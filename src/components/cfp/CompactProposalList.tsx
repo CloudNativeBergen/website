@@ -21,6 +21,16 @@ import { formatConfig } from '@/lib/proposal'
 import { hasProposalVideo } from '@/lib/proposal/video'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { useImpersonateQueryString } from '@/lib/impersonation'
+import { StatusBadge } from '@/components/StatusBadge'
+
+type BadgeColor =
+  | 'gray'
+  | 'red'
+  | 'yellow'
+  | 'green'
+  | 'blue'
+  | 'purple'
+  | 'orange'
 
 interface CompactProposalListProps {
   proposals: ProposalExisting[]
@@ -28,85 +38,36 @@ interface CompactProposalListProps {
   conferenceHasEnded?: boolean
 }
 
-function StatusBadge({
-  status,
-  hasApprovedTalk,
-}: {
-  status: Status
-  hasApprovedTalk: boolean
-}) {
-  const getStatusConfig = (status: Status) => {
-    switch (status) {
-      case 'confirmed':
-        return {
-          color:
-            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-          icon: CheckBadgeIcon,
-          label: 'Confirmed',
-        }
-      case 'accepted':
-        return {
-          color:
-            'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-          icon: SparklesIcon,
-          label: 'Accepted',
-        }
-      case 'submitted':
-        return {
-          color:
-            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-          icon: ClockIcon,
-          label: 'Submitted',
-        }
-      case 'rejected':
-        return hasApprovedTalk
-          ? {
-              color:
-                'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-              icon: MinusCircleIcon,
-              label: 'Not selected',
-            }
-          : {
-              color:
-                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-              icon: XCircleIcon,
-              label: 'Rejected',
-            }
-      case 'withdrawn':
-        return {
-          color:
-            'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-          icon: XCircleIcon,
-          label: 'Withdrawn',
-        }
-      case 'draft':
-        return {
-          color:
-            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400',
-          icon: DocumentTextIcon,
-          label: 'Draft',
-        }
-      default:
-        return {
-          color:
-            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400',
-          icon: DocumentTextIcon,
-          label: statuses.get(status) || status,
-        }
-    }
+function getProposalStatusConfig(
+  status: Status,
+  hasApprovedTalk: boolean,
+): {
+  color: BadgeColor
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  label: string
+} {
+  switch (status) {
+    case 'confirmed':
+      return { color: 'green', icon: CheckBadgeIcon, label: 'Confirmed' }
+    case 'accepted':
+      return { color: 'blue', icon: SparklesIcon, label: 'Accepted' }
+    case 'submitted':
+      return { color: 'yellow', icon: ClockIcon, label: 'Submitted' }
+    case 'rejected':
+      return hasApprovedTalk
+        ? { color: 'gray', icon: MinusCircleIcon, label: 'Not selected' }
+        : { color: 'red', icon: XCircleIcon, label: 'Rejected' }
+    case 'withdrawn':
+      return { color: 'orange', icon: XCircleIcon, label: 'Withdrawn' }
+    case 'draft':
+      return { color: 'gray', icon: DocumentTextIcon, label: 'Draft' }
+    default:
+      return {
+        color: 'gray',
+        icon: DocumentTextIcon,
+        label: statuses.get(status) || status,
+      }
   }
-
-  const config = getStatusConfig(status)
-  const Icon = config.icon
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${config.color}`}
-    >
-      <Icon className="h-3 w-3" />
-      {config.label}
-    </span>
-  )
 }
 
 export function CompactProposalList({
@@ -233,10 +194,19 @@ export function CompactProposalList({
                     <ExclamationTriangleIcon className="h-3 w-3" />
                   </span>
                 )}
-                <StatusBadge
-                  status={proposal.status}
-                  hasApprovedTalk={hasApprovedTalk}
-                />
+                {(() => {
+                  const config = getProposalStatusConfig(
+                    proposal.status,
+                    hasApprovedTalk,
+                  )
+                  return (
+                    <StatusBadge
+                      label={config.label}
+                      color={config.color}
+                      icon={config.icon}
+                    />
+                  )
+                })()}
                 {canEdit && (
                   <Link
                     href={`/cfp/proposal?id=${proposal._id}${queryString ? `&${queryString.slice(1)}` : ''}`}

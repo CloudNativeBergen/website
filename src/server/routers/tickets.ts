@@ -27,7 +27,7 @@ async function updateTicketCapacity(conferenceId: string, capacity: number) {
   try {
     const result = await clientWrite
       .patch(conferenceId)
-      .set({ ticket_capacity: capacity })
+      .set({ ticketCapacity: capacity })
       .commit()
 
     return result
@@ -44,11 +44,11 @@ async function updateTicketTargets(
   conferenceId: string,
   targets: {
     enabled: boolean
-    sales_start_date: string
-    target_curve: 'linear' | 'early_push' | 'late_push' | 's_curve'
+    salesStartDate: string
+    targetCurve: 'linear' | 'early_push' | 'late_push' | 's_curve'
     milestones: Array<{
       date: string
-      target_percentage: number
+      targetPercentage: number
       label: string
     }>
   },
@@ -56,7 +56,7 @@ async function updateTicketTargets(
   try {
     const result = await clientWrite
       .patch(conferenceId)
-      .set({ ticket_targets: targets })
+      .set({ ticketTargets: targets })
       .commit()
 
     return result
@@ -73,8 +73,8 @@ async function getTicketSettings(conferenceId: string) {
   try {
     const query = `*[_type == "conference" && _id == $conferenceId][0]{
       _id,
-      ticket_capacity,
-      ticket_targets
+      ticketCapacity,
+      ticketTargets
     }`
 
     const conference = await clientWrite.fetch(query, { conferenceId })
@@ -110,18 +110,18 @@ export const ticketsRouter = router({
   updateSettings: adminProcedure
     .input(TicketSettingsUpdateSchema)
     .mutation(async ({ input }) => {
-      const { conferenceId, ticket_capacity, ticket_targets } = input
+      const { conferenceId, ticketCapacity, ticketTargets } = input
 
       await getTicketSettings(conferenceId)
 
       const updates: Record<string, unknown> = {}
 
-      if (ticket_capacity !== undefined) {
-        updates.ticket_capacity = ticket_capacity
+      if (ticketCapacity !== undefined) {
+        updates.ticketCapacity = ticketCapacity
       }
 
-      if (ticket_targets !== undefined) {
-        updates.ticket_targets = ticket_targets
+      if (ticketTargets !== undefined) {
+        updates.ticketTargets = ticketTargets
       }
 
       if (Object.keys(updates).length === 0) {
@@ -192,7 +192,7 @@ export const ticketsRouter = router({
       const { conferenceId, enabled } = input
 
       const conference = await getTicketSettings(conferenceId)
-      const currentTargets = conference.ticket_targets || {}
+      const currentTargets = conference.ticketTargets || {}
 
       const updatedTargets = {
         ...currentTargets,
@@ -211,14 +211,14 @@ export const ticketsRouter = router({
       const { conference, error: conferenceError } =
         await getConferenceForCurrentDomain()
 
-      if (conferenceError || !conference.checkin_event_id) {
+      if (conferenceError || !conference.checkinEventId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Conference checkin configuration not found',
         })
       }
 
-      const eventId = conference.checkin_event_id
+      const eventId = conference.checkinEventId
       const eventData = await getEventDiscounts(eventId)
 
       return {
@@ -267,8 +267,8 @@ export const ticketsRouter = router({
 
       if (
         conferenceError ||
-        !conference.checkin_customer_id ||
-        !conference.checkin_event_id
+        !conference.checkinCustomerId ||
+        !conference.checkinEventId
       ) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -276,8 +276,8 @@ export const ticketsRouter = router({
         })
       }
 
-      const customerId = conference.checkin_customer_id
-      const eventId = conference.checkin_event_id
+      const customerId = conference.checkinCustomerId
+      const eventId = conference.checkinEventId
 
       const eventData = await getEventDiscounts(eventId)
       const discounts = eventData.discounts
@@ -311,8 +311,8 @@ export const ticketsRouter = router({
         count: discounts.length,
         hasUsageData: Object.keys(usageStats).length > 0,
         conferenceInfo: {
-          customerId: conference.checkin_customer_id,
-          eventId: conference.checkin_event_id,
+          customerId: conference.checkinCustomerId,
+          eventId: conference.checkinEventId,
           title: conference.title,
         },
       }
@@ -447,10 +447,10 @@ export const ticketsRouter = router({
       try {
         const query = `*[_type == "conference" && _id == $conferenceId][0]{
           _id,
-          ticket_customization,
-          ticket_inclusions,
-          ticket_faqs,
-          vanity_metrics
+          ticketCustomization,
+          ticketInclusions,
+          ticketFaqs,
+          vanityMetrics
         }`
 
         const conference = await clientWrite.fetch(query, { conferenceId })
@@ -478,23 +478,23 @@ export const ticketsRouter = router({
     .mutation(async ({ input }) => {
       const {
         conferenceId,
-        ticket_customization,
-        ticket_inclusions,
-        ticket_faqs,
+        ticketCustomization,
+        ticketInclusions,
+        ticketFaqs,
       } = input
 
       const updates: Record<string, unknown> = {}
 
-      if (ticket_customization !== undefined) {
-        updates.ticket_customization = ticket_customization
+      if (ticketCustomization !== undefined) {
+        updates.ticketCustomization = ticketCustomization
       }
 
-      if (ticket_inclusions !== undefined) {
-        updates.ticket_inclusions = ticket_inclusions
+      if (ticketInclusions !== undefined) {
+        updates.ticketInclusions = ticketInclusions
       }
 
-      if (ticket_faqs !== undefined) {
-        updates.ticket_faqs = ticket_faqs
+      if (ticketFaqs !== undefined) {
+        updates.ticketFaqs = ticketFaqs
       }
 
       if (Object.keys(updates).length === 0) {

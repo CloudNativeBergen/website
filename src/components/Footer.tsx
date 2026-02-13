@@ -29,7 +29,7 @@ export function Footer({ c }: { c: Conference }) {
             </Link>
           </nav>
           <div className="flex space-x-4">
-            {c.social_links?.map((link) => (
+            {c.socialLinks?.map((link) => (
               <a
                 key={link}
                 href={link}

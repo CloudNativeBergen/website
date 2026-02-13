@@ -22,6 +22,7 @@ import { SpeakerEmailModal } from './SpeakerEmailModal'
 import { ProposalManagementModal } from './ProposalManagementModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { useRouter } from 'next/navigation'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 import { Conference } from '@/lib/conference/types'
 
@@ -245,9 +246,9 @@ export function AdminActionBar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <button
+          <AdminButton
+            size="xs"
             onClick={handleEditProposal}
-            className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
             title="Edit proposal"
           >
             <PencilIcon className="h-3 w-3" />
@@ -255,12 +256,13 @@ export function AdminActionBar({
             <kbd className="ml-1 hidden rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-indigo-600 dark:bg-indigo-700">
               ⌘E
             </kbd>
-          </button>
+          </AdminButton>
 
           {speakers.length > 0 && (
-            <button
+            <AdminButton
+              color="purple"
+              size="xs"
               onClick={handlePreviewSpeaker}
-              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
               title="Preview speaker profile"
             >
               <EyeIcon className="h-3 w-3" />
@@ -268,13 +270,14 @@ export function AdminActionBar({
               <kbd className="ml-1 hidden rounded border border-purple-400 bg-purple-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-purple-600 dark:bg-purple-700">
                 ⌘P
               </kbd>
-            </button>
+            </AdminButton>
           )}
 
           {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
-            <button
+            <AdminButton
+              color="blue"
+              size="xs"
               onClick={handleEmailSpeakers}
-              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
             >
               <EnvelopeIcon className="h-3 w-3" />
@@ -282,35 +285,38 @@ export function AdminActionBar({
               <kbd className="ml-1 hidden rounded border border-blue-400 bg-blue-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-blue-600 dark:bg-blue-700">
                 ⌘M
               </kbd>
-            </button>
+            </AdminButton>
           )}
 
           {canApprove && (
-            <button
+            <AdminButton
+              color="green"
+              size="xs"
               onClick={() => handleAction(Action.accept)}
-              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
             >
               <CheckIcon className="h-3 w-3" />
               Approve
-            </button>
+            </AdminButton>
           )}
           {canRemind && (
-            <button
+            <AdminButton
+              color="yellow"
+              size="xs"
               onClick={() => handleAction(Action.remind)}
-              className="inline-flex items-center gap-1 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600"
             >
               <BellIcon className="h-3 w-3" />
               Remind
-            </button>
+            </AdminButton>
           )}
           {canReject && (
-            <button
+            <AdminButton
+              color="red"
+              size="xs"
               onClick={() => handleAction(Action.reject)}
-              className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               <XMarkIcon className="h-3 w-3" />
               Reject
-            </button>
+            </AdminButton>
           )}
         </div>
       </div>

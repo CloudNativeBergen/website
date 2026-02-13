@@ -4,35 +4,8 @@ import { Speaker, Flags } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
+import { hasPreviousAcceptedTalks } from '@/lib/speaker/utils'
 import { unstable_noStore as noStore } from 'next/cache'
-
-function hasPreviousAcceptedTalks(
-  speaker: Speaker & { proposals: ProposalExisting[] },
-  currentConferenceId: string,
-): boolean {
-  if (!speaker.proposals || speaker.proposals.length === 0) {
-    return false
-  }
-
-  return speaker.proposals.some((proposal) => {
-    const isAcceptedOrConfirmed =
-      proposal.status === 'accepted' || proposal.status === 'confirmed'
-
-    if (!isAcceptedOrConfirmed) {
-      return false
-    }
-
-    if (proposal.conference) {
-      const proposalConferenceId =
-        typeof proposal.conference === 'object' && '_id' in proposal.conference
-          ? proposal.conference._id
-          : proposal.conference
-      return proposalConferenceId !== currentConferenceId
-    }
-
-    return false
-  })
-}
 
 function calculateSpeakerStats(
   speakers: (Speaker & { proposals: ProposalExisting[] })[],
@@ -125,7 +98,7 @@ export default async function AdminSpeakers() {
           ).length,
         }}
         confirmedSpeakersCount={confirmedSpeakers.length}
-        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contact_email}>`}
+        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contactEmail}>`}
       />
     )
   } catch (error) {

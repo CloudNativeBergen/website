@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   ChatBubbleLeftRightIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
   XMarkIcon,
   StarIcon,
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
+import { SearchInput } from '@/components/SearchInput'
+import { Dropdown } from '@/components/Form'
 
 interface FeaturedTalksManagerProps {
   className?: string
@@ -151,36 +152,30 @@ export function FeaturedTalksManager({
                 Search talks
               </label>
               <div className="relative">
-                <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" />
-                <input
+                <SearchInput
                   id="talk-search"
-                  type="text"
-                  placeholder="Search talks by title or description..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 leading-5 placeholder-gray-500 focus:border-blue-500 focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+                  onChange={setSearchQuery}
+                  placeholder="Search talks by title or description..."
                 />
               </div>
             </div>
 
             <div>
-              <label
-                htmlFor="status-filter"
-                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Status Filter
-              </label>
-              <select
-                id="status-filter"
-                value={searchStatus}
-                onChange={(e) =>
-                  setSearchStatus(e.target.value as 'confirmed' | 'accepted')
+              <Dropdown
+                name="status-filter"
+                label="Status Filter"
+                options={
+                  new Map([
+                    ['confirmed', 'Confirmed talks only'],
+                    ['accepted', 'Accepted talks only'],
+                  ])
                 }
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="confirmed">Confirmed talks only</option>
-                <option value="accepted">Accepted talks only</option>
-              </select>
+                value={searchStatus}
+                setValue={(val) =>
+                  setSearchStatus(val as 'confirmed' | 'accepted')
+                }
+              />
             </div>
           </div>
 

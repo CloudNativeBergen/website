@@ -81,7 +81,7 @@ export function SponsorBanner({
             >
               <SponsorLogo
                 logo={sponsor.sponsor.logo}
-                logoBright={sponsor.sponsor.logo_bright}
+                logoBright={sponsor.sponsor.logoBright}
                 name={sponsor.sponsor.name}
                 className="h-20 w-auto max-w-[400px] object-contain sm:h-24 lg:h-28"
               />

@@ -21,10 +21,10 @@ export default async function CFPGroupLayout({
   const { conference } = await getConferenceForCurrentDomain({})
   const conferenceLogos = conference
     ? {
-        logo_bright: conference.logo_bright,
-        logo_dark: conference.logo_dark,
-        logomark_bright: conference.logomark_bright,
-        logomark_dark: conference.logomark_dark,
+        logoBright: conference.logoBright,
+        logoDark: conference.logoDark,
+        logomarkBright: conference.logomarkBright,
+        logomarkDark: conference.logomarkDark,
       }
     : undefined
 

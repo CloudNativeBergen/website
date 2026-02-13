@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const speaker = await getSpeakerByEmail(session.user.email)
-    if (!speaker?.is_organizer) {
+    if (!speaker?.isOrganizer) {
       return NextResponse.json(
         { error: 'Admin access required' },
         { status: 403 },

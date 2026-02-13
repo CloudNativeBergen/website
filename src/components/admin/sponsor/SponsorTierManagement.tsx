@@ -22,6 +22,7 @@ import { api } from '@/lib/trpc/client'
 const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
 
 interface SponsorManagementProps {
+  conferenceId: string
   sponsors: ConferenceSponsor[]
   sponsorTiers: SponsorTierExisting[]
   sponsorsByTier: Record<string, ConferenceSponsor[]>
@@ -29,6 +30,7 @@ interface SponsorManagementProps {
 }
 
 export function SponsorTierManagement({
+  conferenceId,
   sponsors: initialSponsors,
   sponsorTiers,
   sponsorsByTier: initialSponsorsByTier,
@@ -45,11 +47,11 @@ export function SponsorTierManagement({
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     sponsorName: string
-    sponsorId: string
-  }>({ isOpen: false, sponsorName: '', sponsorId: '' })
+    sfcId: string
+  }>({ isOpen: false, sponsorName: '', sfcId: '' })
   const { showNotification } = useNotification()
 
-  const removeSponsorMutation = api.sponsor.removeFromConference.useMutation({
+  const removeSponsorMutation = api.sponsor.crm.delete.useMutation({
     onSuccess: () => {
       showNotification({
         type: 'success',
@@ -167,23 +169,20 @@ export function SponsorTierManagement({
     })
   }
 
-  const handleRemoveSponsor = async (
-    sponsorName: string,
-    sponsorId: string,
-  ) => {
+  const handleRemoveSponsor = async (sponsorName: string, sfcId: string) => {
     setConfirmationModal({
       isOpen: true,
       sponsorName,
-      sponsorId,
+      sfcId,
     })
   }
 
   const confirmRemoveSponsor = async () => {
-    const { sponsorName, sponsorId } = confirmationModal
-    setConfirmationModal({ isOpen: false, sponsorName: '', sponsorId: '' })
+    const { sponsorName, sfcId } = confirmationModal
+    setConfirmationModal({ isOpen: false, sponsorName: '', sfcId: '' })
 
     try {
-      await removeSponsorMutation.mutateAsync({ id: sponsorId })
+      await removeSponsorMutation.mutateAsync({ id: sfcId })
 
       const updatedSponsors = sponsors
         .filter((s) => s.sponsor.name !== sponsorName)
@@ -294,7 +293,7 @@ export function SponsorTierManagement({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {tierSponsors.map((sponsorData, index) => {
                     const sponsor = sponsorData.sponsor
-                    const sponsorId = sponsor._id
+                    const sfcId = sponsorData._sfcId || ''
 
                     return (
                       <div
@@ -322,7 +321,7 @@ export function SponsorTierManagement({
                           </button>
                           <button
                             onClick={() =>
-                              handleRemoveSponsor(sponsor.name, sponsorId)
+                              handleRemoveSponsor(sponsor.name, sfcId)
                             }
                             disabled={removeSponsorMutation.isPending}
                             className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900"
@@ -337,7 +336,7 @@ export function SponsorTierManagement({
                             {sponsor.logo ? (
                               <SponsorLogo
                                 logo={sponsor.logo}
-                                logoBright={sponsor.logo_bright}
+                                logoBright={sponsor.logoBright}
                                 name={sponsor.name}
                                 style={ADMIN_LOGO_SIZE}
                                 className="flex h-12 w-12 items-center justify-center"
@@ -450,6 +449,7 @@ export function SponsorTierManagement({
         }
         isOpen={modalState.isOpen}
         onClose={closeModal}
+        conferenceId={conferenceId}
         sponsorTiers={sponsorTiers}
         preselectedTierId={modalState.preselectedTierId}
         editingSponsor={modalState.editingSponsor}
@@ -463,7 +463,7 @@ export function SponsorTierManagement({
           setConfirmationModal({
             isOpen: false,
             sponsorName: '',
-            sponsorId: '',
+            sfcId: '',
           })
         }
         onConfirm={confirmRemoveSponsor}

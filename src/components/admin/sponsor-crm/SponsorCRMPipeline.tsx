@@ -92,7 +92,7 @@ export function SponsorCRMPipeline({
     [searchParams],
   )
   const assignedToFilter = useMemo(
-    () => searchParams.get('assigned_to') || undefined,
+    () => searchParams.get('assignedTo') || undefined,
     [searchParams],
   )
   const tagsFilter = useMemo(
@@ -110,9 +110,9 @@ export function SponsorCRMPipeline({
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery(
     {
       conferenceId,
-      assigned_to:
+      assignedTo:
         assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
-      unassigned_only: assignedToFilter === 'unassigned',
+      unassignedOnly: assignedToFilter === 'unassigned',
       tags: tagsFilter.length > 0 ? tagsFilter : undefined,
       tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
     },
@@ -129,7 +129,7 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contract_value != null,
+              (s) => s.status === 'closed-won' && s.contractValue != null,
             )
           : sponsors.filter((s) => s.status === 'closed-won')
 
@@ -204,9 +204,9 @@ export function SponsorCRMPipeline({
     if (hasDefaultedRef.current) return
     if (!session?.speaker?._id) return
 
-    if (!searchParams.has('assigned_to')) {
+    if (!searchParams.has('assignedTo')) {
       const params = new URLSearchParams(searchParams.toString())
-      params.set('assigned_to', session.speaker._id)
+      params.set('assignedTo', session.speaker._id)
       router.replace(`?${params.toString()}`, { scroll: false })
     }
     hasDefaultedRef.current = true
@@ -318,7 +318,7 @@ export function SponsorCRMPipeline({
 
   const setOrganizerFilter = useCallback(
     (organizerId: string | null) => {
-      updateFilters('assigned_to', organizerId)
+      updateFilters('assignedTo', organizerId)
     },
     [updateFilters],
   )
@@ -347,9 +347,9 @@ export function SponsorCRMPipeline({
         if (currentView === 'pipeline') {
           key = sponsor.status
         } else if (currentView === 'contract') {
-          key = sponsor.contract_status
+          key = sponsor.contractStatus
         } else {
-          key = sponsor.invoice_status
+          key = sponsor.invoiceStatus
         }
         if (!acc[key]) {
           acc[key] = []
@@ -418,18 +418,17 @@ export function SponsorCRMPipeline({
           onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
           domain={domain}
-          fromEmail={conference.sponsor_email || ''}
+          fromEmail={conference.sponsorEmail || ''}
           senderName={session?.user?.name || ''}
           conference={{
             title: conference.title || '',
             city: conference.city || '',
             country: conference.country || '',
-            start_date: conference.start_date || '',
+            startDate: conference.startDate || '',
             organizer: conference.organizer,
             domains: conference.domains || [domain],
-            social_links: conference.social_links,
-            prospectus_url:
-              conference.sponsorship_customization?.prospectus_url,
+            socialLinks: conference.socialLinks,
+            prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
           }}
         />
       )}

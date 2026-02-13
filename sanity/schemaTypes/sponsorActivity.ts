@@ -6,20 +6,21 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
-      name: 'sponsor_for_conference',
+      name: 'sponsorForConference',
       title: 'Sponsor for Conference',
       type: 'reference',
       to: [{ type: 'sponsorForConference' }],
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'activity_type',
+      name: 'activityType',
       title: 'Activity Type',
       type: 'string',
       options: {
         list: [
           { title: 'Stage Change', value: 'stage_change' },
           { title: 'Invoice Status Change', value: 'invoice_status_change' },
+          { title: 'Contract Status Change', value: 'contract_status_change' },
           { title: 'Contract Signed', value: 'contract_signed' },
           { title: 'Note', value: 'note' },
           { title: 'Email', value: 'email' },
@@ -44,12 +45,12 @@ export default defineType({
       description: 'Structured data for the activity (old/new values, etc.)',
       fields: [
         defineField({
-          name: 'old_value',
+          name: 'oldValue',
           title: 'Old Value',
           type: 'string',
         }),
         defineField({
-          name: 'new_value',
+          name: 'newValue',
           title: 'New Value',
           type: 'string',
         }),
@@ -59,24 +60,24 @@ export default defineType({
           type: 'string',
         }),
         defineField({
-          name: 'additional_data',
+          name: 'additionalData',
           title: 'Additional Data',
           type: 'text',
         }),
       ],
     }),
     defineField({
-      name: 'created_by',
+      name: 'createdBy',
       title: 'Created By',
       type: 'reference',
       to: [{ type: 'speaker' }],
       validation: (Rule) => Rule.required(),
       options: {
-        filter: 'is_organizer == true',
+        filter: 'isOrganizer == true',
       },
     }),
     defineField({
-      name: 'created_at',
+      name: 'createdAt',
       title: 'Created At',
       type: 'datetime',
       validation: (Rule) => Rule.required(),
@@ -85,13 +86,12 @@ export default defineType({
   ],
   preview: {
     select: {
-      activityType: 'activity_type',
+      activityType: 'activityType',
       description: 'description',
       createdBy: 'created_by.name',
-      createdAt: 'created_at',
-      sponsorName: 'sponsor_for_conference.sponsor.name',
+      createdAt: 'createdAt',
     },
-    prepare({ activityType, description, createdBy, createdAt, sponsorName }) {
+    prepare({ activityType, description, createdBy, createdAt }) {
       const typeLabel =
         activityType
           ?.split('_')
@@ -99,7 +99,7 @@ export default defineType({
           .join(' ') || 'Activity'
 
       return {
-        title: `${typeLabel} - ${sponsorName || 'Unknown Sponsor'}`,
+        title: typeLabel,
         subtitle: `${description || 'No description'} | By ${createdBy || 'Unknown'} on ${createdAt ? new Date(createdAt).toLocaleDateString() : 'Unknown date'}`,
       }
     },
@@ -108,19 +108,19 @@ export default defineType({
     {
       title: 'Created Date (Newest first)',
       name: 'createdAtDesc',
-      by: [{ field: 'created_at', direction: 'desc' }],
+      by: [{ field: 'createdAt', direction: 'desc' }],
     },
     {
       title: 'Created Date (Oldest first)',
       name: 'createdAtAsc',
-      by: [{ field: 'created_at', direction: 'asc' }],
+      by: [{ field: 'createdAt', direction: 'asc' }],
     },
     {
       title: 'Activity Type',
       name: 'activityType',
       by: [
-        { field: 'activity_type', direction: 'asc' },
-        { field: 'created_at', direction: 'desc' },
+        { field: 'activityType', direction: 'asc' },
+        { field: 'createdAt', direction: 'desc' },
       ],
     },
   ],

@@ -7,7 +7,7 @@ import { Conference } from '@/lib/conference/types'
 interface ConferenceLogoProps {
   conference?: Pick<
     Conference,
-    'logo_bright' | 'logo_dark' | 'logomark_bright' | 'logomark_dark'
+    'logoBright' | 'logoDark' | 'logomarkBright' | 'logomarkDark'
   > | null
   variant?: 'horizontal' | 'mark'
   /**
@@ -29,11 +29,11 @@ export function ConferenceLogo({
   const isHorizontal = variant === 'horizontal'
 
   const brightLogo = isHorizontal
-    ? conference?.logo_bright
-    : conference?.logomark_bright
+    ? conference?.logoBright
+    : conference?.logomarkBright
   const darkLogo = isHorizontal
-    ? conference?.logo_dark
-    : conference?.logomark_dark
+    ? conference?.logoDark
+    : conference?.logomarkDark
 
   // Use custom logo if available
   if (brightLogo) {

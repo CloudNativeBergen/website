@@ -11,7 +11,7 @@ export async function middleware() {
     )
   }
 
-  if (!session.speaker.is_organizer) {
+  if (!session.speaker.isOrganizer) {
     return NextResponse.json(
       { message: 'Forbidden - Organizer access required' },
       { status: 403 },

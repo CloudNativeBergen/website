@@ -21,17 +21,16 @@ export default defineType({
       name: 'logo',
       title: 'Logo',
       type: 'inlineSvg',
-      validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'logo_bright',
+      name: 'logoBright',
       title: 'Logo (Bright)',
       type: 'inlineSvg',
       description:
         'Optional bright/white version of the logo for use on dark backgrounds',
     }),
     defineField({
-      name: 'org_number',
+      name: 'orgNumber',
       title: 'Organization Number',
       type: 'string',
       description: 'Company registration number or organization number',
@@ -44,5 +43,24 @@ export default defineType({
         )
       },
     }),
+    defineField({
+      name: 'address',
+      title: 'Address',
+      type: 'string',
+      description: 'Registered company address (used in contracts)',
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
+  preview: {
+    select: {
+      title: 'name',
+    },
+  },
 })

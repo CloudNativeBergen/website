@@ -130,7 +130,7 @@ export class TicketSalesProcessor {
   }
 
   private calculateTargetProgression(): TargetPoint[] {
-    const startDate = new Date(this.config.sales_start_date)
+    const startDate = new Date(this.config.salesStartDate)
     const endDate = new Date(this.conferenceDate)
     const totalDays =
       (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -193,7 +193,7 @@ export class TicketSalesProcessor {
     if (progress >= 1) return 1
     if (progress <= 0) return 0
 
-    switch (this.config.target_curve) {
+    switch (this.config.targetCurve) {
       case 'linear':
         return progress
       case 'early_push':

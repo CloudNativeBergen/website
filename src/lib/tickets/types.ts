@@ -68,11 +68,11 @@ export interface TicketAnalysisResult {
 
 export interface SalesTargetConfig {
   enabled: boolean
-  sales_start_date: string
-  target_curve: TargetCurve
+  salesStartDate: string
+  targetCurve: TargetCurve
   milestones: Array<{
     date: string
-    target_percentage: number
+    targetPercentage: number
     label: string
   }>
 }

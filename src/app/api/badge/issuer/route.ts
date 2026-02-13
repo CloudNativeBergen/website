@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       name: conference.organizer,
       url: baseUrl,
       email:
-        conference.contact_email ||
+        conference.contactEmail ||
         (conference.domains?.[0]
           ? `contact@${conference.domains[0]}`
           : 'contact@cloudnativedays.no'),

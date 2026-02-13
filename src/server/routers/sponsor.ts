@@ -8,8 +8,6 @@ import {
   IdParamSchema,
   SponsorTierInputSchema,
   SponsorTierUpdateSchema,
-  ConferenceSponsorInputSchema,
-  SponsorTierAssignmentSchema,
   SponsorEmailTemplateInputSchema,
   SponsorEmailTemplateUpdateSchema,
   ReorderTemplatesSchema,
@@ -26,9 +24,6 @@ import {
   createSponsorTier,
   updateSponsorTier,
   deleteSponsorTier,
-  addSponsorToConference,
-  removeSponsorFromConference,
-  updateSponsorTierAssignment,
   getSponsorEmailTemplates,
   getSponsorEmailTemplate,
   createSponsorEmailTemplate,
@@ -61,6 +56,7 @@ import {
   logContractStatusChange,
   logSponsorCreated,
   logAssignmentChange,
+  logSignatureStatusChange,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -79,6 +75,26 @@ import {
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
 import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
+import {
+  listContractTemplates,
+  getContractTemplate,
+  createContractTemplate,
+  updateContractTemplate,
+  deleteContractTemplate,
+  findBestContractTemplate,
+} from '@/lib/sponsor-crm/contract-templates'
+import {
+  ContractTemplateInputSchema,
+  ContractTemplateUpdateSchema,
+  ContractTemplateIdSchema,
+  ContractTemplateListSchema,
+  GenerateContractPdfSchema,
+  FindBestContractTemplateSchema,
+  SendContractSchema,
+} from '@/server/schemas/contractTemplate'
+import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
+import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
+import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -98,7 +114,7 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
         _updatedAt,
         title,
         tagline,
-        tier_type,
+        tierType,
         price[]{
           _key,
           amount,
@@ -109,9 +125,9 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
           label,
           description
         },
-        sold_out,
-        most_popular,
-        max_quantity
+        soldOut,
+        mostPopular,
+        maxQuantity
       }`,
       params,
     )
@@ -394,7 +410,14 @@ export const sponsorRouter = router({
             })
           }
 
-          const mergedData = { ...existingTier, ...input.data }
+          const mergedData = {
+            ...existingTier,
+            ...input.data,
+            maxQuantity:
+              input.data.maxQuantity === null
+                ? undefined
+                : (input.data.maxQuantity ?? existingTier.maxQuantity),
+          }
           const validationErrors = validateSponsorTier(mergedData)
           if (validationErrors.length > 0) {
             console.error('Sponsor tier validation errors:', validationErrors)
@@ -459,95 +482,6 @@ export const sponsorRouter = router({
     }),
   }),
 
-  addToConference: adminProcedure
-    .input(ConferenceSponsorInputSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await addSponsorToConference(
-        conference._id,
-        input.sponsorId,
-        input.tierId,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to add sponsor to conference',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
-
-  updateTierAssignment: adminProcedure
-    .input(SponsorTierAssignmentSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await updateSponsorTierAssignment(
-        conference._id,
-        input.sponsorName,
-        input.tierId,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update sponsor tier assignment',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
-
-  removeFromConference: adminProcedure
-    .input(IdParamSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await removeSponsorFromConference(
-        conference._id,
-        input.id,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to remove sponsor from conference',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
-
   crm: router({
     listOrganizers: adminProcedure
       .input(z.object({ conferenceId: z.string().optional() }).optional())
@@ -582,9 +516,9 @@ export const sponsorRouter = router({
         z.object({
           conferenceId: z.string().min(1),
           status: z.array(z.string()).optional(),
-          invoice_status: z.array(z.string()).optional(),
-          assigned_to: z.string().optional(),
-          unassigned_only: z.boolean().optional(),
+          invoiceStatus: z.array(z.string()).optional(),
+          assignedTo: z.string().optional(),
+          unassignedOnly: z.boolean().optional(),
           tags: z.array(z.string()).optional(),
           tiers: z.array(z.string()).optional(),
         }),
@@ -594,9 +528,9 @@ export const sponsorRouter = router({
           input.conferenceId,
           {
             status: input.status,
-            invoice_status: input.invoice_status,
-            assigned_to: input.assigned_to,
-            unassigned_only: input.unassigned_only,
+            invoiceStatus: input.invoiceStatus,
+            assignedTo: input.assignedTo,
+            unassignedOnly: input.unassignedOnly,
             tags: input.tags,
             tiers: input.tiers,
           },
@@ -639,14 +573,13 @@ export const sponsorRouter = router({
         const userId = ctx.speaker._id
         const data = {
           ...input,
-          assigned_to:
-            input.assigned_to === null ? undefined : input.assigned_to,
+          assignedTo: input.assignedTo === null ? undefined : input.assignedTo,
           tags: input.tags as SponsorTag[] | undefined,
         }
 
         // Auto-assign to current user if not provided
-        if (!data.assigned_to && userId) {
-          data.assigned_to = userId
+        if (!data.assignedTo && userId) {
+          data.assignedTo = userId
         }
 
         const { sponsorForConference, error } =
@@ -690,34 +623,42 @@ export const sponsorRouter = router({
         const { sponsorForConference, error } =
           await updateSponsorForConference(id, {
             ...updateData,
-            assigned_to:
-              updateData.assigned_to === null
+            assignedTo:
+              updateData.assignedTo === null
                 ? undefined
-                : updateData.assigned_to,
+                : updateData.assignedTo,
             billing:
               updateData.billing === null ? undefined : updateData.billing,
-            contact_initiated_at:
-              updateData.contact_initiated_at === null
+            contactInitiatedAt:
+              updateData.contactInitiatedAt === null
                 ? undefined
-                : updateData.contact_initiated_at,
-            contract_signed_at:
-              updateData.contract_signed_at === null
+                : updateData.contactInitiatedAt,
+            contractSignedAt:
+              updateData.contractSignedAt === null
                 ? undefined
-                : updateData.contract_signed_at,
-            contract_value:
-              updateData.contract_value === null
+                : updateData.contractSignedAt,
+            contractValue:
+              updateData.contractValue === null
                 ? undefined
-                : updateData.contract_value,
-            invoice_sent_at:
-              updateData.invoice_sent_at === null
+                : updateData.contractValue,
+            invoiceSentAt:
+              updateData.invoiceSentAt === null
                 ? undefined
-                : updateData.invoice_sent_at,
-            invoice_paid_at:
-              updateData.invoice_paid_at === null
+                : updateData.invoiceSentAt,
+            invoicePaidAt:
+              updateData.invoicePaidAt === null
                 ? undefined
-                : updateData.invoice_paid_at,
+                : updateData.invoicePaidAt,
             notes: updateData.notes === null ? undefined : updateData.notes,
             tags: updateData.tags as SponsorTag[] | undefined,
+            signerEmail:
+              updateData.signerEmail === null
+                ? undefined
+                : updateData.signerEmail,
+            contractTemplate:
+              updateData.contractTemplate === null
+                ? undefined
+                : updateData.contractTemplate,
           })
 
         if (error) {
@@ -742,42 +683,42 @@ export const sponsorRouter = router({
             }
 
             if (
-              updateData.invoice_status &&
-              updateData.invoice_status !== existing.invoice_status
+              updateData.invoiceStatus &&
+              updateData.invoiceStatus !== existing.invoiceStatus
             ) {
               await logInvoiceStatusChange(
                 id,
-                existing.invoice_status,
-                updateData.invoice_status,
+                existing.invoiceStatus,
+                updateData.invoiceStatus,
                 userId,
               )
             }
 
             if (
-              updateData.contract_status &&
-              updateData.contract_status !== existing.contract_status
+              updateData.contractStatus &&
+              updateData.contractStatus !== existing.contractStatus
             ) {
               await logContractStatusChange(
                 id,
-                existing.contract_status,
-                updateData.contract_status,
+                existing.contractStatus,
+                updateData.contractStatus,
                 userId,
               )
             }
 
             if (
-              updateData.assigned_to !== undefined &&
-              updateData.assigned_to !== (existing.assigned_to?._id || null)
+              updateData.assignedTo !== undefined &&
+              updateData.assignedTo !== (existing.assignedTo?._id || null)
             ) {
               let assigneeName: string | null = null
-              if (updateData.assigned_to) {
+              if (updateData.assignedTo) {
                 try {
                   const { getSpeaker } = await import('@/lib/speaker/sanity')
-                  const { speaker } = await getSpeaker(updateData.assigned_to)
-                  assigneeName = speaker?.name || updateData.assigned_to
+                  const { speaker } = await getSpeaker(updateData.assignedTo)
+                  assigneeName = speaker?.name || updateData.assignedTo
                 } catch (lookupError) {
                   console.error('Failed to lookup assignee name:', lookupError)
-                  assigneeName = updateData.assigned_to
+                  assigneeName = updateData.assignedTo
                 }
               }
               await logAssignmentChange(id, assigneeName, userId)
@@ -843,21 +784,21 @@ export const sponsorRouter = router({
           })
         }
 
-        const oldStatus = existing.invoice_status
+        const oldStatus = existing.invoiceStatus
         const updateData: Partial<{
-          invoice_status: string
-          invoice_sent_at: string | null
-          invoice_paid_at: string | null
+          invoiceStatus: string
+          invoiceSentAt: string | null
+          invoicePaidAt: string | null
         }> = {
-          invoice_status: input.newStatus,
+          invoiceStatus: input.newStatus,
         }
 
-        if (input.newStatus === 'sent' && !existing.invoice_sent_at) {
-          updateData.invoice_sent_at = getCurrentDateTime()
+        if (input.newStatus === 'sent' && !existing.invoiceSentAt) {
+          updateData.invoiceSentAt = getCurrentDateTime()
         }
 
-        if (input.newStatus === 'paid' && !existing.invoice_paid_at) {
-          updateData.invoice_paid_at = getCurrentDateTime()
+        if (input.newStatus === 'paid' && !existing.invoicePaidAt) {
+          updateData.invoicePaidAt = getCurrentDateTime()
         }
 
         const { sponsorForConference, error } =
@@ -907,19 +848,19 @@ export const sponsorRouter = router({
           })
         }
 
-        const oldStatus = existing.contract_status
+        const oldStatus = existing.contractStatus
         const updateData: Partial<{
-          contract_status: string
-          contract_signed_at: string | null
+          contractStatus: string
+          contractSignedAt: string | null
         }> = {
-          contract_status: input.newStatus,
+          contractStatus: input.newStatus,
         }
 
         if (
           input.newStatus === 'contract-signed' &&
-          !existing.contract_signed_at
+          !existing.contractSignedAt
         ) {
-          updateData.contract_signed_at = getCurrentDateTime()
+          updateData.contractSignedAt = getCurrentDateTime()
         }
 
         const { sponsorForConference, error } =
@@ -1089,6 +1030,179 @@ export const sponsorRouter = router({
           return []
         }),
     }),
+
+    updateSignatureStatus: adminProcedure
+      .input(UpdateSignatureStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(input.id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        const oldStatus = existing.signatureStatus || 'not-started'
+
+        // Atomic update: set signatureStatus and conditionally set contract fields
+        await clientWrite
+          .patch(input.id)
+          .set({
+            signatureStatus: input.newStatus,
+            ...(input.newStatus === 'signed' && {
+              contractStatus: 'contract-signed',
+              contractSignedAt: getCurrentDateTime(),
+            }),
+          })
+          .commit()
+
+        const userId = ctx.speaker._id
+        if (userId && oldStatus !== input.newStatus) {
+          try {
+            await logSignatureStatusChange(
+              input.id,
+              oldStatus,
+              input.newStatus,
+              userId,
+            )
+          } catch (logError) {
+            console.error('Failed to log signature status change:', logError)
+          }
+        }
+
+        const { sponsorForConference } = await getSponsorForConference(input.id)
+        return sponsorForConference
+      }),
+
+    sendContract: adminProcedure
+      .input(SendContractSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: sfc, error: sfcError } =
+          await getSponsorForConference(input.sponsorForConferenceId)
+        if (sfcError || !sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: sfcError,
+          })
+        }
+
+        const { template, error: templateError } = await getContractTemplate(
+          input.templateId,
+        )
+        if (templateError || !template) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Contract template not found',
+            cause: templateError,
+          })
+        }
+
+        if (
+          !sfc.conference?.title ||
+          !sfc.conference.startDate ||
+          !sfc.conference.endDate
+        ) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Conference data is incomplete for contract generation',
+          })
+        }
+
+        const primaryContact =
+          sfc.contactPersons?.find((c) => c.isPrimary) ||
+          sfc.contactPersons?.[0]
+
+        // Generate the PDF
+        const pdfBuffer = await generateContractPdf(template, {
+          sponsor: {
+            name: sfc.sponsor.name,
+            orgNumber: sfc.sponsor.orgNumber,
+            address: sfc.sponsor.address,
+            website: sfc.sponsor.website,
+          },
+          contactPerson: primaryContact
+            ? { name: primaryContact.name, email: primaryContact.email }
+            : undefined,
+          tier: sfc.tier
+            ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
+            : undefined,
+          addons: sfc.addons?.map((a) => ({ title: a.title })),
+          contractValue: sfc.contractValue,
+          contractCurrency: sfc.contractCurrency,
+          conference: {
+            title: sfc.conference.title,
+            startDate: sfc.conference.startDate,
+            endDate: sfc.conference.endDate,
+            city: sfc.conference.city,
+            organizer: sfc.conference.organizer,
+            organizerOrgNumber: sfc.conference.organizerOrgNumber,
+            organizerAddress: sfc.conference.organizerAddress,
+            venueName: sfc.conference.venueName,
+            venueAddress: sfc.conference.venueAddress,
+            sponsorEmail: sfc.conference.sponsorEmail,
+          },
+        })
+
+        // Update CRM record: contract status, signer email, sent timestamp
+        const now = getCurrentDateTime()
+        const updateFields: Record<string, unknown> = {
+          contractStatus: 'contract-sent',
+          contractSentAt: now,
+          contractTemplate: { _type: 'reference', _ref: input.templateId },
+        }
+        if (input.signerEmail) {
+          updateFields.signerEmail = input.signerEmail
+          updateFields.signatureStatus = 'pending'
+        }
+
+        await clientWrite
+          .patch(input.sponsorForConferenceId)
+          .set(updateFields)
+          .commit()
+
+        // TODO: Send contract email via Resend with PDF attachment
+        // When Posten signering (#303) is integrated, this is where the
+        // signing flow should be initiated instead of manual email.
+
+        // Log activity
+        const userId = ctx.speaker._id
+        if (userId) {
+          const oldContractStatus = sfc.contractStatus
+          try {
+            await logContractStatusChange(
+              input.sponsorForConferenceId,
+              oldContractStatus,
+              'contract-sent',
+              userId,
+            )
+          } catch (logError) {
+            console.error('Failed to log contract send activity:', logError)
+          }
+
+          if (input.signerEmail) {
+            const oldSignatureStatus = sfc.signatureStatus ?? 'not-started'
+            try {
+              await logSignatureStatusChange(
+                input.sponsorForConferenceId,
+                oldSignatureStatus,
+                'pending',
+                userId,
+              )
+            } catch (logError) {
+              console.error('Failed to log signature status change:', logError)
+            }
+          }
+        }
+
+        return {
+          success: true,
+          pdf: pdfBuffer.toString('base64'),
+          filename: `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+        }
+      }),
   }),
 
   emailTemplates: router({
@@ -1189,6 +1303,204 @@ export const sponsorRouter = router({
           })
         }
         return { success: true }
+      }),
+  }),
+
+  contractTemplates: router({
+    list: adminProcedure
+      .input(ContractTemplateListSchema)
+      .query(async ({ input }) => {
+        const { templates, error } = await listContractTemplates(
+          input.conferenceId,
+        )
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to list contract templates',
+            cause: error,
+          })
+        }
+        return templates || []
+      }),
+
+    get: adminProcedure
+      .input(ContractTemplateIdSchema)
+      .query(async ({ input }) => {
+        const { template, error } = await getContractTemplate(input.id)
+        if (error) {
+          throw new TRPCError({
+            code: error.message.includes('not found')
+              ? 'NOT_FOUND'
+              : 'INTERNAL_SERVER_ERROR',
+            message: error.message,
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    create: adminProcedure
+      .input(ContractTemplateInputSchema)
+      .mutation(async ({ input }) => {
+        const { template, error } = await createContractTemplate(input)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create contract template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    update: adminProcedure
+      .input(ContractTemplateUpdateSchema)
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input
+        const { template, error } = await updateContractTemplate(id, {
+          ...data,
+          tier: data.tier === null ? undefined : data.tier,
+          currency: data.currency === null ? undefined : data.currency,
+          headerText: data.headerText === null ? undefined : data.headerText,
+          footerText: data.footerText === null ? undefined : data.footerText,
+          terms: data.terms === null ? undefined : data.terms,
+        })
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update contract template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    delete: adminProcedure
+      .input(ContractTemplateIdSchema)
+      .mutation(async ({ input }) => {
+        const { error } = await deleteContractTemplate(input.id)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete contract template',
+            cause: error,
+          })
+        }
+        return { success: true }
+      }),
+
+    findBest: adminProcedure
+      .input(FindBestContractTemplateSchema)
+      .query(async ({ input }) => {
+        const { template, error } = await findBestContractTemplate(
+          input.conferenceId,
+          input.tierId,
+          input.language,
+        )
+        if (error) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: error.message,
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    contractReadiness: adminProcedure
+      .input(SponsorForConferenceIdSchema)
+      .query(async ({ input }) => {
+        const { sponsorForConference, error } = await getSponsorForConference(
+          input.id,
+        )
+        if (error || !sponsorForConference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: error,
+          })
+        }
+        return checkContractReadiness(sponsorForConference)
+      }),
+
+    generatePdf: adminProcedure
+      .input(GenerateContractPdfSchema)
+      .mutation(async ({ input }) => {
+        const { template, error: templateError } = await getContractTemplate(
+          input.templateId,
+        )
+        if (templateError || !template) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Contract template not found',
+            cause: templateError,
+          })
+        }
+
+        const { sponsorForConference, error: sfcError } =
+          await getSponsorForConference(input.sponsorForConferenceId)
+        if (sfcError || !sponsorForConference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: sfcError,
+          })
+        }
+
+        const primaryContact =
+          sponsorForConference.contactPersons?.find((c) => c.isPrimary) ||
+          sponsorForConference.contactPersons?.[0]
+
+        try {
+          const pdfBuffer = await generateContractPdf(template, {
+            sponsor: {
+              name: sponsorForConference.sponsor.name,
+              orgNumber: sponsorForConference.sponsor.orgNumber,
+              address: sponsorForConference.sponsor.address,
+              website: sponsorForConference.sponsor.website,
+            },
+            contactPerson: primaryContact
+              ? { name: primaryContact.name, email: primaryContact.email }
+              : undefined,
+            tier: sponsorForConference.tier
+              ? {
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
+              : undefined,
+            addons: sponsorForConference.addons?.map((a) => ({
+              title: a.title,
+            })),
+            contractValue: sponsorForConference.contractValue,
+            contractCurrency: sponsorForConference.contractCurrency,
+            conference: {
+              title: sponsorForConference.conference.title,
+              startDate: sponsorForConference.conference.startDate,
+              endDate: sponsorForConference.conference.endDate,
+              city: sponsorForConference.conference.city,
+              organizer: sponsorForConference.conference.organizer,
+              organizerOrgNumber:
+                sponsorForConference.conference.organizerOrgNumber,
+              organizerAddress:
+                sponsorForConference.conference.organizerAddress,
+              venueName: sponsorForConference.conference.venueName,
+              venueAddress: sponsorForConference.conference.venueAddress,
+              sponsorEmail: sponsorForConference.conference.sponsorEmail,
+            },
+          })
+
+          const base64 = pdfBuffer.toString('base64')
+          return {
+            pdf: base64,
+            filename: `contract-${sponsorForConference.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+          }
+        } catch (pdfError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate contract PDF',
+            cause: pdfError,
+          })
+        }
       }),
   }),
 })

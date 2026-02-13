@@ -17,7 +17,7 @@ interface SponsorWithTierInfo {
   tier: {
     title: string
     tagline: string
-    tier_type: 'standard' | 'special'
+    tierType: 'standard' | 'special'
   }
   ticketEntitlement: number
 }
@@ -33,12 +33,12 @@ export default async function DiscountCodesAdminPage() {
 
   if (
     conferenceError ||
-    !conference.checkin_customer_id ||
-    !conference.checkin_event_id
+    !conference.checkinCustomerId ||
+    !conference.checkinEventId
   ) {
     const missingFields = []
-    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
-    if (!conference.checkin_event_id) missingFields.push('Event ID')
+    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
+    if (!conference.checkinEventId) missingFields.push('Event ID')
 
     return (
       <ErrorDisplay
@@ -66,7 +66,7 @@ export default async function DiscountCodesAdminPage() {
         tier: {
           title: tierTitle,
           tagline: sponsorData.tier?.tagline || '',
-          tier_type: (sponsorData.tier?.tier_type || 'standard') as
+          tierType: (sponsorData.tier?.tierType || 'standard') as
             | 'standard'
             | 'special',
         },
@@ -87,15 +87,15 @@ export default async function DiscountCodesAdminPage() {
       <div>
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
-          eventId={conference.checkin_event_id}
+          eventId={conference.checkinEventId}
           conference={{
             title: conference.title,
             city: conference.city,
             country: conference.country,
-            start_date: conference.start_date,
+            startDate: conference.startDate,
             domains: conference.domains,
-            social_links: conference.social_links,
-            contact_email: conference.contact_email || conference.cfp_email,
+            socialLinks: conference.socialLinks,
+            contactEmail: conference.contactEmail || conference.cfpEmail,
             domain: domain,
           }}
         />

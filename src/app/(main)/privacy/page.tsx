@@ -1,5 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -62,7 +63,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = conference.contact_email || 'contact@cloudnativedays.no'
+  const contactEmail = conference.contactEmail || 'contact@cloudnativedays.no'
   const organizationName = 'Cloud Native Days Norway'
 
   return (
@@ -93,7 +94,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/20 print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+          <ContentCard>
             <div className="prose prose-lg dark:prose-invert print:prose-base max-w-none print:max-w-none">
               <div className="space-y-8 print:space-y-6">
                 {/* Section 1: Who We Are */}
@@ -1652,7 +1653,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                 </p>
               </div>
             </div>
-          </div>
+          </ContentCard>
         </Container>
       </div>
     </>

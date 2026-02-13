@@ -224,8 +224,8 @@ export const speakerRouter = router({
 
       // Sort speakers: organizers first, then speakers from current conference, then others
       const sortedSpeakers = filteredSpeakers.sort((a, b) => {
-        if (a.is_organizer && !b.is_organizer) return -1
-        if (!a.is_organizer && b.is_organizer) return 1
+        if (a.isOrganizer && !b.isOrganizer) return -1
+        if (!a.isOrganizer && b.isOrganizer) return 1
 
         const aHasCurrentConference =
           a.proposals?.some(

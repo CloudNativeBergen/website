@@ -5,23 +5,23 @@ const SPONSOR_ACTIVITY_FIELDS = `
   _id,
   _createdAt,
   _updatedAt,
-  sponsor_for_conference->{
+  sponsorForConference->{
     _id,
     sponsor->{
       _id,
       name
     }
   },
-  activity_type,
+  activityType,
   description,
   metadata,
-  created_by->{
+  createdBy->{
     _id,
     name,
     email,
     image
   },
-  created_at
+  createdAt
 `
 
 export async function listActivitiesForSponsor(
@@ -34,7 +34,7 @@ export async function listActivitiesForSponsor(
   try {
     const limitClause = limit ? ` [0...${limit}]` : ''
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
-      `*[_type == "sponsorActivity" && sponsor_for_conference._ref == $sponsorId] | order(created_at desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
+      `*[_type == "sponsorActivity" && sponsorForConference._ref == $sponsorId] | order(createdAt desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
       { sponsorId: sponsorForConferenceId },
     )
 
@@ -54,7 +54,7 @@ export async function listActivitiesForConference(
   try {
     const limitClause = limit ? ` [0...${limit}]` : ''
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
-      `*[_type == "sponsorActivity" && sponsor_for_conference->conference._ref == $conferenceId] | order(created_at desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
+      `*[_type == "sponsorActivity" && sponsorForConference->conference._ref == $conferenceId] | order(createdAt desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
       { conferenceId },
     )
 

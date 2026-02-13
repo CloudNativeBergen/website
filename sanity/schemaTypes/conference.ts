@@ -1,5 +1,6 @@
 import { formats } from '../../src/lib/proposal/types'
 import { defineField, defineType } from 'sanity'
+import { HEROICON_OPTIONS } from './constants'
 
 export default defineType({
   name: 'conference',
@@ -81,6 +82,22 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'organizerOrgNumber',
+      title: 'Organizer Org Number',
+      type: 'string',
+      fieldset: 'basicInfo',
+      description:
+        'Organization number of the organizer (used in contracts and invoices)',
+    }),
+    defineField({
+      name: 'organizerAddress',
+      title: 'Organizer Address',
+      type: 'string',
+      fieldset: 'basicInfo',
+      description:
+        'Registered address of the organizer (used in contracts and invoices)',
+    }),
+    defineField({
       name: 'city',
       title: 'City',
       type: 'string',
@@ -95,13 +112,13 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'venue_name',
+      name: 'venueName',
       title: 'Venue Name',
       type: 'string',
       fieldset: 'basicInfo',
     }),
     defineField({
-      name: 'venue_address',
+      name: 'venueAddress',
       title: 'Venue Address',
       type: 'string',
       fieldset: 'basicInfo',
@@ -121,7 +138,7 @@ export default defineType({
 
     // === Branding ===
     defineField({
-      name: 'logo_bright',
+      name: 'logoBright',
       title: 'Logo (Light Mode)',
       type: 'inlineSvg',
       description:
@@ -129,7 +146,7 @@ export default defineType({
       fieldset: 'branding',
     }),
     defineField({
-      name: 'logo_dark',
+      name: 'logoDark',
       title: 'Logo (Dark Mode)',
       type: 'inlineSvg',
       description:
@@ -137,7 +154,7 @@ export default defineType({
       fieldset: 'branding',
     }),
     defineField({
-      name: 'logomark_bright',
+      name: 'logomarkBright',
       title: 'Logo Mark (Light Mode)',
       type: 'inlineSvg',
       description:
@@ -145,7 +162,7 @@ export default defineType({
       fieldset: 'branding',
     }),
     defineField({
-      name: 'logomark_dark',
+      name: 'logomarkDark',
       title: 'Logo Mark (Dark Mode)',
       type: 'inlineSvg',
       description:
@@ -155,65 +172,74 @@ export default defineType({
 
     // === Important Dates ===
     defineField({
-      name: 'start_date',
+      name: 'startDate',
       title: 'Start Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'end_date',
+      name: 'endDate',
       title: 'End Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'cfp_start_date',
+      name: 'cfpStartDate',
       title: 'CFP Start Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'cfp_end_date',
+      name: 'cfpEndDate',
       title: 'CFP End Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'cfp_notify_date',
+      name: 'cfpNotifyDate',
       title: 'CFP Notify Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'program_date',
+      name: 'programDate',
       title: 'Program Date',
       type: 'date',
       fieldset: 'dates',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'travel_support_payment_date',
+      name: 'travelSupportPaymentDate',
       title: 'Travel Support Payment Date',
       type: 'date',
       fieldset: 'dates',
       description:
         'Default expected payment date for travel support requests. This can be overridden per request.',
     }),
+    defineField({
+      name: 'travelSupportBudget',
+      title: 'Travel Support Budget',
+      type: 'number',
+      fieldset: 'dates',
+      description:
+        'Total budget allocated for travel support (in conference currency)',
+      validation: (Rule) => Rule.min(0),
+    }),
 
     // === Registration & Workshops ===
     defineField({
-      name: 'registration_link',
+      name: 'registrationLink',
       title: 'Registration Link',
       type: 'string',
       fieldset: 'registration',
     }),
     defineField({
-      name: 'registration_enabled',
+      name: 'registrationEnabled',
       title: 'Registration Enabled',
       type: 'boolean',
       fieldset: 'registration',
@@ -224,14 +250,14 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'workshop_registration_start',
+      name: 'workshopRegistrationStart',
       title: 'Workshop Registration Start',
       type: 'datetime',
       fieldset: 'registration',
       description: 'When workshop registration opens',
     }),
     defineField({
-      name: 'workshop_registration_end',
+      name: 'workshopRegistrationEnd',
       title: 'Workshop Registration End',
       type: 'datetime',
       fieldset: 'registration',
@@ -240,21 +266,21 @@ export default defineType({
 
     // === Ticketing & Integrations ===
     defineField({
-      name: 'checkin_customer_id',
+      name: 'checkinCustomerId',
       title: 'Checkin.no Customer ID',
       type: 'number',
       fieldset: 'ticketing',
       description: 'Customer ID for Checkin.no API integration',
     }),
     defineField({
-      name: 'checkin_event_id',
+      name: 'checkinEventId',
       title: 'Checkin.no Event ID',
       type: 'number',
       fieldset: 'ticketing',
       description: 'Event ID for Checkin.no API integration',
     }),
     defineField({
-      name: 'ticket_capacity',
+      name: 'ticketCapacity',
       title: 'Maximum Ticket Capacity',
       type: 'number',
       fieldset: 'ticketing',
@@ -263,7 +289,7 @@ export default defineType({
       validation: (Rule) => Rule.min(1),
     }),
     defineField({
-      name: 'ticket_targets',
+      name: 'ticketTargets',
       title: 'Ticket Sales Targets',
       type: 'object',
       fieldset: 'ticketing',
@@ -279,14 +305,14 @@ export default defineType({
           initialValue: false,
         }),
         defineField({
-          name: 'sales_start_date',
+          name: 'salesStartDate',
           title: 'Sales Start Date',
           type: 'date',
           description: 'When ticket sales officially began',
           hidden: ({ parent }) => !parent?.enabled,
         }),
         defineField({
-          name: 'target_curve',
+          name: 'targetCurve',
           title: 'Target Progression Curve',
           type: 'string',
           description: 'How targets should progress over time',
@@ -326,7 +352,7 @@ export default defineType({
                   validation: (Rule) => Rule.required(),
                 }),
                 defineField({
-                  name: 'target_percentage',
+                  name: 'targetPercentage',
                   title: 'Target Percentage',
                   type: 'number',
                   description:
@@ -345,7 +371,7 @@ export default defineType({
                 select: {
                   title: 'label',
                   subtitle: 'date',
-                  description: 'target_percentage',
+                  description: 'targetPercentage',
                 },
                 prepare(selection) {
                   const { title, subtitle, description } = selection
@@ -360,23 +386,23 @@ export default defineType({
           hidden: ({ parent }) => !parent?.enabled,
         }),
       ],
-      hidden: ({ document }) => !document?.ticket_capacity,
+      hidden: ({ document }) => !document?.ticketCapacity,
     }),
     defineField({
-      name: 'ticket_customization',
+      name: 'ticketCustomization',
       title: 'Ticket Page Customization',
       type: 'object',
       fieldset: 'ticketing',
       options: { collapsible: true, collapsed: true },
       fields: [
         defineField({
-          name: 'hero_headline',
+          name: 'heroHeadline',
           type: 'string',
           title: 'Hero Headline',
           description: 'Main headline on the tickets page',
         }),
         defineField({
-          name: 'hero_subheadline',
+          name: 'heroSubheadline',
           type: 'text',
           title: 'Hero Subheadline',
           rows: 3,
@@ -384,7 +410,7 @@ export default defineType({
             'Subheadline text below the main headline. Leave blank to auto-generate from conference name and dates.',
         }),
         defineField({
-          name: 'show_vanity_metrics',
+          name: 'showVanityMetrics',
           title: 'Show Vanity Metrics',
           type: 'boolean',
           description:
@@ -392,7 +418,7 @@ export default defineType({
           initialValue: false,
         }),
         defineField({
-          name: 'group_discount_info',
+          name: 'groupDiscountInfo',
           type: 'text',
           title: 'Group Discount Information',
           rows: 3,
@@ -400,7 +426,7 @@ export default defineType({
             'Information about group discounts or special offers. Leave blank to hide this section.',
         }),
         defineField({
-          name: 'cta_button_text',
+          name: 'ctaButtonText',
           type: 'string',
           title: 'CTA Button Text',
           description:
@@ -409,7 +435,7 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'ticket_inclusions',
+      name: 'ticketInclusions',
       title: 'Ticket Inclusions',
       type: 'array',
       fieldset: 'ticketing',
@@ -436,31 +462,7 @@ export default defineType({
               title: 'Icon',
               type: 'string',
               options: {
-                list: [
-                  { title: 'Microphone', value: 'MicrophoneIcon' },
-                  { title: 'User Group', value: 'UserGroupIcon' },
-                  {
-                    title: 'Presentation Chart',
-                    value: 'PresentationChartBarIcon',
-                  },
-                  { title: 'Academic Cap', value: 'AcademicCapIcon' },
-                  { title: 'Sparkles', value: 'SparklesIcon' },
-                  { title: 'Light Bulb', value: 'LightBulbIcon' },
-                  { title: 'Cup Soda', value: 'BeakerIcon' },
-                  { title: 'Gift', value: 'GiftIcon' },
-                  { title: 'Film', value: 'FilmIcon' },
-                  { title: 'Camera', value: 'CameraIcon' },
-                  { title: 'Code Bracket', value: 'CodeBracketIcon' },
-                  { title: 'Command Line', value: 'CommandLineIcon' },
-                  { title: 'CPU Chip', value: 'CpuChipIcon' },
-                  { title: 'Chat Bubble', value: 'ChatBubbleLeftRightIcon' },
-                  { title: 'Trophy', value: 'TrophyIcon' },
-                  { title: 'Heart', value: 'HeartIcon' },
-                  { title: 'Star', value: 'StarIcon' },
-                  { title: 'Globe', value: 'GlobeAltIcon' },
-                  { title: 'Musical Note', value: 'MusicalNoteIcon' },
-                  { title: 'Check Badge', value: 'CheckBadgeIcon' },
-                ],
+                list: [...HEROICON_OPTIONS],
               },
             }),
           ],
@@ -474,7 +476,7 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'ticket_faqs',
+      name: 'ticketFaqs',
       title: 'Ticket FAQs',
       type: 'array',
       fieldset: 'ticketing',
@@ -510,14 +512,14 @@ export default defineType({
 
     // === Communication ===
     defineField({
-      name: 'contact_email',
+      name: 'contactEmail',
       title: 'Contact Email',
       type: 'string',
       fieldset: 'communication',
       validation: (Rule) => Rule.required().email(),
     }),
     defineField({
-      name: 'cfp_email',
+      name: 'cfpEmail',
       title: 'CFP Email',
       type: 'string',
       fieldset: 'communication',
@@ -525,7 +527,7 @@ export default defineType({
       validation: (Rule) => Rule.required().email(),
     }),
     defineField({
-      name: 'sponsor_email',
+      name: 'sponsorEmail',
       title: 'Sponsor Email',
       type: 'string',
       fieldset: 'communication',
@@ -533,7 +535,7 @@ export default defineType({
       validation: (Rule) => Rule.required().email(),
     }),
     defineField({
-      name: 'sales_notification_channel',
+      name: 'salesNotificationChannel',
       title: 'Weekly Update Slack Channel',
       type: 'string',
       fieldset: 'communication',
@@ -541,7 +543,7 @@ export default defineType({
         'Slack channel name where weekly updates are posted (e.g. #conference-updates)',
     }),
     defineField({
-      name: 'cfp_notification_channel',
+      name: 'cfpNotificationChannel',
       title: 'CFP Notification Slack Channel',
       type: 'string',
       fieldset: 'communication',
@@ -549,7 +551,7 @@ export default defineType({
         'Slack channel name where CFP notifications are posted (e.g. #conference-cfp)',
     }),
     defineField({
-      name: 'social_links',
+      name: 'socialLinks',
       title: 'Social Links',
       type: 'array',
       fieldset: 'communication',
@@ -566,7 +568,7 @@ export default defineType({
       description: 'Announcement to show on the conference landing page',
     }),
     defineField({
-      name: 'vanity_metrics',
+      name: 'vanityMetrics',
       title: 'Vanity Metrics',
       type: 'array',
       fieldset: 'content',
@@ -626,10 +628,51 @@ export default defineType({
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
     }),
+    defineField({
+      name: 'cfpSubmissionGoal',
+      title: 'CFP Submission Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of CFP submissions for dashboard tracking',
+      validation: (Rule) => Rule.min(1),
+    }),
+    defineField({
+      name: 'cfpLightningGoal',
+      title: 'Lightning Talk Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of lightning talk submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'cfpPresentationGoal',
+      title: 'Presentation Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of presentation submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'cfpWorkshopGoal',
+      title: 'Workshop Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of workshop submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
 
     // === Sponsorship Prospectus ===
     defineField({
-      name: 'sponsor_benefits',
+      name: 'sponsorRevenueGoal',
+      title: 'Sponsor Revenue Goal',
+      type: 'number',
+      fieldset: 'sponsorship',
+      description:
+        'Target sponsor revenue for dashboard tracking (in conference currency)',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'sponsorBenefits',
       title: 'Sponsor Benefits',
       type: 'array',
       fieldset: 'sponsorship',
@@ -657,36 +700,7 @@ export default defineType({
               title: 'Icon',
               type: 'string',
               options: {
-                list: [
-                  { title: 'User Group', value: 'UserGroupIcon' },
-                  { title: 'Megaphone', value: 'MegaphoneIcon' },
-                  { title: 'Sparkles', value: 'SparklesIcon' },
-                  { title: 'Rocket Launch', value: 'RocketLaunchIcon' },
-                  { title: 'Building Office', value: 'BuildingOfficeIcon' },
-                  { title: 'Globe', value: 'GlobeAltIcon' },
-                  { title: 'Heart', value: 'HeartIcon' },
-                  { title: 'Trophy', value: 'TrophyIcon' },
-                  { title: 'Star', value: 'StarIcon' },
-                  { title: 'Light Bulb', value: 'LightBulbIcon' },
-                  { title: 'Chart Bar', value: 'ChartBarIcon' },
-                  { title: 'Briefcase', value: 'BriefcaseIcon' },
-                  { title: 'Chat Bubble', value: 'ChatBubbleLeftRightIcon' },
-                  { title: 'Academic Cap', value: 'AcademicCapIcon' },
-                  { title: 'Command Line', value: 'CommandLineIcon' },
-                  { title: 'CPU Chip', value: 'CpuChipIcon' },
-                  { title: 'Code Bracket', value: 'CodeBracketIcon' },
-                  { title: 'Signal', value: 'SignalIcon' },
-                  { title: 'Camera', value: 'CameraIcon' },
-                  { title: 'Microphone', value: 'MicrophoneIcon' },
-                  {
-                    title: 'Presentation Chart',
-                    value: 'PresentationChartBarIcon',
-                  },
-                  { title: 'Newspaper', value: 'NewspaperIcon' },
-                  { title: 'Hand Raised', value: 'HandRaisedIcon' },
-                  { title: 'Handshake (Thumb Up)', value: 'HandThumbUpIcon' },
-                  { title: 'Check Badge', value: 'CheckBadgeIcon' },
-                ],
+                list: [...HEROICON_OPTIONS],
               },
             }),
           ],
@@ -694,65 +708,65 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'sponsorship_customization',
+      name: 'sponsorshipCustomization',
       title: 'Sponsorship Page Customization',
       type: 'object',
       fieldset: 'sponsorship',
       options: { collapsible: true, collapsed: true },
       fields: [
         defineField({
-          name: 'hero_headline',
+          name: 'heroHeadline',
           type: 'string',
           title: 'Hero Headline',
           initialValue: 'No Sales Pitches. Just Code & Culture.',
         }),
         defineField({
-          name: 'hero_subheadline',
+          name: 'heroSubheadline',
           type: 'text',
           title: 'Hero Subheadline',
           initialValue:
             'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.',
         }),
         defineField({
-          name: 'package_section_title',
+          name: 'packageSectionTitle',
           type: 'string',
           title: 'Package Section Title',
           initialValue: 'The Base Image',
         }),
         defineField({
-          name: 'addon_section_title',
+          name: 'addonSectionTitle',
           type: 'string',
           title: 'Addon Section Title',
           initialValue: 'Custom Resource Definitions (CRDs)',
         }),
         defineField({
-          name: 'philosophy_title',
+          name: 'philosophyTitle',
           type: 'string',
           title: 'Philosophy Title',
           initialValue: "We Don't Sell Booths. We Build Credibility.",
         }),
         defineField({
-          name: 'philosophy_description',
+          name: 'philosophyDescription',
           type: 'text',
           title: 'Philosophy Description',
           initialValue:
             "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'.",
         }),
         defineField({
-          name: 'closing_quote',
+          name: 'closingQuote',
           type: 'string',
           title: 'Closing Quote',
           initialValue:
             "The best engineers don't apply to job ads; they work for companies they respect.",
         }),
         defineField({
-          name: 'closing_cta_text',
+          name: 'closingCtaText',
           type: 'string',
           title: 'Closing CTA Text',
           initialValue: 'git commit -m "Support the Community"',
         }),
         defineField({
-          name: 'prospectus_url',
+          name: 'prospectusUrl',
           type: 'url',
           title: 'Prospectus PDF/Link',
           description:
@@ -771,7 +785,7 @@ export default defineType({
       validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
-      name: 'featured_speakers',
+      name: 'featuredSpeakers',
       title: 'Featured Speakers',
       type: 'array',
       fieldset: 'relations',
@@ -780,7 +794,7 @@ export default defineType({
       initialValue: [],
     }),
     defineField({
-      name: 'featured_talks',
+      name: 'featuredTalks',
       title: 'Featured Talks',
       type: 'array',
       fieldset: 'relations',
@@ -788,69 +802,6 @@ export default defineType({
       validation: (Rule) => Rule.unique(),
       initialValue: [],
       description: 'Talks to highlight in the Program Highlights section',
-    }),
-    defineField({
-      name: 'sponsors',
-      title: 'Sponsors',
-      type: 'array',
-      fieldset: 'relations',
-      of: [
-        {
-          type: 'object',
-          fields: [
-            defineField({
-              name: 'sponsor',
-              type: 'reference',
-              to: { type: 'sponsor' },
-              validation: (Rule) => Rule.required(),
-            }),
-            defineField({
-              name: 'tier',
-              type: 'reference',
-              to: { type: 'sponsorTier' },
-              options: {
-                filter: ({ document }) => {
-                  if (!document?._id) return {}
-
-                  const conferenceId = document._id.replace(/^drafts\./, '')
-
-                  return {
-                    filter: 'conference._ref == $conferenceId',
-                    params: { conferenceId },
-                  }
-                },
-              },
-            }),
-          ],
-          preview: {
-            select: {
-              title: 'sponsor.name',
-              subtitle: 'tier.title',
-            },
-          },
-        },
-      ],
-      validation: (Rule) =>
-        Rule.custom((sponsors: any[] | undefined) => {
-          if (!sponsors || !Array.isArray(sponsors)) {
-            return true
-          }
-
-          const sponsorRefs = sponsors
-            .filter((item) => item.sponsor?._ref)
-            .map((item) => item.sponsor._ref)
-
-          const uniqueSponsors = new Set(sponsorRefs)
-
-          if (uniqueSponsors.size !== sponsorRefs.length) {
-            return 'Duplicate sponsors are not allowed in the same conference'
-          }
-
-          return true
-        }),
-      options: {
-        layout: 'tags',
-      },
     }),
     defineField({
       name: 'schedules',
@@ -887,14 +838,14 @@ export default defineType({
       title: 'title',
       city: 'city',
       country: 'country',
-      start_date: 'start_date',
-      end_date: 'end_date',
+      startDate: 'startDate',
+      endDate: 'endDate',
     },
     prepare(selection) {
-      const { title, city, country, start_date, end_date } = selection
+      const { title, city, country, startDate, endDate } = selection
       return {
         ...selection,
-        title: `${title} - ${city}, ${country} - ${start_date} - ${end_date}`,
+        title: `${title} - ${city}, ${country} - ${startDate} - ${endDate}`,
       }
     },
   },

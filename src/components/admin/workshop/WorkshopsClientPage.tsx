@@ -16,6 +16,8 @@ import type {
   ProposalWithWorkshopData,
 } from '@/lib/workshop/types'
 import { useQueryClient } from '@tanstack/react-query'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { EmptyState } from '@/components/EmptyState'
 
 interface SignupModalState {
   isOpen: boolean
@@ -68,6 +70,10 @@ export function WorkshopsClientPage({
       currentCapacity: 0,
       currentSignups: 0,
     })
+  const [deleteSignupInfo, setDeleteSignupInfo] = useState<{
+    signupId: string
+    userName: string
+  } | null>(null)
 
   const { data: signupsData, refetch: refetchSignups } =
     api.workshop.getAllSignups.useQuery(
@@ -184,13 +190,13 @@ export function WorkshopsClientPage({
   }
 
   const handleDeleteSignup = (signupId: string, userName: string) => {
-    if (
-      confirm(
-        `Are you sure you want to permanently delete ${userName}&apos;s signup?`,
-      )
-    ) {
-      deleteMutation.mutate({ signupId })
-    }
+    setDeleteSignupInfo({ signupId, userName })
+  }
+
+  const confirmDeleteSignup = () => {
+    if (!deleteSignupInfo) return
+    deleteMutation.mutate({ signupId: deleteSignupInfo.signupId })
+    setDeleteSignupInfo(null)
   }
 
   const handleAddParticipant = (participant: ParticipantFormData) => {
@@ -272,15 +278,12 @@ export function WorkshopsClientPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {initialWorkshops.length === 0 ? (
-          <div className="col-span-full rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-            <AcademicCapIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-              No workshops found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No workshops have been created for this conference yet.
-            </p>
-          </div>
+          <EmptyState
+            icon={AcademicCapIcon}
+            title="No workshops found"
+            description="No workshops have been created for this conference yet."
+            className="col-span-full rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+          />
         ) : (
           initialWorkshops.map((workshop) => {
             const workshopSignups = signupsByWorkshop.get(workshop._id) || []
@@ -368,6 +371,16 @@ export function WorkshopsClientPage({
         currentSignups={editCapacityModal.currentSignups}
         onSubmit={handleUpdateCapacity}
         isSubmitting={updateCapacityMutation.isPending}
+      />
+
+      <ConfirmationModal
+        isOpen={!!deleteSignupInfo}
+        onClose={() => setDeleteSignupInfo(null)}
+        onConfirm={confirmDeleteSignup}
+        title="Delete Signup"
+        message={`Are you sure you want to permanently delete ${deleteSignupInfo?.userName}&apos;s signup?`}
+        confirmButtonText="Delete"
+        variant="danger"
       />
     </div>
   )

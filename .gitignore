@@ -36,5 +36,15 @@ next-env.d.ts
 .sanity
 dist/
 
+# lint/format caches
+.eslintcache
+node_modules/.cache/prettier/.prettier-cache
+
 # backups
 *.tar.gz
+storybook-static/*
+
+# msw
+public/mockServiceWorker.js
+# storybook local env
+.storybook/.env

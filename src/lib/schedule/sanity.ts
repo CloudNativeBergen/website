@@ -67,6 +67,7 @@ export async function saveScheduleToSanity(
         _type: 'schedule',
         date: schedule.date,
         tracks: sanitizedTracks,
+        conference: createReference(conference._id),
       }
 
       const createdSchedule = await clientWrite.create(newScheduleDoc)

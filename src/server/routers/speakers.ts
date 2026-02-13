@@ -94,8 +94,8 @@ export const speakersRouter = router({
       // Sort speakers: organizers first, then speakers from current conference, then others
       const sortedSpeakers = filteredSpeakers.sort((a, b) => {
         // Prioritize organizers
-        if (a.is_organizer && !b.is_organizer) return -1
-        if (!a.is_organizer && b.is_organizer) return 1
+        if (a.isOrganizer && !b.isOrganizer) return -1
+        if (!a.isOrganizer && b.isOrganizer) return 1
 
         // Then prioritize speakers with talks in the current conference
         const aHasCurrentConference =

@@ -33,28 +33,28 @@ export default async function SpeakerDashboard() {
 
   // Fetch all conferences where speaker has activity (server-side)
   const conferencesQuery = groq`
-    *[_type == "conference"] | order(start_date desc) {
+    *[_type == "conference"] | order(startDate desc) {
       _id,
       title,
       organizer,
       city,
       country,
-      venue_name,
-      venue_address,
+      venueName,
+      venueAddress,
       tagline,
       description,
-      start_date,
-      end_date,
-      cfp_start_date,
-      cfp_end_date,
-      cfp_notify_date,
-      cfp_email,
-      program_date,
-      registration_link,
-      registration_enabled,
-      workshop_registration_start,
-      workshop_registration_end,
-      contact_email,
+      startDate,
+      endDate,
+      cfpStartDate,
+      cfpEndDate,
+      cfpNotifyDate,
+      cfpEmail,
+      programDate,
+      registrationLink,
+      registrationEnabled,
+      workshopRegistrationStart,
+      workshopRegistrationEnd,
+      contactEmail,
       domains,
       formats,
       features
@@ -94,14 +94,14 @@ export default async function SpeakerDashboard() {
         ),
         getTravelSupport(speakerId, conference._id),
         clientReadCached.fetch<BadgeRecord[]>(
-          groq`*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issued_at desc) {
+          groq`*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issuedAt desc) {
             _id,
             _createdAt,
-            badge_id,
-            badge_type,
-            issued_at,
-            verification_url,
-            baked_svg{
+            badgeId,
+            badgeType,
+            issuedAt,
+            verificationUrl,
+            bakedSvg{
               asset->{
                 _id,
                 url
@@ -169,8 +169,7 @@ export default async function SpeakerDashboard() {
   const allBadges = activeConferences
     .flatMap((c) => c.badges)
     .sort(
-      (a, b) =>
-        new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime(),
+      (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
     )
 
   const latestBadge = allBadges[0]

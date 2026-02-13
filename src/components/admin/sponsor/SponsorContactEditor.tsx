@@ -15,7 +15,7 @@ import {
   StarIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
-import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
+import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { nanoid } from 'nanoid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
@@ -34,7 +34,7 @@ export function SponsorContactEditor({
   className = '',
 }: SponsorContactEditorProps) {
   const [contacts, setContacts] = useState<ContactPerson[]>(
-    sponsorForConference.contact_persons || [],
+    sponsorForConference.contactPersons || [],
   )
   const [billing, setBilling] = useState({
     email: sponsorForConference.billing?.email || '',
@@ -73,7 +73,7 @@ export function SponsorContactEditor({
         email: '',
         phone: '',
         role: '',
-        is_primary: isFirst,
+        isPrimary: isFirst,
       },
     ])
   }
@@ -91,7 +91,7 @@ export function SponsorContactEditor({
     setContacts(
       contacts.map((c, i) => ({
         ...c,
-        is_primary: i === index,
+        isPrimary: i === index,
       })),
     )
   }
@@ -100,8 +100,8 @@ export function SponsorContactEditor({
     const removedContact = contacts[index]
     const newContacts = contacts.filter((_, i) => i !== index)
 
-    if (removedContact.is_primary && newContacts.length > 0) {
-      newContacts[0] = { ...newContacts[0], is_primary: true }
+    if (removedContact.isPrimary && newContacts.length > 0) {
+      newContacts[0] = { ...newContacts[0], isPrimary: true }
     }
 
     setContacts(newContacts)
@@ -129,11 +129,11 @@ export function SponsorContactEditor({
 
     await updateCRMMutation.mutateAsync({
       id: sponsorForConference._id,
-      contact_persons: contacts.map((c) => ({
+      contactPersons: contacts.map((c) => ({
         ...c,
         phone: c.phone || undefined,
         role: c.role || undefined,
-        is_primary: c.is_primary ?? false,
+        isPrimary: c.isPrimary ?? false,
       })),
       billing: billing.email
         ? {
@@ -183,12 +183,12 @@ export function SponsorContactEditor({
                     onClick={() => handleSetPrimary(index)}
                     className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-all hover:bg-yellow-50 hover:text-yellow-500 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400"
                     title={
-                      contact.is_primary
+                      contact.isPrimary
                         ? 'Primary contact'
                         : 'Set as primary contact'
                     }
                   >
-                    {contact.is_primary ? (
+                    {contact.isPrimary ? (
                       <StarIconSolid className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
                     ) : (
                       <StarIcon className="h-4 w-4" />
@@ -264,7 +264,7 @@ export function SponsorContactEditor({
                       Role / Position
                     </label>
                     <div className="mt-1">
-                      <ContactRoleSelect
+                      <SponsorContactRoleSelect
                         value={contact.role || ''}
                         onChange={(value) =>
                           handleUpdateContact(index, { role: value })

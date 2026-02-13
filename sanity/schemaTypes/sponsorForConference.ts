@@ -1,5 +1,6 @@
 import { defineField, defineType } from 'sanity'
 import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
+import { CURRENCY_OPTIONS } from './constants'
 
 const SPONSOR_TAGS = [
   'warm-lead',
@@ -62,7 +63,7 @@ export default defineType({
 
               return {
                 filter:
-                  'conference._ref == $conferenceId && tier_type == "addon"',
+                  'conference._ref == $conferenceId && tierType == "addon"',
                 params: { conferenceId: document.conference._ref },
               }
             },
@@ -71,7 +72,7 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'contract_status',
+      name: 'contractStatus',
       title: 'Contract Status',
       type: 'string',
       options: {
@@ -85,6 +86,68 @@ export default defineType({
       },
       initialValue: 'none',
       validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'signatureStatus',
+      title: 'Signature Status',
+      type: 'string',
+      description: 'Digital signature status from e-signing provider',
+      options: {
+        list: [
+          { title: 'Not Started', value: 'not-started' },
+          { title: 'Pending', value: 'pending' },
+          { title: 'Signed', value: 'signed' },
+          { title: 'Rejected', value: 'rejected' },
+          { title: 'Expired', value: 'expired' },
+        ],
+        layout: 'dropdown',
+      },
+      initialValue: 'not-started',
+    }),
+    defineField({
+      name: 'signatureId',
+      title: 'Signature ID',
+      type: 'string',
+      description: 'External ID from e-signing provider (e.g. Posten.no)',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'signerEmail',
+      title: 'Signer Email',
+      type: 'string',
+      description: 'Email of the person who should sign the contract',
+    }),
+    defineField({
+      name: 'contractSentAt',
+      title: 'Contract Sent Date',
+      type: 'datetime',
+      description: 'When the contract was sent for signing',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'contractDocument',
+      title: 'Contract Document',
+      type: 'file',
+      description: 'Generated PDF contract document',
+      options: {
+        accept: 'application/pdf',
+      },
+    }),
+    defineField({
+      name: 'reminderCount',
+      title: 'Reminder Count',
+      type: 'number',
+      description: 'Number of contract signing reminders sent',
+      initialValue: 0,
+      readOnly: true,
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'contractTemplate',
+      title: 'Contract Template',
+      type: 'reference',
+      to: [{ type: 'contractTemplate' }],
+      description: 'Template used to generate the contract',
     }),
     defineField({
       name: 'status',
@@ -104,7 +167,7 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'assigned_to',
+      name: 'assignedTo',
       title: 'Assigned To',
       type: 'reference',
       to: [{ type: 'speaker' }],
@@ -113,7 +176,7 @@ export default defineType({
         filter: ({ document }: { document: any }) => {
           if (!document?.conference?._ref) {
             return {
-              filter: 'is_organizer == true',
+              filter: 'isOrganizer == true',
             }
           }
 
@@ -126,40 +189,36 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'contact_initiated_at',
+      name: 'contactInitiatedAt',
       title: 'Contact Initiated Date',
       type: 'datetime',
       description: 'When first contact was made with this sponsor',
     }),
     defineField({
-      name: 'contract_signed_at',
+      name: 'contractSignedAt',
       title: 'Contract Signed Date',
       type: 'datetime',
       description: 'When the sponsorship contract was signed',
     }),
     defineField({
-      name: 'contract_value',
+      name: 'contractValue',
       title: 'Contract Value',
       type: 'number',
       description: 'Actual contract value (defaults to tier price)',
       validation: (Rule) => Rule.min(0),
     }),
     defineField({
-      name: 'contract_currency',
+      name: 'contractCurrency',
       title: 'Contract Currency',
       type: 'string',
       options: {
-        list: [
-          { title: 'Norwegian Krone (NOK)', value: 'NOK' },
-          { title: 'US Dollar (USD)', value: 'USD' },
-          { title: 'Euro (EUR)', value: 'EUR' },
-        ],
+        list: [...CURRENCY_OPTIONS],
         layout: 'dropdown',
       },
       initialValue: 'NOK',
     }),
     defineField({
-      name: 'invoice_status',
+      name: 'invoiceStatus',
       title: 'Invoice Status',
       type: 'string',
       options: {
@@ -176,14 +235,14 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'invoice_sent_at',
+      name: 'invoiceSentAt',
       title: 'Invoice Sent Date',
       type: 'datetime',
       description: 'When the invoice was sent (auto-populated)',
       readOnly: true,
     }),
     defineField({
-      name: 'invoice_paid_at',
+      name: 'invoicePaidAt',
       title: 'Invoice Paid Date',
       type: 'datetime',
       description: 'When the invoice was paid (auto-populated)',
@@ -219,7 +278,7 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'contact_persons',
+      name: 'contactPersons',
       title: 'Contact Persons',
       type: 'array',
       of: [
@@ -260,7 +319,7 @@ export default defineType({
               },
             },
             {
-              name: 'is_primary',
+              name: 'isPrimary',
               title: 'Primary Contact',
               type: 'boolean',
               description:
@@ -321,13 +380,26 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'legacy_synced_at',
-      title: 'Legacy Sync Timestamp',
-      type: 'datetime',
-      description:
-        'Internal: Last sync to conference.sponsors[] array (read-only)',
+      name: 'onboardingToken',
+      title: 'Onboarding Token',
+      type: 'string',
+      description: 'Unique token for sponsor self-service onboarding portal',
       readOnly: true,
-      hidden: true,
+    }),
+    defineField({
+      name: 'onboardingComplete',
+      title: 'Onboarding Complete',
+      type: 'boolean',
+      description: 'Whether the sponsor has completed onboarding',
+      initialValue: false,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'onboardingCompletedAt',
+      title: 'Onboarding Completed At',
+      type: 'datetime',
+      description: 'When the sponsor completed onboarding',
+      readOnly: true,
     }),
   ],
   preview: {
@@ -351,12 +423,9 @@ export default defineType({
       by: [{ field: 'status', direction: 'asc' }],
     },
     {
-      title: 'Conference',
-      name: 'conference',
-      by: [
-        { field: 'conference.title', direction: 'desc' },
-        { field: 'status', direction: 'asc' },
-      ],
+      title: 'Status and Sponsor',
+      name: 'statusAndSponsor',
+      by: [{ field: 'status', direction: 'asc' }],
     },
   ],
 })

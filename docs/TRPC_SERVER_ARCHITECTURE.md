@@ -56,7 +56,7 @@ const SponsorInputSchema = z.object({
   name: z.string().min(1).max(100),
   website: z.string().url(),
   logo: z.string(),
-  org_number: z.string().optional(),
+  orgNumber: z.string().optional(),
 })
 
 // Extend base schemas for updates
@@ -147,7 +147,7 @@ create: adminProcedure.input(SponsorInputSchema).mutation(async ({ input }) => {
 const { data: sponsors, isLoading, error } = api.sponsor.list.useQuery()
 
 // Mutations with UI updates
-const removeMutation = api.sponsor.removeFromConference.useMutation({
+const removeMutation = api.sponsor.crm.delete.useMutation({
   onSuccess: () => {
     showNotification({ type: 'success', message: 'Sponsor removed' })
     // React Query automatically invalidates related queries
@@ -157,8 +157,8 @@ const removeMutation = api.sponsor.removeFromConference.useMutation({
   },
 })
 
-// Calling mutations
-await removeMutation.mutateAsync({ id: sponsor._id })
+// Calling mutations (use _sfcId from ConferenceSponsor)
+await removeMutation.mutateAsync({ id: sponsorForConference._id })
 
 // Conditional queries
 const { data: tiers } = api.sponsor.tiers.list.useQuery(
@@ -179,7 +179,7 @@ const { data: tiers } = api.sponsor.tiers.list.useQuery(
 ```typescript
 // Protected procedures
 const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.session?.user?.is_organizer) {
+  if (!ctx.session?.user?.isOrganizer) {
     throw new TRPCError({ code: 'UNAUTHORIZED' })
   }
   return next()

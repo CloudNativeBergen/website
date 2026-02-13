@@ -11,6 +11,7 @@ import { TravelExpense, TravelExpenseInput } from '@/lib/travel-support/types'
 import { TravelSupportService } from '@/lib/travel-support/service'
 import { ExpenseForm } from './ExpenseForm'
 import { ReceiptViewer } from './ReceiptViewer'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 
 interface ExpensesListProps {
   expenses: TravelExpense[]
@@ -111,27 +112,17 @@ function ExpenseItem({
     )
   }
 
-  const getStatusBadgeColor = (status: string) => {
+  const getExpenseStatusConfig = (
+    status: string,
+  ): { color: BadgeColor; label: string } => {
     switch (status) {
       case 'approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+        return { color: 'green', label: 'Approved' }
       case 'rejected':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+        return { color: 'red', label: 'Rejected' }
       case 'pending':
       default:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'Approved'
-      case 'rejected':
-        return 'Rejected'
-      case 'pending':
-      default:
-        return 'Pending Review'
+        return { color: 'yellow', label: 'Pending Review' }
     }
   }
 
@@ -143,11 +134,10 @@ function ExpenseItem({
             <h4 className="font-medium text-gray-900 dark:text-white">
               {expense.description}
             </h4>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeColor(expense.status)}`}
-            >
-              {getStatusText(expense.status)}
-            </span>
+            {(() => {
+              const config = getExpenseStatusConfig(expense.status)
+              return <StatusBadge label={config.label} color={config.color} />
+            })()}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             <span className="font-medium">{categoryName}</span>

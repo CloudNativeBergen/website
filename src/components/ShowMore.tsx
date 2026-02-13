@@ -23,7 +23,10 @@ export function ShowMore({
     <section {...props}>
       <div
         ref={contentRef}
-        className={clsx('text-base leading-7', !isExpanded && 'line-clamp-6')}
+        className={clsx(
+          'text-base leading-7 text-gray-700 dark:text-gray-300',
+          !isExpanded && 'line-clamp-6',
+        )}
       >
         {children}
       </div>

@@ -9,6 +9,7 @@ import {
   HomeIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { EmptyState } from '@/components/EmptyState'
 
 async function getTicketData(
   customerId: number,
@@ -221,12 +222,12 @@ export default async function CompaniesAdminPage() {
 
   if (
     conferenceError ||
-    !conference.checkin_customer_id ||
-    !conference.checkin_event_id
+    !conference.checkinCustomerId ||
+    !conference.checkinEventId
   ) {
     const missingFields = []
-    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
-    if (!conference.checkin_event_id) missingFields.push('Event ID')
+    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
+    if (!conference.checkinEventId) missingFields.push('Event ID')
 
     return (
       <ErrorDisplay
@@ -246,8 +247,8 @@ export default async function CompaniesAdminPage() {
 
   try {
     allTickets = await getTicketData(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
+      conference.checkinCustomerId,
+      conference.checkinEventId,
     )
   } catch (err) {
     error = (err as Error).message
@@ -302,15 +303,12 @@ export default async function CompaniesAdminPage() {
 
       <div>
         {companyBreakdown.length === 0 ? (
-          <div className="rounded-lg bg-white p-12 text-center shadow dark:bg-gray-900">
-            <BuildingOfficeIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No companies found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No company information available in ticket orders.
-            </p>
-          </div>
+          <EmptyState
+            icon={BuildingOfficeIcon}
+            title="No companies found"
+            description="No company information available in ticket orders."
+            className="rounded-lg bg-white p-12 shadow dark:bg-gray-900"
+          />
         ) : (
           <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
             <div className="overflow-x-auto">

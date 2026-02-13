@@ -2,19 +2,30 @@ import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'schedule',
-  title: 'Schedule',
+  title: 'Conference Schedule',
   type: 'document',
   fields: [
+    defineField({
+      name: 'conference',
+      title: 'Conference',
+      type: 'reference',
+      to: [{ type: 'conference' }],
+      description: 'Conference this schedule belongs to.',
+      validation: (Rule) => Rule.required(),
+      readOnly: true,
+    }),
     defineField({
       name: 'date',
       title: 'Date',
       type: 'date',
+      description: 'Calendar date for this day of the schedule',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'tracks',
       title: 'Scheduled Tracks',
       type: 'array',
+      description: 'Parallel session tracks for this schedule day',
       of: [
         {
           type: 'object',
@@ -85,7 +96,9 @@ export default defineType({
                   preview: {
                     select: {
                       title: 'talk.title',
-                      speakers: 'talk.speakers',
+                      speaker0: 'talk.speakers.0.name',
+                      speaker1: 'talk.speakers.1.name',
+                      speaker2: 'talk.speakers.2.name',
                       placeholder: 'placeholder',
                       startTime: 'startTime',
                       endTime: 'endTime',
@@ -93,21 +106,23 @@ export default defineType({
                     },
                     prepare({
                       title,
-                      speakers,
+                      speaker0,
+                      speaker1,
+                      speaker2,
                       placeholder,
                       startTime,
                       endTime,
                       format,
                     }) {
-                      const speakerNames = speakers
-                        ? speakers
-                            .map((s: any) => s.name || 'Unknown')
-                            .join(', ')
-                        : 'Unknown'
+                      const names = [speaker0, speaker1, speaker2].filter(
+                        Boolean,
+                      )
+                      const speakerNames =
+                        names.length > 0 ? names.join(', ') : 'Unknown'
 
                       return {
-                        title: `${startTime} - ${endTime} (${format})`,
-                        subtitle: `${title || placeholder} (${speakerNames})`,
+                        title: `${startTime} - ${endTime} (${format || 'TBD'})`,
+                        subtitle: `${title || placeholder || 'Untitled'} (${speakerNames})`,
                       }
                     },
                   },
@@ -121,12 +136,14 @@ export default defineType({
               talks: 'talks',
             },
             prepare({ title, talks }) {
-              const talkStarTimes = talks
-                ?.map((item: { startTime: string }) => item.startTime)
-                .join(', ')
+              const talkCount = talks?.length || 0
+              const talkStartTimes =
+                talks
+                  ?.map((item: { startTime: string }) => item.startTime)
+                  .join(', ') || 'No talks'
               return {
                 title: title,
-                subtitle: `${talks.length} talk(s) - ${talkStarTimes}`,
+                subtitle: `${talkCount} talk(s) - ${talkStartTimes}`,
               }
             },
           },

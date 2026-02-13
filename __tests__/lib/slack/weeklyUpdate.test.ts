@@ -58,7 +58,7 @@ function createBaseUpdateData(
 ): WeeklyUpdateData {
   return {
     conference: createMockConference({
-      sales_notification_channel: '#sales',
+      salesNotificationChannel: '#sales',
     }),
     ticketsByCategory: { Regular: 50 },
     paidTickets: 50,
@@ -83,6 +83,13 @@ function createMockPipeline(
       negotiating: 1,
       'closed-won': 5,
       'closed-lost': 1,
+    },
+    byStatusValue: {
+      prospect: 0,
+      contacted: 0,
+      negotiating: 50000,
+      'closed-won': 200000,
+      'closed-lost': 0,
     },
     byContractStatus: {
       none: 4,
@@ -169,7 +176,7 @@ describe('weeklyUpdate', () => {
       await sendWeeklyUpdateToSlack(
         createBaseUpdateData({
           conference: createMockConference({
-            sales_notification_channel: '#sales-updates',
+            salesNotificationChannel: '#sales-updates',
           }),
         }),
       )
@@ -208,7 +215,7 @@ describe('weeklyUpdate', () => {
         sendWeeklyUpdateToSlack(
           createBaseUpdateData({
             conference: createMockConference({
-              sales_notification_channel: '#test',
+              salesNotificationChannel: '#test',
             }),
           }),
         ),
@@ -227,7 +234,7 @@ describe('weeklyUpdate', () => {
         await import('@/lib/slack/weeklyUpdate')
       const data = createBaseUpdateData({
         conference: createMockConference({
-          sales_notification_channel: '#conference-sales',
+          salesNotificationChannel: '#conference-sales',
         }),
       })
       await sendWeeklyUpdateToSlack(data)

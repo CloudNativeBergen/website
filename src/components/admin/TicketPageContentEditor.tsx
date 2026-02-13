@@ -90,20 +90,20 @@ export function TicketPageContentEditor({
     setSaving(true)
     updateMutation.mutate({
       conferenceId,
-      ticket_customization: {
-        hero_headline: customization.hero_headline || undefined,
-        hero_subheadline: customization.hero_subheadline || undefined,
-        show_vanity_metrics: customization.show_vanity_metrics ?? false,
-        group_discount_info: customization.group_discount_info || undefined,
-        cta_button_text: customization.cta_button_text || undefined,
+      ticketCustomization: {
+        heroHeadline: customization.heroHeadline || undefined,
+        heroSubheadline: customization.heroSubheadline || undefined,
+        showVanityMetrics: customization.showVanityMetrics ?? false,
+        groupDiscountInfo: customization.groupDiscountInfo || undefined,
+        ctaButtonText: customization.ctaButtonText || undefined,
       },
-      ticket_inclusions: inclusions.map((inc) => ({
+      ticketInclusions: inclusions.map((inc) => ({
         _key: inc._key || generateKey(),
         title: inc.title,
         description: inc.description || undefined,
         icon: inc.icon || undefined,
       })),
-      ticket_faqs: faqs.map((faq) => ({
+      ticketFaqs: faqs.map((faq) => ({
         _key: faq._key || generateKey(),
         question: faq.question,
         answer: faq.answer,
@@ -211,19 +211,19 @@ export function TicketPageContentEditor({
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
                 <label
-                  htmlFor="hero_headline"
+                  htmlFor="heroHeadline"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   Headline
                 </label>
                 <input
-                  id="hero_headline"
+                  id="heroHeadline"
                   type="text"
-                  value={customization.hero_headline ?? ''}
+                  value={customization.heroHeadline ?? ''}
                   onChange={(e) =>
                     setCustomization((prev) => ({
                       ...prev,
-                      hero_headline: e.target.value,
+                      heroHeadline: e.target.value,
                     }))
                   }
                   placeholder="Tickets (leave blank for default)"
@@ -232,19 +232,19 @@ export function TicketPageContentEditor({
               </div>
               <div>
                 <label
-                  htmlFor="cta_button_text"
+                  htmlFor="ctaButtonText"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   CTA Button Text
                 </label>
                 <input
-                  id="cta_button_text"
+                  id="ctaButtonText"
                   type="text"
-                  value={customization.cta_button_text ?? ''}
+                  value={customization.ctaButtonText ?? ''}
                   onChange={(e) =>
                     setCustomization((prev) => ({
                       ...prev,
-                      cta_button_text: e.target.value,
+                      ctaButtonText: e.target.value,
                     }))
                   }
                   placeholder="Register Now (default)"
@@ -254,19 +254,19 @@ export function TicketPageContentEditor({
             </div>
             <div>
               <label
-                htmlFor="hero_subheadline"
+                htmlFor="heroSubheadline"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300"
               >
                 Subheadline
               </label>
               <textarea
-                id="hero_subheadline"
+                id="heroSubheadline"
                 rows={3}
-                value={customization.hero_subheadline ?? ''}
+                value={customization.heroSubheadline ?? ''}
                 onChange={(e) =>
                   setCustomization((prev) => ({
                     ...prev,
-                    hero_subheadline: e.target.value,
+                    heroSubheadline: e.target.value,
                   }))
                 }
                 placeholder="Leave blank to auto-generate from conference name and dates"
@@ -275,25 +275,25 @@ export function TicketPageContentEditor({
             </div>
             <div className="flex items-center gap-3">
               <input
-                id="show_vanity_metrics"
+                id="showVanityMetrics"
                 type="checkbox"
-                checked={customization.show_vanity_metrics ?? false}
+                checked={customization.showVanityMetrics ?? false}
                 onChange={(e) =>
                   setCustomization((prev) => ({
                     ...prev,
-                    show_vanity_metrics: e.target.checked,
+                    showVanityMetrics: e.target.checked,
                   }))
                 }
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <label
-                htmlFor="show_vanity_metrics"
+                htmlFor="showVanityMetrics"
                 className="text-sm font-medium text-gray-700 dark:text-gray-300"
               >
                 Show vanity metrics bar (attendees, speakers, etc.)
               </label>
             </div>
-            {customization.show_vanity_metrics && (
+            {customization.showVanityMetrics && (
               <div className="ml-7 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700">
                 {vanityMetrics.length > 0 ? (
                   <p>
@@ -326,11 +326,11 @@ export function TicketPageContentEditor({
           </p>
           <textarea
             rows={4}
-            value={customization.group_discount_info ?? ''}
+            value={customization.groupDiscountInfo ?? ''}
             onChange={(e) =>
               setCustomization((prev) => ({
                 ...prev,
-                group_discount_info: e.target.value,
+                groupDiscountInfo: e.target.value,
               }))
             }
             placeholder="e.g., Groups of 5 or more receive a 10% discount. Contact us for details."

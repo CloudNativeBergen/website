@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import {
-  MagnifyingGlassIcon,
   FunnelIcon,
   XMarkIcon,
   CalendarDaysIcon,
@@ -14,6 +13,7 @@ import {
 import { ProgramFilterOptions } from '@/hooks/useProgramFilter'
 import { ProgramViewMode, ViewModeConfig } from '@/hooks/useProgramViewMode'
 import { Format, Level, Audience } from '@/lib/proposal/types'
+import { SearchInput } from '@/components/SearchInput'
 import { Topic } from '@/lib/topic/types'
 import { getFormatConfig } from '@/lib/proposal/ui/config'
 import {
@@ -71,13 +71,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
   const handleToggleExpanded = useCallback(() => {
     setIsExpanded((prev) => !prev)
   }, [])
-
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onFilterChange('searchQuery', e.target.value)
-    },
-    [onFilterChange],
-  )
 
   const handleDayChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -197,7 +190,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             )}
             <button
               onClick={handleToggleExpanded}
-              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset] dark:text-gray-300 dark:hover:bg-gray-700"
+              className="flex min-w-15 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset] dark:text-gray-300 dark:hover:bg-gray-700"
             >
               {isExpanded ? (
                 <>
@@ -215,16 +208,12 @@ export const ProgramFilters = React.memo(function ProgramFilters({
         </div>
       </div>
 
-      <div className="relative">
-        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-        <input
-          type="text"
-          placeholder="Search talks, speakers, topics..."
-          value={filters.searchQuery}
-          onChange={handleSearchChange}
-          className="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-400"
-        />
-      </div>
+      <SearchInput
+        value={filters.searchQuery}
+        onChange={(value) => onFilterChange('searchQuery', value)}
+        placeholder="Search talks, speakers, topics..."
+        inputClassName="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-400"
+      />
 
       {isExpanded && (
         <div className="space-y-4 border-t border-brand-frosted-steel pt-4 dark:border-gray-700">

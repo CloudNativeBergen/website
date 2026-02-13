@@ -20,6 +20,13 @@ export type ContractStatus =
   | 'contract-sent'
   | 'contract-signed'
 
+export type SignatureStatus =
+  | 'not-started'
+  | 'pending'
+  | 'signed'
+  | 'rejected'
+  | 'expired'
+
 export type ActivityType =
   | 'stage_change'
   | 'invoice_status_change'
@@ -29,6 +36,9 @@ export type ActivityType =
   | 'email'
   | 'call'
   | 'meeting'
+  | 'signature_status_change'
+  | 'onboarding_complete'
+  | 'contract_reminder_sent'
 
 export type SponsorTag =
   | 'warm-lead'
@@ -53,22 +63,36 @@ export interface SponsorForConference {
   tier?: {
     _ref: string
   }
-  contract_status: ContractStatus
-  status: SponsorStatus
-  assigned_to?: {
+  contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signatureId?: string
+  signerEmail?: string
+  contractSentAt?: string
+  contractDocument?: {
+    asset: { _ref: string }
+  }
+  reminderCount?: number
+  contractTemplate?: {
     _ref: string
   }
-  contact_persons?: ContactPerson[]
+  status: SponsorStatus
+  assignedTo?: {
+    _ref: string
+  }
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency: 'NOK' | 'USD' | 'EUR'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency: 'NOK' | 'USD' | 'EUR'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
+  onboardingToken?: string
+  onboardingComplete?: boolean
+  onboardingCompletedAt?: string
 }
 
 export interface SponsorForConferenceExpanded {
@@ -80,18 +104,28 @@ export interface SponsorForConferenceExpanded {
     name: string
     website: string
     logo: string
-    logo_bright?: string
-    org_number?: string
+    logoBright?: string
+    orgNumber?: string
+    address?: string
   }
   conference: {
     _id: string
     title: string
+    organizer?: string
+    organizerOrgNumber?: string
+    organizerAddress?: string
+    city?: string
+    venueName?: string
+    venueAddress?: string
+    startDate?: string
+    endDate?: string
+    sponsorEmail?: string
   }
   tier?: {
     _id: string
     title: string
     tagline: string
-    tier_type: 'standard' | 'special'
+    tierType: 'standard' | 'special'
     price?: Array<{
       _key: string
       amount: number
@@ -101,60 +135,78 @@ export interface SponsorForConferenceExpanded {
   addons?: Array<{
     _id: string
     title: string
-    tier_type: 'addon'
+    tierType: 'addon'
     price?: Array<{
       _key: string
       amount: number
       currency: string
     }>
   }>
-  contract_status: ContractStatus
+  contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signatureId?: string
+  signerEmail?: string
+  contractSentAt?: string
+  contractDocument?: {
+    asset: {
+      _ref: string
+      url: string
+    }
+  }
+  reminderCount?: number
+  contractTemplate?: {
+    _id: string
+    title: string
+  }
   status: SponsorStatus
-  assigned_to?: {
+  assignedTo?: {
     _id: string
     name: string
     email: string
     image?: string
   }
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
-  contact_persons?: ContactPerson[]
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
+  onboardingToken?: string
+  onboardingComplete?: boolean
+  onboardingCompletedAt?: string
 }
 
 export interface SponsorActivityExpanded {
   _id: string
   _createdAt: string
   _updatedAt: string
-  sponsor_for_conference: {
+  sponsorForConference: {
     _id: string
     sponsor: {
       _id: string
       name: string
     }
   }
-  activity_type: ActivityType
+  activityType: ActivityType
   description: string
   metadata?: {
-    old_value?: string
-    new_value?: string
+    oldValue?: string
+    newValue?: string
     timestamp?: string
-    additional_data?: string
+    additionalData?: string
   }
-  created_by: {
+  createdBy: {
     _id: string
     name: string
     email: string
     image?: string
   }
-  created_at: string
+  createdAt: string
 }
 
 export interface SponsorForConferenceInput {
@@ -162,34 +214,37 @@ export interface SponsorForConferenceInput {
   conference: string
   tier?: string
   addons?: string[]
-  contract_status: ContractStatus
+  contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signerEmail?: string
+  contractTemplate?: string
   status: SponsorStatus
-  assigned_to?: string | null
-  contact_persons?: ContactPerson[]
+  assignedTo?: string | null
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
 }
 
 export interface SponsorActivityInput {
-  sponsor_for_conference: string
-  activity_type: ActivityType
+  sponsorForConference: string
+  activityType: ActivityType
   description: string
   metadata?: {
-    old_value?: string
-    new_value?: string
+    oldValue?: string
+    newValue?: string
     timestamp?: string
-    additional_data?: string
+    additionalData?: string
   }
-  created_by: string
-  created_at?: string
+  createdBy: string
+  createdAt?: string
 }
 
 export interface CopySponsorsParams {

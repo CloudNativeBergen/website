@@ -128,6 +128,7 @@ export async function createCoSpeakerInvitation(params: {
   proposalId: string
   proposalTitle: string
   invitedBySpeakerId: string
+  conferenceId: string
 }): Promise<CoSpeakerInvitationFull | null> {
   try {
     const expiresAt = new Date()
@@ -143,6 +144,7 @@ export async function createCoSpeakerInvitation(params: {
     const invitation = await clientWrite.create({
       _type: 'coSpeakerInvitation',
       proposal: createReference(params.proposalId),
+      conference: createReference(params.conferenceId),
       invitedBy: createReference(params.invitedBySpeakerId),
       invitedEmail: params.invitedEmail,
       invitedName: params.invitedName,
@@ -218,8 +220,8 @@ export async function sendInvitationEmail(
     const eventLocation = conference?.city
       ? `${conference.city}, ${conference.country || 'Norway'}`
       : 'Location TBA'
-    const eventDate = conference?.start_date
-      ? formatDate(conference.start_date)
+    const eventDate = conference?.startDate
+      ? formatDate(conference.startDate)
       : 'TBD'
     const eventUrl =
       conference && conference.domains?.[0]
@@ -257,7 +259,7 @@ export async function sendInvitationEmail(
     const result = await sendEmail({
       to: invitation.invitedEmail,
       subject: `You've been invited to co-present "${proposalTitle}"`,
-      from: `${conference.organizer} <${conference.cfp_email}>`,
+      from: `${conference.organizer} <${conference.cfpEmail}>`,
       component: CoSpeakerInvitationTemplate,
       props: {
         inviterName,
@@ -271,7 +273,7 @@ export async function sendInvitationEmail(
         eventDate,
         eventUrl,
         expiresAt: new Date(invitation.expiresAt).toLocaleDateString(),
-        socialLinks: conference?.social_links || [],
+        socialLinks: conference?.socialLinks || [],
       },
     })
 

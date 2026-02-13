@@ -10,6 +10,7 @@ export default defineType({
       name: 'name',
       title: 'Name',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'title',
@@ -20,6 +21,7 @@ export default defineType({
       name: 'slug',
       title: 'Slug',
       type: 'slug',
+      description: 'URL-friendly identifier, auto-generated from name',
       options: {
         source: 'name',
         maxLength: 96,
@@ -31,6 +33,8 @@ export default defineType({
       name: 'email',
       title: 'Email',
       type: 'string',
+      description: 'Login email address (from OAuth provider)',
+      validation: (Rule) => Rule.required().email(),
       hidden: ({ currentUser }) => {
         return !(
           currentUser != null &&
@@ -44,6 +48,8 @@ export default defineType({
       name: 'providers',
       title: 'Profile Providers',
       type: 'array',
+      description:
+        'OAuth providers linked to this account (e.g., github, linkedin)',
       of: [{ type: 'string' }],
       hidden: ({ currentUser }) => {
         return !(
@@ -58,11 +64,13 @@ export default defineType({
       name: 'imageURL',
       title: 'Image URL',
       type: 'string',
+      description: 'Profile image URL from OAuth provider',
     }),
     defineField({
       name: 'image',
       title: 'Image',
       type: 'image',
+      description: 'Manually uploaded profile image (overrides imageURL)',
       options: {
         hotspot: true,
       },
@@ -78,6 +86,7 @@ export default defineType({
       name: 'links',
       title: 'Links',
       type: 'array',
+      description: 'Social media and personal website URLs',
       of: [{ type: 'string' }],
       validation: (Rule) =>
         Rule.custom((links) => {
@@ -96,20 +105,13 @@ export default defineType({
       name: 'bio',
       title: 'Bio',
       type: 'text',
+      description: 'Speaker biography displayed on the public profile',
     }),
     defineField({
-      name: 'is_organizer',
+      name: 'isOrganizer',
       title: 'Is this a organizer?',
       type: 'boolean',
-    }),
-    defineField({
-      name: 'is_featured',
-      title: 'Is this as featured speaker?',
-      type: 'boolean',
-      deprecated: {
-        reason:
-          'Use the featured_speakers array in the conference document instead',
-      },
+      description: 'Grants access to the admin interface',
     }),
     defineField({
       title: 'Flags',
@@ -138,29 +140,7 @@ export default defineType({
         defineField({
           name: 'dataProcessing',
           title: 'Data Processing Consent',
-          type: 'object',
-          fields: [
-            defineField({
-              name: 'granted',
-              title: 'Consent Granted',
-              type: 'boolean',
-              initialValue: false,
-            }),
-            defineField({
-              name: 'grantedAt',
-              title: 'Consent Granted At',
-              type: 'datetime',
-              readOnly: true,
-            }),
-            defineField({
-              name: 'ipAddress',
-              title: 'IP Address',
-              type: 'string',
-              readOnly: true,
-              description:
-                'IP address when consent was granted (for audit purposes)',
-            }),
-          ],
+          type: 'dataProcessingConsent',
         }),
         defineField({
           name: 'marketing',

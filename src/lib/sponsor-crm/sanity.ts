@@ -3,6 +3,7 @@ import {
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
+import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
   SponsorForConference,
   SponsorForConferenceExpanded,
@@ -24,18 +25,28 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     name,
     website,
     logo,
-    logo_bright,
-    org_number
+    logoBright,
+    orgNumber,
+    address
   },
   conference->{
     _id,
-    title
+    title,
+    organizer,
+    organizerOrgNumber,
+    organizerAddress,
+    city,
+    venueName,
+    venueAddress,
+    startDate,
+    endDate,
+    sponsorEmail
   },
   tier->{
     _id,
     title,
     tagline,
-    tier_type,
+    tierType,
     price[]{
       _key,
       amount,
@@ -45,7 +56,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   addons[]->{
     _id,
     title,
-    tier_type,
+    tierType,
     price[]{
       _key,
       amount,
@@ -53,36 +64,84 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     }
   },
   status,
-  contract_status,
-  assigned_to->{
+  contractStatus,
+  signatureStatus,
+  signatureId,
+  signerEmail,
+  contractSentAt,
+  contractDocument{
+    asset->{
+      _ref,
+      url
+    }
+  },
+  reminderCount,
+  contractTemplate->{
+    _id,
+    title
+  },
+  assignedTo->{
     _id,
     name,
     email,
     image
   },
-  contact_initiated_at,
-  contract_signed_at,
-  contract_value,
-  contract_currency,
-  invoice_status,
-  invoice_sent_at,
-  invoice_paid_at,
+  contactInitiatedAt,
+  contractSignedAt,
+  contractValue,
+  contractCurrency,
+  invoiceStatus,
+  invoiceSentAt,
+  invoicePaidAt,
   notes,
   tags,
-  contact_persons[]{
+  contactPersons[]{
     _key,
     name,
     email,
     phone,
     role,
-    is_primary
+    isPrimary
   },
   billing{
     email,
     reference,
     comments
-  }
+  },
+  onboardingToken,
+  onboardingComplete,
+  onboardingCompletedAt
 `
+
+export async function getPublicSponsorsForConference(
+  conferenceId: string,
+): Promise<ConferenceSponsor[]> {
+  return clientRead.fetch<ConferenceSponsor[]>(
+    `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]
+      | order(tier->tierType asc, tier->price[0].amount desc, tier->title asc){
+      "_sfcId": _id,
+      sponsor->{
+        _id,
+        name,
+        website,
+        logo,
+        logoBright,
+      },
+      tier->{
+        _id,
+        title,
+        tagline,
+        tierType,
+        price[]{
+          _key,
+          amount,
+          currency
+        }
+      }
+    }`,
+    { conferenceId },
+  )
+}
 
 export async function createSponsorForConference(
   data: SponsorForConferenceInput,
@@ -104,20 +163,24 @@ export async function createSponsorForConference(
           }))
         : undefined,
       status: data.status,
-      assigned_to: data.assigned_to
-        ? { _type: 'reference', _ref: data.assigned_to }
+      assignedTo: data.assignedTo
+        ? { _type: 'reference', _ref: data.assignedTo }
         : undefined,
-      contact_initiated_at: data.contact_initiated_at,
-      contract_signed_at: data.contract_signed_at,
-      contract_value: data.contract_value,
-      contract_currency: data.contract_currency || 'NOK',
-      invoice_status: data.invoice_status,
-      invoice_sent_at: data.invoice_sent_at,
-      invoice_paid_at: data.invoice_paid_at,
+      signerEmail: data.signerEmail,
+      contractTemplate: data.contractTemplate
+        ? { _type: 'reference', _ref: data.contractTemplate }
+        : undefined,
+      contactInitiatedAt: data.contactInitiatedAt,
+      contractSignedAt: data.contractSignedAt,
+      contractValue: data.contractValue,
+      contractCurrency: data.contractCurrency || 'NOK',
+      invoiceStatus: data.invoiceStatus,
+      invoiceSentAt: data.invoiceSentAt,
+      invoicePaidAt: data.invoicePaidAt,
       notes: data.notes,
       tags: data.tags,
-      contact_persons: data.contact_persons
-        ? prepareArrayWithKeys(data.contact_persons, 'contact')
+      contactPersons: data.contactPersons
+        ? prepareArrayWithKeys(data.contactPersons, 'contact')
         : undefined,
       billing: data.billing || undefined,
     }
@@ -165,32 +228,38 @@ export async function updateSponsorForConference(
         : []
     }
     if (data.status !== undefined) updates.status = data.status
-    if (data.contract_status !== undefined)
-      updates.contract_status = data.contract_status
-    if (data.assigned_to !== undefined) {
-      updates.assigned_to = data.assigned_to
-        ? { _type: 'reference', _ref: data.assigned_to }
+    if (data.contractStatus !== undefined)
+      updates.contractStatus = data.contractStatus
+    if (data.signerEmail !== undefined) updates.signerEmail = data.signerEmail
+    if (data.contractTemplate !== undefined) {
+      updates.contractTemplate = data.contractTemplate
+        ? { _type: 'reference', _ref: data.contractTemplate }
         : null
     }
-    if (data.contact_initiated_at !== undefined)
-      updates.contact_initiated_at = data.contact_initiated_at
-    if (data.contract_signed_at !== undefined)
-      updates.contract_signed_at = data.contract_signed_at
-    if (data.contract_value !== undefined)
-      updates.contract_value = data.contract_value
-    if (data.contract_currency !== undefined)
-      updates.contract_currency = data.contract_currency
-    if (data.invoice_status !== undefined)
-      updates.invoice_status = data.invoice_status
-    if (data.invoice_sent_at !== undefined)
-      updates.invoice_sent_at = data.invoice_sent_at
-    if (data.invoice_paid_at !== undefined)
-      updates.invoice_paid_at = data.invoice_paid_at
+    if (data.assignedTo !== undefined) {
+      updates.assignedTo = data.assignedTo
+        ? { _type: 'reference', _ref: data.assignedTo }
+        : null
+    }
+    if (data.contactInitiatedAt !== undefined)
+      updates.contactInitiatedAt = data.contactInitiatedAt
+    if (data.contractSignedAt !== undefined)
+      updates.contractSignedAt = data.contractSignedAt
+    if (data.contractValue !== undefined)
+      updates.contractValue = data.contractValue
+    if (data.contractCurrency !== undefined)
+      updates.contractCurrency = data.contractCurrency
+    if (data.invoiceStatus !== undefined)
+      updates.invoiceStatus = data.invoiceStatus
+    if (data.invoiceSentAt !== undefined)
+      updates.invoiceSentAt = data.invoiceSentAt
+    if (data.invoicePaidAt !== undefined)
+      updates.invoicePaidAt = data.invoicePaidAt
     if (data.notes !== undefined) updates.notes = data.notes
     if (data.tags !== undefined) updates.tags = data.tags
-    if (data.contact_persons !== undefined) {
-      updates.contact_persons = data.contact_persons
-        ? prepareArrayWithKeys(data.contact_persons, 'contact')
+    if (data.contactPersons !== undefined) {
+      updates.contactPersons = data.contactPersons
+        ? prepareArrayWithKeys(data.contactPersons, 'contact')
         : null
     }
     if (data.billing !== undefined) updates.billing = data.billing
@@ -249,9 +318,9 @@ export async function listSponsorsForConference(
   conferenceId: string,
   filters?: {
     status?: string[]
-    invoice_status?: string[]
-    assigned_to?: string
-    unassigned_only?: boolean
+    invoiceStatus?: string[]
+    assignedTo?: string
+    unassignedOnly?: boolean
     tags?: string[]
     tiers?: string[]
   },
@@ -265,13 +334,13 @@ export async function listSponsorsForConference(
     if (filters?.status && filters.status.length > 0) {
       filterQuery += ` && status in $statuses`
     }
-    if (filters?.invoice_status && filters.invoice_status.length > 0) {
-      filterQuery += ` && invoice_status in $invoiceStatuses`
+    if (filters?.invoiceStatus && filters.invoiceStatus.length > 0) {
+      filterQuery += ` && invoiceStatus in $invoiceStatuses`
     }
-    if (filters?.unassigned_only) {
-      filterQuery += ` && !defined(assigned_to)`
-    } else if (filters?.assigned_to) {
-      filterQuery += ` && assigned_to._ref == $assignedTo`
+    if (filters?.unassignedOnly) {
+      filterQuery += ` && !defined(assignedTo)`
+    } else if (filters?.assignedTo) {
+      filterQuery += ` && assignedTo._ref == $assignedTo`
     }
     if (filters?.tags && filters.tags.length > 0) {
       filterQuery += ` && count((tags[])[@ in $tags]) > 0`
@@ -285,8 +354,8 @@ export async function listSponsorsForConference(
       {
         conferenceId,
         statuses: filters?.status,
-        invoiceStatuses: filters?.invoice_status,
-        assignedTo: filters?.assigned_to,
+        invoiceStatuses: filters?.invoiceStatus,
+        assignedTo: filters?.assignedTo,
         tags: filters?.tags,
         tierIds: filters?.tiers,
       },
@@ -313,10 +382,10 @@ export async function copySponsorsFromPreviousYear(
         _id,
         sponsor,
         tier,
-        assigned_to,
-        contract_currency,
+        assignedTo,
+        contractCurrency,
         tags,
-        contact_persons[]{ _key, name, email, phone, role, is_primary },
+        contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ email, reference, comments }
       }`,
       { conferenceId: sourceConferenceId },
@@ -370,7 +439,7 @@ export async function copySponsorsFromPreviousYear(
       }
 
       // Check if assigned organizer is in target conference
-      let assignedTo = sourceSponsor.assigned_to?._ref
+      let assignedTo = sourceSponsor.assignedTo?._ref
       if (assignedTo && !targetOrganizerIds.has(assignedTo)) {
         result.warnings.push(
           `Sponsor ${sourceSponsor.sponsor._ref}: assigned organizer not in target conference, unassigning`,
@@ -384,13 +453,13 @@ export async function copySponsorsFromPreviousYear(
         conference: { _type: 'reference', _ref: targetConferenceId },
         tier: sourceSponsor.tier,
         status: 'prospect' as const,
-        assigned_to: assignedTo
+        assignedTo: assignedTo
           ? { _type: 'reference', _ref: assignedTo }
           : undefined,
-        contract_currency: sourceSponsor.contract_currency || 'NOK',
-        invoice_status: 'not-sent' as const,
+        contractCurrency: sourceSponsor.contractCurrency || 'NOK',
+        invoiceStatus: 'not-sent' as const,
         tags: sourceSponsor.tags,
-        contact_persons: sourceSponsor.contact_persons,
+        contactPersons: sourceSponsor.contactPersons,
         billing: sourceSponsor.billing,
       }
 
@@ -421,11 +490,11 @@ export async function importAllHistoricSponsors(
     // Get target conference start date
     const targetConference = await clientRead.fetch<{
       _id: string
-      start_date: string
+      startDate: string
     }>(
       `*[_type == "conference" && _id == $conferenceId][0]{
         _id,
-        start_date
+        startDate
       }`,
       { conferenceId: targetConferenceId },
     )
@@ -436,10 +505,10 @@ export async function importAllHistoricSponsors(
 
     // Get all conferences before the target conference
     const previousConferences = await clientRead.fetch<Array<{ _id: string }>>(
-      `*[_type == "conference" && start_date < $targetStartDate] | order(start_date desc) {
+      `*[_type == "conference" && startDate < $targetStartDate] | order(startDate desc) {
         _id
       }`,
-      { targetStartDate: targetConference.start_date },
+      { targetStartDate: targetConference.startDate },
     )
 
     if (previousConferences.length === 0) {
@@ -542,9 +611,9 @@ export async function importAllHistoricSponsors(
         sponsor: { _type: 'reference', _ref: sponsorId },
         conference: { _type: 'reference', _ref: targetConferenceId },
         status: 'prospect' as const,
-        contract_status: 'none' as const,
-        contract_currency: 'NOK',
-        invoice_status: 'not-sent' as const,
+        contractStatus: 'none' as const,
+        contractCurrency: 'NOK',
+        invoiceStatus: 'not-sent' as const,
         tags: tags.length > 0 ? tags : undefined,
       }
 

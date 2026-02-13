@@ -87,7 +87,7 @@ async function CachedInfoContent({ domain }: { domain: string }) {
       scheduleInfo.workshopDay &&
       scheduleInfo.conferenceDay
     ) {
-      return `This is a multi-day event running from ${formatDate(conference.start_date)} to ${formatDate(conference.end_date)}.
+      return `This is a multi-day event running from ${formatDate(conference.startDate)} to ${formatDate(conference.endDate)}.
 
 Day 1 (${formatDate(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${scheduleInfo.workshopDay.registrationTime}. Workshops run from ${scheduleInfo.workshopDay.startTime} to ${scheduleInfo.workshopDay.endTime}.
 
@@ -96,7 +96,7 @@ Day 2 (${formatDate(scheduleInfo.conferenceDay.date)}) - Main Conference: Regist
 Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Conference&quot;) grant access to both days, while conference-only tickets grant access to the main conference day only.`
     }
 
-    return `The conference will be held on ${formatDate(conference.start_date)}. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The talks are scheduled to start at ${scheduleInfo.conferenceDay?.startTime || '09:00'} and to end at ${scheduleInfo.conferenceDay?.endTime || '17:00'}.`
+    return `The conference will be held on ${formatDate(conference.startDate)}. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The talks are scheduled to start at ${scheduleInfo.conferenceDay?.startTime || '09:00'} and to end at ${scheduleInfo.conferenceDay?.endTime || '17:00'}.`
   })()
 
   const faqs = [
@@ -111,7 +111,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         },
         {
           question: 'Where is the conference located?',
-          answer: `The conference will take place at ${conference.venue_name || 'the venue'} in ${conference.city}, ${conference.country}.${conference.venue_address ? ` The address is ${conference.venue_address}.` : ''}`,
+          answer: `The conference will take place at ${conference.venueName || 'the venue'} in ${conference.city}, ${conference.country}.${conference.venueAddress ? ` The address is ${conference.venueAddress}.` : ''}`,
         },
         {
           question: 'How do I get to the venue?',
@@ -199,15 +199,15 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       questions: [
         {
           question: 'How do I obtain the sponsor tickets?',
-          answer: `Sponsors will receive a unique link to <u>checkin.no</u> to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nThe email will be sent from <u>no-reply@messenger.checkin.no</u>. If you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contact_email}">contact us</a></u>.`,
+          answer: `Sponsors will receive a unique link to <u>checkin.no</u> to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nThe email will be sent from <u>no-reply@messenger.checkin.no</u>. If you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
         },
         {
           question: 'What should I do with the sponsor rollups?',
-          answer: `You can bring your rollups to the venue on the day of the conference, or the day before. We will have a designated area for sponsor rollups. If you have any questions, please <u><a href="mailto:${conference.contact_email}">contact us</a></u>.`,
+          answer: `You can bring your rollups to the venue on the day of the conference, or the day before. We will have a designated area for sponsor rollups. If you have any questions, please <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
         },
         {
           question: 'Where can I place my sponsor materials?',
-          answer: `We will have a designated area for sponsor rollups and a table for sponsor materials. We do not have space for sponsor booths. If you have any questions, please <u><a href="mailto:${conference.contact_email}">contact us</a></u>.`,
+          answer: `We will have a designated area for sponsor rollups and a table for sponsor materials. We do not have space for sponsor booths. If you have any questions, please <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
         },
         {
           question: 'Do you provide a list of attendees?',

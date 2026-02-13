@@ -42,6 +42,10 @@ import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
+import { OnboardingLinkButton } from './OnboardingLinkButton'
+import { SendContractButton } from './SendContractButton'
+import { ContractReadinessIndicator } from './ContractReadinessIndicator'
+import { Textarea } from '@/components/Form'
 
 type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
 
@@ -74,21 +78,21 @@ export function SponsorCRMForm({
     name: sponsor?.sponsor.name || '',
     website: sponsor?.sponsor.website || '',
     logo: (sponsor?.sponsor.logo || null) as string | null,
-    logo_bright: (sponsor?.sponsor.logo_bright || null) as string | null,
+    logoBright: (sponsor?.sponsor.logoBright || null) as string | null,
     tierId: sponsor?.tier?._id || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
-    contractStatus: (sponsor?.contract_status || 'none') as ContractStatus,
+    contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
     status: (sponsor?.status || 'prospect') as SponsorStatus,
-    invoiceStatus: (sponsor?.invoice_status || 'not-sent') as InvoiceStatus,
-    contractValue: sponsor?.contract_value?.toString() || '',
-    contractCurrency: (sponsor?.contract_currency || 'NOK') as
+    invoiceStatus: (sponsor?.invoiceStatus || 'not-sent') as InvoiceStatus,
+    contractValue: sponsor?.contractValue?.toString() || '',
+    contractCurrency: (sponsor?.contractCurrency || 'NOK') as
       | 'NOK'
       | 'USD'
       | 'EUR'
       | 'GBP',
     notes: sponsor?.notes || '',
     tags: sponsor?.tags || ([] as SponsorTag[]),
-    assignedTo: sponsor?.assigned_to?._id || '',
+    assignedTo: sponsor?.assignedTo?._id || '',
   })
 
   const { data: allSponsors = [] } = api.sponsor.list.useQuery()
@@ -111,14 +115,14 @@ export function SponsorCRMForm({
   const regularTiers = useMemo(
     () =>
       sortedSponsorTiers.filter(
-        (tier: SponsorTier) => tier.tier_type !== 'addon',
+        (tier: SponsorTier) => tier.tierType !== 'addon',
       ),
     [sortedSponsorTiers],
   )
   const addonTiers = useMemo(
     () =>
       sortedSponsorTiers.filter(
-        (tier: SponsorTier) => tier.tier_type === 'addon',
+        (tier: SponsorTier) => tier.tierType === 'addon',
       ),
     [sortedSponsorTiers],
   )
@@ -278,6 +282,18 @@ export function SponsorCRMForm({
                       <div className="flex items-center gap-2">
                         {sponsor && (
                           <>
+                            <OnboardingLinkButton
+                              sponsorForConferenceId={sponsor._id}
+                              existingToken={sponsor.onboardingToken}
+                              onboardingComplete={sponsor.onboardingComplete}
+                            />
+                            <SendContractButton
+                              conferenceId={conferenceId}
+                              sponsor={sponsor}
+                              onSuccess={() => {
+                                utils.sponsor.crm.list.invalidate()
+                              }}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -359,7 +375,7 @@ export function SponsorCRMForm({
                       ) : view === 'logo' ? (
                         <SponsorLogoEditor
                           logo={formData.logo}
-                          logoBright={formData.logo_bright}
+                          logoBright={formData.logoBright}
                           name={formData.name}
                           onChange={(updates) =>
                             setFormData((prev) => ({
@@ -538,21 +554,26 @@ export function SponsorCRMForm({
 
                             {/* Notes */}
                             <div>
-                              <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                                Notes
-                              </label>
-                              <textarea
+                              <Textarea
+                                name="notes"
+                                label="Notes"
+                                rows={2}
                                 value={formData.notes}
-                                onChange={(e) =>
+                                setValue={(val) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    notes: e.target.value,
+                                    notes: val,
                                   }))
                                 }
-                                rows={2}
-                                className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
                               />
                             </div>
+
+                            {/* Contract Readiness */}
+                            {sponsor && (
+                              <ContractReadinessIndicator
+                                sponsorForConferenceId={sponsor._id}
+                              />
+                            )}
                           </div>
 
                           <div className="mt-4 flex flex-row-reverse gap-3">

@@ -57,6 +57,21 @@ const config = {
         return {}
       }
 
+      // Migrate legacy snake_case JWT tokens from before migration 028.
+      // Old tokens stored speaker.is_organizer; new code expects isOrganizer.
+      // This block can be removed once all active sessions have expired.
+      if (
+        !trigger &&
+        token.speaker &&
+        typeof token.speaker === 'object' &&
+        'is_organizer' in token.speaker &&
+        !('isOrganizer' in token.speaker)
+      ) {
+        const sp = token.speaker as Record<string, unknown>
+        sp.isOrganizer = sp.is_organizer
+        delete sp.is_organizer
+      }
+
       if (trigger === 'signIn') {
         if (!token || !token.email || !token.name) {
           console.error('Invalid auth token', token)
@@ -97,7 +112,7 @@ const config = {
           name: speaker.name,
           email: speaker.email,
           image: speaker.image,
-          is_organizer: speaker.is_organizer,
+          isOrganizer: speaker.isOrganizer,
           flags: speaker.flags,
         }
       }
@@ -166,7 +181,7 @@ export async function getAuthSession(req?: {
   }
 
   // SECURITY: Only organizers can impersonate
-  if (!session?.speaker?.is_organizer) {
+  if (!session?.speaker?.isOrganizer) {
     return session
   }
 
@@ -195,7 +210,7 @@ export async function getAuthSession(req?: {
       const { getSpeaker } = await import('@/lib/speaker/sanity')
       const { speaker: impersonatedSpeaker } = await getSpeaker(impersonateId)
 
-      if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
+      if (impersonatedSpeaker && !impersonatedSpeaker.isOrganizer) {
         // SECURITY: Log impersonation for audit trail
         console.log(
           `[AUDIT] Admin ${session.speaker.email} (${session.speaker._id}) impersonating ${impersonatedSpeaker.email} (${impersonatedSpeaker._id})`,
@@ -207,7 +222,7 @@ export async function getAuthSession(req?: {
           isImpersonating: true,
           realAdmin: session.speaker,
         }
-      } else if (impersonatedSpeaker?.is_organizer) {
+      } else if (impersonatedSpeaker?.isOrganizer) {
         // SECURITY: Log attempted organizer impersonation
         console.error(
           `[SECURITY] Admin ${session.speaker.email} attempted to impersonate another organizer: ${impersonatedSpeaker.email}`,

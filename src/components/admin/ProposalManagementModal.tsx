@@ -1,14 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
-import { useTheme } from 'next-themes'
+import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/components/Button'
@@ -36,6 +29,7 @@ import {
 } from '@/server/schemas/proposal'
 import { useNotification } from './NotificationProvider'
 import { z } from 'zod'
+import { ModalShell } from '@/components/ModalShell'
 
 interface ProposalManagementModalProps {
   isOpen: boolean
@@ -54,7 +48,6 @@ export function ProposalManagementModal({
   onProposalCreated,
   onProposalUpdated,
 }: ProposalManagementModalProps) {
-  const { theme } = useTheme()
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
 
@@ -348,142 +341,110 @@ export function ProposalManagementModal({
   ]
 
   return (
-    <Transition appear show={isOpen}>
-      <Dialog
-        as="div"
-        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
-        onClose={onClose}
-      >
-        {/* Backdrop */}
-        <TransitionChild
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      padded={false}
+      className="transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white text-left align-middle transition-all dark:border-gray-700"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
+          {editingProposal ? 'Edit Proposal' : 'Create New Proposal'}
+        </DialogTitle>
+        <button
+          type="button"
+          className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800"
+          onClick={onClose}
+          disabled={isPending}
         >
-          <div className="bg-opacity-25 fixed inset-0 bg-black" />
-        </TransitionChild>
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+      </div>
 
-        {/* Dialog Container */}
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
-            <TransitionChild
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
+      {/* Scrollable Content Area */}
+      <form onSubmit={handleSubmit}>
+        <div className="max-h-[calc(90vh-200px)] overflow-y-auto px-6 py-6">
+          {/* Speaker Selection Section */}
+          <div className="mb-6">
+            <SpeakerMultiSelect
+              selectedSpeakerIds={selectedSpeakerIds}
+              onChange={setSelectedSpeakerIds}
+              conferenceId={conference._id}
+              maxSpeakers={5}
+              label="Speakers"
+              required={true}
+              error={validationErrors.speakers}
+            />
+          </div>
+
+          {/* Proposal Details Section */}
+          <ProposalDetailsForm
+            proposal={proposalData}
+            setProposal={setProposalData}
+            conference={conference}
+            allowedFormats={allowedFormats}
+          />
+          {validationErrors.title && (
+            <ErrorText>{validationErrors.title}</ErrorText>
+          )}
+          {validationErrors.format && (
+            <ErrorText>{validationErrors.format}</ErrorText>
+          )}
+          {validationErrors.level && (
+            <ErrorText>{validationErrors.level}</ErrorText>
+          )}
+          {validationErrors.tos && (
+            <ErrorText>{validationErrors.tos}</ErrorText>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+              <XCircleIcon className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons Footer */}
+        <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isPending}
             >
-              <DialogPanel className="w-full max-w-4xl transform overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white text-left align-middle shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                  <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-                    {editingProposal ? 'Edit Proposal' : 'Create New Proposal'}
-                  </DialogTitle>
-                  <button
-                    type="button"
-                    className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800"
-                    onClick={onClose}
-                    disabled={isPending}
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-
-                {/* Scrollable Content Area */}
-                <form onSubmit={handleSubmit}>
-                  <div className="max-h-[calc(90vh-200px)] overflow-y-auto px-6 py-6">
-                    {/* Speaker Selection Section */}
-                    <div className="mb-6">
-                      <SpeakerMultiSelect
-                        selectedSpeakerIds={selectedSpeakerIds}
-                        onChange={setSelectedSpeakerIds}
-                        conferenceId={conference._id}
-                        maxSpeakers={5}
-                        label="Speakers"
-                        required={true}
-                        error={validationErrors.speakers}
-                      />
-                    </div>
-
-                    {/* Proposal Details Section */}
-                    <ProposalDetailsForm
-                      proposal={proposalData}
-                      setProposal={setProposalData}
-                      conference={conference}
-                      allowedFormats={allowedFormats}
-                    />
-                    {validationErrors.title && (
-                      <ErrorText>{validationErrors.title}</ErrorText>
-                    )}
-                    {validationErrors.format && (
-                      <ErrorText>{validationErrors.format}</ErrorText>
-                    )}
-                    {validationErrors.level && (
-                      <ErrorText>{validationErrors.level}</ErrorText>
-                    )}
-                    {validationErrors.tos && (
-                      <ErrorText>{validationErrors.tos}</ErrorText>
-                    )}
-
-                    {/* Error Display */}
-                    {error && (
-                      <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                        <XCircleIcon className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
-                        <p className="text-sm text-red-800 dark:text-red-200">
-                          {error}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons Footer */}
-                  <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-                    <div className="flex justify-end gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onClose}
-                        disabled={isPending}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={isPending}
-                        className="min-w-[140px]"
-                        title="Save changes"
-                      >
-                        {isPending ? (
-                          <span className="flex items-center gap-2">
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            {editingProposal ? 'Updating...' : 'Creating...'}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span>
-                              {editingProposal
-                                ? 'Update Proposal'
-                                : 'Create Proposal'}
-                            </span>
-                            <kbd className="rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white dark:border-indigo-600 dark:bg-indigo-700">
-                              ⌘S
-                            </kbd>
-                          </span>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </form>
-              </DialogPanel>
-            </TransitionChild>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isPending}
+              className="min-w-35"
+              title="Save changes"
+            >
+              {isPending ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  {editingProposal ? 'Updating...' : 'Creating...'}
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <span>
+                    {editingProposal ? 'Update Proposal' : 'Create Proposal'}
+                  </span>
+                  <kbd className="rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white dark:border-indigo-600 dark:bg-indigo-700">
+                    ⌘S
+                  </kbd>
+                </span>
+              )}
+            </Button>
           </div>
         </div>
-      </Dialog>
-    </Transition>
+      </form>
+    </ModalShell>
   )
 }

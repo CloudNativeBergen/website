@@ -3,7 +3,10 @@ import { type SchemaTypeDefinition } from 'sanity'
 import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
+import contractTemplate from './schemaTypes/contractTemplate'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
+import dashboardConfig from './schemaTypes/dashboardConfig'
+import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
@@ -24,17 +27,36 @@ import staff from './schemaTypes/staff'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
+    // Core content
     blockContent,
+    dataProcessingConsent,
     fileAttachment,
     urlAttachment,
+
+    // Conference
     conference,
-    coSpeakerInvitation,
-    imageGallery,
-    review,
     schedule,
+    dashboardConfig,
+    imageGallery,
+    volunteer,
+
+    // Topics & Talks
+    talk,
+    topic,
+    review,
+    workshopSignup,
+
+    // Speakers
     speaker,
     speakerBadge,
+    coSpeakerInvitation,
+    travelSupport,
+    travelExpense,
+
+    // Sponsors
     sponsor,
+    sponsorTier,
+    sponsorForConference,
     sponsorActivity,
     sponsorEmailTemplate,
     sponsorForConference,
@@ -46,5 +68,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     volunteer,
     workshopSignup,
     staff,
+    contractTemplate,
   ],
 }

@@ -9,6 +9,7 @@ import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
 import { ProposalStatistics } from './ProposalStatistics'
 import { useProposalFiltering, useFilterStateWithURL } from './hooks'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface ProposalsListProps {
   proposals: ProposalExisting[]
@@ -156,12 +157,7 @@ function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
       </p>
       <div className="mt-6">
         {hasProposals ? (
-          <button
-            onClick={onClearFilters}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-          >
-            Clear All Filters
-          </button>
+          <AdminButton onClick={onClearFilters}>Clear All Filters</AdminButton>
         ) : (
           <Link
             href="/cfp"

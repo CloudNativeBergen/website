@@ -2,6 +2,7 @@ const nextPlugin = require('@next/eslint-plugin-next')
 const tseslint = require('typescript-eslint')
 const reactHooksPlugin = require('eslint-plugin-react-hooks')
 const importPlugin = require('eslint-plugin-import')
+const storybookPlugin = require('eslint-plugin-storybook')
 
 const eslintConfig = [
   // Global ignores - these apply to all configurations
@@ -28,11 +29,15 @@ const eslintConfig = [
       '__tests__/**/*.test.{js,ts,tsx}',
       '__tests__/**/testdata/**',
       '__tests__/**/mocks/**',
+      'storybook-static/**', // Built Storybook output
     ],
   },
 
   // TypeScript configuration
   ...tseslint.configs.recommended,
+
+  // Storybook configuration
+  ...storybookPlugin.configs['flat/recommended'],
 
   // Main configuration for TypeScript and JavaScript files
   {

@@ -2,17 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import {
-  Dialog,
-  DialogPanel,
   Combobox,
   ComboboxInput,
   ComboboxOptions,
   ComboboxOption,
   ComboboxButton,
-  Transition,
-  TransitionChild,
 } from '@headlessui/react'
-import { useTheme } from 'next-themes'
 import {
   BuildingOffice2Icon,
   XMarkIcon,
@@ -20,7 +15,7 @@ import {
   ChevronUpDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
-import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
+import { Dropdown } from '@/components/Form'
 import {
   ConferenceSponsor,
   SponsorTierExisting,
@@ -29,10 +24,12 @@ import {
 } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
 import { SponsorLogoEditor } from './SponsorLogoEditor'
+import { ModalShell } from '@/components/ModalShell'
 
 interface SponsorAddModalProps {
   isOpen: boolean
   onClose: () => void
+  conferenceId: string
   sponsorTiers: SponsorTierExisting[]
   preselectedTierId?: string
   editingSponsor?: ConferenceSponsor | null
@@ -47,21 +44,21 @@ interface SponsorFormData extends SponsorInput {
 export function SponsorAddModal({
   isOpen,
   onClose,
+  conferenceId,
   sponsorTiers,
   preselectedTierId,
   editingSponsor,
   onSponsorAdded,
   onSponsorUpdated,
 }: SponsorAddModalProps) {
-  const { theme } = useTheme()
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
     logo: null,
-    logo_bright: null,
+    logoBright: null,
     tierId: preselectedTierId || '',
-    org_number: '',
+    orgNumber: '',
   })
 
   const [availableSponsors, setAvailableSponsors] = useState<SponsorExisting[]>(
@@ -84,11 +81,8 @@ export function SponsorAddModal({
       utils.sponsor.list.invalidate()
     },
   })
-  const addToConferenceMutation = api.sponsor.addToConference.useMutation({
-    onSuccess: () => {
-      utils.sponsor.list.invalidate()
-    },
-  })
+  const crmCreateMutation = api.sponsor.crm.create.useMutation()
+  const crmUpdateMutation = api.sponsor.crm.update.useMutation()
   const utils = api.useUtils()
 
   useEffect(() => {
@@ -110,9 +104,9 @@ export function SponsorAddModal({
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
           logo: editingSponsor.sponsor.logo || null,
-          logo_bright: editingSponsor.sponsor.logo_bright || null,
+          logoBright: editingSponsor.sponsor.logoBright || null,
           tierId: tierMatch?._id || '',
-          org_number: '',
+          orgNumber: '',
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -122,9 +116,9 @@ export function SponsorAddModal({
           name: '',
           website: '',
           logo: null,
-          logo_bright: null,
+          logoBright: null,
           tierId: preselectedTierId || '',
-          org_number: '',
+          orgNumber: '',
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -147,8 +141,8 @@ export function SponsorAddModal({
         name: formData.name,
         website: formData.website,
         logo: formData.logo || null,
-        logo_bright: formData.logo_bright || null,
-        org_number: formData.org_number || undefined,
+        logoBright: formData.logoBright || null,
+        orgNumber: formData.orgNumber || undefined,
       }
 
       if (editingSponsor) {
@@ -161,42 +155,42 @@ export function SponsorAddModal({
           throw new Error('Could not find existing sponsor to update')
         }
 
+        const updatedSponsor = (await updateMutation.mutateAsync({
+          id: existingSponsor._id,
+          data: sponsorData,
+        })) as SponsorExisting
+
         const currentTierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
-        const newTierMatch = sponsorTiers.find(
-          (tier) => tier._id === formData.tierId,
-        )
-
-        const sponsorUpdateData = {
-          ...sponsorData,
-
-          ...(currentTierMatch?._id !== newTierMatch?._id && {
-            tierId: formData.tierId,
-          }),
-        }
-
-        const updatedSponsor = (await updateMutation.mutateAsync({
-          id: existingSponsor._id,
-          data: sponsorUpdateData,
-        })) as SponsorExisting
-
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
         )
 
+        if (
+          editingSponsor._sfcId &&
+          currentTierMatch?._id !== selectedTier?._id
+        ) {
+          await crmUpdateMutation.mutateAsync({
+            id: editingSponsor._sfcId,
+            tier: selectedTier?._id,
+          })
+        }
+
         const updatedConferenceSponsor: ConferenceSponsor = {
+          _sfcId: editingSponsor._sfcId,
           sponsor: {
             _id: updatedSponsor._id,
             name: updatedSponsor.name,
             website: updatedSponsor.website,
             logo: updatedSponsor.logo,
-            logo_bright: updatedSponsor.logo_bright,
+            logoBright: updatedSponsor.logoBright,
           },
           tier: {
+            _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
-            tier_type: selectedTier?.tier_type,
+            tierType: selectedTier?.tierType,
           },
         }
 
@@ -210,7 +204,7 @@ export function SponsorAddModal({
                     ...sponsor,
                     name: updatedSponsor.name,
                     logo: updatedSponsor.logo,
-                    logo_bright: updatedSponsor.logo_bright,
+                    logoBright: updatedSponsor.logoBright,
                     website: updatedSponsor.website,
                   }
                 : sponsor,
@@ -232,9 +226,13 @@ export function SponsorAddModal({
           finalSponsorId = selectedExistingSponsor._id
         }
 
-        await addToConferenceMutation.mutateAsync({
-          sponsorId: finalSponsorId,
-          tierId: formData.tierId,
+        const sfcResult = await crmCreateMutation.mutateAsync({
+          sponsor: finalSponsorId,
+          conference: conferenceId,
+          tier: formData.tierId,
+          status: 'closed-won',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
         })
 
         const selectedTier = sponsorTiers.find(
@@ -242,17 +240,19 @@ export function SponsorAddModal({
         )
 
         const addedSponsor: ConferenceSponsor = {
+          _sfcId: sfcResult?._id,
           sponsor: {
             _id: finalSponsorId,
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
-            logo_bright: formData.logo_bright || undefined,
+            logoBright: formData.logoBright || undefined,
           },
           tier: {
+            _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
-            tier_type: selectedTier?.tier_type,
+            tierType: selectedTier?.tierType,
           },
         }
 
@@ -266,7 +266,7 @@ export function SponsorAddModal({
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
-            logo_bright: formData.logo_bright,
+            logoBright: formData.logoBright,
           }
           setAvailableSponsors((prev) =>
             [...prev, newSponsor].sort((a, b) => a.name.localeCompare(b.name)),
@@ -293,9 +293,9 @@ export function SponsorAddModal({
         name: sponsor.name,
         website: sponsor.website || '',
         logo: sponsor.logo || '',
-        logo_bright: sponsor.logo_bright || '',
+        logoBright: sponsor.logoBright || '',
         tierId: formData.tierId,
-        org_number: '',
+        orgNumber: '',
       })
       setSponsorId(sponsor._id)
       setIsCreatingNew(false)
@@ -310,8 +310,8 @@ export function SponsorAddModal({
       name: query,
       website: '',
       logo: null,
-      logo_bright: null,
-      org_number: '',
+      logoBright: null,
+      orgNumber: '',
     }))
     setSponsorId('')
 
@@ -341,326 +341,276 @@ export function SponsorAddModal({
   }
 
   return (
-    <Transition appear show={isOpen}>
-      <Dialog
-        as="div"
-        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
-        onClose={onClose}
-      >
-        <TransitionChild
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      className="max-h-screen overflow-y-auto rounded-xl shadow-lg"
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
+          {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
+        </h3>
+        <button
+          onClick={onClose}
+          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
         >
-          <div className="bg-opacity-25 fixed inset-0 bg-black" />
-        </TransitionChild>
+          <span className="sr-only">Close</span>
+          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+        </button>
+      </div>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
-            <TransitionChild
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <DialogPanel className="max-h-screen w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-                    {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
-                  </h3>
-                  <button
-                    onClick={onClose}
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <div>
+          <Dropdown
+            name="tier"
+            label="Sponsor Tier *"
+            options={
+              new Map(
+                sponsorTiers
+                  .sort((a, b) => {
+                    const getMaxPrice = (tier: SponsorTierExisting) => {
+                      if (!tier.price || tier.price.length === 0) return 0
+                      return Math.max(...tier.price.map((p) => p.amount))
+                    }
+                    return getMaxPrice(b) - getMaxPrice(a)
+                  })
+                  .map((tier) => [tier._id, tier.title]),
+              )
+            }
+            value={formData.tierId}
+            setValue={(val) =>
+              setFormData((prev) => ({
+                ...prev,
+                tierId: val,
+              }))
+            }
+            required
+            placeholder="Select a tier..."
+          />
+        </div>
+
+        {!editingSponsor && (
+          <div>
+            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+              Select Sponsor
+            </label>
+            <div className="mt-2">
+              <Combobox
+                value={selectedExistingSponsor}
+                onChange={handleSponsorSelection}
+              >
+                <div className="relative">
+                  <ComboboxInput
+                    className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                    displayValue={(sponsor: SponsorExisting) =>
+                      sponsor?.name || ''
+                    }
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search existing sponsors or create new..."
+                  />
+                  <ComboboxButton className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
+                    <ChevronUpDownIcon
+                      className="h-5 w-5 text-gray-400 dark:text-gray-500"
+                      aria-hidden="true"
+                    />
+                  </ComboboxButton>
+
+                  <ComboboxOptions className="ring-opacity-5 absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black focus:outline-none sm:text-sm dark:bg-gray-800 dark:ring-gray-700">
+                    {!isCreatingNew && (
+                      <ComboboxOption
+                        value={null}
+                        className="group relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 select-none hover:bg-indigo-600 hover:text-white dark:text-white"
+                      >
+                        <div className="flex items-center">
+                          <PlusIcon className="h-5 w-5 text-indigo-600 group-hover:text-white" />
+                          <span className="ml-3 block truncate font-medium">
+                            Create new sponsor
+                          </span>
+                        </div>
+                      </ComboboxOption>
+                    )}
+                    {filteredSponsors.map((sponsor) => (
+                      <ComboboxOption
+                        key={sponsor._id}
+                        value={sponsor}
+                        className={({ active }) =>
+                          `relative cursor-default py-2 pr-9 pl-3 select-none ${
+                            active
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-gray-900 dark:text-white'
+                          }`
+                        }
+                      >
+                        {({ active, selected }) => (
+                          <>
+                            <div className="flex items-center">
+                              <BuildingOffice2Icon
+                                className={`h-5 w-5 ${
+                                  active ? 'text-white' : 'text-gray-400'
+                                }`}
+                              />
+                              <span
+                                className={`ml-3 block truncate ${
+                                  selected ? 'font-semibold' : 'font-normal'
+                                }`}
+                              >
+                                {sponsor.name}
+                              </span>
+                            </div>
+                            {selected && (
+                              <span
+                                className={`absolute inset-y-0 right-0 flex items-center pr-4 ${
+                                  active
+                                    ? 'text-white'
+                                    : 'text-indigo-600 dark:text-indigo-400'
+                                }`}
+                              >
+                                <CheckIcon
+                                  className="h-5 w-5"
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </ComboboxOption>
+                    ))}
+                  </ComboboxOptions>
+                </div>
+              </Combobox>
+            </div>
+          </div>
+        )}
+
+        {(isCreatingNew || editingSponsor || selectedExistingSponsor) && (
+          <>
+            <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
+              <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
+                Sponsor Information
+              </h4>
+              <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="name"
+                    className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                   >
-                    <span className="sr-only">Close</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-                  </button>
+                    Company Name *
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      ref={companyNameInputRef}
+                      type="text"
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      required
+                      disabled={
+                        selectedExistingSponsor != null && !isCreatingNew
+                      }
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                      placeholder="Enter company name"
+                    />
+                  </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                  <div>
-                    <label
-                      htmlFor="tier"
-                      className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                    >
-                      Sponsor Tier *
-                    </label>
-                    <div className="mt-2 grid grid-cols-1">
-                      <select
-                        id="tier"
-                        value={formData.tierId}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            tierId: e.target.value,
-                          }))
-                        }
-                        required
-                        className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
-                      >
-                        <option value="">Select a tier...</option>
-                        {sponsorTiers
-                          .sort((a, b) => {
-                            const getMaxPrice = (tier: SponsorTierExisting) => {
-                              if (!tier.price || tier.price.length === 0)
-                                return 0
-                              return Math.max(
-                                ...tier.price.map((p) => p.amount),
-                              )
-                            }
-                            return getMaxPrice(b) - getMaxPrice(a)
-                          })
-                          .map((tier) => (
-                            <option key={tier._id} value={tier._id}>
-                              {tier.title}
-                            </option>
-                          ))}
-                      </select>
-                      <ChevronDownIconSmall
-                        aria-hidden="true"
-                        className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-                      />
-                    </div>
-                  </div>
-
-                  {!editingSponsor && (
-                    <div>
-                      <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                        Select Sponsor
-                      </label>
-                      <div className="mt-2">
-                        <Combobox
-                          value={selectedExistingSponsor}
-                          onChange={handleSponsorSelection}
-                        >
-                          <div className="relative">
-                            <ComboboxInput
-                              className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                              displayValue={(sponsor: SponsorExisting) =>
-                                sponsor?.name || ''
-                              }
-                              onChange={(event) => setQuery(event.target.value)}
-                              placeholder="Search existing sponsors or create new..."
-                            />
-                            <ComboboxButton className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
-                              <ChevronUpDownIcon
-                                className="h-5 w-5 text-gray-400 dark:text-gray-500"
-                                aria-hidden="true"
-                              />
-                            </ComboboxButton>
-
-                            <ComboboxOptions className="ring-opacity-5 absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black focus:outline-none sm:text-sm">
-                              {!isCreatingNew && (
-                                <ComboboxOption
-                                  value={null}
-                                  className="group relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 select-none hover:bg-indigo-600 hover:text-white"
-                                >
-                                  <div className="flex items-center">
-                                    <PlusIcon className="h-5 w-5 text-indigo-600 group-hover:text-white" />
-                                    <span className="ml-3 block truncate font-medium">
-                                      Create new sponsor
-                                    </span>
-                                  </div>
-                                </ComboboxOption>
-                              )}
-                              {filteredSponsors.map((sponsor) => (
-                                <ComboboxOption
-                                  key={sponsor._id}
-                                  value={sponsor}
-                                  className={({ active }) =>
-                                    `relative cursor-default py-2 pr-9 pl-3 select-none ${
-                                      active
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'text-gray-900'
-                                    }`
-                                  }
-                                >
-                                  {({ active, selected }) => (
-                                    <>
-                                      <div className="flex items-center">
-                                        <BuildingOffice2Icon
-                                          className={`h-5 w-5 ${
-                                            active
-                                              ? 'text-white'
-                                              : 'text-gray-400'
-                                          }`}
-                                        />
-                                        <span
-                                          className={`ml-3 block truncate ${
-                                            selected
-                                              ? 'font-semibold'
-                                              : 'font-normal'
-                                          }`}
-                                        >
-                                          {sponsor.name}
-                                        </span>
-                                      </div>
-                                      {selected && (
-                                        <span
-                                          className={`absolute inset-y-0 right-0 flex items-center pr-4 ${
-                                            active
-                                              ? 'text-white'
-                                              : 'text-indigo-600'
-                                          }`}
-                                        >
-                                          <CheckIcon
-                                            className="h-5 w-5"
-                                            aria-hidden="true"
-                                          />
-                                        </span>
-                                      )}
-                                    </>
-                                  )}
-                                </ComboboxOption>
-                              ))}
-                            </ComboboxOptions>
-                          </div>
-                        </Combobox>
-                      </div>
-                    </div>
-                  )}
-
-                  {(isCreatingNew ||
-                    editingSponsor ||
-                    selectedExistingSponsor) && (
-                    <>
-                      <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
-                        <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
-                          Sponsor Information
-                        </h4>
-                        <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="name"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Company Name *
-                            </label>
-                            <div className="mt-2">
-                              <input
-                                ref={companyNameInputRef}
-                                type="text"
-                                id="name"
-                                value={formData.name}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    name: e.target.value,
-                                  }))
-                                }
-                                required
-                                disabled={
-                                  selectedExistingSponsor != null &&
-                                  !isCreatingNew
-                                }
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                                placeholder="Enter company name"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="website"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Website *
-                            </label>
-                            <div className="mt-2">
-                              <input
-                                type="url"
-                                id="website"
-                                value={formData.website}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    website: e.target.value,
-                                  }))
-                                }
-                                required
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                placeholder="https://example.com"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="org_number"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Organization Number
-                            </label>
-                            <div className="mt-2">
-                              <input
-                                type="text"
-                                id="org_number"
-                                value={formData.org_number}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    org_number: e.target.value,
-                                  }))
-                                }
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                placeholder="Enter organization number"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <SponsorLogoEditor
-                              logo={formData.logo || null}
-                              logoBright={formData.logo_bright || null}
-                              name={formData.name}
-                              onChange={(updates) =>
-                                setFormData((prev) => ({ ...prev, ...updates }))
-                              }
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  <div className="flex justify-end gap-3 pt-6">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold whitespace-nowrap text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700 dark:focus-visible:outline-indigo-500"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={
-                        !isFormValid() ||
-                        createMutation.isPending ||
-                        updateMutation.isPending ||
-                        addToConferenceMutation.isPending
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="website"
+                    className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                  >
+                    Website *
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="url"
+                      id="website"
+                      value={formData.website}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          website: e.target.value,
+                        }))
                       }
-                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
-                    >
-                      {createMutation.isPending ||
-                      updateMutation.isPending ||
-                      addToConferenceMutation.isPending
-                        ? 'Saving...'
-                        : editingSponsor
-                          ? 'Update Sponsor'
-                          : 'Add Sponsor'}
-                    </button>
+                      required
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                      placeholder="https://example.com"
+                    />
                   </div>
-                </form>
-              </DialogPanel>
-            </TransitionChild>
-          </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="orgNumber"
+                    className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                  >
+                    Organization Number
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      id="orgNumber"
+                      value={formData.orgNumber}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          orgNumber: e.target.value,
+                        }))
+                      }
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                      placeholder="Enter organization number"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <SponsorLogoEditor
+                    logo={formData.logo || null}
+                    logoBright={formData.logoBright || null}
+                    name={formData.name}
+                    onChange={(updates) =>
+                      setFormData((prev) => ({ ...prev, ...updates }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-3 pt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold whitespace-nowrap text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700 dark:focus-visible:outline-indigo-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={
+              !isFormValid() ||
+              createMutation.isPending ||
+              updateMutation.isPending ||
+              crmCreateMutation.isPending
+            }
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
+          >
+            {createMutation.isPending ||
+            updateMutation.isPending ||
+            crmCreateMutation.isPending
+              ? 'Saving...'
+              : editingSponsor
+                ? 'Update Sponsor'
+                : 'Add Sponsor'}
+          </button>
         </div>
-      </Dialog>
-    </Transition>
+      </form>
+    </ModalShell>
   )
 }

@@ -168,17 +168,17 @@ export async function sendFormattedMultiSpeakerEmail({
       proposalUrl: proposalUrl,
       eventName: conference.title,
       eventLocation: `${conference.city}, ${conference.country}`,
-      eventDate: conference.start_date || '',
+      eventDate: conference.startDate || '',
       eventUrl: `https://${conference.domains[0]}`,
       subject: subject,
       message: message,
       senderName: senderName,
-      socialLinks: conference.social_links || [],
+      socialLinks: conference.socialLinks || [],
     })
 
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: `${conference.organizer} <${conference.cfp_email}>`,
+        from: `${conference.organizer} <${conference.cfpEmail}>`,
         to: speakers.map((s) => s.email),
         subject: subject,
         react: emailTemplate,

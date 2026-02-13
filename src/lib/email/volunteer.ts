@@ -10,14 +10,14 @@ import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalT
 
 interface ConferenceForEmail {
   title: string
-  contact_email?: string
-  cfp_email?: string
+  contactEmail?: string
+  cfpEmail?: string
   city?: string
   country?: string
-  start_date?: string
+  startDate?: string
   domains?: string[]
   organizer?: string
-  social_links?: Array<{
+  socialLinks?: Array<{
     platform: string
     url: string
   }>
@@ -36,7 +36,7 @@ export async function sendVolunteerApprovalEmail(
       }
     }
 
-    const fromEmail = conference.contact_email || conference.cfp_email
+    const fromEmail = conference.contactEmail || conference.cfpEmail
     if (!fromEmail) {
       return {
         error: createEmailError(
@@ -51,11 +51,11 @@ export async function sendVolunteerApprovalEmail(
       conference.city && conference.country
         ? `${conference.city}, ${conference.country}`
         : 'Location TBA'
-    const eventDate = conference.start_date
-      ? formatConferenceDateLong(conference.start_date)
+    const eventDate = conference.startDate
+      ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
     const eventUrl = `https://${conference.domains?.[0] || 'cloudnativebergen.no'}`
-    const socialLinks = conference.social_links?.map((link) => link.url) || []
+    const socialLinks = conference.socialLinks?.map((link) => link.url) || []
 
     const result = await retryWithBackoff(async () => {
       const response = await resend.emails.send({

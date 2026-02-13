@@ -2,6 +2,7 @@ import type { SponsorForConferenceExpanded } from './types'
 
 export interface SponsorPipelineData {
   byStatus: Record<string, number>
+  byStatusValue: Record<string, number>
   byContractStatus: Record<string, number>
   byInvoiceStatus: Record<string, number>
   totalContractValue: number
@@ -16,6 +17,7 @@ export function aggregateSponsorPipeline(
   sponsors: SponsorForConferenceExpanded[],
 ): SponsorPipelineData {
   const byStatus: Record<string, number> = {}
+  const byStatusValue: Record<string, number> = {}
   const byContractStatus: Record<string, number> = {}
   const byInvoiceStatus: Record<string, number> = {}
   let totalContractValue = 0
@@ -24,15 +26,17 @@ export function aggregateSponsorPipeline(
 
   for (const s of sponsors) {
     byStatus[s.status] = (byStatus[s.status] || 0) + 1
-    byContractStatus[s.contract_status] =
-      (byContractStatus[s.contract_status] || 0) + 1
-    byInvoiceStatus[s.invoice_status] =
-      (byInvoiceStatus[s.invoice_status] || 0) + 1
+    byStatusValue[s.status] =
+      (byStatusValue[s.status] || 0) + (s.contractValue || 0)
+    byContractStatus[s.contractStatus] =
+      (byContractStatus[s.contractStatus] || 0) + 1
+    byInvoiceStatus[s.invoiceStatus] =
+      (byInvoiceStatus[s.invoiceStatus] || 0) + 1
 
     if (s.status === 'closed-won') {
       closedWonCount++
-      if (s.contract_value) {
-        totalContractValue += s.contract_value
+      if (s.contractValue) {
+        totalContractValue += s.contractValue
       }
     } else if (s.status === 'closed-lost') {
       closedLostCount++
@@ -46,10 +50,11 @@ export function aggregateSponsorPipeline(
 
   return {
     byStatus,
+    byStatusValue,
     byContractStatus,
     byInvoiceStatus,
     totalContractValue,
-    contractCurrency: sponsors[0]?.contract_currency || 'NOK',
+    contractCurrency: sponsors[0]?.contractCurrency || 'NOK',
     totalSponsors: sponsors.length,
     closedWonCount,
     closedLostCount,

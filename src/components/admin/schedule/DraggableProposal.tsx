@@ -378,7 +378,7 @@ export function DraggableProposal({
         title={tooltipContent}
         {...attributes}
       >
-        <div className="flex min-h-[16px] items-center gap-1">
+        <div className="flex min-h-4 items-center gap-1">
           <div
             className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}

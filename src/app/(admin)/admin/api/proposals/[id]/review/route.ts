@@ -25,7 +25,7 @@ export const POST = auth(
       await getProposalSanity({
         id: id,
         speakerId: req.auth!.speaker._id,
-        isOrganizer: req.auth!.speaker.is_organizer,
+        isOrganizer: req.auth!.speaker.isOrganizer,
         includeReviews: true,
       })
     if (checkErr || !existingProposal) {
@@ -53,9 +53,19 @@ export const POST = auth(
         review.reviewer._id === req.auth!.speaker._id,
     )
 
+    const conferenceId =
+      '_id' in existingProposal.conference
+        ? existingProposal.conference._id
+        : (existingProposal.conference as { _ref: string })._ref
+
     const reviewOperation = userReview
       ? updateReview(userReview._id, req.auth!.speaker._id, data)
-      : createReview(existingProposal._id, req.auth!.speaker._id, data)
+      : createReview(
+          existingProposal._id,
+          req.auth!.speaker._id,
+          conferenceId,
+          data,
+        )
 
     const { review, reviewError } = await reviewOperation
 

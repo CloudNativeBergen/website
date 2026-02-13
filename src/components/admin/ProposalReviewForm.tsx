@@ -7,6 +7,8 @@ import { Review, ReviewBase } from '@/lib/review/types'
 import { adminPostReview } from '@/lib/review/client'
 import { adminFetchNextUnreviewedProposal } from '@/lib/proposal'
 import { useNotification } from './NotificationProvider'
+import { Textarea } from '@/components/Form'
+import { AdminButton } from '@/components/admin/AdminButton'
 import { useRouter } from 'next/navigation'
 
 interface ProposalReviewFormProps {
@@ -165,40 +167,31 @@ export function ProposalReviewForm({
 
         {/* Comment */}
         <div>
-          <label
-            htmlFor="comment"
-            className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Comment
-          </label>
-          <textarea
-            id="comment"
+          <Textarea
             name="comment"
+            label="Comment"
             rows={3}
-            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-500"
-            placeholder="Write your review comments here..."
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            setValue={setComment}
+            placeholder="Write your review comments here..."
           />
         </div>
 
         {/* Submit Button */}
         <div className="flex justify-end space-x-2">
-          <button
-            type="button"
+          <AdminButton
+            variant="secondary"
             onClick={handleNextProposal}
             disabled={isLoadingNext}
-            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           >
             <ArrowRightIcon className="h-4 w-4" />
             {isLoadingNext ? 'Loading...' : 'Next'}
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
             type="submit"
             disabled={
               isSubmitting || Object.values(ratings).some((r) => r === 0)
             }
-            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             <PaperAirplaneIcon className="h-4 w-4" />
             {isSubmitting
@@ -206,7 +199,7 @@ export function ProposalReviewForm({
               : existingReview
                 ? 'Update Review'
                 : 'Submit Review'}
-          </button>
+          </AdminButton>
         </div>
       </form>
     </div>

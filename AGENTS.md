@@ -42,7 +42,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Follow Next.js best practices (App Router, Server Components, Server Actions where applicable).
 - Utilize TypeScript for type safety.
 - Adhere to Tailwind CSS utility-first principles for styling.
-- Refer to the branding page (`/branding` or `docs/BRANDING.md`) for styling guidelines and maintain visual consistency.
+- Refer to the Storybook documentation (run `pnpm storybook`) for comprehensive design system guidelines, brand colors, typography, and component examples. All UI/UX design decisions should align with the documented design system.
 - Fetch and manage content primarily through Sanity.
 - Implement authentication flows using NextAuth.js 5.0 with the specified providers.
 - Ensure code is clean, maintainable and only comment when absolutely required to understand why the code is written in a certain way.
@@ -51,6 +51,134 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Use Vercel for deployment previews and production hosting.
 - **JSX/TSX Content:** Use HTML entities (`&apos;` for apostrophes and `&quot;` for quotes) instead of raw quotes in JSX/TSX content to comply with linting rules.
 - **Icons:** Use Heroicons (`@heroicons/react`) for all icon needs instead of creating custom SVG elements. Import icons from either `/24/outline` for stroke icons or `/24/solid` for filled icons. This ensures consistency and maintainability across the application.
+
+### Storybook & Design System
+
+The Storybook (`pnpm storybook`) is the single source of truth for all UI/UX documentation and should be consulted and updated for all visual design tasks.
+
+**Storybook Structure:**
+
+- **Getting Started/** - Introduction and developer guides
+- **Design System/Foundation/** - Colors, Typography, Spacing, Shadows, Icons
+- **Design System/Brand/** - Brand story, color palette, typography system, buttons, cloud native patterns
+- **Design System/Examples/** - Integration patterns showing how components work together (hero sections, conference landing page, admin pages)
+- **Components/** - General-purpose reusable components organized by category:
+  - **Data Display/** - CollapsibleDescription, CollapsibleSection, DownloadableImage, Email Templates, ShowMore, TypewriterEffect, VideoEmbed
+  - **Feedback/** - ConfirmationModal, ErrorDisplay, LoadingSkeleton
+  - **Forms/** - Form Elements, FilterDropdown, PortableTextEditor
+  - **Icons/** - OSIcons, SocialIcons
+  - **Layout/** - BackLink, Button, Container, Logo, MissingAvatar, ThemeToggle
+- **Systems/** - Domain-specific feature documentation organized by system:
+  - **Program/** - Schedule views (grid, list, agenda, schedule), filters, talk cards
+  - **Proposals/** - Proposal submission, review, and admin management components
+  - **Speakers/** - Speaker profiles, forms, and admin management components
+  - **Sponsors/** - Sponsor system (CRM pipeline, contacts, email, tiers, onboarding, dashboard)
+
+**Story Types & Organization:**
+
+There are two distinct types of stories with different purposes:
+
+1. **Component Stories** (individual component docs)
+   - Live alongside components in `/src/components/`
+   - Document a single component&apos;s props, variants, and usage
+   - Include interactive controls for testing
+   - Domain-specific components go under `Systems/{SystemName}/`
+
+2. **Examples Stories** (integration patterns)
+   - Located in `/src/docs/design-system/examples/`
+   - Show how multiple components work together
+   - Demonstrate common application patterns
+   - Render live components with realistic data
+
+**When to Update Storybook:**
+
+- When adding new reusable components, create corresponding stories
+- When modifying brand colors, typography, or visual patterns
+- When creating new page layouts or component variants
+- When documenting UI/UX best practices or guidelines
+- When adding domain-specific components, place them under the appropriate system
+
+**Story Files Location:**
+
+- General component stories: alongside components in `/src/components/`
+- Domain-specific component stories: alongside components with `Systems/{SystemName}/` title prefix
+- Documentation pages: `/src/docs/` (organized by category)
+- System documentation: `/src/docs/{SystemName}.stories.tsx`
+
+**Creating Component Stories:**
+
+```typescript
+// Component story (lives next to component file)
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { MyComponent } from './MyComponent'
+
+const meta = {
+  title: 'Components/Layout/MyComponent', // or 'Systems/Speakers/MyComponent' for domain-specific
+  component: MyComponent,
+  tags: ['autodocs'],
+} satisfies Meta<typeof MyComponent>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const Default: Story = {
+  args: { variant: 'default' },
+}
+```
+
+**Creating Documentation Stories:**
+
+```typescript
+// Documentation story (in /src/docs/)
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+
+const meta = {
+  title: 'Design System/Foundation/NewCategory',
+  parameters: {
+    layout: 'fullscreen',
+    options: { showPanel: false },
+  },
+} satisfies Meta
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const Documentation: Story = {
+  render: () => <YourDocumentationComponent />,
+}
+```
+
+**Known Limitations:**
+
+- `CloudNativePattern` and components using it (e.g., `SpeakerPromotionCard`) cannot be rendered in Storybook due to static SVG import incompatibility. Document these with screenshots or code examples instead.
+
+**Interaction Testing:**
+
+Stories can include `play` functions that test component behavior interactively. Import testing utilities from `storybook/test`:
+
+```typescript
+import { expect, fn, userEvent, within } from 'storybook/test'
+
+export const ClickTest: Story = {
+  args: { onClick: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement)
+    const button = canvas.getByRole('button')
+    await userEvent.click(button)
+    await expect(args.onClick).toHaveBeenCalled()
+  },
+}
+```
+
+Interaction tests run automatically in CI via `pnpm run storybook:test-ci` and can be run locally with `pnpm run storybook:test` (requires Storybook running).
+
+**Visual Regression with Chromatic:**
+
+The project uses Chromatic for visual regression testing. PRs automatically trigger visual snapshots that compare against the main branch. To set up Chromatic:
+
+1. Add `CHROMATIC_PROJECT_TOKEN` secret to GitHub repository settings
+2. PRs will show visual diff status checks
+3. Changes to main are auto-accepted as the new baseline
 
 ### Privacy and GDPR Compliance
 
@@ -80,6 +208,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
 - Always run `pnpm run check` before committing changes.
+- A pre-commit hook runs `pnpm run check && pnpm run test` automatically. After cloning, run `pnpm exec simple-git-hooks` to activate it.
 
 ### Date and Time Handling
 
@@ -115,7 +244,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 
 - **Next.js Cache Components:** All production public pages use Next.js 16+ Cache Components with the `'use cache'` directive for optimal performance in our multi-tenant architecture.
 - **Wrapper Pattern:** Pages follow a consistent pattern where an outer component reads `headers()` to extract the domain, then passes it to an inner cached component that uses `getConferenceForDomain(domain)`.
-- **Cache Durations:** Use `cacheLife('hours')` for frequently changing content (homepage, program, speakers, tickets), `cacheLife('days')` for stable content (CFP), and `cacheLife('max')` for static pages (conduct, terms, privacy, branding).
+- **Cache Durations:** Use `cacheLife('hours')` for frequently changing content (homepage, program, speakers, tickets), `cacheLife('days')` for stable content (CFP), and `cacheLife('max')` for static pages (conduct, terms, privacy).
 - **Cache Tags:** Every cached component includes a `cacheTag('content:pagename')` for granular invalidation via `revalidateTag()`.
 - **Exclusions:** Authentication flows (`/signin`) and development/testing pages (`/css-test`) are intentionally excluded from caching as they require request-time execution.
 
@@ -155,6 +284,13 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - **Testing:** `pnpm run test` - Runs Jest tests silently.
 - **Testing (Debug):** `pnpm run test:debug` - Runs Jest tests with debug output.
 - **Testing (Watch):** `pnpm run test:watch` - Runs Jest tests in watch mode.
+- **Storybook:** `pnpm storybook` - Starts the Storybook development server for design system documentation.
+- **Storybook Build:** `pnpm build-storybook` - Builds static Storybook for deployment.
+- **Storybook Tests:** `pnpm run storybook:test` - Runs Storybook interaction tests (requires Storybook running).
+- **Storybook Tests (CI):** `pnpm run storybook:test-ci` - Builds Storybook and runs tests in CI mode.
+- **Qodo CLI:** `pnpm qodo` - Main Qodo CLI for AI-powered development assistance.
+- **Qodo Chat:** `pnpm qodo:chat` - Interactive AI chat in terminal for code questions and generation.
+- **Qodo Review:** `pnpm qodo:review` - Review PR suggestions from Qodo Merge (auto-detects current branch PR, or pass PR number like `pnpm qodo:review 332`).
 - Run sanity commands with `pnpm sanity {command}` (e.g., `pnpm sanity deploy`) - do not use `npx sanity` directly.
 
 ## Code Organization & Refactoring

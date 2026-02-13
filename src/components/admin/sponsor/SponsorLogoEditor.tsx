@@ -15,7 +15,7 @@ interface SponsorLogoEditorProps {
   name: string
   onChange: (updates: {
     logo?: string | null
-    logo_bright?: string | null
+    logoBright?: string | null
   }) => void
   className?: string
 }
@@ -52,7 +52,7 @@ export function SponsorLogoEditor({
       const reader = new FileReader()
       reader.onload = (e) => {
         const svgContent = e.target?.result as string
-        onChange({ logo_bright: sanitizeSvg(svgContent) })
+        onChange({ logoBright: sanitizeSvg(svgContent) })
       }
       reader.readAsText(file)
     } else {
@@ -146,7 +146,7 @@ export function SponsorLogoEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onChange({ logo_bright: null })}
+                    onClick={() => onChange({ logoBright: null })}
                     className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Remove

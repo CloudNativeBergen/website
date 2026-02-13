@@ -52,7 +52,7 @@ export interface Speaker extends SpeakerBase {
   email: string
   providers?: string[]
   imageURL?: string
-  is_organizer?: boolean
+  isOrganizer?: boolean
 }
 
 export interface SpeakerWithTalks extends Speaker {

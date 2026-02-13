@@ -19,6 +19,7 @@ import {
   DocumentDuplicateIcon,
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
+import { Dropdown } from '@/components/Form'
 
 interface DroppableTrackProps {
   track: ScheduleTrack
@@ -168,27 +169,24 @@ const ServiceSessionModal = ({
           </div>
 
           <div>
-            <label
-              htmlFor="duration"
-              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Duration (minutes)
-            </label>
-            <select
-              id="duration"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            >
-              <option value={5}>5 minutes</option>
-              <option value={10}>10 minutes</option>
-              <option value={15}>15 minutes</option>
-              <option value={20}>20 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={45}>45 minutes</option>
-              <option value={60}>60 minutes</option>
-              <option value={90}>90 minutes</option>
-            </select>
+            <Dropdown
+              name="duration"
+              label="Duration (minutes)"
+              options={
+                new Map([
+                  ['5', '5 minutes'],
+                  ['10', '10 minutes'],
+                  ['15', '15 minutes'],
+                  ['20', '20 minutes'],
+                  ['30', '30 minutes'],
+                  ['45', '45 minutes'],
+                  ['60', '60 minutes'],
+                  ['90', '90 minutes'],
+                ])
+              }
+              value={String(duration)}
+              setValue={(val) => setDuration(Number(val))}
+            />
           </div>
 
           <div className="flex gap-3 pt-4">

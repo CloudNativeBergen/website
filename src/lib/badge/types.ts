@@ -79,13 +79,13 @@ export interface BadgeRecord {
   _id: string
   _createdAt: string
   _updatedAt: string
-  badge_id: string
+  badgeId: string
   speaker: Speaker | { _ref: string; _type: 'reference' }
   conference: Conference | { _ref: string; _type: 'reference' }
-  badge_type: BadgeType
-  issued_at: string
-  badge_json: string
-  baked_svg?: {
+  badgeType: BadgeType
+  issuedAt: string
+  badgeJson: string
+  bakedSvg?: {
     _type: 'file'
     asset: {
       _ref: string
@@ -93,11 +93,11 @@ export interface BadgeRecord {
       url?: string
     }
   }
-  verification_url?: string
-  email_sent: boolean
-  email_sent_at?: string
-  email_id?: string
-  email_error?: string
+  verificationUrl?: string
+  emailSent: boolean
+  emailSentAt?: string
+  emailId?: string
+  emailError?: string
 }
 
 export interface BadgeGenerationParams {

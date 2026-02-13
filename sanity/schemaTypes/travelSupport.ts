@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { CURRENCY_OPTIONS } from './constants'
 
 export default defineType({
   name: 'travelSupport',
@@ -82,15 +83,7 @@ export default defineType({
           title: 'Preferred Currency',
           type: 'string',
           options: {
-            list: [
-              { title: 'NOK - Norwegian Krone', value: 'NOK' },
-              { title: 'USD - US Dollar', value: 'USD' },
-              { title: 'EUR - Euro', value: 'EUR' },
-              { title: 'GBP - British Pound', value: 'GBP' },
-              { title: 'SEK - Swedish Krona', value: 'SEK' },
-              { title: 'DKK - Danish Krone', value: 'DKK' },
-              { title: 'Other', value: 'OTHER' },
-            ],
+            list: [...CURRENCY_OPTIONS],
           },
           initialValue: 'NOK',
           validation: (Rule) => Rule.required(),
@@ -171,14 +164,14 @@ export default defineType({
   preview: {
     select: {
       speakerName: 'speaker.name',
-      conferenceName: 'conference.name',
+      conferenceName: 'conference.title',
       status: 'status',
       totalAmount: 'totalAmount',
     },
     prepare({ speakerName, conferenceName, status, totalAmount }) {
       return {
         title: `${speakerName || 'Unknown Speaker'} - ${conferenceName || 'Unknown Conference'}`,
-        subtitle: `Status: ${status || 'draft'} | Total: ${totalAmount ? `$${totalAmount}` : 'No amount'}`,
+        subtitle: `Status: ${status || 'draft'} | Total: ${totalAmount ?? 'No amount'}`,
       }
     },
   },

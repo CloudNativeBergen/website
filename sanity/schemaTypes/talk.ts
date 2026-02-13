@@ -17,17 +17,21 @@ export default defineType({
       name: 'title',
       title: 'Title',
       type: 'string',
+      description: 'Title of the talk or workshop proposal',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'description',
       title: 'Description',
       type: 'array',
+      description: 'Public-facing abstract shown on the program page',
       of: [{ type: 'block' }],
     }),
     defineField({
       name: 'language',
       title: 'Language',
       type: 'string',
+      description: 'Presentation language',
       options: {
         list: Array.from(languages).map(([value, title]) => ({ value, title })),
       },
@@ -36,14 +40,17 @@ export default defineType({
       name: 'format',
       title: 'Format',
       type: 'string',
+      description: 'Session format (lightning, presentation, or workshop)',
       options: {
         list: Array.from(formats).map(([value, title]) => ({ value, title })),
       },
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'level',
       title: 'Level',
       type: 'string',
+      description: 'Technical difficulty level',
       options: {
         list: Array.from(levels).map(([value, title]) => ({ value, title })),
       },
@@ -52,6 +59,7 @@ export default defineType({
       name: 'audiences',
       title: 'Audience',
       type: 'array',
+      description: 'Target audience for this session',
       of: [{ type: 'string' }],
       options: {
         list: Array.from(audiences).map(([value, title]) => ({ value, title })),
@@ -61,6 +69,7 @@ export default defineType({
       name: 'outline',
       title: 'Outline',
       type: 'text',
+      description: 'Internal outline visible to reviewers (not public)',
     }),
     defineField({
       name: 'topics',
@@ -78,15 +87,18 @@ export default defineType({
       name: 'tos',
       title: 'Terms of Service',
       type: 'boolean',
+      description: 'Whether the speaker accepted the terms of service',
     }),
     defineField({
       name: 'status',
       title: 'Status',
       type: 'string',
+      description: 'Current status in the proposal review workflow',
       initialValue: Status.draft,
       options: {
         list: Array.from(statuses).map(([value, title]) => ({ value, title })),
       },
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'speakers',
@@ -239,15 +251,15 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      speakers: 'speakers',
+      speaker0: 'speakers.0.name',
+      speaker1: 'speakers.1.name',
+      speaker2: 'speakers.2.name',
+      speaker3: 'speakers.3.name',
     },
-    prepare(selection) {
-      const { title, speakers } = selection
-      const speakerNames =
-        speakers?.map((speaker: any) => speaker.name).join(', ') ||
-        'No speakers'
+    prepare({ title, speaker0, speaker1, speaker2, speaker3 }) {
+      const names = [speaker0, speaker1, speaker2, speaker3].filter(Boolean)
+      const speakerNames = names.length > 0 ? names.join(', ') : 'No speakers'
       return {
-        ...selection,
         title: `${title} (${speakerNames})`,
       }
     },

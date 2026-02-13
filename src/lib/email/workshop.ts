@@ -35,14 +35,14 @@ export async function sendBasicWorkshopConfirmation({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference?.contact_email
-      ? `${conference.organizer} <${conference.contact_email}>`
+    const fromEmail = conference?.contactEmail
+      ? `${conference.organizer} <${conference.contactEmail}>`
       : conference?.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
         : 'Cloud Native Days <contact@cloudnativedays.org>'
 
     const contactEmail =
-      conference?.contact_email || 'contact@cloudnativedays.org'
+      conference?.contactEmail || 'contact@cloudnativedays.org'
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
@@ -145,14 +145,14 @@ export async function sendWorkshopSignupInstructions({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference.contact_email
-      ? `${conference.organizer} <${conference.contact_email}>`
+    const fromEmail = conference.contactEmail
+      ? `${conference.organizer} <${conference.contactEmail}>`
       : conference.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
         : 'Cloud Native Days <contact@cloudnativedays.org>'
 
     const contactEmail =
-      conference.contact_email || 'contact@cloudnativedays.org'
+      conference.contactEmail || 'contact@cloudnativedays.org'
 
     const workshopUrl = conference.domains?.[0]
       ? `https://${conference.domains[0]}/workshop`

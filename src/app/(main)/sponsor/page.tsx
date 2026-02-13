@@ -45,8 +45,8 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
     )
   }
 
-  const allSponsorTiers = conference.sponsor_tiers || []
-  const sponsorBenefits = conference.sponsor_benefits || []
+  const allSponsorTiers = conference.sponsorTiers || []
+  const sponsorBenefits = conference.sponsorBenefits || []
 
   // Show a message if no sponsor tiers are configured
   if (allSponsorTiers.length === 0 && sponsorBenefits.length === 0) {
@@ -62,10 +62,10 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
               Sponsorship opportunities for {conference.title} will be announced
               soon. Please check back later or contact us at{' '}
               <a
-                href={`mailto:${conference.sponsor_email}?subject=Sponsorship Inquiry`}
+                href={`mailto:${conference.sponsorEmail}?subject=Sponsorship Inquiry`}
                 className="text-blue-600 hover:underline dark:text-blue-400"
               >
-                {conference.sponsor_email}
+                {conference.sponsorEmail}
               </a>{' '}
               for more information.
             </p>
@@ -81,7 +81,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
   }
 
   const standardSponsorTiers = allSponsorTiers
-    .filter((tier) => tier.tier_type === 'standard')
+    .filter((tier) => tier.tierType === 'standard')
     .sort((a, b) => {
       const getMaxPrice = (tier: SponsorTier) => {
         if (!tier.price || tier.price.length === 0) return 0
@@ -91,7 +91,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
     })
 
   const specialSponsorTiers = allSponsorTiers
-    .filter((tier) => tier.tier_type === 'special')
+    .filter((tier) => tier.tierType === 'special')
     .sort((a, b) => {
       const getMaxPrice = (tier: SponsorTier) => {
         if (!tier.price || tier.price.length === 0) return 0
@@ -102,8 +102,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
 
   const addonSponsorTiers = allSponsorTiers
     .filter(
-      (tier) =>
-        (tier.tier_type as 'standard' | 'special' | 'addon') === 'addon',
+      (tier) => (tier.tierType as 'standard' | 'special' | 'addon') === 'addon',
     )
     .sort((a, b) => {
       const getMaxPrice = (tier: SponsorTier) => {

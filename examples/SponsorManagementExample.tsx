@@ -6,6 +6,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useState } from 'react'
 import type { SponsorTierExisting, SponsorInput } from '@/lib/sponsor/types'
 
@@ -86,7 +87,7 @@ export function SponsorManagement() {
       {/* Loading State */}
       {loadingSponsors && (
         <div className="py-8 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <LoadingSpinner color="blue" />
           <p className="mt-2 text-gray-600">Loading sponsors...</p>
         </div>
       )}
@@ -116,13 +117,6 @@ export function SponsorManagement() {
                 <div>
                   <h3 className="font-semibold">{sponsor.name}</h3>
                   <p className="text-gray-600">{sponsor.website}</p>
-                  {'contact_persons' in sponsor &&
-                  sponsor.contact_persons &&
-                  Array.isArray(sponsor.contact_persons) ? (
-                    <p className="text-sm text-gray-500">
-                      {sponsor.contact_persons.length} contact person(s)
-                    </p>
-                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -179,14 +173,14 @@ export function SponsorManagement() {
                     <div className="text-right">
                       <span
                         className={`inline-block rounded px-2 py-1 text-xs ${
-                          tier.tier_type === 'special'
+                          tier.tierType === 'special'
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {tier.tier_type}
+                        {tier.tierType}
                       </span>
-                      {tier.sold_out && (
+                      {tier.soldOut && (
                         <div className="mt-1 text-xs text-red-600">
                           Sold Out
                         </div>

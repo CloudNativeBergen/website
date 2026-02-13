@@ -26,17 +26,17 @@ const baseConference: Conference = {
   city: 'Bergen',
   country: 'Norway',
   tagline: 'Test Tagline',
-  start_date: '2025-06-01',
-  end_date: '2025-06-02',
-  cfp_start_date: '2025-01-01',
-  cfp_end_date: '2025-03-31',
-  cfp_notify_date: '2025-04-15',
-  cfp_email: 'cfp@test.com',
-  program_date: '2025-05-01',
-  registration_enabled: true,
-  registration_link: 'https://tickets.test.com',
-  contact_email: 'info@test.com',
-  sponsor_email: 'sponsors@test.com',
+  startDate: '2025-06-01',
+  endDate: '2025-06-02',
+  cfpStartDate: '2025-01-01',
+  cfpEndDate: '2025-03-31',
+  cfpNotifyDate: '2025-04-15',
+  cfpEmail: 'cfp@test.com',
+  programDate: '2025-05-01',
+  registrationEnabled: true,
+  registrationLink: 'https://tickets.test.com',
+  contactEmail: 'info@test.com',
+  sponsorEmail: 'sponsors@test.com',
   organizers: [],
   domains: ['test.example.com'],
   formats: [],
@@ -103,8 +103,8 @@ describe('Conference State Helpers', () => {
     it('returns false when dates are missing', () => {
       const conferenceNoDates = {
         ...baseConference,
-        cfp_start_date: '',
-        cfp_end_date: '',
+        cfpStartDate: '',
+        cfpEndDate: '',
       }
       expect(isCfpOpen(conferenceNoDates)).toBe(false)
     })
@@ -129,7 +129,7 @@ describe('Conference State Helpers', () => {
     it('returns false when program date is missing', () => {
       const conferenceNoProgram = {
         ...baseConference,
-        program_date: '',
+        programDate: '',
       }
       expect(isProgramPublished(conferenceNoProgram)).toBe(false)
     })
@@ -143,13 +143,13 @@ describe('Conference State Helpers', () => {
 
     it('returns false when registration disabled', () => {
       jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
-      const conference = { ...baseConference, registration_enabled: false }
+      const conference = { ...baseConference, registrationEnabled: false }
       expect(isRegistrationAvailable(conference)).toBe(false)
     })
 
     it('returns false when registration link missing', () => {
       jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
-      const conference = { ...baseConference, registration_link: undefined }
+      const conference = { ...baseConference, registrationLink: undefined }
       expect(isRegistrationAvailable(conference)).toBe(false)
     })
 
@@ -172,8 +172,8 @@ describe('Conference State Helpers', () => {
   describe('isWorkshopRegistrationOpen', () => {
     const workshopConference = {
       ...baseConference,
-      workshop_registration_start: '2025-05-01',
-      workshop_registration_end: '2025-05-15',
+      workshopRegistrationStart: '2025-05-01',
+      workshopRegistrationEnd: '2025-05-15',
     }
 
     it('returns true during registration period', () => {
@@ -208,7 +208,7 @@ describe('Conference State Helpers', () => {
     })
 
     it('returns false when start date is missing', () => {
-      const conferenceNoStart = { ...baseConference, start_date: '' }
+      const conferenceNoStart = { ...baseConference, startDate: '' }
       expect(isSeekingSponsors(conferenceNoStart)).toBe(false)
     })
   })

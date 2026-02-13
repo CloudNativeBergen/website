@@ -11,6 +11,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { ConfirmationModal } from '../ConfirmationModal'
 import { sanityImage } from '@/lib/sanity/client'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface ImageGridProps {
   images: GalleryImageWithSpeakers[]
@@ -119,12 +120,9 @@ export function ImageGrid({
         {selectedImages.length > 0 && (
           <div className="flex items-center gap-2">
             {onBulkTag && (
-              <button
-                onClick={onBulkTag}
-                className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-              >
+              <AdminButton size="xs" onClick={onBulkTag}>
                 Bulk Update
-              </button>
+              </AdminButton>
             )}
             <button
               onClick={async () => {
@@ -145,12 +143,13 @@ export function ImageGrid({
                 ? 'Unfeature Selected'
                 : 'Feature Selected'}
             </button>
-            <button
+            <AdminButton
+              color="red"
+              size="xs"
               onClick={() => setDeleteConfirmId('bulk')}
-              className="rounded-md bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               Delete Selected
-            </button>
+            </AdminButton>
           </div>
         )}
       </div>

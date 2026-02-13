@@ -30,14 +30,14 @@ export async function getVolunteersByConference(
       conference->{
         _id,
         title,
-        contact_email,
-        cfp_email,
+        contactEmail,
+        cfpEmail,
         city,
         country,
-        start_date,
+        startDate,
         domains,
         organizer,
-        social_links
+        socialLinks
       },
       consent,
       status,
@@ -86,14 +86,14 @@ export async function getVolunteerById(
       conference->{
         _id,
         title,
-        contact_email,
-        cfp_email,
+        contactEmail,
+        cfpEmail,
         city,
         country,
-        start_date,
+        startDate,
         domains,
         organizer,
-        social_links
+        socialLinks
       },
       consent,
       status,

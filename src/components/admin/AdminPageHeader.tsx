@@ -2,16 +2,10 @@ import React from 'react'
 import Link from 'next/link'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { AdminHeaderActions, type ActionItem } from './AdminHeaderActions'
+import { StatCard, type StatCardProps } from './stats'
 
-export interface StatCardProps {
-  value: string | number
-
-  label: string
-
-  subtitle?: string | React.ReactNode
-
-  color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
-}
+// Re-export StatCardProps for backwards compatibility
+export type { StatCardProps }
 
 export interface AdminPageHeaderProps {
   icon: React.ReactNode
@@ -36,44 +30,6 @@ export interface AdminPageHeaderProps {
     href: string
     label?: string
   }
-}
-
-function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
-  switch (color) {
-    case 'blue':
-      return 'text-brand-cloud-blue dark:text-blue-300'
-    case 'green':
-      return 'text-brand-fresh-green dark:text-green-300'
-    case 'purple':
-      return 'text-brand-nordic-purple dark:text-indigo-300'
-    case 'indigo':
-      return 'text-brand-cloud-blue dark:text-indigo-300'
-    case 'yellow':
-      return 'text-yellow-600 dark:text-yellow-300'
-    case 'red':
-      return 'text-red-600 dark:text-red-300'
-    case 'slate':
-    default:
-      return 'text-gray-900 dark:text-white'
-  }
-}
-
-function StatCard({ value, label, subtitle, color = 'slate' }: StatCardProps) {
-  const valueColorClasses = getValueColorClasses(color)
-
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
-        {label}
-      </dt>
-      <dd className={`mt-1 text-xl font-semibold ${valueColorClasses}`}>
-        {value}
-      </dd>
-      {subtitle && (
-        <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
-      )}
-    </div>
-  )
 }
 
 export function AdminPageHeader({

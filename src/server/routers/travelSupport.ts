@@ -229,7 +229,7 @@ export const travelSupportRouter = router({
           await authorizeTravelSupportOperation(
             input.travelSupportId,
             ctx.speaker._id,
-            ctx.speaker.is_organizer,
+            ctx.speaker.isOrganizer,
             'modify',
           )
 
@@ -243,7 +243,7 @@ export const travelSupportRouter = router({
           ctx.speaker.name,
           {
             travelSupportId: input.travelSupportId,
-            isAdmin: ctx.speaker.is_organizer,
+            isAdmin: ctx.speaker.isOrganizer,
           },
           'info',
         )
@@ -284,7 +284,7 @@ export const travelSupportRouter = router({
         } = await authorizeTravelSupportOperation(
           input.travelSupportId,
           ctx.speaker._id,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
           'submit',
         )
 
@@ -357,7 +357,7 @@ export const travelSupportRouter = router({
           await authorizeTravelSupportOperation(
             input.travelSupportId,
             ctx.speaker._id,
-            ctx.speaker.is_organizer,
+            ctx.speaker.isOrganizer,
             'approve',
           )
 
@@ -421,7 +421,7 @@ export const travelSupportRouter = router({
         } = await verifyTravelSupportOwnership(
           input.travelSupportId,
           ctx.speaker._id,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -498,7 +498,7 @@ export const travelSupportRouter = router({
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
           ctx.speaker._id,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -610,7 +610,7 @@ export const travelSupportRouter = router({
         } = await verifyTravelSupportOwnership(
           expense.travelSupport._ref,
           ctx.speaker._id,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -684,7 +684,7 @@ export const travelSupportRouter = router({
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
           ctx.speaker._id,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
         )
 
         if (accessError || !hasAccess || !travelSupport) {

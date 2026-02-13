@@ -20,7 +20,7 @@ export default async function AdminSponsorTiers() {
   }
 
   const sponsors: ConferenceSponsor[] = conference?.sponsors || []
-  const sponsorTiers = conference?.sponsor_tiers || []
+  const sponsorTiers = conference?.sponsorTiers || []
 
   const sponsorsByTier = sponsors.reduce(
     (acc, sponsorData) => {

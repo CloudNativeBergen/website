@@ -4,6 +4,7 @@ import type {
   ProposalWithWorkshopData,
   WorkshopSignupInput,
   WorkshopSignupExisting,
+  WorkshopStatistics,
 } from './types'
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
@@ -473,7 +474,9 @@ export async function getWorkshopsByConference(
   return workshops as ProposalWithWorkshopData[]
 }
 
-export async function getWorkshopStatistics(conferenceId: string) {
+export async function getWorkshopStatistics(
+  conferenceId: string,
+): Promise<WorkshopStatistics> {
   const { workshops } = await getWorkshops({
     conferenceId,
     statuses: [Status.confirmed],

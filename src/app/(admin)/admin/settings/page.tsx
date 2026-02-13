@@ -6,6 +6,7 @@ import {
   WorkshopRegistrationSettings,
   AdminPageHeader,
 } from '@/components/admin'
+import { StatusBadge } from '@/components/StatusBadge'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -31,31 +32,6 @@ type ArrayItem = string | NamedItem
 
 function isValidFormat(key: string): key is Format {
   return Object.values(Format).includes(key as Format)
-}
-
-function Badge({
-  children,
-  variant = 'default',
-}: {
-  children: React.ReactNode
-  variant?: 'default' | 'success' | 'warning' | 'error'
-}) {
-  const variants = {
-    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    success:
-      'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    warning:
-      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    error: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variants[variant]}`}
-    >
-      {children}
-    </span>
-  )
 }
 
 function InfoCard({
@@ -147,7 +123,7 @@ function FieldRow({
                   : (item as NamedItem)?.title ||
                     (item as NamedItem)?.name ||
                     JSON.stringify(item)
-              return <Badge key={idx}>{displayText}</Badge>
+              return <StatusBadge key={idx} label={displayText} color="gray" />
             })}
           </div>
         ) : (
@@ -189,7 +165,7 @@ function FieldRow({
                 formatKey && isValidFormat(formatKey)
                   ? formats.get(formatKey) || formatKey
                   : formatKey || 'Unknown Format'
-              return <Badge key={idx}>{displayText}</Badge>
+              return <StatusBadge key={idx} label={displayText} color="gray" />
             })}
           </div>
         ) : (
@@ -311,35 +287,35 @@ export default async function AdminSettings() {
         </InfoCard>
 
         <InfoCard title="Venue Information" icon={MapPinIcon}>
-          <FieldRow label="Venue Name" value={conference.venue_name} />
-          <FieldRow label="Venue Address" value={conference.venue_address} />
+          <FieldRow label="Venue Name" value={conference.venueName} />
+          <FieldRow label="Venue Address" value={conference.venueAddress} />
         </InfoCard>
 
         <InfoCard title="Dates & Timeline" icon={CalendarIcon}>
           <FieldRow
             label="Start Date"
-            value={conference.start_date}
+            value={conference.startDate}
             type="date"
           />
-          <FieldRow label="End Date" value={conference.end_date} type="date" />
+          <FieldRow label="End Date" value={conference.endDate} type="date" />
           <FieldRow
             label="CFP Start Date"
-            value={conference.cfp_start_date}
+            value={conference.cfpStartDate}
             type="date"
           />
           <FieldRow
             label="CFP End Date"
-            value={conference.cfp_end_date}
+            value={conference.cfpEndDate}
             type="date"
           />
           <FieldRow
             label="CFP Notify Date"
-            value={conference.cfp_notify_date}
+            value={conference.cfpNotifyDate}
             type="date"
           />
           <FieldRow
             label="Program Release Date"
-            value={conference.program_date}
+            value={conference.programDate}
             type="date"
           />
         </InfoCard>
@@ -347,32 +323,32 @@ export default async function AdminSettings() {
         <InfoCard title="Configuration" icon={DocumentTextIcon}>
           <FieldRow
             label="Registration Enabled"
-            value={conference.registration_enabled}
+            value={conference.registrationEnabled}
             type="boolean"
           />
           <FieldRow
             label="Registration Link"
-            value={conference.registration_link}
+            value={conference.registrationLink}
             type="url"
           />
           <FieldRow
             label="Contact Email"
-            value={conference.contact_email}
+            value={conference.contactEmail}
             type="email"
           />
         </InfoCard>
 
         <WorkshopRegistrationSettings
           conferenceId={conference._id}
-          workshopRegistrationStart={conference.workshop_registration_start}
-          workshopRegistrationEnd={conference.workshop_registration_end}
+          workshopRegistrationStart={conference.workshopRegistrationStart}
+          workshopRegistrationEnd={conference.workshopRegistrationEnd}
         />
 
         <InfoCard title="Domain Configuration" icon={GlobeAltIcon}>
           <FieldRow label="Domains" value={conference.domains} type="array" />
           <FieldRow
             label="Social Links"
-            value={conference.social_links}
+            value={conference.socialLinks}
             type="links"
           />
         </InfoCard>
@@ -380,11 +356,11 @@ export default async function AdminSettings() {
         <InfoCard title="External Integrations" icon={LinkIcon}>
           <FieldRow
             label="Checkin Customer ID"
-            value={conference.checkin_customer_id}
+            value={conference.checkinCustomerId}
           />
           <FieldRow
             label="Checkin Event ID"
-            value={conference.checkin_event_id}
+            value={conference.checkinEventId}
           />
         </InfoCard>
 
@@ -410,9 +386,9 @@ export default async function AdminSettings() {
           />
         </InfoCard>
 
-        {conference.sponsor_tiers && conference.sponsor_tiers.length > 0 && (
+        {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
           <InfoCard title="Sponsorship Tiers" icon={CurrencyDollarIcon}>
-            {conference.sponsor_tiers.map((tier, idx) => (
+            {conference.sponsorTiers.map((tier, idx) => (
               <div
                 key={idx}
                 className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
@@ -422,9 +398,11 @@ export default async function AdminSettings() {
                     {tier.title}
                   </span>
                   <div className="flex items-center space-x-2">
-                    {tier.sold_out && <Badge variant="error">Sold Out</Badge>}
-                    {tier.most_popular && (
-                      <Badge variant="success">Popular</Badge>
+                    {tier.soldOut && (
+                      <StatusBadge label="Sold Out" color="red" />
+                    )}
+                    {tier.mostPopular && (
+                      <StatusBadge label="Popular" color="green" />
                     )}
                   </div>
                 </div>
@@ -458,9 +436,9 @@ export default async function AdminSettings() {
           </InfoCard>
         )}
 
-        {conference.vanity_metrics && conference.vanity_metrics.length > 0 && (
+        {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
           <InfoCard title="Vanity Metrics" icon={ChartPieIcon}>
-            {conference.vanity_metrics.map((metric, idx) => (
+            {conference.vanityMetrics.map((metric, idx) => (
               <FieldRow key={idx} label={metric.label} value={metric.value} />
             ))}
           </InfoCard>

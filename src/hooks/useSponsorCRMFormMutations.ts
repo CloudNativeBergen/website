@@ -14,7 +14,7 @@ export interface SponsorCRMFormData {
   name: string
   website: string
   logo: string | null
-  logo_bright: string | null
+  logoBright: string | null
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -111,7 +111,7 @@ export function useSponsorCRMFormMutations({
       if (
         formData.website !== sponsor.sponsor.website ||
         formData.logo !== sponsor.sponsor.logo ||
-        formData.logo_bright !== sponsor.sponsor.logo_bright ||
+        formData.logoBright !== sponsor.sponsor.logoBright ||
         formData.name !== sponsor.sponsor.name
       ) {
         await updateGlobalSponsorMutation.mutateAsync({
@@ -120,7 +120,7 @@ export function useSponsorCRMFormMutations({
             name: formData.name,
             website: formData.website,
             logo: formData.logo || null,
-            logo_bright: formData.logo_bright || null,
+            logoBright: formData.logoBright || null,
           },
         })
       }
@@ -129,16 +129,16 @@ export function useSponsorCRMFormMutations({
         id: sponsor._id,
         tier: formData.tierId || undefined,
         addons: formData.addonIds,
-        contract_status: formData.contractStatus,
+        contractStatus: formData.contractStatus,
         status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
+        invoiceStatus: formData.invoiceStatus,
+        contractValue: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency,
+        contractCurrency: formData.contractCurrency,
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || null,
+        assignedTo: formData.assignedTo || null,
       })
     } else {
       await createMutation.mutateAsync({
@@ -146,16 +146,16 @@ export function useSponsorCRMFormMutations({
         conference: conferenceId,
         tier: formData.tierId || undefined,
         addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
-        contract_status: formData.contractStatus,
+        contractStatus: formData.contractStatus,
         status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
+        invoiceStatus: formData.invoiceStatus,
+        contractValue: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency,
+        contractCurrency: formData.contractCurrency,
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || undefined,
+        assignedTo: formData.assignedTo || undefined,
       })
     }
   }

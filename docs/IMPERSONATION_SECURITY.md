@@ -11,7 +11,7 @@ The impersonation feature allows organizers to view the application as if they w
 1. ✅ `NODE_ENV` must be `development` (NOT production)
 2. ✅ `AppEnvironment.isDevelopment` must be `true`
 3. ✅ User must be authenticated
-4. ✅ User must have `is_organizer: true` flag
+4. ✅ User must have `isOrganizer: true` flag
 5. ✅ URL must be provided to `getAuthSession()`
 6. ✅ URL must contain `?impersonate=<speakerId>` parameter
 7. ✅ Speaker ID must match `/^[a-zA-Z0-9_-]+$/` pattern
@@ -71,7 +71,7 @@ if (!AppEnvironment.isDevelopment) {
 
 ```typescript
 // SECURITY: Only organizers can impersonate
-if (!session?.speaker?.is_organizer) {
+if (!session?.speaker?.isOrganizer) {
   return session
 }
 ```
@@ -79,7 +79,7 @@ if (!session?.speaker?.is_organizer) {
 **Protection:**
 
 - Requires authenticated session
-- Requires `is_organizer: true` flag in speaker profile
+- Requires `isOrganizer: true` flag in speaker profile
 - Flag is stored in Sanity CMS and verified against database
 
 ### Layer 4: URL Requirement
@@ -135,7 +135,7 @@ if (impersonateId.length > MAX_IMPERSONATION_ID_LENGTH) {
 **File:** `src/lib/auth.ts`
 
 ```typescript
-if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
+if (impersonatedSpeaker && !impersonatedSpeaker.isOrganizer) {
   // Allow impersonation
   return {
     ...session,
@@ -143,7 +143,7 @@ if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
     isImpersonating: true,
     realAdmin: session.speaker,
   }
-} else if (impersonatedSpeaker?.is_organizer) {
+} else if (impersonatedSpeaker?.isOrganizer) {
   console.error(
     `[SECURITY] Admin ${session.speaker.email} attempted to impersonate another organizer: ${impersonatedSpeaker.email}`,
   )
@@ -187,7 +187,7 @@ console.log(
 
 ### 2. ❌ Organizer Flag Manipulation
 
-**Attack:** Modify JWT or session to set `is_organizer: true`
+**Attack:** Modify JWT or session to set `isOrganizer: true`
 
 **Mitigation:**
 
@@ -252,7 +252,7 @@ console.log(
 
 **Mitigation:**
 
-- Explicit check: `if (impersonatedSpeaker?.is_organizer)`
+- Explicit check: `if (impersonatedSpeaker?.isOrganizer)`
 - Returns original session
 - Logs security event
 
@@ -347,13 +347,13 @@ If impersonation is suspected to be exploited:
 
 2. **Investigation:**
    - Review audit logs for unauthorized impersonation
-   - Check if any non-organizers have `is_organizer: true` flag
+   - Check if any non-organizers have `isOrganizer: true` flag
    - Verify Sanity CMS speaker profiles for anomalies
    - Review recent code changes to auth.ts and middleware.ts
 
 3. **Remediation:**
    - Revoke sessions of affected users
-   - Reset `is_organizer` flags if compromised
+   - Reset `isOrganizer` flags if compromised
    - Add additional logging if needed
    - Update security documentation
 

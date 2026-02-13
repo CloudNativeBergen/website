@@ -17,4 +17,5 @@ export interface Review extends ReviewBase {
   _updatedAt: string
   reviewer: Speaker | Reference
   proposal: Reference
+  conference?: Reference
 }

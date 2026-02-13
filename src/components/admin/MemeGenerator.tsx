@@ -467,7 +467,7 @@ export function MemeGenerator({
   const logoHeight = (size: number) => size / logoAspectRatio
 
   // Check if conference has custom logos
-  const hasCustomLogo = Boolean(conferenceLogos?.logo_bright)
+  const hasCustomLogo = Boolean(conferenceLogos?.logoBright)
 
   const renderLogo = (scale: number = 1) => (
     <div

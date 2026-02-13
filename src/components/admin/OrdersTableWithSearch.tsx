@@ -6,13 +6,20 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CreditCardIcon,
-  MagnifyingGlassIcon,
   FunnelIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import type { GroupedOrder } from '@/lib/tickets/types'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
+import { SearchInput } from '@/components/SearchInput'
+import {
+  TableHeader,
+  Th,
+  TableBody,
+  TableEmptyState,
+} from '@/components/DataTable'
 
 interface OrdersTableWithSearchProps {
   orders: GroupedOrder[]
@@ -213,18 +220,13 @@ export function OrdersTableWithSearch({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search by name, email, company, order ID, or ticket type..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 bg-white py-3 pr-3 pl-10 text-sm placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-          />
-        </div>
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search by name, email, company, order ID, or ticket type..."
+          className="flex-1"
+          inputClassName="block w-full rounded-lg border border-gray-300 bg-white py-3 pr-3 pl-10 text-sm placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+        />
 
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -289,35 +291,19 @@ export function OrdersTableWithSearch({
       <div className="hidden overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 lg:block dark:bg-gray-900 dark:ring-gray-700">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
+            <TableHeader>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Order
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Customer
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Company
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Categories
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Tickets
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Amount
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                  Actions
-                </th>
+                <Th>Order</Th>
+                <Th>Customer</Th>
+                <Th>Company</Th>
+                <Th>Categories</Th>
+                <Th>Tickets</Th>
+                <Th>Amount</Th>
+                <Th>Status</Th>
+                <Th>Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+            </TableHeader>
+            <TableBody>
               {filteredOrders.map((order) => {
                 const isExpanded = expandedOrders.has(order.order_id)
                 const primaryTicket = order.tickets[0]
@@ -493,7 +479,7 @@ export function OrdersTableWithSearch({
                   </Fragment>
                 )
               })}
-            </tbody>
+            </TableBody>
           </table>
         </div>
       </div>
@@ -646,30 +632,23 @@ export function OrdersTableWithSearch({
       {filteredOrders.length === 0 && (
         <div className="py-12 text-center">
           {searchTerm || paymentFilter !== 'all' ? (
-            <>
-              <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-                No orders found
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {searchTerm && paymentFilter !== 'all'
-                  ? `No ${paymentFilter} orders match your search criteria.`
+            <TableEmptyState
+              icon={MagnifyingGlassIcon}
+              title="No orders found"
+              description={
+                searchTerm && paymentFilter !== 'all'
+                  ? `No ${paymentFilter} orders match your search criteria. Try adjusting your filters.`
                   : searchTerm
-                    ? 'No orders match your search criteria.'
-                    : `No ${paymentFilter} orders found.`}{' '}
-                Try adjusting your filters.
-              </p>
-            </>
+                    ? 'No orders match your search criteria. Try adjusting your filters.'
+                    : `No ${paymentFilter} orders found. Try adjusting your filters.`
+              }
+            />
           ) : (
-            <>
-              <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-                No orders found
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                No tickets have been sold for this event yet.
-              </p>
-            </>
+            <TableEmptyState
+              icon={UserIcon}
+              title="No orders found"
+              description="No tickets have been sold for this event yet."
+            />
           )}
         </div>
       )}

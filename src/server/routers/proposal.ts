@@ -157,7 +157,7 @@ export const proposalRouter = router({
     .input(IdParamSchema)
     .query(async ({ input, ctx }) => {
       try {
-        const isOrganizer = ctx.speaker.is_organizer === true
+        const isOrganizer = ctx.speaker.isOrganizer === true
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
@@ -325,7 +325,7 @@ export const proposalRouter = router({
           })
         }
 
-        if (!ctx.speaker.is_organizer && existing.conference) {
+        if (!ctx.speaker.isOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
             '_id' in existing.conference
@@ -429,7 +429,7 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposalSanity({
           id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.is_organizer,
+          isOrganizer: ctx.speaker.isOrganizer,
         })
 
         if (proposalError || !proposal || proposal._id !== id) {
@@ -443,7 +443,7 @@ export const proposalRouter = router({
         const { status, isValidAction } = actionStateMachine(
           proposal.status,
           action,
-          ctx.speaker.is_organizer,
+          ctx.speaker.isOrganizer,
         )
 
         if (!isValidAction) {
@@ -491,7 +491,7 @@ export const proposalRouter = router({
           metadata: {
             triggeredBy: {
               speakerId: ctx.speaker._id,
-              isOrganizer: ctx.speaker.is_organizer,
+              isOrganizer: ctx.speaker.isOrganizer,
             },
             shouldNotify: notify,
             comment,
@@ -843,7 +843,7 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.is_organizer === true,
+          isOrganizer: ctx.speaker.isOrganizer === true,
         })
 
         if (proposalError || !proposal) {
@@ -943,7 +943,7 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.is_organizer === true,
+          isOrganizer: ctx.speaker.isOrganizer === true,
         })
 
         if (proposalError || !proposal) {
@@ -997,7 +997,7 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.is_organizer === true,
+          isOrganizer: ctx.speaker.isOrganizer === true,
         })
 
         if (proposalError || !proposal) {
@@ -1022,7 +1022,7 @@ export const proposalRouter = router({
         // Speakers cannot delete recording attachments
         if (
           attachmentToCheck.attachmentType === 'recording' &&
-          !ctx.speaker.is_organizer
+          !ctx.speaker.isOrganizer
         ) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -1070,6 +1070,11 @@ export const proposalRouter = router({
           }
 
           // Create invitation
+          const conferenceId =
+            '_id' in proposal.conference
+              ? proposal.conference._id
+              : (proposal.conference as { _ref: string })._ref
+
           const invitation = await createCoSpeakerInvitation({
             invitedByEmail: ctx.speaker.email,
             invitedByName: ctx.speaker.name,
@@ -1078,6 +1083,7 @@ export const proposalRouter = router({
             proposalId: input.proposalId,
             proposalTitle: proposal.title,
             invitedBySpeakerId: ctx.speaker._id,
+            conferenceId,
           })
 
           if (!invitation) {
@@ -1190,7 +1196,7 @@ export const proposalRouter = router({
           const { proposal, proposalError } = await getProposal({
             id: input.id,
             speakerId: ctx.speaker._id,
-            isOrganizer: ctx.speaker.is_organizer === true,
+            isOrganizer: ctx.speaker.isOrganizer === true,
           })
 
           if (proposalError || !proposal || !proposal._id) {

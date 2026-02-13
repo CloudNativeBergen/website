@@ -61,6 +61,7 @@ export function SponsorTiersPageClient({
 
         <div className="mt-12">
           <SponsorTierManagement
+            conferenceId={conference._id}
             sponsors={sponsors}
             sponsorTiers={sponsorTiers}
             sponsorsByTier={sponsorsByTier}
@@ -134,12 +135,12 @@ export function SponsorTiersPageClient({
         onSyncContacts={handleSyncContacts}
         recipientCount={recipientCount}
         recipientType="sponsors"
-        fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`}
+        fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={formatConferenceDateLong(conference.start_date)}
+        eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={`https://${conference.domains[0]}`}
-        socialLinks={conference.social_links || []}
+        socialLinks={conference.socialLinks || []}
       />
     </>
   )

@@ -69,14 +69,14 @@ export async function getProposal({
             && (status == "accepted" || status == "confirmed")
           ]{
             _id, title, status, _createdAt,
-            conference-> { _id, title, start_date },
+            conference-> { _id, title, startDate },
             topics[]-> { _id, title, color }
           }`
             : ''
         }
       },
       conference-> {
-        _id, title, start_date, end_date
+        _id, title, startDate, endDate
       },
       topics[]-> {
         _id, title, color, slug, description
@@ -177,14 +177,14 @@ export async function getProposals({
           && (status == "accepted" || status == "confirmed")
         ]{
           _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
+          conference-> { _id, title, startDate },
           topics[]-> { _id, title, color }
         }`
           : ''
       }
     },
     conference-> {
-      _id, title, start_date, end_date
+      _id, title, startDate, endDate
     },
     topics[]-> {
       _id, title, color, slug, description
@@ -215,7 +215,7 @@ export async function getProposals({
     "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
         : ''
     }
-  } | order(conference->start_date desc, _updatedAt desc)`
+  } | order(conference->startDate desc, _updatedAt desc)`
 
   try {
     proposals = await clientRead.fetch(
@@ -366,7 +366,7 @@ export async function fetchNextUnreviewedProposal({
         _type == "talk" &&
         conference._ref == $conferenceId &&
         status == "${Status.submitted}" &&
-        !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref)
+        !(_id in *[_type == "review" && reviewer._ref == $reviewerId && conference._ref == $conferenceId].proposal._ref)
       ] {
         _id,
         title,
@@ -469,14 +469,14 @@ export async function searchProposals({
           && (status == "accepted" || status == "confirmed")
         ]{
           _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
+          conference-> { _id, title, startDate },
           topics[]-> { _id, title, color }
         }`
             : ''
         }
       },
       conference-> {
-        _id, title, start_date, end_date
+        _id, title, startDate, endDate
       },
       topics[]-> {
         _id, title, color, slug, description
@@ -560,9 +560,8 @@ export async function getWorkshops({
 
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {
-    // Fetch all schedules (not filtered by conference) since schedule documents
-    // may not have a conference reference, and we match by talk IDs instead
-    const scheduleQuery = groq`*[_type == "schedule"]{
+    // Fetch schedules scoped to the current conference
+    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId]{
       date,
       tracks[]{
         trackTitle,
@@ -577,7 +576,7 @@ export async function getWorkshops({
     try {
       const schedules = await clientRead.fetch(
         scheduleQuery,
-        {},
+        { conferenceId },
         { cache: 'no-store' },
       )
 

@@ -9,33 +9,33 @@ export async function createSponsorActivity(
   description: string,
   createdBy: string,
   metadata?: {
-    old_value?: string
-    new_value?: string
+    oldValue?: string
+    newValue?: string
     timestamp?: string
-    additional_data?: string
+    additionalData?: string
   },
 ): Promise<{ activityId?: string; error?: Error }> {
   try {
     const activity: SponsorActivityInput = {
-      sponsor_for_conference: sponsorForConferenceId,
-      activity_type: activityType,
+      sponsorForConference: sponsorForConferenceId,
+      activityType: activityType,
       description,
-      created_by: createdBy,
-      created_at: getCurrentDateTime(),
+      createdBy: createdBy,
+      createdAt: getCurrentDateTime(),
       metadata,
     }
 
     const doc = {
       _type: 'sponsorActivity',
-      sponsor_for_conference: {
+      sponsorForConference: {
         _type: 'reference',
-        _ref: activity.sponsor_for_conference,
+        _ref: activity.sponsorForConference,
       },
-      activity_type: activity.activity_type,
+      activityType: activity.activityType,
       description: activity.description,
       metadata: activity.metadata,
-      created_by: { _type: 'reference', _ref: activity.created_by },
-      created_at: activity.created_at,
+      createdBy: { _type: 'reference', _ref: activity.createdBy },
+      createdAt: activity.createdAt,
     }
 
     const created = await clientWrite.create(doc)
@@ -59,8 +59,8 @@ export async function logStageChange(
     `Status changed from ${formatStatusName(oldStatus)} to ${formatStatusName(newStatus)}`,
     createdBy,
     {
-      old_value: oldStatus,
-      new_value: newStatus,
+      oldValue: oldStatus,
+      newValue: newStatus,
       timestamp: getCurrentDateTime(),
     },
   )
@@ -78,8 +78,8 @@ export async function logInvoiceStatusChange(
     `Invoice status changed from ${formatStatusName(oldStatus)} to ${formatStatusName(newStatus)}`,
     createdBy,
     {
-      old_value: oldStatus,
-      new_value: newStatus,
+      oldValue: oldStatus,
+      newValue: newStatus,
       timestamp: getCurrentDateTime(),
     },
   )
@@ -97,8 +97,8 @@ export async function logContractStatusChange(
     `Contract status changed from ${formatStatusName(oldStatus ?? 'Not Set')} to ${formatStatusName(newStatus ?? 'Not Set')}`,
     createdBy,
     {
-      old_value: oldStatus,
-      new_value: newStatus,
+      oldValue: oldStatus,
+      newValue: newStatus,
       timestamp: getCurrentDateTime(),
     },
   )
@@ -119,7 +119,7 @@ export async function logAssignmentChange(
     description,
     createdBy,
     {
-      additional_data: assigneeName || '',
+      additionalData: assigneeName || '',
       timestamp: getCurrentDateTime(),
     },
   )
@@ -136,7 +136,7 @@ export async function logEmailSent(
     `Email sent: ${subject}`,
     createdBy,
     {
-      additional_data: subject,
+      additionalData: subject,
       timestamp: getCurrentDateTime(),
     },
   )
@@ -157,6 +157,40 @@ export async function logSponsorCreated(
   )
 }
 
+export async function logSignatureStatusChange(
+  sponsorForConferenceId: string,
+  oldStatus: string,
+  newStatus: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'signature_status_change',
+    `Signature status changed from ${formatStatusName(oldStatus ?? 'Not Started')} to ${formatStatusName(newStatus ?? 'Not Started')}`,
+    createdBy,
+    {
+      oldValue: oldStatus,
+      newValue: newStatus,
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
+export async function logOnboardingComplete(
+  sponsorForConferenceId: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'onboarding_complete',
+    'Sponsor completed self-service onboarding',
+    createdBy,
+    {
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
 export async function logBulkEmailSent(
   sponsorForConferenceIds: string[],
   subject: string,
@@ -169,18 +203,18 @@ export async function logBulkEmailSent(
     for (const id of sponsorForConferenceIds) {
       transaction.create({
         _type: 'sponsorActivity',
-        sponsor_for_conference: {
+        sponsorForConference: {
           _type: 'reference',
           _ref: id,
         },
-        activity_type: 'email',
+        activityType: 'email',
         description: `Broadcast email sent: ${subject}`,
         metadata: {
-          additional_data: subject,
+          additionalData: subject,
           timestamp,
         },
-        created_by: { _type: 'reference', _ref: createdBy },
-        created_at: timestamp,
+        createdBy: { _type: 'reference', _ref: createdBy },
+        createdAt: timestamp,
       })
     }
 

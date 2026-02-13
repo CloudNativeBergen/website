@@ -71,7 +71,7 @@ export const POST = auth(
     const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: req.auth.speaker._id,
-      isOrganizer: req.auth.speaker.is_organizer,
+      isOrganizer: req.auth.speaker.isOrganizer,
     })
     if (proposalError || !proposal || proposal._id !== id) {
       console.error(proposalError || 'Proposal not found')
@@ -86,7 +86,7 @@ export const POST = auth(
     const { status, isValidAction } = actionStateMachine(
       proposal.status,
       action,
-      req.auth.speaker.is_organizer,
+      req.auth.speaker.isOrganizer,
     )
     if (!isValidAction) {
       console.error(`Invalid action ${action} for status ${proposal.status}`)
@@ -139,7 +139,7 @@ export const POST = auth(
       metadata: {
         triggeredBy: {
           speakerId: req.auth.speaker._id,
-          isOrganizer: req.auth.speaker.is_organizer,
+          isOrganizer: req.auth.speaker.isOrganizer,
         },
         shouldNotify: notify,
         comment,

@@ -21,13 +21,13 @@ export interface OGImageConfig {
 interface ConferenceData {
   title: string
   tagline?: string | null
-  start_date?: string
-  end_date?: string
-  cfp_end_date?: string
+  startDate?: string
+  endDate?: string
+  cfpEndDate?: string
   city?: string | null
   country?: string | null
-  logo_bright?: string | null
-  logomark_bright?: string | null
+  logoBright?: string | null
+  logomarkBright?: string | null
 }
 
 function getLocation(conference: ConferenceData): string | null {
@@ -71,10 +71,10 @@ export async function generateOGImage(
     let detailRight: string | null = null
 
     if (config.detailLine === 'date-location') {
-      detailLeft = formatDateRange(conference.start_date, conference.end_date)
+      detailLeft = formatDateRange(conference.startDate, conference.endDate)
       detailRight = getLocation(conference)
     } else if (config.detailLine === 'cfp-deadline') {
-      detailLeft = formatCfpDeadline(conference.cfp_end_date)
+      detailLeft = formatCfpDeadline(conference.cfpEndDate)
       detailRight = getLocation(conference)
     } else if (typeof config.detailLine === 'function') {
       const detail = config.detailLine(conference)
@@ -112,10 +112,10 @@ export async function generateOGImage(
             zIndex: 1,
           }}
         >
-          {(conference.logo_bright || conference.logomark_bright) && (
+          {(conference.logoBright || conference.logomarkBright) && (
             <ConferenceLogo
               logoSvg={
-                conference.logomark_bright || conference.logo_bright || null
+                conference.logomarkBright || conference.logoBright || null
               }
               size="xlarge"
             />

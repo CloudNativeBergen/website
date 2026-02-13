@@ -19,65 +19,96 @@ All sponsor data is stored in Sanity CMS across five document types:
 
 The base company record. Conference-independent — a single sponsor can participate across multiple conferences/years.
 
-| Field         | Description                                         |
-| ------------- | --------------------------------------------------- |
-| `name`        | Company name                                        |
-| `website`     | Company URL                                         |
-| `logo`        | Inline SVG logo (required)                          |
-| `logo_bright` | Optional bright/white variant for dark backgrounds  |
-| `org_number`  | Company registration number (admin-only visibility) |
+| Field        | Description                                                |
+| ------------ | ---------------------------------------------------------- |
+| `name`       | Company name                                               |
+| `website`    | Company URL                                                |
+| `logo`       | Inline SVG logo                                            |
+| `logoBright` | Optional bright/white variant for dark backgrounds         |
+| `orgNumber`  | Company registration number (admin-only visibility)        |
+| `address`    | Registered company address (admin-only, used in contracts) |
 
 ### `sponsorTier`
 
 Defines pricing tiers for a conference. Each tier is scoped to a single conference via a reference.
 
-| Field          | Description                                                               |
-| -------------- | ------------------------------------------------------------------------- |
-| `title`        | Tier name (e.g., "Ingress", "Service", "Pod")                             |
-| `tagline`      | Short description                                                         |
-| `tier_type`    | `standard`, `special` (media/community), or `addon` (booth, dinner, etc.) |
-| `price[]`      | Array of `{amount, currency}` (required for standard tiers)               |
-| `perks[]`      | Array of `{label, description}` (required for standard tiers)             |
-| `max_quantity` | Available spots (1 = exclusive, empty = unlimited)                        |
-| `sold_out`     | Boolean flag                                                              |
-| `most_popular` | Boolean flag for highlighting                                             |
-| `conference`   | Reference to the owning conference                                        |
+| Field         | Description                                                               |
+| ------------- | ------------------------------------------------------------------------- |
+| `title`       | Tier name (e.g., "Ingress", "Service", "Pod")                             |
+| `tagline`     | Short description                                                         |
+| `tierType`    | `standard`, `special` (media/community), or `addon` (booth, dinner, etc.) |
+| `price[]`     | Array of `{amount, currency}` (required for standard tiers)               |
+| `perks[]`     | Array of `{label, description}` (required for standard tiers)             |
+| `maxQuantity` | Available spots (1 = exclusive, empty = unlimited)                        |
+| `soldOut`     | Boolean flag                                                              |
+| `mostPopular` | Boolean flag for highlighting                                             |
+| `conference`  | Reference to the owning conference                                        |
 
 ### `sponsorForConference`
 
 The CRM join document linking a sponsor to a conference with relationship metadata. This is the central document the CRM pipeline operates on.
 
-| Field               | Description                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| `sponsor`           | Reference to `sponsor` document                                                                        |
-| `conference`        | Reference to `conference` document                                                                     |
-| `tier`              | Reference to a `sponsorTier` (standard/special)                                                        |
-| `addons[]`          | Array of references to addon-type `sponsorTier` documents                                              |
-| `contact_persons[]` | Per-conference contacts (name, email, phone, role, `is_primary`)                                       |
-| `billing`           | Per-conference billing info (email, reference, comments)                                               |
-| `status`            | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
-| `contract_status`   | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
-| `invoice_status`    | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
-| `assigned_to`       | Reference to an organizer (speaker with `is_organizer: true`)                                          |
-| `contract_value`    | Actual contract value (defaults to tier price)                                                         |
-| `contract_currency` | `NOK`, `USD`, `EUR`, or `GBP`                                                                          |
-| `tags[]`            | Classification tags (see Tags section below)                                                           |
-| `notes`             | Freeform text                                                                                          |
-| Timestamps          | `contact_initiated_at`, `contract_signed_at`, `invoice_sent_at`, `invoice_paid_at`                     |
+| Field                   | Description                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `sponsor`               | Reference to `sponsor` document                                                                        |
+| `conference`            | Reference to `conference` document                                                                     |
+| `tier`                  | Reference to a `sponsorTier` (standard/special)                                                        |
+| `addons[]`              | Array of references to addon-type `sponsorTier` documents                                              |
+| `contactPersons[]`      | Per-conference contacts (name, email, phone, role, `isPrimary`)                                        |
+| `billing`               | Per-conference billing info (email, reference, comments)                                               |
+| `status`                | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
+| `contractStatus`        | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
+| `signatureStatus`       | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
+| `signatureId`           | External ID from e-signing provider (read-only)                                                        |
+| `signerEmail`           | Email of the person designated to sign the contract                                                    |
+| `contractSentAt`        | When the contract was sent for signing (read-only)                                                     |
+| `contractDocument`      | Generated PDF contract stored as a Sanity file asset                                                   |
+| `reminderCount`         | Number of contract signing reminders sent (read-only)                                                  |
+| `contractTemplate`      | Reference to the `contractTemplate` used to generate the contract                                      |
+| `invoiceStatus`         | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
+| `assignedTo`            | Reference to an organizer (speaker with `isOrganizer: true`)                                           |
+| `contractValue`         | Actual contract value (defaults to tier price)                                                         |
+| `contractCurrency`      | `NOK`, `USD`, `EUR`, or `GBP`                                                                          |
+| `tags[]`                | Classification tags (see Tags section below)                                                           |
+| `notes`                 | Freeform text                                                                                          |
+| `onboardingToken`       | Unique token for sponsor self-service onboarding portal (read-only)                                    |
+| `onboardingComplete`    | Whether the sponsor has completed onboarding (read-only)                                               |
+| `onboardingCompletedAt` | When the sponsor completed onboarding (read-only)                                                      |
+| Timestamps              | `contactInitiatedAt`, `contractSignedAt`, `invoiceSentAt`, `invoicePaidAt`                             |
 
-Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `is_primary` flag identifies the main contact for contract signing (Phase 2).
+Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `isPrimary` flag identifies the main contact for contract signing.
+
+### `contractTemplate`
+
+Defines the structure and content for contract PDF generation. Each template is scoped to a conference and optionally to a specific tier. Supports variable substitution via `{{{VARIABLE}}}` placeholders.
+
+| Field        | Description                                                           |
+| ------------ | --------------------------------------------------------------------- |
+| `title`      | Internal name for identification                                      |
+| `conference` | Reference to the owning conference                                    |
+| `tier`       | Optional reference to a `sponsorTier` for tier-specific contracts     |
+| `language`   | `nb` (Norwegian) or `en` (English)                                    |
+| `currency`   | Default currency for this template                                    |
+| `sections[]` | Ordered array of `{ heading, body }` — body is PortableText with vars |
+| `headerText` | Text shown in PDF header (e.g. organization name)                     |
+| `footerText` | Text shown in PDF footer (e.g. org number, contact info)              |
+| `terms`      | General terms &amp; conditions (PortableText, included as Appendix 1) |
+| `isDefault`  | Fallback template when no tier-specific template exists               |
+| `isActive`   | Whether this template is available for use                            |
+
+**Contract template variables:** `SPONSOR_NAME`, `SPONSOR_ORG_NUMBER`, `SPONSOR_ADDRESS`, `SPONSOR_WEBSITE`, `CONTACT_NAME`, `CONTACT_EMAIL`, `TIER_NAME`, `TIER_TAGLINE`, `CONTRACT_VALUE`, `CONTRACT_VALUE_NUMBER`, `CONTRACT_CURRENCY`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_DATES`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `VENUE_NAME`, `VENUE_ADDRESS`, `TODAY_DATE`, `ORG_NAME`, `ORG_ORG_NUMBER`, `ORG_ADDRESS`, `ORG_EMAIL`, `ADDONS_LIST`.
 
 ### `sponsorActivity`
 
 Audit log for CRM actions. Each activity references a `sponsorForConference` document.
 
-| Field           | Description                                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `activity_type` | `stage_change`, `invoice_status_change`, `contract_status_change`, `contract_signed`, `note`, `email`, `call`, `meeting` |
-| `description`   | Human-readable summary                                                                                                   |
-| `metadata`      | Structured data with `old_value`, `new_value`, `timestamp`, `additional_data`                                            |
-| `created_by`    | Reference to the organizer who performed the action                                                                      |
-| `created_at`    | ISO timestamp                                                                                                            |
+| Field          | Description                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activityType` | `stage_change`, `invoice_status_change`, `contract_status_change`, `contract_signed`, `note`, `email`, `call`, `meeting`, `signature_status_change`, `onboarding_complete`, `contract_reminder_sent` |
+| `description`  | Human-readable summary                                                                                                                                                                               |
+| `metadata`     | Structured data with `oldValue`, `newValue`, `timestamp`, `additionalData`                                                                                                                           |
+| `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                  |
+| `createdAt`    | ISO timestamp                                                                                                                                                                                        |
 
 ## Status Enumerations
 
@@ -90,6 +121,10 @@ All CRM status values are defined as TypeScript union types in `src/lib/sponsor-
 ### Contract Status (`ContractStatus`)
 
 `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`
+
+### Signature Status (`SignatureStatus`)
+
+`not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`
 
 ### Invoice Status (`InvoiceStatus`)
 
@@ -111,8 +146,8 @@ Reusable email templates stored in Sanity for sponsor outreach. Global (not conf
 | `subject`     | Email subject line with `{{{VAR}}}` placeholders                                                |
 | `body`        | PortableText body with `{{{VAR}}}` placeholders in text spans                                   |
 | `description` | Internal notes on when to use this template                                                     |
-| `is_default`  | Default template for its category                                                               |
-| `sort_order`  | Ordering in the template picker                                                                 |
+| `isDefault`   | Default template for its category                                                               |
+| `sortOrder`   | Ordering in the template picker                                                                 |
 
 **Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SENDER_NAME`, `TIER_NAME`.
 
@@ -135,17 +170,25 @@ src/
 │       ├── activity.ts             # Activity logging helpers
 │       ├── activities.ts           # Activity list/query operations
 │       ├── action-items.ts         # Action item management
-│       └── bulk.ts                 # Bulk update/delete operations
+│       ├── bulk.ts                 # Bulk update/delete operations
+│       ├── contract-templates.ts   # Contract template CRUD and lookup
+│       ├── contract-variables.ts   # Variable substitution for contract generation
+│       ├── contract-pdf.tsx        # PDF generation using React-PDF
+│       ├── contract-readiness.ts   # Contract signing readiness validation
+│       ├── onboarding.ts           # Sponsor self-service onboarding (token, validation, completion)
+│       └── pipeline.ts             # Pipeline aggregation utilities
 ├── server/
 │   ├── routers/sponsor.ts          # tRPC router (all sponsor procedures)
 │   └── schemas/
 │       ├── sponsor.ts              # Zod schemas for core sponsor operations
-│       └── sponsorForConference.ts # Zod schemas for CRM operations
+│       ├── sponsorForConference.ts # Zod schemas for CRM operations
+│       └── onboarding.ts          # Zod schemas for onboarding submissions
 ├── components/
 │   ├── Sponsors.tsx                # Public sponsor display (grouped by tier)
 │   ├── SponsorLogo.tsx             # Public inline SVG logo renderer
 │   ├── SponsorThankYou.tsx         # Marketing thank-you card for sponsors
 │   ├── sponsor/
+│   │   ├── SponsorOnboardingForm.tsx # Sponsor self-service onboarding form
 │   │   └── SponsorProspectus.tsx   # Public sponsorship prospectus page
 │   └── admin/
 │       ├── sponsor/                # Sponsor management admin UI
@@ -173,7 +216,10 @@ src/
 │           ├── SponsorCard.tsx              # Kanban card
 │           ├── SponsorBulkActions.tsx       # Multi-select action bar
 │           ├── BoardViewSwitcher.tsx        # Pipeline/Contract/Invoice toggle
+│           ├── ContractReadinessIndicator.tsx # Contract readiness status display
+│           ├── OnboardingLinkButton.tsx     # Onboarding link generation button
 │           ├── ImportHistoricSponsorsButton.tsx # Historic import dialog
+│           ├── MobileFilterSheet.tsx        # Mobile-responsive filter panel
 │           ├── utils.ts                     # CRM-specific UI utilities
 │           └── form/                        # Form sub-components
 │               ├── constants.ts             # Status/tag constants with labels & icons
@@ -190,12 +236,16 @@ src/
 │   ├── useSponsorCRMFormMutations.ts # CRM form mutation hooks
 │   └── useSponsorDragDrop.ts       # Drag-and-drop for board columns
 └── app/
-    ├── (main)/sponsor/page.tsx     # Public /sponsor prospectus page
+    ├── (main)/sponsor/
+    │   ├── page.tsx                # Public /sponsor prospectus page
+    │   ├── terms/page.tsx          # Public sponsor terms page
+    │   └── onboarding/[token]/page.tsx # Sponsor self-service onboarding
     └── (admin)/admin/
         ├── sponsors/
         │   ├── page.tsx            # Sponsor management page
         │   ├── crm/page.tsx        # CRM pipeline page
         │   ├── tiers/page.tsx      # Tier management page
+        │   ├── contracts/page.tsx  # Contract template management page
         │   ├── templates/page.tsx  # Email template management page
         │   └── activity/page.tsx   # Activity log page
         └── marketing/page.tsx      # Marketing page (includes SponsorThankYou)
@@ -205,35 +255,34 @@ sanity/schemaTypes/
 ├── sponsorTier.ts                  # Tier document schema
 ├── sponsorForConference.ts         # CRM join document schema
 ├── sponsorActivity.ts              # Activity log schema
-└── sponsorEmailTemplate.ts         # Email template schema
+├── sponsorEmailTemplate.ts         # Email template schema
+└── contractTemplate.ts             # Contract template schema
 ```
 
 ### API Layer
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                      | Procedures                                                                                                                                                                                             | Purpose                              |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| `sponsor.*`                    | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD            |
-| `sponsor.tiers.*`              | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                      |
-| `sponsor.addToConference`      | —                                                                                                                                                                                                      | Link sponsor to conference with tier |
-| `sponsor.updateTierAssignment` | —                                                                                                                                                                                                      | Change tier assignment               |
-| `sponsor.removeFromConference` | —                                                                                                                                                                                                      | Unlink sponsor from conference       |
-| `sponsor.crm.*`                | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations              |
-| `sponsor.crm.activities.*`     | `list`                                                                                                                                                                                                 | Activity log queries                 |
-| `sponsor.emailTemplates.*`     | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                  |
+| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD          |
+| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                    |
+| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations            |
+| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries               |
+| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                |
+| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`                                                                                                            | Contract template CRUD and PDF gen |
 
-All procedures are protected by `adminProcedure` (requires `is_organizer: true`).
+All procedures are protected by `adminProcedure` (requires `isOrganizer: true`).
 
 ### CRM Board Views
 
 The CRM pipeline UI (`SponsorCRMPipeline`) supports three Kanban board views, each grouping sponsors by a different status dimension:
 
-| View         | Groups by         | Columns from        |
-| ------------ | ----------------- | ------------------- |
-| **Pipeline** | `status`          | `STATUSES`          |
-| **Contract** | `contract_status` | `CONTRACT_STATUSES` |
-| **Invoice**  | `invoice_status`  | `INVOICE_STATUSES`  |
+| View         | Groups by        | Columns from        |
+| ------------ | ---------------- | ------------------- |
+| **Pipeline** | `status`         | `STATUSES`          |
+| **Contract** | `contractStatus` | `CONTRACT_STATUSES` |
+| **Invoice**  | `invoiceStatus`  | `INVOICE_STATUSES`  |
 
 Board columns support drag-and-drop (via `@dnd-kit/core`) for status transitions with optimistic updates. The `useSponsorDragDrop` hook manages drag state, and `SponsorBoardColumn`/`SponsorCard` implement the droppable/draggable behaviors.
 
@@ -253,6 +302,53 @@ Sponsor contact management integrates with the email system (see `docs/EMAIL_SYS
 
 Sponsor tier assignments feed into the ticket allocation system, where each tier level maps to a specific number of complimentary tickets (configured in the tickets admin page).
 
+## Contract System
+
+The contract system enables organizers to generate, manage, and (eventually) digitally sign sponsorship agreements directly from the CRM.
+
+### Contract Templates
+
+Contract templates are stored in Sanity as `contractTemplate` documents. Each template belongs to a conference and contains ordered sections with PortableText bodies that support `{{{VARIABLE}}}` substitution. Templates can be scoped to a specific tier or marked as a default fallback.
+
+The `findBestContractTemplate()` function selects the most appropriate template by matching on conference, tier, and language — falling back to the default template if no tier-specific one exists.
+
+### Contract PDF Generation
+
+PDF generation uses React-PDF (`@react-pdf/renderer`) to produce professional contract documents. The generated PDF includes:
+
+- Header with organizer name and logo
+- Info table with parties, dates, and venue details
+- Contract sections with variable substitution
+- Package/tier details table
+- Appendix 1: General Terms & Conditions
+- Footer with organizer contact information
+
+Variable values are built from the `SponsorForConferenceExpanded` record by `buildContractVariables()` in `contract-variables.ts`.
+
+### Contract Readiness
+
+Before a contract can be generated or sent, all required data must be present. The `checkContractReadiness()` function in `contract-readiness.ts` validates 11 required fields and categorizes any missing ones by responsible party:
+
+| Source        | Required Fields                                                        |
+| ------------- | ---------------------------------------------------------------------- |
+| **Organizer** | Conference name, org number, address, dates, venue name, sponsor email |
+| **Sponsor**   | Org number, address, primary contact person                            |
+| **Pipeline**  | Tier assignment, contract value                                        |
+
+The `ContractReadinessIndicator` component displays readiness status in the CRM form — green when ready, amber with a categorized list of missing fields when not.
+
+## Sponsor Self-Service Onboarding
+
+The onboarding portal (`/sponsor/onboarding/[token]`) allows sponsors to self-service their data entry after an organizer initiates the relationship. The flow:
+
+1. Organizer generates a unique onboarding token via the CRM
+2. Sponsor receives a link (e.g. via email) to `/sponsor/onboarding/{token}`
+3. Sponsor fills in: company information (org number, address), contact persons, and billing details
+4. On submission, the system patches both the `sponsor` document (org data) and the `sponsorForConference` document (contacts, billing)
+5. An `onboarding_complete` activity is logged
+
+Token validation checks existence, expiry, and whether onboarding was already completed.
+
 ## Public-Facing Components
 
 The public website displays sponsors using data fetched from Sanity (not through tRPC):
@@ -266,16 +362,19 @@ The public website displays sponsors using data fetched from Sanity (not through
 
 Tests are located in `__tests__/` mirroring the source structure:
 
-| Test file                                  | Covers                                       |
-| ------------------------------------------ | -------------------------------------------- |
-| `lib/sponsor/validation.test.ts`           | Sponsor and tier input validation            |
-| `lib/sponsor/utils.test.ts`                | Tier sorting, formatting, grouping utilities |
-| `lib/sponsor/templates.test.ts`            | Template variable processing utilities       |
-| `lib/sponsor/sponsorForConference.test.ts` | CRM Zod schema validation                    |
-| `lib/sponsor-crm/bulk.test.ts`             | Bulk update/delete operations                |
-| `components/Sponsors.test.tsx`             | Public sponsor display component             |
-| `components/SponsorLogo.test.tsx`          | Logo rendering                               |
-| `components/SponsorProspectus.test.tsx`    | Prospectus page                              |
+| Test file                                    | Covers                                       |
+| -------------------------------------------- | -------------------------------------------- |
+| `lib/sponsor/validation.test.ts`             | Sponsor and tier input validation            |
+| `lib/sponsor/utils.test.ts`                  | Tier sorting, formatting, grouping utilities |
+| `lib/sponsor/templates.test.ts`              | Template variable processing utilities       |
+| `lib/sponsor/sponsorForConference.test.ts`   | CRM Zod schema validation                    |
+| `lib/sponsor-crm/bulk.test.ts`               | Bulk update/delete operations                |
+| `lib/sponsor-crm/contract-readiness.test.ts` | Contract readiness validation logic          |
+| `lib/sponsor-crm/contract-variables.test.ts` | Contract variable building and substitution  |
+| `lib/sponsor-crm/onboarding.test.ts`         | Onboarding URL building                      |
+| `components/Sponsors.test.tsx`               | Public sponsor display component             |
+| `components/SponsorLogo.test.tsx`            | Logo rendering                               |
+| `components/SponsorProspectus.test.tsx`      | Prospectus page                              |
 
 ## Roadmap
 
@@ -305,25 +404,27 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
                                └──▶ #306 (Onboarding Portal)
 ```
 
-| Issue                                                           | Summary                                                                                   | Status |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------ |
-| [#300](https://github.com/CloudNativeBergen/website/issues/300) | Schema extensions (`signature_status`, `signer_email`, `contract_document`, `is_primary`) | Open   |
-| [#301](https://github.com/CloudNativeBergen/website/issues/301) | Contract template system with tier-based PDF generation                                   | Done   |
-| [#302](https://github.com/CloudNativeBergen/website/issues/302) | Sponsor email templates (ContractSent, ContractReminder, WelcomeOnboarding)               | Open   |
-| [#303](https://github.com/CloudNativeBergen/website/issues/303) | Posten.no e-signature integration (OAuth2, BankID, webhooks)                              | Open   |
-| [#304](https://github.com/CloudNativeBergen/website/issues/304) | Admin UI — send contract flow with signature status badges                                | Open   |
-| [#305](https://github.com/CloudNativeBergen/website/issues/305) | Automated contract reminders (daily cron, Slack notifications)                            | Open   |
-| [#306](https://github.com/CloudNativeBergen/website/issues/306) | Sponsor self-service onboarding portal (`/sponsor/onboarding/[token]`)                    | Open   |
+| Issue                                                           | Summary                                                                                  | Status |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------ |
+| [#300](https://github.com/CloudNativeBergen/website/issues/300) | Schema extensions (`signature_status`, `signer_email`, `contract_document`, `isPrimary`) | Done   |
+| [#301](https://github.com/CloudNativeBergen/website/issues/301) | Contract template system with tier-based PDF generation                                  | Done   |
+| [#302](https://github.com/CloudNativeBergen/website/issues/302) | Sponsor email templates (ContractSent, ContractReminder, WelcomeOnboarding)              | Open   |
+| [#303](https://github.com/CloudNativeBergen/website/issues/303) | Posten.no e-signature integration (OAuth2, BankID, webhooks)                             | Open   |
+| [#304](https://github.com/CloudNativeBergen/website/issues/304) | Admin UI — send contract flow with signature status badges                               | Open   |
+| [#305](https://github.com/CloudNativeBergen/website/issues/305) | Automated contract reminders (daily cron, Slack notifications)                           | Open   |
+| [#306](https://github.com/CloudNativeBergen/website/issues/306) | Sponsor self-service onboarding portal (`/sponsor/onboarding/[token]`)                   | Done   |
 
 ### Related Issues
 
 - [#308](https://github.com/CloudNativeBergen/website/issues/308) — Bulk operations, individual email, and contact editing improvements
 - [#294](https://github.com/CloudNativeBergen/website/issues/294) — Admin page for sponsorship prospectus configuration
-- [#288](https://github.com/CloudNativeBergen/website/issues/288) — Audit all sponsor communications to use `sponsor_email`
+- [#288](https://github.com/CloudNativeBergen/website/issues/288) — Audit all sponsor communications to use `sponsorEmail`
 
 ## Key Design Decisions
 
-**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity holding only company-level data (name, logo, website). Contact persons and billing details live on `sponsorForConference` — the per-conference relationship record — since contacts and billing arrangements often differ between conferences/years.
+**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity holding only company-level data (name, logo, website, org number, address). Contact persons and billing details live on `sponsorForConference` — the per-conference relationship record — since contacts and billing arrangements often differ between conferences/years.
+
+**`sponsorForConference` as the single source of truth.** All conference-sponsor relationships are managed exclusively through `sponsorForConference` documents. There is no inline `sponsors[]` array on conference documents. Public-facing pages query `sponsorForConference` docs with `status == "closed-won"` and project them into the `ConferenceSponsor` shape. The `Conference.sponsors` TypeScript property is populated at runtime from this query for backward compatibility with downstream consumers.
 
 **Sanity as the single source of truth.** All data lives in Sanity, with tRPC providing validated, type-safe access. There is no separate database.
 

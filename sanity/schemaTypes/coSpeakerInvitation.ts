@@ -6,7 +6,7 @@ export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 export default defineType({
   name: 'coSpeakerInvitation',
   type: 'document',
-  title: 'Co-speaker Invitation',
+  title: 'Speaker Invitation',
   fields: [
     defineField({
       name: 'proposal',
@@ -15,6 +15,16 @@ export default defineType({
       to: [{ type: 'talk' }],
       description: 'The proposal for which the co-speaker is being invited.',
       validation: (Rule) => Rule.required().error('Proposal is required.'),
+    }),
+    defineField({
+      name: 'conference',
+      type: 'reference',
+      title: 'Conference',
+      to: [{ type: 'conference' }],
+      description:
+        'Conference this invitation belongs to (derived from proposal).',
+      validation: (Rule) => Rule.required(),
+      readOnly: true,
     }),
     defineField({
       name: 'invitedBy',

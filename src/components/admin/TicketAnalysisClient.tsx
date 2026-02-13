@@ -25,8 +25,8 @@ interface UniqueTicketData {
 
 interface ConferenceConfig {
   _id: string
-  ticket_capacity?: number
-  ticket_targets?: SalesTargetConfig
+  ticketCapacity?: number
+  ticketTargets?: SalesTargetConfig
 }
 
 interface AnalysisData {
@@ -62,7 +62,7 @@ export function TicketAnalysisClient({
   const currentData = useMemo(() => {
     const analysis = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
     const tickets = includeFreeTickets ? allTickets : paidTickets
-    const capacity = conference.ticket_capacity || defaultCapacity
+    const capacity = conference.ticketCapacity || defaultCapacity
 
     return {
       analysis: analysis || createDefaultAnalysis(tickets, capacity),
@@ -74,7 +74,7 @@ export function TicketAnalysisClient({
     paidAnalysis,
     allTickets,
     paidTickets,
-    conference.ticket_capacity,
+    conference.ticketCapacity,
     defaultCapacity,
   ])
 
@@ -87,10 +87,10 @@ export function TicketAnalysisClient({
             paidAnalysis ||
             createDefaultAnalysis(
               paidTickets,
-              conference.ticket_capacity || defaultCapacity,
+              conference.ticketCapacity || defaultCapacity,
             )
           }
-          salesConfig={conference.ticket_targets || defaultTargetConfig}
+          salesConfig={conference.ticketTargets || defaultTargetConfig}
           includeFreeTickets={includeFreeTickets}
           onToggleChange={setIncludeFreeTickets}
           paidCount={paidTickets.length}
@@ -104,8 +104,8 @@ export function TicketAnalysisClient({
       <div className="mt-8">
         <TargetConfigEditor
           conferenceId={conference._id}
-          currentConfig={conference.ticket_targets || defaultTargetConfig}
-          capacity={conference.ticket_capacity || defaultCapacity}
+          currentConfig={conference.ticketTargets || defaultTargetConfig}
+          capacity={conference.ticketCapacity || defaultCapacity}
           currentTicketsSold={currentData.tickets.length}
         />
       </div>

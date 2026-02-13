@@ -3,6 +3,7 @@
 import type {
   SponsorForConferenceExpanded,
   SponsorTag,
+  SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
@@ -16,6 +17,8 @@ import {
   getInvoiceStatusColor,
   formatInvoiceStatusLabel,
   calculateSponsorValue,
+  getSignatureStatusBadgeProps,
+  getDaysPending,
 } from './utils'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
@@ -162,7 +165,7 @@ export function SponsorCard({
           {sponsor.sponsor.logo ? (
             <SponsorLogo
               logo={sponsor.sponsor.logo}
-              logoBright={sponsor.sponsor.logo_bright}
+              logoBright={sponsor.sponsor.logoBright}
               name={sponsor.sponsor.name}
               className="max-h-full w-auto max-w-14 object-contain"
             />
@@ -173,14 +176,14 @@ export function SponsorCard({
           )}
         </div>
         {/* Assignee */}
-        {sponsor.assigned_to && (
+        {sponsor.assignedTo && (
           <div className="scale-[0.8] transform">
             <SpeakerAvatars
               speakers={[
                 {
-                  _id: sponsor.assigned_to._id,
-                  name: sponsor.assigned_to.name,
-                  image: sponsor.assigned_to.image,
+                  _id: sponsor.assignedTo._id,
+                  name: sponsor.assignedTo.name,
+                  image: sponsor.assignedTo.image,
                 } as Speaker,
               ]}
               size="sm"
@@ -224,13 +227,21 @@ export function SponsorCard({
           {value > 0 && currentView !== 'pipeline' && (
             <span
               className={clsx(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
-                getInvoiceStatusColor(sponsor.invoice_status),
+                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap',
+                getInvoiceStatusColor(sponsor.invoiceStatus),
               )}
             >
-              {formatInvoiceStatusLabel(sponsor.invoice_status)}
+              {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
             </span>
           )}
+          {currentView === 'contract' &&
+            sponsor.signatureStatus &&
+            sponsor.signatureStatus !== 'not-started' && (
+              <SignatureBadge
+                status={sponsor.signatureStatus}
+                contractSentAt={sponsor.contractSentAt}
+              />
+            )}
         </div>
       </div>
 
@@ -264,5 +275,48 @@ export function SponsorCard({
         </button>
       </div>
     </div>
+  )
+}
+
+const SIGNATURE_COLORS: Record<
+  Exclude<SignatureStatus, 'not-started'>,
+  string
+> = {
+  pending:
+    'bg-yellow-100 text-yellow-700 ring-yellow-700/20 dark:bg-yellow-900/30 dark:text-yellow-400 dark:ring-yellow-400/20',
+  signed:
+    'bg-green-100 text-green-700 ring-green-700/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-400/20',
+  rejected:
+    'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+  expired:
+    'bg-orange-100 text-orange-700 ring-orange-700/20 dark:bg-orange-900/30 dark:text-orange-400 dark:ring-orange-400/20',
+}
+
+function SignatureBadge({
+  status,
+  contractSentAt,
+}: {
+  status: SignatureStatus
+  contractSentAt?: string
+}) {
+  const { label } = getSignatureStatusBadgeProps(status)
+  const days = getDaysPending(contractSentAt)
+  const colorClass =
+    SIGNATURE_COLORS[status as keyof typeof SIGNATURE_COLORS] ??
+    SIGNATURE_COLORS.pending
+
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap ring-1 ring-inset',
+        colorClass,
+      )}
+      title={days != null ? `Sent ${days}d ago` : undefined}
+    >
+      {label}
+      {status === 'pending' && days != null && days > 0 && (
+        <span className="ml-0.5 font-normal">({days}d)</span>
+      )}
+    </span>
   )
 }

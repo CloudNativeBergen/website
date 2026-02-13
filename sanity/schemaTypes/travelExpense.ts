@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { CURRENCY_OPTIONS } from './constants'
 
 export default defineType({
   name: 'travelExpense',
@@ -44,15 +45,7 @@ export default defineType({
       title: 'Currency',
       type: 'string',
       options: {
-        list: [
-          { title: 'Norwegian Krone (NOK)', value: 'NOK' },
-          { title: 'US Dollar (USD)', value: 'USD' },
-          { title: 'Euro (EUR)', value: 'EUR' },
-          { title: 'British Pound (GBP)', value: 'GBP' },
-          { title: 'Swedish Krona (SEK)', value: 'SEK' },
-          { title: 'Danish Krone (DKK)', value: 'DKK' },
-          { title: 'Other', value: 'OTHER' },
-        ],
+        list: [...CURRENCY_OPTIONS],
       },
       initialValue: 'NOK',
       validation: (Rule) => Rule.required(),

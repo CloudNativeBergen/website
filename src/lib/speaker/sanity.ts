@@ -204,7 +204,7 @@ export async function getPublicSpeaker(
           },
           "scheduleInfo": {
             "talkId": _id,
-            "schedule": *[_type == "schedule" && ^._id in tracks[].talks[].talk._ref][0]
+            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ^._id in tracks[].talks[].talk._ref][0]
           } {
             "date": schedule.date,
             "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
@@ -322,8 +322,8 @@ export async function getSpeakers(
         conference-> {
           _id,
           title,
-          start_date,
-          end_date
+          startDate,
+          endDate
         },
         topics[]-> {
           _id,
@@ -367,7 +367,7 @@ export async function getOrganizerCount(): Promise<{
   let err = null
 
   try {
-    const query = groq`count(*[_type == "speaker" && is_organizer == true])`
+    const query = groq`count(*[_type == "speaker" && isOrganizer == true])`
     count = await clientRead.fetch(query, {}, { cache: 'no-store' })
   } catch (error) {
     err = error as Error
@@ -384,7 +384,7 @@ export async function getOrganizers(): Promise<{
   let err = null
 
   try {
-    const query = groq`*[_type == "speaker" && is_organizer == true] {
+    const query = groq`*[_type == "speaker" && isOrganizer == true] {
       ...,
       "slug": slug.current,
       "image": image.asset->url

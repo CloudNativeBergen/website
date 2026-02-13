@@ -62,7 +62,7 @@ export class AppEnvironment {
         name: 'Test User',
         slug: 'test-user',
         email: 'test@cloudnativedays.no',
-        is_organizer: true,
+        isOrganizer: true,
         flags: [Flags.requiresTravelFunding],
       },
     }

@@ -8,6 +8,7 @@ import {
 import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { calculateWorkshopStats, getCapacityColorClass } from './utils'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface WorkshopCardProps {
   workshop: ProposalWithWorkshopData
@@ -37,7 +38,7 @@ export function WorkshopCard({
   return (
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-1 flex-col p-4">
-        <div className="mb-3 min-h-[3rem]">
+        <div className="mb-3 min-h-12">
           <h3 className="line-clamp-2 text-base leading-tight font-semibold text-gray-900 dark:text-white">
             {workshop.title}
           </h3>
@@ -85,21 +86,18 @@ export function WorkshopCard({
       </div>
 
       <div className="flex gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
-        <button
+        <AdminButton
+          variant="secondary"
           onClick={onEditCapacity}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           title="Edit capacity"
         >
           <PencilIcon className="h-4 w-4" />
           Capacity
-        </button>
-        <button
-          onClick={onAddParticipant}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
+        </AdminButton>
+        <AdminButton color="blue" onClick={onAddParticipant} className="flex-1">
           <PlusCircleIcon className="h-4 w-4" />
           Add Participant
-        </button>
+        </AdminButton>
       </div>
     </div>
   )

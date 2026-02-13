@@ -22,6 +22,15 @@ import {
   Transition,
   TransitionChild,
 } from '@headlessui/react'
+import {
+  TableContainer,
+  TableHeader,
+  Th,
+  TableBody,
+  Tr,
+  Td,
+  TableEmptyState,
+} from '@/components/DataTable'
 
 interface SponsorContactTableProps {
   sponsors: SponsorForConferenceExpanded[]
@@ -98,8 +107,8 @@ export function SponsorContactTable({
   const contactRows: ContactRow[] = []
 
   sponsors.forEach((sfc) => {
-    if (sfc.contact_persons && sfc.contact_persons.length > 0) {
-      sfc.contact_persons.forEach((contact, index) => {
+    if (sfc.contactPersons && sfc.contactPersons.length > 0) {
+      sfc.contactPersons.forEach((contact, index) => {
         contactRows.push({
           sfc,
           contact,
@@ -121,15 +130,12 @@ export function SponsorContactTable({
 
   if (contactRows.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-        <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-          No sponsors found
-        </h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          No sponsors were found for this conference.
-        </p>
-      </div>
+      <TableEmptyState
+        icon={BuildingOffice2Icon}
+        title="No sponsors found"
+        description="No sponsors were found for this conference."
+        className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+      />
     )
   }
 
@@ -193,74 +199,36 @@ export function SponsorContactTable({
         </Dialog>
       </Transition>
 
-      <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
+      <TableContainer>
         <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-800">
+          <TableHeader>
             <tr>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-              >
-                Sponsor
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-              >
-                Contact Name
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-              >
-                Contact Email
-              </th>
-              <th
-                scope="col"
-                className="hidden px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase sm:table-cell dark:text-gray-400"
-              >
-                Phone
-              </th>
-              <th
-                scope="col"
-                className="hidden px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase md:table-cell dark:text-gray-400"
-              >
-                Role
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-              >
-                Billing Info
-              </th>
-              <th
-                scope="col"
-                className="w-20 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-              >
-                Actions
-              </th>
+              <Th>Sponsor</Th>
+              <Th>Contact Name</Th>
+              <Th>Contact Email</Th>
+              <Th hiddenBelow="sm">Phone</Th>
+              <Th hiddenBelow="md">Role</Th>
+              <Th>Billing Info</Th>
+              <Th width="5rem">Actions</Th>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+          </TableHeader>
+          <TableBody>
             {contactRows.map((row, index) => {
               return (
-                <tr
-                  key={`${row.sfc._id}-${row.contact._key}-${index}`}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <td className="px-4 py-3">
+                <Tr key={`${row.sfc._id}-${row.contact._key}-${index}`}>
+                  <Td>
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {row.sfc.sponsor.name}
                       </div>
-                      {row.sfc.sponsor.org_number && (
+                      {row.sfc.sponsor.orgNumber && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          Org: {row.sfc.sponsor.org_number}
+                          Org: {row.sfc.sponsor.orgNumber}
                         </div>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
+                  </Td>
+                  <Td>
                     {row.contact.name ? (
                       <div className="text-sm text-gray-900 dark:text-white">
                         {row.contact.name}
@@ -270,8 +238,8 @@ export function SponsorContactTable({
                         No contact person
                       </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
+                  </Td>
+                  <Td>
                     {row.contact.email ? (
                       <div className="flex items-center">
                         <a
@@ -288,8 +256,8 @@ export function SponsorContactTable({
                         No email
                       </div>
                     )}
-                  </td>
-                  <td className="hidden px-4 py-3 sm:table-cell">
+                  </Td>
+                  <Td hiddenBelow="sm">
                     {row.contact.phone ? (
                       <a
                         href={`tel:${row.contact.phone}`}
@@ -303,8 +271,8 @@ export function SponsorContactTable({
                         No phone
                       </div>
                     )}
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
+                  </Td>
+                  <Td hiddenBelow="md">
                     {row.contact.role ? (
                       <div className="text-sm text-gray-900 dark:text-white">
                         {row.contact.role}
@@ -314,8 +282,8 @@ export function SponsorContactTable({
                         No role
                       </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
+                  </Td>
+                  <Td>
                     {row.isFirstContactForSponsor && (
                       <div className="space-y-1">
                         {row.sfc.billing && row.sfc.billing.email ? (
@@ -349,8 +317,8 @@ export function SponsorContactTable({
                         )}
                       </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
+                  </Td>
+                  <Td>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleStartEdit(row.sfc)}
@@ -360,13 +328,13 @@ export function SponsorContactTable({
                         <PencilIcon className="h-4 w-4" />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               )
             })}
-          </tbody>
+          </TableBody>
         </table>
-      </div>
+      </TableContainer>
     </div>
   )
 }

@@ -282,7 +282,7 @@ describe('AppEnvironment', () => {
             name: 'Test User',
             email: 'test@cloudnativedays.no',
             slug: 'test-user',
-            is_organizer: true,
+            isOrganizer: true,
           },
           expires: expect.any(String),
         })

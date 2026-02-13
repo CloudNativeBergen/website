@@ -116,11 +116,11 @@ export function createConfigAnnotations(
 ): ChartAnnotation[] {
   const annotations: ChartAnnotation[] = []
 
-  if (config.sales_start_date) {
+  if (config.salesStartDate) {
     annotations.push({
       id: 'sales-start',
       type: 'xaxis',
-      value: new Date(config.sales_start_date).getTime(),
+      value: new Date(config.salesStartDate).getTime(),
       label: 'Sales Started',
       color: '#10B981',
       strokeDashArray: 4,

@@ -37,14 +37,14 @@ import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
 
 async function getTicketData(conference: Conference) {
-  if (!conference.checkin_customer_id || !conference.checkin_event_id) {
+  if (!conference.checkinCustomerId || !conference.checkinEventId) {
     throw new Error('Missing checkin configuration')
   }
 
   try {
     return await fetchEventTickets(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
+      conference.checkinCustomerId,
+      conference.checkinEventId,
     )
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
@@ -56,8 +56,8 @@ async function processTicketAnalysis(
   conference: Conference,
   speakerCount: number,
 ) {
-  const targetConfig = conference.ticket_targets || DEFAULT_TARGET_CONFIG
-  const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
+  const targetConfig = conference.ticketTargets || DEFAULT_TARGET_CONFIG
+  const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
 
   if (tickets.length === 0) return null
 
@@ -73,8 +73,8 @@ async function processTicketAnalysis(
       capacity,
       conference,
       conferenceDate:
-        conference.start_date ||
-        conference.program_date ||
+        conference.startDate ||
+        conference.programDate ||
         new Date().toISOString(),
       speakerCount,
     }
@@ -95,12 +95,12 @@ export default async function AdminTickets() {
 
   if (
     conferenceError ||
-    !conference.checkin_customer_id ||
-    !conference.checkin_event_id
+    !conference.checkinCustomerId ||
+    !conference.checkinEventId
   ) {
     const missingFields = []
-    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
-    if (!conference.checkin_event_id) missingFields.push('Event ID')
+    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
+    if (!conference.checkinEventId) missingFields.push('Event ID')
 
     return (
       <ErrorDisplay
@@ -229,8 +229,8 @@ export default async function AdminTickets() {
         }}
         conference={{
           _id: conference._id,
-          ticket_capacity: conference.ticket_capacity,
-          ticket_targets: conference.ticket_targets,
+          ticketCapacity: conference.ticketCapacity,
+          ticketTargets: conference.ticketTargets,
         }}
         analysisData={{
           paidAnalysis: paidOnlyAnalysis,
