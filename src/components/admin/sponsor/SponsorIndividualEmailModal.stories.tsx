@@ -24,7 +24,7 @@ const mockTemplates = [
   {
     id: 'reminder',
     name: 'Payment Reminder',
-    subject: 'Invoice reminder for Cloud Native Days Bergen 2025',
+    subject: 'Invoice reminder for Cloud Native Days Norway 2025',
   },
   {
     id: 'onboarding',
@@ -45,7 +45,7 @@ function EmailModalMockup({
 }) {
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [subject, setSubject] = useState(
-    'Partnership opportunity: Cloud Native Days Bergen 2025',
+    'Partnership opportunity: Cloud Native Days Norway 2025',
   )
   const [body, setBody] = useState(
     'Dear TechGiant Corp team,\n\nWe would love to have you as a sponsor for our upcoming conference.\n\nBest regards,\nThe Cloud Native Days Team',

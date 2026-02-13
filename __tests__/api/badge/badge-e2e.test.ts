@@ -13,7 +13,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { BadgeAssertion, BadgeGenerationParams } from '@/lib/badge/types'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
-const TEST_HOST = 'cloudnativeday.no'
+const TEST_HOST = 'cloudnativedays.no'
 
 /**
  * End-to-End Badge System Tests

@@ -8,8 +8,8 @@ import type { Conference } from '@/lib/conference/types'
 
 const mockConference: Conference = {
   _id: 'conf-1',
-  title: 'Cloud Native Day Bergen 2025',
-  organizer: 'Cloud Native Bergen',
+  title: 'Cloud Native Days Norway 2025',
+  organizer: 'Cloud Native Days Norway',
   city: 'Bergen',
   country: 'Norway',
   startDate: '2025-09-15',
@@ -17,18 +17,18 @@ const mockConference: Conference = {
   cfpStartDate: '2025-01-01',
   cfpEndDate: '2025-03-01',
   cfpNotifyDate: '2025-04-01',
-  cfpEmail: 'cfp@cloudnativeday.no',
-  sponsorEmail: 'sponsor@cloudnativeday.no',
-  contactEmail: 'contact@cloudnativeday.no',
+  cfpEmail: 'cfp@cloudnativedays.no',
+  sponsorEmail: 'sponsor@cloudnativedays.no',
+  contactEmail: 'contact@cloudnativedays.no',
   programDate: '2025-09-15',
   registrationEnabled: true,
-  domains: ['cloudnativeday.no'],
+  domains: ['cloudnativedays.no'],
   formats: [],
   topics: [],
   organizers: [],
   sponsors: [],
   sponsorshipCustomization: {
-    prospectusUrl: 'https://cloudnativeday.no/sponsors',
+    prospectusUrl: 'https://cloudnativedays.no/sponsors',
   },
 }
 

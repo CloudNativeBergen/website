@@ -21,13 +21,13 @@ type Story = StoryObj<typeof meta>
 
 function DiscountEmailMockup() {
   const [subject, setSubject] = useState(
-    'Your Cloud Native Days Bergen 2025 Sponsor Discount Code',
+    'Your Cloud Native Days Norway 2025 Sponsor Discount Code',
   )
   const [ticketUrl, setTicketUrl] = useState(
-    'https://bergen.cloudnativeday.no/tickets',
+    'https://bergen.cloudnativedays.no/tickets',
   )
   const [body, setBody] = useState(
-    "Dear TechGiant Corp team,\n\nWe're excited to share your sponsor discount code for Cloud Native Days Bergen 2025!\n\nAs a Gold sponsor, you're entitled to 5 complimentary tickets for the conference.",
+    "Dear TechGiant Corp team,\n\nWe're excited to share your sponsor discount code for Cloud Native Days Norway 2025!\n\nAs a Gold sponsor, you're entitled to 5 complimentary tickets for the conference.",
   )
   const [showPreview, setShowPreview] = useState(false)
 
@@ -138,7 +138,7 @@ function DiscountEmailMockup() {
                   <p className="mb-4">Dear TechGiant Corp team,</p>
                   <p className="mb-4">
                     We&apos;re excited to share your sponsor discount code for
-                    Cloud Native Days Bergen 2025!
+                    Cloud Native Days Norway 2025!
                   </p>
                   <p className="mb-4">
                     As a Gold sponsor, you&apos;re entitled to 5 complimentary

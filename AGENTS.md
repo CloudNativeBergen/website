@@ -288,6 +288,9 @@ The project uses Chromatic for visual regression testing. PRs automatically trig
 - **Storybook Build:** `pnpm build-storybook` - Builds static Storybook for deployment.
 - **Storybook Tests:** `pnpm run storybook:test` - Runs Storybook interaction tests (requires Storybook running).
 - **Storybook Tests (CI):** `pnpm run storybook:test-ci` - Builds Storybook and runs tests in CI mode.
+- **Qodo CLI:** `pnpm qodo` - Main Qodo CLI for AI-powered development assistance.
+- **Qodo Chat:** `pnpm qodo:chat` - Interactive AI chat in terminal for code questions and generation.
+- **Qodo Review:** `pnpm qodo:review` - Review PR suggestions from Qodo Merge (auto-detects current branch PR, or pass PR number like `pnpm qodo:review 332`).
 - Run sanity commands with `pnpm sanity {command}` (e.g., `pnpm sanity deploy`) - do not use `npx sanity` directly.
 
 ## Code Organization & Refactoring

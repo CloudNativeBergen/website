@@ -41,7 +41,7 @@ export const WithContextHighlight: Story = {
     icon: <CalendarDaysIcon className="h-full w-full" />,
     title: 'Schedule',
     description: 'Manage the conference schedule for',
-    contextHighlight: 'Cloud Native Day Bergen 2026',
+    contextHighlight: 'Cloud Native Days Norway 2026',
   },
 }
 
@@ -94,7 +94,7 @@ export const FullFeatured: Story = {
     icon: <TicketIcon className="h-full w-full" />,
     title: 'Tickets',
     description: 'Manage ticket sales and registrations for',
-    contextHighlight: 'Cloud Native Day Bergen 2026',
+    contextHighlight: 'Cloud Native Days Norway 2026',
     backLink: { href: '/admin' },
     stats: [
       { value: 450, label: 'Sold', color: 'green' },

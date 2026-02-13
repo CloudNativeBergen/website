@@ -45,8 +45,8 @@ const mockTopics: Topic[] = [
 
 const mockConference = {
   _id: 'conf-1',
-  title: 'Cloud Native Day Bergen 2025',
-  organizer: 'Cloud Native Bergen',
+  title: 'Cloud Native Days Norway 2025',
+  organizer: 'Cloud Native Days Norway',
   city: 'Bergen',
   country: 'Norway',
   startDate: '2025-11-05',

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ErrorDisplay } from '@/components/admin/ErrorDisplay'
 import { SkeletonTable } from '@/components/admin/LoadingSkeleton'
+import { StatCard, MetricCard, StatsGrid } from '@/components/admin/stats'
 import {
   ChartBarIcon,
   UserGroupIcon,
@@ -10,6 +11,10 @@ import {
   ArrowDownTrayIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
+  CurrencyDollarIcon,
+  CheckCircleIcon,
+  TicketIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline'
 
 const meta = {
@@ -35,7 +40,7 @@ export const ListPage: Story = {
           icon={<ChartBarIcon className="h-full w-full" />}
           title="Sponsor Management"
           description="Manage sponsorships for"
-          contextHighlight="Cloud Native Day Bergen 2026"
+          contextHighlight="Cloud Native Days Norway 2026"
           stats={[
             { value: 24, label: 'Total Sponsors', color: 'blue' },
             { value: 8, label: 'Pending', color: 'yellow' },
@@ -367,7 +372,7 @@ export const EmptyState: Story = {
           icon={<ChartBarIcon className="h-full w-full" />}
           title="Sponsor Management"
           description="Manage sponsorships for"
-          contextHighlight="Cloud Native Day Bergen 2026"
+          contextHighlight="Cloud Native Days Norway 2026"
           actionItems={[
             {
               label: 'Add Sponsor',
@@ -624,6 +629,117 @@ const { mutateAsync } = trpc.sponsors.update.useMutation({
             </ul>
           </div>
         </section>
+      </div>
+    </div>
+  ),
+}
+
+/**
+ * Dashboard page with Stats components showing multiple metric displays.
+ * Uses MetricCard for top-level KPIs and StatCard for breakdowns.
+ */
+export const DashboardWithStats: Story = {
+  render: () => (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <AdminPageHeader
+          icon={<ChartBarIcon className="h-full w-full" />}
+          title="Conference Dashboard"
+          description="Overview for"
+          contextHighlight="Cloud Native Days Norway 2026"
+        />
+
+        {/* Top-level metrics using MetricCard */}
+        <div className="mt-6">
+          <h2 className="mb-4 text-sm font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
+            Key Metrics
+          </h2>
+          <StatsGrid columns={4}>
+            <MetricCard
+              title="Total Revenue"
+              value="kr 450,000"
+              subtitle="kr 380,000 collected"
+              icon={CurrencyDollarIcon}
+              trend="up"
+            />
+            <MetricCard
+              title="Ticket Sales"
+              value="324 / 500"
+              subtitle="65% capacity"
+              icon={TicketIcon}
+              trend="up"
+            />
+            <MetricCard
+              title="Sponsors"
+              value={12}
+              subtitle="5 in pipeline"
+              icon={CheckCircleIcon}
+              trend="neutral"
+            />
+            <MetricCard
+              title="Days Until Event"
+              value={45}
+              subtitle="March 28, 2026"
+              icon={ClockIcon}
+              trend="neutral"
+            />
+          </StatsGrid>
+        </div>
+
+        {/* Breakdowns using StatCard */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              Proposal Status
+            </h3>
+            <StatsGrid columns={4} gap="sm">
+              <StatCard value={156} label="Total" color="slate" />
+              <StatCard value={42} label="Under Review" color="yellow" />
+              <StatCard value={38} label="Accepted" color="green" />
+              <StatCard value={24} label="Rejected" color="red" />
+            </StatsGrid>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+              Ticket Breakdown
+            </h3>
+            <StatsGrid columns={4} gap="sm">
+              <StatCard value={200} label="Early Bird" color="green" />
+              <StatCard value={80} label="Regular" color="blue" />
+              <StatCard value={24} label="Speaker" color="purple" />
+              <StatCard value={20} label="Sponsor" color="indigo" />
+            </StatsGrid>
+          </div>
+        </div>
+
+        {/* Quick navigation */}
+        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            Quick Navigation
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: 'Proposals', count: 156, href: '/admin/proposals' },
+              { label: 'Speakers', count: 48, href: '/admin/speakers' },
+              { label: 'Sponsors', count: 12, href: '/admin/sponsors' },
+              { label: 'Tickets', count: 324, href: '/admin/tickets' },
+            ].map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="flex items-center justify-between rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+              >
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {item.label}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {item.count}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   ),

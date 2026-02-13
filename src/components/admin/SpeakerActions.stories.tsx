@@ -8,8 +8,8 @@ import { Format } from '@/lib/proposal/types'
 
 const mockConference: Conference = {
   _id: 'conf-2025',
-  title: 'Cloud Native Day Bergen 2025',
-  organizer: 'Cloud Native Bergen',
+  title: 'Cloud Native Days Norway 2025',
+  organizer: 'Cloud Native Days Norway',
   city: 'Bergen',
   country: 'Norway',
   startDate: '2025-09-18',
@@ -17,13 +17,13 @@ const mockConference: Conference = {
   cfpStartDate: '2025-03-01',
   cfpEndDate: '2025-06-15',
   cfpNotifyDate: '2025-07-01',
-  cfpEmail: 'cfp@cloudnativeday.no',
-  sponsorEmail: 'sponsor@cloudnativeday.no',
+  cfpEmail: 'cfp@cloudnativedays.no',
+  sponsorEmail: 'sponsor@cloudnativedays.no',
   programDate: '2025-07-15',
-  contactEmail: 'info@cloudnativeday.no',
+  contactEmail: 'info@cloudnativedays.no',
   registrationEnabled: true,
   organizers: [],
-  domains: ['cloudnativeday.no'],
+  domains: ['cloudnativedays.no'],
   formats: [Format.lightning_10, Format.presentation_25, Format.workshop_120],
   topics: [],
   socialLinks: [
@@ -71,7 +71,7 @@ type Story = StoryObj<typeof SpeakerActions>
 export const ModalOpen: Story = {
   args: {
     eligibleSpeakersCount: 15,
-    fromEmail: 'speakers@cloudnativeday.no',
+    fromEmail: 'speakers@cloudnativedays.no',
     conference: mockConference,
     isModalOpen: true,
     setIsModalOpen: fn(),
@@ -81,7 +81,7 @@ export const ModalOpen: Story = {
 export const ModalClosed: Story = {
   args: {
     eligibleSpeakersCount: 15,
-    fromEmail: 'speakers@cloudnativeday.no',
+    fromEmail: 'speakers@cloudnativedays.no',
     conference: mockConference,
     isModalOpen: false,
     setIsModalOpen: fn(),
@@ -91,7 +91,7 @@ export const ModalClosed: Story = {
 export const ManySpeakers: Story = {
   args: {
     eligibleSpeakersCount: 45,
-    fromEmail: 'speakers@cloudnativeday.no',
+    fromEmail: 'speakers@cloudnativedays.no',
     conference: mockConference,
     isModalOpen: true,
     setIsModalOpen: fn(),
@@ -101,7 +101,7 @@ export const ManySpeakers: Story = {
 export const SingleSpeaker: Story = {
   args: {
     eligibleSpeakersCount: 1,
-    fromEmail: 'speakers@cloudnativeday.no',
+    fromEmail: 'speakers@cloudnativedays.no',
     conference: mockConference,
     isModalOpen: true,
     setIsModalOpen: fn(),
@@ -111,7 +111,7 @@ export const SingleSpeaker: Story = {
 export const NoSocialLinks: Story = {
   args: {
     eligibleSpeakersCount: 15,
-    fromEmail: 'speakers@cloudnativeday.no',
+    fromEmail: 'speakers@cloudnativedays.no',
     conference: { ...mockConference, socialLinks: [] },
     isModalOpen: true,
     setIsModalOpen: fn(),

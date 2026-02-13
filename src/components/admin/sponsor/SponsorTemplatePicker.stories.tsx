@@ -103,12 +103,12 @@ const mockTemplates = [
 ]
 
 const mockConference = {
-  title: 'Cloud Native Day Bergen 2025',
+  title: 'Cloud Native Days Norway 2025',
   city: 'Bergen',
   startDate: '2025-09-15',
-  organizer: 'Cloud Native Bergen',
-  domains: ['cloudnativeday.no'],
-  prospectusUrl: 'https://cloudnativeday.no/sponsors',
+  organizer: 'Cloud Native Days Norway',
+  domains: ['cloudnativedays.no'],
+  prospectusUrl: 'https://cloudnativedays.no/sponsors',
 }
 
 const meta = {

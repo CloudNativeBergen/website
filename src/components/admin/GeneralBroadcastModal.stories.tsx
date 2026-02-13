@@ -29,7 +29,7 @@ const meta = {
     onSend: fn(),
     onSyncContacts: fn(),
     fromEmail: 'conference@cloudnativebergen.no',
-    eventName: 'Cloud Native Days Bergen 2025',
+    eventName: 'Cloud Native Days Norway 2025',
     eventLocation: 'Bergen, Norway',
     eventDate: '2025-06-12',
     eventUrl: 'https://cloudnativedays.no',
