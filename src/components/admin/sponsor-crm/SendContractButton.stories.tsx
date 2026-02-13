@@ -92,7 +92,7 @@ export const ContractAlreadySent: Story = {
   },
 }
 
-/** Button is hidden when contract is signed. */
+/** Shows a green "Signed" indicator when contract is signed. */
 export const ContractSigned: Story = {
   args: {
     conferenceId: 'conf-2026',
@@ -106,7 +106,7 @@ export const ContractSigned: Story = {
     docs: {
       description: {
         story:
-          'The button renders nothing when the contract is already signed.',
+          'Displays a non-interactive signed confirmation badge when the contract is already signed.',
       },
     },
   },

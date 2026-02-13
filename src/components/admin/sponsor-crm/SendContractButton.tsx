@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { DocumentTextIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SendContractModal } from './SendContractModal'
 
@@ -22,7 +22,19 @@ export function SendContractButton({
   const isSigned = sponsor.contractStatus === 'contract-signed'
 
   if (isSigned) {
-    return null
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-md bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700 ring-1 ring-green-600/20 ring-inset dark:bg-green-900/20 dark:text-green-400 dark:ring-green-400/20"
+        title={
+          sponsor.contractSignedAt
+            ? `Signed ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`
+            : 'Contract signed'
+        }
+      >
+        <CheckCircleIcon className="h-4 w-4" />
+        <span className="hidden sm:inline">Signed</span>
+      </span>
+    )
   }
 
   return (
