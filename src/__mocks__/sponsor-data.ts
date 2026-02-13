@@ -119,6 +119,7 @@ export function mockSponsor(
 export function mockReadinessReady(): ContractReadiness {
   return {
     ready: true,
+    canSend: true,
     missing: [],
   }
 }
@@ -131,18 +132,33 @@ export function mockReadinessMissing(
       field: 'sponsor.orgNumber',
       label: 'Organization number',
       source: 'sponsor',
+      severity: 'recommended',
     },
-    { field: 'sponsor.address', label: 'Address', source: 'sponsor' },
+    {
+      field: 'sponsor.address',
+      label: 'Address',
+      source: 'sponsor',
+      severity: 'recommended',
+    },
     {
       field: 'conference.organizerOrgNumber',
       label: 'Organizer org number',
       source: 'organizer',
+      severity: 'recommended',
     },
-    { field: 'tier', label: 'Sponsor tier', source: 'pipeline' },
+    {
+      field: 'tier',
+      label: 'Sponsor tier',
+      source: 'pipeline',
+      severity: 'recommended',
+    },
   ]
+
+  const hasRequired = defaultMissing.some((m) => m.severity === 'required')
 
   return {
     ready: false,
+    canSend: !hasRequired,
     missing: defaultMissing,
   }
 }

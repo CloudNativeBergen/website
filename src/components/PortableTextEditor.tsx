@@ -364,12 +364,14 @@ export function PortableTextEditor({
   onChange,
   helpText,
   forceRemountKey,
+  compact,
 }: {
   label: ReactNode
   value: PortableTextBlock[] | undefined
   onChange: (value: PortableTextBlock[]) => void
   helpText?: ReactNode
   forceRemountKey?: string | number
+  compact?: boolean
 }) {
   const id = useId()
   const [isClient] = useState(() => typeof window !== 'undefined')
@@ -428,7 +430,7 @@ export function PortableTextEditor({
 
         <PortableTextEditable
           id={id}
-          className="block min-h-60 w-full rounded-md bg-white p-3 text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+          className={`block w-full rounded-md bg-white p-3 text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 ${compact ? 'min-h-20' : 'min-h-60'}`}
           style={{
             fontSize: '16px',
             lineHeight: '1.6',

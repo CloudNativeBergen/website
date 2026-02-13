@@ -91,10 +91,17 @@ import {
   GenerateContractPdfSchema,
   FindBestContractTemplateSchema,
   SendContractSchema,
+  PreviewContractPdfSchema,
 } from '@/server/schemas/contractTemplate'
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
+import {
+  uploadTransientDocument,
+  createAgreement,
+  getAgreement,
+  downloadSignedDocument,
+} from '@/lib/adobe-sign'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -1031,6 +1038,87 @@ export const sponsorRouter = router({
         }),
     }),
 
+    checkSignatureStatus: adminProcedure
+      .input(SponsorForConferenceIdSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: sfc } = await getSponsorForConference(
+          input.id,
+        )
+        if (!sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        if (!sfc.signatureId) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'No signing agreement found for this contract',
+          })
+        }
+
+        const agreement = await getAgreement(sfc.signatureId)
+        const currentStatus = sfc.signatureStatus || 'not-started'
+
+        const statusMap: Record<string, string> = {
+          SIGNED: 'signed',
+          OUT_FOR_SIGNATURE: 'pending',
+          EXPIRED: 'expired',
+          CANCELLED: 'rejected',
+        }
+        const newStatus = statusMap[agreement.status] || currentStatus
+
+        if (newStatus !== currentStatus) {
+          const updateFields: Record<string, unknown> = {
+            signatureStatus: newStatus,
+          }
+          if (newStatus === 'signed') {
+            updateFields.contractStatus = 'contract-signed'
+            updateFields.contractSignedAt = getCurrentDateTime()
+
+            // Download signed PDF and store it
+            try {
+              const signedPdf = await downloadSignedDocument(sfc.signatureId)
+              const signedFilename = `signed-contract-${sfc.signatureId}.pdf`
+              const asset = await clientWrite.assets.upload(
+                'file',
+                Buffer.from(signedPdf),
+                { filename: signedFilename, contentType: 'application/pdf' },
+              )
+              updateFields.contractDocument = {
+                _type: 'file',
+                asset: { _type: 'reference', _ref: asset._id },
+              }
+            } catch (downloadError) {
+              console.error('Failed to download signed PDF:', downloadError)
+            }
+          }
+
+          await clientWrite.patch(input.id).set(updateFields).commit()
+
+          const userId = ctx.speaker._id
+          if (userId) {
+            try {
+              await logSignatureStatusChange(
+                input.id,
+                currentStatus,
+                newStatus,
+                userId,
+              )
+            } catch (logError) {
+              console.error('Failed to log signature status change:', logError)
+            }
+          }
+        }
+
+        return {
+          signatureStatus: newStatus,
+          agreementStatus: agreement.status,
+          changed: newStatus !== currentStatus,
+        }
+      }),
+
     updateSignatureStatus: adminProcedure
       .input(UpdateSignatureStatusSchema)
       .mutation(async ({ input, ctx }) => {
@@ -1100,20 +1188,23 @@ export const sponsorRouter = router({
           })
         }
 
-        if (
-          !sfc.conference?.title ||
-          !sfc.conference.startDate ||
-          !sfc.conference.endDate
-        ) {
+        if (!sfc.conference?.title) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'Conference data is incomplete for contract generation',
+            message: 'Conference title is required for contract generation',
           })
         }
 
         const primaryContact =
-          sfc.contactPersons?.find((c) => c.isPrimary) ||
-          sfc.contactPersons?.[0]
+          sfc.contactPersons?.find(
+            (c: { isPrimary?: boolean }) => c.isPrimary,
+          ) || sfc.contactPersons?.[0]
+        if (!primaryContact?.name || !primaryContact?.email) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'A contact person with name and email is required',
+          })
+        }
 
         // Generate the PDF
         const pdfBuffer = await generateContractPdf(template, {
@@ -1146,26 +1237,58 @@ export const sponsorRouter = router({
           },
         })
 
-        // Update CRM record: contract status, signer email, sent timestamp
+        const filename = `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`
+
+        // Upload PDF to Sanity as a file asset
+        const asset = await clientWrite.assets.upload('file', pdfBuffer, {
+          filename,
+          contentType: 'application/pdf',
+        })
+
+        // Update CRM record: contract status, signer email, sent timestamp, document
         const now = getCurrentDateTime()
         const updateFields: Record<string, unknown> = {
           contractStatus: 'contract-sent',
           contractSentAt: now,
           contractTemplate: { _type: 'reference', _ref: input.templateId },
+          contractDocument: {
+            _type: 'file',
+            asset: { _type: 'reference', _ref: asset._id },
+          },
         }
         if (input.signerEmail) {
           updateFields.signerEmail = input.signerEmail
           updateFields.signatureStatus = 'pending'
         }
 
+        // Send to Adobe Sign for digital signing if signer email is provided
+        let agreementId: string | undefined
+        if (input.signerEmail) {
+          try {
+            const transientDoc = await uploadTransientDocument(
+              pdfBuffer,
+              filename,
+            )
+            const agreement = await createAgreement({
+              name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
+              participantEmail: input.signerEmail,
+              message: `Please sign the sponsorship agreement for ${sfc.conference?.title || 'Cloud Native Days Norway'}.`,
+              fileInfos: [
+                { transientDocumentId: transientDoc.transientDocumentId },
+              ],
+            })
+            agreementId = agreement.id
+            updateFields.signatureId = agreementId
+          } catch (signError) {
+            console.error('Adobe Sign agreement creation failed:', signError)
+            // Continue without signing — contract is still sent
+          }
+        }
+
         await clientWrite
           .patch(input.sponsorForConferenceId)
           .set(updateFields)
           .commit()
-
-        // TODO: Send contract email via Resend with PDF attachment
-        // When Posten signering (#303) is integrated, this is where the
-        // signing flow should be initiated instead of manual email.
 
         // Log activity
         const userId = ctx.speaker._id
@@ -1200,7 +1323,8 @@ export const sponsorRouter = router({
         return {
           success: true,
           pdf: pdfBuffer.toString('base64'),
-          filename: `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+          filename,
+          agreementId,
         }
       }),
   }),
@@ -1398,13 +1522,9 @@ export const sponsorRouter = router({
           input.language,
         )
         if (error) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: error.message,
-            cause: error,
-          })
+          return null
         }
-        return template
+        return template ?? null
       }),
 
     contractReadiness: adminProcedure
@@ -1501,6 +1621,119 @@ export const sponsorRouter = router({
             cause: pdfError,
           })
         }
+      }),
+
+    previewPdf: adminProcedure
+      .input(PreviewContractPdfSchema)
+      .mutation(async ({ input }) => {
+        const { conference, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
+
+        let tierTitle: string | undefined
+        if (input.tierId) {
+          const { sponsorTier } = await getSponsorTier(input.tierId)
+          tierTitle = sponsorTier?.title
+        }
+
+        const template = {
+          _id: 'preview',
+          _createdAt: new Date().toISOString(),
+          _updatedAt: new Date().toISOString(),
+          title: input.title || 'Sponsor Agreement',
+          conference: {
+            _id: conference._id,
+            title: conference.title,
+          },
+          language: input.language,
+          currency: input.currency,
+          sections: input.sections.map((s, i) => ({
+            _key: s._key || `preview-${i}`,
+            heading: s.heading,
+            body: s.body,
+          })),
+          headerText: input.headerText,
+          footerText: input.footerText,
+          terms: input.terms,
+          isDefault: false,
+          isActive: true,
+        }
+
+        try {
+          const pdfBuffer = await generateContractPdf(template, {
+            sponsor: {
+              name: 'Acme Corporation AS',
+              orgNumber: '987 654 321',
+              address: 'Storgata 1, 0182 Oslo',
+              website: 'https://acme.example.com',
+            },
+            contactPerson: {
+              name: 'Jane Doe',
+              email: 'jane.doe@acme.example.com',
+            },
+            tier: tierTitle ? { title: tierTitle } : { title: 'Gold Partner' },
+            addons: [
+              { title: 'Speakers Dinner' },
+              { title: 'Barista Bar Sponsorship' },
+            ],
+            contractValue: 50000,
+            contractCurrency: input.currency || 'NOK',
+            conference: {
+              title: conference.title,
+              startDate: conference.startDate,
+              endDate: conference.endDate,
+              city: conference.city,
+              organizer: conference.organizer,
+              organizerOrgNumber:
+                conference.organizerOrgNumber || '000 000 000',
+              organizerAddress:
+                conference.organizerAddress || 'Address not set',
+              venueName: conference.venueName,
+              venueAddress: conference.venueAddress,
+              sponsorEmail: conference.sponsorEmail,
+            },
+          })
+
+          return { pdf: pdfBuffer.toString('base64') }
+        } catch (pdfError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate preview PDF',
+            cause: pdfError,
+          })
+        }
+      }),
+
+    updateConferenceOrgInfo: adminProcedure
+      .input(
+        z.object({
+          conferenceId: z.string().min(1),
+          organizerOrgNumber: z.string().optional(),
+          organizerAddress: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const fields: Record<string, string> = {}
+        if (input.organizerOrgNumber !== undefined) {
+          fields.organizerOrgNumber = input.organizerOrgNumber
+        }
+        if (input.organizerAddress !== undefined) {
+          fields.organizerAddress = input.organizerAddress
+        }
+        if (Object.keys(fields).length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'No fields to update',
+          })
+        }
+        await clientWrite.patch(input.conferenceId).set(fields).commit()
+        return { success: true }
       }),
   }),
 })

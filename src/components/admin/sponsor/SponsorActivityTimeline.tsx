@@ -104,7 +104,7 @@ function UserAvatar({
 }) {
   const sizeClasses = size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
 
-  if (image) {
+  if (image && image.length > 0) {
     return (
       <Image
         src={image}

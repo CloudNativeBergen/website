@@ -62,6 +62,7 @@ export function ContractTemplateListPage({
         title="Contract Templates"
         description="Manage contract templates for sponsor agreements"
         icon={<DocumentTextIcon />}
+        backLink={{ href: '/admin/sponsors', label: 'Sponsors' }}
         actions={
           <Link
             href="/admin/sponsors/contracts/new"

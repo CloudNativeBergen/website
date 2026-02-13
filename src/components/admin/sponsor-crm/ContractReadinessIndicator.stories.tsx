@@ -27,6 +27,7 @@ type Story = StoryObj<typeof meta>
 export const Interactive: Story = {
   args: {
     sponsorForConferenceId: 'sfc-ready',
+    conferenceId: 'conf-1',
   },
   parameters: {
     msw: {
@@ -49,6 +50,7 @@ export const Interactive: Story = {
 export const ReadyForContract: Story = {
   args: {
     sponsorForConferenceId: 'sfc-ready',
+    conferenceId: 'conf-1',
   },
   parameters: {
     msw: {
@@ -71,6 +73,7 @@ export const ReadyForContract: Story = {
 export const MissingFields: Story = {
   args: {
     sponsorForConferenceId: 'sfc-missing',
+    conferenceId: 'conf-1',
   },
   parameters: {
     msw: {
@@ -93,6 +96,7 @@ export const MissingFields: Story = {
 export const MissingSponsorDataOnly: Story = {
   args: {
     sponsorForConferenceId: 'sfc-sponsor-missing',
+    conferenceId: 'conf-1',
   },
   parameters: {
     msw: {
@@ -107,16 +111,19 @@ export const MissingSponsorDataOnly: Story = {
                     field: 'sponsor.orgNumber',
                     label: 'Organization number',
                     source: 'sponsor',
+                    severity: 'recommended',
                   },
                   {
                     field: 'sponsor.address',
                     label: 'Address',
                     source: 'sponsor',
+                    severity: 'recommended',
                   },
                   {
                     field: 'contactPersons.primary',
                     label: 'Primary contact person',
                     source: 'sponsor',
+                    severity: 'required',
                   },
                 ]),
               },
@@ -131,6 +138,7 @@ export const MissingSponsorDataOnly: Story = {
 export const MissingOrganizerDataOnly: Story = {
   args: {
     sponsorForConferenceId: 'sfc-organizer-missing',
+    conferenceId: 'conf-1',
   },
   parameters: {
     msw: {
@@ -145,21 +153,25 @@ export const MissingOrganizerDataOnly: Story = {
                     field: 'conference.name',
                     label: 'Conference name',
                     source: 'organizer',
+                    severity: 'recommended',
                   },
                   {
                     field: 'conference.organizerOrgNumber',
                     label: 'Organizer org number',
                     source: 'organizer',
+                    severity: 'recommended',
                   },
                   {
                     field: 'conference.organizerAddress',
                     label: 'Organizer address',
                     source: 'organizer',
+                    severity: 'recommended',
                   },
                   {
                     field: 'conference.sponsorEmail',
                     label: 'Sponsor contact email',
                     source: 'organizer',
+                    severity: 'recommended',
                   },
                 ]),
               },

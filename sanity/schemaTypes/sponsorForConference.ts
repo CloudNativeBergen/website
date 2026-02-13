@@ -108,7 +108,7 @@ export default defineType({
       name: 'signatureId',
       title: 'Signature ID',
       type: 'string',
-      description: 'External ID from e-signing provider (e.g. Posten.no)',
+      description: 'Agreement ID from Adobe Acrobat Sign',
       readOnly: true,
     }),
     defineField({

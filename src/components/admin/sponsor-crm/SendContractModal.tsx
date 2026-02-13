@@ -100,7 +100,7 @@ export function SendContractModal({
     })
   }
 
-  const isReady = readiness?.ready === true
+  const canSend = readiness?.canSend === true
   const primaryContact = getPrimaryContact(sponsor)
   const isBusy = generatePdf.isPending || sendContract.isPending
 
@@ -153,7 +153,10 @@ export function SendContractModal({
 
         {step === 'readiness' && (
           <div className="space-y-4">
-            <ContractReadinessIndicator sponsorForConferenceId={sponsor._id} />
+            <ContractReadinessIndicator
+              sponsorForConferenceId={sponsor._id}
+              conferenceId={conferenceId}
+            />
 
             {bestTemplate ? (
               <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
@@ -261,16 +264,28 @@ export function SendContractModal({
               />
             </div>
 
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-              <div className="flex items-center gap-2">
-                <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-500" />
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Digital signing via Posten signering is not yet integrated.
-                  The contract will be generated and the status updated, but
-                  signing must be handled manually.
-                </p>
+            {signerEmail.trim() ? (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                <div className="flex items-center gap-2">
+                  <DocumentTextIcon className="h-5 w-5 shrink-0 text-blue-500" />
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    The contract will be sent to{' '}
+                    <strong>{signerEmail.trim()}</strong> for digital signing
+                    via Adobe Acrobat Sign.
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+                <div className="flex items-center gap-2">
+                  <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-500" />
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    No signer email provided. The contract will be generated and
+                    status updated, but digital signing will not be initiated.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -288,10 +303,10 @@ export function SendContractModal({
           <button
             type="button"
             onClick={handleGeneratePdf}
-            disabled={!isReady || !bestTemplate || isBusy}
+            disabled={!canSend || !bestTemplate || isBusy}
             className={clsx(
               'inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-              !isReady || !bestTemplate
+              !canSend || !bestTemplate
                 ? 'bg-gray-400 dark:bg-gray-600'
                 : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
             )}

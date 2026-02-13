@@ -1,9 +1,10 @@
-import ReactPDF, {
+import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
+  renderToBuffer,
 } from '@react-pdf/renderer'
 import type { ContractTemplate } from './contract-templates'
 import {
@@ -455,7 +456,7 @@ export async function generateContractPdf(
 ): Promise<Buffer> {
   const variables = buildContractVariables(context)
   const doc = <ContractDocument template={template} variables={variables} />
-  const buffer = await ReactPDF.renderToBuffer(doc)
+  const buffer = await renderToBuffer(doc)
   return Buffer.from(buffer)
 }
 

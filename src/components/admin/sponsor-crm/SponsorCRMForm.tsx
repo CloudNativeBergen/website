@@ -219,6 +219,18 @@ export function SponsorCRMForm({
     await submitForm(formData)
   }
 
+  const missingData = useMemo(() => {
+    if (!sponsor) return null
+    const hasContacts =
+      sponsor.contactPersons && sponsor.contactPersons.length > 0
+    const hasLogo = !!formData.logo && formData.logo.length > 0
+    return {
+      contacts: !hasContacts,
+      logo: !hasLogo,
+      email: !hasContacts,
+    }
+  }, [sponsor, formData.logo])
+
   return (
     <>
       <Transition show={isOpen} as={Fragment}>
@@ -297,15 +309,27 @@ export function SponsorCRMForm({
                             <button
                               type="button"
                               onClick={() => {
+                                if (missingData?.email) return
                                 onClose()
                                 onEmailTrigger?.(sponsor)
                               }}
-                              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
-                              title="Email sponsor contacts"
+                              disabled={missingData?.email}
+                              className={clsx(
+                                'relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset',
+                                missingData?.email
+                                  ? 'cursor-not-allowed text-gray-400 ring-gray-200 dark:text-gray-500 dark:ring-gray-700'
+                                  : 'cursor-pointer bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
+                              )}
+                              title={
+                                missingData?.email
+                                  ? 'Add contacts first to send email'
+                                  : 'Email sponsor contacts'
+                              }
                             >
                               <EnvelopeIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Email</span>
                             </button>
+                            <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
                             <button
                               type="button"
                               onClick={() => setView('history')}
@@ -324,13 +348,22 @@ export function SponsorCRMForm({
                               type="button"
                               onClick={() => setView('logo')}
                               className={clsx(
-                                'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
                                 view === 'logo'
                                   ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
+                                  : missingData?.logo
+                                    ? 'bg-white text-amber-600 ring-amber-300 hover:bg-amber-50 dark:bg-gray-800 dark:text-amber-400 dark:ring-amber-500/50 dark:hover:bg-gray-700'
+                                    : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
                               )}
-                              title="Manage logo"
+                              title={
+                                missingData?.logo
+                                  ? 'No logo uploaded \u2014 click to add'
+                                  : 'Manage logo'
+                              }
                             >
+                              {missingData?.logo && (
+                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
+                              )}
                               <PhotoIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Logo</span>
                             </button>
@@ -338,13 +371,22 @@ export function SponsorCRMForm({
                               type="button"
                               onClick={() => setView('contacts')}
                               className={clsx(
-                                'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
                                 view === 'contacts'
                                   ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
+                                  : missingData?.contacts
+                                    ? 'bg-white text-amber-600 ring-amber-300 hover:bg-amber-50 dark:bg-gray-800 dark:text-amber-400 dark:ring-amber-500/50 dark:hover:bg-gray-700'
+                                    : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
                               )}
-                              title="Manage contact persons"
+                              title={
+                                missingData?.contacts
+                                  ? 'No contacts \u2014 click to add'
+                                  : 'Manage contact persons'
+                              }
                             >
+                              {missingData?.contacts && (
+                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
+                              )}
                               <UserGroupIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Contacts</span>
                             </button>
@@ -572,6 +614,7 @@ export function SponsorCRMForm({
                             {sponsor && (
                               <ContractReadinessIndicator
                                 sponsorForConferenceId={sponsor._id}
+                                conferenceId={conferenceId}
                               />
                             )}
                           </div>

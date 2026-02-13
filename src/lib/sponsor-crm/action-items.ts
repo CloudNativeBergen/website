@@ -127,6 +127,7 @@ export function generateActionItems(
     // Priority 4: Contract in progress (not signed yet)
     if (
       sponsor.status === 'closed-won' &&
+      sponsor.contractStatus &&
       sponsor.contractStatus !== 'contract-signed' &&
       sponsor.contractStatus !== 'none'
     ) {

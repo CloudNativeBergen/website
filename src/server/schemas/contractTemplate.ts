@@ -67,3 +67,23 @@ export const SendContractSchema = z.object({
   templateId: z.string().min(1, 'Template ID is required'),
   signerEmail: z.string().email().optional(),
 })
+
+export const PreviewContractPdfSchema = z.object({
+  conferenceId: z.string().min(1, 'Conference ID is required'),
+  title: z.string().min(1, 'Title is required'),
+  language: z.enum(['nb', 'en']),
+  currency: z.string().optional(),
+  sections: z
+    .array(
+      z.object({
+        _key: z.string().optional(),
+        heading: z.string(),
+        body: z.array(z.any()).optional(),
+      }),
+    )
+    .min(1),
+  headerText: z.string().optional(),
+  footerText: z.string().optional(),
+  terms: z.array(z.any()).optional(),
+  tierId: z.string().optional(),
+})
