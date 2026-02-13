@@ -188,15 +188,15 @@ export function ProposalActionModal({
                 <span className="font-semibold">{proposal.title}</span> by{' '}
                 <span className="font-semibold">
                   {proposal.speakers &&
-                    Array.isArray(proposal.speakers) &&
-                    proposal.speakers.length > 0
+                  Array.isArray(proposal.speakers) &&
+                  proposal.speakers.length > 0
                     ? proposal.speakers
-                      .map((speaker) =>
-                        typeof speaker === 'object' && 'name' in speaker
-                          ? (speaker as Speaker).name
-                          : 'Unknown',
-                      )
-                      .join(', ')
+                        .map((speaker) =>
+                          typeof speaker === 'object' && 'name' in speaker
+                            ? (speaker as Speaker).name
+                            : 'Unknown',
+                        )
+                        .join(', ')
                     : 'Unknown author'}
                 </span>
                 ?

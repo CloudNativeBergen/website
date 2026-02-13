@@ -9,6 +9,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 import { CONTRACT_VARIABLE_DESCRIPTIONS } from '@/lib/sponsor-crm/contract-variables'
 import { Dropdown } from '@/components/Form'
+import { CurrencySelect } from '@/components/CurrencySelect'
 import {
   DocumentTextIcon,
   PlusIcon,
@@ -257,20 +258,16 @@ export function ContractTemplateEditorPage({
               />
             </div>
             <div>
-              <Dropdown
-                name="currency"
-                label="Default Currency"
-                options={
-                  new Map([
-                    ['NOK', 'NOK'],
-                    ['USD', 'USD'],
-                    ['EUR', 'EUR'],
-                    ['GBP', 'GBP'],
-                  ])
-                }
-                value={currency}
-                setValue={setCurrency}
-              />
+              <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+                Default Currency
+              </label>
+              <div className="mt-2">
+                <CurrencySelect
+                  value={currency}
+                  setValue={setCurrency}
+                  name="default-currency"
+                />
+              </div>
             </div>
             <div>
               <Dropdown

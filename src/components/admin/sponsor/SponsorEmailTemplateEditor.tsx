@@ -236,10 +236,11 @@ export function SponsorEmailTemplateEditor({
                 type="button"
                 onClick={handleSubmit}
                 disabled={isPending}
-                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
+                  saveStatus === 'error'
                     ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
                     : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
-                  }`}
+                }`}
               >
                 {isPending ? (
                   <>
@@ -308,10 +309,11 @@ export function SponsorEmailTemplateEditor({
                         setLanguage(value)
                         markDirty()
                       }}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${language === value
+                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        language === value
                           ? 'bg-indigo-600 text-white dark:bg-indigo-500'
                           : 'bg-white text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10'
-                        }`}
+                      }`}
                     >
                       {label}
                     </button>

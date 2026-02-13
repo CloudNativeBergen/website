@@ -340,8 +340,9 @@ export function Multiselect({
                 }
               }}
               disabled={value.length >= maxItems}
-              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500 ${value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
-                }`}
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500 ${
+                value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
+              }`}
             >
               <option value="">
                 {value.length >= maxItems

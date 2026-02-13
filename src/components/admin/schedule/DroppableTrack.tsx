@@ -383,18 +383,20 @@ const ServiceSession = ({
         )}
 
         <div
-          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${isResizing
+          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
+            isResizing
               ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
               : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
-            }`}
+          }`}
           onMouseDown={handleMouseDown}
           title="Drag to resize"
         >
           <div
-            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${isResizing
+            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
+              isResizing
                 ? 'bg-blue-500 dark:bg-blue-400'
                 : 'bg-gray-400 dark:bg-gray-300'
-              }`}
+            }`}
           ></div>
         </div>
 
@@ -506,11 +508,11 @@ const TimeSlotDropZone = ({
 
     const excludeTalk =
       activeDragItem.type === 'scheduled-talk' &&
-        activeDragItem.sourceTrackIndex === trackIndex
+      activeDragItem.sourceTrackIndex === trackIndex
         ? {
-          talkId: activeDragItem.proposal._id,
-          startTime: activeDragItem.sourceTimeSlot!,
-        }
+            talkId: activeDragItem.proposal._id,
+            startTime: activeDragItem.sourceTimeSlot!,
+          }
         : undefined
 
     return (
@@ -639,18 +641,20 @@ const ScheduledTalk = ({
   return (
     <div
       key={`${talk.talk._id}-${talk.startTime}`}
-      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${isSwapTarget ? 'animate-pulse' : ''
-        }`}
+      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${
+        isSwapTarget ? 'animate-pulse' : ''
+      }`}
       style={{
         top: `${position.top}px`,
         height: `${position.height}px`,
       }}
     >
       <div
-        className={`relative h-full transition-all duration-200 ${isSwapTarget
+        className={`relative h-full transition-all duration-200 ${
+          isSwapTarget
             ? 'ring-opacity-75 scale-105 transform shadow-lg ring-2 ring-amber-400'
             : ''
-          }`}
+        }`}
       >
         <DraggableProposal
           proposal={talk.talk}

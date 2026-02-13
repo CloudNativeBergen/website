@@ -70,13 +70,13 @@ export function FeaturedTalksManager({
   const handleAddTalk = async (talkId: string) => {
     try {
       await addTalkMutation.mutateAsync({ talkId })
-    } catch { }
+    } catch {}
   }
 
   const handleRemoveTalk = async (talkId: string) => {
     try {
       await removeTalkMutation.mutateAsync({ talkId })
-    } catch { }
+    } catch {}
   }
 
   const formatTalkFormat = (format: string) => {

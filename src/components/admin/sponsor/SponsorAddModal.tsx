@@ -201,12 +201,12 @@ export function SponsorAddModal({
             .map((sponsor) =>
               sponsor._id === existingSponsor._id
                 ? {
-                  ...sponsor,
-                  name: updatedSponsor.name,
-                  logo: updatedSponsor.logo,
-                  logoBright: updatedSponsor.logoBright,
-                  website: updatedSponsor.website,
-                }
+                    ...sponsor,
+                    name: updatedSponsor.name,
+                    logo: updatedSponsor.logo,
+                    logoBright: updatedSponsor.logoBright,
+                    website: updatedSponsor.website,
+                  }
                 : sponsor,
             )
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -322,8 +322,8 @@ export function SponsorAddModal({
 
   const filteredSponsors = query
     ? availableSponsors.filter((sponsor) =>
-      sponsor.name.toLowerCase().includes(query.toLowerCase()),
-    )
+        sponsor.name.toLowerCase().includes(query.toLowerCase()),
+      )
     : availableSponsors
 
   const isFormValid = () => {
@@ -435,9 +435,10 @@ export function SponsorAddModal({
                         key={sponsor._id}
                         value={sponsor}
                         className={({ active }) =>
-                          `relative cursor-default py-2 pr-9 pl-3 select-none ${active
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-900'
+                          `relative cursor-default py-2 pr-9 pl-3 select-none ${
+                            active
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-gray-900'
                           }`
                         }
                       >
@@ -445,20 +446,23 @@ export function SponsorAddModal({
                           <>
                             <div className="flex items-center">
                               <BuildingOffice2Icon
-                                className={`h-5 w-5 ${active ? 'text-white' : 'text-gray-400'
-                                  }`}
+                                className={`h-5 w-5 ${
+                                  active ? 'text-white' : 'text-gray-400'
+                                }`}
                               />
                               <span
-                                className={`ml-3 block truncate ${selected ? 'font-semibold' : 'font-normal'
-                                  }`}
+                                className={`ml-3 block truncate ${
+                                  selected ? 'font-semibold' : 'font-normal'
+                                }`}
                               >
                                 {sponsor.name}
                               </span>
                             </div>
                             {selected && (
                               <span
-                                className={`absolute inset-y-0 right-0 flex items-center pr-4 ${active ? 'text-white' : 'text-indigo-600'
-                                  }`}
+                                className={`absolute inset-y-0 right-0 flex items-center pr-4 ${
+                                  active ? 'text-white' : 'text-indigo-600'
+                                }`}
                               >
                                 <CheckIcon
                                   className="h-5 w-5"
@@ -596,8 +600,8 @@ export function SponsorAddModal({
             className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
           >
             {createMutation.isPending ||
-              updateMutation.isPending ||
-              crmCreateMutation.isPending
+            updateMutation.isPending ||
+            crmCreateMutation.isPending
               ? 'Saving...'
               : editingSponsor
                 ? 'Update Sponsor'
