@@ -47,10 +47,6 @@ const mockTemplates = [
   },
 ]
 
-function batchResponse(data: unknown) {
-  return [{ result: { data } }]
-}
-
 const meta: Meta<typeof ContractTemplateListPage> = {
   title: 'Systems/Sponsors/Admin/Contracts/ContractTemplateListPage',
   component: ContractTemplateListPage,
@@ -89,11 +85,11 @@ export const Default: Story = {
       handlers: [
         http.get('/api/trpc/sponsor.contractTemplates.list', async () => {
           await delay(200)
-          return HttpResponse.json(batchResponse(mockTemplates))
+          return HttpResponse.json({ result: { data: mockTemplates } })
         }),
         http.post('/api/trpc/sponsor.contractTemplates.delete', async () => {
           await delay(200)
-          return HttpResponse.json(batchResponse({ success: true }))
+          return HttpResponse.json({ result: { data: { success: true } } })
         }),
       ],
     },
@@ -110,7 +106,7 @@ export const EmptyState: Story = {
       handlers: [
         http.get('/api/trpc/sponsor.contractTemplates.list', async () => {
           await delay(200)
-          return HttpResponse.json(batchResponse([]))
+          return HttpResponse.json({ result: { data: [] } })
         }),
       ],
     },
@@ -127,7 +123,7 @@ export const Loading: Story = {
       handlers: [
         http.get('/api/trpc/sponsor.contractTemplates.list', async () => {
           await delay(60000)
-          return HttpResponse.json(batchResponse([]))
+          return HttpResponse.json({ result: { data: [] } })
         }),
       ],
     },

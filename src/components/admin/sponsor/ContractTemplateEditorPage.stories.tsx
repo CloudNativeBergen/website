@@ -89,18 +89,229 @@ const mockExistingTemplate = {
       ],
     },
   ],
-  terms: [],
-}
-
-function batchResponse(data: unknown) {
-  return [{ result: { data } }]
+  terms: [
+    {
+      _type: 'block',
+      _key: 'terms-h1',
+      style: 'h2',
+      children: [
+        {
+          _type: 'span',
+          _key: 'th1',
+          text: '1. Definitions',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-p1',
+      style: 'normal',
+      children: [
+        {
+          _type: 'span',
+          _key: 'tp1a',
+          text: '"Conference"',
+          marks: ['strong'],
+        },
+        {
+          _type: 'span',
+          _key: 'tp1b',
+          text: ' refers to {{{CONFERENCE_TITLE}}} taking place on {{{CONFERENCE_DATES}}} in {{{CONFERENCE_CITY}}}. ',
+          marks: [],
+        },
+        {
+          _type: 'span',
+          _key: 'tp1c',
+          text: '"Sponsor"',
+          marks: ['strong'],
+        },
+        {
+          _type: 'span',
+          _key: 'tp1d',
+          text: ' refers to {{{SPONSOR_NAME}}} (org.nr {{{SPONSOR_ORG_NUMBER}}}). ',
+          marks: [],
+        },
+        {
+          _type: 'span',
+          _key: 'tp1e',
+          text: '"Organizer"',
+          marks: ['strong'],
+        },
+        {
+          _type: 'span',
+          _key: 'tp1f',
+          text: ' refers to {{{ORG_NAME}}} (org.nr {{{ORG_ORG_NUMBER}}}).',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-h2',
+      style: 'h2',
+      children: [
+        {
+          _type: 'span',
+          _key: 'th2',
+          text: '2. Payment Terms',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-p2',
+      style: 'normal',
+      children: [
+        {
+          _type: 'span',
+          _key: 'tp2',
+          text: 'The Sponsor shall pay the agreed sponsorship fee of {{{CONTRACT_VALUE}}} {{{CONTRACT_CURRENCY}}} within 30 days of signing the contract. All payments are non-refundable unless the Conference is cancelled by the Organizer.',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-h3',
+      style: 'h2',
+      children: [
+        {
+          _type: 'span',
+          _key: 'th3',
+          text: '3. Sponsor Benefits',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-p3',
+      style: 'normal',
+      children: [
+        {
+          _type: 'span',
+          _key: 'tp3',
+          text: 'The Organizer will provide the following benefits at the {{{TIER_NAME}}} sponsorship level:',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-li1',
+      style: 'normal',
+      listItem: 'bullet',
+      level: 1,
+      children: [
+        {
+          _type: 'span',
+          _key: 'tl1',
+          text: 'Logo placement on the conference website and promotional materials',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-li2',
+      style: 'normal',
+      listItem: 'bullet',
+      level: 1,
+      children: [
+        {
+          _type: 'span',
+          _key: 'tl2',
+          text: 'Booth space at {{{VENUE_NAME}}} during the Conference',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-li3',
+      style: 'normal',
+      listItem: 'bullet',
+      level: 1,
+      children: [
+        {
+          _type: 'span',
+          _key: 'tl3',
+          text: 'Acknowledgement during opening and closing ceremonies',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-h4',
+      style: 'h2',
+      children: [
+        {
+          _type: 'span',
+          _key: 'th4',
+          text: '4. Cancellation Policy',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+    {
+      _type: 'block',
+      _key: 'terms-p4',
+      style: 'normal',
+      children: [
+        {
+          _type: 'span',
+          _key: 'tp4a',
+          text: 'If the Sponsor wishes to cancel, a ',
+          marks: [],
+        },
+        {
+          _type: 'span',
+          _key: 'tp4b',
+          text: 'written notice',
+          marks: ['strong'],
+        },
+        {
+          _type: 'span',
+          _key: 'tp4c',
+          text: ' must be sent to {{{ORG_EMAIL}}} at least 60 days before the Conference start date. Cancellations received less than 60 days before the event will be charged the ',
+          marks: [],
+        },
+        {
+          _type: 'span',
+          _key: 'tp4d',
+          text: 'full sponsorship fee',
+          marks: ['em'],
+        },
+        {
+          _type: 'span',
+          _key: 'tp4e',
+          text: '.',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+  ],
 }
 
 const tiersHandler = http.get(
   '/api/trpc/sponsor.tiers.listByConference',
   async () => {
     await delay(100)
-    return HttpResponse.json(batchResponse(mockTiers))
+    return HttpResponse.json({ result: { data: mockTiers } })
   },
 )
 
@@ -108,7 +319,9 @@ const createHandler = http.post(
   '/api/trpc/sponsor.contractTemplates.create',
   async () => {
     await delay(200)
-    return HttpResponse.json(batchResponse({ _id: 'tpl-new', success: true }))
+    return HttpResponse.json({
+      result: { data: { _id: 'tpl-new', success: true } },
+    })
   },
 )
 
@@ -116,7 +329,7 @@ const updateHandler = http.post(
   '/api/trpc/sponsor.contractTemplates.update',
   async () => {
     await delay(200)
-    return HttpResponse.json(batchResponse({ success: true }))
+    return HttpResponse.json({ result: { data: { success: true } } })
   },
 )
 
@@ -173,7 +386,9 @@ export const EditTemplate: Story = {
         updateHandler,
         http.get('/api/trpc/sponsor.contractTemplates.get', async () => {
           await delay(200)
-          return HttpResponse.json(batchResponse(mockExistingTemplate))
+          return HttpResponse.json({
+            result: { data: mockExistingTemplate },
+          })
         }),
       ],
     },
@@ -192,7 +407,9 @@ export const LoadingTemplate: Story = {
         tiersHandler,
         http.get('/api/trpc/sponsor.contractTemplates.get', async () => {
           await delay(60000)
-          return HttpResponse.json(batchResponse(mockExistingTemplate))
+          return HttpResponse.json({
+            result: { data: mockExistingTemplate },
+          })
         }),
       ],
     },
