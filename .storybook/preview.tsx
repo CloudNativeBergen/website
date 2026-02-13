@@ -137,6 +137,8 @@ const preview: Preview = {
                   'SponsorTierEditor',
                   'SponsorAddModal',
                 ],
+                'Contracts',
+                ['ContractTemplateListPage', 'ContractTemplateEditorPage'],
                 'Contacts',
                 [
                   'SponsorContactTable',
