@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { SponsorTierEditor } from './SponsorTierEditor'
 import { useState } from 'react'
 import {
   PlusIcon,
@@ -11,6 +12,7 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTierEditor',
+  component: SponsorTierEditor,
   tags: ['autodocs'],
   parameters: {
     layout: 'centered',
@@ -22,7 +24,7 @@ const meta = {
       },
     },
   },
-} satisfies Meta
+} as Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -330,10 +332,10 @@ export const TierCards: Story = {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {tier.price > 0
                     ? new Intl.NumberFormat('nb-NO', {
-                        style: 'currency',
-                        currency: 'NOK',
-                        maximumFractionDigits: 0,
-                      }).format(tier.price)
+                      style: 'currency',
+                      currency: 'NOK',
+                      maximumFractionDigits: 0,
+                    }).format(tier.price)
                     : 'Free'}
                   {tier.max && (
                     <span className="ml-2">

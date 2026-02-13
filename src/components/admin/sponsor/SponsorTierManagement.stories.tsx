@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { SponsorTierManagement } from './SponsorTierManagement'
 import {
   PlusIcon,
   TrashIcon,
@@ -9,6 +10,7 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTierManagement',
+  component: SponsorTierManagement,
   tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
@@ -20,7 +22,7 @@ const meta = {
       },
     },
   },
-} satisfies Meta
+} as Meta
 
 export default meta
 type Story = StoryObj<typeof meta>

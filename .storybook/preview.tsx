@@ -132,6 +132,7 @@ const preview: Preview = {
                 ['Metrics', 'Action Items', 'Activity Timeline'],
                 'Tiers',
                 [
+                  'SponsorTiersPage',
                   'SponsorTierManagement',
                   'SponsorTierEditor',
                   'SponsorAddModal',
