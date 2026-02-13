@@ -29,7 +29,7 @@ const mockSponsorData = {
   sponsorOrgNumber: null,
   sponsorAddress: null,
   tierTitle: 'Gold',
-  conferenceName: 'Cloud Native Days Bergen 2026',
+  conferenceName: 'Cloud Native Days Norway 2026',
   conferenceStartDate: '2026-10-15',
   contactPersons: [],
   billing: null,

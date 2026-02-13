@@ -48,8 +48,8 @@ const mockTopics: Topic[] = [
 
 const mockConference: Conference = {
   _id: 'conf-1',
-  title: 'Cloud Native Day Bergen 2025',
-  organizer: 'Cloud Native Bergen',
+  title: 'Cloud Native Days Norway 2025',
+  organizer: 'Cloud Native Days Norway',
   city: 'Bergen',
   country: 'Norway',
   startDate: '2025-11-05',
@@ -57,13 +57,13 @@ const mockConference: Conference = {
   cfpStartDate: '2025-06-01',
   cfpEndDate: '2025-08-31',
   cfpNotifyDate: '2025-09-15',
-  cfpEmail: 'cfp@cloudnativeday.no',
-  sponsorEmail: 'sponsor@cloudnativeday.no',
+  cfpEmail: 'cfp@cloudnativedays.no',
+  sponsorEmail: 'sponsor@cloudnativedays.no',
   programDate: '2025-10-01',
   registrationEnabled: true,
-  contactEmail: 'hello@cloudnativeday.no',
+  contactEmail: 'hello@cloudnativedays.no',
   organizers: [],
-  domains: ['cloudnativeday.no'],
+  domains: ['cloudnativedays.no'],
   formats: [
     Format.lightning_10,
     Format.presentation_20,

@@ -19,7 +19,7 @@ export function createMockConference(
     contactEmail: 'contact@example.com',
     programDate: '2026-06-15',
     registrationEnabled: true,
-    domains: ['2026.cloudnativeday.no'],
+    domains: ['2026.cloudnativedays.no'],
     formats: [],
     topics: [],
     organizers: [],

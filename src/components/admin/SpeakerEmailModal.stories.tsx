@@ -28,7 +28,7 @@ const mockProposal = {
     _rev: 'rev-1',
     _createdAt: '2024-06-01T00:00:00Z',
     _updatedAt: '2024-06-01T00:00:00Z',
-    title: 'Cloud Native Days Bergen 2025',
+    title: 'Cloud Native Days Norway 2025',
     city: 'Bergen',
     country: 'Norway',
     startDate: '2025-06-12',

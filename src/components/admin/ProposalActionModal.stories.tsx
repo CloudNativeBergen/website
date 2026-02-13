@@ -70,7 +70,7 @@ export const AcceptAction: Story = {
     action: Action.accept,
     adminUI: true,
     onAction: fn(),
-    domain: 'cloudnativeday.no',
+    domain: 'cloudnativedays.no',
   },
 }
 
@@ -82,7 +82,7 @@ export const RejectAction: Story = {
     action: Action.reject,
     adminUI: true,
     onAction: fn(),
-    domain: 'cloudnativeday.no',
+    domain: 'cloudnativedays.no',
   },
 }
 
@@ -94,7 +94,7 @@ export const RemindAction: Story = {
     action: Action.remind,
     adminUI: true,
     onAction: fn(),
-    domain: 'cloudnativeday.no',
+    domain: 'cloudnativedays.no',
   },
 }
 

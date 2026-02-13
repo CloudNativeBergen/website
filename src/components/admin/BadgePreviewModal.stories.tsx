@@ -23,7 +23,7 @@ const mockBadge = {
     _type: 'conference' as const,
     _createdAt: '2024-01-01T00:00:00Z',
     _updatedAt: '2024-01-01T00:00:00Z',
-    title: 'Cloud Native Day Bergen 2025',
+    title: 'Cloud Native Days Norway 2025',
   },
   badgeType: 'speaker' as const,
   issuedAt: '2025-01-15T10:00:00Z',
@@ -32,16 +32,16 @@ const mockBadge = {
       '@context': ['https://www.w3.org/ns/credentials/v2'],
       type: ['VerifiableCredential', 'OpenBadgeCredential'],
       issuer: {
-        id: 'https://cloudnativeday.no',
+        id: 'https://cloudnativedays.no',
         type: ['Profile'],
-        name: 'Cloud Native Day Bergen',
+        name: 'Cloud Native Days Norway',
       },
       credentialSubject: {
         type: ['AchievementSubject'],
         achievement: {
           type: ['Achievement'],
           name: 'Speaker Badge',
-          description: 'Presented at Cloud Native Day Bergen 2025',
+          description: 'Presented at Cloud Native Days Norway 2025',
         },
       },
     },
@@ -51,7 +51,7 @@ const mockBadge = {
   emailSent: true,
   emailSentAt: '2025-01-15T10:05:00Z',
   emailId: 'msg_abc123',
-  verificationUrl: 'https://cloudnativeday.no/badges/verify/a1b2c3d4',
+  verificationUrl: 'https://cloudnativedays.no/badges/verify/a1b2c3d4',
 }
 
 const meta = {

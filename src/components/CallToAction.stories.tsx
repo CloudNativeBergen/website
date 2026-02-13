@@ -22,8 +22,8 @@ type Story = StoryObj<typeof meta>
 
 const baseConference = {
   _id: 'conf-1',
-  title: 'Cloud Native Day Bergen 2026',
-  organizer: 'Cloud Native Bergen',
+  title: 'Cloud Native Days Norway 2026',
+  organizer: 'Cloud Native Days Norway',
   city: 'Bergen',
   country: 'Norway',
   startDate: '2026-09-15',

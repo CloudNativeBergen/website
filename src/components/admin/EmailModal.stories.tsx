@@ -99,7 +99,7 @@ export const WithInitialValues: Story = {
   args: {
     title: 'Follow Up Email',
     initialValues: {
-      subject: 'Following up: Sponsorship for Cloud Native Days Bergen 2025',
+      subject: 'Following up: Sponsorship for Cloud Native Days Norway 2025',
       message:
         'Dear TechGiant team,\n\nThank you for your interest in sponsoring our event.\n\nBest regards,\nThe Conference Team',
     },

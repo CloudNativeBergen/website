@@ -193,7 +193,7 @@ export const Default: Story = {
               Sponsor Pipeline
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Cloud Native Days Bergen 2025
+              Cloud Native Days Norway 2025
             </p>
           </div>
           <div className="flex items-center gap-3">
