@@ -236,8 +236,8 @@ export default function VolunteerAdminPage() {
                   }
                   action={
                     volunteers &&
-                    volunteers.length > 0 &&
-                    statusFilter.size > 0 ? (
+                      volunteers.length > 0 &&
+                      statusFilter.size > 0 ? (
                       <AdminButton
                         onClick={() => setStatusFilter(new Set())}
                         size="sm"
@@ -253,11 +253,10 @@ export default function VolunteerAdminPage() {
                   <div
                     key={volunteer._id}
                     onClick={() => setSelectedVolunteerId(volunteer._id)}
-                    className={`cursor-pointer rounded-lg border p-4 transition-all ${
-                      selectedVolunteerId === volunteer._id
+                    className={`cursor-pointer rounded-lg border p-4 transition-all ${selectedVolunteerId === volunteer._id
                         ? 'border-brand-cloud-blue bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
                         : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
-                    }`}
+                      }`}
                   >
                     <div className="mb-2 flex items-start justify-between">
                       <div>
@@ -551,6 +550,7 @@ export default function VolunteerAdminPage() {
         isOpen={!!deleteVolunteerId}
         onClose={() => setDeleteVolunteerId(null)}
         onConfirm={confirmDelete}
+        isLoading={deleteVolunteer.isPending}
         title="Delete Volunteer"
         message="Are you sure you want to delete this volunteer? This action cannot be undone."
         confirmButtonText="Delete"

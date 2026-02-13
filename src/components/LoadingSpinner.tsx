@@ -26,6 +26,8 @@ export function LoadingSpinner({
 
   return (
     <div
+      role="status"
+      aria-label="Loading"
       className={`animate-spin rounded-full border-b-2 ${colorClasses[color]} ${sizeClasses[size]} ${className}`}
     />
   )
