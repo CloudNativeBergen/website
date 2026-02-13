@@ -11,12 +11,16 @@ export function Input({
   value,
   setValue,
   type = 'text',
+  placeholder,
+  required,
 }: {
   name: string
   label: string
   value?: string
   setValue?: (val: string) => void
   type?: string
+  placeholder?: string
+  required?: boolean
 }) {
   return (
     <>
@@ -36,6 +40,8 @@ export function Input({
           disabled={setValue === undefined}
           onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
+          placeholder={placeholder}
+          required={required}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
         />
       </div>
@@ -118,12 +124,14 @@ export function Textarea({
   rows = 3,
   value,
   setValue,
+  placeholder,
 }: {
   name: string
   label: string
   rows?: number
   value?: string
   setValue: (val: string) => void
+  placeholder?: string
 }) {
   return (
     <>
@@ -140,6 +148,7 @@ export function Textarea({
           rows={rows}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
         />
       </div>
@@ -154,30 +163,38 @@ export function Dropdown({
   value,
   setValue,
   placeholder = 'Select an option',
+  disabled,
+  required,
 }: {
   name: string
-  label: string
+  label?: string
   options: Map<string, string>
   value?: string
   setValue: (val: string) => void
   placeholder?: string
+  disabled?: boolean
+  required?: boolean
 }) {
   return (
     <>
-      <label
-        htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-      >
-        {label}
-      </label>
-      <div className="mt-2 grid grid-cols-1">
+      {label && (
+        <label
+          htmlFor={name}
+          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+        >
+          {label}
+        </label>
+      )}
+      <div className={label ? 'mt-2 grid grid-cols-1' : 'grid grid-cols-1'}>
         <select
           id={name}
           name={name}
           autoComplete={name}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
+          disabled={disabled}
+          required={required}
+          className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
         >
           {!value && (
             <option value="" disabled>
@@ -323,9 +340,8 @@ export function Multiselect({
                 }
               }}
               disabled={value.length >= maxItems}
-              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500 ${
-                value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
-              }`}
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500 ${value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
+                }`}
             >
               <option value="">
                 {value.length >= maxItems

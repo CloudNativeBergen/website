@@ -20,6 +20,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon } from '@heroicons/react/20/solid'
 import { ChevronDownIcon, CheckIcon } from '@heroicons/react/16/solid'
+import { Dropdown } from '@/components/Form'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
@@ -159,7 +160,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch {}
+    } catch { }
   }
 
   const handleDelete = async () => {
@@ -172,7 +173,7 @@ function SponsorTierModal({
     setShowDeleteConfirm(false)
     try {
       await deleteMutation.mutateAsync({ id: tier._id })
-    } catch {}
+    } catch { }
   }
 
   const addPrice = () => {
@@ -389,37 +390,25 @@ function SponsorTierModal({
 
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div>
-                        <label
-                          htmlFor="tierType"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Tier Type
-                        </label>
-                        <div className="mt-2 grid grid-cols-1">
-                          <select
-                            id="tierType"
-                            value={formData.tierType}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                tierType: e.target.value as
-                                  | 'standard'
-                                  | 'special'
-                                  | 'addon',
-                              }))
-                            }
-                            disabled={isLoading}
-                            className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                          >
-                            <option value="standard">Standard</option>
-                            <option value="special">Special</option>
-                            <option value="addon">Add-on</option>
-                          </select>
-                          <ChevronDownIcon
-                            aria-hidden="true"
-                            className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-                          />
-                        </div>
+                        <Dropdown
+                          name="tierType"
+                          label="Tier Type"
+                          options={
+                            new Map([
+                              ['standard', 'Standard'],
+                              ['special', 'Special'],
+                              ['addon', 'Add-on'],
+                            ])
+                          }
+                          value={formData.tierType}
+                          setValue={(val) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              tierType: val as 'standard' | 'special' | 'addon',
+                            }))
+                          }
+                          disabled={isLoading}
+                        />
                       </div>
 
                       <div>

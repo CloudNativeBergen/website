@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
 import { useNotification, AdminPageHeader } from '@/components/admin'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { Input, Dropdown } from '@/components/Form'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import {
   CATEGORY_LABELS,
@@ -28,7 +29,6 @@ import {
   ArrowPathIcon,
   CheckIcon,
 } from '@heroicons/react/24/outline'
-import { ChevronDownIcon } from '@heroicons/react/16/solid'
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [
   TemplateCategory,
@@ -236,11 +236,10 @@ export function SponsorEmailTemplateEditor({
                 type="button"
                 onClick={handleSubmit}
                 disabled={isPending}
-                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
-                  saveStatus === 'error'
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
                     ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
                     : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
-                }`}
+                  }`}
               >
                 {isPending ? (
                   <>
@@ -273,44 +272,28 @@ export function SponsorEmailTemplateEditor({
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                  Title
-                </label>
-                <input
-                  type="text"
+                <Input
+                  name="template-title"
+                  label="Title"
                   value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value)
+                  setValue={(val) => {
+                    setTitle(val)
                     markDirty()
                   }}
                   placeholder="e.g. Cold Outreach (English)"
-                  className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                  Category
-                </label>
-                <div className="mt-2 grid grid-cols-1">
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      setCategory(e.target.value as TemplateCategory)
-                      markDirty()
-                    }}
-                    className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
-                  >
-                    {CATEGORY_OPTIONS.map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDownIcon
-                    aria-hidden="true"
-                    className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-                  />
-                </div>
+                <Dropdown
+                  name="template-category"
+                  label="Category"
+                  options={new Map(CATEGORY_OPTIONS)}
+                  value={category}
+                  setValue={(val) => {
+                    setCategory(val as TemplateCategory)
+                    markDirty()
+                  }}
+                />
               </div>
               <div>
                 <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -325,11 +308,10 @@ export function SponsorEmailTemplateEditor({
                         setLanguage(value)
                         markDirty()
                       }}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                        language === value
+                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${language === value
                           ? 'bg-indigo-600 text-white dark:bg-indigo-500'
                           : 'bg-white text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10'
-                      }`}
+                        }`}
                     >
                       {label}
                     </button>

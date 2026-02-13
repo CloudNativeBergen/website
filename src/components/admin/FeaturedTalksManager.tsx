@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { SearchInput } from '@/components/SearchInput'
+import { Dropdown } from '@/components/Form'
 
 interface FeaturedTalksManagerProps {
   className?: string
@@ -69,13 +70,13 @@ export function FeaturedTalksManager({
   const handleAddTalk = async (talkId: string) => {
     try {
       await addTalkMutation.mutateAsync({ talkId })
-    } catch {}
+    } catch { }
   }
 
   const handleRemoveTalk = async (talkId: string) => {
     try {
       await removeTalkMutation.mutateAsync({ talkId })
-    } catch {}
+    } catch { }
   }
 
   const formatTalkFormat = (format: string) => {
@@ -161,23 +162,20 @@ export function FeaturedTalksManager({
             </div>
 
             <div>
-              <label
-                htmlFor="status-filter"
-                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Status Filter
-              </label>
-              <select
-                id="status-filter"
-                value={searchStatus}
-                onChange={(e) =>
-                  setSearchStatus(e.target.value as 'confirmed' | 'accepted')
+              <Dropdown
+                name="status-filter"
+                label="Status Filter"
+                options={
+                  new Map([
+                    ['confirmed', 'Confirmed talks only'],
+                    ['accepted', 'Accepted talks only'],
+                  ])
                 }
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="confirmed">Confirmed talks only</option>
-                <option value="accepted">Accepted talks only</option>
-              </select>
+                value={searchStatus}
+                setValue={(val) =>
+                  setSearchStatus(val as 'confirmed' | 'accepted')
+                }
+              />
             </div>
           </div>
 

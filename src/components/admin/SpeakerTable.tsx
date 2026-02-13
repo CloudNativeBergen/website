@@ -12,7 +12,6 @@ import {
   EnvelopeIcon,
   UserIcon,
   ClipboardIcon,
-  MagnifyingGlassIcon,
   XMarkIcon,
   PencilIcon,
   EyeIcon,
@@ -22,6 +21,7 @@ import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { SearchInput } from '@/components/SearchInput'
 import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
   ActionMenu,
@@ -289,21 +289,12 @@ export function SpeakerTable({
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:max-w-xs">
-            <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
-              <input
-                type="text"
-                placeholder="Search speakers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="col-start-1 row-start-1 block w-full rounded-md bg-white py-2 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:pl-9 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-300 dark:focus:outline-blue-500"
-              />
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
-              />
-            </div>
-          </div>
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search speakers..."
+            className="flex-1 sm:max-w-xs"
+          />
 
           {hasActiveFilters && (
             <button

@@ -6,11 +6,11 @@ import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
 import { useBatchUpdates } from '@/lib/schedule/performance-utils'
 import {
-  MagnifyingGlassIcon,
   FunnelIcon,
   XMarkIcon,
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline'
+import { SearchInput } from '@/components/SearchInput'
 import { useState, useMemo, useCallback } from 'react'
 
 interface UnassignedProposalsProps {
@@ -22,11 +22,6 @@ const PROPOSAL_HEIGHT = 120
 
 const FILTER_STYLES = {
   container: 'space-y-3',
-  searchContainer: 'relative',
-  searchIcon:
-    'absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none dark:text-gray-500',
-  searchInput:
-    'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600',
   filterRow: 'flex items-center gap-2',
   filterIcon: 'h-4 w-4 text-gray-500 shrink-0 dark:text-gray-400',
   select:
@@ -34,25 +29,6 @@ const FILTER_STYLES = {
   clearButton:
     'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-white/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all shadow-sm border border-gray-200 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 dark:border-gray-600',
 } as const
-
-const SearchFilter = ({
-  searchQuery,
-  onSearchChange,
-}: {
-  searchQuery: string
-  onSearchChange: (value: string) => void
-}) => (
-  <div className={FILTER_STYLES.searchContainer}>
-    <MagnifyingGlassIcon className={FILTER_STYLES.searchIcon} />
-    <input
-      type="text"
-      placeholder="Search talks or speakers..."
-      value={searchQuery}
-      onChange={(e) => onSearchChange(e.target.value)}
-      className={FILTER_STYLES.searchInput}
-    />
-  </div>
-)
 
 const FormatFilter = ({
   selectedFormat,
@@ -288,9 +264,11 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         />
 
         <div className={FILTER_STYLES.container}>
-          <SearchFilter
-            searchQuery={searchQuery}
-            onSearchChange={handleSearchChange}
+          <SearchInput
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Search talks or speakers..."
+            inputClassName="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600"
           />
 
           <FormatFilter

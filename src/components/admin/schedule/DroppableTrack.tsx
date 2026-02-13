@@ -19,6 +19,7 @@ import {
   DocumentDuplicateIcon,
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
+import { Dropdown } from '@/components/Form'
 
 interface DroppableTrackProps {
   track: ScheduleTrack
@@ -168,27 +169,24 @@ const ServiceSessionModal = ({
           </div>
 
           <div>
-            <label
-              htmlFor="duration"
-              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Duration (minutes)
-            </label>
-            <select
-              id="duration"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            >
-              <option value={5}>5 minutes</option>
-              <option value={10}>10 minutes</option>
-              <option value={15}>15 minutes</option>
-              <option value={20}>20 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={45}>45 minutes</option>
-              <option value={60}>60 minutes</option>
-              <option value={90}>90 minutes</option>
-            </select>
+            <Dropdown
+              name="duration"
+              label="Duration (minutes)"
+              options={
+                new Map([
+                  ['5', '5 minutes'],
+                  ['10', '10 minutes'],
+                  ['15', '15 minutes'],
+                  ['20', '20 minutes'],
+                  ['30', '30 minutes'],
+                  ['45', '45 minutes'],
+                  ['60', '60 minutes'],
+                  ['90', '90 minutes'],
+                ])
+              }
+              value={String(duration)}
+              setValue={(val) => setDuration(Number(val))}
+            />
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -385,20 +383,18 @@ const ServiceSession = ({
         )}
 
         <div
-          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
-            isResizing
+          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${isResizing
               ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
               : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
-          }`}
+            }`}
           onMouseDown={handleMouseDown}
           title="Drag to resize"
         >
           <div
-            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
-              isResizing
+            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${isResizing
                 ? 'bg-blue-500 dark:bg-blue-400'
                 : 'bg-gray-400 dark:bg-gray-300'
-            }`}
+              }`}
           ></div>
         </div>
 
@@ -510,11 +506,11 @@ const TimeSlotDropZone = ({
 
     const excludeTalk =
       activeDragItem.type === 'scheduled-talk' &&
-      activeDragItem.sourceTrackIndex === trackIndex
+        activeDragItem.sourceTrackIndex === trackIndex
         ? {
-            talkId: activeDragItem.proposal._id,
-            startTime: activeDragItem.sourceTimeSlot!,
-          }
+          talkId: activeDragItem.proposal._id,
+          startTime: activeDragItem.sourceTimeSlot!,
+        }
         : undefined
 
     return (
@@ -643,20 +639,18 @@ const ScheduledTalk = ({
   return (
     <div
       key={`${talk.talk._id}-${talk.startTime}`}
-      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${
-        isSwapTarget ? 'animate-pulse' : ''
-      }`}
+      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${isSwapTarget ? 'animate-pulse' : ''
+        }`}
       style={{
         top: `${position.top}px`,
         height: `${position.height}px`,
       }}
     >
       <div
-        className={`relative h-full transition-all duration-200 ${
-          isSwapTarget
+        className={`relative h-full transition-all duration-200 ${isSwapTarget
             ? 'ring-opacity-75 scale-105 transform shadow-lg ring-2 ring-amber-400'
             : ''
-        }`}
+          }`}
       >
         <DraggableProposal
           proposal={talk.talk}

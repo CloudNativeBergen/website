@@ -1,14 +1,9 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
-import { useTheme } from 'next-themes'
+import { DialogTitle } from '@headlessui/react'
+import { ModalShell } from '@/components/ModalShell'
+import { Textarea, HelpText } from '@/components/Form'
 import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
 import {
   ArchiveBoxXMarkIcon,
@@ -107,7 +102,6 @@ export function ProposalActionModal({
   const [error, setError] = useState<string>('')
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
-  const { theme } = useTheme()
 
   const actionIconType = useMemo(() => iconForAction(action), [action])
   const [iconBgColor, iconTextColor, buttonColor] = useMemo(
@@ -135,175 +129,138 @@ export function ProposalActionModal({
   }
 
   return (
-    <Transition appear show={open}>
-      <Dialog
-        as="div"
-        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
-        onClose={close}
-      >
-        <TransitionChild
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
+    <ModalShell
+      isOpen={open}
+      onClose={close}
+      size="lg"
+      padded={false}
+      className="relative overflow-hidden px-6 py-5 sm:p-8"
+    >
+      <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
+        <button
+          type="button"
+          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-400"
+          onClick={() => close()}
         >
-          <div className="bg-opacity-25 fixed inset-0 bg-black" />
-        </TransitionChild>
-
-        <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <TransitionChild
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-              enterTo="opacity-100 translate-y-0 sm:scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-              <DialogPanel className="relative transform overflow-hidden rounded-2xl bg-white px-6 py-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-8 dark:bg-gray-900">
-                <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
-                  <button
-                    type="button"
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-400"
-                    onClick={() => close()}
-                  >
-                    <span className="sr-only">Close</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="sm:flex sm:items-start">
-                  <div
-                    className={clsx(
-                      iconBgColor,
-                      'mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10',
-                    )}
-                  >
-                    {React.createElement(actionIconType, {
-                      className: clsx(iconTextColor, 'h-6 w-6'),
-                      'aria-hidden': 'true',
-                    })}
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <DialogTitle
-                      as="h3"
-                      className="text-base/7 leading-6 font-semibold text-gray-900 dark:text-white"
-                    >
-                      {capitalizeFirstLetter(action)} proposal
-                    </DialogTitle>
-                    {error && (
-                      <div className="mt-2">
-                        <p className="text-sm/6 text-red-500 dark:text-red-400">
-                          Server error: &quot;{error}&quot;
-                        </p>
-                      </div>
-                    )}
-                    {(action === Action.accept ||
-                      action === Action.remind ||
-                      action === Action.reject) &&
-                      notify &&
-                      createLocalhostWarning(domain, 'speakers') && (
-                        <div className="mt-2">
-                          {createLocalhostWarning(domain, 'speakers')}
-                        </div>
-                      )}
-                    {adminUI ? (
-                      <div className="mt-2">
-                        <p className="text-sm/6 text-gray-600 dark:text-gray-400">
-                          Are you sure you want to {action} the proposal{' '}
-                          <span className="font-semibold">
-                            {proposal.title}
-                          </span>{' '}
-                          by{' '}
-                          <span className="font-semibold">
-                            {proposal.speakers &&
-                            Array.isArray(proposal.speakers) &&
-                            proposal.speakers.length > 0
-                              ? proposal.speakers
-                                  .map((speaker) =>
-                                    typeof speaker === 'object' &&
-                                    'name' in speaker
-                                      ? (speaker as Speaker).name
-                                      : 'Unknown',
-                                  )
-                                  .join(', ')
-                              : 'Unknown author'}
-                          </span>
-                          ?
-                        </p>
-                        <div className="mt-4">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={notify}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
-                              onChange={() => setNotify(!notify)}
-                            />
-                            <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
-                              Notify the speaker via email
-                            </span>
-                          </label>
-                        </div>
-                        <div className="mt-4">
-                          <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                            Comment
-                          </label>
-                          <textarea
-                            className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                            rows={3}
-                            placeholder="Add a comment..."
-                            onChange={(e) => setComment(e.target.value)}
-                          ></textarea>
-                          <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
-                            Your comment will be included in the email to the
-                            speaker.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
-                        <p className="text-sm/6 text-gray-600 dark:text-gray-400">
-                          Are you sure you want to {action} the proposal{' '}
-                          <span className="font-semibold">
-                            {proposal.title}
-                          </span>
-                          ?
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="button"
-                    disabled={actionMutation.isPending}
-                    className={clsx(
-                      buttonColor,
-                      actionMutation.isPending
-                        ? 'cursor-not-allowed'
-                        : 'cursor-pointer',
-                      'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
-                    )}
-                    onClick={() => submitHandler()}
-                  >
-                    {actionMutation.isPending
-                      ? `${capitalizeFirstLetter(action)}...`
-                      : capitalizeFirstLetter(action)}
-                  </button>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto dark:text-white dark:ring-gray-600 dark:hover:bg-gray-800"
-                    onClick={() => close()}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </DialogPanel>
-            </TransitionChild>
-          </div>
+          <span className="sr-only">Close</span>
+          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="sm:flex sm:items-start">
+        <div
+          className={clsx(
+            iconBgColor,
+            'mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10',
+          )}
+        >
+          {React.createElement(actionIconType, {
+            className: clsx(iconTextColor, 'h-6 w-6'),
+            'aria-hidden': 'true',
+          })}
         </div>
-      </Dialog>
-    </Transition>
+        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+          <DialogTitle
+            as="h3"
+            className="text-base/7 leading-6 font-semibold text-gray-900 dark:text-white"
+          >
+            {capitalizeFirstLetter(action)} proposal
+          </DialogTitle>
+          {error && (
+            <div className="mt-2">
+              <p className="text-sm/6 text-red-500 dark:text-red-400">
+                Server error: &quot;{error}&quot;
+              </p>
+            </div>
+          )}
+          {(action === Action.accept ||
+            action === Action.remind ||
+            action === Action.reject) &&
+            notify &&
+            createLocalhostWarning(domain, 'speakers') && (
+              <div className="mt-2">
+                {createLocalhostWarning(domain, 'speakers')}
+              </div>
+            )}
+          {adminUI ? (
+            <div className="mt-2">
+              <p className="text-sm/6 text-gray-600 dark:text-gray-400">
+                Are you sure you want to {action} the proposal{' '}
+                <span className="font-semibold">{proposal.title}</span> by{' '}
+                <span className="font-semibold">
+                  {proposal.speakers &&
+                    Array.isArray(proposal.speakers) &&
+                    proposal.speakers.length > 0
+                    ? proposal.speakers
+                      .map((speaker) =>
+                        typeof speaker === 'object' && 'name' in speaker
+                          ? (speaker as Speaker).name
+                          : 'Unknown',
+                      )
+                      .join(', ')
+                    : 'Unknown author'}
+                </span>
+                ?
+              </p>
+              <div className="mt-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={notify}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                    onChange={() => setNotify(!notify)}
+                  />
+                  <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
+                    Notify the speaker via email
+                  </span>
+                </label>
+              </div>
+              <div className="mt-4">
+                <Textarea
+                  name="action-comment"
+                  label="Comment"
+                  rows={3}
+                  value={comment}
+                  setValue={setComment}
+                  placeholder="Add a comment..."
+                />
+                <HelpText>
+                  Your comment will be included in the email to the speaker.
+                </HelpText>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2">
+              <p className="text-sm/6 text-gray-600 dark:text-gray-400">
+                Are you sure you want to {action} the proposal{' '}
+                <span className="font-semibold">{proposal.title}</span>?
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+        <button
+          type="button"
+          disabled={actionMutation.isPending}
+          className={clsx(
+            buttonColor,
+            actionMutation.isPending ? 'cursor-not-allowed' : 'cursor-pointer',
+            'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
+          )}
+          onClick={() => submitHandler()}
+        >
+          {actionMutation.isPending
+            ? `${capitalizeFirstLetter(action)}...`
+            : capitalizeFirstLetter(action)}
+        </button>
+        <button
+          type="button"
+          className="mt-3 inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto dark:text-white dark:ring-gray-600 dark:hover:bg-gray-800"
+          onClick={() => close()}
+        >
+          Cancel
+        </button>
+      </div>
+    </ModalShell>
   )
 }

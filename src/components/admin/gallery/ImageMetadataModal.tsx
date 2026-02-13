@@ -18,6 +18,7 @@ import { useNotification } from '../NotificationProvider'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { sanityImage } from '@/lib/sanity/client'
 import { ImageHotspotEditor } from './ImageHotspotEditor'
+import { Input } from '@/components/Form'
 import {
   extractDateFromISO,
   extractTimeFromISO,
@@ -273,51 +274,33 @@ export function ImageMetadataModal({
         <div className="mt-4 space-y-3">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label
-                htmlFor="bulk-photographer"
-                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-              >
-                Photographer (optional)
-              </label>
-              <div className="mt-2">
-                <input
-                  type="text"
-                  id="bulk-photographer"
-                  value={formData.photographer}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      photographer: e.target.value,
-                    }))
-                  }
-                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                  placeholder="Leave empty to keep existing"
-                />
-              </div>
+              <Input
+                name="bulk-photographer"
+                label="Photographer (optional)"
+                value={formData.photographer}
+                setValue={(val) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    photographer: val,
+                  }))
+                }
+                placeholder="Leave empty to keep existing"
+              />
             </div>
 
             <div>
-              <label
-                htmlFor="bulk-location"
-                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-              >
-                Location (optional)
-              </label>
-              <div className="mt-2">
-                <input
-                  type="text"
-                  id="bulk-location"
-                  value={formData.location}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      location: e.target.value,
-                    }))
-                  }
-                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                  placeholder="Leave empty to keep existing"
-                />
-              </div>
+              <Input
+                name="bulk-location"
+                label="Location (optional)"
+                value={formData.location}
+                setValue={(val) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    location: val,
+                  }))
+                }
+                placeholder="Leave empty to keep existing"
+              />
             </div>
           </div>
         </div>
@@ -341,27 +324,18 @@ export function ImageMetadataModal({
           {!isBulkMode && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label
-                  htmlFor="photographer"
-                  className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                >
-                  Photographer
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    id="photographer"
-                    value={formData.photographer}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        photographer: e.target.value,
-                      }))
-                    }
-                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                    required
-                  />
-                </div>
+                <Input
+                  name="photographer"
+                  label="Photographer"
+                  value={formData.photographer}
+                  setValue={(val) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      photographer: val,
+                    }))
+                  }
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -418,51 +392,33 @@ export function ImageMetadataModal({
               </div>
 
               <div>
-                <label
-                  htmlFor="location"
-                  className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                >
-                  Location
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        location: e.target.value,
-                      }))
-                    }
-                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                    required
-                  />
-                </div>
+                <Input
+                  name="location"
+                  label="Location"
+                  value={formData.location}
+                  setValue={(val) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      location: val,
+                    }))
+                  }
+                  required
+                />
               </div>
 
               <div>
-                <label
-                  htmlFor="imageAlt"
-                  className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                >
-                  Alt Text
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    id="imageAlt"
-                    value={formData.imageAlt}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        imageAlt: e.target.value,
-                      }))
-                    }
-                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                    placeholder="Description for accessibility"
-                  />
-                </div>
+                <Input
+                  name="imageAlt"
+                  label="Alt Text"
+                  value={formData.imageAlt}
+                  setValue={(val) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      imageAlt: val,
+                    }))
+                  }
+                  placeholder="Description for accessibility"
+                />
               </div>
             </div>
           )}

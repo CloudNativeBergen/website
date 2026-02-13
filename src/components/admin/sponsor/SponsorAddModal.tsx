@@ -15,7 +15,7 @@ import {
   ChevronUpDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
-import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
+import { Dropdown } from '@/components/Form'
 import {
   ConferenceSponsor,
   SponsorTierExisting,
@@ -201,12 +201,12 @@ export function SponsorAddModal({
             .map((sponsor) =>
               sponsor._id === existingSponsor._id
                 ? {
-                    ...sponsor,
-                    name: updatedSponsor.name,
-                    logo: updatedSponsor.logo,
-                    logoBright: updatedSponsor.logoBright,
-                    website: updatedSponsor.website,
-                  }
+                  ...sponsor,
+                  name: updatedSponsor.name,
+                  logo: updatedSponsor.logo,
+                  logoBright: updatedSponsor.logoBright,
+                  website: updatedSponsor.website,
+                }
                 : sponsor,
             )
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -322,8 +322,8 @@ export function SponsorAddModal({
 
   const filteredSponsors = query
     ? availableSponsors.filter((sponsor) =>
-        sponsor.name.toLowerCase().includes(query.toLowerCase()),
-      )
+      sponsor.name.toLowerCase().includes(query.toLowerCase()),
+    )
     : availableSponsors
 
   const isFormValid = () => {
@@ -362,45 +362,32 @@ export function SponsorAddModal({
 
       <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div>
-          <label
-            htmlFor="tier"
-            className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-          >
-            Sponsor Tier *
-          </label>
-          <div className="mt-2 grid grid-cols-1">
-            <select
-              id="tier"
-              value={formData.tierId}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  tierId: e.target.value,
-                }))
-              }
-              required
-              className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
-            >
-              <option value="">Select a tier...</option>
-              {sponsorTiers
-                .sort((a, b) => {
-                  const getMaxPrice = (tier: SponsorTierExisting) => {
-                    if (!tier.price || tier.price.length === 0) return 0
-                    return Math.max(...tier.price.map((p) => p.amount))
-                  }
-                  return getMaxPrice(b) - getMaxPrice(a)
-                })
-                .map((tier) => (
-                  <option key={tier._id} value={tier._id}>
-                    {tier.title}
-                  </option>
-                ))}
-            </select>
-            <ChevronDownIconSmall
-              aria-hidden="true"
-              className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-            />
-          </div>
+          <Dropdown
+            name="tier"
+            label="Sponsor Tier *"
+            options={
+              new Map(
+                sponsorTiers
+                  .sort((a, b) => {
+                    const getMaxPrice = (tier: SponsorTierExisting) => {
+                      if (!tier.price || tier.price.length === 0) return 0
+                      return Math.max(...tier.price.map((p) => p.amount))
+                    }
+                    return getMaxPrice(b) - getMaxPrice(a)
+                  })
+                  .map((tier) => [tier._id, tier.title]),
+              )
+            }
+            value={formData.tierId}
+            setValue={(val) =>
+              setFormData((prev) => ({
+                ...prev,
+                tierId: val,
+              }))
+            }
+            required
+            placeholder="Select a tier..."
+          />
         </div>
 
         {!editingSponsor && (
@@ -448,10 +435,9 @@ export function SponsorAddModal({
                         key={sponsor._id}
                         value={sponsor}
                         className={({ active }) =>
-                          `relative cursor-default py-2 pr-9 pl-3 select-none ${
-                            active
-                              ? 'bg-indigo-600 text-white'
-                              : 'text-gray-900'
+                          `relative cursor-default py-2 pr-9 pl-3 select-none ${active
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-900'
                           }`
                         }
                       >
@@ -459,23 +445,20 @@ export function SponsorAddModal({
                           <>
                             <div className="flex items-center">
                               <BuildingOffice2Icon
-                                className={`h-5 w-5 ${
-                                  active ? 'text-white' : 'text-gray-400'
-                                }`}
+                                className={`h-5 w-5 ${active ? 'text-white' : 'text-gray-400'
+                                  }`}
                               />
                               <span
-                                className={`ml-3 block truncate ${
-                                  selected ? 'font-semibold' : 'font-normal'
-                                }`}
+                                className={`ml-3 block truncate ${selected ? 'font-semibold' : 'font-normal'
+                                  }`}
                               >
                                 {sponsor.name}
                               </span>
                             </div>
                             {selected && (
                               <span
-                                className={`absolute inset-y-0 right-0 flex items-center pr-4 ${
-                                  active ? 'text-white' : 'text-indigo-600'
-                                }`}
+                                className={`absolute inset-y-0 right-0 flex items-center pr-4 ${active ? 'text-white' : 'text-indigo-600'
+                                  }`}
                               >
                                 <CheckIcon
                                   className="h-5 w-5"
@@ -613,8 +596,8 @@ export function SponsorAddModal({
             className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
           >
             {createMutation.isPending ||
-            updateMutation.isPending ||
-            crmCreateMutation.isPending
+              updateMutation.isPending ||
+              crmCreateMutation.isPending
               ? 'Saving...'
               : editingSponsor
                 ? 'Update Sponsor'

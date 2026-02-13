@@ -13,7 +13,6 @@ import { api } from '@/lib/trpc/client'
 import type { BadgeType } from '@/lib/badge/types'
 import {
   AcademicCapIcon,
-  MagnifyingGlassIcon,
   CheckIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
@@ -27,6 +26,7 @@ import {
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
+import { SearchInput } from '@/components/SearchInput'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
@@ -447,22 +447,12 @@ export function BadgeManagementClient({
                 </button>
               </span>
 
-              {/* Search */}
-              <div className="relative flex-1 sm:max-w-xs">
-                <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
-                  <input
-                    type="text"
-                    placeholder="Search speakers..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="col-start-1 row-start-1 block w-full rounded-md bg-white py-2 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:pl-9 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-300 dark:focus:outline-blue-500"
-                  />
-                  <MagnifyingGlassIcon
-                    aria-hidden="true"
-                    className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
-                  />
-                </div>
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search speakers..."
+                className="flex-1 sm:max-w-xs"
+              />
 
               {filterAlreadyIssued && (
                 <button
