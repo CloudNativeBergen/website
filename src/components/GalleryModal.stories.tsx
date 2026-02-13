@@ -113,10 +113,11 @@ function MockGalleryModal() {
               {mockImages.map((img, index) => (
                 <div
                   key={img.title}
-                  className={`relative h-16 w-24 shrink-0 overflow-hidden rounded ${index === 0
+                  className={`relative h-16 w-24 shrink-0 overflow-hidden rounded ${
+                    index === 0
                       ? 'ring-2 ring-white ring-offset-2 ring-offset-black'
                       : 'opacity-50'
-                    }`}
+                  }`}
                 >
                   <div className="h-full w-full bg-gray-700" />
                 </div>
