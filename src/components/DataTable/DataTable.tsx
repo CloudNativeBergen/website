@@ -1,4 +1,6 @@
-import { ReactNode } from 'react'
+'use client'
+
+import { ReactNode, KeyboardEvent } from 'react'
 import clsx from 'clsx'
 import { TableContainer } from './TableContainer'
 import { TableHeader, Th } from './TableHeader'
@@ -41,16 +43,20 @@ export function DataTable<T>({
   tableClassName,
   className,
 }: DataTableProps<T>) {
-  if (data.length === 0 && emptyState) {
-    return (
-      <TableEmptyState
-        icon={emptyState.icon}
-        title={emptyState.title}
-        description={emptyState.description}
-        action={emptyState.action}
-        className={className}
-      />
-    )
+  if (data.length === 0) {
+    if (emptyState) {
+      return (
+        <TableEmptyState
+          icon={emptyState.icon}
+          title={emptyState.title}
+          description={emptyState.description}
+          action={emptyState.action}
+          className={className}
+        />
+      )
+    }
+
+    return null
   }
 
   return (
@@ -77,29 +83,51 @@ export function DataTable<T>({
           </tr>
         </TableHeader>
         <TableBody>
-          {data.map((item, index) => (
-            <Tr
-              key={keyExtractor(item, index)}
-              onClick={onRowClick ? () => onRowClick(item, index) : undefined}
-              selected={isRowSelected ? isRowSelected(item, index) : false}
-              className={onRowClick ? 'cursor-pointer' : undefined}
-            >
-              {columns.map((column) => (
-                <Td
-                  key={column.key}
-                  align={column.align}
-                  hiddenBelow={column.hiddenBelow}
-                  className={column.className}
-                >
-                  {column.render
-                    ? column.render(item, index)
-                    : String(
-                        (item as Record<string, unknown>)[column.key] ?? '',
-                      )}
-                </Td>
-              ))}
-            </Tr>
-          ))}
+          {data.map((item, index) => {
+            const handleRowClick = onRowClick
+              ? () => onRowClick(item, index)
+              : undefined
+
+            const handleRowKeyDown = onRowClick
+              ? (event: KeyboardEvent<HTMLTableRowElement>) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onRowClick(item, index)
+                  }
+                }
+              : undefined
+
+            return (
+              <Tr
+                key={keyExtractor(item, index)}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={handleRowClick}
+                onKeyDown={handleRowKeyDown}
+                selected={isRowSelected ? isRowSelected(item, index) : false}
+              >
+                {columns.map((column) => (
+                  <Td
+                    key={column.key}
+                    align={column.align}
+                    hiddenBelow={column.hiddenBelow}
+                    className={column.className}
+                  >
+                    {column.render
+                      ? column.render(item, index)
+                      : String(
+                          typeof item === 'object' &&
+                            item !== null &&
+                            (item as Record<string, unknown>)[column.key] !==
+                              undefined
+                            ? (item as Record<string, unknown>)[column.key]
+                            : '',
+                        )}
+                  </Td>
+                ))}
+              </Tr>
+            )
+          })}
         </TableBody>
       </table>
     </TableContainer>

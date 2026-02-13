@@ -24,6 +24,9 @@
     "build-storybook": "storybook build",
     "storybook:test": "test-storybook --maxWorkers=2",
     "storybook:test-ci": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"pnpm build-storybook --quiet && npx http-server storybook-static --port 6006 --silent\" \"wait-on tcp:127.0.0.1:6006 && pnpm storybook:test\"",
+    "qodo": "qodo",
+    "qodo:chat": "qodo chat",
+    "qodo:review": "qodo merge",
     "sanity": "sanity",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts"
   },
@@ -87,6 +90,7 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
+    "@qodo/command": "^0.36.0",
     "@sanity/client": "^7.14.1",
     "@sanity/migrate": "^5.2.3",
     "@sanity/vision": "^5.8.1",

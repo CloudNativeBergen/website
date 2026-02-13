@@ -28,14 +28,17 @@ export interface TrProps extends HTMLAttributes<HTMLTableRowElement> {
 export function Tr({
   children,
   className,
-  hoverable = true,
+  hoverable,
   selected,
   ...props
 }: TrProps) {
+  const isClickable = Boolean(props.onClick)
+
   return (
     <tr
       className={clsx(
-        hoverable && 'hover:bg-gray-50 dark:hover:bg-gray-800',
+        (hoverable ?? isClickable) && 'hover:bg-gray-50 dark:hover:bg-gray-800',
+        isClickable && 'cursor-pointer',
         selected && 'bg-indigo-50 dark:bg-indigo-900/20',
         className,
       )}
