@@ -92,11 +92,31 @@ const mockExistingTemplate = {
   terms: [],
 }
 
+function batchResponse(data: unknown) {
+  return [{ result: { data } }]
+}
+
 const tiersHandler = http.get(
   '/api/trpc/sponsor.tiers.listByConference',
   async () => {
     await delay(100)
-    return HttpResponse.json({ result: { data: mockTiers } })
+    return HttpResponse.json(batchResponse(mockTiers))
+  },
+)
+
+const createHandler = http.post(
+  '/api/trpc/sponsor.contractTemplates.create',
+  async () => {
+    await delay(200)
+    return HttpResponse.json(batchResponse({ _id: 'tpl-new', success: true }))
+  },
+)
+
+const updateHandler = http.post(
+  '/api/trpc/sponsor.contractTemplates.update',
+  async () => {
+    await delay(200)
+    return HttpResponse.json(batchResponse({ success: true }))
   },
 )
 
@@ -135,7 +155,7 @@ export const NewTemplate: Story = {
   },
   parameters: {
     msw: {
-      handlers: [tiersHandler],
+      handlers: [tiersHandler, createHandler],
     },
   },
 }
@@ -150,11 +170,10 @@ export const EditTemplate: Story = {
     msw: {
       handlers: [
         tiersHandler,
+        updateHandler,
         http.get('/api/trpc/sponsor.contractTemplates.get', async () => {
           await delay(200)
-          return HttpResponse.json({
-            result: { data: mockExistingTemplate },
-          })
+          return HttpResponse.json(batchResponse(mockExistingTemplate))
         }),
       ],
     },
@@ -173,9 +192,7 @@ export const LoadingTemplate: Story = {
         tiersHandler,
         http.get('/api/trpc/sponsor.contractTemplates.get', async () => {
           await delay(60000)
-          return HttpResponse.json({
-            result: { data: mockExistingTemplate },
-          })
+          return HttpResponse.json(batchResponse(mockExistingTemplate))
         }),
       ],
     },
