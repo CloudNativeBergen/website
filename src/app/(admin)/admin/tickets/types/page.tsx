@@ -8,6 +8,7 @@ import {
 } from '@/lib/tickets/public'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
+import { EmptyState } from '@/components/EmptyState'
 
 function StatusBadge({
   status,
@@ -218,15 +219,12 @@ export default async function TicketTypesAdminPage() {
         })}
 
         {tickets.length === 0 && (
-          <div className="rounded-lg bg-white p-12 text-center shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-            <TicketIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No ticket types found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No ticket types are configured in Checkin.no for this event.
-            </p>
-          </div>
+          <EmptyState
+            icon={TicketIcon}
+            title="No ticket types found"
+            description="No ticket types are configured in Checkin.no for this event."
+            className="rounded-lg bg-white p-12 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
+          />
         )}
       </div>
     </div>

@@ -29,6 +29,7 @@ import {
   ActionMenuDivider,
 } from '@/components/ActionMenu'
 import { useState, useMemo } from 'react'
+import { EmptyState } from '@/components/EmptyState'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -272,16 +273,12 @@ export function SpeakerTable({
 
   if (speakers.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-        <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-          No speakers found
-        </h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          No speakers with accepted or confirmed talks were found for this
-          conference.
-        </p>
-      </div>
+      <EmptyState
+        icon={UserIcon}
+        title="No speakers found"
+        description="No speakers with accepted or confirmed talks were found for this conference."
+        className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+      />
     )
   }
 

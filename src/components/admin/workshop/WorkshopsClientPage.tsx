@@ -17,6 +17,7 @@ import type {
 } from '@/lib/workshop/types'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { EmptyState } from '@/components/EmptyState'
 
 interface SignupModalState {
   isOpen: boolean
@@ -245,47 +246,44 @@ export function WorkshopsClientPage({
         stats={
           statsData
             ? [
-                {
-                  value: statsData.data.totals.totalWorkshops,
-                  label: 'Total Workshops',
-                  color: 'blue' as const,
-                },
-                {
-                  value: statsData.data.totals.uniqueParticipants,
-                  label: 'Unique Participants',
-                  color: 'purple' as const,
-                },
-                {
-                  value: statsData.data.totals.totalSignups,
-                  label: 'Total Signups',
-                  color: 'slate' as const,
-                },
-                {
-                  value: statsData.data.totals.totalConfirmed,
-                  label: 'Confirmed',
-                  color: 'green' as const,
-                },
-                {
-                  value: statsData.data.totals.totalWaitlist,
-                  label: 'Waitlist',
-                  color: 'blue' as const,
-                },
-              ]
+              {
+                value: statsData.data.totals.totalWorkshops,
+                label: 'Total Workshops',
+                color: 'blue' as const,
+              },
+              {
+                value: statsData.data.totals.uniqueParticipants,
+                label: 'Unique Participants',
+                color: 'purple' as const,
+              },
+              {
+                value: statsData.data.totals.totalSignups,
+                label: 'Total Signups',
+                color: 'slate' as const,
+              },
+              {
+                value: statsData.data.totals.totalConfirmed,
+                label: 'Confirmed',
+                color: 'green' as const,
+              },
+              {
+                value: statsData.data.totals.totalWaitlist,
+                label: 'Waitlist',
+                color: 'blue' as const,
+              },
+            ]
             : []
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {initialWorkshops.length === 0 ? (
-          <div className="col-span-full rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-            <AcademicCapIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-              No workshops found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No workshops have been created for this conference yet.
-            </p>
-          </div>
+          <EmptyState
+            icon={AcademicCapIcon}
+            title="No workshops found"
+            description="No workshops have been created for this conference yet."
+            className="col-span-full rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+          />
         ) : (
           initialWorkshops.map((workshop) => {
             const workshopSignups = signupsByWorkshop.get(workshop._id) || []

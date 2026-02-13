@@ -14,6 +14,7 @@ import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
 import { SearchInput } from '@/components/SearchInput'
+import { EmptyState } from '@/components/EmptyState'
 
 interface OrdersTableWithSearchProps {
   orders: GroupedOrder[]
@@ -657,15 +658,11 @@ export function OrdersTableWithSearch({
               </p>
             </>
           ) : (
-            <>
-              <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-                No orders found
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                No tickets have been sold for this event yet.
-              </p>
-            </>
+            <EmptyState
+              icon={UserIcon}
+              title="No orders found"
+              description="No tickets have been sold for this event yet."
+            />
           )}
         </div>
       )}

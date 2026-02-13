@@ -16,6 +16,7 @@ import { getVideoPlatform } from '@/lib/video/utils'
 import { AttachmentManager } from '@/components/proposal/AttachmentManager'
 import { Attachment } from '@/lib/attachment/types'
 import { getNonUrlRecordingAttachments } from '@/lib/attachment/filters'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface ProposalPublishedContentProps {
   proposalId: string
@@ -147,16 +148,16 @@ export function ProposalPublishedContent({
 
     const updatedAttachments = videoUrl
       ? [
-          ...nonRecordingAttachments,
-          {
-            _type: 'urlAttachment' as const,
-            _key: uuidv4(),
-            url: videoUrl,
-            attachmentType: 'recording' as const,
-            title: 'Session Recording',
-            uploadedAt: new Date().toISOString(),
-          },
-        ]
+        ...nonRecordingAttachments,
+        {
+          _type: 'urlAttachment' as const,
+          _key: uuidv4(),
+          url: videoUrl,
+          attachmentType: 'recording' as const,
+          title: 'Session Recording',
+          uploadedAt: new Date().toISOString(),
+        },
+      ]
       : nonRecordingAttachments
 
     updateVideoUrlMutation.mutate({
@@ -242,24 +243,23 @@ export function ProposalPublishedContent({
                   </p>
                 )}
                 <div className="flex gap-2">
-                  <button
-                    type="button"
+                  <AdminButton
+                    size="xs"
                     onClick={handleSaveVideo}
                     disabled={updateVideoUrlMutation.isPending || !!videoError}
-                    className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
                   >
                     <CheckIcon className="h-3 w-3" />
                     {updateVideoUrlMutation.isPending ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
+                  </AdminButton>
+                  <AdminButton
+                    variant="secondary"
+                    size="xs"
                     onClick={handleCancelVideo}
                     disabled={updateVideoUrlMutation.isPending}
-                    className="inline-flex items-center gap-1 rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
                   >
                     <XMarkIcon className="h-3 w-3" />
                     Cancel
-                  </button>
+                  </AdminButton>
                 </div>
               </div>
             ) : (

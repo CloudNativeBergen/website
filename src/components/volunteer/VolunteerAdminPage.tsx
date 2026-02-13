@@ -20,6 +20,8 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { EmptyState } from '@/components/EmptyState'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 const volunteerStatusConfig: Record<
   VolunteerStatus,
@@ -220,41 +222,41 @@ export default function VolunteerAdminPage() {
           ) : (
             <div className="space-y-2">
               {filteredVolunteers.length === 0 ? (
-                <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-                  <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-                    {volunteers && volunteers.length > 0
+                <EmptyState
+                  icon={UserGroupIcon}
+                  title={
+                    volunteers && volunteers.length > 0
                       ? 'No volunteers match your filters'
-                      : 'No volunteer applications'}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {volunteers && volunteers.length > 0
+                      : 'No volunteer applications'
+                  }
+                  description={
+                    volunteers && volunteers.length > 0
                       ? 'Try adjusting your filters to see more results.'
-                      : 'No volunteer applications have been submitted yet.'}
-                  </p>
-                  {volunteers &&
-                    volunteers.length > 0 &&
-                    statusFilter.size > 0 && (
-                      <div className="mt-6">
-                        <button
-                          onClick={() => setStatusFilter(new Set())}
-                          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        >
-                          Clear All Filters
-                        </button>
-                      </div>
-                    )}
-                </div>
+                      : 'No volunteer applications have been submitted yet.'
+                  }
+                  action={
+                    volunteers &&
+                      volunteers.length > 0 &&
+                      statusFilter.size > 0 ? (
+                      <AdminButton
+                        onClick={() => setStatusFilter(new Set())}
+                        size="sm"
+                      >
+                        Clear All Filters
+                      </AdminButton>
+                    ) : undefined
+                  }
+                  className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+                />
               ) : (
                 filteredVolunteers.map((volunteer) => (
                   <div
                     key={volunteer._id}
                     onClick={() => setSelectedVolunteerId(volunteer._id)}
-                    className={`cursor-pointer rounded-lg border p-4 transition-all ${
-                      selectedVolunteerId === volunteer._id
+                    className={`cursor-pointer rounded-lg border p-4 transition-all ${selectedVolunteerId === volunteer._id
                         ? 'border-brand-cloud-blue bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
                         : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
-                    }`}
+                      }`}
                   >
                     <div className="mb-2 flex items-start justify-between">
                       <div>

@@ -5,6 +5,7 @@ import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { Dropdown } from '@/components/Form'
+import { AdminButton } from '@/components/admin/AdminButton'
 import type { ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
 
 interface AddParticipantModalProps {
@@ -179,22 +180,22 @@ export function AddParticipantModal({
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+          <AdminButton
+            variant="secondary"
+            size="md"
             onClick={handleClose}
             disabled={isSubmitting}
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          </AdminButton>
+          <AdminButton
+            color="blue"
+            size="md"
             onClick={handleSubmit}
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Adding...' : 'Add Participant'}
-          </button>
+          </AdminButton>
         </div>
       </div>
     </ModalShell>

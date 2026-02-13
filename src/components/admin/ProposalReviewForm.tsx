@@ -8,6 +8,7 @@ import { adminPostReview } from '@/lib/review/client'
 import { adminFetchNextUnreviewedProposal } from '@/lib/proposal'
 import { useNotification } from './NotificationProvider'
 import { Textarea } from '@/components/Form'
+import { AdminButton } from '@/components/admin/AdminButton'
 import { useRouter } from 'next/navigation'
 
 interface ProposalReviewFormProps {
@@ -178,21 +179,19 @@ export function ProposalReviewForm({
 
         {/* Submit Button */}
         <div className="flex justify-end space-x-2">
-          <button
-            type="button"
+          <AdminButton
+            variant="secondary"
             onClick={handleNextProposal}
             disabled={isLoadingNext}
-            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           >
             <ArrowRightIcon className="h-4 w-4" />
             {isLoadingNext ? 'Loading...' : 'Next'}
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
             type="submit"
             disabled={
               isSubmitting || Object.values(ratings).some((r) => r === 0)
             }
-            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             <PaperAirplaneIcon className="h-4 w-4" />
             {isSubmitting
@@ -200,7 +199,7 @@ export function ProposalReviewForm({
               : existingReview
                 ? 'Update Review'
                 : 'Submit Review'}
-          </button>
+          </AdminButton>
         </div>
       </form>
     </div>

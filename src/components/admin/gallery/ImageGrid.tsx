@@ -11,6 +11,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { ConfirmationModal } from '../ConfirmationModal'
 import { sanityImage } from '@/lib/sanity/client'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface ImageGridProps {
   images: GalleryImageWithSpeakers[]
@@ -81,11 +82,10 @@ export function ImageGrid({
   return (
     <>
       <div
-        className={`mb-4 flex min-h-[2rem] items-center justify-between transition-all ${
-          selectedImages.length > 0
+        className={`mb-4 flex min-h-[2rem] items-center justify-between transition-all ${selectedImages.length > 0
             ? 'sticky top-16 z-30 -mx-6 bg-white px-6 py-3 shadow-md dark:bg-gray-900'
             : ''
-        }`}
+          }`}
       >
         <div className="flex items-center gap-4">
           <button
@@ -98,11 +98,10 @@ export function ImageGrid({
             }
           >
             <div
-              className={`h-4 w-4 rounded border ${
-                selectedImages.length === images.length && images.length > 0
+              className={`h-4 w-4 rounded border ${selectedImages.length === images.length && images.length > 0
                   ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
                   : 'border-gray-300 dark:border-gray-600'
-              }`}
+                }`}
             >
               {selectedImages.length === images.length && images.length > 0 && (
                 <CheckIcon className="h-3 w-3 text-white" />
@@ -119,12 +118,9 @@ export function ImageGrid({
         {selectedImages.length > 0 && (
           <div className="flex items-center gap-2">
             {onBulkTag && (
-              <button
-                onClick={onBulkTag}
-                className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-              >
+              <AdminButton size="xs" onClick={onBulkTag}>
                 Bulk Update
-              </button>
+              </AdminButton>
             )}
             <button
               onClick={async () => {
@@ -145,12 +141,13 @@ export function ImageGrid({
                 ? 'Unfeature Selected'
                 : 'Feature Selected'}
             </button>
-            <button
+            <AdminButton
+              color="red"
+              size="xs"
               onClick={() => setDeleteConfirmId('bulk')}
-              className="rounded-md bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               Delete Selected
-            </button>
+            </AdminButton>
           </div>
         )}
       </div>
@@ -159,9 +156,8 @@ export function ImageGrid({
         {images.map((image) => (
           <div
             key={image._id}
-            className={`group relative overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 ${
-              selectedImages.length > 0 ? 'cursor-pointer' : ''
-            }`}
+            className={`group relative overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 ${selectedImages.length > 0 ? 'cursor-pointer' : ''
+              }`}
             onMouseEnter={() => setHoveredImage(image._id)}
             onMouseLeave={() => setHoveredImage(null)}
             onClick={(e) => {
@@ -179,11 +175,10 @@ export function ImageGrid({
                 className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm dark:bg-gray-900"
               >
                 <div
-                  className={`h-4 w-4 rounded border ${
-                    selectedImages.includes(image._id)
+                  className={`h-4 w-4 rounded border ${selectedImages.includes(image._id)
                       ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
                       : 'border-gray-400 dark:border-gray-500'
-                  }`}
+                    }`}
                 >
                   {selectedImages.includes(image._id) && (
                     <CheckIcon className="h-3 w-3 text-white" />
@@ -227,11 +222,10 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${
-                hoveredImage === image._id
+              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${hoveredImage === image._id
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100'
-              }`}
+                }`}
             >
               <div className="text-sm text-white">
                 <p className="font-medium">{image.photographer}</p>
@@ -246,9 +240,8 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
-                hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+                }`}
             >
               <button
                 onClick={(e) => {

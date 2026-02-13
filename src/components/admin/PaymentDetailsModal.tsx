@@ -12,6 +12,7 @@ import type { CheckinPayOrder } from '@/lib/tickets/types'
 import { formatCurrency } from '@/lib/format'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { SkeletonModal } from './LoadingSkeleton'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface PaymentDetailsModalProps {
   isOpen: boolean
@@ -291,12 +292,9 @@ export function PaymentDetailsModal({
       </div>
 
       <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/50">
-        <button
-          onClick={onClose}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:focus:ring-indigo-400"
-        >
+        <AdminButton variant="secondary" size="md" onClick={onClose}>
           Close
-        </button>
+        </AdminButton>
       </div>
     </ModalShell>
   )
