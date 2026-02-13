@@ -19,6 +19,7 @@ import { ApprovalSummary } from './ApprovalSummary'
 import { LoadingState, BankingDetailsSkeleton } from './LoadingStates'
 import { ErrorDisplay } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 
 interface TravelSupportPageClientProps {
   initialTravelSupport: TravelSupportWithExpenses | null
@@ -34,6 +35,12 @@ export function TravelSupportPageClient({
   const [editingExpense, setEditingExpense] = useState<
     (TravelExpenseInput & { _id?: string }) | null
   >(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string
+    message: string
+    variant: 'danger' | 'warning' | 'info'
+    onConfirm: () => Promise<void>
+  } | null>(null)
 
   const {
     data: travelSupport,
@@ -196,28 +203,43 @@ export function TravelSupportPageClient({
   }
 
   const handleExpenseDelete = async (expenseId: string) => {
-    if (confirm('Are you sure you want to delete this expense?')) {
-      await deleteExpense(expenseId)
-    }
+    setConfirmAction({
+      title: 'Delete Expense',
+      message: 'Are you sure you want to delete this expense?',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteExpense(expenseId)
+        setConfirmAction(null)
+      },
+    })
   }
 
   const handleReceiptDelete = async (
     expenseId: string,
     receiptIndex: number,
   ) => {
-    if (confirm('Are you sure you want to delete this receipt?')) {
-      await deleteReceipt(expenseId, receiptIndex)
-    }
+    setConfirmAction({
+      title: 'Delete Receipt',
+      message: 'Are you sure you want to delete this receipt?',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteReceipt(expenseId, receiptIndex)
+        setConfirmAction(null)
+      },
+    })
   }
 
   const handleSubmit = async () => {
-    if (
-      confirm(
+    setConfirmAction({
+      title: 'Submit Travel Support',
+      message:
         'Are you sure you want to submit? You will not be able to make changes after submission.',
-      )
-    ) {
-      await submitTravelSupport()
-    }
+      variant: 'warning',
+      onConfirm: async () => {
+        await submitTravelSupport()
+        setConfirmAction(null)
+      },
+    })
   }
 
   if (isLoading) {
@@ -468,6 +490,16 @@ export function TravelSupportPageClient({
 
       {/* Exchange Rate Debug Panel */}
       <ExchangeRateDebugPanel />
+
+      <ConfirmationModal
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => confirmAction?.onConfirm()}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmButtonText="Confirm"
+        variant={confirmAction?.variant ?? 'danger'}
+      />
     </div>
   )
 }

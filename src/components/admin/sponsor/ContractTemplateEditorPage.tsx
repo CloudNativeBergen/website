@@ -8,6 +8,8 @@ import { useNotification } from '@/components/admin'
 import type { Conference } from '@/lib/conference/types'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 import { CONTRACT_VARIABLE_DESCRIPTIONS } from '@/lib/sponsor-crm/contract-variables'
+import { Dropdown } from '@/components/Form'
+import { CurrencySelect } from '@/components/CurrencySelect'
 import {
   DocumentTextIcon,
   PlusIcon,
@@ -241,49 +243,47 @@ export function ContractTemplateEditorPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Language *
-              </label>
-              <select
+              <Dropdown
+                name="language"
+                label="Language *"
+                options={
+                  new Map([
+                    ['nb', '🇳🇴 Norwegian (Bokmål)'],
+                    ['en', '🇬🇧 English'],
+                  ])
+                }
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as 'nb' | 'en')}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="nb">🇳🇴 Norwegian (Bokmål)</option>
-                <option value="en">🇬🇧 English</option>
-              </select>
+                setValue={(val) => setLanguage(val as 'nb' | 'en')}
+                required
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                 Default Currency
               </label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="NOK">NOK</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-              </select>
+              <div className="mt-2">
+                <CurrencySelect
+                  value={currency}
+                  setValue={setCurrency}
+                  name="default-currency"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Associated Tier
-              </label>
-              <select
+              <Dropdown
+                name="tier"
+                label="Associated Tier"
+                options={
+                  new Map([
+                    ['', 'No specific tier'],
+                    ...(tiers?.map(
+                      (t) => [t._id, t.title] as [string, string],
+                    ) ?? []),
+                  ])
+                }
                 value={tier}
-                onChange={(e) => setTier(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-              >
-                <option value="">No specific tier</option>
-                {tiers?.map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t.title}
-                  </option>
-                ))}
-              </select>
+                setValue={setTier}
+              />
             </div>
           </div>
 

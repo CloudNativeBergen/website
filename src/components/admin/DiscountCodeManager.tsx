@@ -14,11 +14,13 @@ import { useNotification } from './NotificationProvider'
 import {
   FilterDropdown,
   FilterOption,
+  SponsorDiscountEmailModal,
+} from '@/components/admin'
+import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-  SponsorDiscountEmailModal,
-} from '@/components/admin'
+} from '@/components/ActionMenu'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 

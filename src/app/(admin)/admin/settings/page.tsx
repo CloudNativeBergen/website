@@ -6,6 +6,7 @@ import {
   WorkshopRegistrationSettings,
   AdminPageHeader,
 } from '@/components/admin'
+import { StatusBadge } from '@/components/StatusBadge'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -31,31 +32,6 @@ type ArrayItem = string | NamedItem
 
 function isValidFormat(key: string): key is Format {
   return Object.values(Format).includes(key as Format)
-}
-
-function Badge({
-  children,
-  variant = 'default',
-}: {
-  children: React.ReactNode
-  variant?: 'default' | 'success' | 'warning' | 'error'
-}) {
-  const variants = {
-    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    success:
-      'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    warning:
-      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    error: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variants[variant]}`}
-    >
-      {children}
-    </span>
-  )
 }
 
 function InfoCard({
@@ -147,7 +123,7 @@ function FieldRow({
                   : (item as NamedItem)?.title ||
                     (item as NamedItem)?.name ||
                     JSON.stringify(item)
-              return <Badge key={idx}>{displayText}</Badge>
+              return <StatusBadge key={idx} label={displayText} color="gray" />
             })}
           </div>
         ) : (
@@ -189,7 +165,7 @@ function FieldRow({
                 formatKey && isValidFormat(formatKey)
                   ? formats.get(formatKey) || formatKey
                   : formatKey || 'Unknown Format'
-              return <Badge key={idx}>{displayText}</Badge>
+              return <StatusBadge key={idx} label={displayText} color="gray" />
             })}
           </div>
         ) : (
@@ -422,9 +398,11 @@ export default async function AdminSettings() {
                     {tier.title}
                   </span>
                   <div className="flex items-center space-x-2">
-                    {tier.soldOut && <Badge variant="error">Sold Out</Badge>}
+                    {tier.soldOut && (
+                      <StatusBadge label="Sold Out" color="red" />
+                    )}
                     {tier.mostPopular && (
-                      <Badge variant="success">Popular</Badge>
+                      <StatusBadge label="Popular" color="green" />
                     )}
                   </div>
                 </div>

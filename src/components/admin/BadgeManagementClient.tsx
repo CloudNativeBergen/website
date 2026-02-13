@@ -13,7 +13,6 @@ import { api } from '@/lib/trpc/client'
 import type { BadgeType } from '@/lib/badge/types'
 import {
   AcademicCapIcon,
-  MagnifyingGlassIcon,
   CheckIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
@@ -25,7 +24,9 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
+import { SearchInput } from '@/components/SearchInput'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
@@ -34,7 +35,7 @@ import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-} from '@/components/admin/ActionMenu'
+} from '@/components/ActionMenu'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 
@@ -75,6 +76,10 @@ export function BadgeManagementClient({
   const [showBadgePreview, setShowBadgePreview] = useState(false)
   const [filterAlreadyIssued, setFilterAlreadyIssued] = useState(false)
   const [sendEmail, setSendEmail] = useState(true)
+  const [deleteBadgeInfo, setDeleteBadgeInfo] = useState<{
+    badgeId: string
+    speakerName: string
+  } | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -336,19 +341,17 @@ export function BadgeManagementClient({
   }
 
   const handleDeleteBadge = async (badgeId: string, speakerName: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to delete the badge for ${speakerName}? This action cannot be undone.`,
-      )
-    ) {
-      return
-    }
+    setDeleteBadgeInfo({ badgeId, speakerName })
+  }
 
+  const confirmDeleteBadge = async () => {
+    if (!deleteBadgeInfo) return
     try {
-      await deleteMutation.mutateAsync({ badgeId })
+      await deleteMutation.mutateAsync({ badgeId: deleteBadgeInfo.badgeId })
     } catch (error) {
       console.error('Error deleting badge:', error)
     }
+    setDeleteBadgeInfo(null)
   }
 
   const isDevelopment =
@@ -444,22 +447,12 @@ export function BadgeManagementClient({
                 </button>
               </span>
 
-              {/* Search */}
-              <div className="relative flex-1 sm:max-w-xs">
-                <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
-                  <input
-                    type="text"
-                    placeholder="Search speakers..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="col-start-1 row-start-1 block w-full rounded-md bg-white py-2 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:pl-9 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-300 dark:focus:outline-blue-500"
-                  />
-                  <MagnifyingGlassIcon
-                    aria-hidden="true"
-                    className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
-                  />
-                </div>
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search speakers..."
+                className="flex-1 sm:max-w-xs"
+              />
 
               {filterAlreadyIssued && (
                 <button
@@ -883,6 +876,16 @@ export function BadgeManagementClient({
               badge={selectedBadge}
             />
           )}
+
+          <ConfirmationModal
+            isOpen={!!deleteBadgeInfo}
+            onClose={() => setDeleteBadgeInfo(null)}
+            onConfirm={confirmDeleteBadge}
+            title="Delete Badge"
+            message={`Are you sure you want to delete the badge for ${deleteBadgeInfo?.speakerName}? This action cannot be undone.`}
+            confirmButtonText="Delete"
+            variant="danger"
+          />
         </>
       )}
     </div>

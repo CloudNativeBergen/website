@@ -5,6 +5,7 @@ import { useDropzone, type FileRejection } from 'react-dropzone'
 import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useNotification } from '../NotificationProvider'
 import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
+import { AdminButton } from '@/components/admin/AdminButton'
 import {
   getCurrentDateTime,
   fileTimestampToISO,
@@ -713,31 +714,25 @@ export function ImageUploadZone({
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={uploadFiles}
-              disabled={isUploading}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
+            <AdminButton size="md" onClick={uploadFiles} disabled={isUploading}>
               {isUploading ? 'Uploading...' : `Upload ${files.length} Image(s)`}
-            </button>
+            </AdminButton>
             {isUploading && (
-              <button
-                onClick={cancelUpload}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
+              <AdminButton color="red" size="md" onClick={cancelUpload}>
                 Cancel
-              </button>
+              </AdminButton>
             )}
             {!isUploading && files.length > 0 && (
-              <button
+              <AdminButton
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   files.forEach((f) => URL.revokeObjectURL(f.preview))
                   setFiles([])
                 }}
-                className="rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
               >
                 Clear All
-              </button>
+              </AdminButton>
             )}
           </div>
         </div>

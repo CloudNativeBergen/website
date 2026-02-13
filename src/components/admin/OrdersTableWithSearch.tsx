@@ -6,13 +6,15 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CreditCardIcon,
-  MagnifyingGlassIcon,
   FunnelIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import type { GroupedOrder } from '@/lib/tickets/types'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
+import { SearchInput } from '@/components/SearchInput'
+import { EmptyState } from '@/components/EmptyState'
 
 interface OrdersTableWithSearchProps {
   orders: GroupedOrder[]
@@ -213,18 +215,13 @@ export function OrdersTableWithSearch({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search by name, email, company, order ID, or ticket type..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 bg-white py-3 pr-3 pl-10 text-sm placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-          />
-        </div>
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search by name, email, company, order ID, or ticket type..."
+          className="flex-1"
+          inputClassName="block w-full rounded-lg border border-gray-300 bg-white py-3 pr-3 pl-10 text-sm placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+        />
 
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -661,15 +658,11 @@ export function OrdersTableWithSearch({
               </p>
             </>
           ) : (
-            <>
-              <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-                No orders found
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                No tickets have been sold for this event yet.
-              </p>
-            </>
+            <EmptyState
+              icon={UserIcon}
+              title="No orders found"
+              description="No tickets have been sold for this event yet."
+            />
           )}
         </div>
       )}

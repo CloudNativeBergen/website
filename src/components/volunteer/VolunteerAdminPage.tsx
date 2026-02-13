@@ -16,37 +16,23 @@ import {
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { EmailModal } from '@/components/admin/EmailModal'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { EmptyState } from '@/components/EmptyState'
+import { AdminButton } from '@/components/admin/AdminButton'
 
-function StatusBadge({ status }: { status: VolunteerStatus }) {
-  const config = {
-    [VolunteerStatus.PENDING]: {
-      icon: ClockIcon,
-      className:
-        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-    },
-    [VolunteerStatus.APPROVED]: {
-      icon: CheckCircleIcon,
-      className:
-        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    },
-    [VolunteerStatus.REJECTED]: {
-      icon: XCircleIcon,
-      className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    },
+const volunteerStatusConfig: Record<
+  VolunteerStatus,
+  {
+    color: BadgeColor
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   }
-
-  const { icon: Icon, className } = config[status]
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {status}
-    </span>
-  )
+> = {
+  [VolunteerStatus.PENDING]: { color: 'yellow', icon: ClockIcon },
+  [VolunteerStatus.APPROVED]: { color: 'green', icon: CheckCircleIcon },
+  [VolunteerStatus.REJECTED]: { color: 'red', icon: XCircleIcon },
 }
 
 export default function VolunteerAdminPage() {
@@ -60,6 +46,9 @@ export default function VolunteerAdminPage() {
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [deleteVolunteerId, setDeleteVolunteerId] = useState<string | null>(
+    null,
+  )
 
   const {
     data: volunteers,
@@ -149,14 +138,13 @@ export default function VolunteerAdminPage() {
   }
 
   const handleDelete = async (volunteerId: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to delete this volunteer? This action cannot be undone.',
-      )
-    ) {
-      return
-    }
-    await deleteVolunteer.mutateAsync({ volunteerId })
+    setDeleteVolunteerId(volunteerId)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteVolunteerId) return
+    await deleteVolunteer.mutateAsync({ volunteerId: deleteVolunteerId })
+    setDeleteVolunteerId(null)
   }
 
   return (
@@ -234,31 +222,32 @@ export default function VolunteerAdminPage() {
           ) : (
             <div className="space-y-2">
               {filteredVolunteers.length === 0 ? (
-                <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-                  <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-                    {volunteers && volunteers.length > 0
+                <EmptyState
+                  icon={UserGroupIcon}
+                  title={
+                    volunteers && volunteers.length > 0
                       ? 'No volunteers match your filters'
-                      : 'No volunteer applications'}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {volunteers && volunteers.length > 0
+                      : 'No volunteer applications'
+                  }
+                  description={
+                    volunteers && volunteers.length > 0
                       ? 'Try adjusting your filters to see more results.'
-                      : 'No volunteer applications have been submitted yet.'}
-                  </p>
-                  {volunteers &&
+                      : 'No volunteer applications have been submitted yet.'
+                  }
+                  action={
+                    volunteers &&
                     volunteers.length > 0 &&
-                    statusFilter.size > 0 && (
-                      <div className="mt-6">
-                        <button
-                          onClick={() => setStatusFilter(new Set())}
-                          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        >
-                          Clear All Filters
-                        </button>
-                      </div>
-                    )}
-                </div>
+                    statusFilter.size > 0 ? (
+                      <AdminButton
+                        onClick={() => setStatusFilter(new Set())}
+                        size="sm"
+                      >
+                        Clear All Filters
+                      </AdminButton>
+                    ) : undefined
+                  }
+                  className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+                />
               ) : (
                 filteredVolunteers.map((volunteer) => (
                   <div
@@ -288,7 +277,11 @@ export default function VolunteerAdminPage() {
                           )}
                         </div>
                       </div>
-                      <StatusBadge status={volunteer.status} />
+                      <StatusBadge
+                        label={volunteer.status}
+                        color={volunteerStatusConfig[volunteer.status].color}
+                        icon={volunteerStatusConfig[volunteer.status].icon}
+                      />
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
                       {volunteer.occupation && (
@@ -436,7 +429,11 @@ export default function VolunteerAdminPage() {
                 <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">
                   Status
                 </h3>
-                <StatusBadge status={selectedVolunteer.status} />
+                <StatusBadge
+                  label={selectedVolunteer.status}
+                  color={volunteerStatusConfig[selectedVolunteer.status].color}
+                  icon={volunteerStatusConfig[selectedVolunteer.status].icon}
+                />
               </div>
 
               {selectedVolunteer.status === VolunteerStatus.PENDING && (
@@ -549,6 +546,17 @@ export default function VolunteerAdminPage() {
           }}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={!!deleteVolunteerId}
+        onClose={() => setDeleteVolunteerId(null)}
+        onConfirm={confirmDelete}
+        isLoading={deleteVolunteer.isPending}
+        title="Delete Volunteer"
+        message="Are you sure you want to delete this volunteer? This action cannot be undone."
+        confirmButtonText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

@@ -44,6 +44,7 @@ import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 import { OnboardingLinkButton } from './OnboardingLinkButton'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
+import { Textarea } from '@/components/Form'
 
 type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
 
@@ -545,19 +546,17 @@ export function SponsorCRMForm({
 
                             {/* Notes */}
                             <div>
-                              <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                                Notes
-                              </label>
-                              <textarea
+                              <Textarea
+                                name="notes"
+                                label="Notes"
+                                rows={2}
                                 value={formData.notes}
-                                onChange={(e) =>
+                                setValue={(val) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    notes: e.target.value,
+                                    notes: val,
                                   }))
                                 }
-                                rows={2}
-                                className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
                               />
                             </div>
 

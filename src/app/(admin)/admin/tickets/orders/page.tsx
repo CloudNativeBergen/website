@@ -11,6 +11,7 @@ import {
   BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { EmptyState } from '@/components/EmptyState'
 
 async function getTicketData(
   customerId: number,
@@ -91,15 +92,12 @@ export default async function OrdersAdminPage() {
         </div>
 
         {orders.length === 0 ? (
-          <div className="py-12 text-center">
-            <ShoppingBagIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No orders found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No tickets have been sold for this event yet.
-            </p>
-          </div>
+          <EmptyState
+            icon={ShoppingBagIcon}
+            title="No orders found"
+            description="No tickets have been sold for this event yet."
+            className="py-12"
+          />
         ) : (
           <OrdersTableWithSearch
             orders={orders}

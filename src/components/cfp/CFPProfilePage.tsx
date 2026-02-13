@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 
@@ -200,7 +201,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             >
               {updateProfileMutation.isPending ? (
                 <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
+                  <LoadingSpinner size="sm" color="white" className="mr-2" />
                   Updating...
                 </>
               ) : (

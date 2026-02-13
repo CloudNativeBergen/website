@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDownIcon } from '@heroicons/react/24/outline'
+import { CurrencySelect } from '@/components/CurrencySelect'
 
 interface ContractValueInputProps {
   value: string
@@ -27,20 +27,11 @@ export function ContractValueInput({
           onChange={(e) => onValueChange(e.target.value)}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
         />
-        <div className="relative grid w-28 grid-cols-1">
-          <select
+        <div className="w-28">
+          <CurrencySelect
             value={currency}
-            onChange={(e) => onCurrencyChange(e.target.value)}
-            className="col-start-1 row-start-1 block w-full appearance-none rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
-          >
-            <option value="NOK">NOK</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-          </select>
-          <ChevronDownIcon
-            className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-            aria-hidden="true"
+            setValue={onCurrencyChange}
+            name="contract-currency"
           />
         </div>
       </div>

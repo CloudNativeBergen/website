@@ -17,8 +17,6 @@ export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
 export { ProposalStatistics } from './ProposalStatistics'
 export { FilterDropdown, FilterOption } from './FilterDropdown'
-export { ActionMenu, ActionMenuItem, ActionMenuDivider } from './ActionMenu'
-export { BackToProposalsButton } from './BackToProposalsButton'
 
 export { ProposalReviewPanel } from './ProposalReviewPanel'
 export { ProposalReviewSummary } from './ProposalReviewSummary'

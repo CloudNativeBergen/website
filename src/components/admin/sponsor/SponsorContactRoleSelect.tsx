@@ -1,4 +1,5 @@
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
+import clsx from 'clsx'
 
 interface SponsorContactRoleSelectProps {
   value: string
@@ -8,11 +9,14 @@ interface SponsorContactRoleSelectProps {
   disabled?: boolean
 }
 
+const defaultClassName =
+  'rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none'
+
 export function SponsorContactRoleSelect({
   value,
   onChange,
   placeholder = 'Select role...',
-  className = '',
+  className,
   disabled = false,
 }: SponsorContactRoleSelectProps) {
   return (
@@ -20,7 +24,7 @@ export function SponsorContactRoleSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none ${className}`}
+      className={clsx(className || defaultClassName)}
     >
       <option value="">{placeholder}</option>
       {CONTACT_ROLE_OPTIONS.map((role) => (

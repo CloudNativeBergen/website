@@ -8,6 +8,7 @@ import {
   ArrowUpTrayIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface ValidationCheck {
   name: string
@@ -210,22 +211,20 @@ export default function BadgeValidator() {
           </label>
 
           {file && (
-            <button
+            <AdminButton
+              color="blue"
+              size="md"
               onClick={validateBadge}
               disabled={isValidating}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isValidating ? 'Validating...' : 'Validate Badge'}
-            </button>
+            </AdminButton>
           )}
 
           {file && !isValidating && (
-            <button
-              onClick={resetState}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
+            <AdminButton variant="secondary" size="md" onClick={resetState}>
               Clear
-            </button>
+            </AdminButton>
           )}
         </div>
       </div>

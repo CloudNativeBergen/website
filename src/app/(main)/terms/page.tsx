@@ -15,6 +15,7 @@ import {
   GlobeAltIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { ContentCard } from '@/components/ContentCard'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
@@ -70,7 +71,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/20 print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+          <ContentCard>
             <div className="prose prose-lg dark:prose-invert print:prose-base max-w-none print:max-w-none">
               <div className="space-y-8 print:space-y-6">
                 {/* Section 1: Acceptance of Terms */}
@@ -510,7 +511,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
                 </div>
               </div>
             </div>
-          </div>
+          </ContentCard>
         </Container>
       </div>
     </>

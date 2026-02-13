@@ -9,7 +9,7 @@ import {
   TrashIcon,
   UserIcon,
 } from '@heroicons/react/24/outline'
-import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
+import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 
 interface ContactPersonForm {
   name: string
@@ -378,20 +378,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     <label className="block text-sm font-medium text-gray-700">
                       Role
                     </label>
-                    <select
+                    <SponsorContactRoleSelect
                       value={contact.role}
-                      onChange={(e) =>
-                        updateContact(index, 'role', e.target.value)
-                      }
+                      onChange={(val) => updateContact(index, 'role', val)}
+                      placeholder="Select role..."
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select role&hellip;</option>
-                      {CONTACT_ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                 </div>
               </div>

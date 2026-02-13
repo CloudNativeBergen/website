@@ -222,46 +222,124 @@ export const Architecture: Story = {
           </h2>
           <p className="font-inter mb-6 text-brand-slate-gray dark:text-gray-300">
             Drag-and-drop interface for building the conference schedule from
-            accepted proposals.
+            accepted proposals. Built on{' '}
+            <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-700">
+              @dnd-kit/core
+            </code>{' '}
+            with performance-optimised rendering via memoisation, virtual
+            scrolling, and batched state updates.
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             <RouteCard path="/admin/schedule" label="Schedule editor" />
             <RouteCard path="/admin/api/schedule" label="Save API (POST)" />
             <RouteCard path="/program" label="Public program page" />
           </div>
-          <div className="mt-6 rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 dark:border-blue-500/20 dark:bg-gray-800">
+
+          {/* Component hierarchy */}
+          <div className="mt-6 rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
             <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-cloud-blue">
-              Editor Architecture
+              Component Hierarchy
             </h3>
-            <ul className="font-inter space-y-2 text-sm text-brand-slate-gray dark:text-gray-400">
-              <li>
-                • <strong>ScheduleEditor</strong> — main orchestrator with track
-                columns and sidebar
-              </li>
-              <li>
-                • <strong>DroppableTrack</strong> — drop zone for a single track
-              </li>
-              <li>
-                • <strong>DraggableProposal</strong> — draggable
-                accepted/confirmed talks
-              </li>
-              <li>
-                • <strong>DraggableServiceSession</strong> — draggable
-                placeholders (breaks, lunch)
-              </li>
-              <li>
-                • <strong>UnassignedProposals</strong> — sidebar of proposals
-                not yet on schedule
-              </li>
-              <li>
-                • Auto-creates empty schedule documents for each conference day
-              </li>
-              <li>
-                • Saves via <code className="text-xs">POST</code> to{' '}
-                <code className="text-xs">/admin/api/schedule</code> then
-                invalidates cache
-              </li>
-            </ul>
+            <pre className="font-jetbrains overflow-x-auto text-sm text-brand-slate-gray dark:text-gray-300">
+              {`ScheduleEditor (orchestrator, DndContext provider)
+├── UnassignedProposals (sidebar)
+│   ├── SearchFilter / FormatFilter / LevelFilter
+│   ├── DraggableProposal[] (virtual-scrolled when >50)
+│   └── Legend
+├── HeaderSection (day tabs, add-track, save button)
+├── TracksGrid
+│   └── DroppableTrack[] (one per track)
+│       ├── Time-slot drop zones (08:00–21:00, 5-min intervals)
+│       ├── DraggableProposal (scheduled talks)
+│       ├── DraggableServiceSession (breaks, lunch, etc.)
+│       └── Service-session create/edit/resize controls
+├── DragOverlay (floating preview during drag)
+└── AddTrackModal`}
+            </pre>
+          </div>
+
+          {/* Component descriptions */}
+          <div className="mt-6 space-y-4">
+            <ComponentCard
+              name="ScheduleEditor"
+              desc="Top-level orchestrator. Owns DndContext, day navigation state, save workflow, and performance timers. Coordinates drag-start/end events, track CRUD, and schedule persistence."
+              storyPath="Systems/Program/Admin/ScheduleEditor"
+              stories="EmptySchedule, SingleDayWithTracks, MultiDay"
+            />
+            <ComponentCard
+              name="DroppableTrack"
+              desc="Renders a single track column with a 08:00–21:00 timeline. Each 5-minute interval is a droppable zone. Supports inline title/description editing, service-session creation, resize handles, talk removal, and swap detection when dragging over occupied slots."
+              storyPath="Systems/Program/Admin/DroppableTrack"
+              stories="EmptyTrack, WithTalks, WithServiceSessions"
+            />
+            <ComponentCard
+              name="DraggableProposal"
+              desc="A draggable card representing a proposal. Shows title, speaker, format badge, level indicator, topic colour border, and audience tags. Visual distinction between confirmed (solid) and accepted-not-confirmed (amber border) status."
+              storyPath="Systems/Program/Admin/DraggableProposal"
+              stories="Presentation45, LightningTalk, Presentation25, Workshop, AcceptedNotConfirmed, WithdrawnProposal, NoTopics, Dragging"
+            />
+            <ComponentCard
+              name="DraggableServiceSession"
+              desc="A draggable placeholder for non-talk slots (registration, breaks, lunch, networking). Height scales with duration. Supports duplication to all tracks."
+              storyPath="Systems/Program/Admin/DraggableServiceSession"
+              stories="ShortBreak, MediumBreak, LunchBreak, NetworkingSession, Dragging"
+            />
+            <ComponentCard
+              name="UnassignedProposals"
+              desc="Sidebar listing confirmed proposals not yet scheduled on any day. Features text search, format/level filtering, virtual scrolling for large lists (>50), and a visual legend explaining status/level/topic/audience indicators."
+              storyPath="Systems/Program/Admin/UnassignedProposals"
+              stories="WithProposals, Empty, SingleProposal, MixedStatuses"
+            />
+          </div>
+
+          {/* Hooks & utilities */}
+          <div className="mt-6">
+            <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+              Hooks &amp; Utilities
+            </h3>
+            <div className="space-y-4">
+              <HookCard
+                name="useScheduleEditor()"
+                desc="Core state manager. Manages schedule + unassigned proposals. Provides addTrack, removeTrack, updateTrack, moveTalkToTrack (with swap detection), moveServiceSessionToTrack, and removeTalkFromSchedule. Computes unassigned proposals across all days."
+              />
+              <HookCard
+                name="usePerformanceTimer()"
+                desc="Dev-mode instrumentation for drag, save, and day-change operations. Logs slow operations (>100ms drag, >200ms day change) and periodic aggregate metrics."
+              />
+              <HookCard
+                name="useDragPerformance()"
+                desc="Manages requestAnimationFrame-based throttling during drag operations to maintain 60fps rendering."
+              />
+              <HookCard
+                name="useBatchUpdates()"
+                desc="Batches rapid filter/search state updates (100ms debounce) to avoid excessive re-renders in UnassignedProposals."
+              />
+            </div>
+          </div>
+
+          {/* Schedule lib */}
+          <div className="mt-6">
+            <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+              Schedule Library
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field
+                name="lib/schedule/types.ts"
+                desc="DragItem, DropPosition, TimeSlot interfaces. Time arithmetic: generateTimeSlots, calculateEndTime, timesOverlap, findAvailableTimeSlot, canSwapTalks."
+              />
+              <Field
+                name="lib/schedule/client.ts"
+                desc="saveSchedule() — POST to /admin/api/schedule with cache revalidation."
+              />
+              <Field
+                name="lib/schedule/performance.ts"
+                desc="SchedulePerformanceMonitor singleton, usePerformanceTimer hook. Tracks operation durations per component."
+              />
+              <Field
+                name="lib/schedule/performance-utils.ts"
+                desc="DragPerformanceManager (rAF throttling), BatchUpdateManager (debouncing), useDragPerformance, useBatchUpdates hooks."
+              />
+            </div>
           </div>
         </section>
 
@@ -369,6 +447,43 @@ function HookCard({ name, desc }: { name: string; desc: string }) {
       <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
         {desc}
       </p>
+    </div>
+  )
+}
+
+function ComponentCard({
+  name,
+  desc,
+  storyPath,
+  stories,
+}: {
+  name: string
+  desc: string
+  storyPath: string
+  stories: string
+}) {
+  return (
+    <div className="rounded-lg border border-brand-frosted-steel bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      <h4 className="font-jetbrains mb-1.5 text-base font-semibold text-brand-nordic-purple dark:text-purple-400">
+        {name}
+      </h4>
+      <p className="font-inter mb-3 text-sm text-brand-slate-gray dark:text-gray-300">
+        {desc}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+        <span>
+          <span className="font-medium text-gray-600 dark:text-gray-300">
+            Story:
+          </span>{' '}
+          {storyPath}
+        </span>
+        <span>
+          <span className="font-medium text-gray-600 dark:text-gray-300">
+            Variants:
+          </span>{' '}
+          {stories}
+        </span>
+      </div>
     </div>
   )
 }

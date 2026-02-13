@@ -73,11 +73,11 @@ export function DraggableProposal({
 
       const speaker =
         proposal.speakers &&
-          Array.isArray(proposal.speakers) &&
-          proposal.speakers.length > 0 &&
-          proposal.speakers[0] &&
-          typeof proposal.speakers[0] === 'object' &&
-          'name' in proposal.speakers[0]
+        Array.isArray(proposal.speakers) &&
+        proposal.speakers.length > 0 &&
+        proposal.speakers[0] &&
+        typeof proposal.speakers[0] === 'object' &&
+        'name' in proposal.speakers[0]
           ? proposal.speakers[0].name
           : null
 
@@ -266,8 +266,9 @@ export function DraggableProposal({
         <UserGroupIcon className="h-3 w-3 shrink-0 text-gray-500 dark:text-gray-400" />
         <span
           className="text-xs font-medium text-gray-600 dark:text-gray-400"
-          title={`Primary: ${audiences.get(proposal.audiences?.[0])}${audienceCount > 1 ? ` (${audienceCount} total)` : ''
-            }`}
+          title={`Primary: ${audiences.get(proposal.audiences?.[0])}${
+            audienceCount > 1 ? ` (${audienceCount} total)` : ''
+          }`}
         >
           {primaryAudience.abbr}
           {countText}
@@ -320,7 +321,7 @@ export function DraggableProposal({
 
     const statusEmoji =
       proposal.status === Status.withdrawn ||
-        proposal.status === Status.rejected
+      proposal.status === Status.rejected
         ? '🚫'
         : proposal.status === Status.accepted
           ? '⚠️'

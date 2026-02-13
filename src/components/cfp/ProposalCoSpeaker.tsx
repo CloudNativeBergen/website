@@ -8,6 +8,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import {
   CoSpeakerInvitationMinimal,
   InvitationStatus,
@@ -433,7 +434,7 @@ export function ProposalCoSpeaker({
                   >
                     {isSendingInvite ? (
                       <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
+                        <LoadingSpinner size="sm" color="white" />
                         Sending...
                       </>
                     ) : (

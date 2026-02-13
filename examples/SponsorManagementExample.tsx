@@ -6,6 +6,7 @@
 'use client'
 
 import { api } from '@/lib/trpc/client'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useState } from 'react'
 import type { SponsorTierExisting, SponsorInput } from '@/lib/sponsor/types'
 
@@ -86,7 +87,7 @@ export function SponsorManagement() {
       {/* Loading State */}
       {loadingSponsors && (
         <div className="py-8 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+          <LoadingSpinner color="blue" />
           <p className="mt-2 text-gray-600">Loading sponsors...</p>
         </div>
       )}

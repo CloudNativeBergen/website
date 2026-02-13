@@ -12,7 +12,6 @@ import {
   EnvelopeIcon,
   UserIcon,
   ClipboardIcon,
-  MagnifyingGlassIcon,
   XMarkIcon,
   PencilIcon,
   EyeIcon,
@@ -21,15 +20,16 @@ import {
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
-import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { SearchInput } from '@/components/SearchInput'
+import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
-  FilterDropdown,
-  FilterOption,
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-} from '@/components/admin'
+} from '@/components/ActionMenu'
 import { useState, useMemo } from 'react'
+import { EmptyState } from '@/components/EmptyState'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -106,18 +106,21 @@ const getProposalConferenceId = (proposal: ProposalExisting): string | null => {
   return null
 }
 
-const StatusBadge = ({ status }: { status: Status }) => {
-  const Icon = status === Status.confirmed ? CheckBadgeIcon : ClockIcon
-  const config = getStatusBadgeConfig(status)
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.textColor}`}
-    >
-      <Icon className="h-3 w-3" />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
+function getProposalBadgeColor(status: Status): BadgeColor {
+  switch (status) {
+    case Status.confirmed:
+    case Status.accepted:
+      return 'green'
+    case Status.submitted:
+      return 'blue'
+    case Status.draft:
+      return 'yellow'
+    case Status.rejected:
+      return 'red'
+    case Status.withdrawn:
+    default:
+      return 'gray'
+  }
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -270,16 +273,12 @@ export function SpeakerTable({
 
   if (speakers.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-        <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-          No speakers found
-        </h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          No speakers with accepted or confirmed talks were found for this
-          conference.
-        </p>
-      </div>
+      <EmptyState
+        icon={UserIcon}
+        title="No speakers found"
+        description="No speakers with accepted or confirmed talks were found for this conference."
+        className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+      />
     )
   }
 
@@ -287,21 +286,12 @@ export function SpeakerTable({
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:max-w-xs">
-            <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
-              <input
-                type="text"
-                placeholder="Search speakers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="col-start-1 row-start-1 block w-full rounded-md bg-white py-2 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:pl-9 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-300 dark:focus:outline-blue-500"
-              />
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
-              />
-            </div>
-          </div>
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search speakers..."
+            className="flex-1 sm:max-w-xs"
+          />
 
           {hasActiveFilters && (
             <button
@@ -636,7 +626,18 @@ export function SpeakerTable({
                               key={`${speaker._id}-${proposal._id}`}
                               className="flex items-center gap-2 text-xs"
                             >
-                              <StatusBadge status={proposal.status} />
+                              <StatusBadge
+                                label={
+                                  proposal.status.charAt(0).toUpperCase() +
+                                  proposal.status.slice(1)
+                                }
+                                color={getProposalBadgeColor(proposal.status)}
+                                icon={
+                                  proposal.status === Status.confirmed
+                                    ? CheckBadgeIcon
+                                    : ClockIcon
+                                }
+                              />
                               <span
                                 className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
                                 title={proposal.title}
