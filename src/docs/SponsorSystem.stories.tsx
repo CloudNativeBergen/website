@@ -475,7 +475,7 @@ export const Architecture: Story = {
         </section>
 
         {/* Data Flow */}
-        <section>
+        <section className="mb-16">
           <h2 className="font-space-grotesk mb-6 text-3xl font-semibold text-brand-cloud-blue dark:text-blue-400">
             Data Flow
           </h2>
@@ -486,12 +486,23 @@ export const Architecture: Story = {
   → Pipeline: prospect → contacted → negotiating → closed-won
   → Each stage change logged to sponsorActivity
 
-Contract flow
-  → contractTemplates.findBest → match tier + language
-  → contractTemplates.generatePdf → render with {{{VARIABLE}}} substitution
-  → crm.updateContractStatus → contract-sent
-  → crm.updateSignatureStatus → pending → signed
-  → Signed atomically sets contractStatus → contract-signed + timestamp
+Contract flow (via generateAndSendContract)
+  → findBestContractTemplate → match conference + tier + language
+  → generateContractPdf → React-PDF with {{{VARIABLE}}} substitution
+  → Upload PDF to Sanity (permanent storage)
+  → Upload PDF to Adobe Sign (POST /transientDocuments)
+  → Create agreement (POST /agreements) → agreementId
+  → Update SFC: contractStatus=contract-sent, signatureStatus=pending
+  → Log contract_status_change + signature_status_change activities
+
+Adobe Sign webhooks (/api/webhooks/adobe-sign)
+  → AGREEMENT_WORKFLOW_COMPLETED → download signed PDF → mark signed
+  → AGREEMENT_RECALLED → mark rejected
+  → AGREEMENT_EXPIRED → mark expired
+
+Automated reminders (/api/cron/contract-reminders, daily)
+  → Query pending > 5 days, < 2 reminders
+  → POST /agreements/{id}/reminders → increment reminderCount
 
 Invoicing
   → crm.updateInvoiceStatus → sent (auto-sets invoiceSentAt)
@@ -499,8 +510,192 @@ Invoicing
 
 Self-service onboarding
   → /sponsor/onboarding/[token] → logo upload, billing, contacts
-  → Sets onboardingComplete + onboardingCompletedAt`}
+  → Sets onboardingComplete + onboardingCompletedAt
+  → Auto-triggers generateAndSendContract on completion`}
             </pre>
+          </div>
+        </section>
+
+        {/* Adobe Sign Integration */}
+        <section>
+          <h2 className="font-space-grotesk mb-6 text-3xl font-semibold text-brand-cloud-blue dark:text-blue-400">
+            Adobe Sign Integration
+          </h2>
+          <p className="font-inter mb-6 text-sm text-brand-slate-gray dark:text-gray-300">
+            Digital contract signing powered by Adobe Acrobat Sign REST API v6.
+            Server-to-server OAuth 2.0 with client credentials grant. Webhooks
+            for real-time status updates instead of polling (per Adobe&apos;s
+            recommendation).
+          </p>
+
+          <div className="mb-8 rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+              Architecture
+            </h3>
+            <pre className="font-jetbrains overflow-x-auto text-xs text-brand-slate-gray dark:text-gray-300">
+              {`┌─────────────────────────────────────────────────┐
+│              Admin CRM UI                       │
+│  SponsorContractView / Contract Board           │
+└────────────┬────────────────┬───────────────────┘
+             │ Manual "Send"  │ Onboarding trigger
+             ▼                ▼
+┌─────────────────────────────────────────────────┐
+│         generateAndSendContract()               │
+│  1. Find template  4. Upload to Adobe Sign      │
+│  2. Generate PDF   5. Create agreement          │
+│  3. Store in CMS   6. Update SFC + log          │
+└──────────────────────┬──────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────┐
+│         Adobe Sign REST API v6                  │
+│  POST /transientDocuments → transientDocId      │
+│  POST /agreements → agreementId                 │
+│  POST /agreements/{id}/reminders                │
+│  GET  /agreements/{id}/combinedDocument         │
+└──────────────────────┬──────────────────────────┘
+                       │ Webhook notifications
+                       ▼
+┌─────────────────────────────────────────────────┐
+│    /api/webhooks/adobe-sign                     │
+│  WORKFLOW_COMPLETED → download PDF, mark signed │
+│  RECALLED → mark rejected                       │
+│  EXPIRED → mark expired                         │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│    /api/cron/contract-reminders (daily)         │
+│  Pending > 5 days, < 2 reminders → send         │
+└─────────────────────────────────────────────────┘`}
+            </pre>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                API Client
+              </h3>
+              <p className="font-inter mb-3 text-xs text-brand-slate-gray dark:text-gray-400">
+                src/lib/adobe-sign/client.ts
+              </p>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">uploadTransientDocument()</code> —
+                  POST /transientDocuments
+                </li>
+                <li>
+                  <code className="text-xs">createAgreement()</code> — POST
+                  /agreements
+                </li>
+                <li>
+                  <code className="text-xs">getAgreement()</code> — GET
+                  /agreements/&#123;id&#125;
+                </li>
+                <li>
+                  <code className="text-xs">downloadSignedDocument()</code> —
+                  GET /agreements/&#123;id&#125;/combinedDocument
+                </li>
+                <li>
+                  <code className="text-xs">sendReminder()</code> — POST
+                  /agreements/&#123;id&#125;/reminders
+                </li>
+                <li>
+                  <code className="text-xs">cancelAgreement()</code> — PUT
+                  /agreements/&#123;id&#125;/state
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Environment Variables
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_APPLICATION_ID</code> —
+                  OAuth client ID
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_APPLICATION_SECRET</code>{' '}
+                  — OAuth client secret
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_CLIENT_ID</code> —
+                  Webhook verification
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_BASE_URL</code> — API
+                  base URL (optional)
+                </li>
+                <li>
+                  <code className="text-xs">CRON_SECRET</code> — Cron job auth
+                  token
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Contract Data Fields (SFC)
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">contractStatus</code> — none →
+                  verbal → sent → signed
+                </li>
+                <li>
+                  <code className="text-xs">signatureStatus</code> — not-started
+                  → pending → signed
+                </li>
+                <li>
+                  <code className="text-xs">signatureId</code> — Adobe Sign
+                  agreement ID
+                </li>
+                <li>
+                  <code className="text-xs">signerEmail</code> — Designated
+                  signer
+                </li>
+                <li>
+                  <code className="text-xs">
+                    contractSentAt / contractSignedAt
+                  </code>{' '}
+                  — Timestamps
+                </li>
+                <li>
+                  <code className="text-xs">contractDocument</code> — PDF file
+                  asset
+                </li>
+                <li>
+                  <code className="text-xs">reminderCount</code> — Reminders
+                  sent (max 2)
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Design Decisions
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <strong>Graceful degradation</strong> — PDF generated even
+                  without Adobe Sign
+                </li>
+                <li>
+                  <strong>Webhook-driven</strong> — No polling; Adobe rate
+                  limits: 1/10min dev
+                </li>
+                <li>
+                  <strong>Dual storage</strong> — Sanity (permanent) + Adobe
+                  Sign (transient 7d)
+                </li>
+                <li>
+                  <strong>Unified send</strong> — Same function for manual +
+                  auto-onboarding
+                </li>
+                <li>
+                  <strong>Two-tier readiness</strong> — Required vs recommended
+                  field checks
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
       </div>
@@ -805,11 +1000,10 @@ function WorkflowRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 rounded-lg border p-4 ${
-        done
+      className={`flex items-center gap-4 rounded-lg border p-4 ${done
           ? 'border-brand-fresh-green/20 bg-brand-fresh-green/10 dark:border-green-500/20 dark:bg-green-900/20'
           : 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-700 dark:bg-gray-800'
-      }`}
+        }`}
     >
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${done ? 'bg-brand-fresh-green' : 'bg-brand-cloud-blue'}`}

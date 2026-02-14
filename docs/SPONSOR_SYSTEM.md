@@ -304,7 +304,7 @@ Sponsor tier assignments feed into the ticket allocation system, where each tier
 
 ## Contract System
 
-The contract system enables organizers to generate, manage, and (eventually) digitally sign sponsorship agreements directly from the CRM.
+The contract system enables organizers to generate, digitally sign, and track sponsorship agreements directly from the CRM. It integrates with Adobe Acrobat Sign for legally binding e-signatures, automated reminders, and webhook-driven status updates — targeting zero manual steps after an organizer clicks "Send Contract".
 
 ### Contract Templates
 
@@ -327,15 +327,213 @@ Variable values are built from the `SponsorForConferenceExpanded` record by `bui
 
 ### Contract Readiness
 
-Before a contract can be generated or sent, all required data must be present. The `checkContractReadiness()` function in `contract-readiness.ts` validates 11 required fields and categorizes any missing ones by responsible party:
+Before a contract can be generated or sent, all required data must be present. The `checkContractReadiness()` function in `contract-readiness.ts` validates 11 fields and categorizes any missing ones by responsible party and severity:
 
-| Source        | Required Fields                                                        |
-| ------------- | ---------------------------------------------------------------------- |
-| **Organizer** | Conference name, org number, address, dates, venue name, sponsor email |
-| **Sponsor**   | Org number, address, primary contact person                            |
-| **Pipeline**  | Tier assignment, contract value                                        |
+| Source        | Required Fields                                                        | Severity    |
+| ------------- | ---------------------------------------------------------------------- | ----------- |
+| **Organizer** | Conference name, org number, address, dates, venue name, sponsor email | Recommended |
+| **Sponsor**   | Org number, address                                                    | Recommended |
+| **Sponsor**   | Primary contact person (name + email)                                  | Required    |
+| **Pipeline**  | Tier assignment, contract value                                        | Recommended |
 
-The `ContractReadinessIndicator` component displays readiness status in the CRM form — green when ready, amber with a categorized list of missing fields when not.
+A contract `canSend` when all **required** fields are present (even if recommended fields are missing). The `ContractReadinessIndicator` component displays readiness status in the CRM form — green when fully ready, amber with a categorized list of missing fields otherwise.
+
+### Adobe Acrobat Sign Integration
+
+The contract system uses the [Adobe Acrobat Sign REST API v6](https://developer.adobe.com/acrobat-sign/docs/overview/developer_guide/) for digital signatures. The integration covers the full lifecycle: document upload, agreement creation, status tracking via webhooks, automated reminders, and signed document retrieval.
+
+#### Authentication
+
+Adobe Sign uses OAuth 2.0 with the **client credentials** grant type for server-to-server authentication. Tokens are requested from the Adobe IMS endpoint and cached in memory with a 60-second safety buffer before expiry.
+
+| Detail         | Value                                               |
+| -------------- | --------------------------------------------------- |
+| Token endpoint | `https://ims-na1.adobelogin.com/ims/token/v3`       |
+| Grant type     | `client_credentials`                                |
+| Scopes         | `agreement_read agreement_write agreement_send`     |
+| Token lifetime | 3600 seconds (1 hour)                               |
+| Cache strategy | In-memory with 60s buffer before expiry             |
+| Implementation | `src/lib/adobe-sign/client.ts` → `getAccessToken()` |
+
+#### API Client
+
+The Adobe Sign client (`src/lib/adobe-sign/client.ts`) wraps the REST v6 API with the following operations:
+
+| Function                    | API Endpoint                            | Purpose                               |
+| --------------------------- | --------------------------------------- | ------------------------------------- |
+| `uploadTransientDocument()` | `POST /transientDocuments`              | Upload PDF for signing (valid 7 days) |
+| `createAgreement()`         | `POST /agreements`                      | Create and send signing request       |
+| `getAgreement()`            | `GET /agreements/{id}`                  | Check current agreement status        |
+| `downloadSignedDocument()`  | `GET /agreements/{id}/combinedDocument` | Download the signed PDF               |
+| `sendReminder()`            | `POST /agreements/{id}/reminders`       | Send a signing reminder to the signer |
+| `cancelAgreement()`         | `PUT /agreements/{id}/state`            | Cancel a pending agreement            |
+
+All API calls are authenticated via `Bearer` token in the `Authorization` header. The base URL defaults to `https://api.na1.adobesign.com/api/rest/v6` and is configurable via `ADOBE_SIGN_BASE_URL`.
+
+#### Contract Send Flow
+
+The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It is used by both the admin manual send and the automated onboarding completion flow.
+
+```text
+1. Load sponsorForConference record
+2. Find best contract template (by conference + tier + language)
+3. Generate PDF via React-PDF with variable substitution
+4. Upload PDF to Sanity as a file asset (permanent storage)
+5. Upload PDF to Adobe Sign as a transient document (POST /transientDocuments)
+6. Create Adobe Sign agreement (POST /agreements) → returns agreementId
+7. Update sponsorForConference:
+   - contractStatus → "contract-sent"
+   - signatureStatus → "pending"
+   - signatureId → agreementId
+   - contractSentAt → now
+   - contractDocument → Sanity file reference
+   - signerEmail → determined by priority: explicit override > sfc.signerEmail > primary contact email
+8. Log sponsorActivity entries for contract status and signature status changes
+```
+
+If Adobe Sign is unavailable or fails, the contract PDF is still generated and stored — only the digital signing step is skipped. This graceful degradation ensures contracts can always be generated even without Adobe Sign configured.
+
+#### Webhook Handler
+
+Adobe Sign notifies our application of agreement status changes via webhooks at `/api/webhooks/adobe-sign`. The handler supports both the initial GET verification and ongoing POST notifications.
+
+**Verification (GET):** When registering a webhook, Adobe Sign sends a GET request with an `X-AdobeSign-ClientId` header. The handler must respond with a 2XX status and echo the client ID back in both the `X-AdobeSign-ClientId` response header and JSON body (`{ xAdobeSignClientId: "<id>" }`).
+
+**Notifications (POST):** Every POST notification also includes `X-AdobeSign-ClientId` and must be echoed back. The handler processes three event types:
+
+| Event                          | Action                                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `AGREEMENT_WORKFLOW_COMPLETED` | Download signed PDF, store in Sanity, set signatureStatus=signed, contractStatus=contract-signed, contractSignedAt=now |
+| `AGREEMENT_RECALLED`           | Set signatureStatus=rejected                                                                                           |
+| `AGREEMENT_EXPIRED`            | Set signatureStatus=expired                                                                                            |
+
+All status changes are logged as `sponsorActivity` entries with `activityType: "signature_status_change"`.
+
+The handler looks up the sponsor by matching `signatureId` on `sponsorForConference` documents against the `agreement.id` from the webhook event.
+
+#### Automated Reminders
+
+A Vercel cron job at `/api/cron/contract-reminders` runs daily (configured in `vercel.json`). It queries for contracts that:
+
+- Have `signatureStatus == "pending"`
+- Have a defined `signatureId`
+- Were sent more than **5 days** ago (`contractSentAt < threshold`)
+- Have fewer than **2 reminders** already sent
+
+For each matching contract, it calls `sendReminder()` (which POSTs to `/agreements/{id}/reminders`), increments `reminderCount`, and logs a `contract_reminder_sent` activity.
+
+The cron endpoint is protected by a `CRON_SECRET` bearer token.
+
+#### Environment Variables
+
+| Variable                        | Required | Purpose                                                             |
+| ------------------------------- | -------- | ------------------------------------------------------------------- |
+| `ADOBE_SIGN_APPLICATION_ID`     | Yes      | OAuth client ID for token requests                                  |
+| `ADOBE_SIGN_APPLICATION_SECRET` | Yes      | OAuth client secret                                                 |
+| `ADOBE_SIGN_CLIENT_ID`          | Yes      | Client ID for webhook verification (may equal app ID)               |
+| `ADOBE_SIGN_BASE_URL`           | No       | API base URL (default: `https://api.na1.adobesign.com/api/rest/v6`) |
+| `CRON_SECRET`                   | Yes      | Bearer token for cron job authentication                            |
+
+#### Adobe Sign Setup
+
+To configure Adobe Sign for a new environment:
+
+1. Log in to [Adobe Sign](https://secure.adobesign.com/public/login) and go to API > API Applications
+2. Create a new application (domain: CUSTOMER for internal use)
+3. Note the Application ID and Secret from View/Edit
+4. Configure OAuth scopes: enable `agreement_read`, `agreement_write`, `agreement_send`
+5. Set the four `ADOBE_SIGN_*` environment variables in Vercel
+6. Register the webhook URL by calling `POST /api/rest/v6/webhooks` with the body shown below
+7. Set `CRON_SECRET` in Vercel and configure the cron schedule in `vercel.json`
+
+```json
+{
+  "name": "Sponsor Contract Webhooks",
+  "scope": "ACCOUNT",
+  "state": "ACTIVE",
+  "webhookSubscriptionEvents": [
+    "AGREEMENT_WORKFLOW_COMPLETED",
+    "AGREEMENT_RECALLED",
+    "AGREEMENT_EXPIRED"
+  ],
+  "webhookUrlInfo": {
+    "url": "https://<domain>/api/webhooks/adobe-sign"
+  }
+}
+```
+
+#### Contract Data Model (on `sponsorForConference`)
+
+The contract lifecycle is tracked across several fields on the `sponsorForConference` document:
+
+| Field              | Type      | Description                                                               |
+| ------------------ | --------- | ------------------------------------------------------------------------- |
+| `contractStatus`   | Enum      | Overall contract stage (none → verbal → sent → signed)                    |
+| `signatureStatus`  | Enum      | Digital signature state (not-started → pending → signed/rejected/expired) |
+| `signatureId`      | String    | Adobe Sign agreement ID (read-only, set on send)                          |
+| `signerEmail`      | String    | Email of the designated signer                                            |
+| `contractSentAt`   | DateTime  | When the contract was sent for signing                                    |
+| `contractSignedAt` | DateTime  | When the signed PDF was received (set by webhook)                         |
+| `contractDocument` | File      | Generated/signed PDF stored as a Sanity file asset                        |
+| `contractTemplate` | Reference | The `contractTemplate` used to generate the PDF                           |
+| `reminderCount`    | Number    | Signing reminders sent (max 2, tracked by cron)                           |
+
+#### Architecture Diagram
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        Admin CRM UI                             │
+│  SponsorContractView  /  SponsorCRMPipeline (Contract Board)   │
+└────────────┬───────────────────────┬────────────────────────────┘
+             │ Manual "Send"        │ Onboarding auto-trigger
+             ▼                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              generateAndSendContract()                          │
+│  contract-send.ts                                               │
+│                                                                 │
+│  1. findBestContractTemplate()   4. uploadTransientDocument()   │
+│  2. generateContractPdf()        5. createAgreement()           │
+│  3. Upload to Sanity             6. Update SFC + log activity   │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Adobe Sign REST API v6                        │
+│                                                                 │
+│  POST /transientDocuments → transientDocumentId                 │
+│  POST /agreements → agreementId                                 │
+│  POST /agreements/{id}/reminders → reminder sent                │
+│  GET  /agreements/{id}/combinedDocument → signed PDF            │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ Webhook notifications
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              /api/webhooks/adobe-sign                            │
+│                                                                 │
+│  AGREEMENT_WORKFLOW_COMPLETED → download PDF, mark signed       │
+│  AGREEMENT_RECALLED → mark rejected                             │
+│  AGREEMENT_EXPIRED → mark expired                               │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│              /api/cron/contract-reminders (daily)                │
+│                                                                 │
+│  Query pending > 5 days, < 2 reminders → sendReminder()         │
+│  Increment reminderCount, log activity                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Contract Design Decisions
+
+**Graceful degradation.** If Adobe Sign credentials are missing or the API is down, contract PDF generation still works — only the e-signing step is skipped. The PDF is stored in Sanity regardless.
+
+**Webhook-driven status updates.** Instead of polling Adobe Sign for agreement status (which has strict rate limits: 1 call/10 min for developer accounts), we rely entirely on webhooks for real-time status changes. This aligns with Adobe's recommended approach.
+
+**Dual storage.** The contract PDF is stored in both Sanity (permanent, accessible via CMS) and Adobe Sign (transient, valid 7 days, then stored as part of the agreement). When the signed version arrives via webhook, it replaces the original in Sanity.
+
+**Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated onboarding-triggered sends, ensuring consistent behavior and logging.
+
+**Two-tier readiness.** Contract readiness distinguishes between `required` fields (blocks sending entirely) and `recommended` fields (allows sending with warnings). Only the primary contact person is strictly required — other fields like org number and address produce warnings but don't block the flow.
 
 ## Sponsor Self-Service Onboarding
 
