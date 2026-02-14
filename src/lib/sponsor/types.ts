@@ -92,6 +92,7 @@ export interface SponsorInput {
   logo?: string | null
   logoBright?: string | null
   orgNumber?: string
+  address?: string
   tierId?: string
 }
 

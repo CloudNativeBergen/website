@@ -16,6 +16,7 @@ export interface SponsorCRMFormData {
   logo: string | null
   logoBright: string | null
   orgNumber: string
+  address: string
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -114,7 +115,8 @@ export function useSponsorCRMFormMutations({
         formData.logo !== sponsor.sponsor.logo ||
         formData.logoBright !== sponsor.sponsor.logoBright ||
         formData.name !== sponsor.sponsor.name ||
-        formData.orgNumber !== (sponsor.sponsor.orgNumber || '')
+        formData.orgNumber !== (sponsor.sponsor.orgNumber || '') ||
+        formData.address !== (sponsor.sponsor.address || '')
       ) {
         await updateGlobalSponsorMutation.mutateAsync({
           id: sponsor.sponsor._id,
@@ -124,6 +126,7 @@ export function useSponsorCRMFormMutations({
             logo: formData.logo || null,
             logoBright: formData.logoBright || null,
             orgNumber: formData.orgNumber || undefined,
+            address: formData.address || undefined,
           },
         })
       }

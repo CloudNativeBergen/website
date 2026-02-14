@@ -31,8 +31,8 @@ export function ConferenceOrgInfoPanel({
       },
     })
 
-  const hasOrgNumber = !!conference.organizerOrgNumber
-  const hasAddress = !!conference.organizerAddress
+  const hasOrgNumber = !!orgNumber.trim()
+  const hasAddress = !!address.trim()
   const isComplete = hasOrgNumber && hasAddress
 
   const handleSave = () => {

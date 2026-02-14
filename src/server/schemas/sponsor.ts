@@ -23,6 +23,7 @@ export const SponsorInputSchema = z.object({
   logo: z.string().nullable().optional().or(z.literal('')),
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().nullable().optional().transform(nullToUndefined),
+  address: z.string().nullable().optional().transform(nullToUndefined),
   tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 

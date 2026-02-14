@@ -6,15 +6,18 @@ import {
   GlobeAltIcon,
   BuildingOffice2Icon,
   HashtagIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline'
 
 interface SponsorGlobalInfoFieldsProps {
   name: string
   website: string
   orgNumber?: string
+  address?: string
   onNameChange: (value: string) => void
   onWebsiteChange: (value: string) => void
   onOrgNumberChange?: (value: string) => void
+  onAddressChange?: (value: string) => void
   disabled?: boolean
 }
 
@@ -22,9 +25,11 @@ export function SponsorGlobalInfoFields({
   name,
   website,
   orgNumber = '',
+  address = '',
   onNameChange,
   onWebsiteChange,
   onOrgNumberChange,
+  onAddressChange,
   disabled = false,
 }: SponsorGlobalInfoFieldsProps) {
   const [editing, setEditing] = useState(false)
@@ -54,6 +59,12 @@ export function SponsorGlobalInfoFields({
             <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
               <HashtagIcon className="h-3 w-3 shrink-0" />
               {orgNumber}
+            </span>
+          )}
+          {address && (
+            <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+              <MapPinIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{address}</span>
             </span>
           )}
         </div>
@@ -143,6 +154,25 @@ export function SponsorGlobalInfoFields({
               placeholder="123 456 789"
             />
           </div>
+        </div>
+      </div>
+      <div>
+        <label
+          htmlFor="address"
+          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+        >
+          Address
+        </label>
+        <div className="mt-1">
+          <input
+            type="text"
+            id="address"
+            value={address}
+            onChange={(e) => onAddressChange?.(e.target.value)}
+            disabled={disabled}
+            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+            placeholder="Street 1, 0000 City"
+          />
         </div>
       </div>
     </div>
