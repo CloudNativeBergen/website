@@ -1010,10 +1010,11 @@ function WorkflowRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 rounded-lg border p-4 ${done
+      className={`flex items-center gap-4 rounded-lg border p-4 ${
+        done
           ? 'border-brand-fresh-green/20 bg-brand-fresh-green/10 dark:border-green-500/20 dark:bg-green-900/20'
           : 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-700 dark:bg-gray-800'
-        }`}
+      }`}
     >
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${done ? 'bg-brand-fresh-green' : 'bg-brand-cloud-blue'}`}

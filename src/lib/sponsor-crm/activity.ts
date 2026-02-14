@@ -37,8 +37,8 @@ export async function createSponsorActivity(
       createdAt: activity.createdAt,
       ...(activity.createdBy &&
         activity.createdBy !== 'system' && {
-        createdBy: { _type: 'reference', _ref: activity.createdBy },
-      }),
+          createdBy: { _type: 'reference', _ref: activity.createdBy },
+        }),
     }
 
     const created = await clientWrite.create(doc)

@@ -444,11 +444,11 @@ function ContractFlowStep({
         className={clsx(
           'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
           status === 'complete' &&
-          'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+            'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
           status === 'active' &&
-          'bg-indigo-100 text-indigo-600 ring-2 ring-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500',
+            'bg-indigo-100 text-indigo-600 ring-2 ring-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500',
           status === 'pending' &&
-          'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500',
+            'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500',
         )}
       >
         {status === 'complete' ? <CheckIcon className="h-3.5 w-3.5" /> : step}
