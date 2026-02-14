@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   CheckCircleIcon,
@@ -41,11 +41,6 @@ export function SponsorPortal({ token }: { token: string }) {
     error: fetchError,
   } = api.onboarding.validate.useQuery({ token })
 
-  const completeMutation = api.onboarding.complete.useMutation({
-    onSuccess: () => setSubmitted(true),
-    onError: (error) => setError(error.message),
-  })
-
   const [contacts, setContacts] = useState<ContactPersonForm[]>([
     { name: '', email: '', phone: '', role: '', isPrimary: true },
   ])
@@ -63,6 +58,21 @@ export function SponsorPortal({ token }: { token: string }) {
   const [logoBright, setLogoBright] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const errorRef = useRef<HTMLDivElement>(null)
+
+  const scrollToError = () => {
+    setTimeout(() => {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+  }
+
+  const completeMutation = api.onboarding.complete.useMutation({
+    onSuccess: () => setSubmitted(true),
+    onError: (err) => {
+      setError(err.message)
+      scrollToError()
+    },
+  })
 
   useEffect(() => {
     if (!sponsor) return
@@ -195,11 +205,13 @@ export function SponsorPortal({ token }: { token: string }) {
       setError(
         'Please provide at least one contact person with name and email.',
       )
+      scrollToError()
       return
     }
 
     if (!billing.email.trim()) {
       setError('Please provide a billing email address.')
+      scrollToError()
       return
     }
 
@@ -252,9 +264,12 @@ export function SponsorPortal({ token }: { token: string }) {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+          <div
+            ref={errorRef}
+            className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
+          >
             <div className="flex">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+              <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-red-400" />
               <p className="ml-3 text-sm text-red-700 dark:text-red-300">
                 {error}
               </p>
@@ -528,16 +543,28 @@ export function SponsorPortal({ token }: { token: string }) {
           </div>
         </section>
 
-        <div className="flex justify-end border-t border-gray-200 pt-6 dark:border-gray-700">
-          <button
-            type="submit"
-            disabled={completeMutation.isPending}
-            className="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
-          >
-            {completeMutation.isPending
-              ? 'Submitting\u2026'
-              : 'Complete Registration'}
-          </button>
+        <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
+          {error && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
+              <div className="flex">
+                <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-red-400" />
+                <p className="ml-3 text-sm text-red-700 dark:text-red-300">
+                  {error}
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={completeMutation.isPending}
+              className="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
+            >
+              {completeMutation.isPending
+                ? 'Submitting\u2026'
+                : 'Complete Registration'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
