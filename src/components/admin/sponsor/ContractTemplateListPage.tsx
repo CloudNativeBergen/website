@@ -7,6 +7,7 @@ import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin'
 import { AdobeSignConfigPanel } from './AdobeSignConfigPanel'
+import { ConferenceOrgInfoPanel } from './ConferenceOrgInfoPanel'
 import type { Conference } from '@/lib/conference/types'
 import {
   DocumentTextIcon,
@@ -74,6 +75,8 @@ export function ContractTemplateListPage({
           </Link>
         }
       />
+
+      <ConferenceOrgInfoPanel conference={conference} />
 
       <AdobeSignConfigPanel />
 

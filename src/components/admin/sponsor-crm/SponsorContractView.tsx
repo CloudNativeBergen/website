@@ -422,12 +422,14 @@ function SponsorPortalSection({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
       <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-        Sponsor portal
+        Sponsor self-service portal
       </h4>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        Send this link to the sponsor. They fill in company details, contacts,
-        and billing info. When they submit, the contract is automatically
-        generated and sent for digital signing.
+        Generate a unique link and share it with the sponsor. They will be asked
+        to provide their company details (org number, address), contact persons,
+        billing information, and upload their logo. Once they submit, the
+        contract status changes to &quot;Ready&quot; and you can generate and
+        send the contract for digital signing from here.
       </p>
 
       {portalComplete ? (

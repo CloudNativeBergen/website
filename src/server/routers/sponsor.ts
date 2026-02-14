@@ -1835,10 +1835,25 @@ export const sponsorRouter = router({
 
     getAdobeSignStatus: adminProcedure.query(async () => {
       const session = await getAdobeSignSession()
+      let webhookActive: string | null = null
+      if (session) {
+        try {
+          const existing = await listWebhooks(session)
+          const active = existing.userWebhookList?.find(
+            (w) => w.state === 'ACTIVE',
+          )
+          if (active) {
+            webhookActive = active.id
+          }
+        } catch {
+          // Non-fatal — webhook check may fail if scope not granted
+        }
+      }
       return {
         connected: !!session,
         expiresAt: session?.expiresAt ?? null,
         apiAccessPoint: session?.apiAccessPoint ?? null,
+        webhookActive,
       }
     }),
 

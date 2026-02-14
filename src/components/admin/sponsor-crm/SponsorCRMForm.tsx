@@ -75,6 +75,7 @@ export function SponsorCRMForm({
     website: sponsor?.sponsor.website || '',
     logo: (sponsor?.sponsor.logo || null) as string | null,
     logoBright: (sponsor?.sponsor.logoBright || null) as string | null,
+    orgNumber: sponsor?.sponsor.orgNumber || '',
     tierId: sponsor?.tier?._id || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
     contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
@@ -449,11 +450,18 @@ export function SponsorCRMForm({
                               <SponsorGlobalInfoFields
                                 name={formData.name}
                                 website={formData.website}
+                                orgNumber={formData.orgNumber}
                                 onNameChange={(name) =>
                                   setFormData((prev) => ({ ...prev, name }))
                                 }
                                 onWebsiteChange={(website) =>
                                   setFormData((prev) => ({ ...prev, website }))
+                                }
+                                onOrgNumberChange={(orgNumber) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    orgNumber,
+                                  }))
                                 }
                               />
                             )}
