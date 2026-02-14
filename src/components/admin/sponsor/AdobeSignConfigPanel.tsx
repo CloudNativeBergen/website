@@ -81,16 +81,18 @@ export function AdobeSignConfigPanel() {
         <div className="flex items-center gap-3">
           {status && (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${status.connected
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                status.connected
                   ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20 dark:bg-green-900/20 dark:text-green-300 dark:ring-green-500/30'
                   : 'bg-red-50 text-red-700 ring-1 ring-red-600/20 dark:bg-red-900/20 dark:text-red-300 dark:ring-red-500/30'
-                }`}
+              }`}
             >
               <span
-                className={`h-1.5 w-1.5 rounded-full ${status.connected
+                className={`h-1.5 w-1.5 rounded-full ${
+                  status.connected
                     ? 'bg-green-500 dark:bg-green-400'
                     : 'bg-red-500 dark:bg-red-400'
-                  }`}
+                }`}
               />
               {status.connected ? 'Connected' : 'Not Connected'}
             </span>
@@ -172,10 +174,11 @@ export function AdobeSignConfigPanel() {
                   </button>
                   {webhookStatus && (
                     <span
-                      className={`text-xs font-medium ${webhookStatus.type === 'success'
+                      className={`text-xs font-medium ${
+                        webhookStatus.type === 'success'
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
-                        }`}
+                      }`}
                     >
                       {webhookStatus.message}
                     </span>
