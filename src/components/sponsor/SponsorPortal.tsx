@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   CheckCircleIcon,
+  ClockIcon,
+  DocumentTextIcon,
   ExclamationTriangleIcon,
+  PencilSquareIcon,
   PlusIcon,
   TrashIcon,
   UserIcon,
@@ -31,7 +34,7 @@ interface CompanyForm {
   address: string
 }
 
-export function SponsorOnboardingForm({ token }: { token: string }) {
+export function SponsorPortal({ token }: { token: string }) {
   const {
     data: sponsor,
     isLoading,
@@ -55,13 +58,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     orgNumber: '',
     address: '',
   })
+  const [signerEmail, setSignerEmail] = useState('')
   const [logo, setLogo] = useState<string | null>(null)
   const [logoBright, setLogoBright] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
-  // Initialize form state from sponsor data when it becomes available
-  // This is intentional - we need to populate the form when async data arrives
   useEffect(() => {
     if (!sponsor) return
 
@@ -93,13 +95,28 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [sponsor])
 
+  const contactsWithEmail = useMemo(
+    () => contacts.filter((c) => c.email.trim()),
+    [contacts],
+  )
+
+  // Auto-set signer to primary contact when contacts change
+  useEffect(() => {
+    if (signerEmail) return
+    const primary = contacts.find((c) => c.isPrimary && c.email.trim())
+    if (primary) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSignerEmail(primary.email)
+    }
+  }, [contacts, signerEmail])
+
   if (isLoading) {
     return (
       <div className="flex min-h-100 items-center justify-center">
         <div className="text-center">
           <div className="border-oslo-blue mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
           <p className="mt-4 text-gray-600 dark:text-gray-300">
-            Loading sponsor registration&hellip;
+            Loading sponsor portal&hellip;
           </p>
         </div>
       </div>
@@ -121,19 +138,20 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     )
   }
 
+  // Portal status dashboard — shown when setup is complete
   if (submitted || sponsor?.onboardingComplete) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center dark:border-green-800 dark:bg-green-950">
-        <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
-        <h2 className="mt-4 text-xl font-semibold text-green-800 dark:text-green-300">
-          Registration Complete
-        </h2>
-        <p className="mt-2 text-green-600 dark:text-green-400">
-          Thank you for completing your sponsor registration for{' '}
-          <strong>{sponsor?.conferenceName}</strong>. A sponsorship agreement
-          will be sent to your primary contact&apos;s email for digital signing.
-        </p>
-      </div>
+      <PortalStatusDashboard
+        sponsorName={sponsor?.sponsorName}
+        conferenceName={sponsor?.conferenceName}
+        tierTitle={sponsor?.tierTitle}
+        signerEmail={sponsor?.signerEmail}
+        signatureStatus={sponsor?.signatureStatus}
+        contractStatus={sponsor?.contractStatus}
+        signingUrl={sponsor?.signingUrl}
+        contractValue={sponsor?.contractValue}
+        contractCurrency={sponsor?.contractCurrency}
+      />
     )
   }
 
@@ -208,6 +226,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       logoBright: logoBright || undefined,
       orgNumber: company.orgNumber.trim() || undefined,
       address: company.address.trim() || undefined,
+      signerEmail: signerEmail.trim() || undefined,
     })
   }
 
@@ -215,7 +234,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Sponsor Registration
+          Sponsor Portal
         </h1>
         <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
           Welcome, <strong>{sponsor?.sponsorName}</strong>! Please complete the
@@ -228,10 +247,6 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
             </>
           )}
           .
-        </p>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          After you submit, a sponsorship agreement will be sent to your primary
-          contact&apos;s email for digital signing.
         </p>
       </div>
 
@@ -428,6 +443,35 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
           </div>
         </section>
 
+        {/* Contract Signer selection — visible when >1 contact with email */}
+        {contactsWithEmail.length > 1 && (
+          <section>
+            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+              Contract Signer
+            </h2>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              Who should sign the sponsorship agreement? This person will
+              receive the contract for digital signing.
+            </p>
+            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+              <select
+                value={signerEmail}
+                onChange={(e) => setSignerEmail(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              >
+                {contactsWithEmail.map((c, i) => (
+                  <option key={i} value={c.email.trim()}>
+                    {c.name.trim()
+                      ? `${c.name.trim()} (${c.email.trim()})`
+                      : c.email.trim()}
+                    {c.isPrimary ? ' \u2014 Primary' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </section>
+        )}
+
         <section>
           <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Billing Information
@@ -492,10 +536,148 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
           >
             {completeMutation.isPending
               ? 'Submitting\u2026'
-              : 'Submit & Send Contract'}
+              : 'Complete Registration'}
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+function PortalStatusDashboard({
+  sponsorName,
+  conferenceName,
+  tierTitle,
+  signerEmail,
+  signatureStatus,
+  contractStatus,
+  signingUrl,
+  contractValue,
+  contractCurrency,
+}: {
+  sponsorName?: string
+  conferenceName?: string
+  tierTitle?: string | null
+  signerEmail?: string | null
+  signatureStatus?: string | null
+  contractStatus?: string | null
+  signingUrl?: string | null
+  contractValue?: number | null
+  contractCurrency?: string | null
+}) {
+  const isSigned = signatureStatus === 'signed'
+  const isPending = signatureStatus === 'pending'
+  const hasContract = contractStatus === 'contract-sent' || isSigned
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Sponsor Portal
+        </h1>
+        <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
+          <strong>{sponsorName}</strong> &mdash;{' '}
+          <strong>{conferenceName}</strong>
+        </p>
+      </div>
+
+      {/* Sponsorship summary */}
+      <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase dark:text-gray-400">
+          Sponsorship Details
+        </h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          {tierTitle && (
+            <div className="flex justify-between">
+              <dt className="text-gray-500 dark:text-gray-400">Package</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">
+                {tierTitle}
+              </dd>
+            </div>
+          )}
+          {contractValue != null && (
+            <div className="flex justify-between">
+              <dt className="text-gray-500 dark:text-gray-400">Value</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">
+                {contractValue.toLocaleString()} {contractCurrency || 'NOK'}
+              </dd>
+            </div>
+          )}
+          {signerEmail && (
+            <div className="flex justify-between">
+              <dt className="text-gray-500 dark:text-gray-400">
+                Contract signer
+              </dt>
+              <dd className="font-medium text-gray-900 dark:text-white">
+                {signerEmail}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      {/* Contract signed */}
+      {isSigned && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center dark:border-green-800 dark:bg-green-950">
+          <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
+          <h2 className="mt-4 text-xl font-semibold text-green-800 dark:text-green-300">
+            Contract Signed
+          </h2>
+          <p className="mt-2 text-green-600 dark:text-green-400">
+            Thank you! Your sponsorship agreement for{' '}
+            <strong>{conferenceName}</strong> has been signed. We look forward
+            to having you as a sponsor.
+          </p>
+        </div>
+      )}
+
+      {/* Contract pending — show signing link */}
+      {isPending && !isSigned && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-950">
+          <div className="flex items-start gap-4">
+            <DocumentTextIcon className="mt-0.5 h-8 w-8 shrink-0 text-blue-500" />
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-blue-800 dark:text-blue-300">
+                Contract Ready for Signing
+              </h2>
+              <p className="mt-1 text-sm text-blue-600 dark:text-blue-400">
+                Your sponsorship agreement has been sent to{' '}
+                <strong>{signerEmail}</strong> for digital signing.
+              </p>
+              {signingUrl && (
+                <a
+                  href={signingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 dark:bg-blue-500 dark:hover:bg-blue-400"
+                >
+                  <PencilSquareIcon className="h-5 w-5" />
+                  Sign Contract
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup complete, no contract yet */}
+      {!hasContract && !isSigned && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex items-start gap-4">
+            <ClockIcon className="mt-0.5 h-8 w-8 shrink-0 text-gray-400 dark:text-gray-500" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Registration Complete
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Thank you for completing your registration. Your sponsorship
+                agreement will be prepared and sent to you shortly for digital
+                signing.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

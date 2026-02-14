@@ -100,9 +100,8 @@ import {
   uploadTransientDocument,
   createAgreement,
   getAgreement,
-  downloadSignedDocument,
-  testConnection,
 } from '@/lib/adobe-sign'
+import { getAdobeSignSession } from '@/lib/adobe-sign/auth'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -1042,6 +1041,15 @@ export const sponsorRouter = router({
     checkSignatureStatus: adminProcedure
       .input(SponsorForConferenceIdSchema)
       .mutation(async ({ input, ctx }) => {
+        const session = await getAdobeSignSession()
+        if (!session) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Adobe Sign session not connected. Please connect via OAuth first.',
+          })
+        }
+
         const { sponsorForConference: sfc } = await getSponsorForConference(
           input.id,
         )
@@ -1059,7 +1067,7 @@ export const sponsorRouter = router({
           })
         }
 
-        const agreement = await getAgreement(sfc.signatureId)
+        const agreement = await getAgreement(session, sfc.signatureId)
         const currentStatus = sfc.signatureStatus || 'not-started'
 
         const statusMap: Record<string, string> = {
@@ -1077,23 +1085,6 @@ export const sponsorRouter = router({
           if (newStatus === 'signed') {
             updateFields.contractStatus = 'contract-signed'
             updateFields.contractSignedAt = getCurrentDateTime()
-
-            // Download signed PDF and store it
-            try {
-              const signedPdf = await downloadSignedDocument(sfc.signatureId)
-              const signedFilename = `signed-contract-${sfc.signatureId}.pdf`
-              const asset = await clientWrite.assets.upload(
-                'file',
-                Buffer.from(signedPdf),
-                { filename: signedFilename, contentType: 'application/pdf' },
-              )
-              updateFields.contractDocument = {
-                _type: 'file',
-                asset: { _type: 'reference', _ref: asset._id },
-              }
-            } catch (downloadError) {
-              console.error('Failed to download signed PDF:', downloadError)
-            }
           }
 
           await clientWrite.patch(input.id).set(updateFields).commit()
@@ -1266,11 +1257,18 @@ export const sponsorRouter = router({
         let agreementId: string | undefined
         if (input.signerEmail) {
           try {
+            const adobeSession = await getAdobeSignSession()
+            if (!adobeSession) {
+              throw new Error(
+                'Adobe Sign not connected. Please connect via OAuth first.',
+              )
+            }
             const transientDoc = await uploadTransientDocument(
+              adobeSession,
               pdfBuffer,
               filename,
             )
-            const agreement = await createAgreement({
+            const agreement = await createAgreement(adobeSession, {
               name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
               participantEmail: input.signerEmail,
               message: `Please sign the sponsorship agreement for ${sfc.conference?.title || 'Cloud Native Days Norway'}.`,
@@ -1585,9 +1583,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                title: sponsorForConference.tier.title,
-                tagline: sponsorForConference.tier.tagline,
-              }
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1737,15 +1735,12 @@ export const sponsorRouter = router({
         return { success: true }
       }),
 
-    testAdobeSignConnection: adminProcedure.mutation(async () => {
-      try {
-        return await testConnection()
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to test Adobe Sign connection',
-          cause: error,
-        })
+    getAdobeSignStatus: adminProcedure.query(async () => {
+      const session = await getAdobeSignSession()
+      return {
+        connected: !!session,
+        expiresAt: session?.expiresAt ?? null,
+        apiAccessPoint: session?.apiAccessPoint ?? null,
       }
     }),
   }),

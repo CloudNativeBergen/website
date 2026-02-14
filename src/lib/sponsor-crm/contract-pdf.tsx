@@ -412,6 +412,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {'{{Sig_es_:signer1:signature}}'}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {'{{Dte_es_:signer1:date}}'}
+            </Text>
           </View>
         </View>
 

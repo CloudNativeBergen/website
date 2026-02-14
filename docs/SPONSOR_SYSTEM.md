@@ -188,7 +188,7 @@ src/
 │   ├── SponsorLogo.tsx             # Public inline SVG logo renderer
 │   ├── SponsorThankYou.tsx         # Marketing thank-you card for sponsors
 │   ├── sponsor/
-│   │   ├── SponsorOnboardingForm.tsx # Sponsor self-service onboarding form
+│   │   ├── SponsorPortal.tsx       # Sponsor self-service portal (setup + status)
 │   │   └── SponsorProspectus.tsx   # Public sponsorship prospectus page
 │   └── admin/
 │       ├── sponsor/                # Sponsor management admin UI
@@ -535,15 +535,16 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 **Two-tier readiness.** Contract readiness distinguishes between `required` fields (blocks sending entirely) and `recommended` fields (allows sending with warnings). Only the primary contact person is strictly required — other fields like org number and address produce warnings but don't block the flow.
 
-## Sponsor Self-Service Onboarding
+## Sponsor Portal
 
-The onboarding portal (`/sponsor/onboarding/[token]`) allows sponsors to self-service their data entry after an organizer initiates the relationship. The flow:
+The sponsor portal (`/sponsor/portal/[token]`) allows sponsors to self-service their data entry after an organizer initiates the relationship. The flow:
 
 1. Organizer generates a unique onboarding token via the CRM
-2. Sponsor receives a link (e.g. via email) to `/sponsor/onboarding/{token}`
-3. Sponsor fills in: company information (org number, address), contact persons, and billing details
-4. On submission, the system patches both the `sponsor` document (org data) and the `sponsorForConference` document (contacts, billing)
+2. Sponsor receives a link (e.g. via email) to `/sponsor/portal/{token}`
+3. Sponsor fills in: company information (org number, address), contact persons, contract signer selection, and billing details
+4. On submission, the system patches both the `sponsor` document (org data) and the `sponsorForConference` document (contacts, billing, signerEmail)
 5. An `onboarding_complete` activity is logged
+6. After setup, the portal shows a progressive status dashboard with contract signing link when available
 
 Token validation checks existence, expiry, and whether onboarding was already completed.
 
@@ -610,7 +611,7 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 | [#303](https://github.com/CloudNativeBergen/website/issues/303) | Posten.no e-signature integration (OAuth2, BankID, webhooks)                             | Open   |
 | [#304](https://github.com/CloudNativeBergen/website/issues/304) | Admin UI — send contract flow with signature status badges                               | Open   |
 | [#305](https://github.com/CloudNativeBergen/website/issues/305) | Automated contract reminders (daily cron, Slack notifications)                           | Open   |
-| [#306](https://github.com/CloudNativeBergen/website/issues/306) | Sponsor self-service onboarding portal (`/sponsor/onboarding/[token]`)                   | Done   |
+| [#306](https://github.com/CloudNativeBergen/website/issues/306) | Sponsor self-service portal (`/sponsor/portal/[token]`)                                  | Done   |
 
 ### Related Issues
 

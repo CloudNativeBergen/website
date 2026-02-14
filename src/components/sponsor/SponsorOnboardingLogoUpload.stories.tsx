@@ -6,7 +6,7 @@ const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60"
 const SAMPLE_SVG_BRIGHT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60"><rect width="200" height="60" rx="8" fill="none" stroke="white" stroke-width="2"/><text x="100" y="36" text-anchor="middle" fill="white" font-family="sans-serif" font-size="20" font-weight="bold">ACME CORP</text></svg>`
 
 const meta = {
-  title: 'Systems/Sponsors/Onboarding/SponsorOnboardingLogoUpload',
+  title: 'Systems/Sponsors/Portal/SponsorOnboardingLogoUpload',
   component: SponsorOnboardingLogoUpload,
   parameters: {
     layout: 'padded',

@@ -1,14 +1,3 @@
-export interface AdobeSignConfig {
-  applicationId: string
-  applicationSecret: string
-  baseUrl: string
-}
-
-export interface AccessToken {
-  token: string
-  expiresAt: number
-}
-
 export type AgreementStatus =
   | 'OUT_FOR_SIGNATURE'
   | 'SIGNED'
@@ -64,6 +53,19 @@ export interface ReminderResponse {
   status: string
 }
 
+export interface SigningUrlSetInfo {
+  signingUrls: Array<{
+    email: string
+    esignUrl: string
+  }>
+}
+
+export interface WebhookDocumentInfo {
+  document?: string // base64-encoded signed PDF
+  mimeType?: string
+  name?: string
+}
+
 export interface WebhookEvent {
   webhookId: string
   webhookName: string
@@ -81,5 +83,6 @@ export interface WebhookEvent {
     id: string
     name: string
     status: AgreementStatus
+    signedDocumentInfo?: WebhookDocumentInfo
   }
 }

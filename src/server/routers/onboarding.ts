@@ -9,11 +9,10 @@ import {
   validateOnboardingToken,
   completeOnboarding,
   generateOnboardingToken,
-  buildOnboardingUrl,
+  buildPortalUrl,
 } from '@/lib/sponsor-crm/onboarding'
 import type { OnboardingSubmission } from '@/lib/sponsor-crm/onboarding'
 import { logOnboardingComplete } from '@/lib/sponsor-crm/activity'
-import { generateAndSendContract } from '@/lib/sponsor-crm/contract-send'
 import { clientReadUncached } from '@/lib/sanity/client'
 
 export const onboardingRouter = router({
@@ -55,22 +54,6 @@ export const onboardingRouter = router({
         } catch (logError) {
           console.error('Failed to log onboarding completion:', logError)
         }
-
-        // Auto-generate and send contract for digital signing
-        try {
-          const contractResult = await generateAndSendContract(
-            sponsorForConferenceId,
-            { actorId: 'system' },
-          )
-          if (!contractResult.success) {
-            console.error(
-              'Auto-contract send failed after onboarding:',
-              contractResult.error,
-            )
-          }
-        } catch (contractError) {
-          console.error('Auto-contract send error:', contractError)
-        }
       }
 
       return { success: true }
@@ -108,7 +91,7 @@ export const onboardingRouter = router({
       }
 
       const baseUrl = `https://${sfc.domain}`
-      const url = buildOnboardingUrl(baseUrl, token)
+      const url = buildPortalUrl(baseUrl, token)
 
       return { token, url }
     }),

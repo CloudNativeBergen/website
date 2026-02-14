@@ -343,8 +343,8 @@ export const Architecture: Story = {
                   label="Sponsorship terms &amp; conditions"
                 />
                 <RouteCard
-                  path="/sponsor/onboarding/[token]"
-                  label="Self-service onboarding portal"
+                  path="/sponsor/portal/[token]"
+                  label="Self-service sponsor portal"
                 />
               </div>
             </div>
@@ -508,10 +508,10 @@ Invoicing
   → crm.updateInvoiceStatus → sent (auto-sets invoiceSentAt)
   → paid (auto-sets invoicePaidAt) | overdue | cancelled
 
-Self-service onboarding
-  → /sponsor/onboarding/[token] → logo upload, billing, contacts
-  → Sets onboardingComplete + onboardingCompletedAt
-  → Auto-triggers generateAndSendContract on completion`}
+Self-service portal
+  → /sponsor/portal/[token] → logo upload, billing, contacts, signer selection
+  → Sets onboardingComplete + onboardingCompletedAt + contractStatus: 'ready'
+  → Admin triggers contract send manually from CRM`}
             </pre>
           </div>
         </section>

@@ -30,11 +30,6 @@ jest.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-15T10:00:00Z',
 }))
 
-const mockSendReminder = jest.fn<(...args: any[]) => any>()
-jest.mock('@/lib/adobe-sign', () => ({
-  sendReminder: (...args: unknown[]) => mockSendReminder(...args),
-}))
-
 jest.mock('next/cache', () => ({
   unstable_noStore: jest.fn(),
 }))
@@ -48,7 +43,6 @@ describe('api/cron/contract-reminders', () => {
     mockSet.mockReturnValue({ commit: mockCommit })
     mockCommit.mockResolvedValue({})
     mockCreate.mockResolvedValue({})
-    mockSendReminder.mockResolvedValue({ id: 'reminder-1', status: 'ACTIVE' })
   })
 
   afterEach(() => {
@@ -129,9 +123,6 @@ describe('api/cron/contract-reminders', () => {
       expect(data.sent).toBe(2)
       expect(data.failed).toBe(0)
 
-      expect(mockSendReminder).toHaveBeenCalledWith('agr-001')
-      expect(mockSendReminder).toHaveBeenCalledWith('agr-002')
-
       // Verify reminder count was incremented
       expect(mockPatch).toHaveBeenCalledWith('sfc-1')
       expect(mockPatch).toHaveBeenCalledWith('sfc-2')
@@ -166,9 +157,10 @@ describe('api/cron/contract-reminders', () => {
         },
       ])
 
-      mockSendReminder
-        .mockResolvedValueOnce({ id: 'r-1', status: 'ACTIVE' })
-        .mockRejectedValueOnce(new Error('API error'))
+      // First contract's patch commit succeeds, second throws
+      mockCommit
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new Error('Sanity error'))
 
       const response = await GET(cronRequest('Bearer test-cron-secret'))
       expect(response.status).toBe(200)

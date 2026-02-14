@@ -7,6 +7,7 @@ import {
 } from './contract-templates'
 import { generateContractPdf } from './contract-pdf'
 import { uploadTransientDocument, createAgreement } from '@/lib/adobe-sign'
+import type { AdobeSignSession } from '@/lib/adobe-sign'
 import { logContractStatusChange, logSignatureStatusChange } from './activity'
 
 export interface SendContractResult {
@@ -21,6 +22,7 @@ export interface SendContractResult {
  */
 export async function generateAndSendContract(
   sponsorForConferenceId: string,
+  session: AdobeSignSession,
   options?: {
     templateId?: string
     signerEmail?: string
@@ -133,8 +135,12 @@ export async function generateAndSendContract(
     let agreementId: string | undefined
     if (signerEmail) {
       try {
-        const transientDoc = await uploadTransientDocument(pdfBuffer, filename)
-        const agreement = await createAgreement({
+        const transientDoc = await uploadTransientDocument(
+          session,
+          pdfBuffer,
+          filename,
+        )
+        const agreement = await createAgreement(session, {
           name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
           participantEmail: signerEmail,
           message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,

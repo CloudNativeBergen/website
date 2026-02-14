@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import { sendReminder } from '@/lib/adobe-sign'
 import { unstable_noStore as noStore } from 'next/cache'
 
 const MAX_REMINDERS = 2
@@ -59,7 +58,10 @@ export async function GET(request: NextRequest) {
 
     for (const contract of pendingContracts) {
       try {
-        await sendReminder(contract.signatureId)
+        // TODO: Phase 7 — send reminder via Resend email instead of Adobe Sign API
+        console.log(
+          `Contract reminder due for ${contract.sponsorName} (${contract._id})`,
+        )
 
         const newCount = (contract.reminderCount || 0) + 1
         await clientWrite

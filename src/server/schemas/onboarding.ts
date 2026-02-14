@@ -29,6 +29,7 @@ export const OnboardingSubmissionSchema = z.object({
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().optional(),
   address: z.string().optional(),
+  signerEmail: z.string().email().optional(),
 })
 
 export const GenerateOnboardingTokenSchema = z.object({

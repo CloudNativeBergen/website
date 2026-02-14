@@ -21,6 +21,12 @@ export interface OnboardingSponsorInfo {
   contactPersons: ContactPerson[]
   billing: BillingInfo | null
   onboardingComplete: boolean
+  signerEmail: string | null
+  signatureStatus: string | null
+  contractStatus: string | null
+  signingUrl: string | null
+  contractValue: number | null
+  contractCurrency: string | null
 }
 
 export interface OnboardingSubmission {
@@ -30,6 +36,7 @@ export interface OnboardingSubmission {
   logoBright?: string | null
   orgNumber?: string
   address?: string
+  signerEmail?: string
 }
 
 export async function generateOnboardingToken(
@@ -70,7 +77,13 @@ export async function validateOnboardingToken(
         "conferenceStartDate": conference->startDate,
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ email, reference, comments },
-        onboardingComplete
+        onboardingComplete,
+        signerEmail,
+        signatureStatus,
+        contractStatus,
+        signingUrl,
+        contractValue,
+        contractCurrency
       }`,
       { onboardingToken: token },
     )
@@ -118,14 +131,17 @@ export async function completeOnboarding(
     const transaction = clientWrite.transaction()
 
     // Always update the sponsorForConference document
-    transaction.patch(sponsor._id, {
-      set: {
-        contactPersons,
-        billing: data.billing,
-        onboardingComplete: true,
-        onboardingCompletedAt: getCurrentDateTime(),
-      },
-    })
+    const sfcUpdate: Record<string, unknown> = {
+      contactPersons,
+      billing: data.billing,
+      onboardingComplete: true,
+      onboardingCompletedAt: getCurrentDateTime(),
+      contractStatus: 'ready',
+    }
+    if (data.signerEmail) {
+      sfcUpdate.signerEmail = data.signerEmail
+    }
+    transaction.patch(sponsor._id, { set: sfcUpdate })
 
     // Conditionally update the sponsor document if there are updates
     if (Object.keys(sponsorUpdates).length > 0) {
@@ -149,6 +165,6 @@ export async function completeOnboarding(
   }
 }
 
-export function buildOnboardingUrl(baseUrl: string, token: string): string {
-  return `${baseUrl}/sponsor/onboarding/${token}`
+export function buildPortalUrl(baseUrl: string, token: string): string {
+  return `${baseUrl}/sponsor/portal/${token}`
 }

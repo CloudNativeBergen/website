@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import { downloadSignedDocument } from '@/lib/adobe-sign'
 import type { WebhookEvent } from '@/lib/adobe-sign'
 
 const SYSTEM_USER_ID = 'system'
@@ -140,23 +139,31 @@ export async function POST(request: NextRequest) {
           contractSignedAt: getCurrentDateTime(),
         }
 
-        // Download and store the signed document
-        try {
-          const signedPdf = await downloadSignedDocument(agreementId)
-          const filename = `signed-contract-${agreementId}.pdf`
-          const asset = await clientWrite.assets.upload(
-            'file',
-            Buffer.from(signedPdf),
-            { filename, contentType: 'application/pdf' },
-          )
-          updateFields.contractDocument = {
-            _type: 'file',
-            asset: { _type: 'reference', _ref: asset._id },
+        // Extract signed document from webhook payload if available
+        const docInfo = event.agreement?.signedDocumentInfo
+        if (docInfo?.document) {
+          try {
+            const pdfBuffer = Buffer.from(docInfo.document, 'base64')
+            const filename =
+              docInfo.name || `signed-contract-${agreementId}.pdf`
+            const asset = await clientWrite.assets.upload('file', pdfBuffer, {
+              filename,
+              contentType: docInfo.mimeType || 'application/pdf',
+            })
+            updateFields.contractDocument = {
+              _type: 'file',
+              asset: { _type: 'reference', _ref: asset._id },
+            }
+          } catch (docError) {
+            console.error(
+              '[Adobe Sign webhook] Failed to store signed PDF from payload:',
+              docError,
+            )
           }
-        } catch (downloadError) {
-          console.error(
-            'Adobe Sign webhook: failed to download signed PDF:',
-            downloadError,
+        } else {
+          console.warn(
+            '[Adobe Sign webhook] No inline signed document in payload for agreement %s',
+            agreementId,
           )
         }
 

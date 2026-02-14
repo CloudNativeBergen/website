@@ -2,23 +2,28 @@ export {
   uploadTransientDocument,
   createAgreement,
   getAgreement,
-  downloadSignedDocument,
   sendReminder,
   cancelAgreement,
-  clearTokenCache,
-  testConnection,
 } from './client'
 
 export type {
-  AdobeSignConfig,
-  AccessToken,
   AgreementStatus,
   AgreementDetails,
   AgreementCreationResponse,
   CreateAgreementParams,
   TransientDocumentResponse,
+  SigningUrlSetInfo,
   ReminderResponse,
+  WebhookDocumentInfo,
   WebhookEvent,
 } from './types'
 
-export type { ConnectionTestResult } from './client'
+export {
+  encryptSession,
+  decryptSession,
+  getAuthorizeUrl,
+  exchangeCodeForTokens,
+  refreshAccessToken,
+} from './auth'
+
+export type { AdobeSignSession } from './auth'

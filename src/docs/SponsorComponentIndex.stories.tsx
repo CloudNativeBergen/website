@@ -355,9 +355,9 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
-              name="SponsorOnboardingForm"
-              path="@/components/sponsor/SponsorOnboardingForm"
-              description="Public sponsor registration form. Submitting triggers automatic contract generation and signing."
+              name="SponsorPortal"
+              path="@/components/sponsor/SponsorPortal"
+              description="Public sponsor portal for self-service registration and contract status. Includes signer selection and progressive status dashboard."
               hasStory
             />
             <ComponentCard

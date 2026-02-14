@@ -394,7 +394,7 @@ function SponsorPortalSection({
   const handleGenerate = () => {
     if (existingToken) {
       const baseUrl = window.location.origin
-      setGeneratedUrl(`${baseUrl}/sponsor/onboarding/${existingToken}`)
+      setGeneratedUrl(`${baseUrl}/sponsor/portal/${existingToken}`)
     } else {
       generateMutation.mutate({ sponsorForConferenceId })
     }

@@ -1,21 +1,21 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse, delay } from 'msw'
-import { SponsorOnboardingForm } from './SponsorOnboardingForm'
+import { SponsorPortal } from './SponsorPortal'
 
 const meta = {
-  title: 'Systems/Sponsors/Onboarding/SponsorOnboardingForm',
-  component: SponsorOnboardingForm,
+  title: 'Systems/Sponsors/Portal/SponsorPortal',
+  component: SponsorPortal,
   parameters: {
     layout: 'padded',
     docs: {
       description: {
         component:
-          'Form for sponsors to complete their onboarding by providing contact information, billing details, and company information.',
+          'Sponsor portal for self-service registration and contract status. Sponsors complete company details, contacts, billing info, and select who signs the contract. After setup, shows a progressive status dashboard with contract signing link.',
       },
     },
   },
   tags: ['autodocs'],
-} satisfies Meta<typeof SponsorOnboardingForm>
+} satisfies Meta<typeof SponsorPortal>
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -34,6 +34,12 @@ const mockSponsorData = {
   contactPersons: [],
   billing: null,
   onboardingComplete: false,
+  signerEmail: null,
+  signatureStatus: null,
+  contractStatus: null,
+  signingUrl: null,
+  contractValue: null,
+  contractCurrency: null,
 }
 
 const mockSponsorWithExistingData = {
@@ -57,11 +63,6 @@ const mockSponsorWithExistingData = {
   },
 }
 
-const mockCompletedSponsor = {
-  ...mockSponsorWithExistingData,
-  onboardingComplete: true,
-}
-
 function trpcResponse(data: unknown) {
   return { result: { data } }
 }
@@ -80,7 +81,7 @@ function trpcError(message: string, code: string) {
 }
 
 /**
- * Default state showing the onboarding form for a new sponsor without any pre-filled data.
+ * Default state showing the portal form for a new sponsor without any pre-filled data.
  */
 export const Default: Story = {
   args: {
@@ -124,7 +125,7 @@ export const WithExistingData: Story = {
 }
 
 /**
- * Loading state while validating the onboarding token.
+ * Loading state while validating the portal token.
  */
 export const Loading: Story = {
   args: {
@@ -143,7 +144,7 @@ export const Loading: Story = {
 }
 
 /**
- * Error state when the onboarding token is invalid or expired.
+ * Error state when the portal token is invalid or expired.
  */
 export const InvalidToken: Story = {
   args: {
@@ -163,9 +164,9 @@ export const InvalidToken: Story = {
 }
 
 /**
- * Success state after onboarding has already been completed.
+ * Portal status: setup complete, waiting for contract to be sent.
  */
-export const AlreadyCompleted: Story = {
+export const SetupComplete: Story = {
   args: {
     token: 'completed-token',
   },
@@ -173,7 +174,71 @@ export const AlreadyCompleted: Story = {
     msw: {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
-          return HttpResponse.json(trpcResponse(mockCompletedSponsor))
+          return HttpResponse.json(
+            trpcResponse({
+              ...mockSponsorWithExistingData,
+              onboardingComplete: true,
+              contractValue: 75000,
+              contractCurrency: 'NOK',
+            }),
+          )
+        }),
+      ],
+    },
+  },
+}
+
+/**
+ * Portal status: contract sent and pending signature, with signing link.
+ */
+export const ContractPending: Story = {
+  args: {
+    token: 'pending-token',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/onboarding.validate', () => {
+          return HttpResponse.json(
+            trpcResponse({
+              ...mockSponsorWithExistingData,
+              onboardingComplete: true,
+              signatureStatus: 'pending',
+              contractStatus: 'contract-sent',
+              signerEmail: 'jane@acme.example.com',
+              signingUrl: 'https://secure.eu2.adobesign.com/sign/example',
+              contractValue: 75000,
+              contractCurrency: 'NOK',
+            }),
+          )
+        }),
+      ],
+    },
+  },
+}
+
+/**
+ * Portal status: contract signed successfully.
+ */
+export const ContractSigned: Story = {
+  args: {
+    token: 'signed-token',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/onboarding.validate', () => {
+          return HttpResponse.json(
+            trpcResponse({
+              ...mockSponsorWithExistingData,
+              onboardingComplete: true,
+              signatureStatus: 'signed',
+              contractStatus: 'contract-signed',
+              signerEmail: 'jane@acme.example.com',
+              contractValue: 75000,
+              contractCurrency: 'NOK',
+            }),
+          )
         }),
       ],
     },

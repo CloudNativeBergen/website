@@ -32,11 +32,7 @@ jest.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-15T10:00:00Z',
 }))
 
-const mockDownloadSignedDocument = jest.fn<(...args: any[]) => any>()
-jest.mock('@/lib/adobe-sign', () => ({
-  downloadSignedDocument: (...args: unknown[]) =>
-    mockDownloadSignedDocument(...args),
-}))
+jest.mock('@/lib/adobe-sign', () => ({}))
 
 describe('api/webhooks/adobe-sign', () => {
   beforeEach(() => {
@@ -138,20 +134,27 @@ describe('api/webhooks/adobe-sign', () => {
       expect(data.xAdobeSignClientId).toBe('test-client-id')
     })
 
-    it('handles AGREEMENT_WORKFLOW_COMPLETED and downloads signed PDF', async () => {
+    it('handles AGREEMENT_WORKFLOW_COMPLETED with inline signed document', async () => {
       const { POST } = await import('@/app/api/webhooks/adobe-sign/route')
 
       mockSanityFetch.mockResolvedValueOnce({
         _id: 'sfc-1',
         signatureStatus: 'pending',
       })
-      mockDownloadSignedDocument.mockResolvedValueOnce(new ArrayBuffer(4))
       mockUpload.mockResolvedValueOnce({ _id: 'file-asset-1' })
 
+      const pdfBase64 = Buffer.from('fake-pdf-content').toString('base64')
       const request = postRequest(
         {
           event: 'AGREEMENT_WORKFLOW_COMPLETED',
-          agreement: { id: 'agr-123' },
+          agreement: {
+            id: 'agr-123',
+            signedDocumentInfo: {
+              document: pdfBase64,
+              mimeType: 'application/pdf',
+              name: 'contract.pdf',
+            },
+          },
         },
         'test-client-id',
       )
@@ -162,12 +165,11 @@ describe('api/webhooks/adobe-sign', () => {
         expect.stringContaining('signatureId == $agreementId'),
         { agreementId: 'agr-123' },
       )
-      expect(mockDownloadSignedDocument).toHaveBeenCalledWith('agr-123')
       expect(mockUpload).toHaveBeenCalledWith(
         'file',
         expect.any(Buffer),
         expect.objectContaining({
-          filename: 'signed-contract-agr-123.pdf',
+          filename: 'contract.pdf',
           contentType: 'application/pdf',
         }),
       )
@@ -191,16 +193,13 @@ describe('api/webhooks/adobe-sign', () => {
       )
     })
 
-    it('still updates status when PDF download fails', async () => {
+    it('updates status without document when signedDocumentInfo is missing', async () => {
       const { POST } = await import('@/app/api/webhooks/adobe-sign/route')
 
       mockSanityFetch.mockResolvedValueOnce({
         _id: 'sfc-1',
         signatureStatus: 'pending',
       })
-      mockDownloadSignedDocument.mockRejectedValueOnce(
-        new Error('Download failed'),
-      )
 
       const request = postRequest(
         {
