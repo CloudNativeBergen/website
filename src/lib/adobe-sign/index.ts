@@ -4,6 +4,7 @@ export {
   getAgreement,
   getSigningUrls,
   registerWebhook,
+  listWebhooks,
   sendReminder,
   cancelAgreement,
 } from './client'
@@ -18,6 +19,7 @@ export type {
   ReminderResponse,
   WebhookCreationParams,
   WebhookCreationResponse,
+  WebhookInfo,
   WebhookDocumentInfo,
   WebhookEvent,
 } from './types'

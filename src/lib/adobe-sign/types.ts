@@ -83,6 +83,19 @@ export interface WebhookCreationResponse {
   id: string
 }
 
+export interface WebhookInfo {
+  id: string
+  name: string
+  scope: string
+  state: string
+  webhookUrlInfo: { url: string }
+  webhookSubscriptionEvents: string[]
+}
+
+export interface WebhookListResponse {
+  userWebhookList: WebhookInfo[]
+}
+
 export interface WebhookEvent {
   webhookId: string
   webhookName: string

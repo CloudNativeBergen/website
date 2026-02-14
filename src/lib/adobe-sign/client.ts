@@ -8,6 +8,7 @@ import type {
   TransientDocumentResponse,
   WebhookCreationParams,
   WebhookCreationResponse,
+  WebhookListResponse,
 } from './types'
 
 function apiBase(session: AdobeSignSession): string {
@@ -129,6 +130,12 @@ export async function registerWebhook(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   })
+}
+
+export async function listWebhooks(
+  session: AdobeSignSession,
+): Promise<WebhookListResponse> {
+  return apiRequest<WebhookListResponse>(session, '/webhooks')
 }
 
 export async function sendReminder(

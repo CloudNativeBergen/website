@@ -5,8 +5,13 @@ import type { WebhookEvent } from '@/lib/adobe-sign'
 
 const SYSTEM_USER_ID = 'system'
 
-function getExpectedClientId(): string | undefined {
-  return process.env.ADOBE_SIGN_CLIENT_ID
+function getExpectedClientIds(): string[] {
+  const ids: string[] = []
+  if (process.env.ADOBE_SIGN_CLIENT_ID)
+    ids.push(process.env.ADOBE_SIGN_CLIENT_ID)
+  if (process.env.ADOBE_SIGN_APPLICATION_ID)
+    ids.push(process.env.ADOBE_SIGN_APPLICATION_ID)
+  return ids
 }
 
 function clientIdResponse(clientId: string): NextResponse {
@@ -18,7 +23,7 @@ function clientIdResponse(clientId: string): NextResponse {
 
 function validateClientId(request: NextRequest): string | null {
   const clientId = request.headers.get('X-AdobeSign-ClientId')
-  const expected = getExpectedClientId()
+  const expected = getExpectedClientIds()
 
   if (!clientId) {
     console.error(
@@ -29,16 +34,16 @@ function validateClientId(request: NextRequest): string | null {
     return null
   }
 
-  if (!expected) {
+  if (expected.length === 0) {
     console.error(
-      '[Adobe Sign webhook] ADOBE_SIGN_CLIENT_ID env var is not set',
+      '[Adobe Sign webhook] Neither ADOBE_SIGN_CLIENT_ID nor ADOBE_SIGN_APPLICATION_ID env var is set',
     )
     return null
   }
 
-  if (clientId !== expected) {
+  if (!expected.includes(clientId)) {
     console.error(
-      `[Adobe Sign webhook] Client ID mismatch: received=${clientId}, expected=${expected}`,
+      `[Adobe Sign webhook] Client ID mismatch: received=${clientId}, expected=${expected.join(' or ')}`,
     )
     return null
   }

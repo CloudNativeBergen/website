@@ -102,6 +102,7 @@ import {
   getAgreement,
   getSigningUrls,
   registerWebhook,
+  listWebhooks,
 } from '@/lib/adobe-sign'
 import {
   getAdobeSignSession,
@@ -1680,9 +1681,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1867,6 +1868,15 @@ export const sponsorRouter = router({
           })
         }
 
+        const existing = await listWebhooks(session)
+        const match = existing.userWebhookList?.find(
+          (w) =>
+            w.webhookUrlInfo.url === input.webhookUrl && w.state === 'ACTIVE',
+        )
+        if (match) {
+          return { webhookId: match.id, existing: true }
+        }
+
         const result = await registerWebhook(session, {
           name: 'Cloud Native Days Sponsor Contracts',
           scope: 'ACCOUNT',
@@ -1884,7 +1894,7 @@ export const sponsorRouter = router({
           },
         })
 
-        return { webhookId: result.id }
+        return { webhookId: result.id, existing: false }
       }),
   }),
 })

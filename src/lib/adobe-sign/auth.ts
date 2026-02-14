@@ -59,6 +59,8 @@ export function getAuthorizeUrl(state: string, redirectUri: string): string {
     'agreement_read:account',
     'agreement_write:account',
     'agreement_send:account',
+    'webhook_read:account',
+    'webhook_write:account',
   ].join(' ')
   const params = new URLSearchParams({
     response_type: 'code',
