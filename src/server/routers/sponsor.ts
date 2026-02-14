@@ -1842,10 +1842,10 @@ export const sponsorRouter = router({
     }),
 
     getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
+      const { domain } = await getConferenceForCurrentDomain()
+      const origin = `https://${domain}`
       const state = crypto.randomUUID()
-      const redirectUri =
-        process.env.ADOBE_SIGN_REDIRECT_URI ||
-        `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/adobe-sign/callback`
+      const redirectUri = `${origin}/api/adobe-sign/callback`
       const url = getAuthorizeUrl(state, redirectUri)
       return { url, state }
     }),

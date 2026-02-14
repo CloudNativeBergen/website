@@ -16,15 +16,15 @@ function getShard(): string {
   return process.env.ADOBE_SIGN_SHARD || 'eu2'
 }
 
-function getClientId(): string {
-  const id = process.env.ADOBE_SIGN_CLIENT_ID
-  if (!id) throw new Error('ADOBE_SIGN_CLIENT_ID is not set')
+function getApplicationId(): string {
+  const id = process.env.ADOBE_SIGN_APPLICATION_ID
+  if (!id) throw new Error('ADOBE_SIGN_APPLICATION_ID is not set')
   return id
 }
 
-function getClientSecret(): string {
-  const secret = process.env.ADOBE_SIGN_CLIENT_SECRET
-  if (!secret) throw new Error('ADOBE_SIGN_CLIENT_SECRET is not set')
+function getApplicationSecret(): string {
+  const secret = process.env.ADOBE_SIGN_APPLICATION_SECRET
+  if (!secret) throw new Error('ADOBE_SIGN_APPLICATION_SECRET is not set')
   return secret
 }
 
@@ -54,12 +54,15 @@ async function getEncryptionKey(): Promise<Uint8Array> {
 
 export function getAuthorizeUrl(state: string, redirectUri: string): string {
   const shard = getShard()
-  const clientId = getClientId()
-  const scopes =
-    'agreement_read agreement_write agreement_send webhook_read webhook_write'
+  const applicationId = getApplicationId()
+  const scopes = [
+    'agreement_read:account',
+    'agreement_write:account',
+    'agreement_send:account',
+  ].join(' ')
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: clientId,
+    client_id: applicationId,
     redirect_uri: redirectUri,
     scope: scopes,
     state,
@@ -88,8 +91,8 @@ export async function exchangeCodeForTokens(
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        client_id: getClientId(),
-        client_secret: getClientSecret(),
+        client_id: getApplicationId(),
+        client_secret: getApplicationSecret(),
         redirect_uri: redirectUri,
       }),
     },
@@ -123,8 +126,8 @@ export async function refreshAccessToken(
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: getClientId(),
-        client_secret: getClientSecret(),
+        client_id: getApplicationId(),
+        client_secret: getApplicationSecret(),
       }),
     },
   )
