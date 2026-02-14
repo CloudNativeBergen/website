@@ -101,6 +101,7 @@ import {
   createAgreement,
   getAgreement,
   downloadSignedDocument,
+  testConnection,
 } from '@/lib/adobe-sign'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
@@ -1584,9 +1585,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1735,5 +1736,17 @@ export const sponsorRouter = router({
         await clientWrite.patch(input.conferenceId).set(fields).commit()
         return { success: true }
       }),
+
+    testAdobeSignConnection: adminProcedure.mutation(async () => {
+      try {
+        return await testConnection()
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to test Adobe Sign connection',
+          cause: error,
+        })
+      }
+    }),
   }),
 })

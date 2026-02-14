@@ -6,6 +6,7 @@ import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin'
+import { AdobeSignConfigPanel } from './AdobeSignConfigPanel'
 import type { Conference } from '@/lib/conference/types'
 import {
   DocumentTextIcon,
@@ -57,7 +58,7 @@ export function ContractTemplateListPage({
   })
 
   return (
-    <div>
+    <div className="space-y-6">
       <AdminPageHeader
         title="Contract Templates"
         description="Manage contract templates for sponsor agreements"
@@ -73,6 +74,8 @@ export function ContractTemplateListPage({
           </Link>
         }
       />
+
+      <AdobeSignConfigPanel />
 
       {isLoading ? (
         <div className="py-12 text-center text-gray-500 dark:text-gray-400">

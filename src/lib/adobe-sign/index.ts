@@ -6,6 +6,7 @@ export {
   sendReminder,
   cancelAgreement,
   clearTokenCache,
+  testConnection,
 } from './client'
 
 export type {
@@ -19,3 +20,5 @@ export type {
   ReminderResponse,
   WebhookEvent,
 } from './types'
+
+export type { ConnectionTestResult } from './client'
