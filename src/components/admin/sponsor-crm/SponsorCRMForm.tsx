@@ -26,24 +26,13 @@ import {
   DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
-import {
-  StatusListbox,
-  SponsorCombobox,
-  TierRadioGroup,
-  AddonsCheckboxGroup,
-  OrganizerCombobox,
-  ContractValueInput,
-  TagCombobox,
-  SponsorGlobalInfoFields,
-} from './form'
-import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorContractView } from './SponsorContractView'
+import { SponsorPipelineView } from './SponsorPipelineView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
-import { Textarea } from '@/components/Form'
 
 type FormView = 'pipeline' | 'contacts' | 'logo' | 'history' | 'contract'
 
@@ -309,8 +298,8 @@ export function SponsorCRMForm({
                               )}
                               {(sponsor.contractStatus === 'contract-sent' ||
                                 sponsor.signatureStatus === 'pending') && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
                               <DocumentTextIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Contract</span>
                             </button>
@@ -430,225 +419,21 @@ export function SponsorCRMForm({
                           }}
                         />
                       ) : (
-                        <form onSubmit={handleSubmit}>
-                          <div className="space-y-3">
-                            {/* Sponsor Selection - Only show when adding new */}
-                            {!sponsor && (
-                              <SponsorCombobox
-                                value={formData.sponsorId}
-                                onChange={(value) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    sponsorId: value,
-                                  }))
-                                }
-                                availableSponsors={availableSponsors}
-                                disabled={!!sponsor}
-                              />
-                            )}
-
-                            {sponsor && (
-                              <SponsorGlobalInfoFields
-                                name={formData.name}
-                                website={formData.website}
-                                orgNumber={formData.orgNumber}
-                                address={formData.address}
-                                onNameChange={(name) =>
-                                  setFormData((prev) => ({ ...prev, name }))
-                                }
-                                onWebsiteChange={(website) =>
-                                  setFormData((prev) => ({ ...prev, website }))
-                                }
-                                onOrgNumberChange={(orgNumber) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    orgNumber,
-                                  }))
-                                }
-                                onAddressChange={(address) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    address,
-                                  }))
-                                }
-                              />
-                            )}
-
-                            {/* Tier Selection */}
-                            <TierRadioGroup
-                              tiers={regularTiers}
-                              value={formData.tierId}
-                              onChange={(value) =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  tierId: value,
-                                }))
-                              }
-                            />
-
-                            {/* Addons Selection */}
-                            <AddonsCheckboxGroup
-                              addons={addonTiers}
-                              value={formData.addonIds}
-                              onChange={(value) =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  addonIds: value,
-                                }))
-                              }
-                            />
-
-                            {/* Status, Contract Status, and Invoice Status */}
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                              <div>
-                                <StatusListbox
-                                  label="Status *"
-                                  value={formData.status}
-                                  onChange={(value) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      status: value,
-                                    }))
-                                  }
-                                  options={STATUSES}
-                                />
-                              </div>
-
-                              <div>
-                                <StatusListbox
-                                  label="Contract Status *"
-                                  value={formData.contractStatus}
-                                  onChange={(value) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      contractStatus: value,
-                                    }))
-                                  }
-                                  options={CONTRACT_STATUSES}
-                                />
-                              </div>
-
-                              <div>
-                                <StatusListbox
-                                  label="Invoice Status *"
-                                  value={formData.invoiceStatus}
-                                  onChange={(value) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      invoiceStatus: value,
-                                    }))
-                                  }
-                                  options={INVOICE_STATUSES}
-                                  disabled={
-                                    !formData.contractValue ||
-                                    parseFloat(formData.contractValue) === 0
-                                  }
-                                  helperText={
-                                    !formData.contractValue ||
-                                    parseFloat(formData.contractValue) === 0
-                                      ? '(No cost)'
-                                      : undefined
-                                  }
-                                />
-                              </div>
-                            </div>
-
-                            {/* Assigned To and Contract Value */}
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              <OrganizerCombobox
-                                value={formData.assignedTo}
-                                onChange={(value) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    assignedTo: value,
-                                  }))
-                                }
-                                organizers={organizers}
-                              />
-
-                              <ContractValueInput
-                                value={formData.contractValue}
-                                currency={formData.contractCurrency}
-                                onValueChange={(value) => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    contractValue: value,
-                                  }))
-                                  setUserHasEditedValue(true)
-                                }}
-                                onCurrencyChange={(value) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    contractCurrency: value as
-                                      | 'NOK'
-                                      | 'USD'
-                                      | 'EUR'
-                                      | 'GBP',
-                                  }))
-                                }
-                              />
-                            </div>
-
-                            {/* Tags */}
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              <div className="col-span-full">
-                                <TagCombobox
-                                  value={formData.tags}
-                                  onChange={(tags) =>
-                                    setFormData((prev) => ({ ...prev, tags }))
-                                  }
-                                />
-                              </div>
-                            </div>
-
-                            {/* Notes */}
-                            <div>
-                              <Textarea
-                                name="notes"
-                                label="Notes"
-                                rows={2}
-                                value={formData.notes}
-                                setValue={(val) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    notes: val,
-                                  }))
-                                }
-                              />
-                            </div>
-                          </div>
-
-                          <div className="mt-4 flex flex-row-reverse gap-3">
-                            <button
-                              type="submit"
-                              disabled={isPending}
-                              className={clsx(
-                                'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-                                isPending
-                                  ? 'bg-gray-400 dark:bg-gray-600'
-                                  : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
-                              )}
-                            >
-                              {isPending ? (
-                                'Saving...'
-                              ) : (
-                                <>
-                                  {sponsor ? 'Update' : 'Add'}
-                                  <kbd className="ml-1 rounded bg-white/20 px-1.5 py-0.5 font-mono text-xs">
-                                    ⌘S
-                                  </kbd>
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleClose}
-                              className="inline-flex cursor-pointer justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/10 dark:text-white dark:ring-white/10 dark:hover:bg-white/20"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
+                        <SponsorPipelineView
+                          formData={formData}
+                          onFormDataChange={setFormData}
+                          onContractValueEdited={() =>
+                            setUserHasEditedValue(true)
+                          }
+                          sponsor={sponsor}
+                          availableSponsors={availableSponsors}
+                          regularTiers={regularTiers}
+                          addonTiers={addonTiers}
+                          organizers={organizers}
+                          isPending={isPending}
+                          onSubmit={handleSubmit}
+                          onCancel={handleClose}
+                        />
                       )}
                     </div>
                   </div>

@@ -1305,15 +1305,29 @@ export const sponsorRouter = router({
             agreementId = agreement.id
             updateFields.signatureId = agreementId
 
-            // Capture signing URL for portal display and email notification
+            // Capture signing URL for portal display and email notification.
+            // Adobe Sign needs a few seconds to expose the agreement to the
+            // signer after creation, so retry with back-off.
             try {
-              const urlInfo = await getSigningUrls(adobeSession, agreementId)
-              const signerUrl = urlInfo.signingUrls?.find(
-                (u) => u.email === input.signerEmail,
-              )
-              if (signerUrl) {
-                signingUrl = signerUrl.esignUrl
-                updateFields.signingUrl = signingUrl
+              const maxAttempts = 3
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  await new Promise((r) => setTimeout(r, attempt * 2000))
+                  const urlInfo = await getSigningUrls(
+                    adobeSession,
+                    agreementId,
+                  )
+                  const signerUrl = urlInfo.signingUrls?.find(
+                    (u) => u.email === input.signerEmail,
+                  )
+                  if (signerUrl) {
+                    signingUrl = signerUrl.esignUrl
+                    updateFields.signingUrl = signingUrl
+                  }
+                  break
+                } catch (retryError) {
+                  if (attempt === maxAttempts) throw retryError
+                }
               }
             } catch (urlError) {
               console.warn(
@@ -1681,9 +1695,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
