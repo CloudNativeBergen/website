@@ -8,15 +8,39 @@ import {
   XCircleIcon,
   ArrowPathIcon,
   LinkIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline'
 
 export function AdobeSignConfigPanel() {
-  const [disconnecting, setDisconnecting] = useState(false)
+  const [webhookStatus, setWebhookStatus] = useState<{
+    message: string
+    type: 'success' | 'error'
+  } | null>(null)
 
   const statusQuery = api.sponsor.contractTemplates.getAdobeSignStatus.useQuery(
     undefined,
     { refetchOnWindowFocus: true },
   )
+
+  const disconnectMutation =
+    api.sponsor.contractTemplates.disconnectAdobeSign.useMutation({
+      onSuccess: () => {
+        statusQuery.refetch()
+      },
+    })
+
+  const registerWebhookMutation =
+    api.sponsor.contractTemplates.registerAdobeSignWebhook.useMutation({
+      onSuccess: (data) => {
+        setWebhookStatus({
+          message: `Webhook registered (ID: ${data.webhookId})`,
+          type: 'success',
+        })
+      },
+      onError: (error) => {
+        setWebhookStatus({ message: error.message, type: 'error' })
+      },
+    })
 
   const status = statusQuery.data
 
@@ -27,16 +51,14 @@ export function AdobeSignConfigPanel() {
     window.location.href = '/api/adobe-sign/authorize'
   }
 
-  const handleDisconnect = async () => {
-    setDisconnecting(true)
-    try {
-      // Clear the cookie by hitting the authorize endpoint with a disconnect param
-      // For now we just clear via document.cookie (httpOnly prevents this in production)
-      // Full disconnect mutation will be added in Phase 6
-      await statusQuery.refetch()
-    } finally {
-      setDisconnecting(false)
-    }
+  const handleDisconnect = () => {
+    disconnectMutation.mutate()
+  }
+
+  const handleRegisterWebhook = () => {
+    if (!webhookUrl) return
+    setWebhookStatus(null)
+    registerWebhookMutation.mutate({ webhookUrl })
   }
 
   return (
@@ -49,11 +71,10 @@ export function AdobeSignConfigPanel() {
           </h3>
           {status && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                status.connected
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.connected
                   ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                   : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-              }`}
+                }`}
             >
               {status.connected ? 'Connected' : 'Not Connected'}
             </span>
@@ -92,10 +113,10 @@ export function AdobeSignConfigPanel() {
             </div>
             <button
               onClick={handleDisconnect}
-              disabled={disconnecting}
+              disabled={disconnectMutation.isPending}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
             >
-              {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+              {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
             </button>
           </>
         ) : (
@@ -131,9 +152,37 @@ export function AdobeSignConfigPanel() {
                 {webhookUrl}
               </code>
             </div>
-            <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-              Register this URL in your Adobe Sign application settings.
-            </p>
+            {status?.connected && (
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={handleRegisterWebhook}
+                  disabled={registerWebhookMutation.isPending}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  <BoltIcon
+                    className={`h-3.5 w-3.5 ${registerWebhookMutation.isPending ? 'animate-spin' : ''}`}
+                  />
+                  {registerWebhookMutation.isPending
+                    ? 'Registering...'
+                    : 'Register Webhook'}
+                </button>
+                {webhookStatus && (
+                  <span
+                    className={`text-xs ${webhookStatus.type === 'success'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                      }`}
+                  >
+                    {webhookStatus.message}
+                  </span>
+                )}
+              </div>
+            )}
+            {!status?.connected && (
+              <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+                Connect to Adobe Sign first, then register this webhook.
+              </p>
+            )}
           </div>
         )}
       </div>

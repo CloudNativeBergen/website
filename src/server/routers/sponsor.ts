@@ -100,8 +100,14 @@ import {
   uploadTransientDocument,
   createAgreement,
   getAgreement,
+  getSigningUrls,
+  registerWebhook,
 } from '@/lib/adobe-sign'
-import { getAdobeSignSession } from '@/lib/adobe-sign/auth'
+import {
+  getAdobeSignSession,
+  clearAdobeSignSession,
+  getAuthorizeUrl,
+} from '@/lib/adobe-sign/auth'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -1255,6 +1261,7 @@ export const sponsorRouter = router({
 
         // Send to Adobe Sign for digital signing if signer email is provided
         let agreementId: string | undefined
+        let signingUrl: string | undefined
         if (input.signerEmail) {
           try {
             const adobeSession = await getAdobeSignSession()
@@ -1278,6 +1285,23 @@ export const sponsorRouter = router({
             })
             agreementId = agreement.id
             updateFields.signatureId = agreementId
+
+            // Capture signing URL for portal display and email notification
+            try {
+              const urlInfo = await getSigningUrls(adobeSession, agreementId)
+              const signerUrl = urlInfo.signingUrls?.find(
+                (u) => u.email === input.signerEmail,
+              )
+              if (signerUrl) {
+                signingUrl = signerUrl.esignUrl
+                updateFields.signingUrl = signingUrl
+              }
+            } catch (urlError) {
+              console.warn(
+                'Failed to capture signing URL (non-fatal):',
+                urlError,
+              )
+            }
           } catch (signError) {
             console.error('Adobe Sign agreement creation failed:', signError)
             // Continue without signing — contract is still sent
@@ -1319,11 +1343,61 @@ export const sponsorRouter = router({
           }
         }
 
+        // Send branded signing email if we have a signing URL
+        if (signingUrl && input.signerEmail && sfc.conference) {
+          try {
+            const { ContractSigningTemplate } =
+              await import('@/components/email/ContractSigningTemplate')
+            const { resend, retryWithBackoff } =
+              await import('@/lib/email/config')
+            const { formatConferenceDateLong } = await import('@/lib/time')
+            const React = await import('react')
+
+            const contractValueStr = sfc.contractValue
+              ? `${sfc.contractValue.toLocaleString()} ${sfc.contractCurrency || 'NOK'}`
+              : undefined
+
+            const emailElement = React.createElement(ContractSigningTemplate, {
+              sponsorName: sfc.sponsor.name,
+              signerEmail: input.signerEmail,
+              signingUrl,
+              tierName: sfc.tier?.title,
+              contractValue: contractValueStr,
+              eventName: sfc.conference.title,
+              eventLocation: sfc.conference.city || 'Norway',
+              eventDate: sfc.conference.startDate
+                ? formatConferenceDateLong(sfc.conference.startDate)
+                : '',
+              eventUrl: 'https://cloudnativeday.no',
+              socialLinks: [],
+            })
+
+            const fromEmail =
+              sfc.conference.sponsorEmail || 'sponsors@cloudnativeday.no'
+            const fromName = sfc.conference.organizer || 'Cloud Native Days'
+
+            await retryWithBackoff(async () => {
+              return resend.emails.send({
+                from: `${fromName} <${fromEmail}>`,
+                to: [input.signerEmail!],
+                subject: `Sponsorship Agreement Ready for Signing — ${sfc.conference.title}`,
+                react: emailElement,
+              })
+            })
+          } catch (emailError) {
+            console.error(
+              'Failed to send signing notification email (non-fatal):',
+              emailError,
+            )
+          }
+        }
+
         return {
           success: true,
           pdf: pdfBuffer.toString('base64'),
           filename,
           agreementId,
+          signingUrl,
         }
       }),
   }),
@@ -1583,9 +1657,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1743,5 +1817,51 @@ export const sponsorRouter = router({
         apiAccessPoint: session?.apiAccessPoint ?? null,
       }
     }),
+
+    getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
+      const state = crypto.randomUUID()
+      const redirectUri =
+        process.env.ADOBE_SIGN_REDIRECT_URI ||
+        `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/adobe-sign/callback`
+      const url = getAuthorizeUrl(state, redirectUri)
+      return { url, state }
+    }),
+
+    disconnectAdobeSign: adminProcedure.mutation(async () => {
+      await clearAdobeSignSession()
+      return { success: true }
+    }),
+
+    registerAdobeSignWebhook: adminProcedure
+      .input(z.object({ webhookUrl: z.string().url() }))
+      .mutation(async ({ input }) => {
+        const session = await getAdobeSignSession()
+        if (!session) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Adobe Sign session not connected. Please connect via OAuth first.',
+          })
+        }
+
+        const result = await registerWebhook(session, {
+          name: 'Cloud Native Days Sponsor Contracts',
+          scope: 'ACCOUNT',
+          state: 'ACTIVE',
+          webhookSubscriptionEvents: [
+            'AGREEMENT_WORKFLOW_COMPLETED',
+            'AGREEMENT_RECALLED',
+            'AGREEMENT_EXPIRED',
+          ],
+          webhookUrlInfo: { url: input.webhookUrl },
+          webhookConditionalParams: {
+            webhookAgreementEvents: {
+              includeSignedDocuments: true,
+            },
+          },
+        })
+
+        return { webhookId: result.id }
+      }),
   }),
 })

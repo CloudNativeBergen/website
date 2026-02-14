@@ -223,6 +223,43 @@ describe('api/webhooks/adobe-sign', () => {
       expect(setArg.contractDocument).toBeUndefined()
     })
 
+    it('handles conditionalParametersTrimmed when document exceeds payload size', async () => {
+      const { POST } = await import('@/app/api/webhooks/adobe-sign/route')
+
+      mockSanityFetch.mockResolvedValueOnce({
+        _id: 'sfc-1',
+        signatureStatus: 'pending',
+      })
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+
+      const request = postRequest(
+        {
+          event: 'AGREEMENT_WORKFLOW_COMPLETED',
+          agreement: { id: 'agr-trimmed' },
+          conditionalParametersTrimmed: ['agreement.signedDocumentInfo'],
+        },
+        'test-client-id',
+      )
+      const response = await POST(request)
+
+      expect(response.status).toBe(200)
+      expect(mockPatch).toHaveBeenCalledWith('sfc-1')
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signatureStatus: 'signed',
+          contractStatus: 'contract-signed',
+        }),
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('trimmed from payload'),
+        'agr-trimmed',
+      )
+      expect(mockUpload).not.toHaveBeenCalled()
+
+      warnSpy.mockRestore()
+    })
+
     it('handles AGREEMENT_RECALLED as rejected', async () => {
       const { POST } = await import('@/app/api/webhooks/adobe-sign/route')
 

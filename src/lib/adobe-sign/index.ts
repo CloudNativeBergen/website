@@ -2,6 +2,8 @@ export {
   uploadTransientDocument,
   createAgreement,
   getAgreement,
+  getSigningUrls,
+  registerWebhook,
   sendReminder,
   cancelAgreement,
 } from './client'
@@ -14,6 +16,8 @@ export type {
   TransientDocumentResponse,
   SigningUrlSetInfo,
   ReminderResponse,
+  WebhookCreationParams,
+  WebhookCreationResponse,
   WebhookDocumentInfo,
   WebhookEvent,
 } from './types'
@@ -24,6 +28,7 @@ export {
   getAuthorizeUrl,
   exchangeCodeForTokens,
   refreshAccessToken,
+  clearAdobeSignSession,
 } from './auth'
 
 export type { AdobeSignSession } from './auth'

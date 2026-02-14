@@ -6,13 +6,18 @@ import {
   getContractTemplate,
 } from './contract-templates'
 import { generateContractPdf } from './contract-pdf'
-import { uploadTransientDocument, createAgreement } from '@/lib/adobe-sign'
+import {
+  uploadTransientDocument,
+  createAgreement,
+  getSigningUrls,
+} from '@/lib/adobe-sign'
 import type { AdobeSignSession } from '@/lib/adobe-sign'
 import { logContractStatusChange, logSignatureStatusChange } from './activity'
 
 export interface SendContractResult {
   success: boolean
   agreementId?: string
+  signingUrl?: string
   error?: string
 }
 
@@ -133,6 +138,7 @@ export async function generateAndSendContract(
 
     // Send to Adobe Sign
     let agreementId: string | undefined
+    let signingUrl: string | undefined
     if (signerEmail) {
       try {
         const transientDoc = await uploadTransientDocument(
@@ -150,6 +156,20 @@ export async function generateAndSendContract(
         })
         agreementId = agreement.id
         updateFields.signatureId = agreementId
+
+        // Capture signing URL for portal display and email notification
+        try {
+          const urlInfo = await getSigningUrls(session, agreementId)
+          const signerUrl = urlInfo.signingUrls?.find(
+            (u) => u.email === signerEmail,
+          )
+          if (signerUrl) {
+            signingUrl = signerUrl.esignUrl
+            updateFields.signingUrl = signingUrl
+          }
+        } catch (urlError) {
+          console.warn('Failed to capture signing URL (non-fatal):', urlError)
+        }
       } catch (signError) {
         console.error('Adobe Sign agreement creation failed:', signError)
       }
@@ -185,7 +205,7 @@ export async function generateAndSendContract(
       }
     }
 
-    return { success: true, agreementId }
+    return { success: true, agreementId, signingUrl }
   } catch (error) {
     console.error('Contract generation/send failed:', error)
     return {

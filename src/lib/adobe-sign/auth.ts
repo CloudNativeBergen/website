@@ -217,7 +217,12 @@ export function setAdobeSignSessionCookie(
   })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by Phase 6+
+export async function clearAdobeSignSession(): Promise<void> {
+  const cookieStore = await cookies()
+  cookieStore.delete(COOKIE_NAME)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for potential use in route handlers
 function clearAdobeSignSessionCookie(response: NextResponse): void {
   response.cookies.delete(COOKIE_NAME)
 }

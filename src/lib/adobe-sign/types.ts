@@ -66,6 +66,23 @@ export interface WebhookDocumentInfo {
   name?: string
 }
 
+export interface WebhookCreationParams {
+  name: string
+  scope: 'ACCOUNT' | 'GROUP' | 'USER' | 'RESOURCE'
+  state: 'ACTIVE'
+  webhookSubscriptionEvents: string[]
+  webhookUrlInfo: { url: string }
+  webhookConditionalParams?: {
+    webhookAgreementEvents?: {
+      includeSignedDocuments?: boolean
+    }
+  }
+}
+
+export interface WebhookCreationResponse {
+  id: string
+}
+
 export interface WebhookEvent {
   webhookId: string
   webhookName: string
@@ -79,6 +96,7 @@ export interface WebhookEvent {
   eventDate: string
   eventResourceType: string
   eventResourceParentType: string
+  conditionalParametersTrimmed?: string[]
   agreement?: {
     id: string
     name: string

@@ -160,6 +160,15 @@ export async function POST(request: NextRequest) {
               docError,
             )
           }
+        } else if (
+          event.conditionalParametersTrimmed?.includes(
+            'agreement.signedDocumentInfo',
+          )
+        ) {
+          console.warn(
+            '[Adobe Sign webhook] Signed document trimmed from payload (size limit exceeded) for agreement %s — document must be fetched manually',
+            agreementId,
+          )
         } else {
           console.warn(
             '[Adobe Sign webhook] No inline signed document in payload for agreement %s',

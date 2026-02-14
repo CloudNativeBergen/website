@@ -6,6 +6,8 @@ import type {
   ReminderResponse,
   SigningUrlSetInfo,
   TransientDocumentResponse,
+  WebhookCreationParams,
+  WebhookCreationResponse,
 } from './types'
 
 function apiBase(session: AdobeSignSession): string {
@@ -108,9 +110,7 @@ export async function getAgreement(
   return apiRequest<AgreementDetails>(session, `/agreements/${agreementId}`)
 }
 
-// Exported on-demand when consumers are added (Phase 6)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getSigningUrls(
+export async function getSigningUrls(
   session: AdobeSignSession,
   agreementId: string,
 ): Promise<SigningUrlSetInfo> {
@@ -118,6 +118,17 @@ async function getSigningUrls(
     session,
     `/agreements/${agreementId}/signingUrls`,
   )
+}
+
+export async function registerWebhook(
+  session: AdobeSignSession,
+  params: WebhookCreationParams,
+): Promise<WebhookCreationResponse> {
+  return apiRequest<WebhookCreationResponse>(session, '/webhooks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
 }
 
 export async function sendReminder(
