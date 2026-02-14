@@ -44,12 +44,12 @@ export function OrganizerCombobox({
     query === ''
       ? organizers
       : organizers.filter((organizer) => {
-        const searchTerm = query.toLowerCase()
-        return (
-          organizer.name.toLowerCase().includes(searchTerm) ||
-          organizer.email?.toLowerCase().includes(searchTerm)
-        )
-      })
+          const searchTerm = query.toLowerCase()
+          return (
+            organizer.name.toLowerCase().includes(searchTerm) ||
+            organizer.email?.toLowerCase().includes(searchTerm)
+          )
+        })
   return (
     <div>
       <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
