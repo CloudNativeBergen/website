@@ -129,8 +129,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-            (s) => s.status === 'closed-won' && s.contractValue != null,
-          )
+              (s) => s.status === 'closed-won' && s.contractValue != null,
+            )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -656,7 +656,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                      ?.name || 'Owner'
+                        ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -776,8 +776,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => { }}
-                onDelete={() => { }}
+                onEdit={() => {}}
+                onDelete={() => {}}
               />
             </div>
           )}
