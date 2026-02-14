@@ -13,6 +13,8 @@ import {
 } from '@/lib/sponsor-crm/onboarding'
 import type { OnboardingSubmission } from '@/lib/sponsor-crm/onboarding'
 import { logOnboardingComplete } from '@/lib/sponsor-crm/activity'
+import { generateAndSendContract } from '@/lib/sponsor-crm/contract-send'
+import { clientReadUncached } from '@/lib/sanity/client'
 
 export const onboardingRouter = router({
   validate: publicProcedure
@@ -53,6 +55,22 @@ export const onboardingRouter = router({
         } catch (logError) {
           console.error('Failed to log onboarding completion:', logError)
         }
+
+        // Auto-generate and send contract for digital signing
+        try {
+          const contractResult = await generateAndSendContract(
+            sponsorForConferenceId,
+            { actorId: 'system' },
+          )
+          if (!contractResult.success) {
+            console.error(
+              'Auto-contract send failed after onboarding:',
+              contractResult.error,
+            )
+          }
+        } catch (contractError) {
+          console.error('Auto-contract send error:', contractError)
+        }
       }
 
       return { success: true }
@@ -72,8 +90,24 @@ export const onboardingRouter = router({
         })
       }
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL || 'https://cloudnativebergen.no'
+      const sfc = await clientReadUncached.fetch<{
+        domain: string | null
+      }>(
+        `*[_type == "sponsorForConference" && _id == $id][0]{
+          "domain": conference->domains[0]
+        }`,
+        { id: input.sponsorForConferenceId },
+      )
+
+      if (!sfc?.domain) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Conference has no domain configured. Set a domain on the conference before generating a portal link.',
+        })
+      }
+
+      const baseUrl = `https://${sfc.domain}`
       const url = buildOnboardingUrl(baseUrl, token)
 
       return { token, url }

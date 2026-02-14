@@ -9,14 +9,6 @@ export interface AccessToken {
   expiresAt: number
 }
 
-export interface AdobeSignAgreement {
-  id: string
-  name: string
-  status: AgreementStatus
-  createdDate?: string
-  expirationTime?: string
-}
-
 export type AgreementStatus =
   | 'OUT_FOR_SIGNATURE'
   | 'SIGNED'
@@ -91,12 +83,3 @@ export interface WebhookEvent {
     status: AgreementStatus
   }
 }
-
-export type WebhookEventType =
-  | 'AGREEMENT_WORKFLOW_COMPLETED'
-  | 'AGREEMENT_RECALLED'
-  | 'AGREEMENT_EXPIRED'
-  | 'AGREEMENT_ACTION_COMPLETED'
-  | 'AGREEMENT_ACTION_REQUESTED'
-  | 'AGREEMENT_CREATED'
-  | 'AGREEMENT_EMAILS_SENT'

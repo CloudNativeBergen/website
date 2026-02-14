@@ -81,6 +81,12 @@ export const Overview: Story = {
               description="Full-width thank you section with all sponsors displayed by tier."
               hasStory
             />
+            <ComponentCard
+              name="SponsorProspectus"
+              path="@/components/sponsor/SponsorProspectus"
+              description="Public-facing sponsorship prospectus page with tiers, benefits, add-ons, and philosophy."
+              hasStory
+            />
           </div>
         </section>
 
@@ -325,15 +331,39 @@ export const Overview: Story = {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="OnboardingLinkButton"
-              path="@/components/admin/sponsor-crm/OnboardingLinkButton"
-              description="Button to generate and copy onboarding portal links."
+              name="SponsorContractView"
+              path="@/components/admin/sponsor-crm/SponsorContractView"
+              description="Contract management view with portal link generation, manual contract send, and signature tracking."
               hasStory
             />
             <ComponentCard
               name="ContractReadinessIndicator"
               path="@/components/admin/sponsor-crm/ContractReadinessIndicator"
               description="Shows missing data required before contract can be generated."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractTemplateListPage"
+              path="@/components/admin/sponsor/ContractTemplateListPage"
+              description="List view for managing contract templates with create/edit/delete."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractTemplateEditorPage"
+              path="@/components/admin/sponsor/ContractTemplateEditorPage"
+              description="Rich editor for contract templates with variable insertion and PDF preview."
+              hasStory
+            />
+            <ComponentCard
+              name="SponsorOnboardingForm"
+              path="@/components/sponsor/SponsorOnboardingForm"
+              description="Public sponsor registration form. Submitting triggers automatic contract generation and signing."
+              hasStory
+            />
+            <ComponentCard
+              name="SponsorOnboardingLogoUpload"
+              path="@/components/sponsor/SponsorOnboardingLogoUpload"
+              description="SVG logo upload for the sponsor onboarding flow."
               hasStory
             />
             <ComponentCard

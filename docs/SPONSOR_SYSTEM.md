@@ -217,7 +217,7 @@ src/
 │           ├── SponsorBulkActions.tsx       # Multi-select action bar
 │           ├── BoardViewSwitcher.tsx        # Pipeline/Contract/Invoice toggle
 │           ├── ContractReadinessIndicator.tsx # Contract readiness status display
-│           ├── OnboardingLinkButton.tsx     # Onboarding link generation button
+│           ├── SponsorContractView.tsx      # Unified contract & portal view
 │           ├── ImportHistoricSponsorsButton.tsx # Historic import dialog
 │           ├── MobileFilterSheet.tsx        # Mobile-responsive filter panel
 │           ├── utils.ts                     # CRM-specific UI utilities

@@ -66,7 +66,7 @@ export function SponsorCRMPipeline({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [initialFormView, setInitialFormView] = useState<
-    'pipeline' | 'history'
+    'pipeline' | 'history' | 'contract'
   >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -129,8 +129,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contractValue != null,
-            )
+            (s) => s.status === 'closed-won' && s.contractValue != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -157,6 +157,15 @@ export function SponsorCRMPipeline({
     setInitialFormView('pipeline')
     setIsFormOpen(true)
   }, [])
+
+  const handleOpenContract = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setSelectedSponsor(sponsor)
+      setInitialFormView('contract')
+      setIsFormOpen(true)
+    },
+    [],
+  )
 
   const handleCloseForm = useCallback(() => {
     setSelectedSponsor(null)
@@ -405,7 +414,6 @@ export function SponsorCRMPipeline({
           onSuccess={() => {
             utils.sponsor.crm.list.invalidate()
           }}
-          onEmailTrigger={handleOpenEmail}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
         />
@@ -648,7 +656,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                      ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -749,7 +757,12 @@ export function SponsorCRMPipeline({
                 isSelectionMode={selectedIds.length > 0}
                 onSponsorClick={handleOpenForm}
                 onSponsorDelete={handleDelete}
-                onSponsorEmail={handleOpenEmail}
+                onSponsorEmail={
+                  currentView !== 'contract' ? handleOpenEmail : undefined
+                }
+                onSponsorContract={
+                  currentView === 'contract' ? handleOpenContract : undefined
+                }
                 onSponsorToggleSelect={handleToggleSelect}
                 onAddClick={() => handleOpenForm()}
               />
@@ -763,8 +776,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={() => { }}
+                onDelete={() => { }}
               />
             </div>
           )}

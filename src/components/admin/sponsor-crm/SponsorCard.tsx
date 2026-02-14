@@ -12,6 +12,7 @@ import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -34,6 +35,7 @@ interface SponsorCardProps {
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
+  onContract?: () => void
 }
 
 const TAG_BADGES: {
@@ -41,25 +43,25 @@ const TAG_BADGES: {
   label: string
   classes: string
 }[] = [
-  {
-    tag: 'high-priority',
-    label: 'PRI',
-    classes:
-      'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
-  },
-  {
-    tag: 'needs-follow-up',
-    label: 'FUP',
-    classes:
-      'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
-  },
-  {
-    tag: 'returning-sponsor',
-    label: 'RET',
-    classes:
-      'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
-  },
-]
+    {
+      tag: 'high-priority',
+      label: 'PRI',
+      classes:
+        'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+    },
+    {
+      tag: 'needs-follow-up',
+      label: 'FUP',
+      classes:
+        'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
+    },
+    {
+      tag: 'returning-sponsor',
+      label: 'RET',
+      classes:
+        'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
+    },
+  ]
 
 const TAG_TOOLTIPS: Record<string, string> = {
   PRI: 'High Priority',
@@ -77,6 +79,7 @@ export function SponsorCard({
   onEdit,
   onDelete,
   onEmail,
+  onContract,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
 
@@ -103,6 +106,11 @@ export function SponsorCard({
   const handleEmailClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onEmail?.()
+  }
+
+  const handleContractClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onContract?.()
   }
 
   const handleSelectClick = (e: React.MouseEvent) => {
@@ -153,7 +161,7 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => {}}
+          onChange={() => { }}
           className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
@@ -250,6 +258,15 @@ export function SponsorCard({
         className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {onContract && (
+          <button
+            onClick={handleContractClick}
+            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+            title="Contract"
+          >
+            <DocumentTextIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
+          </button>
+        )}
         {onEmail && (
           <button
             onClick={handleEmailClick}

@@ -21,9 +21,9 @@ import {
   XMarkIcon,
   ChevronLeftIcon,
   UserGroupIcon,
-  EnvelopeIcon,
   PhotoIcon,
   ClockIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
@@ -40,14 +40,12 @@ import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
+import { SponsorContractView } from './SponsorContractView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
-import { OnboardingLinkButton } from './OnboardingLinkButton'
-import { SendContractButton } from './SendContractButton'
-import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { Textarea } from '@/components/Form'
 
-type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
+type FormView = 'pipeline' | 'contacts' | 'logo' | 'history' | 'contract'
 
 interface SponsorCRMFormProps {
   conferenceId: string
@@ -55,7 +53,6 @@ interface SponsorCRMFormProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
-  onEmailTrigger?: (sponsor: SponsorForConferenceExpanded) => void
   existingSponsorsInCRM?: string[]
   initialView?: FormView
 }
@@ -66,7 +63,6 @@ export function SponsorCRMForm({
   isOpen,
   onClose,
   onSuccess,
-  onEmailTrigger,
   existingSponsorsInCRM = [],
   initialView = 'pipeline',
 }: SponsorCRMFormProps) {
@@ -227,7 +223,6 @@ export function SponsorCRMForm({
     return {
       contacts: !hasContacts,
       logo: !hasLogo,
-      email: !hasContacts,
     }
   }, [sponsor, formData.logo])
 
@@ -279,9 +274,11 @@ export function SponsorCRMForm({
                                 ? 'Sponsor Logo'
                                 : view === 'history'
                                   ? 'Activity History'
-                                  : sponsor
-                                    ? 'Edit Sponsor'
-                                    : 'Add Sponsor to Pipeline'}
+                                  : view === 'contract'
+                                    ? 'Contract'
+                                    : sponsor
+                                      ? 'Edit Sponsor'
+                                      : 'Add Sponsor to Pipeline'}
                           </DialogTitle>
                         </div>
                         {sponsor && view === 'pipeline' && (
@@ -294,40 +291,26 @@ export function SponsorCRMForm({
                       <div className="flex items-center gap-2">
                         {sponsor && (
                           <>
-                            <OnboardingLinkButton
-                              sponsorForConferenceId={sponsor._id}
-                              existingToken={sponsor.onboardingToken}
-                              onboardingComplete={sponsor.onboardingComplete}
-                            />
-                            <SendContractButton
-                              conferenceId={conferenceId}
-                              sponsor={sponsor}
-                              onSuccess={() => {
-                                utils.sponsor.crm.list.invalidate()
-                              }}
-                            />
                             <button
                               type="button"
-                              onClick={() => {
-                                if (missingData?.email) return
-                                onClose()
-                                onEmailTrigger?.(sponsor)
-                              }}
-                              disabled={missingData?.email}
+                              onClick={() => setView('contract')}
                               className={clsx(
-                                'relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-inset',
-                                missingData?.email
-                                  ? 'cursor-not-allowed text-gray-400 ring-gray-200 dark:text-gray-500 dark:ring-gray-700'
-                                  : 'cursor-pointer bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
+                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                view === 'contract'
+                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
+                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
                               )}
-                              title={
-                                missingData?.email
-                                  ? 'Add contacts first to send email'
-                                  : 'Email sponsor contacts'
-                              }
+                              title="Contract"
                             >
-                              <EnvelopeIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Email</span>
+                              {sponsor.contractStatus === 'contract-signed' && (
+                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900" />
+                              )}
+                              {(sponsor.contractStatus === 'contract-sent' ||
+                                sponsor.signatureStatus === 'pending') && (
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
+                              <DocumentTextIcon className="h-4 w-4" />
+                              <span className="hidden sm:inline">Contract</span>
                             </button>
                             <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
                             <button
@@ -436,6 +419,14 @@ export function SponsorCRMForm({
                             limit={20}
                           />
                         </div>
+                      ) : view === 'contract' && sponsor ? (
+                        <SponsorContractView
+                          conferenceId={conferenceId}
+                          sponsor={sponsor}
+                          onSuccess={() => {
+                            utils.sponsor.crm.list.invalidate()
+                          }}
+                        />
                       ) : (
                         <form onSubmit={handleSubmit}>
                           <div className="space-y-3">
@@ -538,7 +529,7 @@ export function SponsorCRMForm({
                                   }
                                   helperText={
                                     !formData.contractValue ||
-                                    parseFloat(formData.contractValue) === 0
+                                      parseFloat(formData.contractValue) === 0
                                       ? '(No cost)'
                                       : undefined
                                   }
@@ -609,14 +600,6 @@ export function SponsorCRMForm({
                                 }
                               />
                             </div>
-
-                            {/* Contract Readiness */}
-                            {sponsor && (
-                              <ContractReadinessIndicator
-                                sponsorForConferenceId={sponsor._id}
-                                conferenceId={conferenceId}
-                              />
-                            )}
                           </div>
 
                           <div className="mt-4 flex flex-row-reverse gap-3">

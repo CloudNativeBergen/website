@@ -99,7 +99,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         <div className="text-center">
           <div className="border-oslo-blue mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
           <p className="mt-4 text-gray-600 dark:text-gray-300">
-            Loading onboarding form&hellip;
+            Loading sponsor registration&hellip;
           </p>
         </div>
       </div>
@@ -111,11 +111,11 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-800 dark:bg-red-950">
         <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
         <h2 className="mt-4 text-xl font-semibold text-red-800 dark:text-red-300">
-          Invalid Onboarding Link
+          Invalid Link
         </h2>
         <p className="mt-2 text-red-600 dark:text-red-400">
-          This onboarding link is invalid or has expired. Please contact the
-          event organizers for a new link.
+          This link is invalid or has expired. Please contact the event
+          organizers for a new link.
         </p>
       </div>
     )
@@ -126,12 +126,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center dark:border-green-800 dark:bg-green-950">
         <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
         <h2 className="mt-4 text-xl font-semibold text-green-800 dark:text-green-300">
-          Onboarding Complete
+          Registration Complete
         </h2>
         <p className="mt-2 text-green-600 dark:text-green-400">
-          Thank you for completing the sponsor onboarding for{' '}
-          <strong>{sponsor?.conferenceName}</strong>. The event organizers will
-          be in touch with next steps.
+          Thank you for completing your sponsor registration for{' '}
+          <strong>{sponsor?.conferenceName}</strong>. A sponsorship agreement
+          will be sent to your primary contact&apos;s email for digital signing.
         </p>
       </div>
     )
@@ -215,7 +215,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Sponsor Onboarding
+          Sponsor Registration
         </h1>
         <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
           Welcome, <strong>{sponsor?.sponsorName}</strong>! Please complete the
@@ -228,6 +228,10 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
             </>
           )}
           .
+        </p>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          After you submit, a sponsorship agreement will be sent to your primary
+          contact&apos;s email for digital signing.
         </p>
       </div>
 
@@ -488,7 +492,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
           >
             {completeMutation.isPending
               ? 'Submitting\u2026'
-              : 'Complete Onboarding'}
+              : 'Submit & Send Contract'}
           </button>
         </div>
       </form>

@@ -123,8 +123,6 @@ const preview: Preview = {
                   'SponsorCRMForm',
                   'SponsorBulkActions',
                   'MobileFilterSheet',
-                  'OnboardingLinkButton',
-                  'SendContractButton',
                   'ContractReadinessIndicator',
                   'ImportHistoricSponsorsButton',
                 ],

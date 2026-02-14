@@ -18,5 +18,4 @@ export type {
   TransientDocumentResponse,
   ReminderResponse,
   WebhookEvent,
-  WebhookEventType,
 } from './types'

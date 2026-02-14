@@ -135,6 +135,7 @@ export const ContractBoard: Story = {
     currentView: 'contract',
     onSponsorClick: (sponsor) => console.log('Sponsor clicked', sponsor),
     onSponsorDelete: (id) => console.log('Delete sponsor', id),
+    onSponsorContract: (sponsor) => console.log('Contract sponsor', sponsor),
     onAddClick: () => console.log('Add sponsor'),
   },
 }
