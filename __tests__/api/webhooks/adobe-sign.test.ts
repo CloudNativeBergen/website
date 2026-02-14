@@ -231,7 +231,7 @@ describe('api/webhooks/adobe-sign', () => {
         signatureStatus: 'pending',
       })
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const request = postRequest(
         {

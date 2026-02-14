@@ -71,10 +71,11 @@ export function AdobeSignConfigPanel() {
           </h3>
           {status && (
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${status.connected
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                status.connected
                   ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                   : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                }`}
+              }`}
             >
               {status.connected ? 'Connected' : 'Not Connected'}
             </span>
@@ -168,10 +169,11 @@ export function AdobeSignConfigPanel() {
                 </button>
                 {webhookStatus && (
                   <span
-                    className={`text-xs ${webhookStatus.type === 'success'
+                    className={`text-xs ${
+                      webhookStatus.type === 'success'
                         ? 'text-green-600 dark:text-green-400'
                         : 'text-red-600 dark:text-red-400'
-                      }`}
+                    }`}
                   >
                     {webhookStatus.message}
                   </span>
