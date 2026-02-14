@@ -124,6 +124,7 @@ export type ActionItemType =
   | 'signature-rejected'
   | 'signature-expired'
   | 'onboarding-pending'
+  | 'registration-complete'
 
 export function getActionItemIcon(type: ActionItemType) {
   switch (type) {
@@ -148,6 +149,8 @@ export function getActionItemIcon(type: ActionItemType) {
       return ClockIcon
     case 'onboarding-pending':
       return PaperAirplaneIcon
+    case 'registration-complete':
+      return DocumentTextIcon
   }
 }
 
@@ -174,6 +177,8 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
     case 'onboarding-pending':
       return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
+    case 'registration-complete':
+      return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/20'
   }
 }
 

@@ -250,129 +250,224 @@ export function SponsorContractView({
   // Overview step
   return (
     <div className="space-y-4 py-4">
-      {/* Contract signed */}
-      {isSigned && (
-        <div className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-          <div className="flex items-center gap-2">
-            <CheckCircleIcon className="h-5 w-5 text-green-500" />
-            <span className="text-sm font-medium text-green-800 dark:text-green-300">
-              Contract signed
-              {sponsor.contractSignedAt &&
-                ` on ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Contract sent, awaiting signature */}
-      {isSent && !isSigned && (
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <DocumentTextIcon className="h-5 w-5 text-blue-500" />
-              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                Contract sent
-                {sponsor.contractSentAt &&
-                  ` on ${new Date(sponsor.contractSentAt).toLocaleDateString()}`}
-                {isPendingSignature && ' \u2014 awaiting signature'}
-              </span>
-            </div>
-            {isPendingSignature && (
-              <button
-                type="button"
-                onClick={() => checkStatus.mutate({ id: sponsor._id })}
-                disabled={checkStatus.isPending}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
-                title="Check signing status with Adobe Sign"
-              >
-                <ArrowPathIcon
-                  className={`h-3.5 w-3.5 ${checkStatus.isPending ? 'animate-spin' : ''}`}
-                />
-                Check status
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {error && <ErrorBanner message={error} />}
 
-      {/* Sponsor portal — the primary flow */}
-      <SponsorPortalSection
-        sponsorForConferenceId={sponsor._id}
-        existingToken={sponsor.onboardingToken}
-        portalComplete={isPortalComplete}
-      />
-
-      {/* Manual contract send — advanced/fallback option */}
-      <details className="group">
-        <summary className="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200">
-          Advanced: send contract manually
-        </summary>
-        <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-4 dark:border-gray-700">
-          <ContractReadinessIndicator
+      {/* Step 1: Registration */}
+      <ContractFlowStep
+        step={1}
+        title="Sponsor registration"
+        status={
+          isPortalComplete
+            ? 'complete'
+            : sponsor.onboardingToken
+              ? 'active'
+              : 'pending'
+        }
+      >
+        {isPortalComplete ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Company details, contacts, billing, and logo collected.
+            {sponsor.onboardingCompletedAt &&
+              ` Completed ${new Date(sponsor.onboardingCompletedAt).toLocaleDateString()}.`}
+          </p>
+        ) : (
+          <SponsorPortalSection
             sponsorForConferenceId={sponsor._id}
-            conferenceId={conferenceId}
+            existingToken={sponsor.onboardingToken}
+            portalComplete={false}
           />
+        )}
+      </ContractFlowStep>
 
-          {bestTemplate ? (
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-              <div className="flex items-center gap-2">
-                <DocumentTextIcon className="h-5 w-5 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                    Template: {bestTemplate.title}
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Language:{' '}
-                    {bestTemplate.language === 'nb' ? 'Norwegian' : 'English'}
+      {/* Step 2: Contract */}
+      <ContractFlowStep
+        step={2}
+        title="Generate &amp; send contract"
+        status={
+          isSigned
+            ? 'complete'
+            : isSent
+              ? 'complete'
+              : isPortalComplete
+                ? 'active'
+                : 'pending'
+        }
+      >
+        {isSigned ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Contract signed
+            {sponsor.contractSignedAt &&
+              ` on ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`}
+            .
+          </p>
+        ) : isSent ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Contract sent
+            {sponsor.contractSentAt &&
+              ` on ${new Date(sponsor.contractSentAt).toLocaleDateString()}`}
+            .
+          </p>
+        ) : isPortalComplete ? (
+          <div className="space-y-3">
+            <ContractReadinessIndicator
+              sponsorForConferenceId={sponsor._id}
+              conferenceId={conferenceId}
+            />
+
+            {bestTemplate ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <DocumentTextIcon className="h-3.5 w-3.5" />
+                Template: {bestTemplate.title} (
+                {bestTemplate.language === 'nb' ? 'Norwegian' : 'English'})
+              </div>
+            ) : (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-900/20">
+                <div className="flex items-center gap-2">
+                  <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-amber-500" />
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    No contract template found. Create one in the contract
+                    templates section first.
                   </p>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-              <div className="flex items-center gap-2">
-                <ExclamationTriangleIcon className="h-5 w-5 text-amber-500" />
-                <p className="text-sm text-amber-800 dark:text-amber-300">
-                  No contract template found. Create one in the contract
-                  templates section first.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {primaryContact && (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Primary contact
-              </p>
-              <p className="text-sm text-gray-900 dark:text-white">
-                {primaryContact.name} &lt;{primaryContact.email}&gt;
-              </p>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleGeneratePdf}
-            disabled={!canSend || !bestTemplate || isBusy}
-            className={clsx(
-              'inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-              !canSend || !bestTemplate
-                ? 'bg-gray-400 dark:bg-gray-600'
-                : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
             )}
-          >
-            <DocumentTextIcon className="h-4 w-4" />
-            {generatePdf.isPending
-              ? 'Generating\u2026'
-              : isSent
-                ? 'Regenerate & Resend'
-                : 'Generate PDF'}
-          </button>
-        </div>
-      </details>
+
+            {primaryContact && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Primary contact: {primaryContact.name} &lt;
+                {primaryContact.email}&gt;
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleGeneratePdf}
+              disabled={!canSend || !bestTemplate || isBusy}
+              className={clsx(
+                'inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
+                !canSend || !bestTemplate
+                  ? 'bg-gray-400 dark:bg-gray-600'
+                  : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+              )}
+            >
+              <DocumentTextIcon className="h-4 w-4" />
+              {generatePdf.isPending
+                ? 'Generating\u2026'
+                : 'Generate contract PDF'}
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Waiting for sponsor to complete registration.
+          </p>
+        )}
+      </ContractFlowStep>
+
+      {/* Step 3: Signature */}
+      <ContractFlowStep
+        step={3}
+        title="Digital signing"
+        status={
+          isSigned ? 'complete' : isPendingSignature ? 'active' : 'pending'
+        }
+        isLast
+      >
+        {isSigned ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Signed
+            {sponsor.contractSignedAt &&
+              ` on ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`}
+            .
+          </p>
+        ) : isPendingSignature ? (
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Awaiting signature from {sponsor.signerEmail || 'signer'}.
+            </p>
+            <button
+              type="button"
+              onClick={() => checkStatus.mutate({ id: sponsor._id })}
+              disabled={checkStatus.isPending}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
+              title="Check signing status with Adobe Sign"
+            >
+              <ArrowPathIcon
+                className={`h-3.5 w-3.5 ${checkStatus.isPending ? 'animate-spin' : ''}`}
+              />
+              Check status
+            </button>
+          </div>
+        ) : isSent ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Contract sent without digital signing.
+          </p>
+        ) : (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Contract will be sent for digital signing after generation.
+          </p>
+        )}
+      </ContractFlowStep>
+    </div>
+  )
+}
+
+function ContractFlowStep({
+  step,
+  title,
+  status,
+  isLast,
+  children,
+}: {
+  step: number
+  title: string
+  status: 'pending' | 'active' | 'complete'
+  isLast?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative flex gap-3">
+      {/* Vertical connector line */}
+      {!isLast && (
+        <div
+          className={clsx(
+            'absolute top-7 left-3 w-0.5',
+            status === 'complete'
+              ? 'bg-green-300 dark:bg-green-700'
+              : 'bg-gray-200 dark:bg-gray-700',
+          )}
+          style={{ bottom: '-1rem' }}
+        />
+      )}
+
+      {/* Step indicator */}
+      <div
+        className={clsx(
+          'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+          status === 'complete' &&
+          'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+          status === 'active' &&
+          'bg-indigo-100 text-indigo-600 ring-2 ring-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500',
+          status === 'pending' &&
+          'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500',
+        )}
+      >
+        {status === 'complete' ? <CheckIcon className="h-3.5 w-3.5" /> : step}
+      </div>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1 pb-4">
+        <h4
+          className={clsx(
+            'text-sm font-semibold',
+            status === 'complete' && 'text-green-700 dark:text-green-400',
+            status === 'active' && 'text-gray-900 dark:text-white',
+            status === 'pending' && 'text-gray-400 dark:text-gray-500',
+          )}
+        >
+          {title}
+        </h4>
+        <div className="mt-1">{children}</div>
+      </div>
     </div>
   )
 }
@@ -442,8 +537,6 @@ function SponsorPortalSection({
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         Send the sponsor a registration form to collect their company details
         (org number, address), contact persons, billing information, and logo.
-        Once they submit, the contract status changes to &quot;Ready&quot; and
-        you can generate and send the contract for digital signing.
       </p>
 
       {portalComplete ? (

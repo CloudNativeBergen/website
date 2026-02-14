@@ -167,6 +167,26 @@ export function generateActionItems(
       })
     }
 
+    // Priority 2: Registration complete — send contract
+    if (
+      sponsor.onboardingComplete &&
+      sponsor.contractStatus !== 'contract-sent' &&
+      sponsor.contractStatus !== 'contract-signed'
+    ) {
+      actions.push({
+        id: `${sponsor._id}-registration-complete`,
+        type: 'registration-complete',
+        title: 'Send Contract',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} completed registration — generate and send the contract`,
+        priority: 2,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
     // Priority 2.5: Rejected digital signature
     if (sponsor.signatureStatus === 'rejected') {
       actions.push({

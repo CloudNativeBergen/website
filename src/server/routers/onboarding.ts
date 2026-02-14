@@ -13,8 +13,10 @@ import {
   buildPortalUrl,
 } from '@/lib/sponsor-crm/onboarding'
 import type { OnboardingSubmission } from '@/lib/sponsor-crm/onboarding'
-import { logOnboardingComplete } from '@/lib/sponsor-crm/activity'
+import { logOnboardingComplete, logEmailSent } from '@/lib/sponsor-crm/activity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
+import type { Conference } from '@/lib/conference/types'
 
 export const onboardingRouter = router({
   validate: publicProcedure
@@ -54,6 +56,42 @@ export const onboardingRouter = router({
           await logOnboardingComplete(sponsorForConferenceId, 'system')
         } catch (logError) {
           console.error('Failed to log onboarding completion:', logError)
+        }
+
+        // Send Slack notification to sales channel
+        try {
+          const sfcData = await clientReadUncached.fetch<{
+            sponsorName: string
+            tierTitle: string | null
+            contractValue: number | null
+            contractCurrency: string | null
+            conference: Conference | null
+          }>(
+            `*[_type == "sponsorForConference" && _id == $id][0]{
+              "sponsorName": sponsor->name,
+              "tierTitle": tier->title,
+              contractValue,
+              contractCurrency,
+              "conference": conference->{
+                _id, title, city, country, startDate, endDate,
+                organizer, salesNotificationChannel, domains,
+                "socialLinks": socialLinks[].url
+              }
+            }`,
+            { id: sponsorForConferenceId },
+          )
+
+          if (sfcData?.conference) {
+            await notifySponsorRegistrationComplete(
+              sfcData.sponsorName,
+              sfcData.tierTitle,
+              sfcData.contractValue,
+              sfcData.contractCurrency,
+              sfcData.conference,
+            )
+          }
+        } catch (slackError) {
+          console.error('Failed to send Slack notification:', slackError)
         }
       }
 
@@ -103,7 +141,7 @@ export const onboardingRouter = router({
         sponsorForConferenceId: z.string().min(1),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Fetch full sponsor + conference data for the email
       const sfc = await clientReadUncached.fetch<{
         _id: string
@@ -244,6 +282,17 @@ export const onboardingRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Failed to send email: ${result.error.message}`,
         })
+      }
+
+      // Log email activity
+      try {
+        await logEmailSent(
+          input.sponsorForConferenceId,
+          `Sponsor Registration — ${sfc.conference!.title}`,
+          ctx.speaker._id,
+        )
+      } catch (logError) {
+        console.error('Failed to log portal invite activity:', logError)
       }
 
       return {

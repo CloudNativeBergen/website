@@ -26,7 +26,7 @@ export async function createSponsorActivity(
     }
 
     const doc = {
-      _type: 'sponsorActivity',
+      _type: 'sponsorActivity' as const,
       sponsorForConference: {
         _type: 'reference',
         _ref: activity.sponsorForConference,
@@ -34,8 +34,11 @@ export async function createSponsorActivity(
       activityType: activity.activityType,
       description: activity.description,
       metadata: activity.metadata,
-      createdBy: { _type: 'reference', _ref: activity.createdBy },
       createdAt: activity.createdAt,
+      ...(activity.createdBy &&
+        activity.createdBy !== 'system' && {
+        createdBy: { _type: 'reference', _ref: activity.createdBy },
+      }),
     }
 
     const created = await clientWrite.create(doc)

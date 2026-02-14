@@ -136,7 +136,6 @@ export async function completeOnboarding(
       billing: data.billing,
       onboardingComplete: true,
       onboardingCompletedAt: getCurrentDateTime(),
-      contractStatus: 'ready',
     }
     if (data.signerEmail) {
       sfcUpdate.signerEmail = data.signerEmail
