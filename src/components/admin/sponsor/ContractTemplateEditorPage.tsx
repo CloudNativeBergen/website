@@ -100,7 +100,11 @@ export function ContractTemplateEditorPage({
         title: 'Template created',
         message: 'Contract template has been created',
       })
-      router.replace(`/admin/sponsors/contracts/${data?._id}`)
+      if (data?._id) {
+        router.replace(`/admin/sponsors/contracts/${data._id}`)
+      } else {
+        router.push('/admin/sponsors/contracts')
+      }
     },
     onError: (error) => {
       showNotification({

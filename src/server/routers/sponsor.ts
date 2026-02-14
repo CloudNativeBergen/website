@@ -1247,7 +1247,11 @@ export const sponsorRouter = router({
           },
         })
 
-        const filename = `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`
+        const safeName = sfc.sponsor.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+        const filename = `contract-${safeName}.pdf`
 
         // Upload PDF to Sanity as a file asset
         const asset = await clientWrite.assets.upload('file', pdfBuffer, {
@@ -1278,9 +1282,11 @@ export const sponsorRouter = router({
           try {
             const adobeSession = await getAdobeSignSession()
             if (!adobeSession) {
-              throw new Error(
-                'Adobe Sign not connected. Please connect via OAuth first.',
-              )
+              throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message:
+                  'Adobe Sign not connected. Please connect via OAuth first.',
+              })
             }
             const transientDoc = await uploadTransientDocument(
               adobeSession,
@@ -1315,8 +1321,13 @@ export const sponsorRouter = router({
               )
             }
           } catch (signError) {
+            if (signError instanceof TRPCError) throw signError
             console.error('Adobe Sign agreement creation failed:', signError)
-            // Continue without signing — contract is still sent
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to create Adobe Sign agreement.',
+              cause: signError,
+            })
           }
         }
 

@@ -44,7 +44,7 @@ async function getEncryptionKey(): Promise<Uint8Array> {
       name: 'HKDF',
       hash: 'SHA-256',
       salt: encoder.encode('adobe-sign-session'),
-      info: encoder.encode(''),
+      info: encoder.encode('Adobe Sign v1'),
     },
     keyMaterial,
     256,
@@ -194,8 +194,8 @@ export async function getAdobeSignSession(): Promise<AdobeSignSession | null> {
         maxAge: 60 * 60 * 24 * 60, // 60 days (refresh token lifetime)
       })
       return refreshed
-    } catch {
-      // Refresh failed — session is dead
+    } catch (refreshError) {
+      console.error('Adobe Sign session refresh failed:', refreshError)
       cookieStore.delete(COOKIE_NAME)
       return null
     }

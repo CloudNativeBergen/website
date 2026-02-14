@@ -69,11 +69,13 @@ function OrgFieldEditor({
       organizerOrgNumber?: string
       organizerAddress?: string
     } = { conferenceId }
-    if (values['conference.organizerOrgNumber']) {
-      update.organizerOrgNumber = values['conference.organizerOrgNumber']
+    const orgNumber = values['conference.organizerOrgNumber']?.trim()
+    if (orgNumber) {
+      update.organizerOrgNumber = orgNumber
     }
-    if (values['conference.organizerAddress']) {
-      update.organizerAddress = values['conference.organizerAddress']
+    const orgAddress = values['conference.organizerAddress']?.trim()
+    if (orgAddress) {
+      update.organizerAddress = orgAddress
     }
     if (!update.organizerOrgNumber && !update.organizerAddress) return
     mutation.mutate(update)

@@ -235,6 +235,7 @@ export const ContractSigned: Story = {
               signatureStatus: 'signed',
               contractStatus: 'contract-signed',
               signerEmail: 'jane@acme.example.com',
+              signingUrl: 'https://secure.eu2.adobesign.com/sign/example',
               contractValue: 75000,
               contractCurrency: 'NOK',
             }),

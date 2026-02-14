@@ -102,9 +102,9 @@ export function SponsorPortal({ token }: { token: string }) {
 
   // Auto-set signer to primary contact when contacts change
   useEffect(() => {
-    if (signerEmail) return
     const primary = contacts.find((c) => c.isPrimary && c.email.trim())
-    if (primary) {
+    const currentSignerExists = contacts.some((c) => c.email === signerEmail)
+    if (primary && (!signerEmail || !currentSignerExists)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSignerEmail(primary.email)
     }

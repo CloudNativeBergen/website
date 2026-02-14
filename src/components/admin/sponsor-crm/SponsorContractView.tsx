@@ -68,7 +68,8 @@ export function SponsorContractView({
 
   const checkStatus = api.sponsor.crm.checkSignatureStatus.useMutation({
     onSuccess: () => onSuccess?.(),
-    onError: (err) => console.error('Failed to check signature status:', err),
+    onError: (err) =>
+      setError(`Failed to check signature status: ${err.message}`),
   })
 
   const handleGeneratePdf = () => {
@@ -413,6 +414,7 @@ function SponsorPortalSection({
       if (input) {
         input.select()
         input.setSelectionRange(0, input.value.length)
+        document.execCommand('copy')
       }
     }
   }
