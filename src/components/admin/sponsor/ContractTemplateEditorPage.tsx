@@ -52,6 +52,7 @@ export function ContractTemplateEditorPage({
   const [terms, setTerms] = useState<PortableTextBlock[]>([])
   const [showVariables, setShowVariables] = useState(false)
   const [sectionEditorKeys, setSectionEditorKeys] = useState<number[]>([0])
+  const [termsEditorKey, setTermsEditorKey] = useState(0)
   const [previewPdf, setPreviewPdf] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -87,6 +88,7 @@ export function ContractTemplateEditorPage({
       if (existingTemplate.terms) {
         setTerms(existingTemplate.terms)
       }
+      setTermsEditorKey(Date.now())
     }
   }, [existingTemplate])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -140,24 +142,34 @@ export function ContractTemplateEditorPage({
         return
       }
 
-      const data = {
-        title,
-        conference: conference._id,
-        tier: tier || undefined,
-        language,
-        currency,
-        sections: validSections,
-        headerText: headerText || undefined,
-        footerText: footerText || undefined,
-        terms: terms.length > 0 ? terms : undefined,
-        isDefault,
-        isActive,
-      }
-
       if (isEditing && templateId) {
-        updateMutation.mutate({ id: templateId, ...data })
+        updateMutation.mutate({
+          id: templateId,
+          title,
+          tier: tier || null,
+          language,
+          currency,
+          sections: validSections,
+          headerText: headerText || null,
+          footerText: footerText || null,
+          terms: terms.length > 0 ? terms : null,
+          isDefault,
+          isActive,
+        })
       } else {
-        createMutation.mutate(data)
+        createMutation.mutate({
+          title,
+          conference: conference._id,
+          tier: tier || undefined,
+          language,
+          currency,
+          sections: validSections,
+          headerText: headerText || undefined,
+          footerText: footerText || undefined,
+          terms: terms.length > 0 ? terms : undefined,
+          isDefault,
+          isActive,
+        })
       }
     },
     [
@@ -195,13 +207,13 @@ export function ContractTemplateEditorPage({
     const newIndex = direction === 'up' ? index - 1 : index + 1
     if (newIndex < 0 || newIndex >= sections.length) return
     const newSections = [...sections]
-    ;[newSections[index], newSections[newIndex]] = [
-      newSections[newIndex],
-      newSections[index],
-    ]
+      ;[newSections[index], newSections[newIndex]] = [
+        newSections[newIndex],
+        newSections[index],
+      ]
     setSections(newSections)
     const newKeys = [...sectionEditorKeys]
-    ;[newKeys[index], newKeys[newIndex]] = [newKeys[newIndex], newKeys[index]]
+      ;[newKeys[index], newKeys[newIndex]] = [newKeys[newIndex], newKeys[index]]
     setSectionEditorKeys(newKeys)
   }
 
@@ -628,9 +640,7 @@ export function ContractTemplateEditorPage({
             label="Terms &amp; Conditions"
             value={(terms as unknown as EditorBlock[]) || []}
             onChange={(val) => setTerms(val as unknown as PortableTextBlock[])}
-            forceRemountKey={
-              existingTemplate ? `terms-${existingTemplate._id}` : 'terms-new'
-            }
+            forceRemountKey={termsEditorKey}
             helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic values. Variables are substituted in the contract PDF."
             compact
           />

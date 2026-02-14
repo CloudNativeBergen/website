@@ -1483,11 +1483,11 @@ export const sponsorRouter = router({
         const { id, ...data } = input
         const { template, error } = await updateContractTemplate(id, {
           ...data,
-          tier: data.tier === null ? undefined : data.tier,
+          tier: data.tier === null ? '' : data.tier,
           currency: data.currency === null ? undefined : data.currency,
-          headerText: data.headerText === null ? undefined : data.headerText,
-          footerText: data.footerText === null ? undefined : data.footerText,
-          terms: data.terms === null ? undefined : data.terms,
+          headerText: data.headerText === null ? '' : data.headerText,
+          footerText: data.footerText === null ? '' : data.footerText,
+          terms: data.terms === null ? [] : data.terms,
         })
         if (error) {
           throw new TRPCError({
@@ -1584,9 +1584,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
