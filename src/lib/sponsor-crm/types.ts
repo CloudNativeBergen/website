@@ -67,6 +67,7 @@ export interface SponsorForConference {
   signatureStatus?: SignatureStatus
   signatureId?: string
   signerEmail?: string
+  signingUrl?: string
   contractSentAt?: string
   contractDocument?: {
     asset: { _ref: string }
@@ -146,6 +147,7 @@ export interface SponsorForConferenceExpanded {
   signatureStatus?: SignatureStatus
   signatureId?: string
   signerEmail?: string
+  signingUrl?: string
   contractSentAt?: string
   contractDocument?: {
     asset: {
@@ -217,6 +219,7 @@ export interface SponsorForConferenceInput {
   contractStatus: ContractStatus
   signatureStatus?: SignatureStatus
   signerEmail?: string
+  signingUrl?: string | null
   contractTemplate?: string
   status: SponsorStatus
   assignedTo?: string | null

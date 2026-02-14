@@ -7,11 +7,13 @@ export { CoSpeakerInvitationTemplate } from './CoSpeakerInvitationTemplate'
 export { CoSpeakerResponseTemplate } from './CoSpeakerResponseTemplate'
 export { GallerySpeakerTaggedTemplate } from './GallerySpeakerTaggedTemplate'
 export { ContractSigningTemplate } from './ContractSigningTemplate'
+export { ContractReminderTemplate } from './ContractReminderTemplate'
 export type { BroadcastTemplateProps } from './BroadcastTemplate'
 export type { SpeakerEmailTemplateProps } from './SpeakerEmailTemplate'
 export type { CoSpeakerInvitationTemplateProps } from './CoSpeakerInvitationTemplate'
 export type { CoSpeakerResponseTemplateProps } from './CoSpeakerResponseTemplate'
 export type { ContractSigningTemplateProps } from './ContractSigningTemplate'
+export type { ContractReminderTemplateProps } from './ContractReminderTemplate'
 export {
   EmailSection,
   EmailSectionHeader,

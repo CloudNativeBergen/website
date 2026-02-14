@@ -17,6 +17,7 @@ const mockPatch = jest.fn<(...args: any[]) => any>()
 const mockSet = jest.fn<(...args: any[]) => any>()
 const mockCommit = jest.fn<(...args: any[]) => any>()
 const mockCreate = jest.fn<(...args: any[]) => any>()
+const mockResendSend = jest.fn<(...args: any[]) => any>()
 
 jest.mock('@/lib/sanity/client', () => ({
   clientWrite: {
@@ -28,6 +29,20 @@ jest.mock('@/lib/sanity/client', () => ({
 
 jest.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-15T10:00:00Z',
+  formatConferenceDateLong: (date: string) => date,
+}))
+
+jest.mock('@/lib/email/config', () => ({
+  resend: {
+    emails: {
+      send: (...args: unknown[]) => mockResendSend(...args),
+    },
+  },
+  retryWithBackoff: async (fn: () => Promise<unknown>) => fn(),
+}))
+
+jest.mock('@/components/email/ContractReminderTemplate', () => ({
+  ContractReminderTemplate: () => null,
 }))
 
 jest.mock('next/cache', () => ({
@@ -43,6 +58,7 @@ describe('api/cron/contract-reminders', () => {
     mockSet.mockReturnValue({ commit: mockCommit })
     mockCommit.mockResolvedValue({})
     mockCreate.mockResolvedValue({})
+    mockResendSend.mockResolvedValue({ data: { id: 'email-123' } })
   })
 
   afterEach(() => {
@@ -103,14 +119,28 @@ describe('api/cron/contract-reminders', () => {
         {
           _id: 'sfc-1',
           signatureId: 'agr-001',
+          signingUrl: 'https://sign.example.com/1',
+          signerEmail: 'signer1@example.com',
           reminderCount: 0,
           sponsorName: 'Acme Corp',
+          conferenceName: 'Cloud Native Day 2026',
+          conferenceCity: 'Oslo',
+          conferenceStartDate: '2026-06-15',
+          conferenceSponsorEmail: 'sponsors@example.com',
+          conferenceOrganizer: 'Cloud Native Days',
         },
         {
           _id: 'sfc-2',
           signatureId: 'agr-002',
+          signingUrl: 'https://sign.example.com/2',
+          signerEmail: 'signer2@example.com',
           reminderCount: 1,
           sponsorName: 'Beta Inc',
+          conferenceName: 'Cloud Native Day 2026',
+          conferenceCity: 'Oslo',
+          conferenceStartDate: '2026-06-15',
+          conferenceSponsorEmail: 'sponsors@example.com',
+          conferenceOrganizer: 'Cloud Native Days',
         },
       ])
 
@@ -122,6 +152,15 @@ describe('api/cron/contract-reminders', () => {
       expect(data.total).toBe(2)
       expect(data.sent).toBe(2)
       expect(data.failed).toBe(0)
+
+      // Verify emails sent
+      expect(mockResendSend).toHaveBeenCalledTimes(2)
+      expect(mockResendSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ['signer1@example.com'],
+          subject: expect.stringContaining('Reminder'),
+        }),
+      )
 
       // Verify reminder count was incremented
       expect(mockPatch).toHaveBeenCalledWith('sfc-1')
@@ -146,21 +185,29 @@ describe('api/cron/contract-reminders', () => {
         {
           _id: 'sfc-1',
           signatureId: 'agr-ok',
+          signingUrl: 'https://sign.example.com/ok',
+          signerEmail: 'ok@example.com',
           reminderCount: 0,
           sponsorName: 'Good Corp',
+          conferenceName: 'Cloud Native Day',
+          conferenceCity: 'Oslo',
         },
         {
           _id: 'sfc-2',
           signatureId: 'agr-bad',
+          signingUrl: 'https://sign.example.com/bad',
+          signerEmail: 'bad@example.com',
           reminderCount: 0,
           sponsorName: 'Bad Corp',
+          conferenceName: 'Cloud Native Day',
+          conferenceCity: 'Oslo',
         },
       ])
 
-      // First contract's patch commit succeeds, second throws
-      mockCommit
-        .mockResolvedValueOnce({})
-        .mockRejectedValueOnce(new Error('Sanity error'))
+      // First email succeeds + commit succeeds, second email throws
+      mockResendSend
+        .mockResolvedValueOnce({ data: { id: 'ok' } })
+        .mockRejectedValueOnce(new Error('Resend error'))
 
       const response = await GET(cronRequest('Bearer test-cron-secret'))
       expect(response.status).toBe(200)
@@ -181,6 +228,30 @@ describe('api/cron/contract-reminders', () => {
         expect.stringContaining('signatureStatus == "pending"'),
         expect.objectContaining({ maxReminders: 2 }),
       )
+    })
+
+    it('skips email when signingUrl or signerEmail missing but still increments count', async () => {
+      const { GET } = await import('@/app/api/cron/contract-reminders/route')
+
+      mockSanityFetch.mockResolvedValueOnce([
+        {
+          _id: 'sfc-no-url',
+          signatureId: 'agr-no-url',
+          signingUrl: null,
+          signerEmail: 'signer@example.com',
+          reminderCount: 0,
+          sponsorName: 'No URL Corp',
+          conferenceName: 'Cloud Native Day',
+        },
+      ])
+
+      const response = await GET(cronRequest('Bearer test-cron-secret'))
+      const data = await response.json()
+
+      expect(data.sent).toBe(1)
+      expect(mockResendSend).not.toHaveBeenCalled()
+      expect(mockPatch).toHaveBeenCalledWith('sfc-no-url')
+      expect(mockSet).toHaveBeenCalledWith({ reminderCount: 1 })
     })
   })
 })

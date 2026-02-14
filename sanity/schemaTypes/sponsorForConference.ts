@@ -118,6 +118,13 @@ export default defineType({
       description: 'Email of the person who should sign the contract',
     }),
     defineField({
+      name: 'signingUrl',
+      title: 'Signing URL',
+      type: 'string',
+      description: 'Adobe Sign signing URL for the signer',
+      readOnly: true,
+    }),
+    defineField({
       name: 'contractSentAt',
       title: 'Contract Sent Date',
       type: 'datetime',

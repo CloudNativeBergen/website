@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
-import { getCurrentDateTime } from '@/lib/time'
+import { getCurrentDateTime, formatConferenceDateLong } from '@/lib/time'
+import { resend, retryWithBackoff } from '@/lib/email/config'
+import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
+import * as React from 'react'
 import { unstable_noStore as noStore } from 'next/cache'
 
 const MAX_REMINDERS = 2
@@ -39,8 +42,15 @@ export async function GET(request: NextRequest) {
       ]{
         _id,
         signatureId,
+        signingUrl,
+        signerEmail,
         reminderCount,
-        "sponsorName": sponsor->name
+        "sponsorName": sponsor->name,
+        "conferenceName": conference->title,
+        "conferenceCity": conference->city,
+        "conferenceStartDate": conference->startDate,
+        "conferenceSponsorEmail": conference->sponsorEmail,
+        "conferenceOrganizer": conference->organizer
       }`,
       { threshold: thresholdDate, maxReminders: MAX_REMINDERS },
     )
@@ -58,12 +68,39 @@ export async function GET(request: NextRequest) {
 
     for (const contract of pendingContracts) {
       try {
-        // TODO: Phase 7 — send reminder via Resend email instead of Adobe Sign API
-        console.log(
-          `Contract reminder due for ${contract.sponsorName} (${contract._id})`,
-        )
-
         const newCount = (contract.reminderCount || 0) + 1
+
+        // Send reminder email via Resend if we have a signing URL and signer email
+        if (contract.signingUrl && contract.signerEmail) {
+          const fromEmail =
+            contract.conferenceSponsorEmail || 'sponsors@cloudnativeday.no'
+          const fromName = contract.conferenceOrganizer || 'Cloud Native Days'
+          const eventName = contract.conferenceName || 'Cloud Native Day'
+
+          await retryWithBackoff(async () => {
+            return resend.emails.send({
+              from: `${fromName} <${fromEmail}>`,
+              to: [contract.signerEmail],
+              subject: `Reminder: Sponsorship Agreement — ${eventName}`,
+              react: React.createElement(ContractReminderTemplate, {
+                sponsorName: contract.sponsorName || 'Sponsor',
+                signingUrl: contract.signingUrl,
+                reminderNumber: newCount,
+                eventName,
+                eventLocation: contract.conferenceCity || 'Norway',
+                eventDate: contract.conferenceStartDate
+                  ? formatConferenceDateLong(contract.conferenceStartDate)
+                  : '',
+                eventUrl: 'https://cloudnativeday.no',
+              }),
+            })
+          })
+        } else {
+          console.warn(
+            `Skipping email for ${contract.sponsorName} (${contract._id}): missing signingUrl or signerEmail`,
+          )
+        }
+
         await clientWrite
           .patch(contract._id)
           .set({ reminderCount: newCount })
@@ -74,7 +111,7 @@ export async function GET(request: NextRequest) {
           _type: 'sponsorActivity',
           sponsorForConference: { _type: 'reference', _ref: contract._id },
           activityType: 'contract_reminder_sent',
-          description: `Signing reminder #${newCount} sent via Adobe Sign for ${contract.sponsorName || 'sponsor'}`,
+          description: `Signing reminder #${newCount} sent via email for ${contract.sponsorName || 'sponsor'}`,
           metadata: {
             additionalData: `reminder_count:${newCount}`,
             timestamp: getCurrentDateTime(),

@@ -592,8 +592,12 @@ Self-service portal
                   /agreements/&#123;id&#125;
                 </li>
                 <li>
-                  <code className="text-xs">downloadSignedDocument()</code> —
-                  GET /agreements/&#123;id&#125;/combinedDocument
+                  <code className="text-xs">getSigningUrls()</code> — GET
+                  /agreements/&#123;id&#125;/signingUrls
+                </li>
+                <li>
+                  <code className="text-xs">registerWebhook()</code> — POST
+                  /webhooks
                 </li>
                 <li>
                   <code className="text-xs">sendReminder()</code> — POST
@@ -623,8 +627,8 @@ Self-service portal
                   Webhook verification
                 </li>
                 <li>
-                  <code className="text-xs">ADOBE_SIGN_BASE_URL</code> — API
-                  base URL (optional)
+                  <code className="text-xs">ADOBE_SIGN_SHARD</code> — API shard
+                  (default: eu2)
                 </li>
                 <li>
                   <code className="text-xs">CRON_SECRET</code> — Cron job auth
@@ -1000,11 +1004,10 @@ function WorkflowRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 rounded-lg border p-4 ${
-        done
+      className={`flex items-center gap-4 rounded-lg border p-4 ${done
           ? 'border-brand-fresh-green/20 bg-brand-fresh-green/10 dark:border-green-500/20 dark:bg-green-900/20'
           : 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-700 dark:bg-gray-800'
-      }`}
+        }`}
     >
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${done ? 'bg-brand-fresh-green' : 'bg-brand-cloud-blue'}`}
