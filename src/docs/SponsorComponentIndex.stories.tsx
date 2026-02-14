@@ -372,6 +372,36 @@ export const Overview: Story = {
               description="SVG logo upload and preview with light/dark variant support."
               hasStory
             />
+            <ComponentCard
+              name="AdobeSignConfigPanel"
+              path="@/components/admin/sponsor/AdobeSignConfigPanel"
+              description="Adobe Sign OAuth connection, webhook registration, and status management panel for contract signing integration."
+            />
+          </div>
+        </section>
+
+        {/* Contract Email Templates */}
+        <section className="mb-12">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+            Contract Email Templates
+          </h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            React email templates for contract signing communications, sent via
+            Resend.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ComponentCard
+              name="ContractSigningTemplate"
+              path="@/components/email/ContractSigningTemplate"
+              description="Email sent to the designated signer with sponsorship details and Adobe Sign signing URL."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractReminderTemplate"
+              path="@/components/email/ContractReminderTemplate"
+              description="Automated reminder email sent by cron when a contract is pending for more than 5 days."
+              hasStory
+            />
           </div>
         </section>
 

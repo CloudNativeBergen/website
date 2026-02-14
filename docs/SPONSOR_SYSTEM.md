@@ -61,6 +61,7 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `signatureStatus`       | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
 | `signatureId`           | External ID from e-signing provider (read-only)                                                        |
 | `signerEmail`           | Email of the person designated to sign the contract                                                    |
+| `signingUrl`            | Adobe Sign signing URL for portal display and reminder emails (read-only)                              |
 | `contractSentAt`        | When the contract was sent for signing (read-only)                                                     |
 | `contractDocument`      | Generated PDF contract stored as a Sanity file asset                                                   |
 | `reminderCount`         | Number of contract signing reminders sent (read-only)                                                  |
@@ -187,6 +188,9 @@ src/
 │   ├── Sponsors.tsx                # Public sponsor display (grouped by tier)
 │   ├── SponsorLogo.tsx             # Public inline SVG logo renderer
 │   ├── SponsorThankYou.tsx         # Marketing thank-you card for sponsors
+│   ├── email/
+│   │   ├── ContractSigningTemplate.tsx  # Contract signing request email
+│   │   └── ContractReminderTemplate.tsx # Automated contract reminder email
 │   ├── sponsor/
 │   │   ├── SponsorPortal.tsx       # Sponsor self-service portal (setup + status)
 │   │   └── SponsorProspectus.tsx   # Public sponsorship prospectus page
@@ -207,7 +211,8 @@ src/
 │       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
 │       │   ├── SponsorTemplatePicker.tsx    # Email template selector dropdown
 │       │   ├── SponsorEmailTemplatesPageClient.tsx # Template list + editor page
-│       │   └── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
+│       │   ├── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
+│       │   └── AdobeSignConfigPanel.tsx     # Adobe Sign OAuth + webhook management
 │       └── sponsor-crm/            # CRM pipeline admin UI
 │           ├── SponsorCRMPageClient.tsx     # CRM page shell
 │           ├── SponsorCRMPipeline.tsx       # Main board with filters/search
@@ -263,14 +268,14 @@ sanity/schemaTypes/
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD          |
-| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                    |
-| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations            |
-| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries               |
-| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                |
-| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`                                                                                                            | Contract template CRUD and PDF gen |
+| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                                   |
+| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                                             |
+| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                                     |
+| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                                        |
+| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                                         |
+| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`, `getAdobeSignAuthorizeUrl`, `disconnectAdobeSign`, `registerAdobeSignWebhook`                             | Contract template CRUD, PDF gen, and Adobe Sign integration |
 
 All procedures are protected by `adminProcedure` (requires `isOrganizer: true`).
 
@@ -475,6 +480,7 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 | `signatureStatus`  | Enum      | Digital signature state (not-started → pending → signed/rejected/expired) |
 | `signatureId`      | String    | Adobe Sign agreement ID (read-only, set on send)                          |
 | `signerEmail`      | String    | Email of the designated signer                                            |
+| `signingUrl`       | String    | Adobe Sign signing URL for portal and reminder emails                     |
 | `contractSentAt`   | DateTime  | When the contract was sent for signing                                    |
 | `contractSignedAt` | DateTime  | When the signed PDF was received (set by webhook)                         |
 | `contractDocument` | File      | Generated/signed PDF stored as a Sanity file asset                        |
@@ -589,15 +595,16 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 **Key outcomes:**
 
 - 1-click contract sending from the CRM board
-- BankID e-signatures via Posten.no integration
-- Automated reminders for unsigned contracts
+- Digital signatures via Adobe Acrobat Sign
+- Automated reminders for unsigned contracts (daily cron via Resend)
 - Self-service onboarding portal for sponsors (logo, billing, contacts)
 - Full activity tracking throughout the contract lifecycle
+- Admin panel for Adobe Sign OAuth connection and webhook management
 
 **Sub-issues and dependencies:**
 
 ```text
-#300 (Schema) ─────────────────┬──▶ #303 (Posten.no) ──▶ #304 (Admin UI)
+#300 (Schema) ─────────────────┬──▶ #303 (Adobe Sign) ──▶ #304 (Admin UI)
                                │
 #301 (Templates) ──────────────┤
                                │
@@ -610,10 +617,10 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------ |
 | [#300](https://github.com/CloudNativeBergen/website/issues/300) | Schema extensions (`signature_status`, `signer_email`, `contract_document`, `isPrimary`) | Done   |
 | [#301](https://github.com/CloudNativeBergen/website/issues/301) | Contract template system with tier-based PDF generation                                  | Done   |
-| [#302](https://github.com/CloudNativeBergen/website/issues/302) | Sponsor email templates (ContractSent, ContractReminder, WelcomeOnboarding)              | Open   |
-| [#303](https://github.com/CloudNativeBergen/website/issues/303) | Posten.no e-signature integration (OAuth2, BankID, webhooks)                             | Open   |
-| [#304](https://github.com/CloudNativeBergen/website/issues/304) | Admin UI — send contract flow with signature status badges                               | Open   |
-| [#305](https://github.com/CloudNativeBergen/website/issues/305) | Automated contract reminders (daily cron, Slack notifications)                           | Open   |
+| [#302](https://github.com/CloudNativeBergen/website/issues/302) | Sponsor email templates (ContractSigning, ContractReminder)                              | Done   |
+| [#303](https://github.com/CloudNativeBergen/website/issues/303) | Adobe Acrobat Sign integration (OAuth2, webhooks, signing URLs)                          | Done   |
+| [#304](https://github.com/CloudNativeBergen/website/issues/304) | Admin UI — send contract flow, AdobeSignConfigPanel, signature badges                    | Done   |
+| [#305](https://github.com/CloudNativeBergen/website/issues/305) | Automated contract reminders (daily cron, branded emails via Resend)                     | Done   |
 | [#306](https://github.com/CloudNativeBergen/website/issues/306) | Sponsor self-service portal (`/sponsor/portal/[token]`)                                  | Done   |
 
 ### Related Issues

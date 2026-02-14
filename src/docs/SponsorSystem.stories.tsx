@@ -115,6 +115,7 @@ export const Architecture: Story = {
                     'not-started → pending → signed / rejected / expired',
                   ],
                   ['signatureId / signerEmail', 'External e-signing tracking'],
+                  ['signingUrl', 'Adobe Sign signing URL for portal/email'],
                   ['contractSentAt / contractSignedAt', 'Timestamps'],
                   ['contractDocument', 'Generated PDF file'],
                   ['contractTemplate', 'Reference to contractTemplate'],
@@ -658,6 +659,10 @@ Self-service portal
                   signer
                 </li>
                 <li>
+                  <code className="text-xs">signingUrl</code> — Adobe Sign
+                  signing URL
+                </li>
+                <li>
                   <code className="text-xs">
                     contractSentAt / contractSignedAt
                   </code>{' '}
@@ -1004,11 +1009,10 @@ function WorkflowRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 rounded-lg border p-4 ${
-        done
+      className={`flex items-center gap-4 rounded-lg border p-4 ${done
           ? 'border-brand-fresh-green/20 bg-brand-fresh-green/10 dark:border-green-500/20 dark:bg-green-900/20'
           : 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-700 dark:bg-gray-800'
-      }`}
+        }`}
     >
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${done ? 'bg-brand-fresh-green' : 'bg-brand-cloud-blue'}`}
