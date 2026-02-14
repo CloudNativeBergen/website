@@ -22,8 +22,9 @@ function validateClientId(request: NextRequest): string | null {
 
   if (!clientId) {
     console.error(
-      '[Adobe Sign webhook] Missing X-AdobeSign-ClientId header. Headers:',
-      Object.fromEntries(request.headers.entries()),
+      '[Adobe Sign webhook] Missing X-AdobeSign-ClientId header from %s %s',
+      request.method,
+      request.nextUrl.pathname,
     )
     return null
   }

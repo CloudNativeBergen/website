@@ -1079,10 +1079,22 @@ export const sponsorRouter = router({
         const statusMap: Record<string, string> = {
           SIGNED: 'signed',
           OUT_FOR_SIGNATURE: 'pending',
+          OUT_FOR_APPROVAL: 'pending',
+          APPROVED: 'pending',
+          DELIVERED: 'pending',
           EXPIRED: 'expired',
           CANCELLED: 'rejected',
+          RECALLED: 'rejected',
+          ABORTED: 'rejected',
         }
         const newStatus = statusMap[agreement.status] || currentStatus
+        if (!statusMap[agreement.status]) {
+          console.warn(
+            '[Adobe Sign] Unknown agreement status: %s for SFC %s',
+            agreement.status,
+            input.id,
+          )
+        }
 
         if (newStatus !== currentStatus) {
           const updateFields: Record<string, unknown> = {
