@@ -4,14 +4,24 @@ import { defineQuery } from 'next-sanity'
 
 export async function getStaffMembers(
   role: string,
-): Promise<{ staff: Staff[]; err?: Error }> {
-  const query = defineQuery(`* [_type == "staff" && role == "${role}}"]`)
+): Promise<{ data: Staff[]; err?: Error }> {
+  const query = defineQuery(`
+    * [_type == "staff" && role == "${role}"]
+    {
+      name,
+      role,
+      email,
+      company,
+      "imageURL": image.asset->url,
+      link
+    }
+  `)
 
   try {
     const queryResult = await clientRead.fetch<Staff[]>(query)
-    const a = { staff: queryResult, error: null }
-    return a
+    const resultOrError = { data: queryResult, error: null }
+    return resultOrError
   } catch (error) {
-    return { staff: [], err: error as Error }
+    return { data: [], err: error as Error }
   }
 }

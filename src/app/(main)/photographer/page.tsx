@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { cacheLife, cacheTag } from 'next/cache'
 import { getStaffMembers } from '@/lib/staff/sanity'
+import { Container } from '@/components/Container'
 
 async function CachedPhotographerContent({}) {
   'use cache'
@@ -12,13 +13,15 @@ async function CachedPhotographerContent({}) {
   return (
     <>
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8">
+        <Container className="relative print:max-w-none print:px-0">
         <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
           Photographers
         </h1>
-        {photographers.staff.map((photographer) => {
+        {photographers.data.length === 0 && "No photographers found"}
+        {photographers.data.map((photographer) => {
           return (
             <div
-              key={photographer.name}
+              key={photographer.email ?? Math.floor(Math.random() * 10000)}
               className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8"
             >
               <h3 className="font-jetbrains text-3xl font-bold tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
@@ -41,6 +44,7 @@ async function CachedPhotographerContent({}) {
             </div>
           )
         })}
+        </Container>
       </div>
     </>
   )
