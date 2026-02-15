@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
+  ArrowPathIcon,
   CheckCircleIcon,
   LinkIcon,
   ClipboardDocumentIcon,
@@ -14,12 +15,14 @@ export interface SponsorPortalSectionProps {
   sponsorForConferenceId: string
   existingToken?: string
   portalComplete?: boolean
+  onCheckStatus?: () => void
 }
 
 export function SponsorPortalSection({
   sponsorForConferenceId,
   existingToken,
   portalComplete,
+  onCheckStatus,
 }: SponsorPortalSectionProps) {
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -125,6 +128,17 @@ export function SponsorPortalSection({
               </button>
             )}
           </div>
+          {onCheckStatus && (
+            <button
+              type="button"
+              onClick={onCheckStatus}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
+              title="Check if sponsor completed registration"
+            >
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+              Check status
+            </button>
+          )}
           {(sendInviteMutation.isError || generateMutation.isError) && (
             <p className="text-xs text-red-600 dark:text-red-400">
               {sendInviteMutation.error?.message ||

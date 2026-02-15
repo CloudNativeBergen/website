@@ -316,24 +316,14 @@ export function SponsorContractView({
               ` Completed ${new Date(sponsor.registrationCompletedAt).toLocaleDateString()}.`}
           </p>
         ) : (
-          <div className="space-y-2">
-            <SponsorPortalSection
-              sponsorForConferenceId={sponsor._id}
-              existingToken={sponsor.registrationToken}
-              portalComplete={false}
-            />
-            {sponsor.registrationToken && (
-              <button
-                type="button"
-                onClick={() => onSuccess?.()}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
-                title="Check if sponsor completed registration"
-              >
-                <ArrowPathIcon className="h-3.5 w-3.5" />
-                Check status
-              </button>
-            )}
-          </div>
+          <SponsorPortalSection
+            sponsorForConferenceId={sponsor._id}
+            existingToken={sponsor.registrationToken}
+            portalComplete={false}
+            onCheckStatus={
+              sponsor.registrationToken ? () => onSuccess?.() : undefined
+            }
+          />
         )}
       </ContractFlowStep>
 
