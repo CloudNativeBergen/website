@@ -68,6 +68,14 @@ function categorizeFile(
     return { category: 'tests', subcategory: 'unit-tests' }
   }
 
+  // Storybook stories
+  if (
+    normalizedPath.endsWith('.stories.ts') ||
+    normalizedPath.endsWith('.stories.tsx')
+  ) {
+    return { category: 'storybook', subcategory: 'component-stories' }
+  }
+
   // Configuration files
   if (
     fileName.startsWith('.') ||
