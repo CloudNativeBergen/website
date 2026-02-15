@@ -43,25 +43,25 @@ const TAG_BADGES: {
   label: string
   classes: string
 }[] = [
-    {
-      tag: 'high-priority',
-      label: 'PRI',
-      classes:
-        'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
-    },
-    {
-      tag: 'needs-follow-up',
-      label: 'FUP',
-      classes:
-        'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
-    },
-    {
-      tag: 'returning-sponsor',
-      label: 'RET',
-      classes:
-        'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
-    },
-  ]
+  {
+    tag: 'high-priority',
+    label: 'PRI',
+    classes:
+      'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+  },
+  {
+    tag: 'needs-follow-up',
+    label: 'FUP',
+    classes:
+      'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
+  },
+  {
+    tag: 'returning-sponsor',
+    label: 'RET',
+    classes:
+      'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
+  },
+]
 
 const TAG_TOOLTIPS: Record<string, string> = {
   PRI: 'High Priority',
@@ -161,7 +161,7 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => { }}
+          onChange={() => {}}
           className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
