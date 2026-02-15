@@ -31,6 +31,7 @@ jest.mock('@/components/sponsor/SignaturePadCanvas', () => ({
 
 jest.mock('@heroicons/react/24/outline', () => ({
   __esModule: true,
+  CheckIcon: (props: any) => <svg {...props} data-testid="icon-check" />,
   PencilSquareIcon: (props: any) => (
     <svg {...props} data-testid="icon-pencil" />
   ),
@@ -87,26 +88,52 @@ describe('OrganizerSignatureCapture', () => {
   })
 
   describe('drawing a signature', () => {
-    it('saves to localStorage and notifies parent when signature drawn', () => {
+    it('does not save until Done is clicked', () => {
       renderCapture()
 
       act(() => {
         capturedOnSignatureChange?.(FAKE_SIGNATURE)
       })
+
+      // Not saved yet — still drawing
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    })
+
+    it('saves to localStorage and notifies parent when Done is clicked', () => {
+      renderCapture()
+
+      act(() => {
+        capturedOnSignatureChange?.(FAKE_SIGNATURE)
+      })
+
+      fireEvent.click(screen.getByText('Done'))
 
       expect(localStorage.getItem(STORAGE_KEY)).toBe(FAKE_SIGNATURE)
       expect(onSignatureReady).toHaveBeenCalledWith(FAKE_SIGNATURE)
     })
 
-    it('persists signature to localStorage and notifies parent after drawing', () => {
+    it('supports multiple strokes before saving', () => {
       renderCapture()
+
+      // Simulate multiple strokes — pad should stay visible
+      act(() => {
+        capturedOnSignatureChange?.('data:image/png;base64,stroke1')
+      })
+      expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
+
+      act(() => {
+        capturedOnSignatureChange?.('data:image/png;base64,stroke2')
+      })
+      expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
       act(() => {
         capturedOnSignatureChange?.(FAKE_SIGNATURE)
       })
+      expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
+      // Only saves when Done is clicked, with the latest data
+      fireEvent.click(screen.getByText('Done'))
       expect(localStorage.getItem(STORAGE_KEY)).toBe(FAKE_SIGNATURE)
-      expect(onSignatureReady).toHaveBeenCalledWith(FAKE_SIGNATURE)
     })
 
     it('does not save when signature is null (cleared pad)', () => {

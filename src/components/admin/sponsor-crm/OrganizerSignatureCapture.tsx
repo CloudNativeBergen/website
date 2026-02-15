@@ -1,8 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from 'react'
 import { SignaturePadCanvas } from '@/components/sponsor/SignaturePadCanvas'
-import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
+import {
+  CheckIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline'
 
 const STORAGE_KEY_PREFIX = 'organizer-signature-'
 
@@ -47,6 +57,7 @@ export function OrganizerSignatureCapture({
   const storageKey = `${STORAGE_KEY_PREFIX}${organizerId}`
   const savedSignature = useLocalStorageSignature(storageKey)
   const [isDrawing, setIsDrawing] = useState(false)
+  const pendingSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
     onSignatureReady(savedSignature)
@@ -54,20 +65,26 @@ export function OrganizerSignatureCapture({
 
   const handleSignatureChange = useCallback(
     (dataUrl: string | null) => {
-      if (dataUrl) {
-        try {
-          localStorage.setItem(storageKey, dataUrl)
-        } catch {
-          // localStorage full or unavailable
-        }
-        setIsDrawing(false)
-        onSignatureReady(dataUrl)
-      } else {
+      pendingSignatureRef.current = dataUrl
+      if (!dataUrl) {
         onSignatureReady(null)
       }
     },
-    [storageKey, onSignatureReady],
+    [onSignatureReady],
   )
+
+  const handleDone = useCallback(() => {
+    const dataUrl = pendingSignatureRef.current
+    if (dataUrl) {
+      try {
+        localStorage.setItem(storageKey, dataUrl)
+      } catch {
+        // localStorage full or unavailable
+      }
+      setIsDrawing(false)
+      onSignatureReady(dataUrl)
+    }
+  }, [storageKey, onSignatureReady])
 
   const handleClear = useCallback(() => {
     try {
@@ -137,15 +154,25 @@ export function OrganizerSignatureCapture({
         onSignatureChange={handleSignatureChange}
         height={150}
       />
-      {savedSignature && (
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => setIsDrawing(false)}
-          className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          onClick={handleDone}
+          className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
         >
-          Cancel
+          <CheckIcon className="h-3.5 w-3.5" />
+          Done
         </button>
-      )}
+        {savedSignature && (
+          <button
+            type="button"
+            onClick={() => setIsDrawing(false)}
+            className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }
