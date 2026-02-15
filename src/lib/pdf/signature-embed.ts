@@ -56,6 +56,7 @@ async function embedSignatureCore(
   const drawHeight = sigDims.height * scale
 
   const sigMarker = findMarkerInPdf(pdfBytes, sigMarkerText)
+  const dateMarkerPos = findMarkerInPdf(pdfBytes, dateMarkerText)
 
   let targetPage: ReturnType<typeof pdfDoc.getPage>
   let sigX: number
@@ -83,7 +84,11 @@ async function embedSignatureCore(
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const dateStr = formatDate(getCurrentDateTime())
 
-  const dateMarkerPos = findMarkerInPdf(pdfBytes, dateMarkerText)
+  // Text (name/date) may be on a different page than the signature image
+  const textPage = dateMarkerPos
+    ? pdfDoc.getPage(dateMarkerPos.pageIndex)
+    : targetPage
+
   const nameX = dateMarkerPos ? dateMarkerPos.x : sigMarker ? sigMarker.x : sigX
   const nameY = dateMarkerPos
     ? dateMarkerPos.y + SIGNER_DATE_OFFSET_Y
@@ -96,7 +101,7 @@ async function embedSignatureCore(
       ? sigMarker.y - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
       : sigY - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
 
-  targetPage.drawText(signerName, {
+  textPage.drawText(signerName, {
     x: nameX,
     y: nameY,
     size: 9,
@@ -104,7 +109,7 @@ async function embedSignatureCore(
     color: rgb(0.2, 0.2, 0.2),
   })
 
-  targetPage.drawText(dateStr, {
+  textPage.drawText(dateStr, {
     x: nameX,
     y: dateY,
     size: 8,
@@ -144,8 +149,12 @@ export async function embedSignatureInPdf(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
 
-  const pdfResponse = await fetch(pdfUrl, { signal: controller.signal })
-  clearTimeout(timeout)
+  let pdfResponse: Response
+  try {
+    pdfResponse = await fetch(pdfUrl, { signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!pdfResponse.ok) {
     throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)

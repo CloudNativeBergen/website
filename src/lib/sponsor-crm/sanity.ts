@@ -165,10 +165,10 @@ export async function createSponsorForConference(
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
       addons: data.addons?.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : undefined,
       status: data.status,
       contractStatus: data.contractStatus || 'none',
@@ -231,10 +231,10 @@ export async function updateSponsorForConference(
     if (data.addons !== undefined) {
       updates.addons = data.addons.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : []
     }
     if (data.status !== undefined) updates.status = data.status
@@ -310,6 +310,20 @@ export async function deleteSponsorForConference(
       contractAssetId = doc?.contractDocument?.asset?._ref
     }
 
+    // Only delete the asset if it's not referenced by other documents
+    let safeContractAssetId: string | undefined
+    if (contractAssetId) {
+      const safe = await clientWrite.fetch<string[]>(
+        `*[
+          _type == "sanity.fileAsset" &&
+          _id == $assetId &&
+          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && _id != $id]) == 0
+        ]._id`,
+        { assetId: contractAssetId, id },
+      )
+      safeContractAssetId = safe?.[0]
+    }
+
     // Clean up related activity documents to prevent orphans
     const relatedActivityIds = await clientWrite.fetch<string[]>(
       `*[_type == "sponsorActivity" && sponsorForConference._ref == $id]._id`,
@@ -321,8 +335,8 @@ export async function deleteSponsorForConference(
     for (const activityId of relatedActivityIds) {
       transaction.delete(activityId)
     }
-    if (contractAssetId) {
-      transaction.delete(contractAssetId)
+    if (safeContractAssetId) {
+      transaction.delete(safeContractAssetId)
     }
     await transaction.commit()
 

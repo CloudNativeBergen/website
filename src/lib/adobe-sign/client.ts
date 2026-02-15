@@ -26,8 +26,8 @@ async function apiRequest<T>(
   const response = await fetch(url, {
     ...options,
     headers: {
-      Authorization: `Bearer ${session.accessToken}`,
       ...options.headers,
+      Authorization: `Bearer ${session.accessToken}`,
     },
   })
 
@@ -38,7 +38,16 @@ async function apiRequest<T>(
     )
   }
 
-  return response.json()
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const text = await response.text()
+  if (!text) {
+    return undefined as T
+  }
+
+  return JSON.parse(text) as T
 }
 
 export async function uploadTransientDocument(

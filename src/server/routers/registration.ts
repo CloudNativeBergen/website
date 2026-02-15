@@ -159,7 +159,7 @@ export const registrationRouter = router({
         registrationToken: string | null
         registrationComplete: boolean
         contractStatus: string | null
-        sponsor: { name: string }
+        sponsor: { name: string } | null
         contactPersons: Array<{
           name: string
           email: string
@@ -212,6 +212,14 @@ export const registrationRouter = router({
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'Conference not found',
+        })
+      }
+
+      if (!sfc.sponsor?.name) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Sponsor information is missing. Link a sponsor to this relationship before sending a portal invite.',
         })
       }
 

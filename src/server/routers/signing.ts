@@ -177,7 +177,7 @@ export const signingRouter = router({
       }
 
       // Upload signed PDF to Sanity
-      const filename = `contract-${sanitizeSponsorName(doc.sponsor?.name)}-signed.pdf`
+      const filename = `contract-${sanitizeSponsorName(doc.sponsor?.name || 'sponsor')}-signed.pdf`
 
       let asset: { _id: string }
       try {

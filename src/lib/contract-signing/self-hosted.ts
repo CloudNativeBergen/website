@@ -40,9 +40,18 @@ export class SelfHostedSigningProvider implements ContractSigningProvider {
     const token = randomUUID()
 
     const rawBaseUrl =
-      process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || ''
-    const baseUrl = rawBaseUrl.replace(/\/+$/, '')
-    const signingUrl = `${baseUrl}/sponsor/contract/sign/${token}`
+      process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL
+    if (!rawBaseUrl) {
+      throw new Error(
+        'Missing NEXTAUTH_URL or NEXT_PUBLIC_BASE_URL for self-hosted signing URL',
+      )
+    }
+
+    const origin = new URL(rawBaseUrl).origin
+    const signingUrl = new URL(
+      `/sponsor/contract/sign/${token}`,
+      origin,
+    ).toString()
 
     return { agreementId: token, signingUrl }
   }

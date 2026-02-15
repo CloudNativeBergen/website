@@ -941,14 +941,16 @@ export const sponsorRouter = router({
         // Cancel signing agreements if requested
         if (input.cancelAgreements) {
           try {
+            const { conference: bulkConf } =
+              await getConferenceForCurrentDomain()
             const pendingAgreements = await clientReadUncached.fetch<
               Array<{
                 signatureId: string
                 signingProvider?: SigningProviderType
               }>
             >(
-              `*[_type == "sponsorForConference" && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId, "signingProvider": conference->signingProvider }`,
-              { ids: input.ids },
+              `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId, "signingProvider": conference->signingProvider }`,
+              { ids: input.ids, conferenceId: bulkConf._id },
             )
             if (pendingAgreements.length > 0) {
               for (const {
@@ -991,13 +993,15 @@ export const sponsorRouter = router({
         // Cancel signing agreement if requested
         if (input.cancelAgreement) {
           try {
+            const { conference: delConf } =
+              await getConferenceForCurrentDomain()
             const sfc = await clientReadUncached.fetch<{
               signatureId?: string
               signatureStatus?: string
               signingProvider?: SigningProviderType
             }>(
-              `*[_type == "sponsorForConference" && _id == $id][0]{ signatureId, signatureStatus, "signingProvider": conference->signingProvider }`,
-              { id: input.id },
+              `*[_type == "sponsorForConference" && conference._ref == $conferenceId && _id == $id][0]{ signatureId, signatureStatus, "signingProvider": conference->signingProvider }`,
+              { id: input.id, conferenceId: delConf._id },
             )
             if (sfc?.signatureId && sfc.signatureStatus === 'pending') {
               const provider = getSigningProvider(sfc.signingProvider)
@@ -1382,7 +1386,7 @@ export const sponsorRouter = router({
         }
 
         // Embed organizer counter-signature if provided
-        if (input.organizerSignatureDataUrl && input.organizerName) {
+        if (input.organizerSignatureDataUrl) {
           const assignedToId = sfc.assignedTo?._id
           if (!assignedToId || assignedToId !== ctx.speaker._id) {
             throw new TRPCError({
@@ -1392,11 +1396,14 @@ export const sponsorRouter = router({
             })
           }
 
+          const organizerDisplayName =
+            ctx.speaker.name?.trim() || ctx.speaker.email?.trim() || 'Organizer'
+
           try {
             pdfBuffer = await embedSignatureInPdfBuffer(
               pdfBuffer,
               input.organizerSignatureDataUrl,
-              input.organizerName,
+              organizerDisplayName,
               {
                 signatureMarker: ORGANIZER_SIGNATURE_MARKER,
                 dateMarker: ORGANIZER_DATE_MARKER,
@@ -1470,9 +1477,10 @@ export const sponsorRouter = router({
           updateFields.signatureStatus = 'pending'
         }
 
-        if (input.organizerSignatureDataUrl && input.organizerName) {
+        if (input.organizerSignatureDataUrl) {
           updateFields.organizerSignedAt = now
-          updateFields.organizerSignedBy = input.organizerName
+          updateFields.organizerSignedBy =
+            ctx.speaker.name?.trim() || ctx.speaker.email?.trim() || 'Organizer'
         }
 
         // Send for digital signing if signer email is provided
@@ -1886,9 +1894,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1944,10 +1952,11 @@ export const sponsorRouter = router({
           tierTitle = sponsorTier?.title
         }
 
+        const previewNow = getCurrentDateTime()
         const template = {
           _id: 'preview',
-          _createdAt: new Date().toISOString(),
-          _updatedAt: new Date().toISOString(),
+          _createdAt: previewNow,
+          _updatedAt: previewNow,
           title: input.title || 'Sponsor Agreement',
           conference: {
             _id: conference._id,
@@ -2021,6 +2030,22 @@ export const sponsorRouter = router({
         }),
       )
       .mutation(async ({ input }) => {
+        const { conference: currentConf, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !currentConf) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
+        if (input.conferenceId !== currentConf._id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot update a different conference.',
+          })
+        }
+
         const fields: Record<string, string> = {}
         if (input.organizerOrgNumber !== undefined) {
           fields.organizerOrgNumber = input.organizerOrgNumber
@@ -2060,7 +2085,15 @@ export const sponsorRouter = router({
     }),
 
     getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
-      const { conference, domain } = await getConferenceForCurrentDomain()
+      const { conference, domain, error } =
+        await getConferenceForCurrentDomain()
+      if (error || !conference || !domain) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to get current conference',
+          cause: error,
+        })
+      }
       const origin = `https://${domain}`
       const redirectUri = `${origin}/api/adobe-sign/callback`
       const provider = getSigningProvider(conference.signingProvider)
@@ -2068,7 +2101,14 @@ export const sponsorRouter = router({
     }),
 
     disconnectAdobeSign: adminProcedure.mutation(async () => {
-      const { conference } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to get current conference',
+          cause: error,
+        })
+      }
       const provider = getSigningProvider(conference.signingProvider)
       await provider.disconnect()
       return { success: true }
@@ -2077,7 +2117,14 @@ export const sponsorRouter = router({
     registerAdobeSignWebhook: adminProcedure
       .input(z.object({ webhookUrl: z.string().url() }))
       .mutation(async ({ input }) => {
-        const { conference } = await getConferenceForCurrentDomain()
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: error,
+          })
+        }
         const provider = getSigningProvider(conference.signingProvider)
         return provider.registerWebhook(input.webhookUrl)
       }),

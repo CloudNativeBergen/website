@@ -47,6 +47,17 @@ export async function generateAndSendContract(
   const sponsorName = sfc.sponsor?.name || 'Unknown sponsor'
   const logCtxFull = `${logCtx} sponsor="${sponsorName}"`
 
+  if (!sfc.sponsor?.name) {
+    console.error(
+      `${logCtxFull} Missing sponsor reference on sponsorForConference`,
+    )
+    return {
+      success: false,
+      error:
+        'Sponsor details are missing. Please link a sponsor to this conference entry.',
+    }
+  }
+
   // Find the best template if not explicitly provided
   let templateId = options?.templateId
   if (!templateId) {
@@ -152,7 +163,7 @@ export async function generateAndSendContract(
     }
   }
 
-  const filename = `contract-${sanitizeSponsorName(sfc.sponsor.name)}.pdf`
+  const filename = `contract-${sanitizeSponsorName(sponsorName)}.pdf`
 
   // Upload PDF to Sanity
   let asset: { _id: string }
@@ -203,7 +214,7 @@ export async function generateAndSendContract(
         pdf: pdfBuffer,
         filename,
         signerEmail,
-        agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
+        agreementName: `Sponsorship Agreement - ${sponsorName}`,
         message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
       })
 

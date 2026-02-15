@@ -270,6 +270,7 @@ function buildTimelineEvents(att: SigningAttestation): TimelineEvent[] {
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
   const yyyy = date.getUTCFullYear()
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
   const dd = String(date.getUTCDate()).padStart(2, '0')
