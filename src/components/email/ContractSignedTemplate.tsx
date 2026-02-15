@@ -37,7 +37,7 @@ export function ContractSignedTemplate({
 
   return (
     <BaseEmailTemplate
-      title={`Contract Confirmed — ${eventName}`}
+      title={`Contract confirmed – Welcome aboard ${eventName}!`}
       titleColor="#059669"
       eventName={eventName}
       eventLocation={eventLocation}
@@ -105,9 +105,8 @@ export function ContractSignedTemplate({
                 color: '#334155',
               }}
             >
-              <strong>Next steps:</strong> We will send you an onboarding link
-              shortly where you can provide company details, logos, and contact
-              information for the event.
+              We look forward to a great partnership and an amazing event
+              together!
             </p>
 
             <p
@@ -118,8 +117,8 @@ export function ContractSignedTemplate({
                 color: '#64748B',
               }}
             >
-              If you have any questions in the meantime, please don&apos;t
-              hesitate to reply to this email.
+              If you have any questions, please don&apos;t hesitate to reply to
+              this email.
             </p>
           </>
         ),

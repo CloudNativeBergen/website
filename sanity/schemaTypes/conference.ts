@@ -672,7 +672,7 @@ export default defineType({
       options: {
         list: [
           {
-            title: 'Self-Hosted (built-in signature pad)',
+            title: 'Verified Document Signing (built-in)',
             value: 'self-hosted',
           },
           { title: 'Adobe Sign', value: 'adobe-sign' },

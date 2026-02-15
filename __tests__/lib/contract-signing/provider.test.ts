@@ -302,7 +302,7 @@ describe('getSigningProvider', () => {
   it('returns SelfHostedSigningProvider by default', async () => {
     const { getSigningProvider } = await import('@/lib/contract-signing')
     const provider = getSigningProvider()
-    expect(provider.name).toBe('Self-Hosted')
+    expect(provider.name).toBe('Verified Document Signing')
   })
 
   it('returns AdobeSignProvider when explicitly requested', async () => {

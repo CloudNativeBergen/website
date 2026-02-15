@@ -10,7 +10,7 @@ import type {
   SigningStatusResult,
 } from './types'
 
-const PROVIDER_NAME = 'Self-Hosted'
+const PROVIDER_NAME = 'Verified Document Signing'
 
 const STATUS_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ signatureStatus }`
 const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ _id }`

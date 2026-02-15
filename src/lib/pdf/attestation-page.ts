@@ -226,7 +226,7 @@ export async function addAttestationPage(
 
   // ── Footer ──
   const orgName = attestation.organizerName || 'Cloud Native Days Norway'
-  const footerText = `${orgName} \u2014 Self-Hosted Digital Signing`
+  const footerText = `${orgName} \u2014 Verified Document Signing`
   const footerWidth = helvetica.widthOfTextAtSize(footerText, 8)
   page.drawText(footerText, {
     x: (PAGE_WIDTH - footerWidth) / 2,
