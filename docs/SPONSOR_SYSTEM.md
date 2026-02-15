@@ -48,34 +48,34 @@ Defines pricing tiers for a conference. Each tier is scoped to a single conferen
 
 The CRM join document linking a sponsor to a conference with relationship metadata. This is the central document the CRM pipeline operates on.
 
-| Field                   | Description                                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `sponsor`               | Reference to `sponsor` document                                                                        |
-| `conference`            | Reference to `conference` document                                                                     |
-| `tier`                  | Reference to a `sponsorTier` (standard/special)                                                        |
-| `addons[]`              | Array of references to addon-type `sponsorTier` documents                                              |
-| `contactPersons[]`      | Per-conference contacts (name, email, phone, role, `isPrimary`)                                        |
-| `billing`               | Per-conference billing info (email, reference, comments)                                               |
-| `status`                | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
-| `contractStatus`        | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
-| `signatureStatus`       | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
-| `signatureId`           | External ID from e-signing provider (read-only)                                                        |
-| `signerEmail`           | Email of the person designated to sign the contract                                                    |
-| `signingUrl`            | Adobe Sign signing URL for portal display and reminder emails (read-only)                              |
-| `contractSentAt`        | When the contract was sent for signing (read-only)                                                     |
-| `contractDocument`      | Generated PDF contract stored as a Sanity file asset                                                   |
-| `reminderCount`         | Number of contract signing reminders sent (read-only)                                                  |
-| `contractTemplate`      | Reference to the `contractTemplate` used to generate the contract                                      |
-| `invoiceStatus`         | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
-| `assignedTo`            | Reference to an organizer (speaker with `isOrganizer: true`)                                           |
-| `contractValue`         | Actual contract value (defaults to tier price)                                                         |
-| `contractCurrency`      | `NOK`, `USD`, `EUR`, or `GBP`                                                                          |
-| `tags[]`                | Classification tags (see Tags section below)                                                           |
-| `notes`                 | Freeform text                                                                                          |
-| `onboardingToken`       | Unique token for sponsor self-service onboarding portal (read-only)                                    |
-| `onboardingComplete`    | Whether the sponsor has completed onboarding (read-only)                                               |
-| `onboardingCompletedAt` | When the sponsor completed onboarding (read-only)                                                      |
-| Timestamps              | `contactInitiatedAt`, `contractSignedAt`, `invoiceSentAt`, `invoicePaidAt`                             |
+| Field                     | Description                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `sponsor`                 | Reference to `sponsor` document                                                                        |
+| `conference`              | Reference to `conference` document                                                                     |
+| `tier`                    | Reference to a `sponsorTier` (standard/special)                                                        |
+| `addons[]`                | Array of references to addon-type `sponsorTier` documents                                              |
+| `contactPersons[]`        | Per-conference contacts (name, email, phone, role, `isPrimary`)                                        |
+| `billing`                 | Per-conference billing info (email, reference, comments)                                               |
+| `status`                  | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
+| `contractStatus`          | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
+| `signatureStatus`         | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
+| `signatureId`             | External ID from e-signing provider (read-only)                                                        |
+| `signerEmail`             | Email of the person designated to sign the contract                                                    |
+| `signingUrl`              | Adobe Sign signing URL for portal display and reminder emails (read-only)                              |
+| `contractSentAt`          | When the contract was sent for signing (read-only)                                                     |
+| `contractDocument`        | Generated PDF contract stored as a Sanity file asset                                                   |
+| `reminderCount`           | Number of contract signing reminders sent (read-only)                                                  |
+| `contractTemplate`        | Reference to the `contractTemplate` used to generate the contract                                      |
+| `invoiceStatus`           | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
+| `assignedTo`              | Reference to an organizer (speaker with `isOrganizer: true`)                                           |
+| `contractValue`           | Actual contract value (defaults to tier price)                                                         |
+| `contractCurrency`        | `NOK`, `USD`, `EUR`, or `GBP`                                                                          |
+| `tags[]`                  | Classification tags (see Tags section below)                                                           |
+| `notes`                   | Freeform text                                                                                          |
+| `registrationToken`       | Unique token for sponsor self-service registration portal (read-only)                                  |
+| `registrationComplete`    | Whether the sponsor has completed registration (read-only)                                             |
+| `registrationCompletedAt` | When the sponsor completed registration (read-only)                                                    |
+| Timestamps                | `contactInitiatedAt`, `contractSignedAt`, `invoiceSentAt`, `invoicePaidAt`                             |
 
 Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `isPrimary` flag identifies the main contact for contract signing.
 
@@ -103,13 +103,13 @@ Defines the structure and content for contract PDF generation. Each template is 
 
 Audit log for CRM actions. Each activity references a `sponsorForConference` document.
 
-| Field          | Description                                                                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `activityType` | `stage_change`, `invoice_status_change`, `contract_status_change`, `contract_signed`, `note`, `email`, `call`, `meeting`, `signature_status_change`, `onboarding_complete`, `contract_reminder_sent` |
-| `description`  | Human-readable summary                                                                                                                                                                               |
-| `metadata`     | Structured data with `oldValue`, `newValue`, `timestamp`, `additionalData`                                                                                                                           |
-| `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                  |
-| `createdAt`    | ISO timestamp                                                                                                                                                                                        |
+| Field          | Description                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `activityType` | `stage_change`, `invoice_status_change`, `contract_status_change`, `contract_signed`, `note`, `email`, `call`, `meeting`, `signature_status_change`, `registration_complete`, `contract_reminder_sent` |
+| `description`  | Human-readable summary                                                                                                                                                                                 |
+| `metadata`     | Structured data with `oldValue`, `newValue`, `timestamp`, `additionalData`                                                                                                                             |
+| `createdBy`    | Reference to the organizer who performed the action                                                                                                                                                    |
+| `createdAt`    | ISO timestamp                                                                                                                                                                                          |
 
 ## Status Enumerations
 
@@ -176,14 +176,14 @@ src/
 │       ├── contract-variables.ts   # Variable substitution for contract generation
 │       ├── contract-pdf.tsx        # PDF generation using React-PDF
 │       ├── contract-readiness.ts   # Contract signing readiness validation
-│       ├── onboarding.ts           # Sponsor self-service onboarding (token, validation, completion)
+│       ├── registration.ts          # Sponsor self-service registration (token, validation, completion)
 │       └── pipeline.ts             # Pipeline aggregation utilities
 ├── server/
 │   ├── routers/sponsor.ts          # tRPC router (all sponsor procedures)
 │   └── schemas/
 │       ├── sponsor.ts              # Zod schemas for core sponsor operations
 │       ├── sponsorForConference.ts # Zod schemas for CRM operations
-│       └── onboarding.ts          # Zod schemas for onboarding submissions
+│       └── registration.ts         # Zod schemas for registration submissions
 ├── components/
 │   ├── Sponsors.tsx                # Public sponsor display (grouped by tier)
 │   ├── SponsorLogo.tsx             # Public inline SVG logo renderer
@@ -244,7 +244,7 @@ src/
     ├── (main)/sponsor/
     │   ├── page.tsx                # Public /sponsor prospectus page
     │   ├── terms/page.tsx          # Public sponsor terms page
-    │   └── onboarding/[token]/page.tsx # Sponsor self-service onboarding
+    │   └── onboarding/[token]/page.tsx # Legacy redirect to /sponsor/portal/[token]
     └── (admin)/admin/
         ├── sponsors/
         │   ├── page.tsx            # Sponsor management page
@@ -378,7 +378,7 @@ All API calls are authenticated via per-user OAuth session stored in an encrypte
 
 #### Contract Send Flow
 
-The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It is used by both the admin manual send and the automated onboarding completion flow.
+The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It is used by both the admin manual send and the automated registration completion flow.
 
 ```text
 1. Load sponsorForConference record
@@ -494,7 +494,7 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 │                        Admin CRM UI                             │
 │  SponsorContractView  /  SponsorCRMPipeline (Contract Board)   │
 └────────────┬───────────────────────┬────────────────────────────┘
-             │ Manual "Send"        │ Onboarding auto-trigger
+             │ Manual "Send"        │ Registration auto-trigger
              ▼                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              generateAndSendContract()                          │
@@ -540,7 +540,7 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 **Dual storage.** The contract PDF is stored in both Sanity (permanent, accessible via CMS) and Adobe Sign (transient, valid 7 days, then stored as part of the agreement). When the signed version arrives via webhook, it replaces the original in Sanity.
 
-**Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated onboarding-triggered sends, ensuring consistent behavior and logging.
+**Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated registration-triggered sends, ensuring consistent behavior and logging.
 
 **Two-tier readiness.** Contract readiness distinguishes between `required` fields (blocks sending entirely) and `recommended` fields (allows sending with warnings). Only the primary contact person is strictly required — other fields like org number and address produce warnings but don't block the flow.
 
@@ -548,14 +548,14 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 The sponsor portal (`/sponsor/portal/[token]`) allows sponsors to self-service their data entry after an organizer initiates the relationship. The flow:
 
-1. Organizer generates a unique onboarding token via the CRM
+1. Organizer generates a unique registration token via the CRM
 2. Sponsor receives a link (e.g. via email) to `/sponsor/portal/{token}`
 3. Sponsor fills in: company information (org number, address), contact persons, contract signer selection, and billing details
 4. On submission, the system patches both the `sponsor` document (org data) and the `sponsorForConference` document (contacts, billing, signerEmail)
-5. An `onboarding_complete` activity is logged
+5. A `registration_complete` activity is logged
 6. After setup, the portal shows a progressive status dashboard with contract signing link when available
 
-Token validation checks existence, expiry, and whether onboarding was already completed.
+Token validation checks existence, expiry, and whether registration was already completed.
 
 ## Public-Facing Components
 
@@ -579,7 +579,7 @@ Tests are located in `__tests__/` mirroring the source structure:
 | `lib/sponsor-crm/bulk.test.ts`               | Bulk update/delete operations                |
 | `lib/sponsor-crm/contract-readiness.test.ts` | Contract readiness validation logic          |
 | `lib/sponsor-crm/contract-variables.test.ts` | Contract variable building and substitution  |
-| `lib/sponsor-crm/onboarding.test.ts`         | Onboarding URL building                      |
+| `lib/sponsor-crm/registration.test.ts`       | Registration URL building                    |
 | `components/Sponsors.test.tsx`               | Public sponsor display component             |
 | `components/SponsorLogo.test.tsx`            | Logo rendering                               |
 | `components/SponsorProspectus.test.tsx`      | Prospectus page                              |
@@ -590,14 +590,14 @@ The sponsor system is being developed in phases. Phase 1 (CRM pipeline, covered 
 
 ### Phase 2: Contract Signing & Automation ([#307](https://github.com/CloudNativeBergen/website/issues/307))
 
-End-to-end sponsor contract workflow with digital signatures, automated reminders, and self-service onboarding. The goal is **zero manual steps** after an organizer clicks "Send Contract" in the CRM.
+End-to-end sponsor contract workflow with digital signatures, automated reminders, and self-service registration. The goal is **zero manual steps** after an organizer clicks "Send Contract" in the CRM.
 
 **Key outcomes:**
 
 - 1-click contract sending from the CRM board
 - Digital signatures via Adobe Acrobat Sign
 - Automated reminders for unsigned contracts (daily cron via Resend)
-- Self-service onboarding portal for sponsors (logo, billing, contacts)
+- Self-service registration portal for sponsors (logo, billing, contacts)
 - Full activity tracking throughout the contract lifecycle
 - Admin panel for Adobe Sign OAuth connection and webhook management
 
@@ -610,7 +610,7 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
                                │
 #302 (Email Templates) ────────┼──▶ #305 (Automation)
                                │
-                               └──▶ #306 (Onboarding Portal)
+                               └──▶ #306 (Registration Portal)
 ```
 
 | Issue                                                           | Summary                                                                                  | Status |
