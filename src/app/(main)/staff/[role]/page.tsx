@@ -55,5 +55,6 @@ export default async function StaffPage({
 }: {
   params: { role: string }
 }) {
-  return <CachedStaffContent role={params.role} />
+  const { role } = await params
+  return <CachedStaffContent role={role} />
 }
