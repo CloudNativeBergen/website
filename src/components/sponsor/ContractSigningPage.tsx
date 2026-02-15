@@ -17,8 +17,8 @@ function LoadingState() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto mb-4 size-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-700" />
-        <p className="text-sm font-medium text-slate-600">
+        <div className="mx-auto mb-4 size-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-700 dark:border-blue-800 dark:border-t-blue-400" />
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
           Loading contract&hellip;
         </p>
       </div>
@@ -31,10 +31,10 @@ function ErrorState({ message }: { message: string }) {
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="mx-auto max-w-md text-center">
         <ExclamationTriangleIcon className="mx-auto mb-4 size-12 text-red-400" />
-        <h2 className="mb-2 text-lg font-semibold text-slate-900">
+        <h2 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">
           Unable to Load Contract
         </h2>
-        <p className="text-sm text-slate-600">{message}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">{message}</p>
       </div>
     </div>
   )
@@ -51,10 +51,10 @@ function AlreadySignedState({
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="mx-auto max-w-md text-center">
         <CheckCircleIcon className="mx-auto mb-4 size-16 text-emerald-500" />
-        <h2 className="mb-2 text-xl font-semibold text-slate-900">
+        <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-white">
           Contract Already Signed
         </h2>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           The sponsorship agreement
           {sponsorName && ` for ${sponsorName}`}
           {conferenceName && ` at ${conferenceName}`} has already been signed.
@@ -84,13 +84,12 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
           return (
             <li key={step.key} className="flex items-center space-x-2">
               <span
-                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${
-                  isCompleted
+                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${isCompleted
                     ? 'bg-emerald-500 text-white'
                     : isActive
                       ? 'bg-blue-700 text-white'
-                      : 'bg-slate-200 text-slate-500'
-                }`}
+                      : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                  }`}
               >
                 {isCompleted ? (
                   <CheckCircleIcon className="size-5" />
@@ -99,21 +98,21 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
                 )}
               </span>
               <span
-                className={`text-sm font-medium ${
-                  isActive
-                    ? 'text-blue-700'
+                className={`text-sm font-medium ${isActive
+                    ? 'text-blue-700 dark:text-blue-400'
                     : isCompleted
-                      ? 'text-emerald-600'
-                      : 'text-slate-400'
-                }`}
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
               >
                 {step.label}
               </span>
               {index < steps.length - 1 && (
                 <div
-                  className={`ml-4 h-px w-12 ${
-                    isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
-                  }`}
+                  className={`ml-4 h-px w-12 ${isCompleted
+                      ? 'bg-emerald-400'
+                      : 'bg-slate-200 dark:bg-slate-700'
+                    }`}
                 />
               )}
             </li>
@@ -145,40 +144,58 @@ function ContractReviewStep({
 }) {
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
           Sponsorship Agreement
         </h2>
 
         <dl className="space-y-3 text-sm">
           {details.conferenceName && (
             <div className="flex justify-between">
-              <dt className="font-medium text-slate-500">Event</dt>
-              <dd className="text-slate-900">{details.conferenceName}</dd>
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Event
+              </dt>
+              <dd className="text-slate-900 dark:text-white">
+                {details.conferenceName}
+              </dd>
             </div>
           )}
           {details.organizer && (
             <div className="flex justify-between">
-              <dt className="font-medium text-slate-500">Organizer</dt>
-              <dd className="text-slate-900">{details.organizer}</dd>
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Organizer
+              </dt>
+              <dd className="text-slate-900 dark:text-white">
+                {details.organizer}
+              </dd>
             </div>
           )}
           {details.sponsorName && (
             <div className="flex justify-between">
-              <dt className="font-medium text-slate-500">Sponsor</dt>
-              <dd className="text-slate-900">{details.sponsorName}</dd>
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Sponsor
+              </dt>
+              <dd className="text-slate-900 dark:text-white">
+                {details.sponsorName}
+              </dd>
             </div>
           )}
           {details.tierName && (
             <div className="flex justify-between">
-              <dt className="font-medium text-slate-500">Tier</dt>
-              <dd className="text-slate-900">{details.tierName}</dd>
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Tier
+              </dt>
+              <dd className="text-slate-900 dark:text-white">
+                {details.tierName}
+              </dd>
             </div>
           )}
           {details.contractValue && (
             <div className="flex justify-between">
-              <dt className="font-medium text-slate-500">Contract Value</dt>
-              <dd className="font-medium text-slate-900">
+              <dt className="font-medium text-slate-500 dark:text-slate-400">
+                Contract Value
+              </dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
                 {details.contractValue.toLocaleString()}{' '}
                 {details.contractCurrency || 'NOK'}
               </dd>
@@ -188,11 +205,11 @@ function ContractReviewStep({
       </div>
 
       {details.contractPdfUrl && (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-700">
             <div className="flex items-center space-x-2">
               <DocumentTextIcon className="size-5 text-slate-400" />
-              <h3 className="text-sm font-medium text-slate-900">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-white">
                 Contract Document
               </h3>
             </div>
@@ -200,24 +217,24 @@ function ContractReviewStep({
               href={details.contractPdfUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-blue-700 hover:text-blue-800"
+              className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
             >
               Open in new tab
             </a>
           </div>
-          <div className="bg-slate-50 p-1">
+          <div className="bg-slate-50 p-1 dark:bg-slate-900">
             <iframe
               src={`${details.contractPdfUrl}#toolbar=0`}
-              className="h-125 w-full rounded border border-slate-200"
+              className="h-125 w-full rounded border border-slate-200 dark:border-slate-700"
               title="Contract PDF"
             />
           </div>
         </div>
       )}
 
-      <div className="flex items-start space-x-3 rounded-lg border border-blue-100 bg-blue-50 p-4">
-        <ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-blue-600" />
-        <p className="text-sm text-blue-800">
+      <div className="flex items-start space-x-3 rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-blue-600 dark:text-blue-400" />
+        <p className="text-sm text-blue-800 dark:text-blue-300">
           By proceeding, you confirm that you have reviewed the agreement above
           and are authorized to sign on behalf of{' '}
           <strong>{details.sponsorName || 'your organization'}</strong>.
@@ -261,11 +278,11 @@ function ContractSignStep({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-1 text-lg font-semibold text-slate-900">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="mb-1 text-lg font-semibold text-slate-900 dark:text-white">
           Sign the Agreement
         </h2>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
           Please provide your name and signature below.
         </p>
 
@@ -273,7 +290,7 @@ function ContractSignStep({
           <div>
             <label
               htmlFor="signer-name"
-              className="mb-1.5 block text-sm font-medium text-slate-700"
+              className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
             >
               Full Name
             </label>
@@ -284,21 +301,23 @@ function ContractSignStep({
               onChange={(e) => setSignerName(e.target.value)}
               disabled={isSubmitting}
               placeholder="Enter your full legal name"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
             />
           </div>
 
           {signerEmail && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Email Address
               </label>
-              <p className="text-sm text-slate-600">{signerEmail}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {signerEmail}
+              </p>
             </div>
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
               Signature
             </label>
             <SignaturePadCanvas
@@ -313,9 +332,9 @@ function ContractSignStep({
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
               disabled={isSubmitting}
-              className="mt-0.5 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+              className="mt-0.5 size-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900"
             />
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
               I confirm that I have read and agree to the terms of the
               sponsorship agreement and that my electronic signature above is
               legally binding.
@@ -355,19 +374,19 @@ function CompletionStep({
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
       <div className="mx-auto max-w-md text-center">
-        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-50">
+        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20">
           <CheckCircleIcon className="size-12 text-emerald-500" />
         </div>
-        <h2 className="mb-2 text-xl font-semibold text-slate-900">
+        <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-white">
           Agreement Signed Successfully
         </h2>
-        <p className="mb-6 text-sm text-slate-600">
+        <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
           Thank you! The sponsorship agreement
           {sponsorName && ` for ${sponsorName}`}
           {conferenceName && ` at ${conferenceName}`} has been signed. A copy of
           the signed document will be available to both parties.
         </p>
-        <div className="inline-flex items-center space-x-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+        <div className="inline-flex items-center space-x-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
           <ShieldCheckIcon className="size-4" />
           <span>Your signature has been securely recorded</span>
         </div>
@@ -448,11 +467,11 @@ export function ContractSigningPage({
   return (
     <div>
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
           Sponsorship Agreement
         </h1>
         {contract.conferenceName && (
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {contract.conferenceName}
           </p>
         )}
@@ -461,13 +480,15 @@ export function ContractSigningPage({
       <StepIndicator currentStep={step} />
 
       {submitError && (
-        <div className="mb-6 flex items-start space-x-3 rounded-lg border border-red-200 bg-red-50 p-4">
+        <div className="mb-6 flex items-start space-x-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
           <ExclamationTriangleIcon className="mt-0.5 size-5 shrink-0 text-red-500" />
           <div>
-            <p className="text-sm font-medium text-red-800">
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">
               Signature submission failed
             </p>
-            <p className="mt-1 text-sm text-red-600">{submitError}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+              {submitError}
+            </p>
           </div>
         </div>
       )}

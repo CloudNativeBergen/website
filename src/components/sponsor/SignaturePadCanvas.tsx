@@ -101,7 +101,7 @@ export function SignaturePadCanvas({
 
   return (
     <div className="space-y-2">
-      <div className="relative overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-white">
+      <div className="relative overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-white dark:border-slate-600">
         <canvas
           ref={canvasRef}
           width={width}
@@ -117,14 +117,14 @@ export function SignaturePadCanvas({
         )}
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           Use your mouse or finger to sign
         </p>
         <button
           type="button"
           onClick={handleClear}
           disabled={isEmpty || disabled}
-          className="text-xs font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
+          className="text-xs font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:text-slate-300"
         >
           Clear signature
         </button>
