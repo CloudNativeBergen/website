@@ -34,14 +34,14 @@ export const Default: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/onboarding.sendPortalInvite', () => {
+        http.post('/api/trpc/registration.sendPortalInvite', () => {
           return HttpResponse.json({
             result: {
               data: { url: 'https://example.com/sponsor/portal/abc-123' },
             },
           })
         }),
-        http.post('/api/trpc/onboarding.generateToken', () => {
+        http.post('/api/trpc/registration.generateToken', () => {
           return HttpResponse.json({
             result: {
               data: { url: 'https://example.com/sponsor/portal/abc-123' },
@@ -61,7 +61,7 @@ export const WithExistingToken: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/onboarding.sendPortalInvite', () => {
+        http.post('/api/trpc/registration.sendPortalInvite', () => {
           return HttpResponse.json({
             result: {
               data: {

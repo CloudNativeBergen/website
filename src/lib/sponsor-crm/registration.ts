@@ -7,7 +7,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
 
-export interface OnboardingSponsorInfo {
+export interface RegistrationSponsorInfo {
   _id: string
   sponsorName: string
   sponsorWebsite: string
@@ -20,7 +20,7 @@ export interface OnboardingSponsorInfo {
   conferenceStartDate: string | null
   contactPersons: ContactPerson[]
   billing: BillingInfo | null
-  onboardingComplete: boolean
+  registrationComplete: boolean
   signerEmail: string | null
   signatureStatus: string | null
   contractStatus: string | null
@@ -29,7 +29,7 @@ export interface OnboardingSponsorInfo {
   contractCurrency: string | null
 }
 
-export interface OnboardingSubmission {
+export interface RegistrationSubmission {
   contactPersons: ContactPerson[]
   billing: BillingInfo
   logo?: string | null
@@ -39,7 +39,7 @@ export interface OnboardingSubmission {
   signerEmail?: string
 }
 
-export async function generateOnboardingToken(
+export async function generateRegistrationToken(
   sponsorForConferenceId: string,
 ): Promise<{ token?: string; error?: Error }> {
   try {
@@ -47,10 +47,10 @@ export async function generateOnboardingToken(
     await clientWrite
       .patch(sponsorForConferenceId)
       .set({
-        onboardingToken: token,
-        onboardingComplete: false,
+        registrationToken: token,
+        registrationComplete: false,
       })
-      .unset(['onboardingCompletedAt'])
+      .unset(['registrationCompletedAt'])
       .commit()
 
     return { token }
@@ -59,12 +59,12 @@ export async function generateOnboardingToken(
   }
 }
 
-export async function validateOnboardingToken(
+export async function validateRegistrationToken(
   token: string,
-): Promise<{ sponsor?: OnboardingSponsorInfo; error?: Error }> {
+): Promise<{ sponsor?: RegistrationSponsorInfo; error?: Error }> {
   try {
-    const result = await clientRead.fetch<OnboardingSponsorInfo | null>(
-      `*[_type == "sponsorForConference" && onboardingToken == $onboardingToken][0]{
+    const result = await clientRead.fetch<RegistrationSponsorInfo | null>(
+      `*[_type == "sponsorForConference" && registrationToken == $registrationToken][0]{
         _id,
         "sponsorName": sponsor->name,
         "sponsorWebsite": sponsor->website,
@@ -77,7 +77,7 @@ export async function validateOnboardingToken(
         "conferenceStartDate": conference->startDate,
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ email, reference, comments },
-        onboardingComplete,
+        registrationComplete,
         signerEmail,
         signatureStatus,
         contractStatus,
@@ -85,11 +85,11 @@ export async function validateOnboardingToken(
         contractValue,
         contractCurrency
       }`,
-      { onboardingToken: token },
+      { registrationToken: token },
     )
 
     if (!result) {
-      return { error: new Error('Invalid or expired onboarding token') }
+      return { error: new Error('Invalid or expired registration token') }
     }
 
     return { sponsor: result }
@@ -98,9 +98,9 @@ export async function validateOnboardingToken(
   }
 }
 
-export async function completeOnboarding(
+export async function completeRegistration(
   token: string,
-  data: OnboardingSubmission,
+  data: RegistrationSubmission,
 ): Promise<{
   success?: boolean
   sponsorForConferenceId?: string
@@ -108,14 +108,14 @@ export async function completeOnboarding(
 }> {
   try {
     const { sponsor, error: validateError } =
-      await validateOnboardingToken(token)
+      await validateRegistrationToken(token)
 
     if (validateError || !sponsor) {
-      return { error: validateError || new Error('Invalid onboarding token') }
+      return { error: validateError || new Error('Invalid registration token') }
     }
 
-    if (sponsor.onboardingComplete) {
-      return { error: new Error('Onboarding has already been completed') }
+    if (sponsor.registrationComplete) {
+      return { error: new Error('Registration has already been completed') }
     }
 
     const contactPersons = prepareArrayWithKeys(data.contactPersons, 'contact')
@@ -134,8 +134,8 @@ export async function completeOnboarding(
     const sfcUpdate: Record<string, unknown> = {
       contactPersons,
       billing: data.billing,
-      onboardingComplete: true,
-      onboardingCompletedAt: getCurrentDateTime(),
+      registrationComplete: true,
+      registrationCompletedAt: getCurrentDateTime(),
     }
     if (data.signerEmail) {
       sfcUpdate.signerEmail = data.signerEmail

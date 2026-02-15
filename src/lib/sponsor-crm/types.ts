@@ -37,7 +37,7 @@ export type ActivityType =
   | 'call'
   | 'meeting'
   | 'signature_status_change'
-  | 'onboarding_complete'
+  | 'registration_complete'
   | 'contract_reminder_sent'
 
 export type SponsorTag =
@@ -91,9 +91,9 @@ export interface SponsorForConference {
   invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
-  onboardingToken?: string
-  onboardingComplete?: boolean
-  onboardingCompletedAt?: string
+  registrationToken?: string
+  registrationComplete?: boolean
+  registrationCompletedAt?: string
 }
 
 export interface SponsorForConferenceExpanded {
@@ -178,9 +178,9 @@ export interface SponsorForConferenceExpanded {
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  onboardingToken?: string
-  onboardingComplete?: boolean
-  onboardingCompletedAt?: string
+  registrationToken?: string
+  registrationComplete?: boolean
+  registrationCompletedAt?: string
 }
 
 export interface SponsorActivityExpanded {

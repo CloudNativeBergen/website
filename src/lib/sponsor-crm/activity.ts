@@ -179,14 +179,14 @@ export async function logSignatureStatusChange(
   )
 }
 
-export async function logOnboardingComplete(
+export async function logRegistrationComplete(
   sponsorForConferenceId: string,
   createdBy: string,
 ): Promise<{ activityId?: string; error?: Error }> {
   return createSponsorActivity(
     sponsorForConferenceId,
-    'onboarding_complete',
-    'Sponsor completed self-service onboarding',
+    'registration_complete',
+    'Sponsor completed self-service registration',
     createdBy,
     {
       timestamp: getCurrentDateTime(),

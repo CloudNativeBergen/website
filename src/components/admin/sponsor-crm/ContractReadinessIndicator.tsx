@@ -15,7 +15,7 @@ import {
 
 const SOURCE_LABELS: Record<ReadinessSource, string> = {
   organizer: 'Conference settings',
-  sponsor: 'Sponsor (via onboarding)',
+  sponsor: 'Sponsor (via registration)',
   pipeline: 'CRM pipeline',
 }
 

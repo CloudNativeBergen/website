@@ -13,7 +13,7 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
-import { SponsorOnboardingLogoUpload } from '@/components/sponsor/SponsorOnboardingLogoUpload'
+import { SponsorRegistrationLogoUpload } from '@/components/sponsor/SponsorRegistrationLogoUpload'
 
 interface ContactPersonForm {
   name: string
@@ -39,7 +39,7 @@ export function SponsorPortal({ token }: { token: string }) {
     data: sponsor,
     isLoading,
     error: fetchError,
-  } = api.onboarding.validate.useQuery({ token })
+  } = api.registration.validate.useQuery({ token })
 
   const [contacts, setContacts] = useState<ContactPersonForm[]>([
     { name: '', email: '', phone: '', role: '', isPrimary: true },
@@ -66,7 +66,7 @@ export function SponsorPortal({ token }: { token: string }) {
     }, 100)
   }
 
-  const completeMutation = api.onboarding.complete.useMutation({
+  const completeMutation = api.registration.complete.useMutation({
     onSuccess: () => setSubmitted(true),
     onError: (err) => {
       setError(err.message)
@@ -149,7 +149,7 @@ export function SponsorPortal({ token }: { token: string }) {
   }
 
   // Portal status dashboard — shown when setup is complete
-  if (submitted || sponsor?.onboardingComplete) {
+  if (submitted || sponsor?.registrationComplete) {
     return (
       <PortalStatusDashboard
         sponsorName={sponsor?.sponsorName}
@@ -328,7 +328,7 @@ export function SponsorPortal({ token }: { token: string }) {
             Upload your company logo in SVG format. This will be used on the
             conference website and printed materials.
           </p>
-          <SponsorOnboardingLogoUpload
+          <SponsorRegistrationLogoUpload
             logo={logo}
             logoBright={logoBright}
             sponsorName={sponsor?.sponsorName ?? ''}

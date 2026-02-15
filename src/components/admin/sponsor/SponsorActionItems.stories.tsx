@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>
 
 interface ActionItem {
   id: string
-  type: 'follow_up' | 'contract' | 'onboarding' | 'invoice'
+  type: 'follow_up' | 'contract' | 'registration' | 'invoice'
   title: string
   description: string
   priority: 'high' | 'medium' | 'low'
@@ -46,8 +46,8 @@ const mockActionItems: ActionItem[] = [
   },
   {
     id: '3',
-    type: 'onboarding',
-    title: 'Complete onboarding for CloudCo',
+    type: 'registration',
+    title: 'Complete registration for CloudCo',
     description: 'Missing logo and billing info',
     priority: 'medium',
     dueDate: 'This week',
@@ -68,7 +68,7 @@ function getActionIcon(type: ActionItem['type']) {
       return EnvelopeIcon
     case 'contract':
       return DocumentTextIcon
-    case 'onboarding':
+    case 'registration':
       return ClockIcon
     case 'invoice':
       return ExclamationTriangleIcon
@@ -83,7 +83,7 @@ function getActionColor(type: ActionItem['type']) {
       return 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
     case 'contract':
       return 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
-    case 'onboarding':
+    case 'registration':
       return 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
     case 'invoice':
       return 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400'
@@ -240,7 +240,7 @@ export const Documentation: Story = {
               <ClockIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              onboarding - Pending onboarding
+              registration - Pending registration
             </span>
           </div>
           <div className="flex items-center gap-2">

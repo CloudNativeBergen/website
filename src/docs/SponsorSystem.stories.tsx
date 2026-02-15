@@ -22,8 +22,8 @@ export const Architecture: Story = {
         <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Manages the full lifecycle of conference sponsorships — from initial
           prospecting through contract generation, digital signatures,
-          invoicing, and self-service onboarding. Built on a two-document model
-          separating the conference-independent sponsor entity from
+          invoicing, and self-service registration. Built on a two-document
+          model separating the conference-independent sponsor entity from
           per-conference CRM records.
         </p>
 
@@ -152,11 +152,11 @@ export const Architecture: Story = {
                 ]}
               />
               <FieldGroup
-                label="Onboarding"
+                label="Registration"
                 fields={[
-                  ['onboardingToken', 'Unique token for self-service portal'],
+                  ['registrationToken', 'Unique token for self-service portal'],
                   [
-                    'onboardingComplete / onboardingCompletedAt',
+                    'registrationComplete / registrationCompletedAt',
                     'Completion tracking',
                   ],
                 ]}
@@ -482,7 +482,7 @@ export const Architecture: Story = {
           </h2>
           <div className="rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
             <pre className="font-jetbrains overflow-x-auto text-sm text-brand-slate-gray dark:text-gray-300">
-              {`Sponsor onboarding
+              {`Sponsor registration
   → CRM: create sponsorForConference (auto-assign to current user)
   → Pipeline: prospect → contacted → negotiating → closed-won
   → Each stage change logged to sponsorActivity
@@ -511,7 +511,7 @@ Invoicing
 
 Self-service portal
   → /sponsor/portal/[token] → logo upload, billing, contacts, signer selection
-  → Sets onboardingComplete + onboardingCompletedAt
+  → Sets registrationComplete + registrationCompletedAt
   → Slack notification sent to salesNotificationChannel
   → Admin triggers contract send manually from CRM`}
             </pre>
@@ -539,7 +539,7 @@ Self-service portal
 │              Admin CRM UI                       │
 │  SponsorContractView / Contract Board           │
 └────────────┬────────────────┬───────────────────┘
-             │ Manual "Send"  │ Onboarding trigger
+             │ Manual "Send"  │ Registration trigger
              ▼                ▼
 ┌─────────────────────────────────────────────────┐
 │         generateAndSendContract()               │
@@ -698,7 +698,7 @@ Self-service portal
                 </li>
                 <li>
                   <strong>Unified send</strong> — Same function for manual +
-                  auto-onboarding
+                  auto-registration
                 </li>
                 <li>
                   <strong>Two-tier readiness</strong> — Required vs recommended

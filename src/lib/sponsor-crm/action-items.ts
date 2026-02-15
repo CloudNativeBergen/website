@@ -169,7 +169,7 @@ export function generateActionItems(
 
     // Priority 2: Registration complete — send contract
     if (
-      sponsor.onboardingComplete &&
+      sponsor.registrationComplete &&
       sponsor.contractStatus !== 'contract-sent' &&
       sponsor.contractStatus !== 'contract-signed'
     ) {
@@ -219,21 +219,21 @@ export function generateActionItems(
       })
     }
 
-    // Priority 6: Onboarding not completed for closed-won sponsors
+    // Priority 6: Registration not completed for closed-won sponsors
     if (
       sponsor.status === 'closed-won' &&
-      sponsor.onboardingToken &&
-      !sponsor.onboardingComplete
+      sponsor.registrationToken &&
+      !sponsor.registrationComplete
     ) {
       actions.push({
-        id: `${sponsor._id}-onboarding`,
-        type: 'onboarding-pending',
-        title: 'Onboarding Pending',
+        id: `${sponsor._id}-registration-pending`,
+        type: 'registration-pending',
+        title: 'Registration Pending',
         sponsor: {
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
-        description: `${sponsor.sponsor.name} has not completed onboarding`,
+        description: `${sponsor.sponsor.name} has not completed registration`,
         priority: 6,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })

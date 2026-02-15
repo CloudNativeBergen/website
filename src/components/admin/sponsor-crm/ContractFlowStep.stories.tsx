@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'A vertical stepper component used inside the contract view to visualize the sponsor onboarding flow. Each step shows a numbered indicator with pending/active/complete states, a title, and content. Steps are connected by vertical lines that change color based on completion status.',
+          'A vertical stepper component used inside the contract view to visualize the sponsor registration flow. Each step shows a numbered indicator with pending/active/complete states, a title, and content. Steps are connected by vertical lines that change color based on completion status.',
       },
     },
   },

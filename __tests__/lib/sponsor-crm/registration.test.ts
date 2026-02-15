@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@jest/globals'
-import { buildPortalUrl } from '@/lib/sponsor-crm/onboarding'
+import { buildPortalUrl } from '@/lib/sponsor-crm/registration'
 
-describe('onboarding', () => {
+describe('registration', () => {
   describe('buildPortalUrl', () => {
     it('should build correct portal URL', () => {
       const baseUrl = 'https://cloudnativebergen.no'

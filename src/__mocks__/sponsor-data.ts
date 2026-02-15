@@ -111,7 +111,7 @@ export function mockSponsor(
     billing: mockBillingInfo(),
     tags: ['warm-lead', 'returning-sponsor'] as SponsorTag[],
     notes: 'Very interested in premium package',
-    onboardingComplete: false,
+    registrationComplete: false,
     ...overrides,
   }
 }

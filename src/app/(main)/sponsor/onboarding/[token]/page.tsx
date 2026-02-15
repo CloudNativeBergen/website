@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 
-interface OnboardingPageProps {
+interface RegistrationRedirectPageProps {
   params: Promise<{ token: string }>
 }
 
-export default async function SponsorOnboardingRedirect({
+export default async function SponsorRegistrationRedirect({
   params,
-}: OnboardingPageProps) {
+}: RegistrationRedirectPageProps) {
   const { token } = await params
   redirect(`/sponsor/portal/${token}`)
 }

@@ -2,32 +2,35 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
 import {
-  OnboardingTokenSchema,
-  OnboardingSubmissionSchema,
-  GenerateOnboardingTokenSchema,
-} from '../schemas/onboarding'
+  RegistrationTokenSchema,
+  RegistrationSubmissionSchema,
+  GenerateRegistrationTokenSchema,
+} from '../schemas/registration'
 import {
-  validateOnboardingToken,
-  completeOnboarding,
-  generateOnboardingToken,
+  validateRegistrationToken,
+  completeRegistration,
+  generateRegistrationToken,
   buildPortalUrl,
-} from '@/lib/sponsor-crm/onboarding'
-import type { OnboardingSubmission } from '@/lib/sponsor-crm/onboarding'
-import { logOnboardingComplete, logEmailSent } from '@/lib/sponsor-crm/activity'
+} from '@/lib/sponsor-crm/registration'
+import type { RegistrationSubmission } from '@/lib/sponsor-crm/registration'
+import {
+  logRegistrationComplete,
+  logEmailSent,
+} from '@/lib/sponsor-crm/activity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import type { Conference } from '@/lib/conference/types'
 
-export const onboardingRouter = router({
+export const registrationRouter = router({
   validate: publicProcedure
-    .input(OnboardingTokenSchema)
+    .input(RegistrationTokenSchema)
     .query(async ({ input }) => {
-      const { sponsor, error } = await validateOnboardingToken(input.token)
+      const { sponsor, error } = await validateRegistrationToken(input.token)
 
       if (error || !sponsor) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: error?.message || 'Invalid onboarding token',
+          message: error?.message || 'Invalid registration token',
         })
       }
 
@@ -35,27 +38,27 @@ export const onboardingRouter = router({
     }),
 
   complete: publicProcedure
-    .input(OnboardingSubmissionSchema)
+    .input(RegistrationSubmissionSchema)
     .mutation(async ({ input }) => {
       const { token, ...data } = input
 
       const { success, sponsorForConferenceId, error } =
-        await completeOnboarding(token, data as OnboardingSubmission)
+        await completeRegistration(token, data as RegistrationSubmission)
 
       if (error || !success) {
         throw new TRPCError({
           code: error?.message.includes('already been completed')
             ? 'CONFLICT'
             : 'INTERNAL_SERVER_ERROR',
-          message: error?.message || 'Failed to complete onboarding',
+          message: error?.message || 'Failed to complete registration',
         })
       }
 
       if (sponsorForConferenceId) {
         try {
-          await logOnboardingComplete(sponsorForConferenceId, 'system')
+          await logRegistrationComplete(sponsorForConferenceId, 'system')
         } catch (logError) {
-          console.error('Failed to log onboarding completion:', logError)
+          console.error('Failed to log registration completion:', logError)
         }
 
         // Send Slack notification to sales channel
@@ -99,16 +102,16 @@ export const onboardingRouter = router({
     }),
 
   generateToken: adminProcedure
-    .input(GenerateOnboardingTokenSchema)
+    .input(GenerateRegistrationTokenSchema)
     .mutation(async ({ input }) => {
-      const { token, error } = await generateOnboardingToken(
+      const { token, error } = await generateRegistrationToken(
         input.sponsorForConferenceId,
       )
 
       if (error || !token) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error?.message || 'Failed to generate onboarding token',
+          message: error?.message || 'Failed to generate registration token',
         })
       }
 
@@ -145,8 +148,8 @@ export const onboardingRouter = router({
       // Fetch full sponsor + conference data for the email
       const sfc = await clientReadUncached.fetch<{
         _id: string
-        onboardingToken: string | null
-        onboardingComplete: boolean
+        registrationToken: string | null
+        registrationComplete: boolean
         sponsor: { name: string }
         contactPersons: Array<{
           name: string
@@ -168,8 +171,8 @@ export const onboardingRouter = router({
       }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{
           _id,
-          onboardingToken,
-          onboardingComplete,
+          registrationToken,
+          registrationComplete,
           sponsor->{ name },
           contactPersons[]{ name, email, isPrimary },
           tier->{ title },
@@ -222,15 +225,15 @@ export const onboardingRouter = router({
       }
 
       // Generate token if not already present
-      let token = sfc.onboardingToken
+      let token = sfc.registrationToken
       if (!token) {
-        const result = await generateOnboardingToken(
+        const result = await generateRegistrationToken(
           input.sponsorForConferenceId,
         )
         if (result.error || !result.token) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to generate onboarding token',
+            message: 'Failed to generate registration token',
           })
         }
         token = result.token

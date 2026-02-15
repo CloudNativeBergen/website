@@ -321,13 +321,13 @@ export const Overview: Story = {
           </div>
         </section>
 
-        {/* Onboarding & Contract */}
+        {/* Registration & Contract */}
         <section className="mb-12">
           <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-            Onboarding &amp; Contract
+            Registration &amp; Contract
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Components for sponsor onboarding and contract management.
+            Components for sponsor registration and contract management.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
@@ -361,9 +361,9 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
-              name="SponsorOnboardingLogoUpload"
-              path="@/components/sponsor/SponsorOnboardingLogoUpload"
-              description="SVG logo upload for the sponsor onboarding flow."
+              name="SponsorRegistrationLogoUpload"
+              path="@/components/sponsor/SponsorRegistrationLogoUpload"
+              description="SVG logo upload for the sponsor registration flow."
               hasStory
             />
             <ComponentCard

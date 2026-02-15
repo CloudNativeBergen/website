@@ -11,7 +11,7 @@ import { ticketsRouter } from './routers/tickets'
 import { volunteerRouter } from './routers/volunteer'
 import { workshopRouter } from './routers/workshop'
 import { galleryRouter } from './routers/gallery'
-import { onboardingRouter } from './routers/onboarding'
+import { registrationRouter } from './routers/registration'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -26,7 +26,7 @@ export const appRouter = router({
   volunteer: volunteerRouter,
   workshop: workshopRouter,
   gallery: galleryRouter,
-  onboarding: onboardingRouter,
+  registration: registrationRouter,
 })
 
 export type AppRouter = typeof appRouter

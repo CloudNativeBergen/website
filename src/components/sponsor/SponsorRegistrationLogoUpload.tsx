@@ -12,7 +12,7 @@ import { downloadSvg } from '@/lib/sponsor/utils'
 
 const LOGO_PREVIEW_SIZE = { width: '120px', height: '120px' }
 
-interface SponsorOnboardingLogoUploadProps {
+interface SponsorRegistrationLogoUploadProps {
   logo: string | null
   logoBright: string | null
   sponsorName: string
@@ -139,12 +139,12 @@ function LogoUploadField({
   )
 }
 
-export function SponsorOnboardingLogoUpload({
+export function SponsorRegistrationLogoUpload({
   logo,
   logoBright,
   sponsorName,
   onChange,
-}: SponsorOnboardingLogoUploadProps) {
+}: SponsorRegistrationLogoUploadProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

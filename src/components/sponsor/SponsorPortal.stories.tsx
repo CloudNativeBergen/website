@@ -33,7 +33,7 @@ const mockSponsorData = {
   conferenceStartDate: '2026-10-15',
   contactPersons: [],
   billing: null,
-  onboardingComplete: false,
+  registrationComplete: false,
   signerEmail: null,
   signatureStatus: null,
   contractStatus: null,
@@ -90,10 +90,10 @@ export const Default: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(trpcResponse(mockSponsorData))
         }),
-        http.post('/api/trpc/onboarding.complete', async () => {
+        http.post('/api/trpc/registration.complete', async () => {
           await delay(1000)
           return HttpResponse.json(trpcResponse({ success: true }))
         }),
@@ -112,10 +112,10 @@ export const WithExistingData: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(trpcResponse(mockSponsorWithExistingData))
         }),
-        http.post('/api/trpc/onboarding.complete', async () => {
+        http.post('/api/trpc/registration.complete', async () => {
           await delay(1000)
           return HttpResponse.json(trpcResponse({ success: true }))
         }),
@@ -134,7 +134,7 @@ export const Loading: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', async () => {
+        http.get('/api/trpc/registration.validate', async () => {
           await delay(999999)
           return HttpResponse.json(trpcResponse(mockSponsorData))
         }),
@@ -153,9 +153,9 @@ export const InvalidToken: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(
-            trpcError('Invalid or expired onboarding token', 'NOT_FOUND'),
+            trpcError('Invalid or expired registration token', 'NOT_FOUND'),
           )
         }),
       ],
@@ -173,11 +173,11 @@ export const SetupComplete: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(
             trpcResponse({
               ...mockSponsorWithExistingData,
-              onboardingComplete: true,
+              registrationComplete: true,
               contractValue: 75000,
               contractCurrency: 'NOK',
             }),
@@ -198,11 +198,11 @@ export const ContractPending: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(
             trpcResponse({
               ...mockSponsorWithExistingData,
-              onboardingComplete: true,
+              registrationComplete: true,
               signatureStatus: 'pending',
               contractStatus: 'contract-sent',
               signerEmail: 'jane@acme.example.com',
@@ -227,11 +227,11 @@ export const ContractSigned: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(
             trpcResponse({
               ...mockSponsorWithExistingData,
-              onboardingComplete: true,
+              registrationComplete: true,
               signatureStatus: 'signed',
               contractStatus: 'contract-signed',
               signerEmail: 'jane@acme.example.com',
@@ -256,7 +256,7 @@ export const CommunityPartner: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/registration.validate', () => {
           return HttpResponse.json(
             trpcResponse({
               ...mockSponsorData,
@@ -265,7 +265,7 @@ export const CommunityPartner: Story = {
             }),
           )
         }),
-        http.post('/api/trpc/onboarding.complete', async () => {
+        http.post('/api/trpc/registration.complete', async () => {
           await delay(1000)
           return HttpResponse.json(trpcResponse({ success: true }))
         }),

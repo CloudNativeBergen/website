@@ -23,7 +23,7 @@ export interface SendContractResult {
 
 /**
  * Generates a contract PDF and sends it for digital signing via Adobe Sign.
- * Used both by the admin manual send flow and the automated onboarding completion flow.
+ * Used both by the admin manual send flow and the automated registration completion flow.
  */
 export async function generateAndSendContract(
   sponsorForConferenceId: string,

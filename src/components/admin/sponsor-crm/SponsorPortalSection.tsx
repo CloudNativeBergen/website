@@ -25,11 +25,11 @@ export function SponsorPortalSection({
   const [copied, setCopied] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
 
-  const generateMutation = api.onboarding.generateToken.useMutation({
+  const generateMutation = api.registration.generateToken.useMutation({
     onSuccess: (data) => setGeneratedUrl(data.url),
   })
 
-  const sendInviteMutation = api.onboarding.sendPortalInvite.useMutation({
+  const sendInviteMutation = api.registration.sendPortalInvite.useMutation({
     onSuccess: (data) => {
       setGeneratedUrl(data.url)
       setEmailSent(true)

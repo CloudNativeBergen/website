@@ -63,8 +63,8 @@ export const PortalComplete: Story = {
     sponsor: mockSponsor({
       contractStatus: 'contract-sent',
       signatureStatus: 'pending',
-      onboardingComplete: true,
-      onboardingToken: 'abc-123',
+      registrationComplete: true,
+      registrationToken: 'abc-123',
     }),
   },
   parameters: {
@@ -171,7 +171,7 @@ export const WithExistingToken: Story = {
     sponsor: mockSponsor({
       contractStatus: 'verbal-agreement',
       signatureStatus: 'not-started',
-      onboardingToken: 'existing-token-abc-123',
+      registrationToken: 'existing-token-abc-123',
     }),
   },
   parameters: {

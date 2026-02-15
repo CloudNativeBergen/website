@@ -100,7 +100,7 @@ export function SponsorContractView({
   const isSent = sponsor.contractStatus === 'contract-sent'
   const isPendingSignature =
     sponsor.signatureStatus === 'pending' && !!sponsor.signatureId
-  const isPortalComplete = sponsor.onboardingComplete === true
+  const isPortalComplete = sponsor.registrationComplete === true
 
   // Preview step (manual send flow)
   if (step === 'preview' && pdfData) {
@@ -257,7 +257,7 @@ export function SponsorContractView({
         status={
           isPortalComplete
             ? 'complete'
-            : sponsor.onboardingToken
+            : sponsor.registrationToken
               ? 'active'
               : 'pending'
         }
@@ -265,13 +265,13 @@ export function SponsorContractView({
         {isPortalComplete ? (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Company details, contacts, billing, and logo collected.
-            {sponsor.onboardingCompletedAt &&
-              ` Completed ${new Date(sponsor.onboardingCompletedAt).toLocaleDateString()}.`}
+            {sponsor.registrationCompletedAt &&
+              ` Completed ${new Date(sponsor.registrationCompletedAt).toLocaleDateString()}.`}
           </p>
         ) : (
           <SponsorPortalSection
             sponsorForConferenceId={sponsor._id}
-            existingToken={sponsor.onboardingToken}
+            existingToken={sponsor.registrationToken}
             portalComplete={false}
           />
         )}

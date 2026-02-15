@@ -109,9 +109,9 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     reference,
     comments
   },
-  onboardingToken,
-  onboardingComplete,
-  onboardingCompletedAt
+  registrationToken,
+  registrationComplete,
+  registrationCompletedAt
 `
 
 export async function getPublicSponsorsForConference(
