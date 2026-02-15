@@ -18,7 +18,13 @@ export function SignaturePadCanvas({
 }: SignaturePadCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const padRef = useRef<SignaturePad | null>(null)
+  const onChangeRef = useRef(onSignatureChange)
   const [isEmpty, setIsEmpty] = useState(true)
+
+  // Keep the callback ref current without triggering effect re-runs
+  useEffect(() => {
+    onChangeRef.current = onSignatureChange
+  }, [onSignatureChange])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -35,7 +41,7 @@ export function SignaturePadCanvas({
     pad.addEventListener('endStroke', () => {
       setIsEmpty(pad.isEmpty())
       if (!pad.isEmpty()) {
-        onSignatureChange(pad.toDataURL('image/png'))
+        onChangeRef.current(pad.toDataURL('image/png'))
       }
     })
 
@@ -51,7 +57,7 @@ export function SignaturePadCanvas({
     return () => {
       pad.off()
     }
-  }, [onSignatureChange])
+  }, [])
 
   useEffect(() => {
     if (padRef.current) {
@@ -90,8 +96,8 @@ export function SignaturePadCanvas({
   const handleClear = useCallback(() => {
     padRef.current?.clear()
     setIsEmpty(true)
-    onSignatureChange(null)
-  }, [onSignatureChange])
+    onChangeRef.current(null)
+  }, [])
 
   return (
     <div className="space-y-2">

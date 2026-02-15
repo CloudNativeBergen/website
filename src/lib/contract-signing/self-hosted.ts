@@ -12,6 +12,9 @@ import type {
 
 const PROVIDER_NAME = 'Self-Hosted'
 
+const STATUS_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ signatureStatus }`
+const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ _id }`
+
 /**
  * Self-hosted contract signing provider.
  *
@@ -19,7 +22,7 @@ const PROVIDER_NAME = 'Self-Hosted'
  * this provider generates a unique token, stores it in the sponsor record,
  * and constructs a signing URL that points to the application itself.
  *
- * The actual signature capture (canvas pad → PNG → embedded in PDF) is
+ * The actual signature capture (canvas pad -> PNG -> embedded in PDF) is
  * handled by the signing page + tRPC router — this provider only manages
  * the lifecycle metadata stored in Sanity.
  */
@@ -35,19 +38,13 @@ export class SelfHostedSigningProvider implements ContractSigningProvider {
       'https://cloudnativeday.no'
     const signingUrl = `${baseUrl}/sponsor/contract/sign/${token}`
 
-    return {
-      agreementId: token,
-      signingUrl,
-    }
+    return { agreementId: token, signingUrl }
   }
 
   async checkStatus(agreementId: string): Promise<SigningStatusResult> {
     const doc = await clientReadUncached.fetch<{
       signatureStatus?: SignatureStatus
-    } | null>(
-      `*[_type == "sponsorForConference" && signatureId == $id][0]{ signatureStatus }`,
-      { id: agreementId },
-    )
+    } | null>(STATUS_QUERY, { id: agreementId })
 
     const status: SignatureStatus = doc?.signatureStatus ?? 'not-started'
     return { status, providerStatus: status }
@@ -55,16 +52,14 @@ export class SelfHostedSigningProvider implements ContractSigningProvider {
 
   async cancelAgreement(agreementId: string): Promise<void> {
     const doc = await clientReadUncached.fetch<{ _id: string } | null>(
-      `*[_type == "sponsorForConference" && signatureId == $id][0]{ _id }`,
+      ID_QUERY,
       { id: agreementId },
     )
     if (!doc) return
 
     await clientWrite
       .patch(doc._id)
-      .set({
-        signatureStatus: 'rejected' as SignatureStatus,
-      })
+      .set({ signatureStatus: 'rejected' as SignatureStatus })
       .commit()
   }
 

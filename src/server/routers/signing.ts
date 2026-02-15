@@ -1,7 +1,11 @@
 import { TRPCError } from '@trpc/server'
 
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
-import { getCurrentDateTime } from '@/lib/time'
+import {
+  logContractStatusChange,
+  logSignatureStatusChange,
+} from '@/lib/sponsor-crm/activity'
+import { formatDate, getCurrentDateTime } from '@/lib/time'
 import { publicProcedure, router } from '@/server/trpc'
 
 import { SigningTokenSchema, SubmitSignatureSchema } from '../schemas/signing'
@@ -11,6 +15,7 @@ interface SigningContractData {
   signatureStatus: string
   signatureId: string
   signerEmail: string
+  contractStatus?: string
   contractDocument?: {
     asset?: {
       url?: string
@@ -37,6 +42,7 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   signatureStatus,
   signatureId,
   signerEmail,
+  contractStatus,
   contractDocument{
     asset->{
       url
@@ -48,6 +54,108 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   contractValue,
   contractCurrency
 }`
+
+// Signature placement constants for the contract PDF.
+// The signature is placed in the right-side block of the signing area.
+const SIGNATURE_MAX_WIDTH = 150
+const SIGNATURE_MAX_HEIGHT = 60
+const SIGNATURE_X_RATIO = 0.55
+const SIGNATURE_Y = 120
+const SIGNER_NAME_OFFSET_Y = 12
+const SIGNER_DATE_OFFSET_Y = 24
+
+/**
+ * Embeds a PNG signature image, signer name, and date into a contract PDF.
+ * Returns the signed PDF as a Buffer.
+ */
+async function embedSignatureInPdf(
+  pdfUrl: string,
+  signatureDataUrl: string,
+  signerName: string,
+): Promise<Buffer> {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+
+  const pdfResponse = await fetch(pdfUrl)
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
+  }
+  const pdfBytes = await pdfResponse.arrayBuffer()
+  const pdfDoc = await PDFDocument.load(pdfBytes)
+
+  // Decode signature PNG from data URL
+  const base64Data = signatureDataUrl.replace('data:image/png;base64,', '')
+  const signatureBytes = Buffer.from(base64Data, 'base64')
+  const signatureImage = await pdfDoc.embedPng(signatureBytes)
+
+  const firstPage = pdfDoc.getPage(0)
+  const { width: pageWidth } = firstPage.getSize()
+
+  // Scale the signature to fit within bounds
+  const sigDims = signatureImage.scale(1)
+  const scale = Math.min(
+    SIGNATURE_MAX_WIDTH / sigDims.width,
+    SIGNATURE_MAX_HEIGHT / sigDims.height,
+    1,
+  )
+  const drawWidth = sigDims.width * scale
+  const drawHeight = sigDims.height * scale
+
+  const sigX =
+    pageWidth * SIGNATURE_X_RATIO + (SIGNATURE_MAX_WIDTH - drawWidth) / 2
+  const sigY = SIGNATURE_Y
+
+  firstPage.drawImage(signatureImage, {
+    x: sigX,
+    y: sigY,
+    width: drawWidth,
+    height: drawHeight,
+  })
+
+  // Add signer name and date below the signature
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const dateStr = formatDate(getCurrentDateTime())
+
+  firstPage.drawText(signerName, {
+    x: sigX,
+    y: sigY - SIGNER_NAME_OFFSET_Y,
+    size: 9,
+    font: helvetica,
+    color: rgb(0.2, 0.2, 0.2),
+  })
+
+  firstPage.drawText(dateStr, {
+    x: sigX,
+    y: sigY - SIGNER_DATE_OFFSET_Y,
+    size: 8,
+    font: helvetica,
+    color: rgb(0.4, 0.4, 0.4),
+  })
+
+  const signedBytes = await pdfDoc.save()
+  return Buffer.from(signedBytes)
+}
+
+function ensurePendingContract(doc: SigningContractData): void {
+  if (doc.signatureStatus === 'signed') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'This contract has already been signed.',
+    })
+  }
+  if (doc.signatureStatus === 'rejected' || doc.signatureStatus === 'expired') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: `This contract has been ${doc.signatureStatus}. Please contact the organizer.`,
+    })
+  }
+}
+
+function sanitizeSponsorName(name?: string): string {
+  return (name || 'sponsor')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
 
 export const signingRouter = router({
   getContract: publicProcedure
@@ -73,15 +181,7 @@ export const signingRouter = router({
         }
       }
 
-      if (
-        doc.signatureStatus === 'rejected' ||
-        doc.signatureStatus === 'expired'
-      ) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: `This contract has been ${doc.signatureStatus}. Please contact the organizer.`,
-        })
-      }
+      ensurePendingContract(doc)
 
       return {
         status: 'pending' as const,
@@ -113,24 +213,8 @@ export const signingRouter = router({
         })
       }
 
-      if (doc.signatureStatus === 'signed') {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'This contract has already been signed.',
-        })
-      }
+      ensurePendingContract(doc)
 
-      if (
-        doc.signatureStatus === 'rejected' ||
-        doc.signatureStatus === 'expired'
-      ) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: `This contract has been ${doc.signatureStatus}. Please contact the organizer.`,
-        })
-      }
-
-      // Embed signature into the contract PDF
       const pdfUrl = doc.contractDocument?.asset?.url
       if (!pdfUrl) {
         throw new TRPCError({
@@ -139,82 +223,14 @@ export const signingRouter = router({
         })
       }
 
+      // Embed signature into the contract PDF
       let signedPdfBuffer: Buffer
       try {
-        const { PDFDocument } = await import('pdf-lib')
-
-        const pdfResponse = await fetch(pdfUrl)
-        if (!pdfResponse.ok) {
-          throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
-        }
-        const pdfBytes = await pdfResponse.arrayBuffer()
-        const pdfDoc = await PDFDocument.load(pdfBytes)
-
-        // Decode signature PNG from data URL
-        const base64Data = input.signatureDataUrl.replace(
-          'data:image/png;base64,',
-          '',
+        signedPdfBuffer = await embedSignatureInPdf(
+          pdfUrl,
+          input.signatureDataUrl,
+          input.signerName,
         )
-        const signatureBytes = Buffer.from(base64Data, 'base64')
-        const signatureImage = await pdfDoc.embedPng(signatureBytes)
-
-        // Place signature on the last page of the main contract (page 1)
-        // Position: right side of the signature area (sponsor/partner block)
-        const firstPage = pdfDoc.getPage(0)
-        const { width: pageWidth } = firstPage.getSize()
-
-        // Scale the signature to fit (max 150x60)
-        const maxWidth = 150
-        const maxHeight = 60
-        const sigDims = signatureImage.scale(1)
-        const scale = Math.min(
-          maxWidth / sigDims.width,
-          maxHeight / sigDims.height,
-          1,
-        )
-        const drawWidth = sigDims.width * scale
-        const drawHeight = sigDims.height * scale
-
-        // Position: right half of the page, above the signature line
-        // The signature area is roughly at y=120 from bottom, right block
-        // starts at roughly 55% of page width
-        const sigX = pageWidth * 0.55 + (maxWidth - drawWidth) / 2
-        const sigY = 120
-
-        firstPage.drawImage(signatureImage, {
-          x: sigX,
-          y: sigY,
-          width: drawWidth,
-          height: drawHeight,
-        })
-
-        // Add signer name and date as text below the signature
-        const { rgb } = await import('pdf-lib')
-        const helvetica = await pdfDoc.embedFont('Helvetica' as never)
-        const dateStr = new Date().toLocaleDateString('en-GB', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-
-        firstPage.drawText(input.signerName, {
-          x: sigX,
-          y: sigY - 12,
-          size: 9,
-          font: helvetica,
-          color: rgb(0.2, 0.2, 0.2),
-        })
-
-        firstPage.drawText(dateStr, {
-          x: sigX,
-          y: sigY - 24,
-          size: 8,
-          font: helvetica,
-          color: rgb(0.4, 0.4, 0.4),
-        })
-
-        const signedBytes = await pdfDoc.save()
-        signedPdfBuffer = Buffer.from(signedBytes)
       } catch (pdfError) {
         console.error('[signing] Failed to embed signature in PDF:', pdfError)
         throw new TRPCError({
@@ -226,11 +242,7 @@ export const signingRouter = router({
       }
 
       // Upload signed PDF to Sanity
-      const safeName = (doc.sponsor?.name || 'sponsor')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-      const filename = `contract-${safeName}-signed.pdf`
+      const filename = `contract-${sanitizeSponsorName(doc.sponsor?.name)}-signed.pdf`
 
       let asset: { _id: string }
       try {
@@ -271,6 +283,24 @@ export const signingRouter = router({
             'Signature was captured but failed to update the record. Please contact the organizer.',
           cause: patchError,
         })
+      }
+
+      // Log activity (non-critical — best-effort)
+      try {
+        await logSignatureStatusChange(
+          doc._id,
+          doc.signatureStatus ?? 'pending',
+          'signed',
+          'signer',
+        )
+        await logContractStatusChange(
+          doc._id,
+          doc.contractStatus ?? 'contract-sent',
+          'contract-signed',
+          'signer',
+        )
+      } catch (logError) {
+        console.error('[signing] Failed to log signing activity:', logError)
       }
 
       return {
