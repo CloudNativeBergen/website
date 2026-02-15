@@ -17,6 +17,7 @@ export type InvoiceStatus =
 export type ContractStatus =
   | 'none'
   | 'verbal-agreement'
+  | 'registration-sent'
   | 'contract-sent'
   | 'contract-signed'
 
@@ -122,6 +123,8 @@ export interface SponsorForConferenceExpanded {
     startDate?: string
     endDate?: string
     sponsorEmail?: string
+    domains?: string[]
+    socialLinks?: string[]
   }
   tier?: {
     _id: string

@@ -88,10 +88,11 @@ export function generateActionItems(
       })
     }
 
-    // Priority 2: Invoice not sent for closed deals with value
+    // Priority 2: Invoice not sent for closed deals with signed contract
     if (
       sponsor.status === 'closed-won' &&
       sponsor.contractValue &&
+      sponsor.contractStatus === 'contract-signed' &&
       sponsor.invoiceStatus === 'not-sent'
     ) {
       actions.push({

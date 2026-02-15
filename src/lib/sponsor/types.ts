@@ -80,7 +80,10 @@ export interface ContactPerson extends Record<string, unknown> {
   isPrimary?: boolean
 }
 
+export type InvoiceFormat = 'ehf' | 'pdf'
+
 export interface BillingInfo {
+  invoiceFormat: InvoiceFormat
   email: string
   reference?: string
   comments?: string

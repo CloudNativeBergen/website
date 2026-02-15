@@ -38,6 +38,7 @@ export function mockBillingInfo(
   overrides: Partial<BillingInfo> = {},
 ): BillingInfo {
   return {
+    invoiceFormat: 'pdf',
     email: 'billing@example.com',
     reference: 'PO-2026-001',
     comments: 'Invoice quarterly',

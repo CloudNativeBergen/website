@@ -85,6 +85,10 @@ export function SponsorPipelineView({
   onSubmit,
   onCancel,
 }: SponsorPipelineViewProps) {
+  const isContractProcessStarted =
+    sponsor?.contractStatus === 'registration-sent' ||
+    sponsor?.contractStatus === 'contract-sent' ||
+    sponsor?.contractStatus === 'contract-signed'
   return (
     <form onSubmit={onSubmit}>
       <div className="space-y-3">
@@ -238,6 +242,12 @@ export function SponsorPipelineView({
                 contractCurrency: value as 'NOK' | 'USD' | 'EUR' | 'GBP',
               }))
             }
+            disabled={isContractProcessStarted}
+            helperText={
+              isContractProcessStarted
+                ? 'Locked — contract has been sent'
+                : undefined
+            }
           />
         </div>
 
@@ -285,7 +295,7 @@ export function SponsorPipelineView({
             'Saving...'
           ) : (
             <>
-              {sponsor ? 'Update' : 'Add'}
+              Save
               <kbd className="ml-1 rounded bg-white/20 px-1.5 py-0.5 font-mono text-xs">
                 ⌘S
               </kbd>

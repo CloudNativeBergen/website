@@ -16,8 +16,9 @@ import type { RegistrationSubmission } from '@/lib/sponsor-crm/registration'
 import {
   logRegistrationComplete,
   logEmailSent,
+  logContractStatusChange,
 } from '@/lib/sponsor-crm/activity'
-import { clientReadUncached } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import type { Conference } from '@/lib/conference/types'
 
@@ -85,7 +86,7 @@ export const registrationRouter = router({
               "conference": conference->{
                 _id, title, city, country, startDate, endDate,
                 organizer, salesNotificationChannel, domains,
-                "socialLinks": socialLinks[].url
+                socialLinks
               }
             }`,
             { id: sponsorForConferenceId },
@@ -157,6 +158,7 @@ export const registrationRouter = router({
         _id: string
         registrationToken: string | null
         registrationComplete: boolean
+        contractStatus: string | null
         sponsor: { name: string }
         contactPersons: Array<{
           name: string
@@ -180,6 +182,7 @@ export const registrationRouter = router({
           _id,
           registrationToken,
           registrationComplete,
+          contractStatus,
           sponsor->{ name },
           contactPersons[]{ name, email, isPrimary },
           tier->{ title },
@@ -191,7 +194,7 @@ export const registrationRouter = router({
             startDate,
             organizer,
             sponsorEmail,
-            "socialLinks": socialLinks[].url,
+            socialLinks,
             domains
           }
         }`,
@@ -292,6 +295,34 @@ export const registrationRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Failed to send email: ${result.error.message}`,
         })
+      }
+
+      // Update contract status to 'registration-sent' if not already further along
+      const oldContractStatus = sfc.contractStatus || 'none'
+      const advancedStatuses = [
+        'registration-sent',
+        'contract-sent',
+        'contract-signed',
+      ]
+      if (!advancedStatuses.includes(oldContractStatus)) {
+        try {
+          await clientWrite
+            .patch(input.sponsorForConferenceId)
+            .set({ contractStatus: 'registration-sent' })
+            .commit()
+
+          await logContractStatusChange(
+            input.sponsorForConferenceId,
+            oldContractStatus,
+            'registration-sent',
+            ctx.speaker._id,
+          )
+        } catch (statusError) {
+          console.error(
+            'Failed to update contract status to registration-sent:',
+            statusError,
+          )
+        }
       }
 
       // Log email activity

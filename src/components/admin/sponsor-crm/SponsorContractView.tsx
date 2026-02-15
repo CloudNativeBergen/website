@@ -12,6 +12,7 @@ import {
   DocumentTextIcon,
   PaperAirplaneIcon,
   ArrowPathIcon,
+  ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
@@ -427,6 +428,61 @@ export function SponsorContractView({
           </p>
         )}
       </ContractFlowStep>
+
+      {/* Contract summary — shown when contract is signed or sent */}
+      {(isSigned || isSent) && (
+        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Contract details
+          </h4>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            {sponsor.tier && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">Tier</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">
+                  {sponsor.tier.title}
+                </dd>
+              </>
+            )}
+            {sponsor.contractValue != null && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">Value</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">
+                  {sponsor.contractValue.toLocaleString()}{' '}
+                  {sponsor.contractCurrency}
+                </dd>
+              </>
+            )}
+            {sponsor.signerEmail && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">Signer</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">
+                  {sponsor.signerEmail}
+                </dd>
+              </>
+            )}
+            {sponsor.contractTemplate && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">Template</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">
+                  {sponsor.contractTemplate.title}
+                </dd>
+              </>
+            )}
+          </dl>
+          {sponsor.contractDocument?.asset?.url && (
+            <a
+              href={sponsor.contractDocument.asset.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            >
+              <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+              View signed contract
+            </a>
+          )}
+        </div>
+      )}
     </div>
   )
 }

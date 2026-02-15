@@ -20,6 +20,7 @@ export const InvoiceStatusSchema = z.enum([
 export const ContractStatusSchema = z.enum([
   'none',
   'verbal-agreement',
+  'registration-sent',
   'contract-sent',
   'contract-signed',
 ])

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { InvoiceFormatSchema } from './sponsor'
+
 export const RegistrationTokenSchema = z.object({
   token: z.string().uuid(),
 })
@@ -14,6 +16,7 @@ export const RegistrationContactPersonSchema = z.object({
 })
 
 export const RegistrationBillingSchema = z.object({
+  invoiceFormat: InvoiceFormatSchema.default('pdf'),
   email: z.string().email('Valid billing email is required'),
   reference: z.string().optional(),
   comments: z.string().optional(),
@@ -25,7 +28,7 @@ export const RegistrationSubmissionSchema = z.object({
     .array(RegistrationContactPersonSchema)
     .min(1, 'At least one contact person is required'),
   billing: RegistrationBillingSchema,
-  logo: z.string().nullable().optional(),
+  logo: z.string().min(1, 'Company logo is required'),
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().optional(),
   address: z.string().optional(),

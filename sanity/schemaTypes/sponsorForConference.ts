@@ -79,6 +79,7 @@ export default defineType({
         list: [
           { title: 'None', value: 'none' },
           { title: 'Verbal Agreement', value: 'verbal-agreement' },
+          { title: 'Registration Sent', value: 'registration-sent' },
           { title: 'Contract Sent', value: 'contract-sent' },
           { title: 'Contract Signed', value: 'contract-signed' },
         ],
@@ -358,9 +359,26 @@ export default defineType({
       type: 'object',
       fields: [
         {
+          name: 'invoiceFormat',
+          title: 'Invoice Format',
+          type: 'string',
+          description: 'How the sponsor prefers to receive invoices',
+          options: {
+            list: [
+              { title: 'EHF (Digital Invoice)', value: 'ehf' },
+              { title: 'PDF via Email', value: 'pdf' },
+            ],
+            layout: 'radio',
+          },
+          initialValue: 'pdf',
+          validation: (Rule) => Rule.required(),
+        },
+        {
           name: 'email',
           title: 'Billing Email',
           type: 'string',
+          description:
+            'Required for PDF invoices and as fallback if EHF delivery fails',
           validation: (Rule) =>
             Rule.required().email().error('Please enter a valid email'),
         },

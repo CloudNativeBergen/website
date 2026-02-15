@@ -41,7 +41,9 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     venueAddress,
     startDate,
     endDate,
-    sponsorEmail
+    sponsorEmail,
+    domains,
+    socialLinks
   },
   tier->{
     _id,
@@ -106,6 +108,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     isPrimary
   },
   billing{
+    invoiceFormat,
     email,
     reference,
     comments
@@ -165,6 +168,7 @@ export async function createSponsorForConference(
           }))
         : undefined,
       status: data.status,
+      contractStatus: data.contractStatus || 'none',
       assignedTo: data.assignedTo
         ? { _type: 'reference', _ref: data.assignedTo }
         : undefined,
@@ -416,7 +420,7 @@ export async function copySponsorsFromPreviousYear(
         contractCurrency,
         tags,
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
-        billing{ email, reference, comments }
+        billing{ invoiceFormat, email, reference, comments }
       }`,
       { conferenceId: sourceConferenceId },
     )

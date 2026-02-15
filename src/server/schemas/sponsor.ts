@@ -11,7 +11,10 @@ export const ContactPersonSchema = z.object({
   role: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+export const InvoiceFormatSchema = z.enum(['ehf', 'pdf'])
+
 export const BillingInfoSchema = z.object({
+  invoiceFormat: InvoiceFormatSchema.default('pdf'),
   email: z.string().email('Valid billing email is required'),
   reference: z.string().nullable().optional().transform(nullToUndefined),
   comments: z.string().nullable().optional().transform(nullToUndefined),

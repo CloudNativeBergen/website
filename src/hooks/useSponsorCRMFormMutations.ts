@@ -34,7 +34,6 @@ interface UseSponsorCRMFormMutationsOptions {
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
   onSuccess: () => void
-  onClose: () => void
 }
 
 export function useSponsorCRMFormMutations({
@@ -42,15 +41,9 @@ export function useSponsorCRMFormMutations({
   sponsor,
   isOpen,
   onSuccess,
-  onClose,
 }: UseSponsorCRMFormMutationsOptions) {
   const { showNotification } = useNotification()
   const utils = api.useUtils()
-
-  const handleSuccess = () => {
-    onSuccess()
-    onClose()
-  }
 
   const createMutation = api.sponsor.crm.create.useMutation({
     onSuccess: async () => {
@@ -60,7 +53,7 @@ export function useSponsorCRMFormMutations({
         message: 'Sponsor added to pipeline',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -79,7 +72,7 @@ export function useSponsorCRMFormMutations({
         message: 'Sponsor updated successfully',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess()
     },
     onError: (error) => {
       showNotification({

@@ -7,6 +7,8 @@ interface ContractValueInputProps {
   currency: string
   onValueChange: (value: string) => void
   onCurrencyChange: (currency: string) => void
+  disabled?: boolean
+  helperText?: string
 }
 
 export function ContractValueInput({
@@ -14,6 +16,8 @@ export function ContractValueInput({
   currency,
   onValueChange,
   onCurrencyChange,
+  disabled,
+  helperText,
 }: ContractValueInputProps) {
   return (
     <div>
@@ -25,16 +29,23 @@ export function ContractValueInput({
           type="number"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
+          disabled={disabled}
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
         />
         <div className="w-28">
           <CurrencySelect
             value={currency}
             setValue={onCurrencyChange}
             name="contract-currency"
+            disabled={disabled}
           />
         </div>
       </div>
+      {helperText && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {helperText}
+        </p>
+      )}
     </div>
   )
 }

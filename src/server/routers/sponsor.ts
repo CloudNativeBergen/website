@@ -1528,8 +1528,8 @@ export const sponsorRouter = router({
               eventDate: sfc.conference.startDate
                 ? formatConferenceDateLong(sfc.conference.startDate)
                 : '',
-              eventUrl: 'https://cloudnativeday.no',
-              socialLinks: [],
+              eventUrl: `https://${sfc.conference.domains?.[0] || 'cloudnativeday.no'}`,
+              socialLinks: sfc.conference.socialLinks || [],
             })
 
             const fromEmail =

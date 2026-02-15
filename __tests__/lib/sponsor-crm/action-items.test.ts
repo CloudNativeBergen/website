@@ -146,10 +146,11 @@ describe('generateActionItems', () => {
   })
 
   describe('invoice not sent for closed-won (priority 2)', () => {
-    it('generates action item when deal closed but invoice not sent', () => {
+    it('generates action item when deal closed and contract signed but invoice not sent', () => {
       const sponsor = createSponsor({
         status: 'closed-won',
         contractValue: 50000,
+        contractStatus: 'contract-signed',
         invoiceStatus: 'not-sent',
       })
       const items = generateActionItems([sponsor])
@@ -163,11 +164,12 @@ describe('generateActionItems', () => {
       )
     })
 
-    it('does not trigger when invoice already sent', () => {
+    it('does not trigger when contract is not signed', () => {
       const sponsor = createSponsor({
         status: 'closed-won',
         contractValue: 50000,
-        invoiceStatus: 'sent',
+        contractStatus: 'contract-sent',
+        invoiceStatus: 'not-sent',
       })
       const items = generateActionItems([sponsor])
 

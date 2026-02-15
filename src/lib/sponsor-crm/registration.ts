@@ -32,7 +32,7 @@ export interface RegistrationSponsorInfo {
 export interface RegistrationSubmission {
   contactPersons: ContactPerson[]
   billing: BillingInfo
-  logo?: string | null
+  logo: string
   logoBright?: string | null
   orgNumber?: string
   address?: string
@@ -120,7 +120,7 @@ export async function validateRegistrationToken(
         "conferenceName": conference->title,
         "conferenceStartDate": conference->startDate,
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
-        billing{ email, reference, comments },
+        billing{ invoiceFormat, email, reference, comments },
         registrationComplete,
         signerEmail,
         signatureStatus,
@@ -180,6 +180,12 @@ export async function completeRegistration(
   if (!data.billing?.email) {
     return {
       error: new Error('Billing email is required to complete registration'),
+    }
+  }
+
+  if (!data.logo) {
+    return {
+      error: new Error('Company logo is required to complete registration'),
     }
   }
 

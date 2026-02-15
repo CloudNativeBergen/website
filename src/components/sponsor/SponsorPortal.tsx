@@ -24,6 +24,7 @@ interface ContactPersonForm {
 }
 
 interface BillingForm {
+  invoiceFormat: 'ehf' | 'pdf'
   email: string
   reference: string
   comments: string
@@ -45,6 +46,7 @@ export function SponsorPortal({ token }: { token: string }) {
     { name: '', email: '', phone: '', role: '', isPrimary: true },
   ])
   const [billing, setBilling] = useState<BillingForm>({
+    invoiceFormat: 'pdf',
     email: '',
     reference: '',
     comments: '',
@@ -91,6 +93,7 @@ export function SponsorPortal({ token }: { token: string }) {
     }
     if (sponsor.billing) {
       setBilling({
+        invoiceFormat: sponsor.billing.invoiceFormat || 'pdf',
         email: sponsor.billing.email,
         reference: sponsor.billing.reference || '',
         comments: sponsor.billing.comments || '',
@@ -209,6 +212,12 @@ export function SponsorPortal({ token }: { token: string }) {
       return
     }
 
+    if (!logo) {
+      setError('Please upload your company logo before submitting.')
+      scrollToError()
+      return
+    }
+
     if (!billing.email.trim()) {
       setError('Please provide a billing email address.')
       scrollToError()
@@ -230,11 +239,12 @@ export function SponsorPortal({ token }: { token: string }) {
       token,
       contactPersons: validContacts,
       billing: {
+        invoiceFormat: billing.invoiceFormat,
         email: billing.email.trim(),
         reference: billing.reference.trim() || undefined,
         comments: billing.comments.trim() || undefined,
       },
-      logo: logo || undefined,
+      logo: logo!,
       logoBright: logoBright || undefined,
       orgNumber: company.orgNumber.trim() || undefined,
       address: company.address.trim() || undefined,
@@ -499,8 +509,49 @@ export function SponsorPortal({ token }: { token: string }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  Invoice Format <span className="text-red-500">*</span>
+                </label>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  How would you like to receive invoices?
+                </p>
+                <div className="mt-2 flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <input
+                      type="radio"
+                      name="invoiceFormat"
+                      value="ehf"
+                      checked={billing.invoiceFormat === 'ehf'}
+                      onChange={() =>
+                        setBilling({ ...billing, invoiceFormat: 'ehf' })
+                      }
+                      className="h-4 w-4 cursor-pointer border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
+                    />
+                    EHF (Digital Invoice)
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <input
+                      type="radio"
+                      name="invoiceFormat"
+                      value="pdf"
+                      checked={billing.invoiceFormat === 'pdf'}
+                      onChange={() =>
+                        setBilling({ ...billing, invoiceFormat: 'pdf' })
+                      }
+                      className="h-4 w-4 cursor-pointer border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
+                    />
+                    PDF via Email
+                  </label>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Billing Email <span className="text-red-500">*</span>
                 </label>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {billing.invoiceFormat === 'ehf'
+                    ? 'Required as fallback if EHF delivery fails'
+                    : 'Invoice will be sent to this address'}
+                </p>
                 <input
                   type="email"
                   value={billing.email}

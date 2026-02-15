@@ -129,7 +129,6 @@ export function SponsorCRMForm({
     sponsor,
     isOpen,
     onSuccess,
-    onClose: handleClose,
   })
 
   const utils = api.useUtils()
@@ -293,8 +292,8 @@ export function SponsorCRMForm({
                               )}
                               {(sponsor.contractStatus === 'contract-sent' ||
                                 sponsor.signatureStatus === 'pending') && (
-                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                                )}
+                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                              )}
                               <DocumentTextIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Contract</span>
                             </button>
@@ -375,9 +374,8 @@ export function SponsorCRMForm({
                           sponsorForConference={sponsor}
                           onSuccess={() => {
                             utils.sponsor.crm.list.invalidate()
-                            setView('pipeline')
                           }}
-                          onCancel={() => setView('pipeline')}
+                          onCancel={handleClose}
                         />
                       ) : view === 'logo' ? (
                         <SponsorLogoEditor
