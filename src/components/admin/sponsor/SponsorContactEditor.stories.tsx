@@ -122,10 +122,11 @@ function ContactEditorDemo() {
             <div className="mb-4 flex items-center justify-between">
               <button
                 onClick={() => handleSetPrimary(contact._key)}
-                className={`flex items-center gap-1 text-sm ${contact.isPrimary
+                className={`flex items-center gap-1 text-sm ${
+                  contact.isPrimary
                     ? 'text-amber-600 dark:text-amber-400'
                     : 'text-gray-400 hover:text-amber-600 dark:hover:text-amber-400'
-                  }`}
+                }`}
               >
                 {contact.isPrimary ? (
                   <StarIconSolid className="h-5 w-5" />

@@ -39,10 +39,11 @@ function LogoPreview({
         {label}
       </p>
       <div
-        className={`flex h-24 items-center justify-center rounded-lg border ${background === 'dark'
+        className={`flex h-24 items-center justify-center rounded-lg border ${
+          background === 'dark'
             ? 'border-gray-600 bg-gray-900'
             : 'border-gray-200 bg-white'
-          }`}
+        }`}
       >
         {svg ? (
           <div
