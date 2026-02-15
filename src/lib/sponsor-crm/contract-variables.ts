@@ -2,6 +2,7 @@ import {
   processTemplateVariables,
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
+import { formatDate, getCurrentDateTime } from '@/lib/time'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   SPONSOR_NAME: 'Legal name of the sponsor company',
@@ -65,15 +66,6 @@ export interface ContractVariableContext {
   }
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('nb-NO', {
     style: 'currency',
@@ -89,7 +81,7 @@ export function buildContractVariables(
   const vars: Record<string, string> = {
     SPONSOR_NAME: ctx.sponsor.name,
     CONFERENCE_TITLE: ctx.conference.title,
-    TODAY_DATE: formatDate(new Date().toISOString()),
+    TODAY_DATE: formatDate(getCurrentDateTime()),
   }
 
   if (ctx.sponsor.orgNumber) {

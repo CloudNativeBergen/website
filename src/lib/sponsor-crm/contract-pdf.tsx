@@ -7,12 +7,14 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer'
 import type { ContractTemplate } from './contract-templates'
+import { SIGNATURE_MARKER, DATE_MARKER } from '@/lib/pdf/constants'
+import type { PortableTextBlock } from '@/lib/sponsor/types'
+
 import {
   buildContractVariables,
   processTemplateVariables,
   type ContractVariableContext,
 } from './contract-variables'
-import type { PortableTextBlock } from '@/lib/sponsor/types'
 
 const styles = StyleSheet.create({
   page: {
@@ -261,7 +263,6 @@ function InfoTable({ variables }: InfoTableProps) {
     { label: 'Name', value: variables.ORG_NAME },
     { label: 'Org. No.', value: variables.ORG_ORG_NUMBER },
     { label: 'Address', value: variables.ORG_ADDRESS },
-    { label: 'Liaison', value: variables.CONTACT_NAME ? undefined : undefined },
     { label: 'Email', value: variables.ORG_EMAIL },
   ].filter((r) => r.value)
 
@@ -412,16 +413,10 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
-            {process.env.CONTRACT_SIGNING_PROVIDER !== 'self-hosted' && (
-              <>
-                <Text style={{ fontSize: 1, color: '#ffffff' }}>
-                  {'{{Sig_es_:signer1:signature}}'}
-                </Text>
-                <Text style={{ fontSize: 1, color: '#ffffff' }}>
-                  {'{{Dte_es_:signer1:date}}'}
-                </Text>
-              </>
-            )}
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>{DATE_MARKER}</Text>
           </View>
         </View>
 

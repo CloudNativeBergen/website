@@ -1,11 +1,13 @@
 import { TRPCError } from '@trpc/server'
 
+import { embedSignatureInPdf } from '@/lib/pdf'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   logContractStatusChange,
   logSignatureStatusChange,
 } from '@/lib/sponsor-crm/activity'
-import { formatDate, getCurrentDateTime } from '@/lib/time'
+import { sanitizeSponsorName } from '@/lib/sponsor-crm/utils'
+import { getCurrentDateTime } from '@/lib/time'
 import { publicProcedure, router } from '@/server/trpc'
 
 import { SigningTokenSchema, SubmitSignatureSchema } from '../schemas/signing'
@@ -55,86 +57,6 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   contractCurrency
 }`
 
-// Signature placement constants for the contract PDF.
-// The signature is placed in the right-side block of the signing area.
-const SIGNATURE_MAX_WIDTH = 150
-const SIGNATURE_MAX_HEIGHT = 60
-const SIGNATURE_X_RATIO = 0.55
-const SIGNATURE_Y = 120
-const SIGNER_NAME_OFFSET_Y = 12
-const SIGNER_DATE_OFFSET_Y = 24
-
-/**
- * Embeds a PNG signature image, signer name, and date into a contract PDF.
- * Returns the signed PDF as a Buffer.
- */
-async function embedSignatureInPdf(
-  pdfUrl: string,
-  signatureDataUrl: string,
-  signerName: string,
-): Promise<Buffer> {
-  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
-
-  const pdfResponse = await fetch(pdfUrl)
-  if (!pdfResponse.ok) {
-    throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
-  }
-  const pdfBytes = await pdfResponse.arrayBuffer()
-  const pdfDoc = await PDFDocument.load(pdfBytes)
-
-  // Decode signature PNG from data URL
-  const base64Data = signatureDataUrl.replace('data:image/png;base64,', '')
-  const signatureBytes = Buffer.from(base64Data, 'base64')
-  const signatureImage = await pdfDoc.embedPng(signatureBytes)
-
-  const firstPage = pdfDoc.getPage(0)
-  const { width: pageWidth } = firstPage.getSize()
-
-  // Scale the signature to fit within bounds
-  const sigDims = signatureImage.scale(1)
-  const scale = Math.min(
-    SIGNATURE_MAX_WIDTH / sigDims.width,
-    SIGNATURE_MAX_HEIGHT / sigDims.height,
-    1,
-  )
-  const drawWidth = sigDims.width * scale
-  const drawHeight = sigDims.height * scale
-
-  const sigX =
-    pageWidth * SIGNATURE_X_RATIO + (SIGNATURE_MAX_WIDTH - drawWidth) / 2
-  const sigY = SIGNATURE_Y
-
-  firstPage.drawImage(signatureImage, {
-    x: sigX,
-    y: sigY,
-    width: drawWidth,
-    height: drawHeight,
-  })
-
-  // Add signer name and date below the signature
-  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const dateStr = formatDate(getCurrentDateTime())
-
-  firstPage.drawText(signerName, {
-    x: sigX,
-    y: sigY - SIGNER_NAME_OFFSET_Y,
-    size: 9,
-    font: helvetica,
-    color: rgb(0.2, 0.2, 0.2),
-  })
-
-  firstPage.drawText(dateStr, {
-    x: sigX,
-    y: sigY - SIGNER_DATE_OFFSET_Y,
-    size: 8,
-    font: helvetica,
-    color: rgb(0.4, 0.4, 0.4),
-  })
-
-  const signedBytes = await pdfDoc.save()
-  return Buffer.from(signedBytes)
-}
-
 function ensurePendingContract(doc: SigningContractData): void {
   if (doc.signatureStatus === 'signed') {
     throw new TRPCError({
@@ -148,13 +70,6 @@ function ensurePendingContract(doc: SigningContractData): void {
       message: `This contract has been ${doc.signatureStatus}. Please contact the organizer.`,
     })
   }
-}
-
-function sanitizeSponsorName(name?: string): string {
-  return (name || 'sponsor')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
 }
 
 export const signingRouter = router({

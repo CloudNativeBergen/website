@@ -8,6 +8,7 @@ import {
 import { generateContractPdf } from './contract-pdf'
 import type { ContractSigningProvider } from '@/lib/contract-signing'
 import { logContractStatusChange, logSignatureStatusChange } from './activity'
+import { sanitizeSponsorName } from './utils'
 
 export interface SendContractResult {
   success: boolean
@@ -151,7 +152,7 @@ export async function generateAndSendContract(
     }
   }
 
-  const filename = `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`
+  const filename = `contract-${sanitizeSponsorName(sfc.sponsor.name)}.pdf`
 
   // Upload PDF to Sanity
   let asset: { _id: string }
