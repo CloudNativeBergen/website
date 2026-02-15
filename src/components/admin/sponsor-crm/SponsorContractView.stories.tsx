@@ -27,7 +27,7 @@ const defaultHandlers = [
 ]
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Pipeline/SponsorContractView',
+  title: 'Systems/Sponsors/Admin/Sponsor Detail/SponsorContractView',
   component: SponsorContractView,
   tags: ['autodocs'],
   parameters: {

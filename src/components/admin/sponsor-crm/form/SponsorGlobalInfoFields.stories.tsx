@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { SponsorGlobalInfoFields } from './SponsorGlobalInfoFields'
 
 const meta = {
-  title: 'Systems/Sponsors/Form/SponsorGlobalInfoFields',
+  title: 'Systems/Sponsors/Admin/Form/SponsorGlobalInfoFields',
   component: SponsorGlobalInfoFields,
   parameters: {
     layout: 'padded',

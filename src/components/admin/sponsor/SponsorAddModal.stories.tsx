@@ -4,7 +4,7 @@ import { XMarkIcon, PhotoIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Tiers/SponsorAddModal',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorAddModal',
   component: SponsorAddModal,
   tags: ['autodocs'],
   parameters: {
@@ -67,21 +67,19 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
         <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
           <button
             onClick={() => setMode('select')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              mode === 'select'
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === 'select'
                 ? 'bg-white text-gray-900 shadow dark:bg-gray-600 dark:text-white'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-            }`}
+              }`}
           >
             Select Existing
           </button>
           <button
             onClick={() => setMode('create')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              mode === 'create'
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === 'create'
                 ? 'bg-white text-gray-900 shadow dark:bg-gray-600 dark:text-white'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-            }`}
+              }`}
           >
             Create New
           </button>

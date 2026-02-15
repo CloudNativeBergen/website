@@ -7,7 +7,7 @@ import {
 } from '@/__mocks__/sponsor-data'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Pipeline/ContractReadinessIndicator',
+  title: 'Systems/Sponsors/Admin/Sponsor Detail/ContractReadinessIndicator',
   component: ContractReadinessIndicator,
   parameters: {
     layout: 'padded',

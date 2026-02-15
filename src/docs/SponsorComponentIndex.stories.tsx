@@ -160,6 +160,12 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
+              name="SponsorAddModal"
+              path="@/components/admin/sponsor/SponsorAddModal"
+              description="Modal for adding sponsors to a specific tier."
+              hasStory
+            />
+            <ComponentCard
               name="MobileFilterSheet"
               path="@/components/admin/sponsor-crm/MobileFilterSheet"
               description="Bottom sheet filter panel for mobile devices."
@@ -255,6 +261,12 @@ export const Overview: Story = {
               description="Action bar with export and broadcast buttons."
               hasStory
             />
+            <ComponentCard
+              name="SponsorContactRoleSelect"
+              path="@/components/admin/sponsor/SponsorContactRoleSelect"
+              description="Dropdown for selecting sponsor contact person roles."
+              hasStory
+            />
           </div>
         </section>
 
@@ -312,10 +324,29 @@ export const Overview: Story = {
               description="Form for creating and editing sponsor tier definitions."
               hasStory
             />
+          </div>
+        </section>
+
+        {/* Contract Signing (Sponsor-facing) */}
+        <section className="mb-12">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+            Contract Signing
+          </h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Sponsor-facing contract signing flow. Supports self-hosted signing
+            (built-in signature pad) and Adobe Sign.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="SponsorAddModal"
-              path="@/components/admin/sponsor/SponsorAddModal"
-              description="Modal for adding sponsors to a specific tier."
+              name="ContractSigningPage"
+              path="@/components/sponsor/ContractSigningPage"
+              description="Three-step contract signing flow: review details, capture signature, and confirmation."
+              hasStory
+            />
+            <ComponentCard
+              name="SignaturePadCanvas"
+              path="@/components/sponsor/SignaturePadCanvas"
+              description="Canvas-based signature pad with high-DPI support, clear button, and PNG export."
               hasStory
             />
           </div>
@@ -418,12 +449,6 @@ export const Overview: Story = {
               name="ImportHistoricSponsorsButton"
               path="@/components/admin/sponsor-crm/ImportHistoricSponsorsButton"
               description="Button to import sponsors from previous conferences."
-              hasStory
-            />
-            <ComponentCard
-              name="SponsorContactRoleSelect"
-              path="@/components/admin/sponsor/SponsorContactRoleSelect"
-              description="Dropdown for selecting sponsor contact person roles."
               hasStory
             />
           </div>

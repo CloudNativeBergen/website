@@ -46,7 +46,7 @@ const mockOrganizers = [
 ]
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/SponsorCRMFilterBar',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMFilterBar',
   component: SponsorCRMFilterBar,
   parameters: {
     layout: 'padded',

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ContractFlowStep } from './ContractFlowStep'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Pipeline/ContractFlowStep',
+  title: 'Systems/Sponsors/Admin/Sponsor Detail/ContractFlowStep',
   component: ContractFlowStep,
   tags: ['autodocs'],
   parameters: {

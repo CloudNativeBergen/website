@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SponsorLogo } from './SponsorLogo'
 
 const meta = {
-  title: 'Systems/Sponsors/Components/SponsorLogo',
+  title: 'Systems/Sponsors/Public/SponsorLogo',
   component: SponsorLogo,
   parameters: {
     layout: 'padded',

@@ -70,7 +70,7 @@ const mockSponsors: ConferenceSponsor[] = [
 ]
 
 const meta: Meta<typeof SponsorBanner> = {
-  title: 'Systems/Sponsors/Stream/SponsorBanner',
+  title: 'Systems/Sponsors/Public/SponsorBanner',
   component: SponsorBanner,
   tags: ['autodocs'],
   parameters: {

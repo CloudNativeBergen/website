@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { SponsorPortalSection } from './SponsorPortalSection'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Pipeline/SponsorPortalSection',
+  title: 'Systems/Sponsors/Admin/Sponsor Detail/SponsorPortalSection',
   component: SponsorPortalSection,
   tags: ['autodocs'],
   parameters: {
