@@ -382,9 +382,7 @@ describe('generateActionItems', () => {
       })
       const items = generateActionItems([sponsor])
 
-      expect(items).toContainEqual(
-        expect.objectContaining({ type: 'stale' }),
-      )
+      expect(items).toContainEqual(expect.objectContaining({ type: 'stale' }))
     })
 
     it('does not trigger for prospect status', () => {
