@@ -101,9 +101,9 @@ export function ContractSigningTemplate({
                 color: '#64748B',
               }}
             >
-              This is a secure link to Adobe Sign where you can review the full
-              agreement and provide your digital signature. The link is unique
-              to your email address.
+              This is a secure link where you can review the full agreement and
+              provide your digital signature. The link is unique to your email
+              address.
             </p>
           </>
         ),

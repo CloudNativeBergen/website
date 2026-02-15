@@ -108,7 +108,7 @@ export default defineType({
       name: 'signatureId',
       title: 'Signature ID',
       type: 'string',
-      description: 'Agreement ID from Adobe Acrobat Sign',
+      description: 'Agreement ID from the contract signing provider',
       readOnly: true,
     }),
     defineField({
@@ -121,7 +121,7 @@ export default defineType({
       name: 'signingUrl',
       title: 'Signing URL',
       type: 'string',
-      description: 'Adobe Sign signing URL for the signer',
+      description: 'Signing URL for the signer',
       readOnly: true,
     }),
     defineField({

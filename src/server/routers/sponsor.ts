@@ -97,20 +97,7 @@ import {
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
-import {
-  uploadTransientDocument,
-  createAgreement,
-  getAgreement,
-  getSigningUrls,
-  registerWebhook,
-  listWebhooks,
-  cancelAgreement,
-} from '@/lib/adobe-sign'
-import {
-  getAdobeSignSession,
-  clearAdobeSignSession,
-  getAuthorizeUrl,
-} from '@/lib/adobe-sign/auth'
+import { getSigningProvider } from '@/lib/contract-signing'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -939,7 +926,7 @@ export const sponsorRouter = router({
     bulkDelete: adminProcedure
       .input(BulkDeleteSponsorCRMSchema)
       .mutation(async ({ input }) => {
-        // Cancel Adobe Sign agreements if requested
+        // Cancel signing agreements if requested
         if (input.cancelAgreements) {
           try {
             const pendingAgreements = await clientReadUncached.fetch<
@@ -948,11 +935,11 @@ export const sponsorRouter = router({
               `*[_type == "sponsorForConference" && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId }`,
               { ids: input.ids },
             )
-            const session = await getAdobeSignSession()
-            if (session && pendingAgreements.length > 0) {
+            if (pendingAgreements.length > 0) {
+              const provider = getSigningProvider()
               for (const { signatureId } of pendingAgreements) {
                 try {
-                  await cancelAgreement(session, signatureId)
+                  await provider.cancelAgreement(signatureId)
                 } catch (e) {
                   console.error(
                     `[bulkDelete] Failed to cancel agreement ${signatureId}:`,
@@ -983,7 +970,7 @@ export const sponsorRouter = router({
     delete: adminProcedure
       .input(DeleteSponsorSchema)
       .mutation(async ({ input }) => {
-        // Cancel Adobe Sign agreement if requested
+        // Cancel signing agreement if requested
         if (input.cancelAgreement) {
           try {
             const sfc = await clientReadUncached.fetch<{
@@ -994,16 +981,14 @@ export const sponsorRouter = router({
               { id: input.id },
             )
             if (sfc?.signatureId && sfc.signatureStatus === 'pending') {
-              const session = await getAdobeSignSession()
-              if (session) {
-                try {
-                  await cancelAgreement(session, sfc.signatureId)
-                } catch (e) {
-                  console.error(
-                    `[delete] Failed to cancel agreement ${sfc.signatureId}:`,
-                    e,
-                  )
-                }
+              const provider = getSigningProvider()
+              try {
+                await provider.cancelAgreement(sfc.signatureId)
+              } catch (e) {
+                console.error(
+                  `[delete] Failed to cancel agreement ${sfc.signatureId}:`,
+                  e,
+                )
               }
             }
           } catch (e) {
@@ -1110,15 +1095,7 @@ export const sponsorRouter = router({
       .input(SponsorForConferenceIdSchema)
       .mutation(async ({ input, ctx }) => {
         const logCtx = `[checkSignatureStatus] sfc=${input.id}`
-
-        const session = await getAdobeSignSession()
-        if (!session) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Adobe Sign session not connected. Please connect via OAuth first.',
-          })
-        }
+        const provider = getSigningProvider()
 
         const { sponsorForConference: sfc, error: sfcError } =
           await getSponsorForConference(input.id)
@@ -1138,53 +1115,24 @@ export const sponsorRouter = router({
           })
         }
 
-        let agreement: { status: string }
+        let result: { status: string; providerStatus: string }
         try {
-          agreement = await getAgreement(session, sfc.signatureId)
-        } catch (adobeError) {
+          result = await provider.checkStatus(sfc.signatureId)
+        } catch (providerError) {
           console.error(
             `${logCtx} Failed to fetch agreement ${sfc.signatureId}:`,
-            adobeError,
+            providerError,
           )
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message:
-              'Failed to check signing status with Adobe Sign. The service may be temporarily unavailable.',
-            cause: adobeError,
-          })
-        }
-
-        if (!agreement?.status) {
-          console.error(
-            `${logCtx} Adobe Sign returned no status for agreement ${sfc.signatureId}`,
-          )
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              'Adobe Sign returned an unexpected response. Please try again.',
+              'Failed to check signing status. The signing service may be temporarily unavailable.',
+            cause: providerError,
           })
         }
 
         const currentStatus = sfc.signatureStatus || 'not-started'
-
-        const statusMap: Record<string, string> = {
-          SIGNED: 'signed',
-          OUT_FOR_SIGNATURE: 'pending',
-          OUT_FOR_APPROVAL: 'pending',
-          APPROVED: 'pending',
-          DELIVERED: 'pending',
-          EXPIRED: 'expired',
-          CANCELLED: 'rejected',
-          RECALLED: 'rejected',
-          ABORTED: 'rejected',
-        }
-        const newStatus = statusMap[agreement.status] || currentStatus
-        if (!statusMap[agreement.status]) {
-          console.warn(
-            `${logCtx} Unknown agreement status: %s`,
-            agreement.status,
-          )
-        }
+        const newStatus = result.status
 
         if (newStatus !== currentStatus) {
           const updateFields: Record<string, unknown> = {
@@ -1230,7 +1178,7 @@ export const sponsorRouter = router({
 
         return {
           signatureStatus: newStatus,
-          agreementStatus: agreement.status,
+          agreementStatus: result.providerStatus,
           changed: newStatus !== currentStatus,
         }
       }),
@@ -1455,78 +1403,31 @@ export const sponsorRouter = router({
           updateFields.signatureStatus = 'pending'
         }
 
-        // Send to Adobe Sign for digital signing if signer email is provided
+        // Send for digital signing if signer email is provided
         let agreementId: string | undefined
         let signingUrl: string | undefined
         if (input.signerEmail) {
           try {
-            const adobeSession = await getAdobeSignSession()
-            if (!adobeSession) {
-              throw new TRPCError({
-                code: 'PRECONDITION_FAILED',
-                message:
-                  'Adobe Sign not connected. Please connect via OAuth first.',
-              })
-            }
-
-            const transientDoc = await uploadTransientDocument(
-              adobeSession,
-              pdfBuffer,
+            const provider = getSigningProvider()
+            const signingResult = await provider.sendForSigning({
+              pdf: pdfBuffer,
               filename,
-            )
-            if (!transientDoc?.transientDocumentId) {
-              throw new Error('Adobe Sign returned no transient document ID')
-            }
-
-            const agreement = await createAgreement(adobeSession, {
-              name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
-              participantEmail: input.signerEmail,
+              signerEmail: input.signerEmail,
+              agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
               message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-              fileInfos: [
-                { transientDocumentId: transientDoc.transientDocumentId },
-              ],
             })
-            if (!agreement?.id) {
-              throw new Error('Adobe Sign returned no agreement ID')
-            }
 
-            agreementId = agreement.id
+            agreementId = signingResult.agreementId
             updateFields.signatureId = agreementId
 
-            // Capture signing URL for portal display and email notification.
-            // Adobe Sign needs a few seconds to expose the agreement to the
-            // signer after creation, so retry with back-off.
-            try {
-              const maxAttempts = 3
-              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                try {
-                  await new Promise((r) => setTimeout(r, attempt * 2000))
-                  const urlInfo = await getSigningUrls(
-                    adobeSession,
-                    agreementId,
-                  )
-                  const signerUrl = urlInfo.signingUrls?.find(
-                    (u) => u.email === input.signerEmail,
-                  )
-                  if (signerUrl) {
-                    signingUrl = signerUrl.esignUrl
-                    updateFields.signingUrl = signingUrl
-                  }
-                  break
-                } catch (retryError) {
-                  if (attempt === maxAttempts) throw retryError
-                }
-              }
-            } catch (urlError) {
-              console.warn(
-                `${logCtxFull} Failed to capture signing URL (non-fatal):`,
-                urlError,
-              )
+            if (signingResult.signingUrl) {
+              signingUrl = signingResult.signingUrl
+              updateFields.signingUrl = signingUrl
             }
           } catch (signError) {
             if (signError instanceof TRPCError) throw signError
             console.error(
-              `${logCtxFull} Adobe Sign agreement creation failed:`,
+              `${logCtxFull} Contract signing agreement creation failed:`,
               signError,
             )
             throw new TRPCError({
@@ -2059,82 +1960,36 @@ export const sponsorRouter = router({
       }),
 
     getAdobeSignStatus: adminProcedure.query(async () => {
-      const session = await getAdobeSignSession()
-      let webhookActive: string | null = null
-      if (session) {
-        try {
-          const existing = await listWebhooks(session)
-          const active = existing.userWebhookList?.find(
-            (w) => w.state === 'ACTIVE',
-          )
-          if (active) {
-            webhookActive = active.id
-          }
-        } catch {
-          // Non-fatal — webhook check may fail if scope not granted
-        }
-      }
+      const provider = getSigningProvider()
+      const status = await provider.getConnectionStatus()
       return {
-        connected: !!session,
-        expiresAt: session?.expiresAt ?? null,
-        apiAccessPoint: session?.apiAccessPoint ?? null,
-        webhookActive,
+        connected: status.connected,
+        expiresAt: status.expiresAt ?? null,
+        apiAccessPoint: status.detail ?? null,
+        webhookActive: status.webhookActive ?? null,
+        providerName: status.providerName,
       }
     }),
 
     getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
       const { domain } = await getConferenceForCurrentDomain()
       const origin = `https://${domain}`
-      const state = crypto.randomUUID()
       const redirectUri = `${origin}/api/adobe-sign/callback`
-      const url = getAuthorizeUrl(state, redirectUri)
-      return { url, state }
+      const provider = getSigningProvider()
+      return provider.getAuthorizeUrl(redirectUri)
     }),
 
     disconnectAdobeSign: adminProcedure.mutation(async () => {
-      await clearAdobeSignSession()
+      const provider = getSigningProvider()
+      await provider.disconnect()
       return { success: true }
     }),
 
     registerAdobeSignWebhook: adminProcedure
       .input(z.object({ webhookUrl: z.string().url() }))
       .mutation(async ({ input }) => {
-        const session = await getAdobeSignSession()
-        if (!session) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'Adobe Sign session not connected. Please connect via OAuth first.',
-          })
-        }
-
-        const existing = await listWebhooks(session)
-        const match = existing.userWebhookList?.find(
-          (w) =>
-            w.webhookUrlInfo.url === input.webhookUrl && w.state === 'ACTIVE',
-        )
-        if (match) {
-          return { webhookId: match.id, existing: true }
-        }
-
-        const result = await registerWebhook(session, {
-          name: 'Cloud Native Days Sponsor Contracts',
-          scope: 'ACCOUNT',
-          state: 'ACTIVE',
-          webhookSubscriptionEvents: [
-            'AGREEMENT_WORKFLOW_COMPLETED',
-            'AGREEMENT_RECALLED',
-            'AGREEMENT_EXPIRED',
-          ],
-          webhookUrlInfo: { url: input.webhookUrl },
-          webhookConditionalParams: {
-            webhookAgreementEvents: {
-              includeSignedDocuments: true,
-            },
-          },
-        })
-
-        return { webhookId: result.id, existing: false }
+        const provider = getSigningProvider()
+        return provider.registerWebhook(input.webhookUrl)
       }),
   }),
 })

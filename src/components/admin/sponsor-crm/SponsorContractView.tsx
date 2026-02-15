@@ -404,7 +404,7 @@ export function SponsorContractView({
                 onClick={() => checkStatus.mutate({ id: sponsor._id })}
                 disabled={checkStatus.isPending}
                 className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
-                title="Check signing status with Adobe Sign"
+                title="Check signing status"
               >
                 <ArrowPathIcon
                   className={`h-3.5 w-3.5 ${checkStatus.isPending ? 'animate-spin' : ''}`}
@@ -458,7 +458,7 @@ function getPrimaryContactEmail(sponsor: SponsorForConferenceExpanded) {
 const ERROR_PATTERNS: Array<[RegExp, string]> = [
   [
     /not connected|connect via oauth/i,
-    'Adobe Sign is not connected. Ask an admin to connect it in Settings.',
+    'The signing service is not connected. Ask an admin to connect it in Settings.',
   ],
   [
     /no contract template/i,

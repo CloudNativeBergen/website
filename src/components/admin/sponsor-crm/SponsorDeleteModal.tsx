@@ -18,7 +18,7 @@ interface SponsorDeleteModalProps {
   isLoading?: boolean
   /** Number of sponsors being deleted (1 for single, >1 for bulk) */
   count: number
-  /** Whether any of the selected sponsors have a pending Adobe Sign agreement */
+  /** Whether any of the selected sponsors have a pending signing agreement */
   hasPendingAgreement?: boolean
   /** Whether any of the selected sponsors have a contract PDF document */
   hasContractDocument?: boolean
@@ -102,8 +102,9 @@ export function SponsorDeleteModal({
                   Cancel pending signing {isBulk ? 'agreements' : 'agreement'}
                 </span>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Cancels the Adobe Sign {isBulk ? 'agreements' : 'agreement'}{' '}
-                  so the signer stops receiving reminders.
+                  Cancels the pending signing{' '}
+                  {isBulk ? 'agreements' : 'agreement'} so the signer stops
+                  receiving reminders.
                 </p>
               </div>
             </label>

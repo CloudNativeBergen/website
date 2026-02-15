@@ -6,12 +6,7 @@ import {
   getContractTemplate,
 } from './contract-templates'
 import { generateContractPdf } from './contract-pdf'
-import {
-  uploadTransientDocument,
-  createAgreement,
-  getSigningUrls,
-} from '@/lib/adobe-sign'
-import type { AdobeSignSession } from '@/lib/adobe-sign'
+import type { ContractSigningProvider } from '@/lib/contract-signing'
 import { logContractStatusChange, logSignatureStatusChange } from './activity'
 
 export interface SendContractResult {
@@ -22,12 +17,15 @@ export interface SendContractResult {
 }
 
 /**
- * Generates a contract PDF and sends it for digital signing via Adobe Sign.
- * Used both by the admin manual send flow and the automated registration completion flow.
+ * Generates a contract PDF and sends it for digital signing via the
+ * configured contract signing provider.
+ *
+ * Used both by the admin manual send flow and the automated
+ * registration completion flow.
  */
 export async function generateAndSendContract(
   sponsorForConferenceId: string,
-  session: AdobeSignSession,
+  signingProvider: ContractSigningProvider,
   options?: {
     templateId?: string
     signerEmail?: string
@@ -191,57 +189,31 @@ export async function generateAndSendContract(
     updateFields.signatureStatus = 'pending'
   }
 
-  // Send to Adobe Sign
+  // Send for digital signing via the configured provider
   let agreementId: string | undefined
   let signingUrl: string | undefined
   if (signerEmail) {
     try {
-      const transientDoc = await uploadTransientDocument(
-        session,
-        pdfBuffer,
+      const result = await signingProvider.sendForSigning({
+        pdf: pdfBuffer,
         filename,
-      )
-
-      if (!transientDoc?.transientDocumentId) {
-        throw new Error('Adobe Sign returned no transient document ID')
-      }
-
-      const agreement = await createAgreement(session, {
-        name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
-        participantEmail: signerEmail,
+        signerEmail,
+        agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
         message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-        fileInfos: [{ transientDocumentId: transientDoc.transientDocumentId }],
       })
 
-      if (!agreement?.id) {
-        throw new Error('Adobe Sign returned no agreement ID')
-      }
-
-      agreementId = agreement.id
+      agreementId = result.agreementId
       updateFields.signatureId = agreementId
 
-      // Capture signing URL for portal display and email notification
-      try {
-        const urlInfo = await getSigningUrls(session, agreementId)
-        const signerUrl = urlInfo.signingUrls?.find(
-          (u) => u.email === signerEmail,
-        )
-        if (signerUrl) {
-          signingUrl = signerUrl.esignUrl
-          updateFields.signingUrl = signingUrl
-        }
-      } catch (urlError) {
-        console.warn(
-          `${logCtxFull} Failed to capture signing URL (non-fatal):`,
-          urlError,
-        )
+      if (result.signingUrl) {
+        signingUrl = result.signingUrl
+        updateFields.signingUrl = signingUrl
       }
     } catch (signError) {
       console.error(
-        `${logCtxFull} Adobe Sign agreement creation failed:`,
+        `${logCtxFull} Contract signing agreement creation failed:`,
         signError,
       )
-      // Do NOT mark as contract-sent if signing was requested but failed
       return {
         success: false,
         error:
