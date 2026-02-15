@@ -156,9 +156,9 @@ describe('OrganizerSignatureCapture', () => {
   })
 
   describe('disabled state', () => {
-    it('renders nothing when disabled and no saved signature', () => {
-      const { container } = renderCapture({ disabled: true })
-      expect(container.innerHTML).toBe('')
+    it('shows informative message when disabled and no saved signature', () => {
+      renderCapture({ disabled: true })
+      expect(screen.getByText(/No counter-signature saved/)).toBeInTheDocument()
     })
 
     it('shows read-only preview when disabled with saved signature', () => {

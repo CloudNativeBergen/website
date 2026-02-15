@@ -85,7 +85,11 @@ export function OrganizerSignatureCapture({
         dataUrl={savedSignature}
         organizerName={organizerName}
       />
-    ) : null
+    ) : (
+      <p className="text-xs text-gray-400 italic dark:text-gray-500">
+        No counter-signature saved for {organizerName}.
+      </p>
+    )
   }
 
   if (savedSignature && !isDrawing) {
