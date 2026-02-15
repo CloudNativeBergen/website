@@ -7,7 +7,9 @@ export const RegistrationTokenSchema = z.object({
 })
 
 export const RegistrationContactPersonSchema = z.object({
-  _key: z.string().default(''),
+  _key: z
+    .string()
+    .default(() => `cp-${Date.now()}-${Math.random().toString(16).slice(2)}`),
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Valid email is required'),
   phone: z.string().optional(),

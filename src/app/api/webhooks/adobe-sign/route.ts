@@ -3,8 +3,6 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { WebhookEvent } from '@/lib/adobe-sign'
 
-const SYSTEM_USER_ID = 'system'
-
 function getExpectedClientIds(): string[] {
   const ids: string[] = []
   if (process.env.ADOBE_SIGN_CLIENT_ID)
@@ -246,7 +244,6 @@ async function logActivity(
         newValue: newStatus,
         timestamp: getCurrentDateTime(),
       },
-      createdBy: { _type: 'reference', _ref: SYSTEM_USER_ID },
       createdAt: getCurrentDateTime(),
     })
   } catch (logError) {

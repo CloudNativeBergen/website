@@ -1,5 +1,6 @@
 import { formatDate, getCurrentDateTime } from '@/lib/time'
 
+import { addAttestationPage, type SigningAttestation } from './attestation-page'
 import { SIGNATURE_MARKER, DATE_MARKER } from './constants'
 import { findMarkerInPdf } from './marker-detection'
 
@@ -18,24 +19,38 @@ const SIGNER_DATE_OFFSET_Y = 14
  * Locates the Adobe Sign marker in the PDF to position the signature
  * correctly, regardless of which page the signature area ends up on.
  * Falls back to last-page bottom-right positioning if markers are not found.
+ *
+ * When `attestation` is provided, appends a signing certificate page
+ * with an audit trail of the signing process.
  */
 export async function embedSignatureInPdf(
   pdfUrl: string,
   signatureDataUrl: string,
   signerName: string,
+  attestation?: SigningAttestation,
 ): Promise<Buffer> {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
 
-  const pdfResponse = await fetch(pdfUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  const pdfResponse = await fetch(pdfUrl, { signal: controller.signal })
+  clearTimeout(timeout)
+
   if (!pdfResponse.ok) {
     throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
   }
   const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer())
   const pdfDoc = await PDFDocument.load(pdfBytes)
 
-  // Decode signature PNG from data URL
-  const base64Data = signatureDataUrl.replace('data:image/png;base64,', '')
-  const signatureBytes = Buffer.from(base64Data, 'base64')
+  // Decode and validate signature PNG data URL
+  const match = signatureDataUrl.match(
+    /^data:image\/png(?:;[^,]*)?;base64,(.+)$/i,
+  )
+  if (!match?.[1]) {
+    throw new Error('Invalid signature image format. Expected a PNG data URL.')
+  }
+  const signatureBytes = Buffer.from(match[1], 'base64')
   const signatureImage = await pdfDoc.embedPng(signatureBytes)
 
   // Scale the signature to fit within bounds
@@ -106,6 +121,10 @@ export async function embedSignatureInPdf(
     font: helvetica,
     color: rgb(0.4, 0.4, 0.4),
   })
+
+  if (attestation) {
+    await addAttestationPage(pdfDoc, attestation)
+  }
 
   const signedBytes = await pdfDoc.save()
   return Buffer.from(signedBytes)

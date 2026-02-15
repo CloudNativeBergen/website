@@ -36,8 +36,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         { _id: 's2', _type: 'sponsorForConference', status: 'prospect' },
       ]
 
-      // @ts-ignore
-      ;(clientWrite.fetch as any).mockResolvedValue(mockSponsors)
+        // @ts-ignore
+        ; (clientWrite.fetch as any).mockResolvedValue(mockSponsors)
 
       const mockTransactionInstance = {
         patch: jest.fn().mockReturnThis(),
@@ -47,8 +47,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         commit: jest.fn().mockResolvedValue({}),
       }
 
-      // @ts-ignore
-      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+        // @ts-ignore
+        ; (clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
 
       const result = await bulkUpdateSponsors(
         { ids: ['s1', 's2'], status: 'contacted' },
@@ -79,8 +79,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         { _id: 's1', _type: 'sponsorForConference', tags: ['warm-lead'] },
       ]
 
-      // @ts-ignore
-      ;(clientWrite.fetch as any).mockResolvedValue(mockSponsors)
+        // @ts-ignore
+        ; (clientWrite.fetch as any).mockResolvedValue(mockSponsors)
       const mockTransactionInstance = {
         patch: jest.fn().mockReturnThis(),
         create: jest.fn().mockReturnThis(),
@@ -88,8 +88,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         // @ts-ignore
         commit: jest.fn().mockResolvedValue({}),
       }
-      // @ts-ignore
-      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+        // @ts-ignore
+        ; (clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
 
       await bulkUpdateSponsors(
         {
@@ -113,7 +113,7 @@ describe('Bulk Sponsor CRM Operations', () => {
     it('deletes sponsors and their related activities in a transaction', async () => {
       // Mock finding related activities
       // @ts-ignore
-      ;(clientWrite.fetch as any).mockResolvedValue([
+      ; (clientWrite.fetch as any).mockResolvedValue([
         'activity-1',
         'activity-2',
       ])
@@ -125,8 +125,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         // @ts-ignore
         commit: jest.fn().mockResolvedValue({}),
       }
-      // @ts-ignore
-      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+        // @ts-ignore
+        ; (clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
 
       const result = await bulkDeleteSponsors(['s1', 's2'])
 
@@ -145,9 +145,10 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('deletes contract assets when deleteContractAssets option is true', async () => {
-      // First fetch call returns activity IDs, second returns asset IDs
-      ;(clientWrite.fetch as any)
+      // First fetch: activity IDs, second: candidate asset IDs, third: safe-to-delete asset IDs
+      ; (clientWrite.fetch as any)
         .mockResolvedValueOnce(['activity-1'])
+        .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
 
       const mockTransactionInstance = {
@@ -157,8 +158,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         // @ts-ignore
         commit: jest.fn().mockResolvedValue({}),
       }
-      // @ts-ignore
-      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+        // @ts-ignore
+        ; (clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
 
       const result = await bulkDeleteSponsors(['s1'], {
         deleteContractAssets: true,
@@ -175,7 +176,7 @@ describe('Bulk Sponsor CRM Operations', () => {
 
     it('does not fetch contract assets when deleteContractAssets is false', async () => {
       // @ts-ignore
-      ;(clientWrite.fetch as any).mockResolvedValue([])
+      ; (clientWrite.fetch as any).mockResolvedValue([])
 
       const mockTransactionInstance = {
         patch: jest.fn().mockReturnThis(),
@@ -184,8 +185,8 @@ describe('Bulk Sponsor CRM Operations', () => {
         // @ts-ignore
         commit: jest.fn().mockResolvedValue({}),
       }
-      // @ts-ignore
-      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+        // @ts-ignore
+        ; (clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
 
       await bulkDeleteSponsors(['s1'])
 

@@ -84,14 +84,14 @@ describe('RegistrationContactPersonSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('defaults _key to empty string when not provided', () => {
+  it('generates a unique _key when not provided', () => {
     const result = RegistrationContactPersonSchema.safeParse({
       name: 'John',
       email: 'john@example.com',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data._key).toBe('')
+      expect(result.data._key).toMatch(/^cp-\d+-[0-9a-f]+$/)
     }
   })
 })

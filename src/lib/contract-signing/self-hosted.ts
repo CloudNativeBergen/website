@@ -29,13 +29,19 @@ const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ _
 export class SelfHostedSigningProvider implements ContractSigningProvider {
   readonly name = PROVIDER_NAME
 
-  async sendForSigning(): Promise<SendForSigningResult> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async sendForSigning(params: {
+    pdf: Buffer
+    filename: string
+    signerEmail: string
+    agreementName: string
+    message?: string
+  }): Promise<SendForSigningResult> {
     const token = randomUUID()
 
-    const baseUrl =
-      process.env.NEXTAUTH_URL ||
-      process.env.NEXT_PUBLIC_BASE_URL ||
-      'https://cloudnativeday.no'
+    const rawBaseUrl =
+      process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || ''
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '')
     const signingUrl = `${baseUrl}/sponsor/contract/sign/${token}`
 
     return { agreementId: token, signingUrl }

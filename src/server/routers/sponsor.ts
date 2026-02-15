@@ -1278,6 +1278,15 @@ export const sponsorRouter = router({
         const sponsorName = sfc.sponsor?.name || 'Unknown'
         const logCtxFull = `${logCtx} sponsor="${sponsorName}"`
 
+        if (!sfc.sponsor?.name) {
+          console.error(`${logCtxFull} Missing sponsor record/name`)
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Sponsor information is missing. Please ensure the sponsor is linked before sending a contract.',
+          })
+        }
+
         const { template, error: templateError } = await getContractTemplate(
           input.templateId,
         )
@@ -1731,10 +1740,10 @@ export const sponsorRouter = router({
         const { id, ...data } = input
         const { template, error } = await updateContractTemplate(id, {
           ...data,
-          tier: data.tier === null ? '' : data.tier,
+          tier: data.tier === null ? undefined : data.tier,
           currency: data.currency === null ? undefined : data.currency,
-          headerText: data.headerText === null ? '' : data.headerText,
-          footerText: data.footerText === null ? '' : data.footerText,
+          headerText: data.headerText === null ? undefined : data.headerText,
+          footerText: data.footerText === null ? undefined : data.footerText,
           terms: data.terms === null ? [] : data.terms,
         })
         if (error) {
@@ -1832,9 +1841,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1985,7 +1994,14 @@ export const sponsorRouter = router({
       }),
 
     getSigningProviderStatus: adminProcedure.query(async () => {
-      const { conference } = await getConferenceForCurrentDomain()
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to get current conference',
+          cause: error,
+        })
+      }
       const provider = getSigningProvider(conference.signingProvider)
       const status = await provider.getConnectionStatus()
       return {

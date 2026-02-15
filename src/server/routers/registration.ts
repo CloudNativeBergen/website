@@ -216,7 +216,13 @@ export const registrationRouter = router({
       }
 
       const contacts = sfc.contactPersons || []
-      const recipients = contacts.filter((c) => c.email).map((c) => c.email)
+      const recipients = Array.from(
+        new Set(
+          contacts
+            .map((c) => c.email?.trim())
+            .filter((email): email is string => Boolean(email)),
+        ),
+      )
 
       if (recipients.length === 0) {
         throw new TRPCError({

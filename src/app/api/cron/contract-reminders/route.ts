@@ -69,46 +69,46 @@ export async function GET(request: NextRequest) {
 
     for (const contract of pendingContracts) {
       try {
+        if (!contract.signingUrl || !contract.signerEmail) {
+          failed++
+          console.warn(
+            `Skipping reminder for ${contract.sponsorName} (${contract._id}): missing signingUrl or signerEmail`,
+          )
+          continue
+        }
+
         const newCount = (contract.reminderCount || 0) + 1
 
-        // Send reminder email via Resend if we have a signing URL and signer email
-        if (contract.signingUrl && contract.signerEmail) {
-          const fromEmail =
-            contract.conferenceSponsorEmail || 'sponsors@cloudnativeday.no'
-          const fromName = contract.conferenceOrganizer || 'Cloud Native Days'
-          const eventName = contract.conferenceName || 'Cloud Native Day'
+        const fromEmail =
+          contract.conferenceSponsorEmail || 'sponsors@cloudnativeday.no'
+        const fromName = contract.conferenceOrganizer || 'Cloud Native Days'
+        const eventName = contract.conferenceName || 'Cloud Native Day'
 
-          await retryWithBackoff(async () => {
-            return resend.emails.send({
-              from: `${fromName} <${fromEmail}>`,
-              to: [contract.signerEmail],
-              subject: `Reminder: Sponsorship Agreement — ${eventName}`,
-              react: React.createElement(ContractReminderTemplate, {
-                sponsorName: contract.sponsorName || 'Sponsor',
-                signerName: contract.signerName,
-                signingUrl: contract.signingUrl,
-                reminderNumber: newCount,
-                eventName,
-                eventLocation: contract.conferenceCity || 'Norway',
-                eventDate: contract.conferenceStartDate
-                  ? formatConferenceDateLong(contract.conferenceStartDate)
-                  : '',
-                eventUrl: 'https://cloudnativeday.no',
-              }),
-            })
+        await retryWithBackoff(async () => {
+          return resend.emails.send({
+            from: `${fromName} <${fromEmail}>`,
+            to: [contract.signerEmail],
+            subject: `Reminder: Sponsorship Agreement — ${eventName}`,
+            react: React.createElement(ContractReminderTemplate, {
+              sponsorName: contract.sponsorName || 'Sponsor',
+              signerName: contract.signerName,
+              signingUrl: contract.signingUrl,
+              reminderNumber: newCount,
+              eventName,
+              eventLocation: contract.conferenceCity || 'Norway',
+              eventDate: contract.conferenceStartDate
+                ? formatConferenceDateLong(contract.conferenceStartDate)
+                : '',
+              eventUrl: 'https://cloudnativeday.no',
+            }),
           })
-        } else {
-          console.warn(
-            `Skipping email for ${contract.sponsorName} (${contract._id}): missing signingUrl or signerEmail`,
-          )
-        }
+        })
 
         await clientWrite
           .patch(contract._id)
           .set({ reminderCount: newCount })
           .commit()
 
-        // Log reminder activity
         await clientWrite.create({
           _type: 'sponsorActivity',
           sponsorForConference: { _type: 'reference', _ref: contract._id },

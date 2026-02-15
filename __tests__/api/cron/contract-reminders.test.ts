@@ -230,7 +230,7 @@ describe('api/cron/contract-reminders', () => {
       )
     })
 
-    it('skips email when signingUrl or signerEmail missing but still increments count', async () => {
+    it('skips contract entirely when signingUrl or signerEmail is missing', async () => {
       const { GET } = await import('@/app/api/cron/contract-reminders/route')
 
       mockSanityFetch.mockResolvedValueOnce([
@@ -248,10 +248,13 @@ describe('api/cron/contract-reminders', () => {
       const response = await GET(cronRequest('Bearer test-cron-secret'))
       const data = await response.json()
 
-      expect(data.sent).toBe(1)
+      // Should count as failed, not sent
+      expect(data.sent).toBe(0)
+      expect(data.failed).toBe(1)
       expect(mockResendSend).not.toHaveBeenCalled()
-      expect(mockPatch).toHaveBeenCalledWith('sfc-no-url')
-      expect(mockSet).toHaveBeenCalledWith({ reminderCount: 1 })
+      // Should NOT increment reminder count
+      expect(mockPatch).not.toHaveBeenCalled()
+      expect(mockCreate).not.toHaveBeenCalled()
     })
   })
 })

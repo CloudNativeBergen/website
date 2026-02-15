@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 
-import { embedSignatureInPdf } from '@/lib/pdf'
+import { embedSignatureInPdf, type SigningAttestation } from '@/lib/pdf'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   logContractStatusChange,
@@ -18,6 +18,7 @@ interface SigningContractData {
   signatureId: string
   signerEmail: string
   contractStatus?: string
+  contractSentAt?: string
   contractDocument?: {
     asset?: {
       url?: string
@@ -45,6 +46,7 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   signatureId,
   signerEmail,
   contractStatus,
+  contractSentAt,
   contractDocument{
     asset->{
       url
@@ -138,13 +140,25 @@ export const signingRouter = router({
         })
       }
 
-      // Embed signature into the contract PDF
+      // Embed signature and append signing certificate
+      const now = getCurrentDateTime()
+      const attestation: SigningAttestation = {
+        agreementName: `Sponsorship Agreement - ${doc.sponsor?.name || 'Sponsor'}`,
+        transactionId: doc.signatureId,
+        signerName: input.signerName,
+        signerEmail: doc.signerEmail,
+        organizerName: doc.conference?.organizer,
+        contractSentAt: doc.contractSentAt,
+        signedAt: now,
+      }
+
       let signedPdfBuffer: Buffer
       try {
         signedPdfBuffer = await embedSignatureInPdf(
           pdfUrl,
           input.signatureDataUrl,
           input.signerName,
+          attestation,
         )
       } catch (pdfError) {
         console.error('[signing] Failed to embed signature in PDF:', pdfError)
@@ -175,7 +189,6 @@ export const signingRouter = router({
       }
 
       // Update the sponsor record
-      const now = getCurrentDateTime()
       try {
         await clientWrite
           .patch(doc._id)

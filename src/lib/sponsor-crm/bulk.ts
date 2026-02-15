@@ -173,13 +173,25 @@ export async function bulkDeleteSponsors(
     { ids },
   )
 
-  // Find contract asset IDs if cleanup requested
+  // Find contract asset IDs if cleanup requested (only delete assets not referenced elsewhere)
   let contractAssetIds: string[] = []
   if (options?.deleteContractAssets) {
-    contractAssetIds = await clientWrite.fetch<string[]>(
+    const candidateAssetIds = await clientWrite.fetch<string[]>(
       `*[_type == "sponsorForConference" && _id in $ids && defined(contractDocument.asset._ref)].contractDocument.asset._ref`,
       { ids },
     )
+
+    if (candidateAssetIds.length > 0) {
+      const unique = Array.from(new Set(candidateAssetIds.filter(Boolean)))
+      contractAssetIds = await clientWrite.fetch<string[]>(
+        `*[
+          _type == "sanity.fileAsset" &&
+          _id in $assetIds &&
+          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(_id in $ids)]) == 0
+        ]._id`,
+        { assetIds: unique, ids },
+      )
+    }
   }
 
   const transaction = clientWrite.transaction()

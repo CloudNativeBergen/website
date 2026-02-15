@@ -26,6 +26,8 @@ async function sendSalesNotification(
   message: SlackMessage,
   conference: Conference,
 ) {
+  if (!conference.salesNotificationChannel) return
+
   try {
     await postSlackMessage(message, {
       channel: conference.salesNotificationChannel,
@@ -333,7 +335,7 @@ export async function notifySponsorRegistrationComplete(
   const domain = getDomainFromConference(conference)
 
   const valueStr =
-    contractValue && contractCurrency
+    contractValue != null && contractCurrency
       ? `${contractValue.toLocaleString()} ${contractCurrency}`
       : null
 
