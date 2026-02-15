@@ -43,7 +43,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     endDate,
     sponsorEmail,
     domains,
-    socialLinks
+    socialLinks,
+    logoBright
   },
   tier->{
     _id,
@@ -165,10 +166,10 @@ export async function createSponsorForConference(
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
       addons: data.addons?.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : undefined,
       status: data.status,
       contractStatus: data.contractStatus || 'none',
@@ -231,10 +232,10 @@ export async function updateSponsorForConference(
     if (data.addons !== undefined) {
       updates.addons = data.addons.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : []
     }
     if (data.status !== undefined) updates.status = data.status

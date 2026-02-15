@@ -63,6 +63,7 @@ export interface ContractVariableContext {
     venueName?: string
     venueAddress?: string
     sponsorEmail?: string
+    logoBright?: string
   }
 }
 

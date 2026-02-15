@@ -128,6 +128,7 @@ export interface SponsorForConferenceExpanded {
     sponsorEmail?: string
     domains?: string[]
     socialLinks?: string[]
+    logoBright?: string
   }
   tier?: {
     _id: string
