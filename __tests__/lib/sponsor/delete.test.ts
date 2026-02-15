@@ -20,7 +20,7 @@ describe('deleteSponsor', () => {
   })
 
   it('deletes sponsor and all related sponsorForConference, activities, and assets', async () => {
-    ; (clientWrite.fetch as any)
+    ;(clientWrite.fetch as any)
       .mockResolvedValueOnce([
         { _id: 'sfc-1', contractAssetRef: 'asset-1' },
         { _id: 'sfc-2', contractAssetRef: undefined },
@@ -33,7 +33,7 @@ describe('deleteSponsor', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsor('sponsor-1')
 
@@ -48,14 +48,14 @@ describe('deleteSponsor', () => {
   })
 
   it('deletes sponsor with no related records', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([]) // no SFC docs
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // no SFC docs
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsor('sponsor-1')
 
@@ -65,14 +65,14 @@ describe('deleteSponsor', () => {
   })
 
   it('does not fetch activities when no sponsorForConference records exist', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([])
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     await deleteSponsor('sponsor-1')
 
@@ -81,7 +81,7 @@ describe('deleteSponsor', () => {
   })
 
   it('skips asset deletion when assets are referenced by other sponsors', async () => {
-    ; (clientWrite.fetch as any)
+    ;(clientWrite.fetch as any)
       .mockResolvedValueOnce([
         { _id: 'sfc-1', contractAssetRef: 'asset-shared' },
       ]) // SFC docs
@@ -93,7 +93,7 @@ describe('deleteSponsor', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsor('sponsor-1')
 
@@ -104,7 +104,7 @@ describe('deleteSponsor', () => {
   })
 
   it('deduplicates contract asset references', async () => {
-    ; (clientWrite.fetch as any)
+    ;(clientWrite.fetch as any)
       .mockResolvedValueOnce([
         { _id: 'sfc-1', contractAssetRef: 'asset-1' },
         { _id: 'sfc-2', contractAssetRef: 'asset-1' },
@@ -117,7 +117,7 @@ describe('deleteSponsor', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     await deleteSponsor('sponsor-1')
 
@@ -129,14 +129,14 @@ describe('deleteSponsor', () => {
   })
 
   it('returns error when transaction fails', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([])
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockRejectedValue(new Error('Transaction failed')),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsor('sponsor-1')
 
