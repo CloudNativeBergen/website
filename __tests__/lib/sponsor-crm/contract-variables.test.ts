@@ -83,14 +83,24 @@ describe('contract-variables', () => {
       expect(vars.ADDONS_LIST).toBe('Workshop Sponsorship, Party Sponsorship')
     })
 
-    it('should format contract value with currency', () => {
+    it('should format contract value with currency and Norwegian VAT suffix by default', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
       expect(vars.CONTRACT_VALUE).toContain('75')
       expect(vars.CONTRACT_VALUE).toContain('000')
+      expect(vars.CONTRACT_VALUE).toContain('ex. mva')
       expect(vars.CONTRACT_VALUE_NUMBER).toBe('75000')
       expect(vars.CONTRACT_CURRENCY).toBe('NOK')
+    })
+
+    it('should use English VAT suffix when language is en', () => {
+      const ctx = createBasicContext()
+      ctx.language = 'en'
+      const vars = buildContractVariables(ctx)
+
+      expect(vars.CONTRACT_VALUE).toContain('excl. VAT')
+      expect(vars.CONTRACT_VALUE).not.toContain('ex. mva')
     })
 
     it('should handle different currencies', () => {

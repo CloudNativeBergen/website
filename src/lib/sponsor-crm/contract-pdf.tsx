@@ -547,7 +547,10 @@ export async function generateContractPdf(
   template: ContractTemplate,
   context: ContractVariableContext,
 ): Promise<Buffer> {
-  const variables = buildContractVariables(context)
+  const variables = buildContractVariables({
+    ...context,
+    language: template.language,
+  })
   const logoDataUrl = context.conference.logoBright
     ? svgToDataUrl(context.conference.logoBright)
     : undefined

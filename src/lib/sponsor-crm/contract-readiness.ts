@@ -133,11 +133,11 @@ export function checkContractReadiness(
     }
   }
 
-  const hasRequired = !missing.some((m) => m.severity === 'required')
+  const allRequiredPresent = !missing.some((m) => m.severity === 'required')
 
   return {
     ready: missing.length === 0,
-    canSend: hasRequired,
+    canSend: allRequiredPresent,
     missing,
   }
 }

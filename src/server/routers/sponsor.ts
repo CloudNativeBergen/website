@@ -2154,6 +2154,21 @@ export const sponsorRouter = router({
         }),
       )
       .mutation(async ({ input }) => {
+        const { conference: currentConf, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !currentConf) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
+        if (input.conferenceId !== currentConf._id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot update a different conference.',
+          })
+        }
         await clientWrite
           .patch(input.conferenceId)
           .set({ signingProvider: input.signingProvider })

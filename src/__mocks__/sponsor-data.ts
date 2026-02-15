@@ -155,11 +155,13 @@ export function mockReadinessMissing(
     },
   ]
 
-  const hasRequired = defaultMissing.some((m) => m.severity === 'required')
+  const anyRequiredMissing = defaultMissing.some(
+    (m) => m.severity === 'required',
+  )
 
   return {
     ready: false,
-    canSend: !hasRequired,
+    canSend: !anyRequiredMissing,
     missing: defaultMissing,
   }
 }
