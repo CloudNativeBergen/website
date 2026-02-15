@@ -6,6 +6,9 @@ import {
   suggestTemplateCategory,
   suggestTemplateLanguage,
   findBestTemplate,
+  extractVariablesFromText,
+  extractVariablesFromPortableText,
+  findUnsupportedVariables,
 } from '@/lib/sponsor/templates'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 
@@ -405,5 +408,144 @@ describe('findBestTemplate', () => {
       makeTemplate({ _id: '1', category: 'custom', language: 'en' }),
     ]
     expect(findBestTemplate(templates, 'cold-outreach', 'no')?._id).toBe('1')
+  })
+})
+
+describe('extractVariablesFromText', () => {
+  it('extracts single variable', () => {
+    expect(extractVariablesFromText('Hello {{{NAME}}}')).toEqual(['NAME'])
+  })
+
+  it('extracts multiple different variables', () => {
+    const result = extractVariablesFromText('{{{A}}} and {{{B}}}')
+    expect(result).toContain('A')
+    expect(result).toContain('B')
+    expect(result).toHaveLength(2)
+  })
+
+  it('deduplicates repeated variables', () => {
+    expect(extractVariablesFromText('{{{X}}} then {{{X}}} again')).toEqual([
+      'X',
+    ])
+  })
+
+  it('returns empty array for text without variables', () => {
+    expect(extractVariablesFromText('No variables here')).toEqual([])
+  })
+
+  it('returns empty array for empty string', () => {
+    expect(extractVariablesFromText('')).toEqual([])
+  })
+
+  it('ignores malformed variable syntax', () => {
+    expect(extractVariablesFromText('{{NAME}} or {NAME}')).toEqual([])
+  })
+})
+
+describe('extractVariablesFromPortableText', () => {
+  const makeBlock = (text: string, key = 'k1') => ({
+    _type: 'block' as const,
+    _key: key,
+    children: [{ _type: 'span' as const, _key: `${key}-s`, text }],
+    style: 'normal' as const,
+  })
+
+  it('extracts variables from block spans', () => {
+    const blocks = [makeBlock('Hello {{{SPONSOR_NAME}}}')]
+    expect(extractVariablesFromPortableText(blocks)).toEqual(['SPONSOR_NAME'])
+  })
+
+  it('extracts from multiple blocks', () => {
+    const blocks = [
+      makeBlock('{{{A}}} text', 'k1'),
+      makeBlock('more {{{B}}}', 'k2'),
+    ]
+    const result = extractVariablesFromPortableText(blocks)
+    expect(result).toContain('A')
+    expect(result).toContain('B')
+  })
+
+  it('deduplicates across blocks', () => {
+    const blocks = [makeBlock('{{{X}}}', 'k1'), makeBlock('{{{X}}}', 'k2')]
+    expect(extractVariablesFromPortableText(blocks)).toEqual(['X'])
+  })
+
+  it('skips non-block types', () => {
+    const blocks = [{ _type: 'image', _key: 'img1', url: 'test.png' }]
+    expect(extractVariablesFromPortableText(blocks as never[])).toEqual([])
+  })
+
+  it('returns empty for empty array', () => {
+    expect(extractVariablesFromPortableText([])).toEqual([])
+  })
+})
+
+describe('findUnsupportedVariables', () => {
+  const supported = { NAME: 'Name', TITLE: 'Title', CITY: 'City' }
+
+  it('returns empty when all variables are supported', () => {
+    expect(
+      findUnsupportedVariables(supported, 'Hello {{{NAME}}} in {{{CITY}}}'),
+    ).toEqual([])
+  })
+
+  it('detects unsupported variables in text', () => {
+    const result = findUnsupportedVariables(
+      supported,
+      'Hello {{{UNKNOWN_VAR}}}',
+    )
+    expect(result).toEqual(['UNKNOWN_VAR'])
+  })
+
+  it('detects unsupported variables in portable text', () => {
+    const blocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [
+          {
+            _type: 'span' as const,
+            _key: 'k1-s',
+            text: 'Value: {{{BAD_VAR}}}',
+          },
+        ],
+        style: 'normal' as const,
+      },
+    ]
+    const result = findUnsupportedVariables(supported, blocks)
+    expect(result).toEqual(['BAD_VAR'])
+  })
+
+  it('checks multiple sources', () => {
+    const blocks = [
+      {
+        _type: 'block' as const,
+        _key: 'k1',
+        children: [{ _type: 'span' as const, _key: 'k1-s', text: '{{{FOO}}}' }],
+        style: 'normal' as const,
+      },
+    ]
+    const result = findUnsupportedVariables(
+      supported,
+      '{{{BAR}}}',
+      blocks,
+      '{{{NAME}}}',
+    )
+    expect(result).toContain('BAR')
+    expect(result).toContain('FOO')
+    expect(result).not.toContain('NAME')
+  })
+
+  it('deduplicates across sources', () => {
+    const result = findUnsupportedVariables(supported, '{{{BAD}}}', '{{{BAD}}}')
+    expect(result).toEqual(['BAD'])
+  })
+
+  it('returns empty when no variables present', () => {
+    expect(findUnsupportedVariables(supported, 'Plain text')).toEqual([])
+  })
+
+  it('returns empty for empty sources', () => {
+    expect(findUnsupportedVariables(supported)).toEqual([])
   })
 })

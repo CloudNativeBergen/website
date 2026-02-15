@@ -335,3 +335,59 @@ export function findBestTemplate(
 
   return best
 }
+
+/**
+ * Extract all {{{VARIABLE_NAME}}} references from a plain string.
+ */
+export function extractVariablesFromText(text: string): string[] {
+  const matches = text.match(/\{\{\{([A-Z_]+)\}\}\}/g)
+  if (!matches) return []
+  return [...new Set(matches.map((m) => m.slice(3, -3)))]
+}
+
+/**
+ * Extract all {{{VARIABLE_NAME}}} references from Portable Text blocks.
+ */
+export function extractVariablesFromPortableText(
+  blocks: PortableTextBlock[],
+): string[] {
+  const vars = new Set<string>()
+  for (const block of blocks) {
+    if (block._type === 'block' && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        if (child._type === 'span' && typeof child.text === 'string') {
+          for (const v of extractVariablesFromText(child.text)) {
+            vars.add(v)
+          }
+        }
+      }
+    }
+  }
+  return [...vars]
+}
+
+/**
+ * Find unsupported variables in text and Portable Text blocks.
+ * Returns an array of variable names that are not in the supported set.
+ */
+export function findUnsupportedVariables(
+  supportedVariables: Record<string, string>,
+  ...sources: Array<string | PortableTextBlock[]>
+): string[] {
+  const supported = new Set(Object.keys(supportedVariables))
+  const found = new Set<string>()
+
+  for (const source of sources) {
+    if (typeof source === 'string') {
+      for (const v of extractVariablesFromText(source)) {
+        if (!supported.has(v)) found.add(v)
+      }
+    } else if (Array.isArray(source)) {
+      for (const v of extractVariablesFromPortableText(source)) {
+        if (!supported.has(v)) found.add(v)
+      }
+    }
+  }
+
+  return [...found]
+}

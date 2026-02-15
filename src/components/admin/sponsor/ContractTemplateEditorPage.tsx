@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
@@ -9,6 +9,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 import type { PortableTextBlock as EditorBlock } from '@portabletext/editor'
 import { CONTRACT_VARIABLE_DESCRIPTIONS } from '@/lib/sponsor-crm/contract-variables'
+import { findUnsupportedVariables } from '@/lib/sponsor/templates'
 import { Dropdown } from '@/components/Form'
 import { CurrencySelect } from '@/components/CurrencySelect'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
@@ -21,6 +22,7 @@ import {
   InformationCircleIcon,
   ClipboardDocumentIcon,
   EyeIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 interface ContractSection {
@@ -291,6 +293,19 @@ export function ContractTemplateEditorPage({
     previewMutation,
     showNotification,
   ])
+
+  const unsupportedVars = useMemo(
+    () =>
+      findUnsupportedVariables(
+        CONTRACT_VARIABLE_DESCRIPTIONS,
+        headerText,
+        footerText,
+        ...sections.map((s) => s.heading),
+        ...sections.filter((s) => s.body).map((s) => s.body!),
+        terms,
+      ),
+    [headerText, footerText, sections, terms],
+  )
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
@@ -649,6 +664,27 @@ export function ContractTemplateEditorPage({
             compact
           />
         </div>
+
+        {/* Unsupported variable warning */}
+        {unsupportedVars.length > 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-900/20">
+            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-medium">Unsupported variables detected</p>
+              <p className="mt-1">
+                The following variables will not be replaced in the contract:{' '}
+                {unsupportedVars.map((v, i) => (
+                  <span key={v}>
+                    {i > 0 && ', '}
+                    <code className="rounded bg-amber-100 px-1 font-mono text-xs dark:bg-amber-800">
+                      {`{{{${v}}}}`}
+                    </code>
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Submit */}
         <div className="flex items-center justify-end gap-3">
