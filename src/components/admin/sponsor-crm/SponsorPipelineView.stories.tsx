@@ -3,6 +3,7 @@ import { fn } from 'storybook/test'
 import { SponsorPipelineView } from './SponsorPipelineView'
 import type { SponsorPipelineFormData } from './SponsorPipelineView'
 import { mockSponsor, mockSponsorTier } from '@/__mocks__/sponsor-data'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const defaultFormData: SponsorPipelineFormData = {
   sponsorId: 'sponsor-123',
@@ -93,9 +94,11 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="max-w-2xl">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="max-w-2xl">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 } satisfies Meta<typeof SponsorPipelineView>
