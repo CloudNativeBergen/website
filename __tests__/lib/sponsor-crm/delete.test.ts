@@ -23,7 +23,7 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('deletes sponsor and related activities in a transaction', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([
       'activity-1',
       'activity-2',
     ]) // related activities
@@ -33,7 +33,7 @@ describe('deleteSponsorForConference', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsorForConference('sfc-1')
 
@@ -45,14 +45,14 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('deletes sponsor without activities when none exist', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([]) // no activities
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsorForConference('sfc-1')
 
@@ -62,7 +62,7 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('deletes contract asset when deleteContractAsset option is true', async () => {
-    ; (clientWrite.fetch as any)
+    ;(clientWrite.fetch as any)
       .mockResolvedValueOnce({
         contractDocument: { asset: { _ref: 'asset-pdf-1' } },
       }) // contract doc lookup
@@ -73,7 +73,7 @@ describe('deleteSponsorForConference', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsorForConference('sfc-1', {
       deleteContractAsset: true,
@@ -85,7 +85,7 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('skips asset deletion when no contract document exists', async () => {
-    ; (clientWrite.fetch as any)
+    ;(clientWrite.fetch as any)
       .mockResolvedValueOnce(null) // no contract doc
       .mockResolvedValueOnce([]) // no activities
 
@@ -94,7 +94,7 @@ describe('deleteSponsorForConference', () => {
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsorForConference('sfc-1', {
       deleteContractAsset: true,
@@ -107,14 +107,14 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('does not look up contract asset when option is not set', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([]) // activities only
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // activities only
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockResolvedValue({}),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     await deleteSponsorForConference('sfc-1')
 
@@ -123,14 +123,14 @@ describe('deleteSponsorForConference', () => {
   })
 
   it('returns error when transaction fails', async () => {
-    ; (clientWrite.fetch as any).mockResolvedValueOnce([])
+    ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
       delete: jest.fn().mockReturnThis(),
       // @ts-ignore
       commit: jest.fn().mockRejectedValue(new Error('Transaction failed')),
     }
-      ; (clientWrite.transaction as any).mockReturnValue(mockTransaction)
+    ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
     const result = await deleteSponsorForConference('sfc-1')
 
