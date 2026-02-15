@@ -3,11 +3,7 @@ import { fn } from 'storybook/test'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
 
-function daysFromNow(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  return d.toISOString()
-}
+const FIXED_NOW = new Date('2025-03-01T12:00:00Z')
 
 const baseOrder: CheckinPayOrder = {
   id: 1001,
@@ -64,6 +60,29 @@ const meta = {
     isLoading: false,
     error: null,
   },
+  beforeEach: () => {
+    const OriginalDate = globalThis.Date
+    const fixedTime = FIXED_NOW.getTime()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(fixedTime)
+      return new (Function.prototype.bind.apply(OriginalDate, [
+        null,
+        ...args,
+      ]) as typeof OriginalDate)()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => fixedTime
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
 } satisfies Meta<typeof PaymentDetailsModal>
 
 export default meta
@@ -82,7 +101,7 @@ export const Pending: Story = {
       paymentStatus: 'PENDING',
       paid: false,
       sumLeft: '15000.00',
-      dueAt: daysFromNow(30),
+      dueAt: '2025-08-15T23:59:59Z',
     },
   },
 }
@@ -94,7 +113,7 @@ export const Overdue: Story = {
       paymentStatus: 'PENDING',
       paid: false,
       sumLeft: '15000.00',
-      dueAt: daysFromNow(-14),
+      dueAt: '2025-01-15T23:59:59Z',
       actionRequired: 'Payment is overdue. Please follow up with the customer.',
     },
   },
