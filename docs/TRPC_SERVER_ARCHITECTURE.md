@@ -16,6 +16,11 @@ src/
 │   ├── schemas/           # Zod validation schemas
 │   │   └── sponsor.ts     # Input validation schemas
 │   └── trpc.ts           # tRPC configuration and procedures
+├── lib/
+│   └── contract-signing/  # Provider-agnostic contract signing abstraction
+│       ├── types.ts       # ContractSigningProvider interface
+│       ├── adobe-sign.ts  # Adobe Sign implementation
+│       └── index.ts       # Provider factory (getSigningProvider)
 ```
 
 ### Core Components

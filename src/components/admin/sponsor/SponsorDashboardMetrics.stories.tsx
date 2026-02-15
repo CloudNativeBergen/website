@@ -2,9 +2,16 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Metrics',
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Dashboard metric cards showing revenue, active deals, tier utilization, and invoice status. Includes trend indicators and compact value formatting.',
+      },
+    },
   },
 } satisfies Meta
 

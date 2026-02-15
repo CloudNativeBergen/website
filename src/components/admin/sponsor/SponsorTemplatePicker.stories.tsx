@@ -112,7 +112,7 @@ const mockConference = {
 }
 
 const meta = {
-  title: 'Systems/Sponsors/Email/SponsorTemplatePicker',
+  title: 'Systems/Sponsors/Admin/Email/SponsorTemplatePicker',
   component: SponsorTemplatePicker,
   parameters: {
     layout: 'padded',

@@ -48,3 +48,5 @@ storybook-static/*
 public/mockServiceWorker.js
 # storybook local env
 .storybook/.env
+
+certificates

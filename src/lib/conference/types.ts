@@ -107,6 +107,7 @@ export interface Conference {
   cfpLightningGoal?: number
   cfpPresentationGoal?: number
   cfpWorkshopGoal?: number
+  signingProvider?: 'self-hosted' | 'adobe-sign'
   sponsorRevenueGoal?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string

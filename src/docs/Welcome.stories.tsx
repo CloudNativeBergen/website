@@ -57,7 +57,7 @@ const systems = [
   {
     name: 'Sponsors',
     description:
-      'Full CRM pipeline, contract workflows, tiered management, onboarding portal, and email templates.',
+      'Full CRM pipeline, contract workflows, tiered management, registration portal, and email templates.',
     icon: CurrencyDollarIcon,
     color: 'from-brand-sunbeam-yellow to-orange-400',
     stories: 43,

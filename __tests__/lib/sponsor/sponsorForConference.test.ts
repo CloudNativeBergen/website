@@ -6,6 +6,7 @@ import {
   ImportAllHistoricSponsorsSchema,
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
+  DeleteSponsorSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   ContactPersonSchema,
@@ -233,6 +234,60 @@ describe('BulkDeleteSponsorCRMSchema', () => {
     const result = BulkDeleteSponsorCRMSchema.safeParse({
       ids: [],
     })
+    expect(result.success).toBe(false)
+  })
+
+  it('passes with cleanup options', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+      cancelAgreements: true,
+      deleteContractAssets: true,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreements).toBe(true)
+      expect(result.data.deleteContractAssets).toBe(true)
+    }
+  })
+
+  it('passes without cleanup options (optional)', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreements).toBeUndefined()
+      expect(result.data.deleteContractAssets).toBeUndefined()
+    }
+  })
+})
+
+describe('DeleteSponsorSchema', () => {
+  it('passes with id only', () => {
+    const result = DeleteSponsorSchema.safeParse({ id: 'sfc-1' })
+    expect(result.success).toBe(true)
+  })
+
+  it('passes with all cleanup options', () => {
+    const result = DeleteSponsorSchema.safeParse({
+      id: 'sfc-1',
+      cancelAgreement: true,
+      deleteContractAsset: true,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreement).toBe(true)
+      expect(result.data.deleteContractAsset).toBe(true)
+    }
+  })
+
+  it('fails with empty id', () => {
+    const result = DeleteSponsorSchema.safeParse({ id: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('fails without id', () => {
+    const result = DeleteSponsorSchema.safeParse({})
     expect(result.success).toBe(false)
   })
 })

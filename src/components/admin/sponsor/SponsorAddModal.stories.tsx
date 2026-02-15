@@ -4,7 +4,7 @@ import { XMarkIcon, PhotoIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/Tiers/SponsorAddModal',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorAddModal',
   component: SponsorAddModal,
   tags: ['autodocs'],
   parameters: {

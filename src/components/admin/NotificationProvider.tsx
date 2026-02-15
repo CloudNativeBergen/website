@@ -98,7 +98,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     >
       {children}
 
-      <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-end space-y-6 p-6 pr-8 pb-8">
+      <div className="pointer-events-none fixed inset-0 z-[60] flex flex-col items-end justify-end space-y-6 p-6 pr-8 pb-8">
         {notifications.map((notification) => (
           <NotificationToast
             key={notification.id}

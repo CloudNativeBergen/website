@@ -4,14 +4,12 @@ import { useState } from 'react'
 import { ContactPerson } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
-  ArrowPathIcon,
   EnvelopeIcon,
   PhoneIcon,
   UserIcon,
   PlusIcon,
   TrashIcon,
   CreditCardIcon,
-  CheckIcon,
   StarIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
@@ -37,6 +35,7 @@ export function SponsorContactEditor({
     sponsorForConference.contactPersons || [],
   )
   const [billing, setBilling] = useState({
+    invoiceFormat: sponsorForConference.billing?.invoiceFormat || 'pdf',
     email: sponsorForConference.billing?.email || '',
     reference: sponsorForConference.billing?.reference || '',
     comments: sponsorForConference.billing?.comments || '',
@@ -137,6 +136,7 @@ export function SponsorContactEditor({
       })),
       billing: billing.email
         ? {
+            invoiceFormat: billing.invoiceFormat as 'ehf' | 'pdf',
             email: billing.email.trim(),
             reference: billing.reference?.trim() || undefined,
             comments: billing.comments?.trim() || undefined,
@@ -288,10 +288,49 @@ export function SponsorContactEditor({
         </h3>
         <div className="group relative rounded-xl border border-gray-200 bg-gray-50/50 p-4 transition-all hover:bg-gray-100/50 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-700/50 dark:hover:shadow-none">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="col-span-full">
+              <label className="block text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
+                Invoice Format
+              </label>
+              <div className="mt-1.5 flex gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900 dark:text-white">
+                  <input
+                    type="radio"
+                    name="invoiceFormat"
+                    value="ehf"
+                    checked={billing.invoiceFormat === 'ehf'}
+                    onChange={() =>
+                      setBilling({ ...billing, invoiceFormat: 'ehf' })
+                    }
+                    className="h-4 w-4 cursor-pointer border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600"
+                  />
+                  EHF (Digital Invoice)
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900 dark:text-white">
+                  <input
+                    type="radio"
+                    name="invoiceFormat"
+                    value="pdf"
+                    checked={billing.invoiceFormat === 'pdf'}
+                    onChange={() =>
+                      setBilling({ ...billing, invoiceFormat: 'pdf' })
+                    }
+                    className="h-4 w-4 cursor-pointer border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600"
+                  />
+                  PDF via Email
+                </label>
+              </div>
+            </div>
+
             <div className="col-span-1">
               <label className="block text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
                 Billing Email
               </label>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                {billing.invoiceFormat === 'ehf'
+                  ? 'Fallback if EHF delivery fails'
+                  : 'Invoice will be sent to this address'}
+              </p>
               <div className="mt-1 flex items-center gap-2">
                 <CreditCardIcon className="h-4 w-4 text-gray-400" />
                 <input
@@ -344,36 +383,25 @@ export function SponsorContactEditor({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
-        {(onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={updateCRMMutation.isPending}
-            className="cursor-pointer rounded-md px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white"
-          >
-            Cancel
-          </button>
-        )) ||
-          null}
+      <div className="mt-4 flex flex-row-reverse gap-3">
         <button
           type="button"
           onClick={handleSave}
           disabled={updateCRMMutation.isPending}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:bg-gray-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:dark:bg-gray-600"
         >
-          {updateCRMMutation.isPending ? (
-            <>
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <CheckIcon className="h-4 w-4" />
-              Save Contact Information
-            </>
-          )}
+          {updateCRMMutation.isPending ? 'Saving...' : 'Save'}
         </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={updateCRMMutation.isPending}
+            className="inline-flex cursor-pointer justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/10 dark:text-white dark:ring-white/10 dark:hover:bg-white/20"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   )

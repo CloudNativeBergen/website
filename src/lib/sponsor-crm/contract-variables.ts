@@ -2,6 +2,7 @@ import {
   processTemplateVariables,
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
+import { formatDate, getCurrentDateTime } from '@/lib/time'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   SPONSOR_NAME: 'Legal name of the sponsor company',
@@ -12,7 +13,8 @@ export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   CONTACT_EMAIL: 'Email of the primary contact person',
   TIER_NAME: 'Sponsor tier name',
   TIER_TAGLINE: 'Sponsor tier tagline/description',
-  CONTRACT_VALUE: 'Contract amount (formatted with currency)',
+  CONTRACT_VALUE:
+    'Contract amount with currency, ex. mva (e.g. 50 000 kr ex. mva)',
   CONTRACT_VALUE_NUMBER: 'Contract amount (number only)',
   CONTRACT_CURRENCY: 'Currency code (e.g. NOK)',
   CONFERENCE_TITLE: 'Full conference title',
@@ -64,15 +66,6 @@ export interface ContractVariableContext {
   }
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
 function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('nb-NO', {
     style: 'currency',
@@ -88,7 +81,7 @@ export function buildContractVariables(
   const vars: Record<string, string> = {
     SPONSOR_NAME: ctx.sponsor.name,
     CONFERENCE_TITLE: ctx.conference.title,
-    TODAY_DATE: formatDate(new Date().toISOString()),
+    TODAY_DATE: formatDate(getCurrentDateTime()),
   }
 
   if (ctx.sponsor.orgNumber) {
@@ -121,7 +114,7 @@ export function buildContractVariables(
   vars.CONTRACT_CURRENCY = currency
 
   if (ctx.contractValue != null) {
-    vars.CONTRACT_VALUE = formatCurrency(ctx.contractValue, currency)
+    vars.CONTRACT_VALUE = `${formatCurrency(ctx.contractValue, currency)} ex. mva`
     vars.CONTRACT_VALUE_NUMBER = String(ctx.contractValue)
   }
 

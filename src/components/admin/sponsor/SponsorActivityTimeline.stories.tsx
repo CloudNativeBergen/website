@@ -2,9 +2,16 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Activity Timeline',
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Chronological feed of sponsor activities grouped by day. Shows status changes, emails sent, contract events, and registration milestones with icons and timestamps.',
+      },
+    },
   },
 } satisfies Meta
 

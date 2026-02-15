@@ -4,7 +4,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
 const meta: Meta<typeof Sponsors> = {
-  title: 'Systems/Sponsors/Components/Sponsors',
+  title: 'Systems/Sponsors/Public/Sponsors',
   component: Sponsors,
   parameters: {
     docs: {

@@ -26,7 +26,7 @@ export async function createSponsorActivity(
     }
 
     const doc = {
-      _type: 'sponsorActivity',
+      _type: 'sponsorActivity' as const,
       sponsorForConference: {
         _type: 'reference',
         _ref: activity.sponsorForConference,
@@ -34,8 +34,11 @@ export async function createSponsorActivity(
       activityType: activity.activityType,
       description: activity.description,
       metadata: activity.metadata,
-      createdBy: { _type: 'reference', _ref: activity.createdBy },
       createdAt: activity.createdAt,
+      ...(activity.createdBy &&
+        activity.createdBy !== 'system' && {
+          createdBy: { _type: 'reference', _ref: activity.createdBy },
+        }),
     }
 
     const created = await clientWrite.create(doc)
@@ -176,14 +179,14 @@ export async function logSignatureStatusChange(
   )
 }
 
-export async function logOnboardingComplete(
+export async function logRegistrationComplete(
   sponsorForConferenceId: string,
   createdBy: string,
 ): Promise<{ activityId?: string; error?: Error }> {
   return createSponsorActivity(
     sponsorForConferenceId,
-    'onboarding_complete',
-    'Sponsor completed self-service onboarding',
+    'registration_complete',
+    'Sponsor completed self-service registration',
     createdBy,
     {
       timestamp: getCurrentDateTime(),

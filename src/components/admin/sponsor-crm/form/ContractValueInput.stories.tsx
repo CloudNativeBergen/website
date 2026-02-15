@@ -136,3 +136,17 @@ export const GBP: Story = {
     )
   },
 }
+
+/** When a contract has been sent, the value is locked to prevent mismatches with the contract document. */
+export const Locked: Story = {
+  render: () => (
+    <ContractValueInput
+      value="25000"
+      currency="NOK"
+      onValueChange={() => {}}
+      onCurrencyChange={() => {}}
+      disabled
+      helperText="Locked — contract has been sent"
+    />
+  ),
+}

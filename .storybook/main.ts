@@ -15,6 +15,33 @@ const config: StorybookConfig = {
     },
   },
   staticDirs: ['../public'],
+  viteFinal: async (config) => {
+    // CloudNativePattern imports static CNCF SVGs that Vite cannot resolve.
+    // Replace with a lightweight stub so stories using BackgroundImage can build.
+    config.plugins = config.plugins || []
+    config.plugins.push({
+      name: 'mock-cloud-native-pattern',
+      enforce: 'pre',
+      resolveId(id) {
+        if (
+          id === './CloudNativePattern' ||
+          id.endsWith('/CloudNativePattern')
+        ) {
+          return '\0mock:CloudNativePattern'
+        }
+      },
+      load(id) {
+        if (id === '\0mock:CloudNativePattern') {
+          return `
+            export function CloudNativePattern({ className }) {
+              return null;
+            }
+          `
+        }
+      },
+    })
+    return config
+  },
   typescript: {
     check: false,
     reactDocgen: 'react-docgen-typescript',

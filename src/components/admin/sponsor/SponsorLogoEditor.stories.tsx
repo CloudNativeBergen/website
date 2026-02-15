@@ -4,9 +4,16 @@ import { ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Form/SponsorLogoEditor',
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'SVG logo upload and preview with light/dark variant support. Validates SVG format, shows live previews on both light and dark backgrounds, and supports clearing uploads.',
+      },
+    },
   },
 } satisfies Meta
 

@@ -15,6 +15,8 @@ export interface SponsorCRMFormData {
   website: string
   logo: string | null
   logoBright: string | null
+  orgNumber: string
+  address: string
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -32,7 +34,6 @@ interface UseSponsorCRMFormMutationsOptions {
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
   onSuccess: () => void
-  onClose: () => void
 }
 
 export function useSponsorCRMFormMutations({
@@ -40,15 +41,9 @@ export function useSponsorCRMFormMutations({
   sponsor,
   isOpen,
   onSuccess,
-  onClose,
 }: UseSponsorCRMFormMutationsOptions) {
   const { showNotification } = useNotification()
   const utils = api.useUtils()
-
-  const handleSuccess = () => {
-    onSuccess()
-    onClose()
-  }
 
   const createMutation = api.sponsor.crm.create.useMutation({
     onSuccess: async () => {
@@ -58,7 +53,7 @@ export function useSponsorCRMFormMutations({
         message: 'Sponsor added to pipeline',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -77,7 +72,7 @@ export function useSponsorCRMFormMutations({
         message: 'Sponsor updated successfully',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -112,7 +107,9 @@ export function useSponsorCRMFormMutations({
         formData.website !== sponsor.sponsor.website ||
         formData.logo !== sponsor.sponsor.logo ||
         formData.logoBright !== sponsor.sponsor.logoBright ||
-        formData.name !== sponsor.sponsor.name
+        formData.name !== sponsor.sponsor.name ||
+        formData.orgNumber !== (sponsor.sponsor.orgNumber || '') ||
+        formData.address !== (sponsor.sponsor.address || '')
       ) {
         await updateGlobalSponsorMutation.mutateAsync({
           id: sponsor.sponsor._id,
@@ -121,6 +118,8 @@ export function useSponsorCRMFormMutations({
             website: formData.website,
             logo: formData.logo || null,
             logoBright: formData.logoBright || null,
+            orgNumber: formData.orgNumber || undefined,
+            address: formData.address || undefined,
           },
         })
       }

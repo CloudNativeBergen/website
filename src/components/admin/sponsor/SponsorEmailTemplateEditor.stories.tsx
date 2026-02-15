@@ -126,7 +126,7 @@ const createMswHandlers = () => [
 ]
 
 const meta = {
-  title: 'Systems/Sponsors/Email/SponsorEmailTemplateEditor',
+  title: 'Systems/Sponsors/Admin/Email/SponsorEmailTemplateEditor',
   component: SponsorEmailTemplateEditor,
   parameters: {
     layout: 'fullscreen',

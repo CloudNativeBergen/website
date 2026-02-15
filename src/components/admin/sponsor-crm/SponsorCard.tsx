@@ -12,6 +12,7 @@ import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -34,6 +35,7 @@ interface SponsorCardProps {
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
+  onContract?: () => void
 }
 
 const TAG_BADGES: {
@@ -77,6 +79,7 @@ export function SponsorCard({
   onEdit,
   onDelete,
   onEmail,
+  onContract,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
 
@@ -103,6 +106,11 @@ export function SponsorCard({
   const handleEmailClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onEmail?.()
+  }
+
+  const handleContractClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onContract?.()
   }
 
   const handleSelectClick = (e: React.MouseEvent) => {
@@ -250,6 +258,15 @@ export function SponsorCard({
         className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {onContract && (
+          <button
+            onClick={handleContractClick}
+            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+            title="Contract"
+          >
+            <DocumentTextIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
+          </button>
+        )}
         {onEmail && (
           <button
             onClick={handleEmailClick}

@@ -17,7 +17,7 @@ interface Organizer {
   _id: string
   name: string
   email?: string
-  avatar?: string
+  avatar?: string | null
 }
 
 interface OrganizerComboboxProps {

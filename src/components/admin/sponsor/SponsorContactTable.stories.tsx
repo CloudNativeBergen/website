@@ -8,9 +8,16 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactTable',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Table view of all sponsor contacts across tiers. Displays name, email, role, and tier with inline actions for emailing and editing. Supports sorting and filtering by tier or role.',
+      },
+    },
   },
 } satisfies Meta
 

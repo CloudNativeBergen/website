@@ -79,6 +79,7 @@ export default defineType({
         list: [
           { title: 'None', value: 'none' },
           { title: 'Verbal Agreement', value: 'verbal-agreement' },
+          { title: 'Registration Sent', value: 'registration-sent' },
           { title: 'Contract Sent', value: 'contract-sent' },
           { title: 'Contract Signed', value: 'contract-signed' },
         ],
@@ -108,8 +109,14 @@ export default defineType({
       name: 'signatureId',
       title: 'Signature ID',
       type: 'string',
-      description: 'External ID from e-signing provider (e.g. Posten.no)',
+      description: 'Agreement ID from the contract signing provider',
       readOnly: true,
+    }),
+    defineField({
+      name: 'signerName',
+      title: 'Signer Name',
+      type: 'string',
+      description: 'Name of the person who should sign the contract',
     }),
     defineField({
       name: 'signerEmail',
@@ -118,10 +125,31 @@ export default defineType({
       description: 'Email of the person who should sign the contract',
     }),
     defineField({
+      name: 'signingUrl',
+      title: 'Signing URL',
+      type: 'string',
+      description: 'Signing URL for the signer',
+      readOnly: true,
+    }),
+    defineField({
       name: 'contractSentAt',
       title: 'Contract Sent Date',
       type: 'datetime',
       description: 'When the contract was sent for signing',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'organizerSignedAt',
+      title: 'Organizer Signed Date',
+      type: 'datetime',
+      description: 'When the organizer counter-signed the contract',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'organizerSignedBy',
+      title: 'Organizer Signed By',
+      type: 'string',
+      description: 'Name of the organizer who counter-signed',
       readOnly: true,
     }),
     defineField({
@@ -351,9 +379,26 @@ export default defineType({
       type: 'object',
       fields: [
         {
+          name: 'invoiceFormat',
+          title: 'Invoice Format',
+          type: 'string',
+          description: 'How the sponsor prefers to receive invoices',
+          options: {
+            list: [
+              { title: 'EHF (Digital Invoice)', value: 'ehf' },
+              { title: 'PDF via Email', value: 'pdf' },
+            ],
+            layout: 'radio',
+          },
+          initialValue: 'pdf',
+          validation: (Rule) => Rule.required(),
+        },
+        {
           name: 'email',
           title: 'Billing Email',
           type: 'string',
+          description:
+            'Required for PDF invoices and as fallback if EHF delivery fails',
           validation: (Rule) =>
             Rule.required().email().error('Please enter a valid email'),
         },
@@ -380,25 +425,25 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'onboardingToken',
-      title: 'Onboarding Token',
+      name: 'registrationToken',
+      title: 'Registration Token',
       type: 'string',
-      description: 'Unique token for sponsor self-service onboarding portal',
+      description: 'Unique token for sponsor self-service registration portal',
       readOnly: true,
     }),
     defineField({
-      name: 'onboardingComplete',
-      title: 'Onboarding Complete',
+      name: 'registrationComplete',
+      title: 'Registration Complete',
       type: 'boolean',
-      description: 'Whether the sponsor has completed onboarding',
+      description: 'Whether the sponsor has completed registration',
       initialValue: false,
       readOnly: true,
     }),
     defineField({
-      name: 'onboardingCompletedAt',
-      title: 'Onboarding Completed At',
+      name: 'registrationCompletedAt',
+      title: 'Registration Completed At',
       type: 'datetime',
-      description: 'When the sponsor completed onboarding',
+      description: 'When the sponsor completed registration',
       readOnly: true,
     }),
   ],

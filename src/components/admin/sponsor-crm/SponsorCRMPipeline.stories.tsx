@@ -10,9 +10,16 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMPipeline',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Main Kanban board view of the sponsor pipeline. Displays sponsors as draggable cards organized into columns by status (Lead, Contacted, Negotiating, Confirmed, etc.) with inline bulk actions and view switching.',
+      },
+    },
   },
 } satisfies Meta
 

@@ -1,17 +1,25 @@
-import ReactPDF, {
+import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
+  renderToBuffer,
 } from '@react-pdf/renderer'
 import type { ContractTemplate } from './contract-templates'
+import {
+  SPONSOR_SIGNATURE_MARKER,
+  SPONSOR_DATE_MARKER,
+  ORGANIZER_SIGNATURE_MARKER,
+  ORGANIZER_DATE_MARKER,
+} from '@/lib/pdf/constants'
+import type { PortableTextBlock } from '@/lib/sponsor/types'
+
 import {
   buildContractVariables,
   processTemplateVariables,
   type ContractVariableContext,
 } from './contract-variables'
-import type { PortableTextBlock } from '@/lib/sponsor/types'
 
 const styles = StyleSheet.create({
   page: {
@@ -260,7 +268,6 @@ function InfoTable({ variables }: InfoTableProps) {
     { label: 'Name', value: variables.ORG_NAME },
     { label: 'Org. No.', value: variables.ORG_ORG_NUMBER },
     { label: 'Address', value: variables.ORG_ADDRESS },
-    { label: 'Liaison', value: variables.CONTACT_NAME ? undefined : undefined },
     { label: 'Email', value: variables.ORG_EMAIL },
   ].filter((r) => r.value)
 
@@ -404,6 +411,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_DATE_MARKER}
+            </Text>
           </View>
           <View style={styles.signatureBlock}>
             <Text style={styles.signatureLabel}>
@@ -411,6 +424,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SPONSOR_SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SPONSOR_DATE_MARKER}
+            </Text>
           </View>
         </View>
 
@@ -455,7 +474,7 @@ export async function generateContractPdf(
 ): Promise<Buffer> {
   const variables = buildContractVariables(context)
   const doc = <ContractDocument template={template} variables={variables} />
-  const buffer = await ReactPDF.renderToBuffer(doc)
+  const buffer = await renderToBuffer(doc)
   return Buffer.from(buffer)
 }
 

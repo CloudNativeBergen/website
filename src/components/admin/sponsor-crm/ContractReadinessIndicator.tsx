@@ -1,9 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline'
 import {
   groupMissingBySource,
@@ -13,7 +15,7 @@ import {
 
 const SOURCE_LABELS: Record<ReadinessSource, string> = {
   organizer: 'Conference settings',
-  sponsor: 'Sponsor (via onboarding)',
+  sponsor: 'Sponsor (via registration)',
   pipeline: 'CRM pipeline',
 }
 
@@ -37,6 +39,7 @@ export function ContractReadinessIndicator({
   sponsorForConferenceId,
 }: {
   sponsorForConferenceId: string
+  conferenceId?: string
 }) {
   const { data: readiness, isLoading } =
     api.sponsor.contractTemplates.contractReadiness.useQuery(
@@ -78,6 +81,15 @@ export function ContractReadinessIndicator({
                 {SOURCE_LABELS[source]}:
               </p>
               <MissingFieldList items={items} />
+              {source === 'organizer' && (
+                <Link
+                  href="/admin/sponsors/contracts"
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
+                >
+                  <PencilSquareIcon className="h-3.5 w-3.5" />
+                  Set organizer details
+                </Link>
+              )}
             </div>
           ))}
       </div>

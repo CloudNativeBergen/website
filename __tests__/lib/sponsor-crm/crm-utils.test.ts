@@ -255,7 +255,7 @@ describe('CRM Utils', () => {
         'call',
         'meeting',
         'signature_status_change',
-        'onboarding_complete',
+        'registration_complete',
         'contract_reminder_sent',
       ]
       for (const type of types) {
@@ -275,8 +275,8 @@ describe('CRM Utils', () => {
       expect(signatureChange).toContain('cyan')
     })
 
-    it('returns specific color for onboarding_complete', () => {
-      const color = getActivityColor('onboarding_complete')
+    it('returns specific color for registration_complete', () => {
+      const color = getActivityColor('registration_complete')
       expect(color).toContain('emerald')
     })
 
