@@ -35,7 +35,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Contract management view shown inside the sponsor modal. Primary action is generating a sponsor portal link for self-service registration. Includes an advanced section for manual contract generation and sending via Adobe Sign. Displays contract status, signature progress, and portal completion state.',
+          'Contract management view shown inside the sponsor modal. Primary action is generating a sponsor portal link for self-service registration. Includes an advanced section for manual contract generation and sending for digital signature. Displays contract status, signature progress, and portal completion state.',
       },
     },
   },

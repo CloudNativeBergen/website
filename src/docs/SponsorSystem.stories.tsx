@@ -115,7 +115,7 @@ export const Architecture: Story = {
                     'not-started → pending → signed / rejected / expired',
                   ],
                   ['signatureId / signerEmail', 'External e-signing tracking'],
-                  ['signingUrl', 'Adobe Sign signing URL for portal/email'],
+                  ['signingUrl', 'Signing URL for portal/email'],
                   ['contractSentAt / contractSignedAt', 'Timestamps'],
                   ['contractDocument', 'Generated PDF file'],
                   ['contractTemplate', 'Reference to contractTemplate'],
@@ -491,19 +491,20 @@ Contract flow (via generateAndSendContract)
   → findBestContractTemplate → match conference + tier + language
   → generateContractPdf → React-PDF with {{{VARIABLE}}} substitution
   → Upload PDF to Sanity (permanent storage)
-  → Upload PDF to Adobe Sign (POST /transientDocuments)
-  → Create agreement (POST /agreements) → agreementId
+  → signingProvider.sendForSigning(pdf, signerEmail, ...)
+    → provider handles upload + agreement creation internally
+    → returns { agreementId, signingUrl? }
   → Update SFC: contractStatus=contract-sent, signatureStatus=pending
   → Log contract_status_change + signature_status_change activities
 
-Adobe Sign webhooks (/api/webhooks/adobe-sign)
+Webhooks (/api/webhooks/adobe-sign — provider-specific)
   → AGREEMENT_WORKFLOW_COMPLETED → download signed PDF → mark signed
   → AGREEMENT_RECALLED → mark rejected
   → AGREEMENT_EXPIRED → mark expired
 
 Automated reminders (/api/cron/contract-reminders, daily)
   → Query pending > 5 days, < 2 reminders
-  → POST /agreements/{id}/reminders → increment reminderCount
+  → signingProvider.sendReminder(agreementId) → increment reminderCount
 
 Invoicing
   → crm.updateInvoiceStatus → sent (auto-sets invoiceSentAt)
@@ -518,16 +519,18 @@ Self-service portal
           </div>
         </section>
 
-        {/* Adobe Sign Integration */}
+        {/* Contract Signing */}
         <section>
           <h2 className="font-space-grotesk mb-6 text-3xl font-semibold text-brand-cloud-blue dark:text-blue-400">
-            Adobe Sign Integration
+            Contract Signing
           </h2>
           <p className="font-inter mb-6 text-sm text-brand-slate-gray dark:text-gray-300">
-            Digital contract signing powered by Adobe Acrobat Sign REST API v6.
-            Server-to-server OAuth 2.0 with client credentials grant. Webhooks
-            for real-time status updates instead of polling (per Adobe&apos;s
-            recommendation).
+            Digital contract signing via a provider-agnostic abstraction layer (
+            <code className="text-xs">ContractSigningProvider</code> interface
+            in <code className="text-xs">src/lib/contract-signing/</code>).
+            Currently backed by Adobe Acrobat Sign REST API v6. The CRM, router,
+            and UI never interact with Adobe Sign directly &mdash; only through
+            the provider interface.
           </p>
 
           <div className="mb-8 rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
@@ -542,12 +545,20 @@ Self-service portal
              │ Manual "Send"  │ Registration trigger
              ▼                ▼
 ┌─────────────────────────────────────────────────┐
-│         generateAndSendContract()               │
-│  1. Find template  4. Upload to Adobe Sign      │
-│  2. Generate PDF   5. Create agreement          │
-│  3. Store in CMS   6. Update SFC + log          │
+│         tRPC Router (sponsor.*)                 │
+│  1. getSigningProvider()                        │
+│  2. generateAndSendContract(provider, ...)      │
 └──────────────────────┬──────────────────────────┘
                        │
+                       ▼
+┌─────────────────────────────────────────────────┐
+│    ContractSigningProvider (interface)           │
+│  sendForSigning()   checkStatus()               │
+│  cancelAgreement()  sendReminder()              │
+│  getConnectionStatus()  disconnect()            │
+│  getAuthorizeUrl()  registerWebhook()           │
+└──────────────────────┬──────────────────────────┘
+                       │ Currently: AdobeSignProvider
                        ▼
 ┌─────────────────────────────────────────────────┐
 │         Adobe Sign REST API v6                  │
@@ -559,7 +570,7 @@ Self-service portal
                        │ Webhook notifications
                        ▼
 ┌─────────────────────────────────────────────────┐
-│    /api/webhooks/adobe-sign                     │
+│    /api/webhooks/adobe-sign (provider-specific) │
 │  WORKFLOW_COMPLETED → download PDF, mark signed │
 │  RECALLED → mark rejected                       │
 │  EXPIRED → mark expired                         │
@@ -575,39 +586,44 @@ Self-service portal
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
               <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
-                API Client
+                Provider Abstraction
               </h3>
               <p className="font-inter mb-3 text-xs text-brand-slate-gray dark:text-gray-400">
-                src/lib/adobe-sign/client.ts
+                src/lib/contract-signing/
               </p>
               <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
                 <li>
-                  <code className="text-xs">uploadTransientDocument()</code> —
-                  POST /transientDocuments
+                  <code className="text-xs">types.ts</code> —
+                  ContractSigningProvider interface
                 </li>
                 <li>
-                  <code className="text-xs">createAgreement()</code> — POST
-                  /agreements
+                  <code className="text-xs">adobe-sign.ts</code> —
+                  AdobeSignProvider implementation
                 </li>
                 <li>
-                  <code className="text-xs">getAgreement()</code> — GET
-                  /agreements/&#123;id&#125;
+                  <code className="text-xs">index.ts</code> —
+                  getSigningProvider() factory
                 </li>
                 <li>
-                  <code className="text-xs">getSigningUrls()</code> — GET
-                  /agreements/&#123;id&#125;/signingUrls
+                  <code className="text-xs">sendForSigning()</code> — Upload PDF
+                  + create signing request
                 </li>
                 <li>
-                  <code className="text-xs">registerWebhook()</code> — POST
-                  /webhooks
+                  <code className="text-xs">checkStatus()</code> — Poll provider
+                  for agreement status
                 </li>
                 <li>
-                  <code className="text-xs">sendReminder()</code> — POST
-                  /agreements/&#123;id&#125;/reminders
+                  <code className="text-xs">cancelAgreement()</code> — Cancel
+                  pending agreement
                 </li>
                 <li>
-                  <code className="text-xs">cancelAgreement()</code> — PUT
-                  /agreements/&#123;id&#125;/state
+                  <code className="text-xs">sendReminder()</code> — Nudge signer
+                </li>
+                <li>
+                  <code className="text-xs">
+                    getConnectionStatus() / disconnect()
+                  </code>{' '}
+                  — Session management
                 </li>
               </ul>
             </div>
@@ -652,16 +668,15 @@ Self-service portal
                   → pending → signed
                 </li>
                 <li>
-                  <code className="text-xs">signatureId</code> — Adobe Sign
-                  agreement ID
+                  <code className="text-xs">signatureId</code> — Signing
+                  provider agreement ID
                 </li>
                 <li>
                   <code className="text-xs">signerEmail</code> — Designated
                   signer
                 </li>
                 <li>
-                  <code className="text-xs">signingUrl</code> — Adobe Sign
-                  signing URL
+                  <code className="text-xs">signingUrl</code> — Signing URL
                 </li>
                 <li>
                   <code className="text-xs">
@@ -685,12 +700,16 @@ Self-service portal
               </h3>
               <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
                 <li>
-                  <strong>Graceful degradation</strong> — PDF generated even
-                  without Adobe Sign
+                  <strong>Provider abstraction</strong> — CRM/router use
+                  ContractSigningProvider interface only
                 </li>
                 <li>
-                  <strong>Webhook-driven</strong> — No polling; Adobe rate
-                  limits: 1/10min dev
+                  <strong>Graceful degradation</strong> — PDF generated even
+                  without signing provider
+                </li>
+                <li>
+                  <strong>Webhook-driven</strong> — No polling; provider pushes
+                  status updates
                 </li>
                 <li>
                   <strong>Dual storage</strong> — Sanity (permanent) + Adobe
@@ -1010,11 +1029,10 @@ function WorkflowRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 rounded-lg border p-4 ${
-        done
+      className={`flex items-center gap-4 rounded-lg border p-4 ${done
           ? 'border-brand-fresh-green/20 bg-brand-fresh-green/10 dark:border-green-500/20 dark:bg-green-900/20'
           : 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-700 dark:bg-gray-800'
-      }`}
+        }`}
     >
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${done ? 'bg-brand-fresh-green' : 'bg-brand-cloud-blue'}`}

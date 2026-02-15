@@ -165,6 +165,10 @@ src/
 │   │   ├── templates.ts            # Template variable processing utilities
 │   │   ├── utils.ts                # Sorting, formatting, grouping utilities
 │   │   └── validation.ts           # Input validation for sponsors and tiers
+│   ├── contract-signing/              # Provider-agnostic contract signing abstraction
+│   │   ├── types.ts                # ContractSigningProvider interface, result types
+│   │   ├── adobe-sign.ts           # Adobe Sign implementation of the provider
+│   │   └── index.ts                # Provider factory (getSigningProvider)
 │   └── sponsor-crm/                # CRM pipeline domain
 │       ├── types.ts                # CRM-specific types (statuses, activities, inputs)
 │       ├── sanity.ts               # CRM CRUD, copy/import operations
@@ -268,14 +272,14 @@ sanity/schemaTypes/
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                                   |
-| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                                             |
-| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                                     |
-| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                                        |
-| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                                         |
-| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`, `getAdobeSignAuthorizeUrl`, `disconnectAdobeSign`, `registerAdobeSignWebhook`                             | Contract template CRUD, PDF gen, and Adobe Sign integration |
+| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                                         |
+| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                                                   |
+| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                                           |
+| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                                              |
+| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                                               |
+| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`, `getAdobeSignAuthorizeUrl`, `disconnectAdobeSign`, `registerAdobeSignWebhook`                             | Contract template CRUD, PDF gen, and signing provider integration |
 
 All procedures are protected by `adminProcedure` (requires `isOrganizer: true`).
 
@@ -343,9 +347,61 @@ Before a contract can be generated or sent, all required data must be present. T
 
 A contract `canSend` when all **required** fields are present (even if recommended fields are missing). The `ContractReadinessIndicator` component displays readiness status in the CRM form — green when fully ready, amber with a categorized list of missing fields otherwise.
 
-### Adobe Acrobat Sign Integration
+### Contract Signing Provider Abstraction
 
-The contract system uses the [Adobe Acrobat Sign REST API v6](https://developer.adobe.com/acrobat-sign/docs/overview/developer_guide/) for digital signatures. The integration covers the full lifecycle: document upload, agreement creation, status tracking via webhooks, automated reminders, and signed document retrieval.
+The contract system uses a provider-agnostic abstraction layer (`src/lib/contract-signing/`) so the CRM pipeline never interacts with signing APIs directly. This design allows the signing service to be swapped or extended without touching the CRM, router, or UI code.
+
+#### `ContractSigningProvider` Interface
+
+Defined in `src/lib/contract-signing/types.ts`, the interface exposes eight methods across three responsibilities:
+
+| Category       | Method                         | Purpose                                                                      |
+| -------------- | ------------------------------ | ---------------------------------------------------------------------------- |
+| **Signing**    | `sendForSigning(params)`       | Upload PDF + create signing request → returns `{ agreementId, signingUrl? }` |
+| **Signing**    | `checkStatus(agreementId)`     | Poll provider for current status → returns `{ status, providerStatus }`      |
+| **Signing**    | `cancelAgreement(agreementId)` | Cancel / void a pending agreement                                            |
+| **Signing**    | `sendReminder(agreementId)`    | Nudge the signer via the provider                                            |
+| **Connection** | `getConnectionStatus()`        | Is the provider connected? Returns `SigningProviderStatus`                   |
+| **Connection** | `getAuthorizeUrl(redirectUri)` | Build OAuth authorization URL                                                |
+| **Connection** | `disconnect()`                 | Revoke / clear session                                                       |
+| **Webhook**    | `registerWebhook(webhookUrl)`  | Register for real-time status updates                                        |
+
+Key result types:
+
+- **`SendForSigningResult`** — `{ agreementId: string; signingUrl?: string }`
+- **`SigningStatusResult`** — `{ status: SignatureStatus; providerStatus: string }` — maps provider-specific statuses to the unified `SignatureStatus` enum
+- **`SigningProviderStatus`** — `{ connected, providerName, expiresAt?, detail?, webhookActive? }`
+
+#### Provider Factory
+
+`getSigningProvider()` in `src/lib/contract-signing/index.ts` returns the configured provider. Currently always returns `AdobeSignProvider`. To add a new provider:
+
+1. Create a class implementing `ContractSigningProvider` in `src/lib/contract-signing/<provider-name>.ts`
+2. Update `getSigningProvider()` to select the provider based on an env var or conference-level setting
+3. Add provider-specific webhook route at `src/app/api/webhooks/<provider-name>/route.ts`
+4. Add provider-specific OAuth routes and config panel component
+
+#### How the Router Uses the Provider
+
+The tRPC router (`src/server/routers/sponsor.ts`) calls `getSigningProvider()` and uses only the `ContractSigningProvider` interface. For example:
+
+```typescript
+const provider = getSigningProvider()
+const result = await provider.sendForSigning({
+  pdf,
+  filename,
+  signerEmail,
+  agreementName,
+})
+const status = await provider.checkStatus(agreementId)
+await provider.cancelAgreement(agreementId)
+```
+
+No provider-specific imports appear in the router or CRM business logic.
+
+### Adobe Acrobat Sign Provider
+
+The current (and default) provider implementation is `AdobeSignProvider` in `src/lib/contract-signing/adobe-sign.ts`. It wraps the [Adobe Acrobat Sign REST API v6](https://developer.adobe.com/acrobat-sign/docs/overview/developer_guide/) and covers the full lifecycle: document upload, agreement creation, status tracking via webhooks, automated reminders, and signed document retrieval.
 
 #### Authentication
 
@@ -378,20 +434,21 @@ All API calls are authenticated via per-user OAuth session stored in an encrypte
 
 #### Contract Send Flow
 
-The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It is used by both the admin manual send and the automated registration completion flow.
+The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It accepts a `ContractSigningProvider` instance (injected by the caller) and is used by both the admin manual send and the automated registration completion flow.
 
 ```text
 1. Load sponsorForConference record
 2. Find best contract template (by conference + tier + language)
 3. Generate PDF via React-PDF with variable substitution
 4. Upload PDF to Sanity as a file asset (permanent storage)
-5. Upload PDF to Adobe Sign as a transient document (POST /transientDocuments)
-6. Create Adobe Sign agreement (POST /agreements) → returns agreementId
+5. Call provider.sendForSigning(pdf, filename, signerEmail, agreementName)
+   → provider handles upload + agreement creation internally
+   → returns { agreementId, signingUrl? }
 7. Update sponsorForConference:
    - contractStatus → "contract-sent"
    - signatureStatus → "pending"
    - signatureId → agreementId
-   - signingUrl → captured from getSigningUrls()
+   - signingUrl → from provider result
    - contractSentAt → now
    - contractDocument → Sanity file reference
    - signerEmail → determined by priority: explicit override > sfc.signerEmail > primary contact email
@@ -399,7 +456,7 @@ The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.t
 9. Log sponsorActivity entries for contract status and signature status changes
 ```
 
-If Adobe Sign is unavailable or fails, the contract PDF is still generated and stored — only the digital signing step is skipped. This graceful degradation ensures contracts can always be generated even without Adobe Sign configured.
+If the signing provider is unavailable or fails, the contract PDF is still generated and stored — only the digital signing step is skipped. This graceful degradation ensures contracts can always be generated even without a signing provider configured.
 
 #### Webhook Handler
 
@@ -478,9 +535,9 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 | ------------------ | --------- | ------------------------------------------------------------------------- |
 | `contractStatus`   | Enum      | Overall contract stage (none → verbal → sent → signed)                    |
 | `signatureStatus`  | Enum      | Digital signature state (not-started → pending → signed/rejected/expired) |
-| `signatureId`      | String    | Adobe Sign agreement ID (read-only, set on send)                          |
+| `signatureId`      | String    | Agreement ID from the contract signing provider (read-only, set on send)  |
 | `signerEmail`      | String    | Email of the designated signer                                            |
-| `signingUrl`       | String    | Adobe Sign signing URL for portal and reminder emails                     |
+| `signingUrl`       | String    | Signing URL for portal and reminder emails                                |
 | `contractSentAt`   | DateTime  | When the contract was sent for signing                                    |
 | `contractSignedAt` | DateTime  | When the signed PDF was received (set by webhook)                         |
 | `contractDocument` | File      | Generated/signed PDF stored as a Sanity file asset                        |
@@ -497,14 +554,20 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
              │ Manual "Send"        │ Registration auto-trigger
              ▼                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              generateAndSendContract()                          │
-│  contract-send.ts                                               │
-│                                                                 │
-│  1. findBestContractTemplate()   4. uploadTransientDocument()   │
-│  2. generateContractPdf()        5. createAgreement()           │
-│  3. Upload to Sanity             6. Update SFC + log activity   │
+│              tRPC Router (sponsor.*)                             │
+│  1. getSigningProvider()                                        │
+│  2. generateAndSendContract(provider, ...)                      │
 └──────────────────────┬──────────────────────────────────────────┘
                        │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│        ContractSigningProvider  (src/lib/contract-signing/)     │
+│                                                                 │
+│  sendForSigning()   checkStatus()   cancelAgreement()           │
+│  sendReminder()     getConnectionStatus()   disconnect()        │
+│  getAuthorizeUrl()  registerWebhook()                           │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ Currently: AdobeSignProvider
                        ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Adobe Sign REST API v6                        │
@@ -534,7 +597,9 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 #### Contract Design Decisions
 
-**Graceful degradation.** If Adobe Sign credentials are missing or the API is down, contract PDF generation still works — only the e-signing step is skipped. The PDF is stored in Sanity regardless.
+**Provider abstraction.** The CRM pipeline and tRPC router interact exclusively with the `ContractSigningProvider` interface — never with provider-specific APIs. This makes it straightforward to add new signing providers (e.g. DocuSign) without modifying business logic.
+
+**Graceful degradation.** If the signing provider is not connected or its API is down, contract PDF generation still works — only the e-signing step is skipped. The PDF is stored in Sanity regardless.
 
 **Webhook-driven status updates.** Instead of polling Adobe Sign for agreement status (which has strict rate limits: 1 call/10 min for developer accounts), we rely entirely on webhooks for real-time status changes. Signed documents are extracted inline from the webhook payload (`includeSignedDocuments: true` on webhook registration) — no API calls needed in the webhook handler. This aligns with Adobe's recommended approach.
 
@@ -580,6 +645,7 @@ Tests are located in `__tests__/` mirroring the source structure:
 | `lib/sponsor-crm/contract-readiness.test.ts` | Contract readiness validation logic          |
 | `lib/sponsor-crm/contract-variables.test.ts` | Contract variable building and substitution  |
 | `lib/sponsor-crm/registration.test.ts`       | Registration URL building                    |
+| `lib/contract-signing/provider.test.ts`      | Signing provider abstraction & factory       |
 | `components/Sponsors.test.tsx`               | Public sponsor display component             |
 | `components/SponsorLogo.test.tsx`            | Logo rendering                               |
 | `components/SponsorProspectus.test.tsx`      | Prospectus page                              |

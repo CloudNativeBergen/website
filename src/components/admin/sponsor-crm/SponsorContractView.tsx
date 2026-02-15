@@ -215,8 +215,7 @@ export function SponsorContractView({
               <DocumentTextIcon className="h-5 w-5 shrink-0 text-blue-500" />
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 The contract will be sent to{' '}
-                <strong>{signerEmail.trim()}</strong> for digital signing via
-                Adobe Acrobat Sign.
+                <strong>{signerEmail.trim()}</strong> for digital signing.
               </p>
             </div>
           </div>

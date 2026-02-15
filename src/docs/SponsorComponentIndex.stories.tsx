@@ -375,7 +375,7 @@ export const Overview: Story = {
             <ComponentCard
               name="AdobeSignConfigPanel"
               path="@/components/admin/sponsor/AdobeSignConfigPanel"
-              description="Adobe Sign OAuth connection, webhook registration, and status management panel for contract signing integration."
+              description="Signing provider OAuth connection, webhook registration, and status management panel. Currently implements Adobe Sign."
             />
           </div>
         </section>
@@ -393,7 +393,7 @@ export const Overview: Story = {
             <ComponentCard
               name="ContractSigningTemplate"
               path="@/components/email/ContractSigningTemplate"
-              description="Email sent to the designated signer with sponsorship details and Adobe Sign signing URL."
+              description="Email sent to the designated signer with sponsorship details and signing URL."
               hasStory
             />
             <ComponentCard
