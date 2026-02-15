@@ -299,9 +299,15 @@ describe('AdobeSignProvider', () => {
 })
 
 describe('getSigningProvider', () => {
-  it('returns an AdobeSignProvider', async () => {
+  it('returns SelfHostedSigningProvider by default', async () => {
     const { getSigningProvider } = await import('@/lib/contract-signing')
     const provider = getSigningProvider()
+    expect(provider.name).toBe('Self-Hosted')
+  })
+
+  it('returns AdobeSignProvider when explicitly requested', async () => {
+    const { getSigningProvider } = await import('@/lib/contract-signing')
+    const provider = getSigningProvider('adobe-sign')
     expect(provider.name).toBe('Adobe Sign')
   })
 

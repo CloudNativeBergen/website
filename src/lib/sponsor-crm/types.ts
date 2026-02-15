@@ -115,6 +115,7 @@ export interface SponsorForConferenceExpanded {
     organizer?: string
     organizerOrgNumber?: string
     organizerAddress?: string
+    signingProvider?: 'self-hosted' | 'adobe-sign'
     city?: string
     venueName?: string
     venueAddress?: string

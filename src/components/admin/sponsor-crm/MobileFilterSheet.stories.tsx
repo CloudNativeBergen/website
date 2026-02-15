@@ -141,10 +141,11 @@ function MobileFilterSheetDemo() {
                     <button
                       key={status.value}
                       onClick={() => toggleStatus(status.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedStatuses.includes(status.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedStatuses.includes(status.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedStatuses.includes(status.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />
@@ -168,10 +169,11 @@ function MobileFilterSheetDemo() {
                     <button
                       key={tier.value}
                       onClick={() => toggleTier(tier.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedTiers.includes(tier.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedTiers.includes(tier.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedTiers.includes(tier.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />
@@ -192,10 +194,11 @@ function MobileFilterSheetDemo() {
                     <button
                       key={tag.value}
                       onClick={() => toggleTag(tag.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedTags.includes(tag.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedTags.includes(tag.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedTags.includes(tag.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />

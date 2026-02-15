@@ -35,6 +35,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     organizer,
     organizerOrgNumber,
     organizerAddress,
+    signingProvider,
     city,
     venueName,
     venueAddress,

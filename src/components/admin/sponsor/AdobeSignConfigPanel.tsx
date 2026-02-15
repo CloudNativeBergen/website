@@ -20,10 +20,10 @@ export function AdobeSignConfigPanel() {
     type: 'success' | 'error'
   } | null>(null)
 
-  const statusQuery = api.sponsor.contractTemplates.getAdobeSignStatus.useQuery(
-    undefined,
-    { refetchOnWindowFocus: true },
-  )
+  const statusQuery =
+    api.sponsor.contractTemplates.getSigningProviderStatus.useQuery(undefined, {
+      refetchOnWindowFocus: true,
+    })
 
   const disconnectMutation =
     api.sponsor.contractTemplates.disconnectAdobeSign.useMutation({

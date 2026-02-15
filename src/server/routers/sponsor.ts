@@ -97,7 +97,10 @@ import {
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
-import { getSigningProvider } from '@/lib/contract-signing'
+import {
+  getSigningProvider,
+  type SigningProviderType,
+} from '@/lib/contract-signing'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -930,14 +933,20 @@ export const sponsorRouter = router({
         if (input.cancelAgreements) {
           try {
             const pendingAgreements = await clientReadUncached.fetch<
-              Array<{ signatureId: string }>
+              Array<{
+                signatureId: string
+                signingProvider?: SigningProviderType
+              }>
             >(
-              `*[_type == "sponsorForConference" && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId }`,
+              `*[_type == "sponsorForConference" && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId, "signingProvider": conference->signingProvider }`,
               { ids: input.ids },
             )
             if (pendingAgreements.length > 0) {
-              const provider = getSigningProvider()
-              for (const { signatureId } of pendingAgreements) {
+              for (const {
+                signatureId,
+                signingProvider,
+              } of pendingAgreements) {
+                const provider = getSigningProvider(signingProvider)
                 try {
                   await provider.cancelAgreement(signatureId)
                 } catch (e) {
@@ -976,12 +985,13 @@ export const sponsorRouter = router({
             const sfc = await clientReadUncached.fetch<{
               signatureId?: string
               signatureStatus?: string
+              signingProvider?: SigningProviderType
             }>(
-              `*[_type == "sponsorForConference" && _id == $id][0]{ signatureId, signatureStatus }`,
+              `*[_type == "sponsorForConference" && _id == $id][0]{ signatureId, signatureStatus, "signingProvider": conference->signingProvider }`,
               { id: input.id },
             )
             if (sfc?.signatureId && sfc.signatureStatus === 'pending') {
-              const provider = getSigningProvider()
+              const provider = getSigningProvider(sfc.signingProvider)
               try {
                 await provider.cancelAgreement(sfc.signatureId)
               } catch (e) {
@@ -1095,7 +1105,6 @@ export const sponsorRouter = router({
       .input(SponsorForConferenceIdSchema)
       .mutation(async ({ input, ctx }) => {
         const logCtx = `[checkSignatureStatus] sfc=${input.id}`
-        const provider = getSigningProvider()
 
         const { sponsorForConference: sfc, error: sfcError } =
           await getSponsorForConference(input.id)
@@ -1115,6 +1124,7 @@ export const sponsorRouter = router({
           })
         }
 
+        const provider = getSigningProvider(sfc.conference.signingProvider)
         let result: { status: string; providerStatus: string }
         try {
           result = await provider.checkStatus(sfc.signatureId)
@@ -1408,7 +1418,7 @@ export const sponsorRouter = router({
         let signingUrl: string | undefined
         if (input.signerEmail) {
           try {
-            const provider = getSigningProvider()
+            const provider = getSigningProvider(sfc.conference.signingProvider)
             const signingResult = await provider.sendForSigning({
               pdf: pdfBuffer,
               filename,
@@ -1959,8 +1969,9 @@ export const sponsorRouter = router({
         return { success: true }
       }),
 
-    getAdobeSignStatus: adminProcedure.query(async () => {
-      const provider = getSigningProvider()
+    getSigningProviderStatus: adminProcedure.query(async () => {
+      const { conference } = await getConferenceForCurrentDomain()
+      const provider = getSigningProvider(conference.signingProvider)
       const status = await provider.getConnectionStatus()
       return {
         connected: status.connected,
@@ -1968,19 +1979,21 @@ export const sponsorRouter = router({
         apiAccessPoint: status.detail ?? null,
         webhookActive: status.webhookActive ?? null,
         providerName: status.providerName,
+        signingProvider: conference.signingProvider ?? 'self-hosted',
       }
     }),
 
     getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
-      const { domain } = await getConferenceForCurrentDomain()
+      const { conference, domain } = await getConferenceForCurrentDomain()
       const origin = `https://${domain}`
       const redirectUri = `${origin}/api/adobe-sign/callback`
-      const provider = getSigningProvider()
+      const provider = getSigningProvider(conference.signingProvider)
       return provider.getAuthorizeUrl(redirectUri)
     }),
 
     disconnectAdobeSign: adminProcedure.mutation(async () => {
-      const provider = getSigningProvider()
+      const { conference } = await getConferenceForCurrentDomain()
+      const provider = getSigningProvider(conference.signingProvider)
       await provider.disconnect()
       return { success: true }
     }),
@@ -1988,8 +2001,24 @@ export const sponsorRouter = router({
     registerAdobeSignWebhook: adminProcedure
       .input(z.object({ webhookUrl: z.string().url() }))
       .mutation(async ({ input }) => {
-        const provider = getSigningProvider()
+        const { conference } = await getConferenceForCurrentDomain()
+        const provider = getSigningProvider(conference.signingProvider)
         return provider.registerWebhook(input.webhookUrl)
+      }),
+
+    updateSigningProvider: adminProcedure
+      .input(
+        z.object({
+          conferenceId: z.string(),
+          signingProvider: z.enum(['self-hosted', 'adobe-sign']),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        await clientWrite
+          .patch(input.conferenceId)
+          .set({ signingProvider: input.signingProvider })
+          .commit()
+        return { success: true }
       }),
   }),
 })

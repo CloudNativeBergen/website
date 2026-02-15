@@ -8,6 +8,7 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin'
 import { AdobeSignConfigPanel } from './AdobeSignConfigPanel'
 import { ConferenceOrgInfoPanel } from './ConferenceOrgInfoPanel'
+import { SigningProviderPanel } from './SigningProviderPanel'
 import type { Conference } from '@/lib/conference/types'
 import {
   DocumentTextIcon,
@@ -77,6 +78,8 @@ export function ContractTemplateListPage({
       />
 
       <ConferenceOrgInfoPanel conference={conference} />
+
+      <SigningProviderPanel conference={conference} />
 
       <AdobeSignConfigPanel />
 

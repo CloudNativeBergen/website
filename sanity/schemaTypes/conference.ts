@@ -663,6 +663,25 @@ export default defineType({
 
     // === Sponsorship Prospectus ===
     defineField({
+      name: 'signingProvider',
+      title: 'Contract Signing Provider',
+      type: 'string',
+      fieldset: 'sponsorship',
+      description:
+        'Which signing provider to use for sponsor contracts. Self-Hosted uses a built-in signature pad; Adobe Sign requires an OAuth connection.',
+      options: {
+        list: [
+          {
+            title: 'Self-Hosted (built-in signature pad)',
+            value: 'self-hosted',
+          },
+          { title: 'Adobe Sign', value: 'adobe-sign' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'self-hosted',
+    }),
+    defineField({
       name: 'sponsorRevenueGoal',
       title: 'Sponsor Revenue Goal',
       type: 'number',

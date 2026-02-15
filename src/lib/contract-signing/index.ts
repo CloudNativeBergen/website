@@ -9,21 +9,25 @@ export type {
   SigningProviderStatus,
 } from './types'
 
+export type SigningProviderType = 'self-hosted' | 'adobe-sign'
+
 /**
- * Returns the configured contract signing provider.
+ * Returns a contract signing provider instance.
  *
- * Set `CONTRACT_SIGNING_PROVIDER` to choose a provider:
- *   - `"adobe-sign"` — Adobe Sign (default)
- *   - `"self-hosted"` — built-in signature pad, no external service
+ * @param providerType - Explicit provider type (from conference settings).
+ *   Falls back to the `CONTRACT_SIGNING_PROVIDER` env var, then `"self-hosted"`.
  */
-export function getSigningProvider(): ContractSigningProvider {
-  const provider = process.env.CONTRACT_SIGNING_PROVIDER ?? 'adobe-sign'
+export function getSigningProvider(
+  providerType?: SigningProviderType | null,
+): ContractSigningProvider {
+  const provider =
+    providerType ?? process.env.CONTRACT_SIGNING_PROVIDER ?? 'self-hosted'
 
   switch (provider) {
-    case 'self-hosted':
-      return new SelfHostedSigningProvider()
     case 'adobe-sign':
-    default:
       return new AdobeSignProvider()
+    case 'self-hosted':
+    default:
+      return new SelfHostedSigningProvider()
   }
 }
