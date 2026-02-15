@@ -1,5 +1,6 @@
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker/sanity'
+import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
@@ -336,7 +337,7 @@ export async function notifySponsorRegistrationComplete(
 
   const valueStr =
     contractValue != null && contractCurrency
-      ? `${contractValue.toLocaleString()} ${contractCurrency}`
+      ? `${formatNumber(contractValue)} ${contractCurrency}`
       : null
 
   const blocks: SlackBlock[] = [

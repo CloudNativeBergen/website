@@ -251,8 +251,9 @@ export const signingRouter = router({
           const { resend, retryWithBackoff } =
             await import('@/lib/email/config')
 
+          const { formatNumber } = await import('@/lib/format')
           const contractValueStr = doc.contractValue
-            ? `${doc.contractValue.toLocaleString()} ${doc.contractCurrency || 'NOK'}`
+            ? `${formatNumber(doc.contractValue)} ${doc.contractCurrency || 'NOK'}`
             : undefined
 
           const result = await renderContractEmail(

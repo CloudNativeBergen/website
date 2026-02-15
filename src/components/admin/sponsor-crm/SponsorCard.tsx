@@ -8,6 +8,7 @@ import type {
 import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { formatNumber } from '@/lib/format'
 import {
   PencilIcon,
   TrashIcon,
@@ -133,7 +134,7 @@ export function SponsorCard({
       ? `${(v / 1000000).toFixed(1)}M`
       : v >= 1000
         ? `${(v / 1000).toFixed(0)}K`
-        : v.toLocaleString()
+        : formatNumber(v)
 
   return (
     <div

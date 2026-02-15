@@ -204,7 +204,7 @@ describe('SponsorContractView', () => {
       })
 
       expect(screen.getByText('Contract details')).toBeInTheDocument()
-      expect(screen.getByText(/100,000/)).toBeInTheDocument()
+      expect(screen.getByText(/100\s000/)).toBeInTheDocument()
       expect(screen.getAllByText(/jane@acme.com/).length).toBeGreaterThan(0)
     })
 

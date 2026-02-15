@@ -3,7 +3,7 @@ import {
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
 import { formatDate, getCurrentDateTime } from '@/lib/time'
-import { formatOrgNumber } from '@/lib/format'
+import { formatOrgNumber, formatCurrency } from '@/lib/format'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   SPONSOR_NAME: 'Legal name of the sponsor company',
@@ -66,15 +66,6 @@ export interface ContractVariableContext {
     sponsorEmail?: string
     logoBright?: string
   }
-}
-
-function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat('nb-NO', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
 }
 
 export function buildContractVariables(

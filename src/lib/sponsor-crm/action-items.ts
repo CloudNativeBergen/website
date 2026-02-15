@@ -3,6 +3,7 @@ import {
   type ActionItemType,
   calculateSponsorValue,
 } from '@/components/admin/sponsor-crm/utils'
+import { formatNumber } from '@/lib/format'
 
 export interface ActionItem {
   id: string
@@ -82,7 +83,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
-        description: `${sponsor.sponsor.name} is a high-value prospect (${value.toLocaleString()} NOK) not yet contacted`,
+        description: `${sponsor.sponsor.name} is a high-value prospect (${formatNumber(value)} NOK) not yet contacted`,
         priority: 1.7,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })

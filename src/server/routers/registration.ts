@@ -264,8 +264,9 @@ export const registrationRouter = router({
       const { formatConferenceDateLong } = await import('@/lib/time')
       const React = await import('react')
 
+      const { formatNumber } = await import('@/lib/format')
       const contractValueStr = sfc.contractValue
-        ? `${sfc.contractValue.toLocaleString()} ${sfc.contractCurrency || 'NOK'}`
+        ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
         : undefined
 
       const emailElement = React.createElement(SponsorPortalInviteTemplate, {

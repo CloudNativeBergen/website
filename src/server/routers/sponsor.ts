@@ -1581,8 +1581,9 @@ export const sponsorRouter = router({
             const { resend, retryWithBackoff } =
               await import('@/lib/email/config')
 
+            const { formatNumber } = await import('@/lib/format')
             const contractValueStr = sfc.contractValue
-              ? `${sfc.contractValue.toLocaleString()} ${sfc.contractCurrency || 'NOK'}`
+              ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
               : undefined
 
             const signerContact = sfc.contactPersons?.find(

@@ -8,6 +8,7 @@ import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
 import { OrganizerSignatureCapture } from './OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import { formatNumber } from '@/lib/format'
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -201,7 +202,7 @@ export function SponsorContractView({
               <div className="flex justify-between">
                 <dt className="text-gray-500 dark:text-gray-400">Value</dt>
                 <dd className="font-medium text-gray-900 dark:text-white">
-                  {sponsor.contractValue.toLocaleString()}{' '}
+                  {formatNumber(sponsor.contractValue)}{' '}
                   {sponsor.contractCurrency}
                 </dd>
               </div>
@@ -479,7 +480,7 @@ export function SponsorContractView({
               <>
                 <dt className="text-gray-500 dark:text-gray-400">Value</dt>
                 <dd className="font-medium text-gray-900 dark:text-white">
-                  {sponsor.contractValue.toLocaleString()}{' '}
+                  {formatNumber(sponsor.contractValue)}{' '}
                   {sponsor.contractCurrency}
                 </dd>
               </>

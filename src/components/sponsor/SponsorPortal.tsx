@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { SponsorRegistrationLogoUpload } from '@/components/sponsor/SponsorRegistrationLogoUpload'
+import { formatNumber } from '@/lib/format'
 
 interface ContactPersonForm {
   name: string
@@ -696,7 +697,7 @@ function PortalStatusDashboard({
             <div className="flex justify-between">
               <dt className="text-gray-500 dark:text-gray-400">Value</dt>
               <dd className="font-medium text-gray-900 dark:text-white">
-                {contractValue.toLocaleString()} {contractCurrency || 'NOK'}
+                {formatNumber(contractValue)} {contractCurrency || 'NOK'}
               </dd>
             </div>
           )}

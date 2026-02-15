@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { SignaturePadCanvas } from './SignaturePadCanvas'
 import { formatDateTimeSafe } from '@/lib/time'
+import { formatNumber } from '@/lib/format'
 
 type Step = 'review' | 'sign' | 'complete'
 
@@ -215,7 +216,7 @@ function ContractReviewStep({
                 Contract Value
               </dt>
               <dd className="font-medium text-slate-900 dark:text-white">
-                {details.contractValue.toLocaleString()}{' '}
+                {formatNumber(details.contractValue)}{' '}
                 {details.contractCurrency || 'NOK'}
               </dd>
             </div>
@@ -482,7 +483,7 @@ function CompletionStep({ data }: { data: CompletionData }) {
                 Contract Value
               </dt>
               <dd className="font-medium text-slate-900 dark:text-white">
-                {data.contractValue.toLocaleString()}{' '}
+                {formatNumber(data.contractValue)}{' '}
                 {data.contractCurrency || 'NOK'}
               </dd>
             </div>

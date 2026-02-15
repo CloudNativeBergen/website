@@ -228,7 +228,7 @@ describe('ContractSigningPage', () => {
         screen.getAllByText('Cloud Native Days 2026').length,
       ).toBeGreaterThan(0)
       expect(screen.getByText('Ingress')).toBeInTheDocument()
-      expect(screen.getByText(/100,000/)).toBeInTheDocument()
+      expect(screen.getByText(/100\s000/)).toBeInTheDocument()
     })
 
     it('shows PDF iframe when contractPdfUrl is provided', () => {
