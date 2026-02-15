@@ -65,6 +65,7 @@ export const SendContractSchema = z.object({
     .string()
     .min(1, 'Sponsor relationship ID is required'),
   templateId: z.string().min(1, 'Template ID is required'),
+  signerName: z.string().optional(),
   signerEmail: z.string().email().optional(),
 })
 

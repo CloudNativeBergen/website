@@ -158,6 +158,7 @@ export function SponsorPortal({ token }: { token: string }) {
         sponsorName={sponsor?.sponsorName}
         conferenceName={sponsor?.conferenceName}
         tierTitle={sponsor?.tierTitle}
+        signerName={sponsor?.signerName}
         signerEmail={sponsor?.signerEmail}
         signatureStatus={sponsor?.signatureStatus}
         contractStatus={sponsor?.contractStatus}
@@ -248,6 +249,7 @@ export function SponsorPortal({ token }: { token: string }) {
       logoBright: logoBright || undefined,
       orgNumber: company.orgNumber.trim() || undefined,
       address: company.address.trim() || undefined,
+      signerName: contacts.find((c) => c.email === signerEmail.trim())?.name,
       signerEmail: signerEmail.trim() || undefined,
     })
   }
@@ -636,6 +638,7 @@ function PortalStatusDashboard({
   sponsorName,
   conferenceName,
   tierTitle,
+  signerName,
   signerEmail,
   signatureStatus,
   contractStatus,
@@ -646,6 +649,7 @@ function PortalStatusDashboard({
   sponsorName?: string
   conferenceName?: string
   tierTitle?: string | null
+  signerName?: string | null
   signerEmail?: string | null
   signatureStatus?: string | null
   contractStatus?: string | null
@@ -697,7 +701,7 @@ function PortalStatusDashboard({
                 Contract signer
               </dt>
               <dd className="font-medium text-gray-900 dark:text-white">
-                {signerEmail}
+                {signerName ? `${signerName} (${signerEmail})` : signerEmail}
               </dd>
             </div>
           )}

@@ -397,7 +397,8 @@ export function SponsorContractView({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Awaiting signature from {sponsor.signerEmail || 'signer'}.
+                Awaiting signature from{' '}
+                {sponsor.signerName || sponsor.signerEmail || 'signer'}.
               </p>
               <button
                 type="button"
@@ -457,7 +458,9 @@ export function SponsorContractView({
               <>
                 <dt className="text-gray-500 dark:text-gray-400">Signer</dt>
                 <dd className="font-medium text-gray-900 dark:text-white">
-                  {sponsor.signerEmail}
+                  {sponsor.signerName
+                    ? `${sponsor.signerName} (${sponsor.signerEmail})`
+                    : sponsor.signerEmail}
                 </dd>
               </>
             )}

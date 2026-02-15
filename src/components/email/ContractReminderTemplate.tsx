@@ -4,6 +4,7 @@ import { EmailButton } from './EmailComponents'
 
 export interface ContractReminderTemplateProps {
   sponsorName: string
+  signerName?: string
   signingUrl: string
   reminderNumber: number
   eventName: string
@@ -15,6 +16,7 @@ export interface ContractReminderTemplateProps {
 
 export function ContractReminderTemplate({
   sponsorName,
+  signerName,
   signingUrl,
   reminderNumber,
   eventName,
@@ -23,6 +25,9 @@ export function ContractReminderTemplate({
   eventUrl,
   socialLinks = [],
 }: ContractReminderTemplateProps) {
+  const greeting = signerName
+    ? `Dear ${signerName},`
+    : `Dear ${sponsorName} team,`
   return (
     <BaseEmailTemplate
       title={`Reminder: Sponsorship Agreement — ${eventName}`}
@@ -45,7 +50,7 @@ export function ContractReminderTemplate({
                 color: '#334155',
               }}
             >
-              Dear {sponsorName} team,
+              {greeting}
             </p>
             <p
               style={{

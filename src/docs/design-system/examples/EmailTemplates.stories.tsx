@@ -202,6 +202,7 @@ export const EmailTemplates: Story = {
           >
             <ContractSigningTemplate
               sponsorName="Acme Corp"
+              signerName="Jane Smith"
               signerEmail="sponsor@acmecorp.com"
               signingUrl="https://secure.adobesign.com/sign/abc123"
               tierName="Service"
@@ -235,6 +236,7 @@ export const EmailTemplates: Story = {
           >
             <ContractReminderTemplate
               sponsorName="Acme Corp"
+              signerName="Jane Smith"
               signingUrl="https://secure.adobesign.com/sign/abc123"
               reminderNumber={1}
               eventName="Cloud Native Days Norway 2026"

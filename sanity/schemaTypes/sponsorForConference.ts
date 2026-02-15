@@ -113,6 +113,12 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'signerName',
+      title: 'Signer Name',
+      type: 'string',
+      description: 'Name of the person who should sign the contract',
+    }),
+    defineField({
       name: 'signerEmail',
       title: 'Signer Email',
       type: 'string',

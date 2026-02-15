@@ -21,6 +21,7 @@ export interface RegistrationSponsorInfo {
   contactPersons: ContactPerson[]
   billing: BillingInfo | null
   registrationComplete: boolean
+  signerName: string | null
   signerEmail: string | null
   signatureStatus: string | null
   contractStatus: string | null
@@ -36,6 +37,7 @@ export interface RegistrationSubmission {
   logoBright?: string | null
   orgNumber?: string
   address?: string
+  signerName?: string
   signerEmail?: string
 }
 
@@ -122,6 +124,7 @@ export async function validateRegistrationToken(
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
         billing{ invoiceFormat, email, reference, comments },
         registrationComplete,
+        signerName,
         signerEmail,
         signatureStatus,
         contractStatus,
@@ -222,6 +225,7 @@ export async function completeRegistration(
       registrationCompletedAt: getCurrentDateTime(),
     }
     if (data.signerEmail) {
+      sfcUpdate.signerName = data.signerName
       sfcUpdate.signerEmail = data.signerEmail
     }
     transaction.patch(sponsor._id, { set: sfcUpdate })

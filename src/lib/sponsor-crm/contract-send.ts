@@ -28,6 +28,7 @@ export async function generateAndSendContract(
   signingProvider: ContractSigningProvider,
   options?: {
     templateId?: string
+    signerName?: string
     signerEmail?: string
     actorId?: string
   },
@@ -99,6 +100,8 @@ export async function generateAndSendContract(
 
   const signerEmail =
     options?.signerEmail || sfc.signerEmail || primaryContact.email
+  const signerName =
+    options?.signerName || sfc.signerName || primaryContact.name
 
   // Generate the PDF
   let pdfBuffer: Buffer
@@ -185,6 +188,7 @@ export async function generateAndSendContract(
   }
 
   if (signerEmail) {
+    updateFields.signerName = signerName
     updateFields.signerEmail = signerEmail
     updateFields.signatureStatus = 'pending'
   }

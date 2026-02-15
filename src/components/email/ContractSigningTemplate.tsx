@@ -9,6 +9,7 @@ import {
 
 export interface ContractSigningTemplateProps {
   sponsorName: string
+  signerName?: string
   signerEmail: string
   signingUrl: string
   tierName?: string
@@ -22,6 +23,7 @@ export interface ContractSigningTemplateProps {
 
 export function ContractSigningTemplate({
   sponsorName,
+  signerName,
   signerEmail,
   signingUrl,
   tierName,
@@ -32,7 +34,15 @@ export function ContractSigningTemplate({
   eventUrl,
   socialLinks = [],
 }: ContractSigningTemplateProps) {
-  const packageRows = [
+  const greeting = signerName
+    ? `Dear ${signerName},`
+    : `Dear ${sponsorName} team,`
+
+  const detailRows = [
+    { label: 'Event', value: eventName },
+    eventDate && { label: 'Date', value: eventDate },
+    eventLocation && { label: 'Location', value: eventLocation },
+    { label: 'Organization', value: sponsorName },
     tierName && { label: 'Partnership Level', value: tierName },
     contractValue && { label: 'Total Fee', value: contractValue },
   ].filter(Boolean) as Array<{ label: string; value: string }>
@@ -59,7 +69,7 @@ export function ContractSigningTemplate({
                 color: '#334155',
               }}
             >
-              Dear {sponsorName} team,
+              {greeting}
             </p>
             <p
               style={{
@@ -75,19 +85,18 @@ export function ContractSigningTemplate({
               convenience.
             </p>
 
-            {packageRows.length > 0 && (
-              <EmailSection backgroundColor="#F8FAFC" borderColor="#E5E7EB">
-                <EmailSectionHeader>Sponsorship Details</EmailSectionHeader>
-                {packageRows.map((row, idx) => (
-                  <EmailText key={idx}>
-                    <strong>{row.label}:</strong> {row.value}
-                  </EmailText>
-                ))}
-                <EmailText size="14px" color="#64748B">
-                  Signer: {signerEmail}
+            <EmailSection backgroundColor="#F8FAFC" borderColor="#E5E7EB">
+              <EmailSectionHeader>Sponsorship Details</EmailSectionHeader>
+              {detailRows.map((row, idx) => (
+                <EmailText key={idx}>
+                  <strong>{row.label}:</strong> {row.value}
                 </EmailText>
-              </EmailSection>
-            )}
+              ))}
+              <EmailText size="14px" color="#64748B">
+                Signer:{' '}
+                {signerName ? `${signerName} (${signerEmail})` : signerEmail}
+              </EmailText>
+            </EmailSection>
 
             <EmailButton href={signingUrl}>
               Review &amp; Sign Agreement

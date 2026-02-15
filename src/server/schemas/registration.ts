@@ -32,6 +32,7 @@ export const RegistrationSubmissionSchema = z.object({
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().optional(),
   address: z.string().optional(),
+  signerName: z.string().optional(),
   signerEmail: z.string().email().optional(),
 })
 

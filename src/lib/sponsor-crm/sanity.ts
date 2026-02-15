@@ -70,6 +70,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   contractStatus,
   signatureStatus,
   signatureId,
+  signerName,
   signerEmail,
   signingUrl,
   contractSentAt,
@@ -162,16 +163,17 @@ export async function createSponsorForConference(
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
       addons: data.addons?.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : undefined,
       status: data.status,
       contractStatus: data.contractStatus || 'none',
       assignedTo: data.assignedTo
         ? { _type: 'reference', _ref: data.assignedTo }
         : undefined,
+      signerName: data.signerName,
       signerEmail: data.signerEmail,
       contractTemplate: data.contractTemplate
         ? { _type: 'reference', _ref: data.contractTemplate }
@@ -227,15 +229,16 @@ export async function updateSponsorForConference(
     if (data.addons !== undefined) {
       updates.addons = data.addons.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : []
     }
     if (data.status !== undefined) updates.status = data.status
     if (data.contractStatus !== undefined)
       updates.contractStatus = data.contractStatus
+    if (data.signerName !== undefined) updates.signerName = data.signerName
     if (data.signerEmail !== undefined) updates.signerEmail = data.signerEmail
     if (data.contractTemplate !== undefined) {
       updates.contractTemplate = data.contractTemplate

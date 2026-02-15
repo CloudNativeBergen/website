@@ -657,6 +657,10 @@ export const sponsorRouter = router({
                 : updateData.invoicePaidAt,
             notes: updateData.notes === null ? undefined : updateData.notes,
             tags: updateData.tags as SponsorTag[] | undefined,
+            signerName:
+              updateData.signerName === null
+                ? undefined
+                : updateData.signerName,
             signerEmail:
               updateData.signerEmail === null
                 ? undefined
@@ -1409,6 +1413,10 @@ export const sponsorRouter = router({
           },
         }
         if (input.signerEmail) {
+          const signerContact = sfc.contactPersons?.find(
+            (c: { email?: string }) => c.email === input.signerEmail,
+          )
+          updateFields.signerName = signerContact?.name || primaryContact.name
           updateFields.signerEmail = input.signerEmail
           updateFields.signatureStatus = 'pending'
         }
@@ -1517,8 +1525,15 @@ export const sponsorRouter = router({
               ? `${sfc.contractValue.toLocaleString()} ${sfc.contractCurrency || 'NOK'}`
               : undefined
 
+            const signerContact = sfc.contactPersons?.find(
+              (c: { email?: string }) => c.email === input.signerEmail,
+            )
+            const resolvedSignerName =
+              signerContact?.name || primaryContact.name
+
             const emailElement = React.createElement(ContractSigningTemplate, {
               sponsorName: sfc.sponsor.name,
+              signerName: resolvedSignerName,
               signerEmail: input.signerEmail,
               signingUrl,
               tierName: sfc.tier?.title,
@@ -1817,9 +1832,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,

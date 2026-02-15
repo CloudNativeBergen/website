@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
         signerEmail,
         reminderCount,
         "sponsorName": sponsor->name,
+        signerName,
         "conferenceName": conference->title,
         "conferenceCity": conference->city,
         "conferenceStartDate": conference->startDate,
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
               subject: `Reminder: Sponsorship Agreement — ${eventName}`,
               react: React.createElement(ContractReminderTemplate, {
                 sponsorName: contract.sponsorName || 'Sponsor',
+                signerName: contract.signerName,
                 signingUrl: contract.signingUrl,
                 reminderNumber: newCount,
                 eventName,
