@@ -34,6 +34,20 @@ const mockContract = {
   contractPdfUrl: null,
 }
 
+const mockSubmitResponse = {
+  success: true,
+  sponsorName: 'Acme Corp',
+  conferenceName: 'Cloud Native Days Norway 2026',
+  conferenceCity: 'Bergen',
+  organizer: 'Cloud Native Bergen',
+  tierName: 'Gold',
+  contractValue: 75000,
+  contractCurrency: 'NOK',
+  signerName: 'Jane Doe',
+  signerEmail: 'jane@acme.example.com',
+  signedAt: new Date().toISOString(),
+}
+
 function trpcResponse(data: unknown) {
   return { result: { data } }
 }
@@ -72,13 +86,7 @@ export const ReviewStep: Story = {
         }),
         http.post('/api/trpc/signing.submitSignature', async () => {
           await delay(1000)
-          return HttpResponse.json(
-            trpcResponse({
-              success: true,
-              sponsorName: 'Acme Corp',
-              conferenceName: 'Cloud Native Days Norway 2026',
-            }),
-          )
+          return HttpResponse.json(trpcResponse(mockSubmitResponse))
         }),
       ],
     },
@@ -105,13 +113,7 @@ export const WithPdfPreview: Story = {
         }),
         http.post('/api/trpc/signing.submitSignature', async () => {
           await delay(1000)
-          return HttpResponse.json(
-            trpcResponse({
-              success: true,
-              sponsorName: 'Acme Corp',
-              conferenceName: 'Cloud Native Days Norway 2026',
-            }),
-          )
+          return HttpResponse.json(trpcResponse(mockSubmitResponse))
         }),
       ],
     },
@@ -222,13 +224,7 @@ export const SignStep: Story = {
         }),
         http.post('/api/trpc/signing.submitSignature', async () => {
           await delay(1000)
-          return HttpResponse.json(
-            trpcResponse({
-              success: true,
-              sponsorName: 'Acme Corp',
-              conferenceName: 'Cloud Native Days Norway 2026',
-            }),
-          )
+          return HttpResponse.json(trpcResponse(mockSubmitResponse))
         }),
       ],
     },
@@ -286,9 +282,12 @@ export const CommunityPartner: Story = {
           await delay(1000)
           return HttpResponse.json(
             trpcResponse({
-              success: true,
+              ...mockSubmitResponse,
               sponsorName: 'Local Tech Meetup',
-              conferenceName: 'Cloud Native Days Norway 2026',
+              tierName: null,
+              contractValue: null,
+              contractCurrency: null,
+              signerEmail: 'hello@localtechmeetup.no',
             }),
           )
         }),
