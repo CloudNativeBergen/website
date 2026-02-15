@@ -20,7 +20,8 @@ export function formatOrgNumber(value: string): string {
 
   if (digits.length !== 9) return value
 
-  const formatted = `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}`
+  const nbsp = '\u00A0'
+  const formatted = `${digits.slice(0, 3)}${nbsp}${digits.slice(3, 6)}${nbsp}${digits.slice(6, 9)}`
   return `${prefix}${formatted}${suffix}`
 }
 
