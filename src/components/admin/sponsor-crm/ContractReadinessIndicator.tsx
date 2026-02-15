@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
 import {
   CheckCircleIcon,
@@ -17,106 +17,6 @@ const SOURCE_LABELS: Record<ReadinessSource, string> = {
   organizer: 'Conference settings',
   sponsor: 'Sponsor (via registration)',
   pipeline: 'CRM pipeline',
-}
-
-const EDITABLE_ORG_FIELDS: Record<string, string> = {
-  'conference.organizerOrgNumber': 'Org. number',
-  'conference.organizerAddress': 'Address',
-}
-
-function OrgFieldEditor({
-  conferenceId,
-  missingFields,
-  onSaved,
-}: {
-  conferenceId: string
-  missingFields: MissingField[]
-  onSaved: () => void
-}) {
-  const editableFields = missingFields.filter(
-    (f) => f.field in EDITABLE_ORG_FIELDS,
-  )
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [isEditing, setIsEditing] = useState(false)
-
-  const mutation =
-    api.sponsor.contractTemplates.updateConferenceOrgInfo.useMutation({
-      onSuccess: () => {
-        setIsEditing(false)
-        setValues({})
-        onSaved()
-      },
-    })
-
-  if (editableFields.length === 0) return null
-
-  if (!isEditing) {
-    return (
-      <button
-        type="button"
-        onClick={() => setIsEditing(true)}
-        className="mt-1 inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
-      >
-        <PencilSquareIcon className="h-3.5 w-3.5" />
-        Set organizer details
-      </button>
-    )
-  }
-
-  const handleSave = () => {
-    const update: {
-      conferenceId: string
-      organizerOrgNumber?: string
-      organizerAddress?: string
-    } = { conferenceId }
-    const orgNumber = values['conference.organizerOrgNumber']?.trim()
-    if (orgNumber) {
-      update.organizerOrgNumber = orgNumber
-    }
-    const orgAddress = values['conference.organizerAddress']?.trim()
-    if (orgAddress) {
-      update.organizerAddress = orgAddress
-    }
-    if (!update.organizerOrgNumber && !update.organizerAddress) return
-    mutation.mutate(update)
-  }
-
-  return (
-    <div className="mt-2 space-y-2">
-      {editableFields.map((f) => (
-        <input
-          key={f.field}
-          type="text"
-          placeholder={EDITABLE_ORG_FIELDS[f.field]}
-          value={values[f.field] || ''}
-          onChange={(e) =>
-            setValues((prev) => ({ ...prev, [f.field]: e.target.value }))
-          }
-          className="block w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
-        />
-      ))}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={mutation.isPending}
-          className="rounded bg-amber-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Saving\u2026' : 'Save'}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setIsEditing(false)
-            setValues({})
-          }}
-          className="rounded px-2 py-0.5 text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
 }
 
 function MissingFieldList({ items }: { items: MissingField[] }) {
@@ -137,13 +37,10 @@ function MissingFieldList({ items }: { items: MissingField[] }) {
 
 export function ContractReadinessIndicator({
   sponsorForConferenceId,
-  conferenceId,
 }: {
   sponsorForConferenceId: string
-  conferenceId: string
+  conferenceId?: string
 }) {
-  const utils = api.useUtils()
-
   const { data: readiness, isLoading } =
     api.sponsor.contractTemplates.contractReadiness.useQuery(
       { id: sponsorForConferenceId },
@@ -184,14 +81,14 @@ export function ContractReadinessIndicator({
                 {SOURCE_LABELS[source]}:
               </p>
               <MissingFieldList items={items} />
-              {source === 'organizer' && conferenceId && (
-                <OrgFieldEditor
-                  conferenceId={conferenceId}
-                  missingFields={items}
-                  onSaved={() =>
-                    utils.sponsor.contractTemplates.contractReadiness.invalidate()
-                  }
-                />
+              {source === 'organizer' && (
+                <Link
+                  href="/admin/sponsors/contracts"
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
+                >
+                  <PencilSquareIcon className="h-3.5 w-3.5" />
+                  Set organizer details
+                </Link>
               )}
             </div>
           ))}

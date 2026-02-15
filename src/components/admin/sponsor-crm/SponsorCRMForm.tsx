@@ -19,7 +19,7 @@ import type {
 import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
 import {
   XMarkIcon,
-  ChevronLeftIcon,
+  PencilSquareIcon,
   UserGroupIcon,
   PhotoIcon,
   ClockIcon,
@@ -248,31 +248,12 @@ export function SponsorCRMForm({
                   <div className="shrink-0 border-b border-gray-200 p-6 dark:border-gray-700">
                     <div className="flex items-start justify-between">
                       <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          {view !== 'pipeline' && (
-                            <button
-                              onClick={() => setView('pipeline')}
-                              className="-ml-1.5 cursor-pointer rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-800 dark:hover:text-indigo-400"
-                              title="Back to Pipeline"
-                            >
-                              <ChevronLeftIcon className="h-6 w-6" />
-                            </button>
-                          )}
-                          <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-                            {view === 'contacts'
-                              ? 'Manage Contacts'
-                              : view === 'logo'
-                                ? 'Sponsor Logo'
-                                : view === 'history'
-                                  ? 'Activity History'
-                                  : view === 'contract'
-                                    ? 'Contract'
-                                    : sponsor
-                                      ? 'Edit Sponsor'
-                                      : 'Add Sponsor to Pipeline'}
-                          </DialogTitle>
-                        </div>
-                        {sponsor && view === 'pipeline' && (
+                        <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
+                          {sponsor
+                            ? 'Sponsor Details'
+                            : 'Add Sponsor to Pipeline'}
+                        </DialogTitle>
+                        {sponsor && (
                           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                             {sponsor.sponsor.name}
                           </p>
@@ -282,6 +263,20 @@ export function SponsorCRMForm({
                       <div className="flex items-center gap-2">
                         {sponsor && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => setView('pipeline')}
+                              className={clsx(
+                                'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                view === 'pipeline'
+                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
+                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
+                              )}
+                              title="Edit pipeline details"
+                            >
+                              <PencilSquareIcon className="h-4 w-4" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => setView('contract')}
@@ -298,31 +293,29 @@ export function SponsorCRMForm({
                               )}
                               {(sponsor.contractStatus === 'contract-sent' ||
                                 sponsor.signatureStatus === 'pending') && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
                               <DocumentTextIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Contract</span>
                             </button>
-                            <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
                             <button
                               type="button"
                               onClick={() => setView('history')}
                               className={clsx(
-                                'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                'inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
                                 view === 'history'
                                   ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
                                   : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
                               )}
                               title="View history"
                             >
-                              <ClockIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">History</span>
+                              <ClockIcon className="h-5 w-5" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setView('logo')}
                               className={clsx(
-                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                'relative inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
                                 view === 'logo'
                                   ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
                                   : missingData?.logo
@@ -338,14 +331,13 @@ export function SponsorCRMForm({
                               {missingData?.logo && (
                                 <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
                               )}
-                              <PhotoIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Logo</span>
+                              <PhotoIcon className="h-5 w-5" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setView('contacts')}
                               className={clsx(
-                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
+                                'relative inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
                                 view === 'contacts'
                                   ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
                                   : missingData?.contacts
@@ -361,8 +353,7 @@ export function SponsorCRMForm({
                               {missingData?.contacts && (
                                 <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
                               )}
-                              <UserGroupIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Contacts</span>
+                              <UserGroupIcon className="h-5 w-5" />
                             </button>
                           </>
                         )}
