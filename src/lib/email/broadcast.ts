@@ -61,12 +61,12 @@ export async function sendBroadcastEmail({
     const determineFromEmail = (): string => {
       if (fromEmail) return fromEmail
 
-      if (audienceType === 'speakers' && conference.cfp_email) {
-        return `${conference.organizer} <${conference.cfp_email}>`
+      if (audienceType === 'speakers' && conference.cfpEmail) {
+        return `${conference.organizer} <${conference.cfpEmail}>`
       }
 
-      if (conference.contact_email) {
-        return `${conference.organizer} <${conference.contact_email}>`
+      if (conference.contactEmail) {
+        return `${conference.organizer} <${conference.contactEmail}>`
       }
 
       throw new Error(
@@ -80,8 +80,8 @@ export async function sendBroadcastEmail({
     } catch (error) {
       console.error('[Broadcast] Email configuration error:', {
         audienceType,
-        hasCfpEmail: !!conference.cfp_email,
-        hasContactEmail: !!conference.contact_email,
+        hasCfpEmail: !!conference.cfpEmail,
+        hasContactEmail: !!conference.contactEmail,
         error: error instanceof Error ? error.message : String(error),
       })
       return createEmailErrorResponse(
@@ -178,8 +178,8 @@ export async function sendIndividualEmail({
 
     const resolvedFromEmail =
       fromEmail ||
-      (conference.contact_email
-        ? `${conference.organizer} <${conference.contact_email}>`
+      (conference.contactEmail
+        ? `${conference.organizer} <${conference.contactEmail}>`
         : undefined)
 
     if (!resolvedFromEmail) {

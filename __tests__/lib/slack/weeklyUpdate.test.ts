@@ -58,7 +58,7 @@ function createBaseUpdateData(
 ): WeeklyUpdateData {
   return {
     conference: createMockConference({
-      sales_notification_channel: '#sales',
+      salesNotificationChannel: '#sales',
     }),
     ticketsByCategory: { Regular: 50 },
     paidTickets: 50,
@@ -176,7 +176,7 @@ describe('weeklyUpdate', () => {
       await sendWeeklyUpdateToSlack(
         createBaseUpdateData({
           conference: createMockConference({
-            sales_notification_channel: '#sales-updates',
+            salesNotificationChannel: '#sales-updates',
           }),
         }),
       )
@@ -215,7 +215,7 @@ describe('weeklyUpdate', () => {
         sendWeeklyUpdateToSlack(
           createBaseUpdateData({
             conference: createMockConference({
-              sales_notification_channel: '#test',
+              salesNotificationChannel: '#test',
             }),
           }),
         ),
@@ -234,7 +234,7 @@ describe('weeklyUpdate', () => {
         await import('@/lib/slack/weeklyUpdate')
       const data = createBaseUpdateData({
         conference: createMockConference({
-          sales_notification_channel: '#conference-sales',
+          salesNotificationChannel: '#conference-sales',
         }),
       })
       await sendWeeklyUpdateToSlack(data)

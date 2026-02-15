@@ -10,6 +10,7 @@ import { type TravelSupportData } from '@/lib/dashboard/data-types'
 import { fetchTravelSupport } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { formatNumber } from '@/lib/format'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
@@ -234,7 +235,7 @@ export function TravelSupportQueueWidget({
                   </span>
                   <span className="ml-2 flex items-center gap-0.5 text-[11px] font-bold text-gray-900 dark:text-gray-100">
                     <BanknotesIcon className="h-3 w-3" />
-                    {request.amount.toLocaleString()}
+                    {formatNumber(request.amount)}
                   </span>
                 </div>
                 <div className="text-[10px] text-gray-500 dark:text-gray-400">

@@ -60,10 +60,10 @@ const navigation: NavigationSection[] = [
 ]
 
 interface ConferenceLogos {
-  logo_bright?: string
-  logo_dark?: string
-  logomark_bright?: string
-  logomark_dark?: string
+  logoBright?: string
+  logoDark?: string
+  logomarkBright?: string
+  logomarkDark?: string
 }
 
 interface AdminLayoutProps {

@@ -134,12 +134,12 @@ export function SpeakerEmailModal({
         proposalUrl={`https://${domain}/admin/proposals/${proposal._id}`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={conference.start_date || 'TBD'}
+        eventDate={conference.startDate || 'TBD'}
         eventUrl={`https://${domain}/`}
         subject={subject}
         message={messageHTML}
         senderName="Conference Team"
-        socialLinks={conference.social_links || []}
+        socialLinks={conference.socialLinks || []}
       />
     )
   }

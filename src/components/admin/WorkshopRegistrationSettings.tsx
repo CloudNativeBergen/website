@@ -8,6 +8,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface WorkshopRegistrationSettingsProps {
   conferenceId: string
@@ -113,13 +114,10 @@ export function WorkshopRegistrationSettings({
           </h3>
         </div>
         {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-          >
+          <AdminButton color="blue" onClick={() => setIsEditing(true)}>
             <PencilIcon className="h-4 w-4" />
             Edit
-          </button>
+          </AdminButton>
         )}
       </div>
 
@@ -156,22 +154,24 @@ export function WorkshopRegistrationSettings({
           </div>
 
           <div className="flex gap-2">
-            <button
+            <AdminButton
+              color="green"
+              size="md"
               onClick={handleSave}
               disabled={updateRegistrationTimes.isPending}
-              className="flex items-center gap-1 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-500 dark:hover:bg-green-600"
             >
               <CheckIcon className="h-4 w-4" />
               {updateRegistrationTimes.isPending ? 'Saving...' : 'Save'}
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
+              variant="secondary"
+              size="md"
               onClick={handleCancel}
               disabled={updateRegistrationTimes.isPending}
-              className="flex items-center gap-1 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
               <XMarkIcon className="h-4 w-4" />
               Cancel
-            </button>
+            </AdminButton>
           </div>
         </div>
       ) : (

@@ -31,7 +31,7 @@ export default async function ProposalViewPage({
   }
 
   const isImpersonatingAsOrganizer =
-    session.isImpersonating && !!session.realAdmin?.is_organizer
+    session.isImpersonating && !!session.realAdmin?.isOrganizer
 
   const { proposal, proposalError } = await getProposal({
     id,

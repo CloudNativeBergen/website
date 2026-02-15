@@ -6,7 +6,7 @@ import { Status } from '@/lib/proposal/types'
 export const GET = auth(async (req) => {
   try {
     // Check if user is authenticated and is an organizer
-    if (!req.auth?.speaker?.is_organizer) {
+    if (!req.auth?.speaker?.isOrganizer) {
       return NextResponse.json(
         { error: 'Unauthorized - Admin access required' },
         { status: 401 },

@@ -35,20 +35,20 @@ export async function sendBadgeEmail({
   try {
     // Generate download URL
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const downloadUrl = `${baseUrl}/api/badge/${badge.badge_id}/download`
+    const downloadUrl = `${baseUrl}/api/badge/${badge.badgeId}/download`
 
     // Generate email HTML
     const emailHtml = BadgeEmailTemplate({
       speakerName,
       conferenceName,
       conferenceYear,
-      badgeType: badge.badge_type,
+      badgeType: badge.badgeType,
       downloadUrl,
     })
 
     // Determine from email using conference data
-    const fromEmail = conference.contact_email
-      ? `${conference.organizer} <${conference.contact_email}>`
+    const fromEmail = conference.contactEmail
+      ? `${conference.organizer} <${conference.contactEmail}>`
       : conference.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
         : 'Cloud Native Days <contact@cloudnativedays.org>'
@@ -57,7 +57,7 @@ export async function sendBadgeEmail({
     const { data, error } = await resend.emails.send({
       from: fromEmail,
       to: speakerEmail,
-      subject: `Your ${badge.badge_type} badge for ${conferenceName} ${conferenceYear}`,
+      subject: `Your ${badge.badgeType} badge for ${conferenceName} ${conferenceYear}`,
       html: emailHtml,
     })
 
@@ -70,7 +70,7 @@ export async function sendBadgeEmail({
     }
 
     // Update badge record with email sent status
-    await updateBadgeEmailStatus(badge.badge_id, 'sent', data?.id)
+    await updateBadgeEmailStatus(badge.badgeId, 'sent', data?.id)
 
     return {
       success: true,
@@ -112,7 +112,7 @@ export async function sendBadgeEmailWithRetry(
 
   // Update badge record with failed status
   await updateBadgeEmailStatus(
-    params.badge.badge_id,
+    params.badge.badgeId,
     'failed',
     undefined,
     lastError,

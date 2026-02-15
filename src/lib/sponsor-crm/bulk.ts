@@ -12,12 +12,12 @@ import { getCurrentDateTime } from '@/lib/time'
 export interface BulkUpdateParams {
   ids: string[]
   status?: SponsorStatus
-  contract_status?: ContractStatus
-  invoice_status?: InvoiceStatus
-  assigned_to?: string | null
+  contractStatus?: ContractStatus
+  invoiceStatus?: InvoiceStatus
+  assignedTo?: string | null
   tags?: SponsorTag[]
-  add_tags?: SponsorTag[]
-  remove_tags?: SponsorTag[]
+  addTags?: SponsorTag[]
+  removeTags?: SponsorTag[]
 }
 
 /**
@@ -41,34 +41,34 @@ export async function bulkUpdateSponsors(
 
   // Fetch the new assignee's name if we're assigning someone
   let assigneeName = ''
-  if (input.assigned_to) {
+  if (input.assignedTo) {
     const assignee = await clientWrite.fetch<{ name: string }>(
       `*[_type == "speaker" && _id == $id][0]{name}`,
-      { id: input.assigned_to },
+      { id: input.assignedTo },
     )
-    assigneeName = assignee?.name || input.assigned_to
+    assigneeName = assignee?.name || input.assignedTo
   }
 
   interface CRMUpdates {
     status?: SponsorStatus
-    contract_status?: ContractStatus
-    invoice_status?: InvoiceStatus
-    assigned_to?: { _type: 'reference'; _ref: string } | null
+    contractStatus?: ContractStatus
+    invoiceStatus?: InvoiceStatus
+    assignedTo?: { _type: 'reference'; _ref: string } | null
     tags?: SponsorTag[]
   }
 
   for (const existing of sponsors) {
     const updates: CRMUpdates = {}
     if (input.status !== undefined) updates.status = input.status
-    if (input.contract_status !== undefined)
-      updates.contract_status = input.contract_status
-    if (input.invoice_status !== undefined)
-      updates.invoice_status = input.invoice_status
-    if (input.assigned_to !== undefined) {
-      updates.assigned_to =
-        input.assigned_to === null
+    if (input.contractStatus !== undefined)
+      updates.contractStatus = input.contractStatus
+    if (input.invoiceStatus !== undefined)
+      updates.invoiceStatus = input.invoiceStatus
+    if (input.assignedTo !== undefined) {
+      updates.assignedTo =
+        input.assignedTo === null
           ? null
-          : { _type: 'reference', _ref: input.assigned_to }
+          : { _type: 'reference', _ref: input.assignedTo }
     }
 
     // Handle tags
@@ -79,15 +79,15 @@ export async function bulkUpdateSponsors(
       currentTags = input.tags
       tagsChanged = true
     }
-    if (input.add_tags) {
-      const newTags = [...new Set([...currentTags, ...input.add_tags])]
+    if (input.addTags) {
+      const newTags = [...new Set([...currentTags, ...input.addTags])]
       if (newTags.length !== currentTags.length) {
         currentTags = newTags as SponsorTag[]
         tagsChanged = true
       }
     }
-    if (input.remove_tags) {
-      const newTags = currentTags.filter((t) => !input.remove_tags?.includes(t))
+    if (input.removeTags) {
+      const newTags = currentTags.filter((t) => !input.removeTags?.includes(t))
       if (newTags.length !== currentTags.length) {
         currentTags = newTags as SponsorTag[]
         tagsChanged = true
@@ -109,40 +109,40 @@ export async function bulkUpdateSponsors(
         transaction.create({
           _id: activityId,
           _type: 'sponsorActivity',
-          sponsor_for_conference: {
+          sponsorForConference: {
             _type: 'reference',
             _ref: existing._id,
           },
-          activity_type: 'stage_change',
+          activityType: 'stage_change',
           description: `Status changed from ${formatStatusName(existing.status)} to ${formatStatusName(input.status)}`,
           metadata: {
-            old_value: existing.status,
-            new_value: input.status,
+            oldValue: existing.status,
+            newValue: input.status,
             timestamp: getCurrentDateTime(),
           },
-          created_by: { _type: 'reference', _ref: userId },
-          created_at: getCurrentDateTime(),
+          createdBy: { _type: 'reference', _ref: userId },
+          createdAt: getCurrentDateTime(),
         })
       }
 
       if (
-        input.assigned_to !== undefined &&
-        input.assigned_to !== (existing.assigned_to?._ref || null)
+        input.assignedTo !== undefined &&
+        input.assignedTo !== (existing.assignedTo?._ref || null)
       ) {
         const activityId = `activity-assign-${existing._id}-${Date.now()}`
         transaction.create({
           _id: activityId,
           _type: 'sponsorActivity',
-          sponsor_for_conference: {
+          sponsorForConference: {
             _type: 'reference',
             _ref: existing._id,
           },
-          activity_type: 'note',
-          description: input.assigned_to
+          activityType: 'note',
+          description: input.assignedTo
             ? `Assigned to ${assigneeName} via bulk update`
             : 'Unassigned via bulk update',
-          created_by: { _type: 'reference', _ref: userId },
-          created_at: getCurrentDateTime(),
+          createdBy: { _type: 'reference', _ref: userId },
+          createdAt: getCurrentDateTime(),
         })
       }
     }
@@ -161,16 +161,38 @@ export async function bulkUpdateSponsors(
 
 /**
  * Deletes multiple sponsor CRM records in a single transaction.
- * Also cleans up related activity documents to prevent orphaned data.
+ * Also cleans up related activity documents and optionally contract assets.
  */
 export async function bulkDeleteSponsors(
   ids: string[],
+  options?: { deleteContractAssets?: boolean },
 ): Promise<{ success: true; deletedCount: number; totalCount: number }> {
   // Find all related activity documents
   const relatedActivityIds = await clientWrite.fetch<string[]>(
-    `*[_type == "sponsorActivity" && sponsor_for_conference._ref in $ids]._id`,
+    `*[_type == "sponsorActivity" && sponsorForConference._ref in $ids]._id`,
     { ids },
   )
+
+  // Find contract asset IDs if cleanup requested (only delete assets not referenced elsewhere)
+  let contractAssetIds: string[] = []
+  if (options?.deleteContractAssets) {
+    const candidateAssetIds = await clientWrite.fetch<string[]>(
+      `*[_type == "sponsorForConference" && _id in $ids && defined(contractDocument.asset._ref)].contractDocument.asset._ref`,
+      { ids },
+    )
+
+    if (candidateAssetIds.length > 0) {
+      const unique = Array.from(new Set(candidateAssetIds.filter(Boolean)))
+      contractAssetIds = await clientWrite.fetch<string[]>(
+        `*[
+          _type == "sanity.fileAsset" &&
+          _id in $assetIds &&
+          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(_id in $ids)]) == 0
+        ]._id`,
+        { assetIds: unique, ids },
+      )
+    }
+  }
 
   const transaction = clientWrite.transaction()
 
@@ -182,6 +204,11 @@ export async function bulkDeleteSponsors(
   // Delete the related activity documents
   for (const id of relatedActivityIds) {
     transaction.delete(id)
+  }
+
+  // Delete contract PDF assets
+  for (const assetId of contractAssetIds) {
+    transaction.delete(assetId)
   }
 
   await transaction.commit()

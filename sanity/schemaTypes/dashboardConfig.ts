@@ -27,13 +27,13 @@ export default defineType({
           type: 'object',
           fields: [
             defineField({
-              name: 'widget_id',
+              name: 'widgetId',
               title: 'Widget ID',
               type: 'string',
               validation: (Rule) => Rule.required(),
             }),
             defineField({
-              name: 'widget_type',
+              name: 'widgetType',
               title: 'Widget Type',
               type: 'string',
               validation: (Rule) => Rule.required(),
@@ -54,12 +54,12 @@ export default defineType({
               type: 'number',
             }),
             defineField({
-              name: 'row_span',
+              name: 'rowSpan',
               title: 'Row Span',
               type: 'number',
             }),
             defineField({
-              name: 'col_span',
+              name: 'colSpan',
               title: 'Column Span',
               type: 'number',
             }),

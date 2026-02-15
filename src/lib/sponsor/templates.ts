@@ -11,6 +11,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   international: 'International',
   'local-community': 'Local / Community',
   'follow-up': 'Follow-up',
+  contract: 'Contract',
   custom: 'Custom',
 }
 
@@ -37,6 +38,12 @@ export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   PROSPECTUS_URL: 'Sponsor prospectus/deck URL',
   SENDER_NAME: 'Name of the person sending the email',
   TIER_NAME: 'Sponsor tier name (if assigned)',
+  SIGNER_NAME: 'Name of the contract signer',
+  SIGNER_EMAIL: 'Email of the contract signer',
+  CONTRACT_VALUE: 'Contract total (e.g. "50,000 NOK")',
+  EVENT_URL: 'Conference website URL (https://...)',
+  EVENT_DATE: 'Conference date (long format)',
+  EVENT_LOCATION: 'Conference city / location',
 }
 
 const URL_VARIABLE_KEYS = new Set([
@@ -197,11 +204,11 @@ export function buildTemplateVariables(opts: {
   contactNames?: string
   conference: {
     title: string
-    start_date?: string
+    startDate?: string
     city?: string
     organizer?: string
     domains?: string[]
-    prospectus_url?: string
+    prospectusUrl?: string
   }
   senderName?: string
   tierName?: string
@@ -221,13 +228,13 @@ export function buildTemplateVariables(opts: {
     vars.ORG_NAME = conference.organizer
   }
 
-  if (conference.start_date) {
+  if (conference.startDate) {
     // Format as DD/MM-YY from YYYY-MM-DD
-    const [y, m, d] = conference.start_date.split('-')
+    const [y, m, d] = conference.startDate.split('-')
     if (y && m && d) {
       vars.CONFERENCE_DATE = `${d}/${m}-${y.slice(2)}`
     }
-    const year = conference.start_date.slice(0, 4)
+    const year = conference.startDate.slice(0, 4)
     if (year) vars.CONFERENCE_YEAR = year
   }
 
@@ -240,8 +247,8 @@ export function buildTemplateVariables(opts: {
     vars.SPONSOR_PAGE_URL = `https://${conference.domains[0]}/sponsor`
   }
 
-  if (conference.prospectus_url) {
-    vars.PROSPECTUS_URL = conference.prospectus_url
+  if (conference.prospectusUrl) {
+    vars.PROSPECTUS_URL = conference.prospectusUrl
   }
 
   if (senderName) {
@@ -319,7 +326,7 @@ export function findBestTemplate(
     let score = 0
     if (t.category === category) score += 4
     if (t.language === language) score += 2
-    if (t.is_default) score += 1
+    if (t.isDefault) score += 1
     if (score > bestScore) {
       bestScore = score
       best = t
@@ -327,4 +334,60 @@ export function findBestTemplate(
   }
 
   return best
+}
+
+/**
+ * Extract all {{{VARIABLE_NAME}}} references from a plain string.
+ */
+export function extractVariablesFromText(text: string): string[] {
+  const matches = text.match(/\{\{\{([A-Z_]+)\}\}\}/g)
+  if (!matches) return []
+  return [...new Set(matches.map((m) => m.slice(3, -3)))]
+}
+
+/**
+ * Extract all {{{VARIABLE_NAME}}} references from Portable Text blocks.
+ */
+export function extractVariablesFromPortableText(
+  blocks: PortableTextBlock[],
+): string[] {
+  const vars = new Set<string>()
+  for (const block of blocks) {
+    if (block._type === 'block' && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        if (child._type === 'span' && typeof child.text === 'string') {
+          for (const v of extractVariablesFromText(child.text)) {
+            vars.add(v)
+          }
+        }
+      }
+    }
+  }
+  return [...vars]
+}
+
+/**
+ * Find unsupported variables in text and Portable Text blocks.
+ * Returns an array of variable names that are not in the supported set.
+ */
+export function findUnsupportedVariables(
+  supportedVariables: Record<string, string>,
+  ...sources: Array<string | PortableTextBlock[]>
+): string[] {
+  const supported = new Set(Object.keys(supportedVariables))
+  const found = new Set<string>()
+
+  for (const source of sources) {
+    if (typeof source === 'string') {
+      for (const v of extractVariablesFromText(source)) {
+        if (!supported.has(v)) found.add(v)
+      }
+    } else if (Array.isArray(source)) {
+      for (const v of extractVariablesFromPortableText(source)) {
+        if (!supported.has(v)) found.add(v)
+      }
+    }
+  }
+
+  return [...found]
 }

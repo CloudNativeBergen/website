@@ -14,7 +14,9 @@ export interface SponsorCRMFormData {
   name: string
   website: string
   logo: string | null
-  logo_bright: string | null
+  logoBright: string | null
+  orgNumber: string
+  address: string
   tierId: string
   addonIds: string[]
   contractStatus: ContractStatus
@@ -31,8 +33,7 @@ interface UseSponsorCRMFormMutationsOptions {
   conferenceId: string
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
-  onSuccess: () => void
-  onClose: () => void
+  onSuccess: (createdId?: string) => void
 }
 
 export function useSponsorCRMFormMutations({
@@ -40,25 +41,19 @@ export function useSponsorCRMFormMutations({
   sponsor,
   isOpen,
   onSuccess,
-  onClose,
 }: UseSponsorCRMFormMutationsOptions) {
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
-  const handleSuccess = () => {
-    onSuccess()
-    onClose()
-  }
-
   const createMutation = api.sponsor.crm.create.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await utils.sponsor.crm.list.invalidate()
       showNotification({
         title: 'Success',
         message: 'Sponsor added to pipeline',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess(data?._id)
     },
     onError: (error) => {
       showNotification({
@@ -77,7 +72,7 @@ export function useSponsorCRMFormMutations({
         message: 'Sponsor updated successfully',
         type: 'success',
       })
-      handleSuccess()
+      onSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -111,8 +106,10 @@ export function useSponsorCRMFormMutations({
       if (
         formData.website !== sponsor.sponsor.website ||
         formData.logo !== sponsor.sponsor.logo ||
-        formData.logo_bright !== sponsor.sponsor.logo_bright ||
-        formData.name !== sponsor.sponsor.name
+        formData.logoBright !== sponsor.sponsor.logoBright ||
+        formData.name !== sponsor.sponsor.name ||
+        formData.orgNumber !== (sponsor.sponsor.orgNumber || '') ||
+        formData.address !== (sponsor.sponsor.address || '')
       ) {
         await updateGlobalSponsorMutation.mutateAsync({
           id: sponsor.sponsor._id,
@@ -120,7 +117,9 @@ export function useSponsorCRMFormMutations({
             name: formData.name,
             website: formData.website,
             logo: formData.logo || null,
-            logo_bright: formData.logo_bright || null,
+            logoBright: formData.logoBright || null,
+            orgNumber: formData.orgNumber || undefined,
+            address: formData.address || undefined,
           },
         })
       }
@@ -129,16 +128,16 @@ export function useSponsorCRMFormMutations({
         id: sponsor._id,
         tier: formData.tierId || undefined,
         addons: formData.addonIds,
-        contract_status: formData.contractStatus,
+        contractStatus: formData.contractStatus,
         status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
+        invoiceStatus: formData.invoiceStatus,
+        contractValue: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency,
+        contractCurrency: formData.contractCurrency,
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || null,
+        assignedTo: formData.assignedTo || null,
       })
     } else {
       await createMutation.mutateAsync({
@@ -146,16 +145,16 @@ export function useSponsorCRMFormMutations({
         conference: conferenceId,
         tier: formData.tierId || undefined,
         addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
-        contract_status: formData.contractStatus,
+        contractStatus: formData.contractStatus,
         status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
+        invoiceStatus: formData.invoiceStatus,
+        contractValue: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency,
+        contractCurrency: formData.contractCurrency,
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || undefined,
+        assignedTo: formData.assignedTo || undefined,
       })
     }
   }

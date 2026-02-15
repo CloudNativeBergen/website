@@ -1,5 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
@@ -47,7 +48,7 @@ async function CachedConductContent({ domain }: { domain: string }) {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800 print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+          <ContentCard>
             <div className="prose prose-lg print:prose-base dark:prose-invert max-w-none print:max-w-none">
               <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Scope
@@ -208,10 +209,10 @@ async function CachedConductContent({ domain }: { domain: string }) {
                   <li>
                     <strong>Email:</strong> Contact the organizers via{' '}
                     <a
-                      href={`mailto:${conference.contact_email}`}
+                      href={`mailto:${conference.contactEmail}`}
                       className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover print:text-black print:underline"
                     >
-                      {conference.contact_email}
+                      {conference.contactEmail}
                     </a>
                   </li>
                   <li>
@@ -302,7 +303,7 @@ async function CachedConductContent({ domain }: { domain: string }) {
                 </p>
               </div>
             </div>
-          </div>
+          </ContentCard>
         </Container>
       </div>
     </>

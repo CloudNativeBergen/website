@@ -112,7 +112,7 @@ export default async function Image({
     conference && 'city' in conference && 'country' in conference
       ? `${conference.city}, ${conference.country}`
       : 'Location TBA'
-  const badgeTypeName = badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
+  const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
 
   // Get badge SVG URL
   const badgeSvgUrl = getBadgeSVGUrl(badge)

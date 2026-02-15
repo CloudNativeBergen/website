@@ -12,8 +12,6 @@ import {
   EnvelopeIcon,
   UserIcon,
   ClipboardIcon,
-  MagnifyingGlassIcon,
-  XMarkIcon,
   PencilIcon,
   EyeIcon,
   ArrowRightCircleIcon,
@@ -21,18 +19,27 @@ import {
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
-import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
-  FilterDropdown,
-  FilterOption,
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-} from '@/components/admin'
+} from '@/components/ActionMenu'
 import { useState, useMemo } from 'react'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import {
+  TableContainer,
+  TableHeader,
+  Th,
+  TableBody,
+  Tr,
+  Td,
+  TableToolbar,
+  TableEmptyState,
+} from '@/components/DataTable'
 
 const extractLinkedInLink = (links: string[] | undefined): string | null => {
   if (!links) return null
@@ -106,18 +113,21 @@ const getProposalConferenceId = (proposal: ProposalExisting): string | null => {
   return null
 }
 
-const StatusBadge = ({ status }: { status: Status }) => {
-  const Icon = status === Status.confirmed ? CheckBadgeIcon : ClockIcon
-  const config = getStatusBadgeConfig(status)
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.textColor}`}
-    >
-      <Icon className="h-3 w-3" />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
+function getProposalBadgeColor(status: Status): BadgeColor {
+  switch (status) {
+    case Status.confirmed:
+    case Status.accepted:
+      return 'green'
+    case Status.submitted:
+      return 'blue'
+    case Status.draft:
+      return 'yellow'
+    case Status.rejected:
+      return 'red'
+    case Status.withdrawn:
+    default:
+      return 'gray'
+  }
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -270,436 +280,372 @@ export function SpeakerTable({
 
   if (speakers.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
-        <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-          No speakers found
-        </h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          No speakers with accepted or confirmed talks were found for this
-          conference.
-        </p>
-      </div>
+      <TableEmptyState
+        icon={UserIcon}
+        title="No speakers found"
+        description="No speakers with accepted or confirmed talks were found for this conference."
+        className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+      />
     )
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:max-w-xs">
-            <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
-              <input
-                type="text"
-                placeholder="Search speakers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="col-start-1 row-start-1 block w-full rounded-md bg-white py-2 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600 sm:pl-9 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-300 dark:focus:outline-blue-500"
-              />
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
-              />
+      <TableToolbar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search speakers..."
+        showClearButton={hasActiveFilters}
+        onClear={resetFilters}
+        resultCount={filteredSpeakers.length}
+        totalCount={speakers.length}
+        resultLabel="speakers"
+      >
+        <FilterDropdown
+          label="Filters"
+          activeCount={activeFilterCount}
+          width="wider"
+          position="right"
+        >
+          <div className="p-1.5">
+            <div className="mb-2">
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Status
+              </label>
+              <div className="space-y-0.5">
+                <FilterOption
+                  type="radio"
+                  checked={filters.status === 'all'}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, status: 'all' }))
+                  }
+                  keepOpen
+                >
+                  All
+                </FilterOption>
+                <FilterOption
+                  type="radio"
+                  checked={filters.status === 'confirmed'}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, status: 'confirmed' }))
+                  }
+                  keepOpen
+                >
+                  Confirmed
+                </FilterOption>
+                <FilterOption
+                  type="radio"
+                  checked={filters.status === 'accepted'}
+                  onClick={() =>
+                    setFilters((prev) => ({ ...prev, status: 'accepted' }))
+                  }
+                  keepOpen
+                >
+                  Accepted
+                </FilterOption>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
+              <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Speaker Type
+              </label>
+              <div className="space-y-0.5">
+                <FilterOption
+                  checked={filters.newSpeakers}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      newSpeakers: !prev.newSpeakers,
+                    }))
+                  }
+                  keepOpen
+                >
+                  New speakers only
+                </FilterOption>
+                <FilterOption
+                  checked={filters.localSpeakers}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      localSpeakers: !prev.localSpeakers,
+                    }))
+                  }
+                  keepOpen
+                >
+                  Local speakers only
+                </FilterOption>
+                <FilterOption
+                  checked={filters.underrepresentedSpeakers}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      underrepresentedSpeakers: !prev.underrepresentedSpeakers,
+                    }))
+                  }
+                  keepOpen
+                >
+                  Underrepresented speakers
+                </FilterOption>
+                <FilterOption
+                  checked={filters.travelSupportSpeakers}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      travelSupportSpeakers: !prev.travelSupportSpeakers,
+                    }))
+                  }
+                  keepOpen
+                >
+                  Travel support needed
+                </FilterOption>
+              </div>
             </div>
           </div>
+        </FilterDropdown>
 
-          {hasActiveFilters && (
-            <button
-              onClick={resetFilters}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+        <FilterDropdown
+          label="Columns"
+          activeCount={Object.values(columnVisibility).filter(Boolean).length}
+          position="right"
+        >
+          {Object.entries(columnVisibility).map(([column, isVisible]) => (
+            <FilterOption
+              key={column}
+              checked={isVisible}
+              onClick={() =>
+                toggleColumnVisibility(column as keyof ColumnVisibility)
+              }
+              keepOpen
             >
-              <XMarkIcon className="h-4 w-4" />
-              Clear
-            </button>
-          )}
-        </div>
+              {column.charAt(0).toUpperCase() + column.slice(1)}
+            </FilterOption>
+          ))}
+        </FilterDropdown>
+      </TableToolbar>
 
-        <div className="flex items-center gap-2">
-          <FilterDropdown
-            label="Filters"
-            activeCount={activeFilterCount}
-            width="wider"
-            position="right"
-          >
-            <div className="p-1.5">
-              <div className="mb-2">
-                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Status
-                </label>
-                <div className="space-y-0.5">
-                  <FilterOption
-                    type="radio"
-                    checked={filters.status === 'all'}
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, status: 'all' }))
-                    }
-                    keepOpen
-                  >
-                    All
-                  </FilterOption>
-                  <FilterOption
-                    type="radio"
-                    checked={filters.status === 'confirmed'}
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, status: 'confirmed' }))
-                    }
-                    keepOpen
-                  >
-                    Confirmed
-                  </FilterOption>
-                  <FilterOption
-                    type="radio"
-                    checked={filters.status === 'accepted'}
-                    onClick={() =>
-                      setFilters((prev) => ({ ...prev, status: 'accepted' }))
-                    }
-                    keepOpen
-                  >
-                    Accepted
-                  </FilterOption>
-                </div>
-              </div>
+      <TableContainer>
+        <table className="w-full table-fixed divide-y divide-gray-300 dark:divide-gray-700">
+          <TableHeader>
+            <tr>
+              <Th width="11rem">Speaker</Th>
+              {columnVisibility.indicators && (
+                <Th width="6rem" hiddenBelow="sm">
+                  Indicators
+                </Th>
+              )}
+              {columnVisibility.email && <Th width="12rem">Email</Th>}
+              {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
+              {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
+              <Th>Talks</Th>
+              <Th width="7rem" align="right">
+                Actions
+              </Th>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {filteredSpeakers.map((speaker) => {
+              const linkedinLink = extractLinkedInLink(speaker.links)
+              const blueskyLink = hasBlueskySocial(speaker.links)
 
-              <div className="border-t border-gray-200 pt-2 dark:border-gray-600">
-                <label className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
-                  Speaker Type
-                </label>
-                <div className="space-y-0.5">
-                  <FilterOption
-                    checked={filters.newSpeakers}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        newSpeakers: !prev.newSpeakers,
-                      }))
-                    }
-                    keepOpen
-                  >
-                    New speakers only
-                  </FilterOption>
-                  <FilterOption
-                    checked={filters.localSpeakers}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        localSpeakers: !prev.localSpeakers,
-                      }))
-                    }
-                    keepOpen
-                  >
-                    Local speakers only
-                  </FilterOption>
-                  <FilterOption
-                    checked={filters.underrepresentedSpeakers}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        underrepresentedSpeakers:
-                          !prev.underrepresentedSpeakers,
-                      }))
-                    }
-                    keepOpen
-                  >
-                    Underrepresented speakers
-                  </FilterOption>
-                  <FilterOption
-                    checked={filters.travelSupportSpeakers}
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        travelSupportSpeakers: !prev.travelSupportSpeakers,
-                      }))
-                    }
-                    keepOpen
-                  >
-                    Travel support needed
-                  </FilterOption>
-                </div>
-              </div>
-            </div>
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Columns"
-            activeCount={Object.values(columnVisibility).filter(Boolean).length}
-            position="right"
-          >
-            {Object.entries(columnVisibility).map(([column, isVisible]) => (
-              <FilterOption
-                key={column}
-                checked={isVisible}
-                onClick={() =>
-                  toggleColumnVisibility(column as keyof ColumnVisibility)
-                }
-                keepOpen
-              >
-                {column.charAt(0).toUpperCase() + column.slice(1)}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-        </div>
-      </div>
-
-      <div className="text-sm text-gray-500 dark:text-gray-400">
-        Showing {filteredSpeakers.length} of {speakers.length} speakers
-      </div>
-
-      <div className="overflow-x-auto">
-        <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
-          <table className="w-full table-fixed divide-y divide-gray-300 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th
-                  scope="col"
-                  className="w-44 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                >
-                  Speaker
-                </th>
-                {columnVisibility.indicators && (
-                  <th
-                    scope="col"
-                    className="hidden w-24 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase sm:table-cell dark:text-gray-400"
-                  >
-                    Indicators
-                  </th>
-                )}
-                {columnVisibility.email && (
-                  <th
-                    scope="col"
-                    className="w-48 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                  >
-                    Email
-                  </th>
-                )}
-                {columnVisibility.linkedin && (
-                  <th
-                    scope="col"
-                    className="w-32 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                  >
-                    LinkedIn
-                  </th>
-                )}
-                {columnVisibility.bluesky && (
-                  <th
-                    scope="col"
-                    className="w-32 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                  >
-                    Bluesky
-                  </th>
-                )}
-                <th
-                  scope="col"
-                  className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                >
-                  Talks
-                </th>
-                <th
-                  scope="col"
-                  className="w-28 px-4 py-3 text-right text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              {filteredSpeakers.map((speaker) => {
-                const linkedinLink = extractLinkedInLink(speaker.links)
-                const blueskyLink = hasBlueskySocial(speaker.links)
-
-                return (
-                  <tr
-                    key={speaker._id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-0 items-center">
-                        <div className="h-8 w-8 shrink-0">
-                          {speaker.image ? (
-                            <img
-                              className="h-8 w-8 rounded-full object-cover"
-                              src={speaker.image}
-                              alt={speaker.name}
-                            />
-                          ) : (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
-                              <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="ml-3 min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                            {speaker.name}
+              return (
+                <Tr key={speaker._id}>
+                  <Td>
+                    <div className="flex min-w-0 items-center">
+                      <div className="h-8 w-8 shrink-0">
+                        {speaker.image ? (
+                          <img
+                            className="h-8 w-8 rounded-full object-cover"
+                            src={speaker.image}
+                            alt={speaker.name}
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
+                            <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
                           </div>
-                          {speaker.title && (
-                            <div className="max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
-                              {speaker.title}
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
-                    </td>
-                    {columnVisibility.indicators && (
-                      <td className="hidden px-4 py-3 sm:table-cell">
-                        <SpeakerIndicators
-                          speakers={[speaker]}
-                          size="md"
-                          maxVisible={5}
-                          className="justify-start"
-                          currentConferenceId={currentConferenceId}
-                        />
-                      </td>
-                    )}
-                    {columnVisibility.email && (
-                      <td className="px-4 py-3">
+                      <div className="ml-3 min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                          {speaker.name}
+                        </div>
+                        {speaker.title && (
+                          <div className="max-w-45 truncate text-xs text-gray-500 dark:text-gray-400">
+                            {speaker.title}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Td>
+                  {columnVisibility.indicators && (
+                    <Td hiddenBelow="sm">
+                      <SpeakerIndicators
+                        speakers={[speaker]}
+                        size="md"
+                        maxVisible={5}
+                        className="justify-start"
+                        currentConferenceId={currentConferenceId}
+                      />
+                    </Td>
+                  )}
+                  {columnVisibility.email && (
+                    <Td>
+                      <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                        <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                        <a
+                          href={`mailto:${speaker.email}`}
+                          className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                          title={speaker.email}
+                        >
+                          {speaker.email}
+                        </a>
+                        <CopyEmailButton email={speaker.email} />
+                      </div>
+                    </Td>
+                  )}
+                  {columnVisibility.linkedin && (
+                    <Td>
+                      {linkedinLink ? (
                         <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                          <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                          <div className="mr-2 h-4 w-4 shrink-0">
+                            {iconForLink(
+                              linkedinLink,
+                              'h-4 w-4 text-gray-400 dark:text-gray-500',
+                            )}
+                          </div>
                           <a
-                            href={`mailto:${speaker.email}`}
+                            href={linkedinLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                            title={speaker.email}
+                            title={titleForLink(linkedinLink)}
                           >
-                            {speaker.email}
+                            View Profile
                           </a>
-                          <CopyEmailButton email={speaker.email} />
                         </div>
-                      </td>
-                    )}
-                    {columnVisibility.linkedin && (
-                      <td className="px-4 py-3">
-                        {linkedinLink ? (
-                          <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                            <div className="mr-2 h-4 w-4 shrink-0">
-                              {iconForLink(
-                                linkedinLink,
-                                'h-4 w-4 text-gray-400 dark:text-gray-500',
-                              )}
-                            </div>
-                            <a
-                              href={linkedinLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                              title={titleForLink(linkedinLink)}
-                            >
-                              View Profile
-                            </a>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                          -
+                        </span>
+                      )}
+                    </Td>
+                  )}
+                  {columnVisibility.bluesky && (
+                    <Td>
+                      {blueskyLink ? (
+                        <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                          <div className="mr-2 h-4 w-4 shrink-0">
+                            {iconForLink(
+                              blueskyLink,
+                              'h-4 w-4 text-gray-400 dark:text-gray-500',
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-sm text-gray-400 dark:text-gray-500">
-                            -
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {columnVisibility.bluesky && (
-                      <td className="px-4 py-3">
-                        {blueskyLink ? (
-                          <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                            <div className="mr-2 h-4 w-4 shrink-0">
-                              {iconForLink(
-                                blueskyLink,
-                                'h-4 w-4 text-gray-400 dark:text-gray-500',
-                              )}
-                            </div>
-                            <a
-                              href={blueskyLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                              title={titleForLink(blueskyLink)}
-                            >
-                              View Profile
-                            </a>
-                            <CopyBlueskyUsernameButton
-                              blueskyLink={blueskyLink}
+                          <a
+                            href={blueskyLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                            title={titleForLink(blueskyLink)}
+                          >
+                            View Profile
+                          </a>
+                          <CopyBlueskyUsernameButton
+                            blueskyLink={blueskyLink}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                          -
+                        </span>
+                      )}
+                    </Td>
+                  )}
+                  <Td>
+                    <div className="space-y-1">
+                      {speaker.proposals
+                        .filter((proposal) => {
+                          if (!currentConferenceId) return true
+                          return (
+                            getProposalConferenceId(proposal) ===
+                            currentConferenceId
+                          )
+                        })
+                        .map((proposal) => (
+                          <div
+                            key={`${speaker._id}-${proposal._id}`}
+                            className="flex items-center gap-2 text-xs"
+                          >
+                            <StatusBadge
+                              label={
+                                proposal.status.charAt(0).toUpperCase() +
+                                proposal.status.slice(1)
+                              }
+                              color={getProposalBadgeColor(proposal.status)}
+                              icon={
+                                proposal.status === Status.confirmed
+                                  ? CheckBadgeIcon
+                                  : ClockIcon
+                              }
                             />
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400 dark:text-gray-500">
-                            -
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        {speaker.proposals
-                          .filter((proposal) => {
-                            if (!currentConferenceId) return true
-                            return (
-                              getProposalConferenceId(proposal) ===
-                              currentConferenceId
-                            )
-                          })
-                          .map((proposal) => (
-                            <div
-                              key={`${speaker._id}-${proposal._id}`}
-                              className="flex items-center gap-2 text-xs"
+                            <span
+                              className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
+                              title={proposal.title}
                             >
-                              <StatusBadge status={proposal.status} />
-                              <span
-                                className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
-                                title={proposal.title}
-                              >
-                                {proposal.title}
-                              </span>
-                              <span
-                                className="shrink-0 text-gray-500 dark:text-gray-400"
-                                title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
-                              >
-                                {getCompactFormat(proposal.format)} •{' '}
-                                {languages.get(proposal.language)}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    </td>
-                    <td className="w-20 px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-end">
-                        <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
-                          <ActionMenuItem
-                            onClick={() => onEditSpeaker(speaker)}
-                            icon={PencilIcon}
-                          >
-                            Edit Speaker
-                          </ActionMenuItem>
-                          <ActionMenuItem
-                            onClick={() => onPreviewSpeaker(speaker)}
-                            icon={EyeIcon}
-                          >
-                            Preview Profile
-                          </ActionMenuItem>
-                          {AppEnvironment.isDevelopment && (
-                            <>
-                              <ActionMenuDivider />
-                              <ActionMenuItem
-                                onClick={async () => {
-                                  const { addImpersonateParam } =
-                                    await import('@/lib/impersonation')
-                                  window.open(
-                                    addImpersonateParam(
-                                      '/cfp/list',
-                                      speaker._id,
-                                    ),
-                                    '_blank',
-                                  )
-                                }}
-                                icon={ArrowRightCircleIcon}
-                              >
-                                View as Speaker (dev)
-                              </ActionMenuItem>
-                            </>
-                          )}
-                        </ActionMenu>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                              {proposal.title}
+                            </span>
+                            <span
+                              className="shrink-0 text-gray-500 dark:text-gray-400"
+                              title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
+                            >
+                              {getCompactFormat(proposal.format)} •{' '}
+                              {languages.get(proposal.language)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    <div className="flex items-center justify-end">
+                      <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
+                        <ActionMenuItem
+                          onClick={() => onEditSpeaker(speaker)}
+                          icon={PencilIcon}
+                        >
+                          Edit Speaker
+                        </ActionMenuItem>
+                        <ActionMenuItem
+                          onClick={() => onPreviewSpeaker(speaker)}
+                          icon={EyeIcon}
+                        >
+                          Preview Profile
+                        </ActionMenuItem>
+                        {AppEnvironment.isDevelopment && (
+                          <>
+                            <ActionMenuDivider />
+                            <ActionMenuItem
+                              onClick={async () => {
+                                const { addImpersonateParam } =
+                                  await import('@/lib/impersonation')
+                                window.open(
+                                  addImpersonateParam('/cfp/list', speaker._id),
+                                  '_blank',
+                                )
+                              }}
+                              icon={ArrowRightCircleIcon}
+                            >
+                              View as Speaker (dev)
+                            </ActionMenuItem>
+                          </>
+                        )}
+                      </ActionMenu>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </TableBody>
+        </table>
+      </TableContainer>
     </div>
   )
 }

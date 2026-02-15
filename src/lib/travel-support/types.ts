@@ -1,3 +1,5 @@
+import { CURRENCY_VALUES } from '../../../sanity/schemaTypes/constants'
+
 export enum TravelSupportStatus {
   DRAFT = 'draft',
   SUBMITTED = 'submitted',
@@ -20,15 +22,7 @@ export enum ExpenseStatus {
   REJECTED = 'rejected',
 }
 
-export const SUPPORTED_CURRENCIES = [
-  'NOK',
-  'USD',
-  'EUR',
-  'GBP',
-  'SEK',
-  'DKK',
-  'OTHER',
-] as const
+export const SUPPORTED_CURRENCIES = CURRENCY_VALUES
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
 

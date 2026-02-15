@@ -55,7 +55,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     const sfc = await clientReadUncached.fetch<{
       _id: string
       sponsor: { name: string }
-      contact_persons?: Array<{
+      contactPersons?: Array<{
         _key: string
         name: string
         email: string
@@ -66,7 +66,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
         _id,
         sponsor->{ name },
-        contact_persons[]{ _key, name, email, phone, role }
+        contactPersons[]{ _key, name, email, phone, role }
       }`,
       { sponsorId, conferenceId: conference!._id },
     )
@@ -82,8 +82,8 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const ccEmails: string[] = []
 
-    if (sfc.contact_persons) {
-      sfc.contact_persons.forEach(
+    if (sfc.contactPersons) {
+      sfc.contactPersons.forEach(
         (contact: {
           _key: string
           name: string

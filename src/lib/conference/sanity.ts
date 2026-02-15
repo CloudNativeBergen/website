@@ -122,7 +122,7 @@ export async function getConferenceForDomain(
       }
       ${
         featuredSpeakers
-          ? `featured_speakers[]->{
+          ? `featuredSpeakers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url,
@@ -138,7 +138,7 @@ export async function getConferenceForDomain(
       }
       ${
         featuredTalks
-          ? `featured_talks[]->{
+          ? `featuredTalks[]->{
       _id,
       title,
       description,
@@ -204,13 +204,13 @@ export async function getConferenceForDomain(
       }
       ${
         sponsorTiers
-          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tier_type asc, title asc, price[0].amount desc){
+          ? `"sponsorTiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tierType asc, title asc, price[0].amount desc){
       _id,
       _createdAt,
       _updatedAt,
       title,
       tagline,
-      tier_type,
+      tierType,
       price[]{
         _key,
         amount,
@@ -221,9 +221,9 @@ export async function getConferenceForDomain(
         label,
         description
       },
-      sold_out,
-      most_popular,
-      max_quantity
+      soldOut,
+      mostPopular,
+      maxQuantity
       },`
           : ''
       }
@@ -334,7 +334,7 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
   error: Error | null
 }> {
   try {
-    const query = `*[_type == "conference" && checkin_event_id == $eventId][0]`
+    const query = `*[_type == "conference" && checkinEventId == $eventId][0]`
 
     const conference = await clientWrite.fetch<Conference>(query, { eventId })
 

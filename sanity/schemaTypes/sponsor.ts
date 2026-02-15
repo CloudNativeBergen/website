@@ -23,17 +23,31 @@ export default defineType({
       type: 'inlineSvg',
     }),
     defineField({
-      name: 'logo_bright',
+      name: 'logoBright',
       title: 'Logo (Bright)',
       type: 'inlineSvg',
       description:
         'Optional bright/white version of the logo for use on dark backgrounds',
     }),
     defineField({
-      name: 'org_number',
+      name: 'orgNumber',
       title: 'Organization Number',
       type: 'string',
       description: 'Company registration number or organization number',
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
+    defineField({
+      name: 'address',
+      title: 'Address',
+      type: 'string',
+      description: 'Registered company address (used in contracts)',
       hidden: ({ currentUser }) => {
         return !(
           currentUser != null &&

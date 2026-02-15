@@ -10,70 +10,11 @@ import {
   CheckCircleIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline'
-import clsx from 'clsx'
+import { MetricCard } from '../stats'
+import { formatCurrency } from '@/lib/format'
 
 interface SponsorDashboardMetricsProps {
   conferenceId: string
-}
-
-interface MetricCardProps {
-  title: string
-  value: string | number
-  subtitle?: string
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-  trend?: 'up' | 'down' | 'neutral'
-  isLoading?: boolean
-}
-
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  trend,
-  isLoading,
-}: MetricCardProps) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-            {title}
-          </p>
-          {isLoading ? (
-            <div className="mt-2 h-8 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-          ) : (
-            <p className="mt-2 text-3xl font-semibold text-gray-900 dark:text-white">
-              {value}
-            </p>
-          )}
-          {subtitle && (
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {subtitle}
-            </p>
-          )}
-        </div>
-        <div
-          className={clsx(
-            'rounded-full p-3',
-            trend === 'up' && 'bg-green-100 dark:bg-green-900/20',
-            trend === 'down' && 'bg-red-100 dark:bg-red-900/20',
-            (!trend || trend === 'neutral') && 'bg-gray-100 dark:bg-gray-700',
-          )}
-        >
-          <Icon
-            className={clsx(
-              'h-6 w-6',
-              trend === 'up' && 'text-green-600 dark:text-green-400',
-              trend === 'down' && 'text-red-600 dark:text-red-400',
-              (!trend || trend === 'neutral') &&
-                'text-gray-600 dark:text-gray-400',
-            )}
-          />
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function calculateMetrics(
@@ -86,21 +27,21 @@ function calculateMetrics(
   )
 
   const totalRevenueNOK = closedWon.reduce((sum, sponsor) => {
-    if (!sponsor.contract_value) return sum
+    if (!sponsor.contractValue) return sum
     const valueInNOK = convertCurrency(
-      sponsor.contract_value,
-      sponsor.contract_currency,
+      sponsor.contractValue,
+      sponsor.contractCurrency,
       'NOK',
     )
     return sum + valueInNOK
   }, 0)
 
-  const paidInvoices = closedWon.filter((s) => s.invoice_status === 'paid')
+  const paidInvoices = closedWon.filter((s) => s.invoiceStatus === 'paid')
   const paidRevenueNOK = paidInvoices.reduce((sum, sponsor) => {
-    if (!sponsor.contract_value) return sum
+    if (!sponsor.contractValue) return sum
     const valueInNOK = convertCurrency(
-      sponsor.contract_value,
-      sponsor.contract_currency,
+      sponsor.contractValue,
+      sponsor.contractCurrency,
       'NOK',
     )
     return sum + valueInNOK
@@ -118,7 +59,7 @@ function calculateMetrics(
   })
 
   const overdueInvoices = closedWon.filter(
-    (s) => s.invoice_status === 'overdue',
+    (s) => s.invoiceStatus === 'overdue',
   ).length
 
   return {
@@ -157,14 +98,6 @@ export function SponsorDashboardMetrics({
   }, [sponsors, exchangeRates, convertCurrency])
 
   const isLoading = isLoadingSponsors || isLoadingRates
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
 
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

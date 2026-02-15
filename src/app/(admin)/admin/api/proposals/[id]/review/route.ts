@@ -25,7 +25,7 @@ export const POST = auth(
       await getProposalSanity({
         id: id,
         speakerId: req.auth!.speaker._id,
-        isOrganizer: req.auth!.speaker.is_organizer,
+        isOrganizer: req.auth!.speaker.isOrganizer,
         includeReviews: true,
       })
     if (checkErr || !existingProposal) {

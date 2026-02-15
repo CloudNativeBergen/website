@@ -61,9 +61,9 @@ export function WorkshopCapacityWidget({
               <div className="mt-1 flex items-baseline gap-1">
                 <CalendarIcon className="h-4 w-4 text-gray-400" />
                 <div className="text-sm font-bold text-gray-900 dark:text-white">
-                  {conference.workshop_registration_start
+                  {conference.workshopRegistrationStart
                     ? new Date(
-                        conference.workshop_registration_start,
+                        conference.workshopRegistrationStart,
                       ).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',

@@ -94,8 +94,8 @@ describe('Bulk Sponsor CRM Operations', () => {
       await bulkUpdateSponsors(
         {
           ids: ['s1'],
-          add_tags: ['high-priority'],
-          remove_tags: ['warm-lead'],
+          addTags: ['high-priority'],
+          removeTags: ['warm-lead'],
         },
         mockUserId,
       )
@@ -142,6 +142,56 @@ describe('Bulk Sponsor CRM Operations', () => {
       expect(mockTransactionInstance.delete).toHaveBeenCalledWith('activity-2')
 
       expect(mockTransactionInstance.commit).toHaveBeenCalled()
+    })
+
+    it('deletes contract assets when deleteContractAssets option is true', async () => {
+      // First fetch: activity IDs, second: candidate asset IDs, third: safe-to-delete asset IDs
+      ;(clientWrite.fetch as any)
+        .mockResolvedValueOnce(['activity-1'])
+        .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
+        .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
+
+      const mockTransactionInstance = {
+        patch: jest.fn().mockReturnThis(),
+        create: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
+        // @ts-ignore
+        commit: jest.fn().mockResolvedValue({}),
+      }
+      // @ts-ignore
+      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+
+      const result = await bulkDeleteSponsors(['s1'], {
+        deleteContractAssets: true,
+      })
+
+      expect(result.success).toBe(true)
+
+      // Should delete sponsor, activity, and both contract assets
+      expect(mockTransactionInstance.delete).toHaveBeenCalledWith('s1')
+      expect(mockTransactionInstance.delete).toHaveBeenCalledWith('activity-1')
+      expect(mockTransactionInstance.delete).toHaveBeenCalledWith('asset-pdf-1')
+      expect(mockTransactionInstance.delete).toHaveBeenCalledWith('asset-pdf-2')
+    })
+
+    it('does not fetch contract assets when deleteContractAssets is false', async () => {
+      // @ts-ignore
+      ;(clientWrite.fetch as any).mockResolvedValue([])
+
+      const mockTransactionInstance = {
+        patch: jest.fn().mockReturnThis(),
+        create: jest.fn().mockReturnThis(),
+        delete: jest.fn().mockReturnThis(),
+        // @ts-ignore
+        commit: jest.fn().mockResolvedValue({}),
+      }
+      // @ts-ignore
+      ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
+
+      await bulkDeleteSponsors(['s1'])
+
+      // Only one fetch call for activities, not a second for assets
+      expect(clientWrite.fetch).toHaveBeenCalledTimes(1)
     })
   })
 })

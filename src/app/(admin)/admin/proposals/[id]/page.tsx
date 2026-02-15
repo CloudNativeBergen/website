@@ -5,12 +5,12 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   ProposalDetail,
   ErrorDisplay,
-  BackToProposalsButton,
   ProposalReviewPanel,
   AdminActionBar,
   ProposalPublishedContent,
   AudienceFeedbackPanel,
 } from '@/components/admin'
+import { BackLink } from '@/components/BackButton'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -59,7 +59,9 @@ export default async function ProposalDetailPage({
           <div className="mx-auto max-w-4xl p-4 lg:p-0">
             <div className="mb-8">
               <div className="mb-4 flex items-center justify-between">
-                <BackToProposalsButton />
+                <BackLink fallbackUrl="/admin/proposals">
+                  Back to Proposals
+                </BackLink>
 
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
@@ -74,7 +76,7 @@ export default async function ProposalDetailPage({
               <AdminActionBar
                 proposal={proposal}
                 domain={domain}
-                fromEmail={conference.cfp_email}
+                fromEmail={conference.cfpEmail}
                 conference={conference}
               />
             </div>
@@ -90,13 +92,13 @@ export default async function ProposalDetailPage({
               currentVideoUrl={getProposalVideoUrl(proposal)}
               currentAttachments={proposal.attachments}
               status={proposal.status}
-              conferenceEndDate={conference.end_date}
+              conferenceEndDate={conference.endDate}
             />
             <AudienceFeedbackPanel
               proposalId={proposal._id}
               currentFeedback={proposal.audienceFeedback}
               status={proposal.status}
-              conferenceStartDate={conference.start_date}
+              conferenceStartDate={conference.startDate}
             />
           </div>
           <ProposalReviewPanel

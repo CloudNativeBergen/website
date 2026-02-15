@@ -45,8 +45,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const schedules: ConferenceSchedule[] = conference.schedules || []
 
     const conferenceDates = generateConferenceDates(
-      conference.start_date,
-      conference.end_date,
+      conference.startDate,
+      conference.endDate,
     )
 
     const existingDates = new Set(schedules.map((s) => s.date))

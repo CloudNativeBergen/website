@@ -44,7 +44,7 @@ export default async function AdminSponsorContacts() {
 
     const sponsorsWithContactPersons = crmSponsors.filter(
       (s: SponsorForConferenceExpanded) =>
-        Array.isArray(s.contact_persons) && s.contact_persons.length > 0,
+        Array.isArray(s.contactPersons) && s.contactPersons.length > 0,
     )
 
     const sponsorsWithBillingInfo = crmSponsors.filter(
@@ -78,7 +78,7 @@ export default async function AdminSponsorContacts() {
           actions={
             <SponsorContactActions
               sponsorsWithContactsCount={sponsorsWithContactPersons.length}
-              fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`}
+              fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`}
               conference={conference}
             />
           }

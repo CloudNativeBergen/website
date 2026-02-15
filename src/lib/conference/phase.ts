@@ -19,9 +19,9 @@ export type ConferencePhase =
  * Determine current conference phase based on dates and state
  *
  * Phase transitions:
- * 1. Initialization → Planning: CFP opens (cfp_start_date)
- * 2. Planning → Execution: Program published (program_date)
- * 3. Execution → Post-Conference: Day after event ends (end_date + 1)
+ * 1. Initialization → Planning: CFP opens (cfpStartDate)
+ * 2. Planning → Execution: Program published (programDate)
+ * 3. Execution → Post-Conference: Day after event ends (endDate + 1)
  */
 export function getCurrentPhase(conference: Conference): ConferencePhase {
   // Post-conference: After event ends
@@ -41,11 +41,11 @@ export function getCurrentPhase(conference: Conference): ConferencePhase {
 
   // Check if CFP has closed but program not yet published (still planning/review)
   const now = new Date()
-  const cfpEnd = conference.cfp_end_date
-    ? new Date(conference.cfp_end_date + 'T23:59:59.999Z')
+  const cfpEnd = conference.cfpEndDate
+    ? new Date(conference.cfpEndDate + 'T23:59:59.999Z')
     : null
-  const programDate = conference.program_date
-    ? new Date(conference.program_date)
+  const programDate = conference.programDate
+    ? new Date(conference.programDate)
     : null
 
   if (cfpEnd && programDate && now > cfpEnd && now < programDate) {
@@ -74,44 +74,44 @@ export function getPhaseContext(conference: Conference) {
     isConferenceOver: isConferenceOver(conference),
 
     // Countdown timers (in days)
-    daysUntilCfpStart: conference.cfp_start_date
+    daysUntilCfpStart: conference.cfpStartDate
       ? Math.ceil(
-          (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
+          (new Date(conference.cfpStartDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,
 
-    daysUntilCfpClose: conference.cfp_end_date
+    daysUntilCfpClose: conference.cfpEndDate
       ? Math.ceil(
-          (new Date(conference.cfp_end_date).getTime() - now.getTime()) /
+          (new Date(conference.cfpEndDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,
 
-    daysUntilNotification: conference.cfp_notify_date
+    daysUntilNotification: conference.cfpNotifyDate
       ? Math.ceil(
-          (new Date(conference.cfp_notify_date).getTime() - now.getTime()) /
+          (new Date(conference.cfpNotifyDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,
 
-    daysUntilProgramRelease: conference.program_date
+    daysUntilProgramRelease: conference.programDate
       ? Math.ceil(
-          (new Date(conference.program_date).getTime() - now.getTime()) /
+          (new Date(conference.programDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,
 
-    daysUntilConference: conference.start_date
+    daysUntilConference: conference.startDate
       ? Math.ceil(
-          (new Date(conference.start_date).getTime() - now.getTime()) /
+          (new Date(conference.startDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,
 
-    daysSinceConference: conference.end_date
+    daysSinceConference: conference.endDate
       ? Math.ceil(
-          (now.getTime() - new Date(conference.end_date).getTime()) /
+          (now.getTime() - new Date(conference.endDate).getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : null,

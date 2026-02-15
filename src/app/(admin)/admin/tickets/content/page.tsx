@@ -21,10 +21,10 @@ export default async function TicketContentAdminPage() {
       <TicketPageContentEditor
         conferenceId={conference._id}
         conferenceTitle={conference.title}
-        initialCustomization={conference.ticket_customization ?? {}}
-        initialInclusions={conference.ticket_inclusions ?? []}
-        initialFaqs={conference.ticket_faqs ?? []}
-        vanityMetrics={conference.vanity_metrics ?? []}
+        initialCustomization={conference.ticketCustomization ?? {}}
+        initialInclusions={conference.ticketInclusions ?? []}
+        initialFaqs={conference.ticketFaqs ?? []}
+        vanityMetrics={conference.vanityMetrics ?? []}
       />
     </div>
   )

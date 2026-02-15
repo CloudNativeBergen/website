@@ -44,7 +44,7 @@ import type { WorkshopStatistics } from '@/lib/workshop/types'
 
 async function requireOrganizer(): Promise<void> {
   const session = await getAuthSession()
-  if (!session?.speaker?.is_organizer) {
+  if (!session?.speaker?.isOrganizer) {
     throw new Error('Unauthorized: organizer access required')
   }
 }
@@ -88,7 +88,7 @@ export async function fetchSponsorPipelineData(
       .map((s) => ({
         name: s.sponsor?.name || 'Unknown',
         logo: s.sponsor?.logo || undefined,
-        logoBright: s.sponsor?.logo_bright || undefined,
+        logoBright: s.sponsor?.logoBright || undefined,
       }))
 
     return {
@@ -102,9 +102,9 @@ export async function fetchSponsorPipelineData(
   const activities = activityResult.activities || []
   const recentActivity = activities.slice(0, 5).map((a) => ({
     id: a._id,
-    sponsor: a.sponsor_for_conference?.sponsor?.name || 'Unknown',
+    sponsor: a.sponsorForConference?.sponsor?.name || 'Unknown',
     activity: a.description,
-    timestamp: formatRelativeTime(a.created_at || a._createdAt),
+    timestamp: formatRelativeTime(a.createdAt || a._createdAt),
   }))
 
   return {
@@ -140,7 +140,7 @@ export async function fetchDeadlines(
   if (ctx.daysUntilCfpStart !== null && ctx.daysUntilCfpStart > 0) {
     candidates.push({
       name: 'CFP Opens',
-      date: conference.cfp_start_date,
+      date: conference.cfpStartDate,
       daysRemaining: ctx.daysUntilCfpStart,
       phase: 'Preparation',
       action: 'Configure CFP',
@@ -151,7 +151,7 @@ export async function fetchDeadlines(
   if (ctx.daysUntilCfpClose !== null && ctx.daysUntilCfpClose > 0) {
     candidates.push({
       name: 'CFP Closes',
-      date: conference.cfp_end_date,
+      date: conference.cfpEndDate,
       daysRemaining: ctx.daysUntilCfpClose,
       phase: ctx.isCfpOpen ? 'CFP Open' : 'Preparation',
       action: ctx.isCfpOpen ? 'Promote CFP' : undefined,
@@ -162,7 +162,7 @@ export async function fetchDeadlines(
   if (ctx.daysUntilNotification !== null && ctx.daysUntilNotification > 0) {
     candidates.push({
       name: 'Notify Speakers',
-      date: conference.cfp_notify_date,
+      date: conference.cfpNotifyDate,
       daysRemaining: ctx.daysUntilNotification,
       phase: 'Review',
       action: 'Review Proposals',
@@ -173,7 +173,7 @@ export async function fetchDeadlines(
   if (ctx.daysUntilProgramRelease !== null && ctx.daysUntilProgramRelease > 0) {
     candidates.push({
       name: 'Program Published',
-      date: conference.program_date,
+      date: conference.programDate,
       daysRemaining: ctx.daysUntilProgramRelease,
       phase: 'Program',
       action: 'Build Schedule',
@@ -184,7 +184,7 @@ export async function fetchDeadlines(
   if (ctx.daysUntilConference !== null && ctx.daysUntilConference > 0) {
     candidates.push({
       name: 'Conference Day',
-      date: conference.start_date,
+      date: conference.startDate,
       daysRemaining: ctx.daysUntilConference,
       phase: 'Event',
     })
@@ -253,8 +253,8 @@ export async function fetchCFPHealth(
   )
 
   // Compute average per day
-  const cfpStart = conference.cfp_start_date
-    ? new Date(conference.cfp_start_date)
+  const cfpStart = conference.cfpStartDate
+    ? new Date(conference.cfpStartDate)
     : null
   const now = new Date()
   const daysSinceOpen = cfpStart
@@ -270,7 +270,7 @@ export async function fetchCFPHealth(
 
   return {
     totalSubmissions: submitted.length,
-    submissionGoal: conference.cfp_submission_goal || 0,
+    submissionGoal: conference.cfpSubmissionGoal || 0,
     daysRemaining: Math.max(0, daysRemaining),
     averagePerDay,
     submissionsPerDay,
@@ -345,17 +345,17 @@ export async function fetchTicketSales(
 ): Promise<TicketSalesData | null> {
   await requireOrganizer()
 
-  if (!conference.checkin_customer_id || !conference.checkin_event_id) {
+  if (!conference.checkinCustomerId || !conference.checkinEventId) {
     return null
   }
 
   try {
     const tickets = await fetchEventTickets(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
+      conference.checkinCustomerId,
+      conference.checkinEventId,
     )
 
-    const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
+    const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
 
     if (!tickets || tickets.length === 0) {
       return {
@@ -382,7 +382,7 @@ export async function fetchTicketSales(
       }
     }
 
-    const targetConfig = conference.ticket_targets || DEFAULT_TARGET_CONFIG
+    const targetConfig = conference.ticketTargets || DEFAULT_TARGET_CONFIG
 
     const input: ProcessTicketSalesInput = {
       tickets: tickets.map((t) => ({
@@ -395,8 +395,8 @@ export async function fetchTicketSales(
       capacity,
       conference,
       conferenceDate:
-        conference.start_date ||
-        conference.program_date ||
+        conference.startDate ||
+        conference.programDate ||
         new Date().toISOString(),
       speakerCount: 0,
     }
@@ -482,12 +482,12 @@ export async function fetchRecentActivity(
 
   const activities = activityResult.activities || []
   for (const a of activities) {
-    const isoDate = a.created_at || a._createdAt
+    const isoDate = a.createdAt || a._createdAt
     items.push({
       id: a._id,
       type: 'sponsor',
-      description: `${a.sponsor_for_conference?.sponsor?.name || 'Sponsor'}: ${a.description}`,
-      user: a.created_by?.name || 'System',
+      description: `${a.sponsorForConference?.sponsor?.name || 'Sponsor'}: ${a.description}`,
+      user: a.createdBy?.name || 'System',
       timestamp: formatRelativeTime(isoDate),
       link: '/admin/sponsors/crm',
       _sortDate: isoDate,
@@ -887,7 +887,7 @@ export async function fetchTravelSupport(
     0,
   )
 
-  const budgetAllocated = conference.travel_support_budget || 0
+  const budgetAllocated = conference.travelSupportBudget || 0
 
   return {
     pendingApprovals: pending.length,
@@ -998,13 +998,13 @@ export async function fetchScheduleStatus(
 
 interface DashboardConfigWidget {
   _key: string
-  widget_id: string
-  widget_type: string
+  widgetId: string
+  widgetType: string
   title: string
   row: number
   col: number
-  row_span: number
-  col_span: number
+  rowSpan: number
+  colSpan: number
   config?: string
 }
 
@@ -1037,14 +1037,14 @@ export async function loadDashboardConfig(
   if (!doc?.widgets?.length) return null
 
   return doc.widgets.map((w) => ({
-    id: w.widget_id,
-    type: w.widget_type,
-    title: w.title || w.widget_type,
+    id: w.widgetId,
+    type: w.widgetType,
+    title: w.title || w.widgetType,
     position: {
       row: w.row || 0,
       col: w.col || 0,
-      rowSpan: w.row_span || 2,
-      colSpan: w.col_span || 3,
+      rowSpan: w.rowSpan || 2,
+      colSpan: w.colSpan || 3,
     },
     config: (() => {
       if (!w.config) return undefined
@@ -1070,13 +1070,13 @@ export async function saveDashboardConfig(
 
   const widgetDocs: DashboardConfigWidget[] = widgets.map((w, i) => ({
     _key: `widget-${i}`,
-    widget_id: w.id,
-    widget_type: w.type,
+    widgetId: w.id,
+    widgetType: w.type,
     title: w.title,
     row: w.position.row,
     col: w.position.col,
-    row_span: w.position.rowSpan,
-    col_span: w.position.colSpan,
+    rowSpan: w.position.rowSpan,
+    colSpan: w.position.colSpan,
     config: w.config ? JSON.stringify(w.config) : undefined,
   }))
 

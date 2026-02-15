@@ -37,8 +37,8 @@ export function CompactConferenceHeader({
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
           <div className="flex items-center gap-1">
             <CalendarIcon className="h-3.5 w-3.5" />
-            <time dateTime={conference.start_date}>
-              {formatDatesSafe(conference.start_date, conference.end_date)}
+            <time dateTime={conference.startDate}>
+              {formatDatesSafe(conference.startDate, conference.endDate)}
             </time>
           </div>
           <div className="flex items-center gap-1">

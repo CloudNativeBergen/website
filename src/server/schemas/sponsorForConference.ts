@@ -20,8 +20,17 @@ export const InvoiceStatusSchema = z.enum([
 export const ContractStatusSchema = z.enum([
   'none',
   'verbal-agreement',
+  'registration-sent',
   'contract-sent',
   'contract-signed',
+])
+
+export const SignatureStatusSchema = z.enum([
+  'not-started',
+  'pending',
+  'signed',
+  'rejected',
+  'expired',
 ])
 
 export const SponsorTagSchema = z.enum([
@@ -52,26 +61,31 @@ export const SponsorForConferenceInputSchema = z.object({
       },
       { message: 'Addon IDs must be unique' },
     ),
-  contract_status: ContractStatusSchema,
+  contractStatus: ContractStatusSchema,
+  signatureStatus: SignatureStatusSchema.optional(),
+  signerName: z.string().optional(),
+  signerEmail: z.string().email().optional(),
+  signingUrl: z.string().url().optional(),
+  contractTemplate: z.string().optional(),
   status: SponsorStatusSchema,
-  assigned_to: z.string().nullable().optional(),
-  contact_initiated_at: z.string().optional(),
-  contract_signed_at: z.string().optional(),
-  contract_value: z.number().min(0).optional(),
-  contract_currency: CurrencySchema.optional(),
-  invoice_status: InvoiceStatusSchema,
-  invoice_sent_at: z.string().optional(),
-  invoice_paid_at: z.string().optional(),
+  assignedTo: z.string().nullable().optional(),
+  contactInitiatedAt: z.string().optional(),
+  contractSignedAt: z.string().optional(),
+  contractValue: z.number().min(0).optional(),
+  contractCurrency: CurrencySchema.optional(),
+  invoiceStatus: InvoiceStatusSchema,
+  invoiceSentAt: z.string().optional(),
+  invoicePaidAt: z.string().optional(),
   notes: z.string().optional(),
   tags: z.array(SponsorTagSchema).optional(),
-  contact_persons: z
+  contactPersons: z
     .array(
       ContactPersonSchema.extend({
-        is_primary: z.boolean().optional(),
+        isPrimary: z.boolean().optional(),
       }),
     )
     .optional()
-    .refine((arr) => !arr || arr.filter((c) => c.is_primary).length <= 1, {
+    .refine((arr) => !arr || arr.filter((c) => c.isPrimary).length <= 1, {
       message: 'Only one contact can be marked as primary',
     }),
   billing: BillingInfoSchema.optional(),
@@ -91,26 +105,31 @@ export const SponsorForConferenceUpdateSchema = z.object({
       },
       { message: 'Addon IDs must be unique' },
     ),
-  contract_status: ContractStatusSchema.optional(),
+  contractStatus: ContractStatusSchema.optional(),
+  signatureStatus: SignatureStatusSchema.optional(),
+  signerName: z.string().nullable().optional(),
+  signerEmail: z.string().email().nullable().optional(),
+  signingUrl: z.string().url().nullable().optional(),
+  contractTemplate: z.string().nullable().optional(),
   status: SponsorStatusSchema.optional(),
-  assigned_to: z.string().nullable().optional(),
-  contact_initiated_at: z.string().nullable().optional(),
-  contract_signed_at: z.string().nullable().optional(),
-  contract_value: z.number().min(0).nullable().optional(),
-  contract_currency: CurrencySchema.optional(),
-  invoice_status: InvoiceStatusSchema.optional(),
-  invoice_sent_at: z.string().nullable().optional(),
-  invoice_paid_at: z.string().nullable().optional(),
+  assignedTo: z.string().nullable().optional(),
+  contactInitiatedAt: z.string().nullable().optional(),
+  contractSignedAt: z.string().nullable().optional(),
+  contractValue: z.number().min(0).nullable().optional(),
+  contractCurrency: CurrencySchema.optional(),
+  invoiceStatus: InvoiceStatusSchema.optional(),
+  invoiceSentAt: z.string().nullable().optional(),
+  invoicePaidAt: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   tags: z.array(SponsorTagSchema).optional(),
-  contact_persons: z
+  contactPersons: z
     .array(
       ContactPersonSchema.extend({
-        is_primary: z.boolean().optional(),
+        isPrimary: z.boolean().optional(),
       }),
     )
     .optional()
-    .refine((arr) => !arr || arr.filter((c) => c.is_primary).length <= 1, {
+    .refine((arr) => !arr || arr.filter((c) => c.isPrimary).length <= 1, {
       message: 'Only one contact can be marked as primary',
     }),
   billing: BillingInfoSchema.nullable().optional(),
@@ -118,6 +137,12 @@ export const SponsorForConferenceUpdateSchema = z.object({
 
 export const SponsorForConferenceIdSchema = z.object({
   id: z.string().min(1, 'ID is required'),
+})
+
+export const DeleteSponsorSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  cancelAgreement: z.boolean().optional(),
+  deleteContractAsset: z.boolean().optional(),
 })
 
 export const MoveStageSchema = z.object({
@@ -135,6 +160,11 @@ export const UpdateContractStatusSchema = z.object({
   newStatus: ContractStatusSchema,
 })
 
+export const UpdateSignatureStatusSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  newStatus: SignatureStatusSchema,
+})
+
 export const CopySponsorsSchema = z.object({
   sourceConferenceId: z.string().min(1, 'Source conference ID is required'),
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
@@ -145,18 +175,20 @@ export const BulkUpdateSponsorCRMSchema = z.object({
     .array(z.string().min(1))
     .min(1, 'At least one sponsor must be selected'),
   status: SponsorStatusSchema.optional(),
-  contract_status: ContractStatusSchema.optional(),
-  invoice_status: InvoiceStatusSchema.optional(),
-  assigned_to: z.string().nullable().optional(),
+  contractStatus: ContractStatusSchema.optional(),
+  invoiceStatus: InvoiceStatusSchema.optional(),
+  assignedTo: z.string().nullable().optional(),
   tags: z.array(SponsorTagSchema).optional(),
-  add_tags: z.array(SponsorTagSchema).optional(),
-  remove_tags: z.array(SponsorTagSchema).optional(),
+  addTags: z.array(SponsorTagSchema).optional(),
+  removeTags: z.array(SponsorTagSchema).optional(),
 })
 
 export const BulkDeleteSponsorCRMSchema = z.object({
   ids: z
     .array(z.string().min(1))
     .min(1, 'At least one sponsor must be selected'),
+  cancelAgreements: z.boolean().optional(),
+  deleteContractAssets: z.boolean().optional(),
 })
 
 export const ImportAllHistoricSponsorsSchema = z.object({

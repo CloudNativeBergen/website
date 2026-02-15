@@ -44,14 +44,14 @@ export function ProposalPipelineWidget({
     const now = new Date()
     const daysUntilCFP = conference
       ? Math.ceil(
-          (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
+          (new Date(conference.cfpStartDate).getTime() - now.getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : 0
     const cfpDuration = conference
       ? Math.ceil(
-          (new Date(conference.cfp_end_date).getTime() -
-            new Date(conference.cfp_start_date).getTime()) /
+          (new Date(conference.cfpEndDate).getTime() -
+            new Date(conference.cfpStartDate).getTime()) /
             (1000 * 60 * 60 * 24),
         )
       : 0

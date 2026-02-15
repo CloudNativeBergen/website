@@ -1,16 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   SponsorStatus,
   ContractStatus,
   InvoiceStatus,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { STATUSES, TAGS } from './form/constants'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import {
+  SponsorDeleteModal,
+  type DeleteCleanupOptions,
+} from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import {
   XMarkIcon,
   ChevronDownIcon,
@@ -30,22 +34,24 @@ import clsx from 'clsx'
 
 interface SponsorBulkActionsProps {
   selectedIds: string[]
+  sponsors: SponsorForConferenceExpanded[]
   onClearSelection: () => void
   onSuccess: () => void
 }
 
 interface BulkUpdateParams {
   status?: SponsorStatus
-  contract_status?: ContractStatus
-  invoice_status?: InvoiceStatus
-  assigned_to?: string | null
+  contractStatus?: ContractStatus
+  invoiceStatus?: InvoiceStatus
+  assignedTo?: string | null
   tags?: SponsorTag[]
-  add_tags?: SponsorTag[]
-  remove_tags?: SponsorTag[]
+  addTags?: SponsorTag[]
+  removeTags?: SponsorTag[]
 }
 
 export function SponsorBulkActions({
   selectedIds,
+  sponsors,
   onClearSelection,
   onSuccess,
 }: SponsorBulkActionsProps) {
@@ -53,6 +59,22 @@ export function SponsorBulkActions({
   const utils = api.useUtils()
   const [isProcessing, setIsProcessing] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const selectedSponsors = useMemo(
+    () => sponsors.filter((s) => selectedIds.includes(s._id)),
+    [sponsors, selectedIds],
+  )
+  const hasPendingAgreement = useMemo(
+    () =>
+      selectedSponsors.some(
+        (s) => s.signatureStatus === 'pending' && s.signatureId,
+      ),
+    [selectedSponsors],
+  )
+  const hasContractDocument = useMemo(
+    () => selectedSponsors.some((s) => s.contractDocument),
+    [selectedSponsors],
+  )
 
   const bulkUpdateMutation = api.sponsor.crm.bulkUpdate.useMutation({
     onSuccess: (result) => {
@@ -112,11 +134,13 @@ export function SponsorBulkActions({
     setShowDeleteConfirm(true)
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (options: DeleteCleanupOptions) => {
     setShowDeleteConfirm(false)
     setIsProcessing(true)
     await bulkDeleteMutation.mutateAsync({
       ids: selectedIds,
+      cancelAgreements: options.cancelAgreement,
+      deleteContractAssets: options.deleteContractAsset,
     })
   }
 
@@ -210,7 +234,7 @@ export function SponsorBulkActions({
                 <MenuItem>
                   {({ focus }) => (
                     <button
-                      onClick={() => handleUpdate({ assigned_to: null })}
+                      onClick={() => handleUpdate({ assignedTo: null })}
                       className={clsx(
                         'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                         focus && 'bg-gray-100 dark:bg-gray-700',
@@ -225,7 +249,7 @@ export function SponsorBulkActions({
                   <MenuItem key={org._id}>
                     {({ focus }) => (
                       <button
-                        onClick={() => handleUpdate({ assigned_to: org._id })}
+                        onClick={() => handleUpdate({ assignedTo: org._id })}
                         className={clsx(
                           'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                           focus && 'bg-gray-100 dark:bg-gray-700',
@@ -266,7 +290,7 @@ export function SponsorBulkActions({
                   <MenuItem key={tag.value}>
                     {({ focus }) => (
                       <button
-                        onClick={() => handleUpdate({ add_tags: [tag.value] })}
+                        onClick={() => handleUpdate({ addTags: [tag.value] })}
                         className={clsx(
                           'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                           focus && 'bg-gray-100 dark:bg-gray-700',
@@ -309,14 +333,13 @@ export function SponsorBulkActions({
         </div>
       </div>
 
-      <ConfirmationModal
+      <SponsorDeleteModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={confirmDelete}
-        title="Delete Sponsors"
-        message={`Are you sure you want to remove ${selectedIds.length} sponsors from the pipeline?`}
-        confirmButtonText="Delete"
-        variant="danger"
+        count={selectedIds.length}
+        hasPendingAgreement={hasPendingAgreement}
+        hasContractDocument={hasContractDocument}
         isLoading={bulkDeleteMutation.isPending}
       />
     </div>

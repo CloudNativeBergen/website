@@ -41,7 +41,7 @@ export function SponsorPipelineWidget({
         ? () =>
             fetchSponsorPipelineData(
               conference._id,
-              conference.sponsor_revenue_goal || 0,
+              conference.sponsorRevenueGoal || 0,
             )
         : null,
       [conference],

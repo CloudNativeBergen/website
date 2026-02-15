@@ -1,9 +1,11 @@
 import type {
   InvoiceStatus,
+  SignatureStatus,
   SponsorForConferenceExpanded,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
+import type { BadgeColor } from '@/components/StatusBadge'
 import {
   ExclamationTriangleIcon,
   ClockIcon,
@@ -18,6 +20,9 @@ import {
   CalendarIcon,
   FireIcon,
   ArrowPathRoundedSquareIcon,
+  PaperAirplaneIcon,
+  ShieldCheckIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline'
 
 // Invoice Status Utilities
@@ -70,6 +75,12 @@ export function getActivityIcon(type: ActivityType) {
       return PhoneIcon
     case 'meeting':
       return CalendarIcon
+    case 'signature_status_change':
+      return ShieldCheckIcon
+    case 'registration_complete':
+      return CheckCircleIcon
+    case 'contract_reminder_sent':
+      return BellAlertIcon
   }
 }
 
@@ -91,6 +102,12 @@ export function getActivityColor(type: ActivityType): string {
       return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
     case 'meeting':
       return 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/20'
+    case 'signature_status_change':
+      return 'text-cyan-600 bg-cyan-100 dark:text-cyan-400 dark:bg-cyan-900/20'
+    case 'registration_complete':
+      return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/20'
+    case 'contract_reminder_sent':
+      return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
   }
 }
 
@@ -104,6 +121,10 @@ export type ActionItemType =
   | 'stale'
   | 'high-priority'
   | 'follow-up'
+  | 'signature-rejected'
+  | 'signature-expired'
+  | 'registration-pending'
+  | 'registration-complete'
 
 export function getActionItemIcon(type: ActionItemType) {
   switch (type) {
@@ -122,6 +143,14 @@ export function getActionItemIcon(type: ActionItemType) {
       return FireIcon
     case 'follow-up':
       return ArrowPathRoundedSquareIcon
+    case 'signature-rejected':
+      return ExclamationTriangleIcon
+    case 'signature-expired':
+      return ClockIcon
+    case 'registration-pending':
+      return PaperAirplaneIcon
+    case 'registration-complete':
+      return DocumentTextIcon
   }
 }
 
@@ -142,6 +171,14 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
     case 'follow-up':
       return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/20'
+    case 'signature-rejected':
+      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
+    case 'signature-expired':
+      return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
+    case 'registration-pending':
+      return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
+    case 'registration-complete':
+      return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/20'
   }
 }
 
@@ -153,13 +190,42 @@ export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
   let value = 0
   let currency = 'NOK'
 
-  if (sponsor.contract_value) {
-    value = sponsor.contract_value
-    currency = sponsor.contract_currency || 'NOK'
+  if (sponsor.contractValue) {
+    value = sponsor.contractValue
+    currency = sponsor.contractCurrency || 'NOK'
   } else if (sponsor.tier?.price?.[0]?.amount) {
     value = sponsor.tier.price[0].amount
     currency = sponsor.tier.price[0].currency || 'NOK'
   }
 
   return { value, currency }
+}
+
+// Signature Status Badge Utilities
+export function getSignatureStatusBadgeProps(status: SignatureStatus): {
+  label: string
+  color: BadgeColor
+} {
+  switch (status) {
+    case 'not-started':
+      return { label: 'Not Started', color: 'gray' }
+    case 'pending':
+      return { label: 'Pending', color: 'yellow' }
+    case 'signed':
+      return { label: 'Signed', color: 'green' }
+    case 'rejected':
+      return { label: 'Rejected', color: 'red' }
+    case 'expired':
+      return { label: 'Expired', color: 'orange' }
+  }
+}
+
+export function getDaysPending(contractSentAt?: string): number | null {
+  if (!contractSentAt) return null
+  const sent = new Date(contractSentAt)
+  const now = new Date()
+  const days = Math.floor(
+    (now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  return Math.max(0, days)
 }

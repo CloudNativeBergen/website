@@ -92,24 +92,24 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
     return <div>Error loading conference data</div>
   }
 
-  const ticketData = conference.checkin_event_id
-    ? await getPublicTicketTypes(conference.checkin_event_id)
+  const ticketData = conference.checkinEventId
+    ? await getPublicTicketTypes(conference.checkinEventId)
     : null
 
   const hasTicketPricing = ticketData && ticketData.tickets.length > 0
   const registrationAvailable = isRegistrationAvailable(conference)
 
-  const customization = conference.ticket_customization
-  const inclusions = conference.ticket_inclusions ?? []
-  const faqs = conference.ticket_faqs ?? []
-  const vanityMetrics = conference.vanity_metrics ?? []
+  const customization = conference.ticketCustomization
+  const inclusions = conference.ticketInclusions ?? []
+  const faqs = conference.ticketFaqs ?? []
+  const vanityMetrics = conference.vanityMetrics ?? []
   const showVanityMetrics =
-    customization?.show_vanity_metrics && vanityMetrics.length > 0
+    customization?.showVanityMetrics && vanityMetrics.length > 0
 
-  const heroHeadline = customization?.hero_headline || 'Tickets'
-  const heroSubheadline = customization?.hero_subheadline
-  const ctaText = customization?.cta_button_text || 'Register Now'
-  const groupDiscountInfo = customization?.group_discount_info
+  const heroHeadline = customization?.heroHeadline || 'Tickets'
+  const heroSubheadline = customization?.heroSubheadline
+  const ctaText = customization?.ctaButtonText || 'Register Now'
+  const groupDiscountInfo = customization?.groupDiscountInfo
 
   if (hasTicketPricing) {
     return (
@@ -126,14 +126,14 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                 {heroSubheadline || (
                   <>
                     Secure your spot at {conference.title}
-                    {conference.start_date && (
+                    {conference.startDate && (
                       <>
                         {' '}
                         &mdash;{' '}
-                        <time dateTime={conference.start_date}>
+                        <time dateTime={conference.startDate}>
                           {formatDatesSafe(
-                            conference.start_date,
-                            conference.end_date,
+                            conference.startDate,
+                            conference.endDate,
                           )}
                         </time>
                       </>
@@ -166,7 +166,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             <div className="rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm sm:p-8 dark:bg-gray-800/95 dark:ring-gray-700">
               <TicketPricingGrid
                 tickets={ticketData.tickets}
-                registrationLink={conference.registration_link}
+                registrationLink={conference.registrationLink}
                 complimentaryTickets={ticketData.complimentaryTickets}
               />
             </div>
@@ -175,7 +175,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             {registrationAvailable && (
               <div className="mt-8 text-center">
                 <Button
-                  href={conference.registration_link!}
+                  href={conference.registrationLink!}
                   target="_blank"
                   rel="noopener noreferrer"
                   variant="primary"
@@ -272,7 +272,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
               <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
                 Need help or have questions about tickets?{' '}
                 <Link
-                  href={`mailto:${conference.contact_email}`}
+                  href={`mailto:${conference.contactEmail}`}
                   className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green dark:text-blue-400 dark:hover:text-brand-fresh-green"
                 >
                   Contact us
@@ -308,15 +308,15 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   experience!
                 </p>
 
-                {conference.start_date && (
+                {conference.startDate && (
                   <div className="mb-6 flex items-center justify-center text-brand-slate-gray dark:text-gray-300">
                     <ClockIcon className="mr-2 h-5 w-5 text-brand-cloud-blue dark:text-blue-400" />
                     <span className="font-inter text-base">
                       Conference Dates:{' '}
-                      <time dateTime={conference.start_date}>
+                      <time dateTime={conference.startDate}>
                         {formatDatesSafe(
-                          conference.start_date,
-                          conference.end_date,
+                          conference.startDate,
+                          conference.endDate,
                         )}
                       </time>
                     </span>
@@ -356,7 +356,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
                     Have questions?{' '}
                     <Link
-                      href={`mailto:${conference.contact_email}`}
+                      href={`mailto:${conference.contactEmail}`}
                       className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green dark:text-blue-400 dark:hover:text-brand-fresh-green"
                     >
                       Contact us

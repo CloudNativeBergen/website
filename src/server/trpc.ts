@@ -45,7 +45,7 @@ const requireAuth = t.middleware(({ ctx, next }) => {
 })
 
 const requireAdmin = t.middleware(({ ctx, next }) => {
-  if (!ctx.session?.speaker?.is_organizer) {
+  if (!ctx.session?.speaker?.isOrganizer) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Admin privileges required',

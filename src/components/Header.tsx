@@ -50,8 +50,8 @@ export function Header({ c }: { c: Conference }) {
             }`}
           >
             <p>
-              <time dateTime={c.start_date}>
-                {formatDatesSafe(c.start_date, c.end_date)}
+              <time dateTime={c.startDate}>
+                {formatDatesSafe(c.startDate, c.endDate)}
               </time>
             </p>
             <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
@@ -75,7 +75,7 @@ export function Header({ c }: { c: Conference }) {
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
           {isRegistrationAvailable(c) && (
             <Button
-              href={c.registration_link ?? '#'}
+              href={c.registrationLink ?? '#'}
               variant="primary"
               className="flex h-12 items-center px-6 py-0"
             >

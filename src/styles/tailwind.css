@@ -542,6 +542,10 @@
   font-family: var(--font-family-ibm-plex-mono);
 }
 
+.font-atkinson {
+  font-family: var(--font-family-atkinson);
+}
+
 /* Hover Utilities */
 .hover\:bg-brand-cloud-blue:hover {
   background-color: var(--color-brand-cloud-blue);

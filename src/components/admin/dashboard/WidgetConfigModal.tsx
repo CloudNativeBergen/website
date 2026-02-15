@@ -12,6 +12,7 @@ import { XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { CogIcon } from '@heroicons/react/24/solid'
 import type { WidgetConfigField } from '@/lib/dashboard/types'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface WidgetConfigModalProps {
   /** Whether the modal is open */
@@ -115,13 +116,9 @@ export function WidgetConfigModal({
                     </p>
                   </div>
                   <div className="mt-4">
-                    <button
-                      type="button"
-                      className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                      onClick={onClose}
-                    >
+                    <AdminButton color="blue" size="md" onClick={onClose}>
                       Close
-                    </button>
+                    </AdminButton>
                   </div>
                 </DialogPanel>
               </TransitionChild>
@@ -243,28 +240,25 @@ export function WidgetConfigModal({
 
                   {/* Footer */}
                   <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-                    <button
-                      type="button"
+                    <AdminButton
+                      variant="ghost"
+                      size="sm"
                       onClick={handleReset}
-                      className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-300 dark:hover:bg-gray-700"
                     >
                       <ArrowPathIcon className="h-4 w-4" />
                       Reset to Defaults
-                    </button>
+                    </AdminButton>
                     <div className="flex gap-3">
-                      <button
-                        type="button"
+                      <AdminButton
+                        variant="secondary"
+                        size="md"
                         onClick={onClose}
-                        className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                       >
                         Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      >
+                      </AdminButton>
+                      <AdminButton color="blue" size="md" type="submit">
                         Save Changes
-                      </button>
+                      </AdminButton>
                     </div>
                   </div>
                 </form>

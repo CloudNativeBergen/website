@@ -11,6 +11,7 @@ import {
   BuildingOffice2Icon,
   UserGroupIcon,
   EnvelopeIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
@@ -55,7 +56,7 @@ export default async function AdminSponsors() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Quick Navigation
         </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/sponsors/crm"
             className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
@@ -120,6 +121,23 @@ export default async function AdminSponsors() {
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Full history
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sponsors/contracts"
+            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+          >
+            <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/20">
+              <DocumentDuplicateIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">
+                Contract Templates
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Manage contracts
               </p>
             </div>
           </Link>

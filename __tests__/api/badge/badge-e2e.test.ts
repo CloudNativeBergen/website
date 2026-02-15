@@ -13,7 +13,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { BadgeAssertion, BadgeGenerationParams } from '@/lib/badge/types'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
-const TEST_HOST = 'cloudnativeday.no'
+const TEST_HOST = 'cloudnativedays.no'
 
 /**
  * End-to-End Badge System Tests
@@ -38,18 +38,18 @@ describe('Badge System E2E', () => {
     organizer: 'Cloud Native Bergen',
     city: 'Bergen',
     country: 'Norway',
-    venue_name: 'Åsane Kulturhus',
-    venue_address: 'Åsane, Bergen, Norway',
-    start_date: '2025-06-15',
-    end_date: '2025-06-15',
-    cfp_start_date: '2025-01-01',
-    cfp_end_date: '2025-03-31',
-    cfp_notify_date: '2025-04-15',
-    cfp_email: 'cfp@example.com',
-    program_date: '2025-05-01',
-    registration_enabled: true,
-    contact_email: 'hello@example.com',
-    sponsor_email: 'sponsors@example.com',
+    venueName: 'Åsane Kulturhus',
+    venueAddress: 'Åsane, Bergen, Norway',
+    startDate: '2025-06-15',
+    endDate: '2025-06-15',
+    cfpStartDate: '2025-01-01',
+    cfpEndDate: '2025-03-31',
+    cfpNotifyDate: '2025-04-15',
+    cfpEmail: 'cfp@example.com',
+    programDate: '2025-05-01',
+    registrationEnabled: true,
+    contactEmail: 'hello@example.com',
+    sponsorEmail: 'sponsors@example.com',
     domains: [TEST_HOST],
     organizers: [],
     formats: [],
@@ -64,7 +64,7 @@ describe('Badge System E2E', () => {
     conferenceId: testConference._id,
     conferenceTitle: testConference.title,
     conferenceYear: '2025',
-    conferenceDate: testConference.start_date,
+    conferenceDate: testConference.startDate,
     badgeType: 'speaker',
     talkId: 'test-talk-456',
     talkTitle: 'Kubernetes at Scale',
@@ -82,7 +82,7 @@ describe('Badge System E2E', () => {
           id: `https://${TEST_HOST}/api/badge/issuer`,
           name: testConference.organizer,
           url: `https://${TEST_HOST}`,
-          email: testConference.contact_email,
+          email: testConference.contactEmail,
           description: `Test organization for ${testConference.title}`,
         },
       })
@@ -398,7 +398,7 @@ describe('Badge System E2E', () => {
           id: `https://${TEST_HOST}/api/badge/issuer`,
           name: testConference.organizer,
           url: `https://${TEST_HOST}`,
-          email: testConference.contact_email,
+          email: testConference.contactEmail,
           description: `Test organization for ${testConference.title}`,
         },
       })
@@ -456,7 +456,7 @@ describe('Badge System E2E', () => {
           id: `https://${TEST_HOST}/api/badge/issuer`,
           name: testConference.organizer,
           url: `https://${TEST_HOST}`,
-          email: testConference.contact_email,
+          email: testConference.contactEmail,
           description: `Test organization for ${testConference.title}`,
         },
       })

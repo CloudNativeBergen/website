@@ -87,8 +87,8 @@ export async function sendGalleryTagEmail(
     if (
       !conference.title ||
       !conference.city ||
-      !conference.start_date ||
-      !conference.cfp_email
+      !conference.startDate ||
+      !conference.cfpEmail
     ) {
       return {
         success: false,
@@ -106,8 +106,8 @@ export async function sendGalleryTagEmail(
       'https://www.linkedin.com/company/cloudnativebergen',
     ]
     const socialLinks =
-      conference.social_links && conference.social_links.length > 0
-        ? conference.social_links
+      conference.socialLinks && conference.socialLinks.length > 0
+        ? conference.socialLinks
         : defaultSocialLinks
 
     const emailHtml = await render(
@@ -117,7 +117,7 @@ export async function sendGalleryTagEmail(
         imageAlt: image.imageAlt || image.image?.alt,
         eventName: conference.title,
         eventLocation: `${conference.city}, ${conference.country}`,
-        eventDate: conference.start_date,
+        eventDate: conference.startDate,
         eventUrl,
         galleryUrl,
         dashboardUrl,
@@ -129,7 +129,7 @@ export async function sendGalleryTagEmail(
 
     const result = await retryWithBackoff(async () => {
       return await resend.emails.send({
-        from: `${conference.title} <${conference.cfp_email}>`,
+        from: `${conference.title} <${conference.cfpEmail}>`,
         to: speaker.email,
         subject,
         html: emailHtml,

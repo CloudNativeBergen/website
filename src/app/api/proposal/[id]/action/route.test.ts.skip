@@ -225,11 +225,11 @@ describe('POST /api/proposal/[id]/action', () => {
         registration_enabled: true,
         contact_email: 'contact@example.com',
         organizers: [],
-        domains: ['cloudnativeday.no'],
+        domains: ['cloudnativedays.no'],
         formats: [],
         topics: [],
       },
-      domain: 'cloudnativeday.no',
+      domain: 'cloudnativedays.no',
       error: null,
     })
 
@@ -283,11 +283,11 @@ describe('POST /api/proposal/[id]/action', () => {
         registration_enabled: true,
         contact_email: 'contact@example.com',
         organizers: [],
-        domains: ['cloudnativeday.no'],
+        domains: ['cloudnativedays.no'],
         formats: [],
         topics: [],
       },
-      domain: 'cloudnativeday.no',
+      domain: 'cloudnativedays.no',
       error: null,
     })
 
@@ -365,11 +365,11 @@ describe('POST /api/proposal/[id]/action', () => {
         registration_enabled: true,
         contact_email: 'contact@example.com',
         organizers: [],
-        domains: ['cloudnativeday.no'],
+        domains: ['cloudnativedays.no'],
         formats: [],
         topics: [],
       },
-      domain: 'cloudnativeday.no',
+      domain: 'cloudnativedays.no',
       error: null,
     })
 

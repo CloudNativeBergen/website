@@ -18,13 +18,16 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon } from '@heroicons/react/20/solid'
-import { ChevronDownIcon, CheckIcon } from '@heroicons/react/16/solid'
+import { CheckIcon } from '@heroicons/react/16/solid'
+import { Dropdown } from '@/components/Form'
+import { CurrencySelect } from '@/components/CurrencySelect'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import { api } from '@/lib/trpc/client'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { useNotification } from '@/components/admin'
 
 interface SponsorTierProps {
   conferenceId: string
@@ -41,8 +44,6 @@ interface SponsorTierModalProps {
   onDelete?: (tierId: string) => void
 }
 
-const CURRENCY_OPTIONS = ['NOK', 'USD', 'EUR', 'GBP'] as const
-
 function SponsorTierModal({
   isOpen,
   onClose,
@@ -51,15 +52,16 @@ function SponsorTierModal({
   onDelete,
 }: SponsorTierModalProps) {
   const { theme } = useTheme()
+  const { showNotification } = useNotification()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [formData, setFormData] = useState<SponsorTierInput>({
     title: '',
     tagline: '',
-    tier_type: 'standard',
+    tierType: 'standard',
     price: [{ amount: 0, currency: 'NOK' }],
     perks: [{ label: '', description: '' }],
-    sold_out: false,
-    most_popular: false,
+    soldOut: false,
+    mostPopular: false,
   })
 
   const createMutation = api.sponsor.tiers.create.useMutation({
@@ -69,19 +71,22 @@ function SponsorTierModal({
         setFormData({
           title: '',
           tagline: '',
-          tier_type: 'standard',
+          tierType: 'standard',
           price: [{ amount: 0, currency: 'NOK' }],
           perks: [{ label: '', description: '' }],
-          sold_out: false,
-          most_popular: false,
-          max_quantity: undefined,
+          soldOut: false,
+          mostPopular: false,
+          maxQuantity: undefined,
         })
         onClose()
       }
     },
     onError: (error) => {
-      console.error('Error creating sponsor tier:', error)
-      alert('Failed to create sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to create tier',
+        message: error.message,
+      })
     },
   })
 
@@ -93,8 +98,11 @@ function SponsorTierModal({
       }
     },
     onError: (error) => {
-      console.error('Error updating sponsor tier:', error)
-      alert('Failed to update sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to update tier',
+        message: error.message,
+      })
     },
   })
 
@@ -106,8 +114,11 @@ function SponsorTierModal({
       onClose()
     },
     onError: (error) => {
-      console.error('Error deleting sponsor tier:', error)
-      alert('Failed to delete sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to delete tier',
+        message: error.message,
+      })
     },
   })
 
@@ -117,7 +128,7 @@ function SponsorTierModal({
       setFormData({
         title: tier.title,
         tagline: tier.tagline,
-        tier_type: tier.tier_type,
+        tierType: tier.tierType,
         price: tier.price?.map((p) => ({
           _key: p._key,
           amount: p.amount,
@@ -128,20 +139,20 @@ function SponsorTierModal({
           label: p.label,
           description: p.description,
         })) || [{ label: '', description: '' }],
-        sold_out: tier.sold_out,
-        most_popular: tier.most_popular,
-        max_quantity: tier.max_quantity,
+        soldOut: tier.soldOut,
+        mostPopular: tier.mostPopular,
+        maxQuantity: tier.maxQuantity,
       })
     } else {
       setFormData({
         title: '',
         tagline: '',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ amount: 0, currency: 'NOK' }],
         perks: [{ label: '', description: '' }],
-        sold_out: false,
-        most_popular: false,
-        max_quantity: undefined,
+        soldOut: false,
+        mostPopular: false,
+        maxQuantity: undefined,
       })
     }
   }, [tier])
@@ -153,7 +164,10 @@ function SponsorTierModal({
       if (tier) {
         await updateMutation.mutateAsync({
           id: tier._id,
-          data: formData,
+          data: {
+            ...formData,
+            maxQuantity: formData.maxQuantity ?? null,
+          },
         })
       } else {
         await createMutation.mutateAsync(formData)
@@ -388,37 +402,25 @@ function SponsorTierModal({
 
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div>
-                        <label
-                          htmlFor="tier_type"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Tier Type
-                        </label>
-                        <div className="mt-2 grid grid-cols-1">
-                          <select
-                            id="tier_type"
-                            value={formData.tier_type}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                tier_type: e.target.value as
-                                  | 'standard'
-                                  | 'special'
-                                  | 'addon',
-                              }))
-                            }
-                            disabled={isLoading}
-                            className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                          >
-                            <option value="standard">Standard</option>
-                            <option value="special">Special</option>
-                            <option value="addon">Add-on</option>
-                          </select>
-                          <ChevronDownIcon
-                            aria-hidden="true"
-                            className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-                          />
-                        </div>
+                        <Dropdown
+                          name="tierType"
+                          label="Tier Type"
+                          options={
+                            new Map([
+                              ['standard', 'Standard'],
+                              ['special', 'Special'],
+                              ['addon', 'Add-on'],
+                            ])
+                          }
+                          value={formData.tierType}
+                          setValue={(val) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              tierType: val as 'standard' | 'special' | 'addon',
+                            }))
+                          }
+                          disabled={isLoading}
+                        />
                       </div>
 
                       <div>
@@ -432,11 +434,11 @@ function SponsorTierModal({
                           <input
                             type="number"
                             id="max_quantity"
-                            value={formData.max_quantity ?? ''}
+                            value={formData.maxQuantity ?? ''}
                             onChange={(e) =>
                               setFormData((prev) => ({
                                 ...prev,
-                                max_quantity: e.target.value
+                                maxQuantity: e.target.value
                                   ? parseInt(e.target.value)
                                   : undefined,
                               }))
@@ -456,11 +458,11 @@ function SponsorTierModal({
                               <input
                                 id="sold_out"
                                 type="checkbox"
-                                checked={formData.sold_out}
+                                checked={formData.soldOut}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    sold_out: e.target.checked,
+                                    soldOut: e.target.checked,
                                   }))
                                 }
                                 disabled={isLoading}
@@ -499,11 +501,11 @@ function SponsorTierModal({
                               <input
                                 id="most_popular"
                                 type="checkbox"
-                                checked={formData.most_popular}
+                                checked={formData.mostPopular}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    most_popular: e.target.checked,
+                                    mostPopular: e.target.checked,
                                   }))
                                 }
                                 disabled={isLoading}
@@ -564,24 +566,14 @@ function SponsorTierModal({
                                 placeholder="Amount"
                               />
                             </div>
-                            <div className="grid w-24 grid-cols-1">
-                              <select
+                            <div className="w-24">
+                              <CurrencySelect
                                 value={price.currency}
-                                onChange={(e) =>
-                                  updatePrice(index, 'currency', e.target.value)
+                                setValue={(val) =>
+                                  updatePrice(index, 'currency', val)
                                 }
                                 disabled={isLoading}
-                                className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                              >
-                                {CURRENCY_OPTIONS.map((currency) => (
-                                  <option key={currency} value={currency}>
-                                    {currency}
-                                  </option>
-                                ))}
-                              </select>
-                              <ChevronDownIcon
-                                aria-hidden="true"
-                                className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
+                                name={`currency-${index}`}
                               />
                             </div>
                             {formData.price && formData.price.length > 1 && (
@@ -826,15 +818,15 @@ export function SponsorTierEditor({
               key={tier._id}
               className={clsx(
                 'group relative overflow-hidden rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
-                tier.most_popular && 'ring-2 ring-indigo-500',
+                tier.mostPopular && 'ring-2 ring-indigo-500',
               )}
             >
-              {tier.max_quantity === 1 && (
+              {tier.maxQuantity === 1 && (
                 <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                   Exclusive
                 </div>
               )}
-              {tier.most_popular && (
+              {tier.mostPopular && (
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                   <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
                     <StarIcon className="mr-1 h-3 w-3" />
@@ -885,21 +877,21 @@ export function SponsorTierEditor({
                 <span
                   className={clsx(
                     'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    tier.tier_type === 'standard'
+                    tier.tierType === 'standard'
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                      : tier.tier_type === 'special'
+                      : tier.tierType === 'special'
                         ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
                         : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
                   )}
                 >
-                  {tier.tier_type}
+                  {tier.tierType}
                 </span>
-                {tier.max_quantity && tier.max_quantity > 1 && (
+                {tier.maxQuantity && tier.maxQuantity > 1 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                    Limit: {tier.max_quantity}
+                    Limit: {tier.maxQuantity}
                   </span>
                 )}
-                {tier.sold_out && (
+                {tier.soldOut && (
                   <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
                     Sold Out
                   </span>

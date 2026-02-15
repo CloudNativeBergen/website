@@ -190,7 +190,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const renderWidget = useCallback(
     (widget: Widget, isDragging: boolean, cellWidth: number) => {
       return (
-        <WidgetErrorBoundary widgetName={widget.title}>
+        <WidgetErrorBoundary key={widget.id} widgetName={widget.title}>
           <WidgetContainer
             widget={widget}
             editMode={effectiveEditMode}

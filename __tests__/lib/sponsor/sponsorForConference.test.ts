@@ -6,6 +6,7 @@ import {
   ImportAllHistoricSponsorsSchema,
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
+  DeleteSponsorSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   ContactPersonSchema,
@@ -16,9 +17,9 @@ describe('SponsorForConferenceInputSchema', () => {
   const validInput = {
     sponsor: 'sponsor-123',
     conference: 'conf-456',
-    contract_status: 'none',
+    contractStatus: 'none',
     status: 'prospect',
-    invoice_status: 'not-sent',
+    invoiceStatus: 'not-sent',
   }
 
   it('passes with minimal valid data', () => {
@@ -88,13 +89,13 @@ describe('SponsorForConferenceInputSchema', () => {
   })
 
   it('accepts contract_value as number', () => {
-    const input = { ...validInput, contract_value: 50000 }
+    const input = { ...validInput, contractValue: 50000 }
     const result = SponsorForConferenceInputSchema.safeParse(input)
     expect(result.success).toBe(true)
   })
 
   it('fails with negative contract_value', () => {
-    const input = { ...validInput, contract_value: -100 }
+    const input = { ...validInput, contractValue: -100 }
     const result = SponsorForConferenceInputSchema.safeParse(input)
     expect(result.success).toBe(false)
   })
@@ -143,7 +144,7 @@ describe('SponsorForConferenceUpdateSchema', () => {
   it('accepts nullable assigned_to', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      assigned_to: null,
+      assignedTo: null,
     })
     expect(result.success).toBe(true)
   })
@@ -196,10 +197,10 @@ describe('BulkUpdateSponsorCRMSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('passes with add_tags', () => {
+  it('passes with addTags', () => {
     const result = BulkUpdateSponsorCRMSchema.safeParse({
       ids: ['id-1'],
-      add_tags: ['high-priority', 'returning-sponsor'],
+      addTags: ['high-priority', 'returning-sponsor'],
     })
     expect(result.success).toBe(true)
   })
@@ -233,6 +234,60 @@ describe('BulkDeleteSponsorCRMSchema', () => {
     const result = BulkDeleteSponsorCRMSchema.safeParse({
       ids: [],
     })
+    expect(result.success).toBe(false)
+  })
+
+  it('passes with cleanup options', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+      cancelAgreements: true,
+      deleteContractAssets: true,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreements).toBe(true)
+      expect(result.data.deleteContractAssets).toBe(true)
+    }
+  })
+
+  it('passes without cleanup options (optional)', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreements).toBeUndefined()
+      expect(result.data.deleteContractAssets).toBeUndefined()
+    }
+  })
+})
+
+describe('DeleteSponsorSchema', () => {
+  it('passes with id only', () => {
+    const result = DeleteSponsorSchema.safeParse({ id: 'sfc-1' })
+    expect(result.success).toBe(true)
+  })
+
+  it('passes with all cleanup options', () => {
+    const result = DeleteSponsorSchema.safeParse({
+      id: 'sfc-1',
+      cancelAgreement: true,
+      deleteContractAsset: true,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cancelAgreement).toBe(true)
+      expect(result.data.deleteContractAsset).toBe(true)
+    }
+  })
+
+  it('fails with empty id', () => {
+    const result = DeleteSponsorSchema.safeParse({ id: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('fails without id', () => {
+    const result = DeleteSponsorSchema.safeParse({})
     expect(result.success).toBe(false)
   })
 })
@@ -361,20 +416,20 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   const validInput = {
     sponsor: 'sponsor-123',
     conference: 'conf-456',
-    contract_status: 'none',
+    contractStatus: 'none',
     status: 'prospect',
-    invoice_status: 'not-sent',
+    invoiceStatus: 'not-sent',
   }
 
   it('passes with contact_persons array', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
       ],
     })
@@ -384,18 +439,18 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('passes with multiple contacts and one primary', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
         {
           _key: 'c2',
           name: 'John Smith',
           email: 'john@example.com',
-          is_primary: false,
+          isPrimary: false,
         },
       ],
     })
@@ -410,7 +465,7 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('passes with empty contact_persons array', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [],
+      contactPersons: [],
     })
     expect(result.success).toBe(true)
   })
@@ -418,7 +473,7 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('passes with contact without is_primary (optional)', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [
+      contactPersons: [
         { _key: 'c1', name: 'Jane Doe', email: 'jane@example.com' },
       ],
     })
@@ -428,9 +483,7 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('fails with invalid contact email', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [
-        { _key: 'c1', name: 'Jane Doe', email: 'not-an-email' },
-      ],
+      contactPersons: [{ _key: 'c1', name: 'Jane Doe', email: 'not-an-email' }],
     })
     expect(result.success).toBe(false)
   })
@@ -438,7 +491,7 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('fails with empty contact name', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [{ _key: 'c1', name: '', email: 'jane@example.com' }],
+      contactPersons: [{ _key: 'c1', name: '', email: 'jane@example.com' }],
     })
     expect(result.success).toBe(false)
   })
@@ -446,18 +499,18 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
   it('fails with multiple primary contacts', () => {
     const result = SponsorForConferenceInputSchema.safeParse({
       ...validInput,
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
         {
           _key: 'c2',
           name: 'John Smith',
           email: 'john@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
       ],
     })
@@ -469,9 +522,9 @@ describe('SponsorForConferenceInputSchema - billing', () => {
   const validInput = {
     sponsor: 'sponsor-123',
     conference: 'conf-456',
-    contract_status: 'none',
+    contractStatus: 'none',
     status: 'prospect',
-    invoice_status: 'not-sent',
+    invoiceStatus: 'not-sent',
   }
 
   it('passes with billing info', () => {
@@ -504,12 +557,12 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
   it('passes with contact_persons update', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
       ],
     })
@@ -519,7 +572,7 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
   it('passes with empty contact_persons to clear them', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      contact_persons: [],
+      contactPersons: [],
     })
     expect(result.success).toBe(true)
   })
@@ -546,12 +599,12 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
   it('passes with contacts and billing together', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
       ],
       billing: {
@@ -564,7 +617,7 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
   it('fails with invalid contact in update', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      contact_persons: [{ _key: 'c1', name: '', email: 'bad' }],
+      contactPersons: [{ _key: 'c1', name: '', email: 'bad' }],
     })
     expect(result.success).toBe(false)
   })
@@ -572,18 +625,18 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
   it('fails with multiple primary contacts in update', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
-      contact_persons: [
+      contactPersons: [
         {
           _key: 'c1',
           name: 'Jane Doe',
           email: 'jane@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
         {
           _key: 'c2',
           name: 'John Smith',
           email: 'john@example.com',
-          is_primary: true,
+          isPrimary: true,
         },
       ],
     })

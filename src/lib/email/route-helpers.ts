@@ -149,9 +149,9 @@ export function renderEmailTemplate({
     subject,
     eventName: conference.title,
     eventLocation: `${conference.city}, ${conference.country}`,
-    eventDate: formatConferenceDateLong(conference.start_date),
+    eventDate: formatConferenceDateLong(conference.startDate),
     eventUrl: `https://${conference.domains[0]}`,
-    socialLinks: conference.social_links || [],
+    socialLinks: conference.socialLinks || [],
     unsubscribeUrl,
     content: React.createElement('div', {
       dangerouslySetInnerHTML: { __html: htmlContent },

@@ -74,15 +74,15 @@ describe('Impersonation Security Rules', () => {
 
   describe('Authorization Logic', () => {
     it('should document organizer-only requirement', () => {
-      // Only users with is_organizer: true can impersonate
-      // This is checked via session?.speaker?.is_organizer
+      // Only users with isOrganizer: true can impersonate
+      // This is checked via session?.speaker?.isOrganizer
       const organizerRequired = true
       expect(organizerRequired).toBe(true)
     })
 
     it('should document organizer-to-organizer prevention', () => {
       // Even organizers cannot impersonate other organizers
-      // Checked via: impersonatedSpeaker?.is_organizer
+      // Checked via: impersonatedSpeaker?.isOrganizer
       const preventsOrganizerImpersonation = true
       expect(preventsOrganizerImpersonation).toBe(true)
     })
@@ -110,7 +110,7 @@ describe('Impersonation Security Rules', () => {
         '1. NODE_ENV must not be production',
         '2. AppEnvironment.isDevelopment must be true',
         '3. Session must exist with speaker',
-        '4. Speaker must have is_organizer: true',
+        '4. Speaker must have isOrganizer: true',
         '5. URL must be provided to getAuthSession',
         '6. Speaker ID must match SANITY_ID_PATTERN',
         '7. Speaker ID length must be <= 100',

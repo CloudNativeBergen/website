@@ -56,45 +56,45 @@ function createPhaseOverride(
     string,
     Pick<
       Conference,
-      | 'cfp_start_date'
-      | 'cfp_end_date'
-      | 'cfp_notify_date'
-      | 'program_date'
-      | 'start_date'
-      | 'end_date'
+      | 'cfpStartDate'
+      | 'cfpEndDate'
+      | 'cfpNotifyDate'
+      | 'programDate'
+      | 'startDate'
+      | 'endDate'
     >
   > = {
     initialization: {
-      cfp_start_date: addDays(50),
-      cfp_end_date: addDays(120),
-      cfp_notify_date: addDays(150),
-      program_date: addDays(180),
-      start_date: addDays(247),
-      end_date: addDays(248),
+      cfpStartDate: addDays(50),
+      cfpEndDate: addDays(120),
+      cfpNotifyDate: addDays(150),
+      programDate: addDays(180),
+      startDate: addDays(247),
+      endDate: addDays(248),
     },
     planning: {
-      cfp_start_date: addDays(-30),
-      cfp_end_date: addDays(30),
-      cfp_notify_date: addDays(45),
-      program_date: addDays(60),
-      start_date: addDays(90),
-      end_date: addDays(91),
+      cfpStartDate: addDays(-30),
+      cfpEndDate: addDays(30),
+      cfpNotifyDate: addDays(45),
+      programDate: addDays(60),
+      startDate: addDays(90),
+      endDate: addDays(91),
     },
     execution: {
-      cfp_start_date: addDays(-120),
-      cfp_end_date: addDays(-30),
-      cfp_notify_date: addDays(-15),
-      program_date: addDays(-10),
-      start_date: addDays(5),
-      end_date: addDays(6),
+      cfpStartDate: addDays(-120),
+      cfpEndDate: addDays(-30),
+      cfpNotifyDate: addDays(-15),
+      programDate: addDays(-10),
+      startDate: addDays(5),
+      endDate: addDays(6),
     },
     'post-conference': {
-      cfp_start_date: addDays(-210),
-      cfp_end_date: addDays(-120),
-      cfp_notify_date: addDays(-105),
-      program_date: addDays(-100),
-      start_date: addDays(-10),
-      end_date: addDays(-9),
+      cfpStartDate: addDays(-210),
+      cfpEndDate: addDays(-120),
+      cfpNotifyDate: addDays(-105),
+      programDate: addDays(-100),
+      startDate: addDays(-10),
+      endDate: addDays(-9),
     },
   }
 

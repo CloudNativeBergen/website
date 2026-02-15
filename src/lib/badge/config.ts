@@ -17,7 +17,7 @@ export interface SigningConfiguration {
    * Verification method URL (kid) - must be a dereferenceable HTTP URL
    * pointing to a JWK endpoint, not a fragment identifier
    *
-   * @example "https://cloudnativeday.no/api/badge/keys/key-1"
+   * @example "https://cloudnativedays.no/api/badge/keys/key-1"
    * @see https://www.imsglobal.org/spec/ob/v3p0/impl/#external-proof-jwt-proof
    */
   verificationMethod: string
@@ -53,7 +53,7 @@ export interface IssuerConfiguration {
  * @see https://www.imsglobal.org/spec/ob/v3p0/
  */
 export interface BadgeConfiguration {
-  /** Base URL for all generated URLs (e.g., https://cloudnativeday.no) */
+  /** Base URL for all generated URLs (e.g., https://cloudnativedays.no) */
   baseUrl: string
   /** Issuer profile configuration */
   issuer: IssuerConfiguration
@@ -68,13 +68,13 @@ export interface BadgeConfiguration {
  * conference data loading) to enable pure function testing of badge generation.
  *
  * @param conference - Conference data from Sanity CMS
- * @param domain - Domain name for the conference (e.g., "cloudnativeday.no")
+ * @param domain - Domain name for the conference (e.g., "cloudnativedays.no")
  * @returns BadgeConfiguration object for badge generation
  * @throws Error if required environment variables are missing or invalid
  *
  * @example
  * ```typescript
- * const config = await createBadgeConfiguration(conference, 'cloudnativeday.no')
+ * const config = await createBadgeConfiguration(conference, 'cloudnativedays.no')
  * const badge = await generateBadgeCredential(params, config)
  * ```
  */
@@ -126,7 +126,7 @@ export async function createBadgeConfiguration(
 
   // Build issuer configuration
   const issuerEmail =
-    conference.contact_email ||
+    conference.contactEmail ||
     (conference.domains?.[0]
       ? `contact@${conference.domains[0]}`
       : 'contact@cloudnativedays.no')

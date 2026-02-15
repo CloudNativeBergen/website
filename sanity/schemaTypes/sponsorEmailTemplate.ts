@@ -6,6 +6,7 @@ export const TEMPLATE_CATEGORY_OPTIONS = [
   { title: 'International Sponsor', value: 'international' },
   { title: 'Local / Community', value: 'local-community' },
   { title: 'Follow-up', value: 'follow-up' },
+  { title: 'Contract', value: 'contract' },
   { title: 'Custom', value: 'custom' },
 ] as const
 
@@ -82,14 +83,14 @@ export default defineType({
       rows: 2,
     }),
     defineField({
-      name: 'is_default',
+      name: 'isDefault',
       title: 'Default Template',
       type: 'boolean',
       description: 'Show this template as the default for its category',
       initialValue: false,
     }),
     defineField({
-      name: 'sort_order',
+      name: 'sortOrder',
       title: 'Sort Order',
       type: 'number',
       description: 'Controls ordering in the template picker (lower = first)',
@@ -101,7 +102,7 @@ export default defineType({
       title: 'title',
       category: 'category',
       language: 'language',
-      isDefault: 'is_default',
+      isDefault: 'isDefault',
     },
     prepare({ title, category, language, isDefault }) {
       const categoryLabel =
@@ -122,7 +123,7 @@ export default defineType({
       name: 'categorySort',
       by: [
         { field: 'category', direction: 'asc' },
-        { field: 'sort_order', direction: 'asc' },
+        { field: 'sortOrder', direction: 'asc' },
       ],
     },
   ],

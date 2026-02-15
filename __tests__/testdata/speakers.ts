@@ -26,7 +26,7 @@ const speakers: Speaker[] = [
     email: 'jane@acme.com',
     slug: 'jane-doe',
     flags: [Flags.diverseSpeaker, Flags.requiresTravelFunding],
-    is_organizer: true,
+    isOrganizer: true,
     // No image field - should use MissingAvatar
   },
 ] as Speaker[]

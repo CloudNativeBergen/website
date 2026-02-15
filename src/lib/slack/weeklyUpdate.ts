@@ -407,7 +407,7 @@ export async function sendWeeklyUpdateToSlack(
 
   const message = { blocks }
   await postSlackMessage(message, {
-    channel: conference.sales_notification_channel,
+    channel: conference.salesNotificationChannel,
     forceSlack,
   })
 }

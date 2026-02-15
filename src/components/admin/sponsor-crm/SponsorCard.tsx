@@ -3,19 +3,24 @@
 import type {
   SponsorForConferenceExpanded,
   SponsorTag,
+  SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { formatNumber } from '@/lib/format'
 import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
   formatInvoiceStatusLabel,
   calculateSponsorValue,
+  getSignatureStatusBadgeProps,
+  getDaysPending,
 } from './utils'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
@@ -31,6 +36,7 @@ interface SponsorCardProps {
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
+  onContract?: () => void
 }
 
 const TAG_BADGES: {
@@ -74,6 +80,7 @@ export function SponsorCard({
   onEdit,
   onDelete,
   onEmail,
+  onContract,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
 
@@ -102,6 +109,11 @@ export function SponsorCard({
     onEmail?.()
   }
 
+  const handleContractClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onContract?.()
+  }
+
   const handleSelectClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onToggleSelect?.(e)
@@ -122,7 +134,7 @@ export function SponsorCard({
       ? `${(v / 1000000).toFixed(1)}M`
       : v >= 1000
         ? `${(v / 1000).toFixed(0)}K`
-        : v.toLocaleString()
+        : formatNumber(v)
 
   return (
     <div
@@ -162,7 +174,7 @@ export function SponsorCard({
           {sponsor.sponsor.logo ? (
             <SponsorLogo
               logo={sponsor.sponsor.logo}
-              logoBright={sponsor.sponsor.logo_bright}
+              logoBright={sponsor.sponsor.logoBright}
               name={sponsor.sponsor.name}
               className="max-h-full w-auto max-w-14 object-contain"
             />
@@ -173,14 +185,14 @@ export function SponsorCard({
           )}
         </div>
         {/* Assignee */}
-        {sponsor.assigned_to && (
+        {sponsor.assignedTo && (
           <div className="scale-[0.8] transform">
             <SpeakerAvatars
               speakers={[
                 {
-                  _id: sponsor.assigned_to._id,
-                  name: sponsor.assigned_to.name,
-                  image: sponsor.assigned_to.image,
+                  _id: sponsor.assignedTo._id,
+                  name: sponsor.assignedTo.name,
+                  image: sponsor.assignedTo.image,
                 } as Speaker,
               ]}
               size="sm"
@@ -224,13 +236,29 @@ export function SponsorCard({
           {value > 0 && currentView !== 'pipeline' && (
             <span
               className={clsx(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
-                getInvoiceStatusColor(sponsor.invoice_status),
+                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap',
+                getInvoiceStatusColor(sponsor.invoiceStatus),
               )}
             >
-              {formatInvoiceStatusLabel(sponsor.invoice_status)}
+              {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
             </span>
           )}
+          {currentView === 'contract' &&
+            sponsor.signatureStatus &&
+            sponsor.signatureStatus !== 'not-started' && (
+              <SignatureBadge
+                status={sponsor.signatureStatus}
+                contractSentAt={sponsor.contractSentAt}
+              />
+            )}
+          {currentView === 'contract' &&
+            sponsor.registrationComplete &&
+            sponsor.contractStatus !== 'contract-sent' &&
+            sponsor.contractStatus !== 'contract-signed' && (
+              <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
+                READY
+              </span>
+            )}
         </div>
       </div>
 
@@ -239,6 +267,15 @@ export function SponsorCard({
         className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {onContract && (
+          <button
+            onClick={handleContractClick}
+            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+            title="Contract"
+          >
+            <DocumentTextIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
+          </button>
+        )}
         {onEmail && (
           <button
             onClick={handleEmailClick}
@@ -264,5 +301,48 @@ export function SponsorCard({
         </button>
       </div>
     </div>
+  )
+}
+
+const SIGNATURE_COLORS: Record<
+  Exclude<SignatureStatus, 'not-started'>,
+  string
+> = {
+  pending:
+    'bg-yellow-100 text-yellow-700 ring-yellow-700/20 dark:bg-yellow-900/30 dark:text-yellow-400 dark:ring-yellow-400/20',
+  signed:
+    'bg-green-100 text-green-700 ring-green-700/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-400/20',
+  rejected:
+    'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+  expired:
+    'bg-orange-100 text-orange-700 ring-orange-700/20 dark:bg-orange-900/30 dark:text-orange-400 dark:ring-orange-400/20',
+}
+
+function SignatureBadge({
+  status,
+  contractSentAt,
+}: {
+  status: SignatureStatus
+  contractSentAt?: string
+}) {
+  const { label } = getSignatureStatusBadgeProps(status)
+  const days = getDaysPending(contractSentAt)
+  const colorClass =
+    SIGNATURE_COLORS[status as keyof typeof SIGNATURE_COLORS] ??
+    SIGNATURE_COLORS.pending
+
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap ring-1 ring-inset',
+        colorClass,
+      )}
+      title={days != null ? `Sent ${days}d ago` : undefined}
+    >
+      {label}
+      {status === 'pending' && days != null && days > 0 && (
+        <span className="ml-0.5 font-normal">({days}d)</span>
+      )}
+    </span>
   )
 }

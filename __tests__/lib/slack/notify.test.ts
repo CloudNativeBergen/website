@@ -79,21 +79,21 @@ function createMockConference(overrides: Partial<Conference> = {}): Conference {
     organizer: 'Test Organizer',
     city: 'Test City',
     country: 'Test Country',
-    start_date: '2024-06-01',
-    end_date: '2024-06-02',
-    cfp_start_date: '2024-03-01',
-    cfp_end_date: '2024-05-01',
-    cfp_notify_date: '2024-05-15',
-    cfp_email: 'cfp@example.com',
-    sponsor_email: 'sponsors@example.com',
-    program_date: '2024-05-20',
-    registration_enabled: true,
-    contact_email: 'test@example.com',
+    startDate: '2024-06-01',
+    endDate: '2024-06-02',
+    cfpStartDate: '2024-03-01',
+    cfpEndDate: '2024-05-01',
+    cfpNotifyDate: '2024-05-15',
+    cfpEmail: 'cfp@example.com',
+    sponsorEmail: 'sponsors@example.com',
+    programDate: '2024-05-20',
+    registrationEnabled: true,
+    contactEmail: 'test@example.com',
     organizers: [],
     domains: ['test.cloudnativebergen.no'],
     formats: [Format.presentation_25],
     topics: [],
-    cfp_notification_channel: '#cfp-notifications',
+    cfpNotificationChannel: '#cfp-notifications',
     ...overrides,
   }
 }
@@ -166,7 +166,7 @@ describe('Slack notifications', () => {
       const { notifyNewProposal } = await import('@/lib/slack/notify')
       const proposal = createMockProposal()
       const conference = createMockConference({
-        cfp_notification_channel: '#my-cfp',
+        cfpNotificationChannel: '#my-cfp',
       })
 
       await notifyNewProposal(proposal, conference, 'Speaker')
@@ -179,7 +179,7 @@ describe('Slack notifications', () => {
       const { notifyNewProposal } = await import('@/lib/slack/notify')
       const proposal = createMockProposal()
       const conference = createMockConference({
-        cfp_notification_channel: undefined,
+        cfpNotificationChannel: undefined,
       })
 
       await notifyNewProposal(proposal, conference, 'Speaker')

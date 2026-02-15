@@ -6,7 +6,7 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
-      name: 'badge_id',
+      name: 'badgeId',
       title: 'Badge ID',
       type: 'string',
       description: 'Unique identifier for the badge',
@@ -28,7 +28,7 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'badge_type',
+      name: 'badgeType',
       title: 'Badge Type',
       type: 'string',
       options: {
@@ -41,14 +41,14 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'issued_at',
+      name: 'issuedAt',
       title: 'Issued At',
       type: 'datetime',
       validation: (Rule) => Rule.required(),
       readOnly: true,
     }),
     defineField({
-      name: 'badge_json',
+      name: 'badgeJson',
       title: 'Badge JSON',
       type: 'text',
       description: 'OpenBadges v3.0 JSON-LD credential',
@@ -56,7 +56,7 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
-      name: 'baked_svg',
+      name: 'bakedSvg',
       title: 'Baked SVG',
       type: 'file',
       description: 'SVG file with embedded badge metadata',
@@ -65,32 +65,32 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'verification_url',
+      name: 'verificationUrl',
       title: 'Verification URL',
       type: 'url',
       description: 'Public URL for badge verification',
       readOnly: true,
     }),
     defineField({
-      name: 'email_sent',
+      name: 'emailSent',
       title: 'Email Sent',
       type: 'boolean',
       initialValue: false,
     }),
     defineField({
-      name: 'email_sent_at',
+      name: 'emailSentAt',
       title: 'Email Sent At',
       type: 'datetime',
     }),
     defineField({
-      name: 'email_id',
+      name: 'emailId',
       title: 'Email ID',
       type: 'string',
       description: 'Resend email ID',
       readOnly: true,
     }),
     defineField({
-      name: 'email_error',
+      name: 'emailError',
       title: 'Email Error',
       type: 'text',
       description: 'Error message if email failed to send',
@@ -100,9 +100,9 @@ export default defineType({
   preview: {
     select: {
       speakerName: 'speaker.name',
-      badgeType: 'badge_type',
+      badgeType: 'badgeType',
       conferenceName: 'conference.title',
-      issuedAt: 'issued_at',
+      issuedAt: 'issuedAt',
     },
     prepare({ speakerName, badgeType, conferenceName, issuedAt }) {
       return {
@@ -116,12 +116,12 @@ export default defineType({
     {
       title: 'Issued Date (newest first)',
       name: 'issuedDateDesc',
-      by: [{ field: 'issued_at', direction: 'desc' }],
+      by: [{ field: 'issuedAt', direction: 'desc' }],
     },
     {
       title: 'Badge Type',
       name: 'badgeType',
-      by: [{ field: 'badge_type', direction: 'asc' }],
+      by: [{ field: 'badgeType', direction: 'asc' }],
     },
   ],
 })

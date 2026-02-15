@@ -1,7 +1,7 @@
 'use client'
 
 import { PhotoGalleryBuilder } from './PhotoGalleryBuilder'
-import { DownloadSpeakerImage } from '../branding/DownloadSpeakerImage'
+import { DownloadableImage } from '../common/DownloadableImage'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { ConferenceLogos } from '../common/DashboardLayout'
 
@@ -27,7 +27,7 @@ export function PhotoGalleryWithDownload({
       conferenceTitle={conferenceTitle}
       conferenceLogos={conferenceLogos}
       wrapPreview={(node) => (
-        <DownloadSpeakerImage filename={filename}>{node}</DownloadSpeakerImage>
+        <DownloadableImage filename={filename}>{node}</DownloadableImage>
       )}
     />
   )

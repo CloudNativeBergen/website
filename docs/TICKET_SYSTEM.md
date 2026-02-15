@@ -35,8 +35,8 @@ src/app/(main)/tickets/page.tsx   ← public page with 'use cache'
 | Pricing grid       | Checkin.no API (`EventTicket.price`, `visibleStartsAt`/`visibleEndsAt`) | Tiered table: Early Bird / Standard / Late Bird × ticket categories            |
 | Standalone tickets | Checkin.no API                                                          | Cards for non-tiered tickets (e.g., Student) with description and availability |
 | VAT note           | Checkin.no API (`Price.vat`)                                            | "All prices in NOK excl. 25% VAT"                                              |
-| Register Now CTA   | Sanity (`conference.registration_link`)                                 | Deep-link to Checkin.no registration                                           |
-| Contact footer     | Sanity (`conference.contact_email`)                                     | "Need help? Contact us"                                                        |
+| Register Now CTA   | Sanity (`conference.registrationLink`)                                  | Deep-link to Checkin.no registration                                           |
+| Contact footer     | Sanity (`conference.contactEmail`)                                      | "Need help? Contact us"                                                        |
 
 ### Ticket Name Convention
 
@@ -133,16 +133,16 @@ The sponsor page is the most mature public-facing page and serves as the templat
 
 ### Sponsor Page Sections
 
-| Section                       | Config Source                                            | Tickets Page Equivalent                                       |
-| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| Hero (headline + subheadline) | `sponsorship_customization.hero_headline/subheadline`    | **Missing** — should add customizable headline                |
-| Vanity metrics (stats bar)    | `conference.vanity_metrics[]`                            | **Missing** — could reuse (attendees, speakers, tracks, etc.) |
-| Why Sponsor (benefit cards)   | `conference.sponsor_benefits[]` (icon + title + desc)    | **Missing** — should add "What's Included" cards              |
-| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                      |
-| Philosophy section            | `sponsorship_customization.philosophy_title/description` | **Missing** — could add registration type explanations        |
-| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                        |
-| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                              |
-| Past sponsors grid            | `sponsorForConference` documents                         | N/A                                                           |
+| Section                       | Config Source                                                    | Tickets Page Equivalent                                       |
+| ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| Hero (headline + subheadline) | `sponsorshipCustomization.heroHeadline/heroSubheadline`          | **Missing** — should add customizable headline                |
+| Vanity metrics (stats bar)    | `conference.vanityMetrics[]`                                     | **Missing** — could reuse (attendees, speakers, tracks, etc.) |
+| Why Sponsor (benefit cards)   | `conference.sponsorBenefits[]` (icon + title + desc)             | **Missing** — should add "What's Included" cards              |
+| Tier pricing cards            | `sponsorTier` Sanity documents                                   | ✅ Exists — pricing grid from Checkin.no                      |
+| Philosophy section            | `sponsorshipCustomization.philosophyTitle/philosophyDescription` | **Missing** — could add registration type explanations        |
+| Closing CTA                   | `sponsorshipCustomization.closingQuote/closingCtaText`           | ✅ Partial — has "Register Now" button                        |
+| Contact footer                | `conference.sponsorEmail`                                        | ✅ Exists — uses `contactEmail`                               |
+| Past sponsors grid            | `sponsorForConference` documents                                 | N/A                                                           |
 
 ### KubeCon Registration Page Sections
 
@@ -168,15 +168,15 @@ Based on the sponsor page pattern and KubeCon's registration page, these section
 
 #### 1. Hero with Customizable Copy (High Priority)
 
-Like the sponsor page's `sponsorship_customization`, allow organizers to set a headline and subheadline for the tickets page.
+Like the sponsor page's `sponsorshipCustomization`, allow organizers to set a headline and subheadline for the tickets page.
 
-**Config:** Sanity `ticket_customization.hero_headline` / `hero_subheadline`
+**Config:** Sanity `ticketCustomization.heroHeadline` / `heroSubheadline`
 
 #### 2. What's Included (High Priority)
 
 A bullet list or card grid showing what attendees get with their ticket. KubeCon lists: keynotes, breakouts, social events, solutions showcase, lunches/coffee, conference t-shirt, on-demand recordings, etc.
 
-**Config:** Sanity `ticket_inclusions[]` — array of `{icon: HeroIcon, title: string, description?: text}`, same pattern as `sponsor_benefits[]`.
+**Config:** Sanity `ticketInclusions[]` — array of `{icon: HeroIcon, title: string, description?: text}`, same pattern as `sponsorBenefits[]`.
 
 #### 3. Ticket Type Explanations (High Priority)
 
@@ -188,17 +188,17 @@ Each ticket category needs a short description explaining what it includes and w
 
 Information about available discounts — group pricing, community partner codes, etc.
 
-**Config:** Sanity `ticket_customization.group_discount_info` (text) or reference the existing discount system (`src/lib/discounts/`).
+**Config:** Sanity `ticketCustomization.groupDiscountInfo` (text) or reference the existing discount system (`src/lib/discounts/`).
 
 #### 5. FAQ / Additional Information (Medium Priority)
 
 Collapsible FAQ section covering: registration deadlines, cancellation policy, invoice info, accessibility, etc.
 
-**Config:** Sanity `ticket_faqs[]` — array of `{question: string, answer: text}`.
+**Config:** Sanity `ticketFaqs[]` — array of `{question: string, answer: text}`.
 
 #### 6. Vanity Metrics Bar (Optional)
 
-Reuse the existing `conference.vanity_metrics[]` (attendees, speakers, tracks) to build excitement. The sponsor page already renders this data.
+Reuse the existing `conference.vanityMetrics[]` (attendees, speakers, tracks) to build excitement. The sponsor page already renders this data.
 
 **Config:** Already exists in Sanity — just render it on the tickets page too.
 
@@ -208,22 +208,22 @@ Reuse the existing `conference.vanity_metrics[]` (attendees, speakers, tracks) t
 
 ### Sanity Schema Additions
 
-Follow the `sponsorship_customization` pattern — a collapsible object on the conference document:
+Follow the `sponsorshipCustomization` pattern — a collapsible object on the conference document:
 
 ```text
-conference.ticket_customization (object, collapsible)
-  ├── hero_headline: string          (default: "Secure Your Spot")
-  ├── hero_subheadline: text         (default: auto-generated from conference name + dates)
-  ├── show_vanity_metrics: boolean   (default: true — reuse existing vanity_metrics array)
-  ├── group_discount_info: text      (optional — freeform markdown/text about group discounts)
-  └── closing_cta_text: string       (optional — override "Register Now" button text)
+conference.ticketCustomization (object, collapsible)
+  ├── heroHeadline: string           (default: "Secure Your Spot")
+  ├── heroSubheadline: text          (default: auto-generated from conference name + dates)
+  ├── showVanityMetrics: boolean     (default: true — reuse existing vanityMetrics array)
+  ├── groupDiscountInfo: text        (optional — freeform markdown/text about group discounts)
+  └── closingCtaText: string         (optional — override "Register Now" button text)
 
-conference.ticket_inclusions[] (array of objects)
-  ├── icon: string (HeroIcon name — same predefined list as sponsor_benefits)
+conference.ticketInclusions[] (array of objects)
+  ├── icon: string (HeroIcon name — same predefined list as sponsorBenefits)
   ├── title: string
   └── description: text (optional)
 
-conference.ticket_faqs[] (array of objects)
+conference.ticketFaqs[] (array of objects)
   ├── question: string
   └── answer: text
 ```

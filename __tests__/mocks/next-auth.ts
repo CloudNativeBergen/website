@@ -44,7 +44,7 @@ const NextAuth = () => ({
           },
           speaker: {
             _id: user._id!,
-            is_organizer: user.is_organizer === true,
+            isOrganizer: user.isOrganizer === true,
           },
           account,
         }

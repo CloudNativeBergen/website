@@ -15,13 +15,13 @@ interface SponsorData {
   name: string
   website?: string
   logo?: string
-  logo_bright?: string
+  logoBright?: string
 }
 
 interface SponsorTierData {
   title: string
   tagline?: string
-  tier_type: 'standard' | 'special'
+  tierType: 'standard' | 'special'
 }
 
 type SponsorVariant =
@@ -142,7 +142,7 @@ const SponsorLogo = ({
   size: number
   className?: string
 }) => {
-  const logoSrc = sponsor.logo_bright || sponsor.logo
+  const logoSrc = sponsor.logoBright || sponsor.logo
   const dimensions = { width: `${size}cqw`, height: `${size * 0.4}cqw` }
 
   if (logoSrc) {

@@ -26,10 +26,10 @@ interface SponsorTemplatePickerProps {
   conference: {
     title: string
     city: string
-    start_date: string
+    startDate: string
     organizer?: string
     domains: string[]
-    prospectus_url?: string
+    prospectusUrl?: string
   }
   senderName?: string
   tierName?: string

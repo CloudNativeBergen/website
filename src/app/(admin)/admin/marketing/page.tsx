@@ -6,7 +6,7 @@ import { formatConferenceDateLong } from '@/lib/time'
 import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SponsorThankYou } from '@/components/SponsorThankYou'
-import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
+import { DownloadableImage } from '@/components/common/DownloadableImage'
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithDownload'
@@ -30,13 +30,13 @@ interface SponsorData {
   name: string
   website?: string
   logo?: string
-  logo_bright?: string
+  logoBright?: string
 }
 
 interface SponsorTierData {
   title: string
   tagline?: string
-  tier_type: 'standard' | 'special'
+  tierType: 'standard' | 'special'
 }
 
 const qrCodeCache = new Map<string, string>()
@@ -124,7 +124,7 @@ const ErrorDisplay = ({ message }: { message: string }) => (
 export default async function MarketingPage() {
   const session = await getAuthSession()
 
-  if (!session?.speaker?.is_organizer) {
+  if (!session?.speaker?.isOrganizer) {
     return (
       <div className="flex h-screen items-center justify-center">
         <p className="text-lg text-gray-500 dark:text-gray-400">
@@ -227,8 +227,8 @@ export default async function MarketingPage() {
   const conferenceDomain = conference.domains[0]
   const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 80)
 
-  const eventDate = conference.start_date
-    ? formatConferenceDateLong(conference.start_date)
+  const eventDate = conference.startDate
+    ? formatConferenceDateLong(conference.startDate)
     : 'June 15, 2025'
 
   const conferenceDescription = getFirstParagraph(conference.description)
@@ -318,17 +318,17 @@ export default async function MarketingPage() {
           <MemeGeneratorWithDownload
             conferenceTitle={conference.title}
             conferenceLogos={{
-              logo_bright: conference.logo_bright,
-              logo_dark: conference.logo_dark,
-              logomark_bright: conference.logomark_bright,
-              logomark_dark: conference.logomark_dark,
+              logoBright: conference.logoBright,
+              logoDark: conference.logoDark,
+              logomarkBright: conference.logomarkBright,
+              logomarkDark: conference.logomarkDark,
             }}
           />
         </div>
 
         {/* Conference Promotional Tab */}
         <div>
-          <DownloadSpeakerImage
+          <DownloadableImage
             filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || 'cloud-native-bergen'}-conference-promo`}
           >
             <div
@@ -409,7 +409,7 @@ export default async function MarketingPage() {
                 </p>
               </div>
             </div>
-          </DownloadSpeakerImage>
+          </DownloadableImage>
         </div>
 
         {/* Photo Gallery Tab */}
@@ -431,10 +431,10 @@ export default async function MarketingPage() {
               qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
               conferenceTitle={conference.title || 'Cloud Native Days'}
               conferenceLogos={{
-                logo_bright: conference.logo_bright,
-                logo_dark: conference.logo_dark,
-                logomark_bright: conference.logomark_bright,
-                logomark_dark: conference.logomark_dark,
+                logoBright: conference.logoBright,
+                logoDark: conference.logoDark,
+                logomarkBright: conference.logomarkBright,
+                logomarkDark: conference.logomarkDark,
               }}
             />
           )}
@@ -456,7 +456,7 @@ export default async function MarketingPage() {
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
               {speakersWithTalks.map(({ speaker, talks }) => (
                 <div key={speaker._id} className="flex flex-col items-center">
-                  <DownloadSpeakerImage
+                  <DownloadableImage
                     filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
                   >
                     <div
@@ -475,7 +475,7 @@ export default async function MarketingPage() {
                         showCloudNativePattern={true}
                       />
                     </div>
-                  </DownloadSpeakerImage>
+                  </DownloadableImage>
                 </div>
               ))}
             </div>
@@ -512,7 +512,7 @@ export default async function MarketingPage() {
 
                 return (
                   <div key={sponsor._id} className="flex flex-col items-center">
-                    <DownloadSpeakerImage
+                    <DownloadableImage
                       filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
                     >
                       <div
@@ -529,7 +529,7 @@ export default async function MarketingPage() {
                           className="h-full w-full"
                         />
                       </div>
-                    </DownloadSpeakerImage>
+                    </DownloadableImage>
                   </div>
                 )
               })}

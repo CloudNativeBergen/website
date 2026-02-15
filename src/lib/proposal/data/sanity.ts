@@ -69,14 +69,14 @@ export async function getProposal({
             && (status == "accepted" || status == "confirmed")
           ]{
             _id, title, status, _createdAt,
-            conference-> { _id, title, start_date },
+            conference-> { _id, title, startDate },
             topics[]-> { _id, title, color }
           }`
             : ''
         }
       },
       conference-> {
-        _id, title, start_date, end_date
+        _id, title, startDate, endDate
       },
       topics[]-> {
         _id, title, color, slug, description
@@ -177,14 +177,14 @@ export async function getProposals({
           && (status == "accepted" || status == "confirmed")
         ]{
           _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
+          conference-> { _id, title, startDate },
           topics[]-> { _id, title, color }
         }`
           : ''
       }
     },
     conference-> {
-      _id, title, start_date, end_date
+      _id, title, startDate, endDate
     },
     topics[]-> {
       _id, title, color, slug, description
@@ -215,7 +215,7 @@ export async function getProposals({
     "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
         : ''
     }
-  } | order(conference->start_date desc, _updatedAt desc)`
+  } | order(conference->startDate desc, _updatedAt desc)`
 
   try {
     proposals = await clientRead.fetch(
@@ -469,14 +469,14 @@ export async function searchProposals({
           && (status == "accepted" || status == "confirmed")
         ]{
           _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
+          conference-> { _id, title, startDate },
           topics[]-> { _id, title, color }
         }`
             : ''
         }
       },
       conference-> {
-        _id, title, start_date, end_date
+        _id, title, startDate, endDate
       },
       topics[]-> {
         _id, title, color, slug, description

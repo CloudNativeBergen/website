@@ -142,26 +142,7 @@ export default defineType({
         defineField({
           name: 'dataProcessing',
           title: 'Data Processing',
-          type: 'object',
-          fields: [
-            defineField({
-              name: 'granted',
-              title: 'Granted',
-              type: 'boolean',
-            }),
-            defineField({
-              name: 'grantedAt',
-              title: 'Granted At',
-              type: 'datetime',
-              readOnly: true,
-            }),
-            defineField({
-              name: 'ipAddress',
-              title: 'IP Address',
-              type: 'string',
-              readOnly: true,
-            }),
-          ],
+          type: 'dataProcessingConsent',
         }),
         defineField({
           name: 'privacyPolicyVersion',

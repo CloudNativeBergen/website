@@ -11,7 +11,7 @@ export async function getSpeakerByEmail(
         _id,
         name,
         email,
-        is_organizer,
+        isOrganizer,
         "image": image.asset->url,
         "slug": slug.current
       }

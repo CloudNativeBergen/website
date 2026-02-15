@@ -23,7 +23,7 @@ export function checkOrganizerAccess(req: NextAuthRequest) {
     return response
   }
 
-  if (!req.auth.speaker.is_organizer) {
+  if (!req.auth.speaker.isOrganizer) {
     const response = new NextResponse(
       JSON.stringify({
         error: {

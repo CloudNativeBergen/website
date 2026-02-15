@@ -72,7 +72,7 @@ export default async function ProposalPage({
   if (conference && !proposalId) {
     const { isCfpOpen } = await import('@/lib/conference/state')
     if (!isCfpOpen(conference)) {
-      const contactEmail = conference.cfp_email || conference.contact_email
+      const contactEmail = conference.cfpEmail || conference.contactEmail
       loadingError = {
         type: 'CFP Closed',
         message: contactEmail

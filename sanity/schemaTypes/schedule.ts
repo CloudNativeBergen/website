@@ -18,12 +18,14 @@ export default defineType({
       name: 'date',
       title: 'Date',
       type: 'date',
+      description: 'Calendar date for this day of the schedule',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'tracks',
       title: 'Scheduled Tracks',
       type: 'array',
+      description: 'Parallel session tracks for this schedule day',
       of: [
         {
           type: 'object',

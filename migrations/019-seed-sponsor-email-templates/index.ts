@@ -46,8 +46,9 @@ const TEMPLATES = [
     subject: 'Partnership opportunity: {{{CONFERENCE_TITLE}}}',
     description:
       'First contact with a new potential sponsor (English language)',
-    is_default: true,
-    sort_order: 0,
+    language: 'en',
+    isDefault: true,
+    sortOrder: 0,
     body: [
       textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
       textBlock(
@@ -82,8 +83,9 @@ const TEMPLATES = [
     category: 'returning-sponsor',
     subject: 'Welcome back: {{{CONFERENCE_TITLE}}}',
     description: 'Re-engage sponsors from previous editions (English language)',
-    is_default: true,
-    sort_order: 0,
+    language: 'en',
+    isDefault: true,
+    sortOrder: 0,
     body: [
       textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
       textBlock(
@@ -122,20 +124,21 @@ const TEMPLATES = [
     category: 'international',
     subject: 'Reach the Nordic cloud native community: {{{CONFERENCE_TITLE}}}',
     description: 'Outreach to international companies not based in Norway',
-    is_default: true,
-    sort_order: 0,
+    language: 'en',
+    isDefault: true,
+    sortOrder: 0,
     body: [
       textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
       textBlock(
-        "Thanks again for {{{SPONSOR_NAME}}}'s support of the Norwegian cloud native community over the years!",
+        'My name is {{{SENDER_NAME}}} from {{{ORG_NAME}}}. We are organizing {{{CONFERENCE_TITLE}}}, a practitioner-focused cloud native conference in {{{CONFERENCE_CITY}}} on {{{CONFERENCE_DATE}}}.',
         'b2',
       ),
       textBlock(
-        'For {{{CONFERENCE_YEAR}}}, we have unified our roots to launch {{{CONFERENCE_TITLE}}}\u2014a single national conference in {{{CONFERENCE_CITY}}}. We are targeting 500 attendees, focusing on a practitioner-heavy audience where 80% occupy Senior, Lead, or Architect roles.',
+        'We are targeting 500 attendees with a practitioner-heavy audience where 80% occupy Senior, Lead, or Architect roles. The event is a great opportunity to reach the Nordic cloud native community.',
         'b3',
       ),
       textBlock(
-        'Our philosophy remains the same: No booths, just credibility. We integrate your brand into the fabric of the event instead of using a traditional expo hall.',
+        'Our philosophy is simple: No booths, just credibility. We integrate your brand into the fabric of the event instead of using a traditional expo hall.',
         'b4',
       ),
       textBlock(
@@ -174,8 +177,9 @@ const TEMPLATES = [
     category: 'returning-sponsor',
     subject: 'Sponsormuligheter: {{{CONFERENCE_TITLE}}}',
     description: 'Henvendelse til store nasjonale sponsorer (norsk spr\u00E5k)',
-    is_default: false,
-    sort_order: 10,
+    language: 'no',
+    isDefault: false,
+    sortOrder: 10,
     body: [
       textBlock('Hei {{{CONTACT_NAMES}}},', 'b1'),
       textBlock(
@@ -222,8 +226,9 @@ const TEMPLATES = [
     subject:
       'St\u00F8tt det lokale cloud native-milj\u00F8et: {{{CONFERENCE_TITLE}}}',
     description: 'Henvendelse til lokale/sm\u00E5 sponsorer (norsk spr\u00E5k)',
-    is_default: true,
-    sort_order: 0,
+    language: 'no',
+    isDefault: true,
+    sortOrder: 0,
     body: [
       textBlock('Hei {{{CONTACT_NAMES}}}!', 'b1'),
       textBlock(

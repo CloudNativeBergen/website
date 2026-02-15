@@ -70,14 +70,14 @@ export interface VolunteerWithConference extends Omit<
   conference: {
     _id: string
     title: string
-    contact_email?: string
-    cfp_email?: string
+    contactEmail?: string
+    cfpEmail?: string
     city?: string
     country?: string
-    start_date?: string
+    startDate?: string
     domains?: string[]
     organizer?: string
-    social_links?: Array<{
+    socialLinks?: Array<{
       platform: string
       url: string
     }>

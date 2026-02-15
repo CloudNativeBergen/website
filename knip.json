@@ -13,11 +13,15 @@
     "sanity.config.ts",
     "sanity/actions/**/*.js",
     "scripts/**/*.ts",
-    "migrations/**/index.ts"
+    "migrations/**/index.ts",
+    "src/**/*.stories.{ts,tsx}",
+    "src/docs/**/*.{ts,tsx}",
+    ".storybook/**/*.{ts,tsx}"
   ],
   "project": [
     "src/**/*.{ts,tsx,js,jsx}",
     "sanity/**/*.{ts,tsx,js,jsx}",
+    ".storybook/**/*.{ts,tsx,js,jsx}",
     "!src/**/*.test.{ts,tsx}",
     "!**/__tests__/**"
   ],
@@ -32,13 +36,17 @@
     "migrations/**",
     "**/middleware.ts",
     "src/lib/empty-module.ts",
-    "scripts/strip-comments.ts"
+    "scripts/strip-comments.ts",
+    "storybook-static/**",
+    "src/components/email/CoSpeakerResponseTemplate.tsx",
+    "src/lib/sponsor-crm/contract-send.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",
     "postcss",
     "jest-environment-jsdom",
-    "ts-node"
+    "ts-node",
+    "chromatic"
   ],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": true

@@ -61,20 +61,20 @@ function groupActivities(
   >()
 
   for (const activity of activities) {
-    const dateKey = getDateKey(activity.created_at)
+    const dateKey = getDateKey(activity.createdAt)
     if (!dayMap.has(dateKey)) {
       dayMap.set(dateKey, {
-        dateLabel: getDateLabel(activity.created_at),
+        dateLabel: getDateLabel(activity.createdAt),
         sponsors: new Map(),
       })
     }
 
     const day = dayMap.get(dateKey)!
-    const sponsorId = activity.sponsor_for_conference.sponsor._id
+    const sponsorId = activity.sponsorForConference.sponsor._id
     if (!day.sponsors.has(sponsorId)) {
       day.sponsors.set(sponsorId, {
-        sponsorName: activity.sponsor_for_conference.sponsor.name,
-        sponsorForConferenceId: activity.sponsor_for_conference._id,
+        sponsorName: activity.sponsorForConference.sponsor.name,
+        sponsorForConferenceId: activity.sponsorForConference._id,
         activities: [],
       })
     }
@@ -104,7 +104,7 @@ function UserAvatar({
 }) {
   const sizeClasses = size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
 
-  if (image) {
+  if (image && image.length > 0) {
     return (
       <Image
         src={image}
@@ -135,10 +135,10 @@ function UserAvatar({
 
 function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
   const iconType = useMemo(
-    () => getActivityIcon(activity.activity_type),
-    [activity.activity_type],
+    () => getActivityIcon(activity.activityType),
+    [activity.activityType],
   )
-  const timeAgo = formatDistanceToNow(new Date(activity.created_at), {
+  const timeAgo = formatDistanceToNow(new Date(activity.createdAt), {
     addSuffix: true,
   })
 
@@ -147,7 +147,7 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
       <div
         className={clsx(
           'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-          getActivityColor(activity.activity_type),
+          getActivityColor(activity.activityType),
         )}
       >
         {React.createElement(iconType, { className: 'h-3 w-3' })}
@@ -157,8 +157,8 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
         <UserAvatar
-          name={activity.created_by.name}
-          image={activity.created_by.image}
+          name={activity.createdBy?.name ?? 'System'}
+          image={activity.createdBy?.image}
           size="sm"
         />
         <time className="text-xs text-gray-400 dark:text-gray-500">

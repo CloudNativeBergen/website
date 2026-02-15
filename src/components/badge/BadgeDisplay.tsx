@@ -43,8 +43,8 @@ export function BadgeDisplay({
 }: BadgeDisplayProps) {
   const [copied, setCopied] = useState<'url' | null>(null)
 
-  const badgeTypeName = badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
-  const issuedDate = new Date(badge.issued_at).toLocaleDateString('en-US', {
+  const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
+  const issuedDate = new Date(badge.issuedAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -55,7 +55,7 @@ export function BadgeDisplay({
   const jsonUrl = `/api/badge/${badgeId}/json`
   const fullBadgeUrl = buildFullUrl(domain, badgeUrl)
   const fullJsonUrl = buildFullUrl(domain, jsonUrl)
-  const badgeSvgUrl = badge.baked_svg?.asset?.url
+  const badgeSvgUrl = badge.bakedSvg?.asset?.url
   const speakerProfileUrl = speaker.slug ? `/speaker/${speaker.slug}` : null
 
   const handleCopy = async () => {
@@ -74,7 +74,7 @@ export function BadgeDisplay({
   }
 
   const handleAddToLinkedIn = () => {
-    const issueDate = new Date(badge.issued_at)
+    const issueDate = new Date(badge.issuedAt)
     addToLinkedInProfile({
       name: `${conference.title} ${badgeTypeName} Badge`,
       organizationName: conference.organizer || 'Cloud Native Days',

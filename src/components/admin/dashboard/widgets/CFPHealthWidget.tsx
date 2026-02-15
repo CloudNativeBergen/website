@@ -74,7 +74,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               </div>
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
-                  (new Date(conference.cfp_start_date).getTime() - now) /
+                  (new Date(conference.cfpStartDate).getTime() - now) /
                     (1000 * 60 * 60 * 24),
                 )}
                 d
@@ -86,8 +86,8 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               </div>
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
-                  (new Date(conference.cfp_end_date).getTime() -
-                    new Date(conference.cfp_start_date).getTime()) /
+                  (new Date(conference.cfpEndDate).getTime() -
+                    new Date(conference.cfpStartDate).getTime()) /
                     (1000 * 60 * 60 * 24),
                 )}
                 d

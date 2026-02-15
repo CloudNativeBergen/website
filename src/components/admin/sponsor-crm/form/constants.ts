@@ -15,6 +15,7 @@ import {
   ClockIcon,
   MinusCircleIcon,
   DocumentCheckIcon,
+  EnvelopeOpenIcon,
 } from '@heroicons/react/24/outline'
 
 export const STATUSES: Array<{
@@ -68,6 +69,11 @@ export const CONTRACT_STATUSES: Array<{
     value: 'verbal-agreement',
     label: 'Verbal Agreement',
     icon: ArrowsRightLeftIcon,
+  },
+  {
+    value: 'registration-sent',
+    label: 'Registration Sent',
+    icon: EnvelopeOpenIcon,
   },
   { value: 'contract-sent', label: 'Contract Sent', icon: PaperAirplaneIcon },
   {

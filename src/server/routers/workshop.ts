@@ -166,18 +166,18 @@ export const workshopRouter = router({
 
         const now = new Date()
         if (
-          conference.workshop_registration_start &&
-          new Date(conference.workshop_registration_start) > now
+          conference.workshopRegistrationStart &&
+          new Date(conference.workshopRegistrationStart) > now
         ) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `Workshop registration opens on ${new Date(conference.workshop_registration_start).toLocaleDateString()}`,
+            message: `Workshop registration opens on ${new Date(conference.workshopRegistrationStart).toLocaleDateString()}`,
           })
         }
 
         if (
-          conference.workshop_registration_end &&
-          new Date(conference.workshop_registration_end) < now
+          conference.workshopRegistrationEnd &&
+          new Date(conference.workshopRegistrationEnd) < now
         ) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
@@ -718,10 +718,10 @@ export const workshopRouter = router({
         await clientWrite
           .patch(conferenceId)
           .set({
-            workshop_registration_start: startDate
+            workshopRegistrationStart: startDate
               ? new Date(startDate).toISOString()
               : null,
-            workshop_registration_end: endDate
+            workshopRegistrationEnd: endDate
               ? new Date(endDate).toISOString()
               : null,
           })

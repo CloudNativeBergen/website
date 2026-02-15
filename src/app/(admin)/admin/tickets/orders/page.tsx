@@ -11,6 +11,7 @@ import {
   BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { EmptyState } from '@/components/EmptyState'
 
 async function getTicketData(
   customerId: number,
@@ -29,12 +30,12 @@ export default async function OrdersAdminPage() {
 
   if (
     conferenceError ||
-    !conference.checkin_customer_id ||
-    !conference.checkin_event_id
+    !conference.checkinCustomerId ||
+    !conference.checkinEventId
   ) {
     const missingFields = []
-    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
-    if (!conference.checkin_event_id) missingFields.push('Event ID')
+    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
+    if (!conference.checkinEventId) missingFields.push('Event ID')
 
     return (
       <ErrorDisplay
@@ -54,8 +55,8 @@ export default async function OrdersAdminPage() {
 
   try {
     allTickets = await getTicketData(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
+      conference.checkinCustomerId,
+      conference.checkinEventId,
     )
   } catch (err) {
     error = (err as Error).message
@@ -91,20 +92,17 @@ export default async function OrdersAdminPage() {
         </div>
 
         {orders.length === 0 ? (
-          <div className="py-12 text-center">
-            <ShoppingBagIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No orders found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No tickets have been sold for this event yet.
-            </p>
-          </div>
+          <EmptyState
+            icon={ShoppingBagIcon}
+            title="No orders found"
+            description="No tickets have been sold for this event yet."
+            className="py-12"
+          />
         ) : (
           <OrdersTableWithSearch
             orders={orders}
-            customerId={conference.checkin_customer_id}
-            eventId={conference.checkin_event_id}
+            customerId={conference.checkinCustomerId}
+            eventId={conference.checkinEventId}
           />
         )}
       </div>

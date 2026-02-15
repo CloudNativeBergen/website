@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
     // Verify authorization: user must be uploading their own image OR be an organizer
     const isOwnProfile = !speakerId || speakerId === session.speaker._id
-    const isOrganizer = session.speaker.is_organizer === true
+    const isOrganizer = session.speaker.isOrganizer === true
 
     if (!isOwnProfile && !isOrganizer) {
       return NextResponse.json(

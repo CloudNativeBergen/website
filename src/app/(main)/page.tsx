@@ -52,8 +52,8 @@ async function CachedHomeContent({ domain }: { domain: string }) {
       {hasSchedule ? (
         <ProgramHighlights
           schedules={conference.schedules!}
-          featuredSpeakers={conference.featured_speakers || []}
-          featuredTalks={conference.featured_talks || []}
+          featuredSpeakers={conference.featuredSpeakers || []}
+          featuredTalks={conference.featuredTalks || []}
           conference={conference}
         />
       ) : sortedOrganizers.length > 0 ? (

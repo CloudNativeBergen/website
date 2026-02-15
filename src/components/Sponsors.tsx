@@ -36,7 +36,7 @@ export function Sponsors({
 
   const sortedTierNames = sortTierNamesByValue(
     Object.keys(groupedSponsors),
-    conference.sponsor_tiers || [],
+    conference.sponsorTiers || [],
   )
 
   return (
@@ -66,9 +66,9 @@ export function Sponsors({
                   key={tierName}
                   className="mb-12 last:mb-0 lg:relative lg:mb-0"
                 >
-                  <div className="mb-6 flex items-center gap-3 lg:absolute lg:top-8 lg:left-0 lg:mb-0 lg:w-32">
-                    <div className="h-0.5 w-4 bg-brand-cloud-blue dark:bg-brand-cloud-blue"></div>
-                    <h3 className="font-display text-lg font-bold tracking-wider whitespace-nowrap text-brand-cloud-blue uppercase dark:text-brand-cloud-blue">
+                  <div className="mb-6 flex items-start gap-3 lg:absolute lg:top-8 lg:left-0 lg:mb-0 lg:w-32">
+                    <div className="mt-2 h-0.5 w-4 shrink-0 bg-brand-cloud-blue dark:bg-brand-cloud-blue"></div>
+                    <h3 className="font-display text-lg font-bold tracking-wider text-brand-cloud-blue uppercase dark:text-brand-cloud-blue">
                       {tierName}
                     </h3>
                   </div>
@@ -89,7 +89,7 @@ export function Sponsors({
                           >
                             <SponsorLogo
                               logo={sponsor.sponsor.logo}
-                              logoBright={sponsor.sponsor.logo_bright}
+                              logoBright={sponsor.sponsor.logoBright}
                               name={sponsor.sponsor.name}
                               className="h-8 w-auto max-w-full object-contain sm:h-10 lg:h-8"
                             />
@@ -124,8 +124,8 @@ export function Sponsors({
                     enthusiasts, container wranglers, and cloud architects. We
                     have sponsorship tiers for every cluster size.
                   </p>
-                  {conference.sponsor_tiers &&
-                  conference.sponsor_tiers.length > 0 ? (
+                  {conference.sponsorTiers &&
+                  conference.sponsorTiers.length > 0 ? (
                     <Link
                       href="/sponsor"
                       className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
@@ -134,7 +134,7 @@ export function Sponsors({
                     </Link>
                   ) : (
                     <a
-                      href={`mailto:${conference.sponsor_email}?subject=Sponsorship Inquiry`}
+                      href={`mailto:${conference.sponsorEmail}?subject=Sponsorship Inquiry`}
                       className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
                     >
                       Contact Us About Sponsoring

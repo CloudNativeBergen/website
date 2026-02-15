@@ -72,6 +72,32 @@ To run TypeScript type checking:
 pnpm run typecheck
 ```
 
+To run all checks at once (typecheck, lint, knip, format — runs in parallel):
+
+```bash
+pnpm run check
+```
+
+ESLint and Prettier use `--cache` flags so subsequent runs only process changed files. First run after a clean clone takes ~40s; warm runs take ~5s.
+
+## Git Hooks
+
+This project uses [simple-git-hooks](https://github.com/toplenboren/simple-git-hooks) to run `pnpm run check` and `pnpm run test` before every commit.
+
+After cloning the repo and installing dependencies, activate the hooks:
+
+```bash
+pnpm exec simple-git-hooks
+```
+
+To skip the hook for a one-off commit:
+
+```bash
+SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "wip"
+```
+
+If the hook configuration in `package.json` changes, re-run `pnpm exec simple-git-hooks` to update.
+
 ## Sanity
 
 Install the Sanity CLI:

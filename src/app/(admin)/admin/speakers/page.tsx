@@ -98,7 +98,7 @@ export default async function AdminSpeakers() {
           ).length,
         }}
         confirmedSpeakersCount={confirmedSpeakers.length}
-        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contact_email}>`}
+        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contactEmail}>`}
       />
     )
   } catch (error) {

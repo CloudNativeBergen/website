@@ -5,7 +5,7 @@ import { clientWrite } from '@/lib/sanity/client'
 export async function POST(request: Request) {
   try {
     const session = await getAuthSession()
-    if (!session?.speaker?.is_organizer) {
+    if (!session?.speaker?.isOrganizer) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
