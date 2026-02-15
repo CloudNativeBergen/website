@@ -8,9 +8,16 @@ import { useState } from 'react'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/ImportHistoricSponsorsButton',
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Button and confirmation modal for importing sponsors from previous conferences into the current pipeline. Shows a preview list of importable sponsors before executing.',
+      },
+    },
   },
 } satisfies Meta
 

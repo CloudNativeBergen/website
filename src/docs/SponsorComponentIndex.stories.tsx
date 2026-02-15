@@ -2,9 +2,16 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Overview',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Component index and navigation guide for the sponsor admin system. Lists all available components organized by domain with direct links.',
+      },
+    },
   },
 } satisfies Meta
 

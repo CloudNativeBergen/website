@@ -48,8 +48,15 @@ const mockOrganizers = [
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMFilterBar',
   component: SponsorCRMFilterBar,
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
+    docs: {
+      description: {
+        component:
+          'Filter toolbar for the sponsor pipeline. Provides search input, tier and organizer dropdowns, view mode toggle (board/list), and active filter chips with clear-all action.',
+      },
+    },
   },
   args: {
     currentView: 'pipeline',

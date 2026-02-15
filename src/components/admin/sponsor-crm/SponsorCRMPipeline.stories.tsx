@@ -10,9 +10,16 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMPipeline',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Main Kanban board view of the sponsor pipeline. Displays sponsors as draggable cards organized into columns by status (Lead, Contacted, Negotiating, Confirmed, etc.) with inline bulk actions and view switching.',
+      },
+    },
   },
 } satisfies Meta
 
@@ -250,10 +257,10 @@ export const Default: Story = {
               ))}
               {(!mockSponsors[status.id] ||
                 mockSponsors[status.id].length === 0) && (
-                <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                  No sponsors
-                </div>
-              )}
+                  <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                    No sponsors
+                  </div>
+                )}
             </div>
           </div>
         ))}
