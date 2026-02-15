@@ -45,9 +45,11 @@ function ErrorState({ message }: { message: string }) {
 function AlreadySignedState({
   sponsorName,
   conferenceName,
+  contractPdfUrl,
 }: {
   sponsorName?: string
   conferenceName?: string
+  contractPdfUrl?: string
 }) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -61,6 +63,17 @@ function AlreadySignedState({
           {sponsorName && ` for ${sponsorName}`}
           {conferenceName && ` at ${conferenceName}`} has already been signed.
         </p>
+        {contractPdfUrl && (
+          <a
+            href={contractPdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center space-x-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus-visible:outline-none"
+          >
+            <ArrowDownTrayIcon className="size-4" />
+            <span>Download Signed Agreement</span>
+          </a>
+        )}
       </div>
     </div>
   )
@@ -86,13 +99,12 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
           return (
             <li key={step.key} className="flex items-center space-x-2">
               <span
-                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${
-                  isCompleted
+                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${isCompleted
                     ? 'bg-emerald-500 text-white'
                     : isActive
                       ? 'bg-blue-700 text-white'
                       : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                }`}
+                  }`}
               >
                 {isCompleted ? (
                   <CheckCircleIcon className="size-5" />
@@ -101,23 +113,21 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
                 )}
               </span>
               <span
-                className={`text-sm font-medium ${
-                  isActive
+                className={`text-sm font-medium ${isActive
                     ? 'text-blue-700 dark:text-blue-400'
                     : isCompleted
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-slate-400 dark:text-slate-500'
-                }`}
+                  }`}
               >
                 {step.label}
               </span>
               {index < steps.length - 1 && (
                 <div
-                  className={`ml-4 h-px w-12 ${
-                    isCompleted
+                  className={`ml-4 h-px w-12 ${isCompleted
                       ? 'bg-emerald-400'
                       : 'bg-slate-200 dark:bg-slate-700'
-                  }`}
+                    }`}
                 />
               )}
             </li>
@@ -386,13 +396,7 @@ interface CompletionData {
 
 function CompletionStep({ data }: { data: CompletionData }) {
   const formattedDate = data.signedAt
-    ? new Date(data.signedAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+    ? formatDateTimeSafe(data.signedAt)
     : undefined
 
   return (
@@ -563,10 +567,7 @@ export function ContractSigningPage({
         signerName: data.signerName ?? undefined,
         signerEmail: data.signerEmail ?? undefined,
         signedAt: data.signedAt ?? undefined,
-        contractPdfUrl:
-          contract && 'contractPdfUrl' in contract
-            ? (contract.contractPdfUrl ?? undefined)
-            : undefined,
+        contractPdfUrl: data.contractPdfUrl ?? undefined,
       })
       setStep('complete')
     },
@@ -607,6 +608,11 @@ export function ContractSigningPage({
       <AlreadySignedState
         sponsorName={contract.sponsorName ?? undefined}
         conferenceName={contract.conferenceName ?? undefined}
+        contractPdfUrl={
+          'contractPdfUrl' in contract
+            ? (contract.contractPdfUrl ?? undefined)
+            : undefined
+        }
       />
     )
   }

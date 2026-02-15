@@ -158,6 +158,53 @@ describe('ContractSigningPage', () => {
       expect(screen.getByText('Contract Already Signed')).toBeInTheDocument()
       expect(screen.getByText(/Acme Corp/)).toBeInTheDocument()
     })
+
+    it('shows download link when signed contract has PDF URL', () => {
+      mockGetContract.mockReturnValue({
+        data: {
+          status: 'signed',
+          sponsorName: 'Acme Corp',
+          conferenceName: 'Cloud Native Days 2026',
+          contractPdfUrl: 'https://example.com/signed-contract.pdf',
+        },
+        isLoading: false,
+        error: null,
+      })
+      mockSubmitSignature.mockReturnValue({
+        mutate: jest.fn(),
+        isPending: false,
+      })
+
+      render(<ContractSigningPage token="test-token" />)
+      const downloadLink = screen.getByText('Download Signed Agreement')
+      expect(downloadLink).toBeInTheDocument()
+      expect(downloadLink.closest('a')).toHaveAttribute(
+        'href',
+        'https://example.com/signed-contract.pdf',
+      )
+    })
+
+    it('does not show download link when signed contract has no PDF URL', () => {
+      mockGetContract.mockReturnValue({
+        data: {
+          status: 'signed',
+          sponsorName: 'Acme Corp',
+          conferenceName: 'Cloud Native Days 2026',
+        },
+        isLoading: false,
+        error: null,
+      })
+      mockSubmitSignature.mockReturnValue({
+        mutate: jest.fn(),
+        isPending: false,
+      })
+
+      render(<ContractSigningPage token="test-token" />)
+      expect(screen.getByText('Contract Already Signed')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Download Signed Agreement'),
+      ).not.toBeInTheDocument()
+    })
   })
 
   describe('review step', () => {
@@ -315,6 +362,72 @@ describe('ContractSigningPage', () => {
       expect(
         screen.getByText('Agreement Signed Successfully'),
       ).toBeInTheDocument()
+    })
+
+    it('uses signed PDF URL from mutation response, not stale query data', async () => {
+      mockGetContract.mockReturnValue({
+        data: MOCK_CONTRACT,
+        isLoading: false,
+        error: null,
+      })
+      mockSubmitSignature.mockReturnValue({
+        mutate: jest.fn(),
+        isPending: false,
+      })
+
+      render(<ContractSigningPage token="test-token" />)
+
+      // Simulate onSuccess with a DIFFERENT contractPdfUrl than the query
+      const signedUrl = 'https://example.com/signed-contract.pdf'
+      submitOnSuccess?.({
+        sponsorName: 'Acme Corp',
+        conferenceName: 'Cloud Native Days 2026',
+        conferenceCity: 'Bergen',
+        organizer: 'Cloud Native Bergen',
+        tierName: 'Ingress',
+        contractValue: 100000,
+        contractCurrency: 'NOK',
+        signerName: 'Jane Doe',
+        signerEmail: 'jane@acme.com',
+        signedAt: '2026-02-15T10:00:00Z',
+        contractPdfUrl: signedUrl,
+      })
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Agreement Signed Successfully'),
+        ).toBeInTheDocument()
+      })
+
+      const downloadLink = screen.getByText('Download')
+      expect(downloadLink.closest('a')).toHaveAttribute('href', signedUrl)
+    })
+
+    it('shows submission error when mutation fails', async () => {
+      mockGetContract.mockReturnValue({
+        data: MOCK_CONTRACT,
+        isLoading: false,
+        error: null,
+      })
+      mockSubmitSignature.mockReturnValue({
+        mutate: jest.fn(),
+        isPending: false,
+      })
+
+      const { rerender } = render(<ContractSigningPage token="test-token" />)
+
+      const { act } = await import('@testing-library/react')
+      act(() => {
+        submitOnError?.({ message: 'Network error' })
+      })
+      rerender(<ContractSigningPage token="test-token" />)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Signature submission failed'),
+        ).toBeInTheDocument()
+      })
+      expect(screen.getByText('Network error')).toBeInTheDocument()
     })
   })
 

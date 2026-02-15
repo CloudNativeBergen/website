@@ -435,6 +435,12 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
+              name="ContractSignedTemplate"
+              path="@/components/email/ContractSignedTemplate"
+              description="Confirmation email sent after signing, with signed PDF attached."
+              hasStory
+            />
+            <ComponentCard
               name="ContractReminderTemplate"
               path="@/components/email/ContractReminderTemplate"
               description="Automated reminder email sent by cron when a contract is pending for more than 5 days."

@@ -37,7 +37,11 @@ interface SigningContractData {
     startDate?: string
     city?: string
     organizer?: string
+    sponsorEmail?: string
+    domains?: string[]
+    socialLinks?: string[]
   }
+  contactPersons?: Array<{ name?: string; email?: string; isPrimary?: boolean }>
   contractValue?: number
   contractCurrency?: string
 }
@@ -58,7 +62,8 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   },
   "sponsor": sponsor->{ name },
   "tier": tier->{ title },
-  "conference": conference->{ title, startDate, city, organizer },
+  "conference": conference->{ title, startDate, city, organizer, sponsorEmail, domains, socialLinks },
+  contactPersons[]{ name, email, isPrimary },
   contractValue,
   contractCurrency
 }`
@@ -99,6 +104,7 @@ export const signingRouter = router({
           status: 'signed' as const,
           sponsorName: doc.sponsor?.name,
           conferenceName: doc.conference?.title,
+          contractPdfUrl: doc.contractDocument?.asset?.url,
         }
       }
 
@@ -179,12 +185,12 @@ export const signingRouter = router({
       // Upload signed PDF to Sanity
       const filename = `contract-${sanitizeSponsorName(doc.sponsor?.name || 'sponsor')}-signed.pdf`
 
-      let asset: { _id: string }
+      let asset: { _id: string; url: string }
       try {
-        asset = await clientWrite.assets.upload('file', signedPdfBuffer, {
+        asset = (await clientWrite.assets.upload('file', signedPdfBuffer, {
           filename,
           contentType: 'application/pdf',
-        })
+        })) as { _id: string; url: string }
       } catch (uploadError) {
         console.error('[signing] Failed to upload signed PDF:', uploadError)
         throw new TRPCError({
@@ -237,6 +243,66 @@ export const signingRouter = router({
         console.error('[signing] Failed to log signing activity:', logError)
       }
 
+      // Send confirmation email (best-effort, non-critical)
+      try {
+        if (doc.conference?.sponsorEmail && doc.signerEmail) {
+          const { ContractSignedTemplate } =
+            await import('@/components/email/ContractSignedTemplate')
+          const { resend, retryWithBackoff } =
+            await import('@/lib/email/config')
+          const { formatConferenceDateLong } = await import('@/lib/time')
+          const React = await import('react')
+
+          const contractValueStr = doc.contractValue
+            ? `${doc.contractValue.toLocaleString()} ${doc.contractCurrency || 'NOK'}`
+            : undefined
+
+          const eventUrl = doc.conference.domains?.[0]
+            ? `https://${doc.conference.domains[0]}`
+            : 'https://cloudnativeday.no'
+
+          const emailElement = React.createElement(ContractSignedTemplate, {
+            sponsorName: doc.sponsor?.name || 'Sponsor',
+            signerName: input.signerName,
+            tierName: doc.tier?.title,
+            contractValue: contractValueStr,
+            eventName: doc.conference.title || 'Cloud Native Day',
+            eventLocation: doc.conference.city || 'Norway',
+            eventDate: doc.conference.startDate
+              ? formatConferenceDateLong(doc.conference.startDate)
+              : '',
+            eventUrl,
+            socialLinks: doc.conference.socialLinks || [],
+          })
+
+          const fromEmail = doc.conference.sponsorEmail
+          const fromName = doc.conference.organizer || 'Cloud Native Days'
+          const eventName = doc.conference.title || 'Cloud Native Day'
+
+          await retryWithBackoff(async () => {
+            return resend.emails.send({
+              from: `${fromName} <${fromEmail}>`,
+              to: [doc.signerEmail],
+              subject: `Contract confirmed \u2013 Welcome aboard ${eventName}!`,
+              react: emailElement,
+              attachments: [
+                {
+                  filename,
+                  content: signedPdfBuffer,
+                },
+              ],
+            })
+          })
+
+          console.log(`[signing] Confirmation email sent to ${doc.signerEmail}`)
+        }
+      } catch (emailError) {
+        console.error(
+          '[signing] Failed to send confirmation email:',
+          emailError,
+        )
+      }
+
       return {
         success: true,
         sponsorName: doc.sponsor?.name,
@@ -249,6 +315,7 @@ export const signingRouter = router({
         signerName: input.signerName,
         signerEmail: doc.signerEmail,
         signedAt: now,
+        contractPdfUrl: asset.url,
       }
     }),
 })

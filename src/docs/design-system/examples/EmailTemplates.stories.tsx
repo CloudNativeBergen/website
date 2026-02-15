@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
 import { ContractSigningTemplate } from '@/components/email/ContractSigningTemplate'
+import { ContractSignedTemplate } from '@/components/email/ContractSignedTemplate'
 import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
 import {
   EnvelopeIcon,
@@ -251,6 +252,38 @@ export const EmailTemplates: Story = {
           </EmailPreviewFrame>
         </section>
 
+        {/* Contract Signed Confirmation Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Contract Signed Confirmation Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent automatically to the sponsor after they successfully sign the
+            sponsorship agreement, with a copy of the signed PDF attached.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="sponsor@acmecorp.com"
+            subject="Contract confirmed – Welcome aboard Cloud Native Days Norway 2026!"
+            time="Immediately after signing"
+          >
+            <ContractSignedTemplate
+              sponsorName="Acme Corp"
+              signerName="Jane Smith"
+              tierName="Service"
+              contractValue="50 000 NOK"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
         {/* Template Categories */}
         <section className="mb-16">
           <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
@@ -315,6 +348,7 @@ export const EmailTemplates: Story = {
               description="Digital contract signing and reminder templates"
               templates={[
                 'Contract Signing Request',
+                'Contract Signed Confirmation',
                 'Contract Reminder (#1)',
                 'Contract Reminder (#2)',
               ]}
