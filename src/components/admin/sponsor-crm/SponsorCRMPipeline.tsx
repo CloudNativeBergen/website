@@ -131,8 +131,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contractValue != null,
-            )
+            (s) => s.status === 'closed-won' && s.contractValue != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -671,7 +671,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                      ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -750,14 +750,10 @@ export function SponsorCRMPipeline({
         collisionDetection={pointerWithin}
       >
         <div
-          className={clsx(
-            'min-h-0 flex-1',
-            'flex snap-x snap-mandatory gap-3 overflow-x-auto',
-            'lg:grid lg:snap-none lg:gap-1 lg:overflow-x-visible',
-            currentView === 'pipeline' && 'lg:grid-cols-5',
-            currentView === 'invoice' && 'lg:grid-cols-5',
-            currentView === 'contract' && 'lg:grid-cols-4',
-          )}
+          className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto lg:grid lg:snap-none lg:gap-1 lg:overflow-x-visible"
+          style={{
+            gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+          }}
         >
           {columns.map((column) => {
             const columnSponsors = groupedSponsors[column.key] || []
@@ -792,8 +788,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={() => { }}
+                onDelete={() => { }}
               />
             </div>
           )}
