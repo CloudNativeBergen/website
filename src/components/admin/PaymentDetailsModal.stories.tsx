@@ -3,6 +3,12 @@ import { fn } from 'storybook/test'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
 
+function daysFromNow(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString()
+}
+
 const baseOrder: CheckinPayOrder = {
   id: 1001,
   belongsTo: 42,
@@ -76,7 +82,7 @@ export const Pending: Story = {
       paymentStatus: 'PENDING',
       paid: false,
       sumLeft: '15000.00',
-      dueAt: '2025-08-15T23:59:59Z',
+      dueAt: daysFromNow(30),
     },
   },
 }
@@ -88,7 +94,7 @@ export const Overdue: Story = {
       paymentStatus: 'PENDING',
       paid: false,
       sumLeft: '15000.00',
-      dueAt: '2024-12-01T23:59:59Z',
+      dueAt: daysFromNow(-14),
       actionRequired: 'Payment is overdue. Please follow up with the customer.',
     },
   },
