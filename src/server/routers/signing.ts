@@ -307,6 +307,14 @@ export const signingRouter = router({
         success: true,
         sponsorName: doc.sponsor?.name,
         conferenceName: doc.conference?.title,
+        conferenceCity: doc.conference?.city,
+        organizer: doc.conference?.organizer,
+        tierName: doc.tier?.title,
+        contractValue: doc.contractValue,
+        contractCurrency: doc.contractCurrency,
+        signerName: input.signerName,
+        signerEmail: doc.signerEmail,
+        signedAt: now,
       }
     }),
 })

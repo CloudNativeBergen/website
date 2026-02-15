@@ -3,8 +3,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
+  ArrowDownTrayIcon,
   CheckCircleIcon,
   DocumentTextIcon,
+  EnvelopeIcon,
   ExclamationTriangleIcon,
   PencilIcon,
   ShieldCheckIcon,
@@ -283,7 +285,8 @@ function ContractSignStep({
           Sign the Agreement
         </h2>
         <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
-          Please provide your name and signature below.
+          Please provide your name and signature below. Fields marked with{' '}
+          <span className="text-red-500">*</span> are required.
         </p>
 
         <div className="space-y-5">
@@ -292,7 +295,7 @@ function ContractSignStep({
               htmlFor="signer-name"
               className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
             >
-              Full Name
+              Full Name <span className="text-red-500">*</span>
             </label>
             <input
               id="signer-name"
@@ -318,7 +321,7 @@ function ContractSignStep({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Signature
+              Signature <span className="text-red-500">*</span>
             </label>
             <SignaturePadCanvas
               onSignatureChange={setSignatureDataUrl}
@@ -364,28 +367,158 @@ function ContractSignStep({
   )
 }
 
-function CompletionStep({
-  sponsorName,
-  conferenceName,
-}: {
+interface CompletionData {
   sponsorName?: string
   conferenceName?: string
-}) {
+  conferenceCity?: string
+  organizer?: string
+  tierName?: string
+  contractValue?: number
+  contractCurrency?: string
+  signerName?: string
+  signerEmail?: string
+  signedAt?: string
+  contractPdfUrl?: string
+}
+
+function CompletionStep({ data }: { data: CompletionData }) {
+  const formattedDate = data.signedAt
+    ? new Date(data.signedAt).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    : undefined
+
   return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <div className="mx-auto max-w-md text-center">
-        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20">
-          <CheckCircleIcon className="size-12 text-emerald-500" />
+    <div className="space-y-6">
+      {/* Success banner */}
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20">
+          <CheckCircleIcon className="size-10 text-emerald-500" />
         </div>
-        <h2 className="mb-2 text-xl font-semibold text-slate-900 dark:text-white">
+        <h2 className="mb-1 text-xl font-semibold text-slate-900 dark:text-white">
           Agreement Signed Successfully
         </h2>
-        <p className="mb-6 text-sm text-slate-600 dark:text-slate-400">
-          Thank you! The sponsorship agreement
-          {sponsorName && ` for ${sponsorName}`}
-          {conferenceName && ` at ${conferenceName}`} has been signed. A copy of
-          the signed document will be available to both parties.
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          The sponsorship agreement has been signed and recorded.
         </p>
+      </div>
+
+      {/* Signature details card */}
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h3 className="mb-4 text-sm font-semibold text-slate-500 uppercase dark:text-slate-400">
+          Signature Details
+        </h3>
+        <dl className="space-y-3 text-sm">
+          {data.signerName && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">Signed by</dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.signerName}
+              </dd>
+            </div>
+          )}
+          {data.signerEmail && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">Email</dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.signerEmail}
+              </dd>
+            </div>
+          )}
+          {formattedDate && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">Date</dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {formattedDate}
+              </dd>
+            </div>
+          )}
+          {data.sponsorName && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">
+                Organization
+              </dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.sponsorName}
+              </dd>
+            </div>
+          )}
+          {data.conferenceName && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">Event</dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.conferenceName}
+              </dd>
+            </div>
+          )}
+          {data.tierName && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">
+                Partnership Level
+              </dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.tierName}
+              </dd>
+            </div>
+          )}
+          {data.contractValue != null && (
+            <div className="flex justify-between">
+              <dt className="text-slate-500 dark:text-slate-400">
+                Contract Value
+              </dt>
+              <dd className="font-medium text-slate-900 dark:text-white">
+                {data.contractValue.toLocaleString()}{' '}
+                {data.contractCurrency || 'NOK'}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      {/* Download button */}
+      {data.contractPdfUrl && (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <DocumentTextIcon className="size-5 text-slate-400" />
+              <div>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                  Signed Agreement
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  PDF document with your signature
+                </p>
+              </div>
+            </div>
+            <a
+              href={data.contractPdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus-visible:outline-none"
+            >
+              <ArrowDownTrayIcon className="size-4" />
+              <span>Download</span>
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Email confirmation notice */}
+      <div className="flex items-start space-x-3 rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <EnvelopeIcon className="mt-0.5 size-5 shrink-0 text-blue-600 dark:text-blue-400" />
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          A confirmation email with a copy of the signed agreement will be sent
+          to <strong>{data.signerEmail || 'the designated signer'}</strong>{' '}
+          shortly.
+        </p>
+      </div>
+
+      {/* Secure badge */}
+      <div className="text-center">
         <div className="inline-flex items-center space-x-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
           <ShieldCheckIcon className="size-4" />
           <span>Your signature has been securely recorded</span>
@@ -404,10 +537,9 @@ export function ContractSigningPage({
 }) {
   const [step, setStep] = useState<Step>(initialStep)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [completionData, setCompletionData] = useState<{
-    sponsorName?: string
-    conferenceName?: string
-  } | null>(null)
+  const [completionData, setCompletionData] = useState<CompletionData | null>(
+    null,
+  )
 
   const {
     data: contract,
@@ -420,6 +552,18 @@ export function ContractSigningPage({
       setCompletionData({
         sponsorName: data.sponsorName ?? undefined,
         conferenceName: data.conferenceName ?? undefined,
+        conferenceCity: data.conferenceCity ?? undefined,
+        organizer: data.organizer ?? undefined,
+        tierName: data.tierName ?? undefined,
+        contractValue: data.contractValue ?? undefined,
+        contractCurrency: data.contractCurrency ?? undefined,
+        signerName: data.signerName ?? undefined,
+        signerEmail: data.signerEmail ?? undefined,
+        signedAt: data.signedAt ?? undefined,
+        contractPdfUrl:
+          contract && 'contractPdfUrl' in contract
+            ? (contract.contractPdfUrl ?? undefined)
+            : undefined,
       })
       setStep('complete')
     },
@@ -518,11 +662,8 @@ export function ContractSigningPage({
         />
       )}
 
-      {step === 'complete' && (
-        <CompletionStep
-          sponsorName={completionData?.sponsorName}
-          conferenceName={completionData?.conferenceName}
-        />
+      {step === 'complete' && completionData && (
+        <CompletionStep data={completionData} />
       )}
     </div>
   )
