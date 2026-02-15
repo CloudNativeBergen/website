@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -44,6 +44,7 @@ interface SponsorCRMFormProps {
   onSuccess: (createdId?: string) => void
   existingSponsorsInCRM?: string[]
   initialView?: FormView
+  onViewChange?: (view: FormView) => void
 }
 
 export function SponsorCRMForm({
@@ -54,8 +55,16 @@ export function SponsorCRMForm({
   onSuccess,
   existingSponsorsInCRM = [],
   initialView = 'pipeline',
+  onViewChange,
 }: SponsorCRMFormProps) {
-  const [view, setView] = useState<FormView>(initialView)
+  const [view, setViewState] = useState<FormView>(initialView)
+  const setView = useCallback(
+    (v: FormView) => {
+      setViewState(v)
+      onViewChange?.(v)
+    },
+    [onViewChange],
+  )
   const [userHasEditedValue, setUserHasEditedValue] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -292,12 +301,12 @@ export function SponsorCRMForm({
                               )}
                               {(sponsor.contractStatus === 'contract-sent' ||
                                 sponsor.signatureStatus === 'pending') && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
                               {sponsor.registrationComplete &&
                                 sponsor.contractStatus !== 'contract-sent' &&
                                 sponsor.contractStatus !==
-                                  'contract-signed' && (
+                                'contract-signed' && (
                                   <span className="absolute -top-1 -right-1 h-2 w-2 animate-pulse rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
                                 )}
                               <DocumentTextIcon className="h-4 w-4" />

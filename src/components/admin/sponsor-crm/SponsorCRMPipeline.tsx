@@ -72,7 +72,14 @@ export function SponsorCRMPipeline({
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
-  const [currentView, setCurrentView] = useState<BoardView>('pipeline')
+  const [currentView, setCurrentView] = useState<BoardView>(
+    () =>
+      (['pipeline', 'contract', 'invoice'].includes(
+        searchParams.get('board') || '',
+      )
+        ? searchParams.get('board')
+        : 'pipeline') as BoardView,
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
@@ -141,8 +148,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contractValue != null,
-            )
+            (s) => s.status === 'closed-won' && s.contractValue != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -154,35 +161,69 @@ export function SponsorCRMPipeline({
     return filtered
   }, [sponsors, currentView, searchQuery])
 
+  // Helper to update URL params without triggering navigation
+  const updateUrlParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString())
+      for (const [key, value] of Object.entries(updates)) {
+        if (value) {
+          params.set(key, value)
+        } else {
+          params.delete(key)
+        }
+      }
+      router.replace(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
   // Handlers
   const handleOpenForm = useCallback(
-    (sponsor?: SponsorForConferenceExpanded) => {
+    (
+      sponsor?: SponsorForConferenceExpanded,
+      formView: 'pipeline' | 'history' | 'contract' = 'pipeline',
+    ) => {
       setSelectedSponsor(sponsor || null)
-      setInitialFormView('pipeline')
+      setInitialFormView(formView)
       setIsFormOpen(true)
+      if (sponsor) {
+        updateUrlParams({ sponsor: sponsor._id, view: formView })
+      }
     },
-    [],
+    [updateUrlParams],
   )
 
   const handleCreateNew = useCallback(() => {
     setSelectedSponsor(null)
     setInitialFormView('pipeline')
     setIsFormOpen(true)
-  }, [])
+    updateUrlParams({ sponsor: null, view: null })
+  }, [updateUrlParams])
 
   const handleOpenContract = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
       setSelectedSponsor(sponsor)
       setInitialFormView('contract')
       setIsFormOpen(true)
+      updateUrlParams({ sponsor: sponsor._id, view: 'contract' })
     },
-    [],
+    [updateUrlParams],
   )
 
   const handleCloseForm = useCallback(() => {
     setSelectedSponsor(null)
     setIsFormOpen(false)
-  }, [])
+    updateUrlParams({ sponsor: null, view: null })
+  }, [updateUrlParams])
+
+  const handleFormViewChange = useCallback(
+    (formView: string) => {
+      if (selectedSponsor) {
+        updateUrlParams({ view: formView })
+      }
+    },
+    [selectedSponsor, updateUrlParams],
+  )
 
   const handleOpenEmail = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
@@ -299,29 +340,28 @@ export function SponsorCRMPipeline({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleCreateNew, handleOpenForm])
 
-  // Handle sponsor query parameter
+  // Restore sponsor form from URL on initial load
   useEffect(() => {
     const sponsorId = searchParams.get('sponsor')
-    const viewParam = searchParams.get('view')
+    const viewParam = searchParams.get('view') as
+      | 'pipeline'
+      | 'history'
+      | 'contract'
+      | null
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedSponsor(sponsor)
-        setInitialFormView(viewParam === 'history' ? 'history' : 'pipeline')
-        setIsFormOpen(true)
-        const params = new URLSearchParams(searchParams.toString())
-        params.delete('sponsor')
-        params.delete('view')
-        router.replace(
-          params.toString()
-            ? `?${params.toString()}`
-            : window.location.pathname,
-          { scroll: false },
+        setInitialFormView(
+          viewParam === 'history' || viewParam === 'contract'
+            ? viewParam
+            : 'pipeline',
         )
+        setIsFormOpen(true)
       }
     }
-  }, [searchParams, sponsors, isFormOpen, router])
+  }, [searchParams, sponsors, isFormOpen])
 
   // Update URL with filters
   const updateFilters = useCallback(
@@ -458,6 +498,7 @@ export function SponsorCRMPipeline({
           }}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
+          onViewChange={handleFormViewChange}
         />
       )}
 
@@ -490,7 +531,12 @@ export function SponsorCRMPipeline({
           <div className="shrink-0">
             <BoardViewSwitcher
               currentView={currentView}
-              onViewChange={setCurrentView}
+              onViewChange={(view) => {
+                setCurrentView(view)
+                updateUrlParams({
+                  board: view === 'pipeline' ? null : view,
+                })
+              }}
             />
           </div>
 
@@ -698,7 +744,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                      ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -815,8 +861,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={() => { }}
+                onDelete={() => { }}
               />
             </div>
           )}
