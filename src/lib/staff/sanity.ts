@@ -20,8 +20,7 @@ export async function getStaffMembers(
 
   try {
     const queryResult = await clientRead.fetch<Staff[]>(query, { role: role })
-    const resultOrError = { data: queryResult, error: null }
-    return resultOrError
+    return { data: queryResult }
   } catch (error) {
     return { data: [], err: error as Error }
   }
