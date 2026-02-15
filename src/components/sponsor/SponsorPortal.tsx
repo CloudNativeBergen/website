@@ -468,31 +468,41 @@ export function SponsorPortal({ token }: { token: string }) {
           </div>
         </section>
 
-        {/* Contract Signer selection — visible when >1 contact with email */}
-        {contactsWithEmail.length > 1 && (
+        {/* Contract Signer selection */}
+        {contactsWithEmail.length > 0 && (
           <section>
             <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
               Contract Signer
             </h2>
             <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-              Who should sign the sponsorship agreement? This person will
-              receive the contract for digital signing.
+              Select who should receive and sign the sponsorship agreement. The
+              contract will be sent for digital signing to this person.
             </p>
             <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-              <select
-                value={signerEmail}
-                onChange={(e) => setSignerEmail(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                {contactsWithEmail.map((c, i) => (
-                  <option key={i} value={c.email.trim()}>
-                    {c.name.trim()
-                      ? `${c.name.trim()} (${c.email.trim()})`
-                      : c.email.trim()}
-                    {c.isPrimary ? ' \u2014 Primary' : ''}
-                  </option>
-                ))}
-              </select>
+              {contactsWithEmail.length === 1 ? (
+                <p className="text-sm text-gray-700 dark:text-gray-200">
+                  {contactsWithEmail[0].name.trim()
+                    ? `${contactsWithEmail[0].name.trim()} (${contactsWithEmail[0].email.trim()})`
+                    : contactsWithEmail[0].email.trim()}{' '}
+                  will receive the contract for signing. Add more contacts above
+                  if someone else should sign.
+                </p>
+              ) : (
+                <select
+                  value={signerEmail}
+                  onChange={(e) => setSignerEmail(e.target.value)}
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                  {contactsWithEmail.map((c, i) => (
+                    <option key={i} value={c.email.trim()}>
+                      {c.name.trim()
+                        ? `${c.name.trim()} (${c.email.trim()})`
+                        : c.email.trim()}
+                      {c.isPrimary ? ' \u2014 Primary' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </section>
         )}
