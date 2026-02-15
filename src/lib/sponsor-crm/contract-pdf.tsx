@@ -450,7 +450,7 @@ function ContractDocument({
   return (
     <Document
       title={title}
-      author={template.headerText || 'Cloud Native Days Norway'}
+      author={template.headerText || variables.ORG_NAME || ''}
     >
       {/* Page 1: Partner Agreement */}
       <Page size="A4" style={styles.page}>
