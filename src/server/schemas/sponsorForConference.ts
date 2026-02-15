@@ -136,6 +136,12 @@ export const SponsorForConferenceIdSchema = z.object({
   id: z.string().min(1, 'ID is required'),
 })
 
+export const DeleteSponsorSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  cancelAgreement: z.boolean().optional(),
+  deleteContractAsset: z.boolean().optional(),
+})
+
 export const MoveStageSchema = z.object({
   id: z.string().min(1, 'ID is required'),
   newStatus: SponsorStatusSchema,
@@ -178,6 +184,8 @@ export const BulkDeleteSponsorCRMSchema = z.object({
   ids: z
     .array(z.string().min(1))
     .min(1, 'At least one sponsor must be selected'),
+  cancelAgreements: z.boolean().optional(),
+  deleteContractAssets: z.boolean().optional(),
 })
 
 export const ImportAllHistoricSponsorsSchema = z.object({

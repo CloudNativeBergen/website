@@ -37,7 +37,8 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
+import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
@@ -69,7 +70,8 @@ export function SponsorCRMPipeline({
     'pipeline' | 'history' | 'contract'
   >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
+    useState<SponsorForConferenceExpanded | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
@@ -238,15 +240,26 @@ export function SponsorCRMPipeline({
       }))
   }, [conference.organizers])
 
-  const handleDelete = useCallback(async (sponsorId: string) => {
-    setDeleteConfirmId(sponsorId)
-  }, [])
+  const handleDelete = useCallback(
+    async (sponsorId: string) => {
+      const sponsor = sponsors.find((s) => s._id === sponsorId)
+      if (sponsor) setDeleteConfirmSponsor(sponsor)
+    },
+    [sponsors],
+  )
 
-  const confirmDelete = useCallback(async () => {
-    if (!deleteConfirmId) return
-    await deleteMutation.mutateAsync({ id: deleteConfirmId })
-    setDeleteConfirmId(null)
-  }, [deleteConfirmId, deleteMutation])
+  const confirmDelete = useCallback(
+    async (options: DeleteCleanupOptions) => {
+      if (!deleteConfirmSponsor) return
+      await deleteMutation.mutateAsync({
+        id: deleteConfirmSponsor._id,
+        cancelAgreement: options.cancelAgreement,
+        deleteContractAsset: options.deleteContractAsset,
+      })
+      setDeleteConfirmSponsor(null)
+    },
+    [deleteConfirmSponsor, deleteMutation],
+  )
 
   // Clear selection when filters change
   useEffect(() => {
@@ -394,14 +407,16 @@ export function SponsorCRMPipeline({
   return (
     <div className="flex h-full flex-col gap-2 lg:gap-4">
       {/* Modals */}
-      <ConfirmationModal
-        isOpen={deleteConfirmId !== null}
-        onClose={() => setDeleteConfirmId(null)}
+      <SponsorDeleteModal
+        isOpen={deleteConfirmSponsor !== null}
+        onClose={() => setDeleteConfirmSponsor(null)}
         onConfirm={confirmDelete}
-        title="Remove Sponsor"
-        message="Are you sure you want to remove this sponsor from the pipeline?"
-        confirmButtonText="Remove"
-        variant="danger"
+        count={1}
+        hasPendingAgreement={
+          deleteConfirmSponsor?.signatureStatus === 'pending' &&
+          !!deleteConfirmSponsor?.signatureId
+        }
+        hasContractDocument={!!deleteConfirmSponsor?.contractDocument}
         isLoading={deleteMutation.isPending}
       />
       {isFormOpen && (
@@ -722,6 +737,7 @@ export function SponsorCRMPipeline({
       {selectedIds.length > 0 && (
         <SponsorBulkActions
           selectedIds={selectedIds}
+          sponsors={sponsors}
           onClearSelection={handleClearSelection}
           onSuccess={() => utils.sponsor.crm.list.invalidate()}
         />

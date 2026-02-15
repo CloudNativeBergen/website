@@ -34,7 +34,7 @@ import {
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { SponsorTierExisting } from '@/lib/sponsor/types'
 import type {
@@ -62,6 +62,7 @@ import {
   SponsorForConferenceInputSchema,
   SponsorForConferenceUpdateSchema,
   SponsorForConferenceIdSchema,
+  DeleteSponsorSchema,
   MoveStageSchema,
   UpdateInvoiceStatusSchema,
   UpdateContractStatusSchema,
@@ -103,6 +104,7 @@ import {
   getSigningUrls,
   registerWebhook,
   listWebhooks,
+  cancelAgreement,
 } from '@/lib/adobe-sign'
 import {
   getAdobeSignSession,
@@ -937,8 +939,37 @@ export const sponsorRouter = router({
     bulkDelete: adminProcedure
       .input(BulkDeleteSponsorCRMSchema)
       .mutation(async ({ input }) => {
+        // Cancel Adobe Sign agreements if requested
+        if (input.cancelAgreements) {
+          try {
+            const pendingAgreements = await clientReadUncached.fetch<
+              Array<{ signatureId: string }>
+            >(
+              `*[_type == "sponsorForConference" && _id in $ids && signatureStatus == "pending" && defined(signatureId)]{ signatureId }`,
+              { ids: input.ids },
+            )
+            const session = await getAdobeSignSession()
+            if (session && pendingAgreements.length > 0) {
+              for (const { signatureId } of pendingAgreements) {
+                try {
+                  await cancelAgreement(session, signatureId)
+                } catch (e) {
+                  console.error(
+                    `[bulkDelete] Failed to cancel agreement ${signatureId}:`,
+                    e,
+                  )
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[bulkDelete] Failed to cancel agreements:', e)
+          }
+        }
+
         try {
-          return await bulkDeleteSponsors(input.ids)
+          return await bulkDeleteSponsors(input.ids, {
+            deleteContractAssets: input.deleteContractAssets,
+          })
         } catch (error) {
           console.error('Bulk delete error:', error)
           throw new TRPCError({
@@ -950,9 +981,39 @@ export const sponsorRouter = router({
       }),
 
     delete: adminProcedure
-      .input(SponsorForConferenceIdSchema)
+      .input(DeleteSponsorSchema)
       .mutation(async ({ input }) => {
-        const { error } = await deleteSponsorForConference(input.id)
+        // Cancel Adobe Sign agreement if requested
+        if (input.cancelAgreement) {
+          try {
+            const sfc = await clientReadUncached.fetch<{
+              signatureId?: string
+              signatureStatus?: string
+            }>(
+              `*[_type == "sponsorForConference" && _id == $id][0]{ signatureId, signatureStatus }`,
+              { id: input.id },
+            )
+            if (sfc?.signatureId && sfc.signatureStatus === 'pending') {
+              const session = await getAdobeSignSession()
+              if (session) {
+                try {
+                  await cancelAgreement(session, sfc.signatureId)
+                } catch (e) {
+                  console.error(
+                    `[delete] Failed to cancel agreement ${sfc.signatureId}:`,
+                    e,
+                  )
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[delete] Failed to cancel agreement:', e)
+          }
+        }
+
+        const { error } = await deleteSponsorForConference(input.id, {
+          deleteContractAsset: input.deleteContractAsset,
+        })
 
         if (error) {
           throw new TRPCError({

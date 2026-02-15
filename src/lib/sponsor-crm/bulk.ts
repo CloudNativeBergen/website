@@ -161,16 +161,26 @@ export async function bulkUpdateSponsors(
 
 /**
  * Deletes multiple sponsor CRM records in a single transaction.
- * Also cleans up related activity documents to prevent orphaned data.
+ * Also cleans up related activity documents and optionally contract assets.
  */
 export async function bulkDeleteSponsors(
   ids: string[],
+  options?: { deleteContractAssets?: boolean },
 ): Promise<{ success: true; deletedCount: number; totalCount: number }> {
   // Find all related activity documents
   const relatedActivityIds = await clientWrite.fetch<string[]>(
     `*[_type == "sponsorActivity" && sponsorForConference._ref in $ids]._id`,
     { ids },
   )
+
+  // Find contract asset IDs if cleanup requested
+  let contractAssetIds: string[] = []
+  if (options?.deleteContractAssets) {
+    contractAssetIds = await clientWrite.fetch<string[]>(
+      `*[_type == "sponsorForConference" && _id in $ids && defined(contractDocument.asset._ref)].contractDocument.asset._ref`,
+      { ids },
+    )
+  }
 
   const transaction = clientWrite.transaction()
 
@@ -182,6 +192,11 @@ export async function bulkDeleteSponsors(
   // Delete the related activity documents
   for (const id of relatedActivityIds) {
     transaction.delete(id)
+  }
+
+  // Delete contract PDF assets
+  for (const assetId of contractAssetIds) {
+    transaction.delete(assetId)
   }
 
   await transaction.commit()

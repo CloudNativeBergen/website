@@ -285,9 +285,37 @@ export async function updateSponsorForConference(
 
 export async function deleteSponsorForConference(
   id: string,
+  options?: { deleteContractAsset?: boolean },
 ): Promise<{ error?: Error }> {
   try {
-    await clientWrite.delete(id)
+    // Look up contract asset before deleting
+    let contractAssetId: string | undefined
+    if (options?.deleteContractAsset) {
+      const doc = await clientWrite.fetch<{
+        contractDocument?: { asset?: { _ref: string } }
+      }>(
+        `*[_type == "sponsorForConference" && _id == $id][0]{ contractDocument }`,
+        { id },
+      )
+      contractAssetId = doc?.contractDocument?.asset?._ref
+    }
+
+    // Clean up related activity documents to prevent orphans
+    const relatedActivityIds = await clientWrite.fetch<string[]>(
+      `*[_type == "sponsorActivity" && sponsorForConference._ref == $id]._id`,
+      { id },
+    )
+
+    const transaction = clientWrite.transaction()
+    transaction.delete(id)
+    for (const activityId of relatedActivityIds) {
+      transaction.delete(activityId)
+    }
+    if (contractAssetId) {
+      transaction.delete(contractAssetId)
+    }
+    await transaction.commit()
+
     return {}
   } catch (error) {
     return { error: error as Error }
