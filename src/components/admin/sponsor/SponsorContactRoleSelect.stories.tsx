@@ -43,21 +43,21 @@ function InteractiveDemo({ className }: { className?: string }) {
 }
 
 export const Default: Story = {
-  args: { value: '', onChange: () => { } },
+  args: { value: '', onChange: () => {} },
   render: () => <InteractiveDemo />,
 }
 
 export const WithSelection: Story = {
   args: {
     value: 'Marketing',
-    onChange: () => { },
+    onChange: () => {},
   },
 }
 
 export const Disabled: Story = {
   args: {
     value: 'Technical Contact',
-    onChange: () => { },
+    onChange: () => {},
     disabled: true,
   },
 }
@@ -65,20 +65,20 @@ export const Disabled: Story = {
 export const CustomPlaceholder: Story = {
   args: {
     value: '',
-    onChange: () => { },
+    onChange: () => {},
     placeholder: 'Choose a role...',
   },
 }
 
 export const WithCustomClassName: Story = {
-  args: { value: '', onChange: () => { } },
+  args: { value: '', onChange: () => {} },
   render: () => (
     <InteractiveDemo className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
   ),
 }
 
 export const AllRoles: Story = {
-  args: { value: '', onChange: () => { } },
+  args: { value: '', onChange: () => {} },
   render: () => (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

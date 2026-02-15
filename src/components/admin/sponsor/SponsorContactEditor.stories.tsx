@@ -14,9 +14,16 @@ import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactEditor',
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Form for managing multiple contact persons and billing information for a sponsor. Supports adding, removing, and editing contacts with role selection and primary contact designation.',
+      },
+    },
   },
 } satisfies Meta
 
@@ -115,11 +122,10 @@ function ContactEditorDemo() {
             <div className="mb-4 flex items-center justify-between">
               <button
                 onClick={() => handleSetPrimary(contact._key)}
-                className={`flex items-center gap-1 text-sm ${
-                  contact.isPrimary
+                className={`flex items-center gap-1 text-sm ${contact.isPrimary
                     ? 'text-amber-600 dark:text-amber-400'
                     : 'text-gray-400 hover:text-amber-600 dark:hover:text-amber-400'
-                }`}
+                  }`}
               >
                 {contact.isPrimary ? (
                   <StarIconSolid className="h-5 w-5" />

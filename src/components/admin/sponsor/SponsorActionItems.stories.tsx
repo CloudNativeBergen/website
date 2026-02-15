@@ -14,6 +14,12 @@ const meta = {
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Priority-sorted list of urgent action items requiring organizer attention. Groups items by severity (critical, warning, info) with sponsor name, description, and quick-action buttons.',
+      },
+    },
   },
 } satisfies Meta
 

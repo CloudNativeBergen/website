@@ -6,9 +6,16 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactActions',
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Action bar for sponsor contact management with export (CSV download) and broadcast email buttons. Disables actions when no contacts are available.',
+      },
+    },
   },
 } satisfies Meta
 
