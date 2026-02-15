@@ -84,12 +84,13 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
           return (
             <li key={step.key} className="flex items-center space-x-2">
               <span
-                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${isCompleted
+                className={`flex size-8 items-center justify-center rounded-full text-sm font-medium ${
+                  isCompleted
                     ? 'bg-emerald-500 text-white'
                     : isActive
                       ? 'bg-blue-700 text-white'
                       : 'bg-slate-200 text-slate-500'
-                  }`}
+                }`}
               >
                 {isCompleted ? (
                   <CheckCircleIcon className="size-5" />
@@ -98,19 +99,21 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
                 )}
               </span>
               <span
-                className={`text-sm font-medium ${isActive
+                className={`text-sm font-medium ${
+                  isActive
                     ? 'text-blue-700'
                     : isCompleted
                       ? 'text-emerald-600'
                       : 'text-slate-400'
-                  }`}
+                }`}
               >
                 {step.label}
               </span>
               {index < steps.length - 1 && (
                 <div
-                  className={`ml-4 h-px w-12 ${isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
-                    }`}
+                  className={`ml-4 h-px w-12 ${
+                    isCompleted ? 'bg-emerald-400' : 'bg-slate-200'
+                  }`}
                 />
               )}
             </li>
