@@ -34,6 +34,7 @@ import {
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { SponsorTierExisting } from '@/lib/sponsor/types'
@@ -1907,9 +1908,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -1949,13 +1950,14 @@ export const sponsorRouter = router({
     previewPdf: adminProcedure
       .input(PreviewContractPdfSchema)
       .mutation(async ({ input }) => {
-        const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !conference) {
+        const conference = await clientReadUncached.fetch<Conference | null>(
+          `*[_type == "conference" && _id == $id][0]`,
+          { id: input.conferenceId },
+        )
+        if (!conference) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
           })
         }
 
