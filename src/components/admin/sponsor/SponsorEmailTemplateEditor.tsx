@@ -13,6 +13,7 @@ import {
   processTemplateVariables,
   processPortableTextVariables,
   buildTemplateVariables,
+  findUnsupportedVariables,
 } from '@/lib/sponsor/templates'
 import type {
   SponsorEmailTemplate,
@@ -28,6 +29,7 @@ import {
   EnvelopeIcon,
   ArrowPathIcon,
   CheckIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [
@@ -176,6 +178,16 @@ export function SponsorEmailTemplateEditor({
         tierName: 'Community Partner',
       }),
     [conference],
+  )
+
+  const unsupportedVars = useMemo(
+    () =>
+      findUnsupportedVariables(
+        TEMPLATE_VARIABLE_DESCRIPTIONS,
+        subject,
+        body as unknown as TemplateBlock[],
+      ),
+    [subject, body],
   )
 
   const previewSubject = useMemo(
@@ -370,6 +382,27 @@ export function SponsorEmailTemplateEditor({
               helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic content. Click a variable below to copy it."
             />
           </div>
+
+          {/* Unsupported variable warning */}
+          {unsupportedVars.length > 0 && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-600 dark:bg-amber-900/20">
+              <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                <p className="font-medium">Unsupported variables detected</p>
+                <p className="mt-1">
+                  The following variables will not be replaced in the email:{' '}
+                  {unsupportedVars.map((v, i) => (
+                    <span key={v}>
+                      {i > 0 && ', '}
+                      <code className="rounded bg-amber-100 px-1 font-mono text-xs dark:bg-amber-800">
+                        {`{{{${v}}}}`}
+                      </code>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Variable reference */}
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">

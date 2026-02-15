@@ -37,7 +37,8 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
+import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
@@ -66,11 +67,19 @@ export function SponsorCRMPipeline({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [initialFormView, setInitialFormView] = useState<
-    'pipeline' | 'history'
+    'pipeline' | 'history' | 'contract'
   >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [currentView, setCurrentView] = useState<BoardView>('pipeline')
+  const [deleteConfirmSponsor, setDeleteConfirmSponsor] =
+    useState<SponsorForConferenceExpanded | null>(null)
+  const [currentView, setCurrentView] = useState<BoardView>(
+    () =>
+      (['pipeline', 'contract', 'invoice'].includes(
+        searchParams.get('board') || '',
+      )
+        ? searchParams.get('board')
+        : 'pipeline') as BoardView,
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
@@ -122,6 +131,16 @@ export function SponsorCRMPipeline({
     },
   )
 
+  // Keep selectedSponsor in sync with fresh query data
+  useEffect(() => {
+    if (!selectedSponsor || !sponsors.length) return
+    const fresh = sponsors.find((s) => s._id === selectedSponsor._id)
+    if (fresh && fresh !== selectedSponsor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSponsor(fresh)
+    }
+  }, [sponsors, selectedSponsor])
+
   // Filter logic
   const filteredSponsors = useMemo(() => {
     let filtered =
@@ -142,26 +161,69 @@ export function SponsorCRMPipeline({
     return filtered
   }, [sponsors, currentView, searchQuery])
 
+  // Helper to update URL params without triggering navigation
+  const updateUrlParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString())
+      for (const [key, value] of Object.entries(updates)) {
+        if (value) {
+          params.set(key, value)
+        } else {
+          params.delete(key)
+        }
+      }
+      router.replace(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
   // Handlers
   const handleOpenForm = useCallback(
-    (sponsor?: SponsorForConferenceExpanded) => {
+    (
+      sponsor?: SponsorForConferenceExpanded,
+      formView: 'pipeline' | 'history' | 'contract' = 'pipeline',
+    ) => {
       setSelectedSponsor(sponsor || null)
-      setInitialFormView('pipeline')
+      setInitialFormView(formView)
       setIsFormOpen(true)
+      if (sponsor) {
+        updateUrlParams({ sponsor: sponsor._id, view: formView })
+      }
     },
-    [],
+    [updateUrlParams],
   )
 
   const handleCreateNew = useCallback(() => {
     setSelectedSponsor(null)
     setInitialFormView('pipeline')
     setIsFormOpen(true)
-  }, [])
+    updateUrlParams({ sponsor: null, view: null })
+  }, [updateUrlParams])
+
+  const handleOpenContract = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setSelectedSponsor(sponsor)
+      setInitialFormView('contract')
+      setIsFormOpen(true)
+      updateUrlParams({ sponsor: sponsor._id, view: 'contract' })
+    },
+    [updateUrlParams],
+  )
 
   const handleCloseForm = useCallback(() => {
     setSelectedSponsor(null)
     setIsFormOpen(false)
-  }, [])
+    updateUrlParams({ sponsor: null, view: null })
+  }, [updateUrlParams])
+
+  const handleFormViewChange = useCallback(
+    (formView: string) => {
+      if (selectedSponsor) {
+        updateUrlParams({ view: formView })
+      }
+    },
+    [selectedSponsor, updateUrlParams],
+  )
 
   const handleOpenEmail = useCallback(
     (sponsor: SponsorForConferenceExpanded) => {
@@ -229,15 +291,26 @@ export function SponsorCRMPipeline({
       }))
   }, [conference.organizers])
 
-  const handleDelete = useCallback(async (sponsorId: string) => {
-    setDeleteConfirmId(sponsorId)
-  }, [])
+  const handleDelete = useCallback(
+    async (sponsorId: string) => {
+      const sponsor = sponsors.find((s) => s._id === sponsorId)
+      if (sponsor) setDeleteConfirmSponsor(sponsor)
+    },
+    [sponsors],
+  )
 
-  const confirmDelete = useCallback(async () => {
-    if (!deleteConfirmId) return
-    await deleteMutation.mutateAsync({ id: deleteConfirmId })
-    setDeleteConfirmId(null)
-  }, [deleteConfirmId, deleteMutation])
+  const confirmDelete = useCallback(
+    async (options: DeleteCleanupOptions) => {
+      if (!deleteConfirmSponsor) return
+      await deleteMutation.mutateAsync({
+        id: deleteConfirmSponsor._id,
+        cancelAgreement: options.cancelAgreement,
+        deleteContractAsset: options.deleteContractAsset,
+      })
+      setDeleteConfirmSponsor(null)
+    },
+    [deleteConfirmSponsor, deleteMutation],
+  )
 
   // Clear selection when filters change
   useEffect(() => {
@@ -267,29 +340,28 @@ export function SponsorCRMPipeline({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleCreateNew, handleOpenForm])
 
-  // Handle sponsor query parameter
+  // Restore sponsor form from URL on initial load
   useEffect(() => {
     const sponsorId = searchParams.get('sponsor')
-    const viewParam = searchParams.get('view')
+    const viewParam = searchParams.get('view') as
+      | 'pipeline'
+      | 'history'
+      | 'contract'
+      | null
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedSponsor(sponsor)
-        setInitialFormView(viewParam === 'history' ? 'history' : 'pipeline')
-        setIsFormOpen(true)
-        const params = new URLSearchParams(searchParams.toString())
-        params.delete('sponsor')
-        params.delete('view')
-        router.replace(
-          params.toString()
-            ? `?${params.toString()}`
-            : window.location.pathname,
-          { scroll: false },
+        setInitialFormView(
+          viewParam === 'history' || viewParam === 'contract'
+            ? viewParam
+            : 'pipeline',
         )
+        setIsFormOpen(true)
       }
     }
-  }, [searchParams, sponsors, isFormOpen, router])
+  }, [searchParams, sponsors, isFormOpen])
 
   // Update URL with filters
   const updateFilters = useCallback(
@@ -385,14 +457,16 @@ export function SponsorCRMPipeline({
   return (
     <div className="flex h-full flex-col gap-2 lg:gap-4">
       {/* Modals */}
-      <ConfirmationModal
-        isOpen={deleteConfirmId !== null}
-        onClose={() => setDeleteConfirmId(null)}
+      <SponsorDeleteModal
+        isOpen={deleteConfirmSponsor !== null}
+        onClose={() => setDeleteConfirmSponsor(null)}
         onConfirm={confirmDelete}
-        title="Remove Sponsor"
-        message="Are you sure you want to remove this sponsor from the pipeline?"
-        confirmButtonText="Remove"
-        variant="danger"
+        count={1}
+        hasPendingAgreement={
+          deleteConfirmSponsor?.signatureStatus === 'pending' &&
+          !!deleteConfirmSponsor?.signatureId
+        }
+        hasContractDocument={!!deleteConfirmSponsor?.contractDocument}
         isLoading={deleteMutation.isPending}
       />
       {isFormOpen && (
@@ -402,12 +476,29 @@ export function SponsorCRMPipeline({
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
-          onSuccess={() => {
-            utils.sponsor.crm.list.invalidate()
+          onSuccess={(createdId) => {
+            if (createdId) {
+              const created = utils.sponsor.crm.list
+                .getData({
+                  conferenceId,
+                  assignedTo:
+                    assignedToFilter === 'unassigned'
+                      ? undefined
+                      : assignedToFilter,
+                  unassignedOnly: assignedToFilter === 'unassigned',
+                  tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+                  tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+                })
+                ?.find((s) => s._id === createdId)
+              if (created) {
+                setSelectedSponsor(created)
+                setInitialFormView('pipeline')
+              }
+            }
           }}
-          onEmailTrigger={handleOpenEmail}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
+          onViewChange={handleFormViewChange}
         />
       )}
 
@@ -440,7 +531,12 @@ export function SponsorCRMPipeline({
           <div className="shrink-0">
             <BoardViewSwitcher
               currentView={currentView}
-              onViewChange={setCurrentView}
+              onViewChange={(view) => {
+                setCurrentView(view)
+                updateUrlParams({
+                  board: view === 'pipeline' ? null : view,
+                })
+              }}
             />
           </div>
 
@@ -714,6 +810,7 @@ export function SponsorCRMPipeline({
       {selectedIds.length > 0 && (
         <SponsorBulkActions
           selectedIds={selectedIds}
+          sponsors={sponsors}
           onClearSelection={handleClearSelection}
           onSuccess={() => utils.sponsor.crm.list.invalidate()}
         />
@@ -726,14 +823,10 @@ export function SponsorCRMPipeline({
         collisionDetection={pointerWithin}
       >
         <div
-          className={clsx(
-            'min-h-0 flex-1',
-            'flex snap-x snap-mandatory gap-3 overflow-x-auto',
-            'lg:grid lg:snap-none lg:gap-1 lg:overflow-x-visible',
-            currentView === 'pipeline' && 'lg:grid-cols-5',
-            currentView === 'invoice' && 'lg:grid-cols-5',
-            currentView === 'contract' && 'lg:grid-cols-4',
-          )}
+          className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto lg:grid lg:snap-none lg:gap-1 lg:overflow-x-visible"
+          style={{
+            gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+          }}
         >
           {columns.map((column) => {
             const columnSponsors = groupedSponsors[column.key] || []
@@ -749,7 +842,12 @@ export function SponsorCRMPipeline({
                 isSelectionMode={selectedIds.length > 0}
                 onSponsorClick={handleOpenForm}
                 onSponsorDelete={handleDelete}
-                onSponsorEmail={handleOpenEmail}
+                onSponsorEmail={
+                  currentView !== 'contract' ? handleOpenEmail : undefined
+                }
+                onSponsorContract={
+                  currentView === 'contract' ? handleOpenContract : undefined
+                }
                 onSponsorToggleSelect={handleToggleSelect}
                 onAddClick={() => handleOpenForm()}
               />

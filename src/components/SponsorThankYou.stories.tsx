@@ -199,7 +199,7 @@ function SponsorThankYouStorybook({
 }
 
 const meta: Meta<typeof SponsorThankYouStorybook> = {
-  title: 'Systems/Sponsors/Components/SponsorThankYou',
+  title: 'Systems/Sponsors/Public/SponsorThankYou',
   component: SponsorThankYouStorybook,
   parameters: {
     docs: {

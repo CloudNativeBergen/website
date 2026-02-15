@@ -299,6 +299,11 @@ export function SponsorContactTable({
                               </a>
                               <CopyEmailButton email={row.sfc.billing.email} />
                             </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {row.sfc.billing.invoiceFormat === 'ehf'
+                                ? 'EHF (Digital)'
+                                : 'PDF via Email'}
+                            </div>
                             {row.sfc.billing.reference && (
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Ref: {row.sfc.billing.reference}

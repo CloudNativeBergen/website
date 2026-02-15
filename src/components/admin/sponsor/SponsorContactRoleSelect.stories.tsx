@@ -4,7 +4,7 @@ import { SponsorContactRoleSelect } from './SponsorContactRoleSelect'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
 const meta = {
-  title: 'Systems/Sponsors/Admin/SponsorContactRoleSelect',
+  title: 'Systems/Sponsors/Admin/Contacts/SponsorContactRoleSelect',
   component: SponsorContactRoleSelect,
   tags: ['autodocs'],
   parameters: {

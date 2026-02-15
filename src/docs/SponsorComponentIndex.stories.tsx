@@ -2,9 +2,16 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Overview',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Component index and navigation guide for the sponsor admin system. Lists all available components organized by domain with direct links.',
+      },
+    },
   },
 } satisfies Meta
 
@@ -81,6 +88,12 @@ export const Overview: Story = {
               description="Full-width thank you section with all sponsors displayed by tier."
               hasStory
             />
+            <ComponentCard
+              name="SponsorProspectus"
+              path="@/components/sponsor/SponsorProspectus"
+              description="Public-facing sponsorship prospectus page with tiers, benefits, add-ons, and philosophy."
+              hasStory
+            />
           </div>
         </section>
 
@@ -151,6 +164,12 @@ export const Overview: Story = {
               name="SponsorBulkActions"
               path="@/components/admin/sponsor-crm/SponsorBulkActions"
               description="Toolbar for bulk operations on selected sponsors."
+              hasStory
+            />
+            <ComponentCard
+              name="SponsorAddModal"
+              path="@/components/admin/sponsor/SponsorAddModal"
+              description="Modal for adding sponsors to a specific tier."
               hasStory
             />
             <ComponentCard
@@ -249,6 +268,12 @@ export const Overview: Story = {
               description="Action bar with export and broadcast buttons."
               hasStory
             />
+            <ComponentCard
+              name="SponsorContactRoleSelect"
+              path="@/components/admin/sponsor/SponsorContactRoleSelect"
+              description="Dropdown for selecting sponsor contact person roles."
+              hasStory
+            />
           </div>
         </section>
 
@@ -306,28 +331,47 @@ export const Overview: Story = {
               description="Form for creating and editing sponsor tier definitions."
               hasStory
             />
+          </div>
+        </section>
+
+        {/* Contract Signing (Sponsor-facing) */}
+        <section className="mb-12">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+            Contract Signing
+          </h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Sponsor-facing contract signing flow. Supports self-hosted signing
+            (built-in signature pad) and Adobe Sign.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="SponsorAddModal"
-              path="@/components/admin/sponsor/SponsorAddModal"
-              description="Modal for adding sponsors to a specific tier."
+              name="ContractSigningPage"
+              path="@/components/sponsor/ContractSigningPage"
+              description="Three-step contract signing flow: review details, capture signature, and confirmation."
+              hasStory
+            />
+            <ComponentCard
+              name="SignaturePadCanvas"
+              path="@/components/sponsor/SignaturePadCanvas"
+              description="Canvas-based signature pad with high-DPI support, clear button, and PNG export."
               hasStory
             />
           </div>
         </section>
 
-        {/* Onboarding & Contract */}
+        {/* Registration & Contract */}
         <section className="mb-12">
           <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-            Onboarding &amp; Contract
+            Registration &amp; Contract
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Components for sponsor onboarding and contract management.
+            Components for sponsor registration and contract management.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
-              name="OnboardingLinkButton"
-              path="@/components/admin/sponsor-crm/OnboardingLinkButton"
-              description="Button to generate and copy onboarding portal links."
+              name="SponsorContractView"
+              path="@/components/admin/sponsor-crm/SponsorContractView"
+              description="Contract management view with portal link generation, manual contract send, and signature tracking."
               hasStory
             />
             <ComponentCard
@@ -337,9 +381,69 @@ export const Overview: Story = {
               hasStory
             />
             <ComponentCard
+              name="ContractTemplateListPage"
+              path="@/components/admin/sponsor/ContractTemplateListPage"
+              description="List view for managing contract templates with create/edit/delete."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractTemplateEditorPage"
+              path="@/components/admin/sponsor/ContractTemplateEditorPage"
+              description="Rich editor for contract templates with variable insertion and PDF preview."
+              hasStory
+            />
+            <ComponentCard
+              name="SponsorPortal"
+              path="@/components/sponsor/SponsorPortal"
+              description="Public sponsor portal for self-service registration and contract status. Includes signer selection and progressive status dashboard."
+              hasStory
+            />
+            <ComponentCard
+              name="SponsorRegistrationLogoUpload"
+              path="@/components/sponsor/SponsorRegistrationLogoUpload"
+              description="SVG logo upload for the sponsor registration flow."
+              hasStory
+            />
+            <ComponentCard
               name="SponsorLogoEditor"
               path="@/components/admin/sponsor/SponsorLogoEditor"
               description="SVG logo upload and preview with light/dark variant support."
+              hasStory
+            />
+            <ComponentCard
+              name="AdobeSignConfigPanel"
+              path="@/components/admin/sponsor/AdobeSignConfigPanel"
+              description="Signing provider OAuth connection, webhook registration, and status management panel. Currently implements Adobe Sign."
+            />
+          </div>
+        </section>
+
+        {/* Contract Email Templates */}
+        <section className="mb-12">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+            Contract Email Templates
+          </h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            React email templates for contract signing communications, sent via
+            Resend.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ComponentCard
+              name="ContractSigningTemplate"
+              path="@/components/email/ContractSigningTemplate"
+              description="Email sent to the designated signer with sponsorship details and signing URL."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractSignedTemplate"
+              path="@/components/email/ContractSignedTemplate"
+              description="Confirmation email sent after signing, with signed PDF attached."
+              hasStory
+            />
+            <ComponentCard
+              name="ContractReminderTemplate"
+              path="@/components/email/ContractReminderTemplate"
+              description="Automated reminder email sent by cron when a contract is pending for more than 5 days."
               hasStory
             />
           </div>
@@ -358,12 +462,6 @@ export const Overview: Story = {
               name="ImportHistoricSponsorsButton"
               path="@/components/admin/sponsor-crm/ImportHistoricSponsorsButton"
               description="Button to import sponsors from previous conferences."
-              hasStory
-            />
-            <ComponentCard
-              name="SponsorContactRoleSelect"
-              path="@/components/admin/sponsor/SponsorContactRoleSelect"
-              description="Dropdown for selecting sponsor contact person roles."
               hasStory
             />
           </div>

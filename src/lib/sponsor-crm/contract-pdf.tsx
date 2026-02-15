@@ -1,54 +1,92 @@
-import ReactPDF, {
+import {
   Document,
+  Image,
   Page,
   Text,
   View,
   StyleSheet,
+  renderToBuffer,
 } from '@react-pdf/renderer'
 import type { ContractTemplate } from './contract-templates'
+import {
+  SPONSOR_SIGNATURE_MARKER,
+  SPONSOR_DATE_MARKER,
+  ORGANIZER_SIGNATURE_MARKER,
+  ORGANIZER_DATE_MARKER,
+} from '@/lib/pdf/constants'
+import type { PortableTextBlock } from '@/lib/sponsor/types'
+
 import {
   buildContractVariables,
   processTemplateVariables,
   type ContractVariableContext,
 } from './contract-variables'
-import type { PortableTextBlock } from '@/lib/sponsor/types'
+
+// Brand colors
+const BRAND_BLUE = '#1D4ED8'
+const BRAND_BLUE_LIGHT = '#EFF6FF'
+const TEXT_PRIMARY = '#1E293B'
+const TEXT_SECONDARY = '#475569'
+const TEXT_MUTED = '#94A3B8'
+const BORDER_COLOR = '#E2E8F0'
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
-    fontSize: 11,
-    paddingTop: 60,
+    fontSize: 10,
+    paddingTop: 70,
     paddingBottom: 60,
     paddingHorizontal: 50,
     lineHeight: 1.5,
+    color: TEXT_PRIMARY,
   },
-  header: {
+  accentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: BRAND_BLUE,
+  },
+  headerArea: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  headerText: {
     fontSize: 9,
-    color: '#666',
-    marginBottom: 30,
-    textAlign: 'center',
+    color: TEXT_MUTED,
+  },
+  headerLogo: {
+    height: 28,
+    objectFit: 'contain' as const,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 20,
+    marginBottom: 6,
     textAlign: 'center',
+    color: TEXT_PRIMARY,
   },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 16,
-    textAlign: 'center',
+  titleDivider: {
+    width: 60,
+    height: 2,
+    backgroundColor: BRAND_BLUE,
+    marginBottom: 24,
+    alignSelf: 'center' as const,
   },
   sectionHeading: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'Helvetica-Bold',
     marginTop: 16,
     marginBottom: 8,
+    color: TEXT_PRIMARY,
   },
   paragraph: {
-    fontSize: 11,
+    fontSize: 10,
     marginBottom: 8,
+    color: TEXT_PRIMARY,
   },
   bold: {
     fontFamily: 'Helvetica-Bold',
@@ -61,8 +99,8 @@ const styles = StyleSheet.create({
     bottom: 30,
     left: 50,
     right: 50,
-    fontSize: 8,
-    color: '#999',
+    fontSize: 7,
+    color: TEXT_MUTED,
     textAlign: 'center',
   },
   signatureArea: {
@@ -81,14 +119,15 @@ const styles = StyleSheet.create({
   },
   signatureLabel: {
     fontSize: 9,
-    color: '#666',
+    color: TEXT_SECONDARY,
   },
   // Info table styles
   infoTable: {
     flexDirection: 'row',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: BORDER_COLOR,
+    borderRadius: 2,
   },
   infoColumn: {
     flex: 1,
@@ -96,53 +135,60 @@ const styles = StyleSheet.create({
   },
   infoColumnLeft: {
     borderRightWidth: 1,
-    borderRightColor: '#ccc',
+    borderRightColor: BORDER_COLOR,
   },
   infoColumnHeader: {
-    fontSize: 10,
+    fontSize: 8,
     fontFamily: 'Helvetica-Bold',
-    color: '#555',
+    color: BRAND_BLUE,
     marginBottom: 8,
     textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   infoRow: {
     flexDirection: 'row',
     marginBottom: 4,
   },
   infoLabel: {
-    fontSize: 9,
-    color: '#666',
+    fontSize: 8,
+    color: TEXT_MUTED,
     width: 70,
   },
   infoValue: {
-    fontSize: 10,
+    fontSize: 9,
     flex: 1,
+    color: TEXT_PRIMARY,
   },
   // Details section styles
   detailsSection: {
     marginBottom: 16,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: BRAND_BLUE_LIGHT,
+    borderRadius: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: BRAND_BLUE,
   },
   detailsHeading: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     marginBottom: 8,
+    color: TEXT_PRIMARY,
   },
   detailRow: {
     flexDirection: 'row',
     marginBottom: 4,
   },
   detailLabel: {
-    fontSize: 10,
-    color: '#555',
+    fontSize: 9,
+    color: TEXT_SECONDARY,
     width: 140,
   },
   detailValue: {
-    fontSize: 10,
+    fontSize: 9,
     flex: 1,
     fontFamily: 'Helvetica-Bold',
+    color: TEXT_PRIMARY,
   },
   // Appendix styles
   appendixTitle: {
@@ -150,12 +196,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     marginBottom: 20,
     textAlign: 'center',
+    color: TEXT_PRIMARY,
   },
   termsHeading: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     marginTop: 14,
     marginBottom: 6,
+    color: TEXT_PRIMARY,
   },
 })
 
@@ -260,7 +308,6 @@ function InfoTable({ variables }: InfoTableProps) {
     { label: 'Name', value: variables.ORG_NAME },
     { label: 'Org. No.', value: variables.ORG_ORG_NUMBER },
     { label: 'Address', value: variables.ORG_ADDRESS },
-    { label: 'Liaison', value: variables.CONTACT_NAME ? undefined : undefined },
     { label: 'Email', value: variables.ORG_EMAIL },
   ].filter((r) => r.value)
 
@@ -361,25 +408,60 @@ function PackageDetails({ variables }: PackageDetailsProps) {
 interface ContractDocumentProps {
   template: ContractTemplate
   variables: Record<string, string>
+  logoDataUrl?: string
 }
 
-function ContractDocument({ template, variables }: ContractDocumentProps) {
+function svgToDataUrl(svg: string): string {
+  const base64 = Buffer.from(svg, 'utf-8').toString('base64')
+  return `data:image/svg+xml;base64,${base64}`
+}
+
+function PageHeader({
+  headerText,
+  logoDataUrl,
+  variables,
+}: {
+  headerText?: string
+  logoDataUrl?: string
+  variables: Record<string, string>
+}) {
+  const text = headerText
+    ? processTemplateVariables(headerText, variables)
+    : undefined
+
+  return (
+    <>
+      <View style={styles.accentBar} fixed />
+      <View style={styles.headerArea}>
+        <Text style={styles.headerText}>{text || ''}</Text>
+        {logoDataUrl && <Image style={styles.headerLogo} src={logoDataUrl} />}
+      </View>
+    </>
+  )
+}
+
+function ContractDocument({
+  template,
+  variables,
+  logoDataUrl,
+}: ContractDocumentProps) {
   const title = processTemplateVariables(template.title, variables)
 
   return (
     <Document
       title={title}
-      author={template.headerText || 'Cloud Native Days Norway'}
+      author={template.headerText || variables.ORG_NAME || ''}
     >
       {/* Page 1: Partner Agreement */}
       <Page size="A4" style={styles.page}>
-        {template.headerText && (
-          <Text style={styles.header}>
-            {processTemplateVariables(template.headerText, variables)}
-          </Text>
-        )}
+        <PageHeader
+          headerText={template.headerText}
+          logoDataUrl={logoDataUrl}
+          variables={variables}
+        />
 
         <Text style={styles.title}>{title}</Text>
+        <View style={styles.titleDivider} />
 
         <InfoTable variables={variables} />
 
@@ -404,6 +486,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_DATE_MARKER}
+            </Text>
           </View>
           <View style={styles.signatureBlock}>
             <Text style={styles.signatureLabel}>
@@ -411,6 +499,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SPONSOR_SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SPONSOR_DATE_MARKER}
+            </Text>
           </View>
         </View>
 
@@ -424,11 +518,11 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
       {/* Appendix 1: General Terms & Conditions */}
       {template.terms && template.terms.length > 0 && (
         <Page size="A4" style={styles.page}>
-          {template.headerText && (
-            <Text style={styles.header}>
-              {processTemplateVariables(template.headerText, variables)}
-            </Text>
-          )}
+          <PageHeader
+            headerText={template.headerText}
+            logoDataUrl={logoDataUrl}
+            variables={variables}
+          />
 
           <Text style={styles.appendixTitle}>
             Appendix 1: General Terms &amp; Conditions
@@ -453,9 +547,21 @@ export async function generateContractPdf(
   template: ContractTemplate,
   context: ContractVariableContext,
 ): Promise<Buffer> {
-  const variables = buildContractVariables(context)
-  const doc = <ContractDocument template={template} variables={variables} />
-  const buffer = await ReactPDF.renderToBuffer(doc)
+  const variables = buildContractVariables({
+    ...context,
+    language: template.language,
+  })
+  const logoDataUrl = context.conference.logoBright
+    ? svgToDataUrl(context.conference.logoBright)
+    : undefined
+  const doc = (
+    <ContractDocument
+      template={template}
+      variables={variables}
+      logoDataUrl={logoDataUrl}
+    />
+  )
+  const buffer = await renderToBuffer(doc)
   return Buffer.from(buffer)
 }
 

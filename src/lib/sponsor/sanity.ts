@@ -199,7 +199,62 @@ export async function updateSponsor(
 
 export async function deleteSponsor(id: string): Promise<{ error?: Error }> {
   try {
-    await clientWrite.delete(id)
+    // Find all sponsorForConference records referencing this sponsor
+    const sfcDocs = await clientWrite.fetch<
+      Array<{
+        _id: string
+        contractAssetRef?: string
+      }>
+    >(
+      `*[_type == "sponsorForConference" && sponsor._ref == $id]{
+        _id,
+        "contractAssetRef": contractDocument.asset._ref
+      }`,
+      { id },
+    )
+
+    const sfcIds = sfcDocs.map((d) => d._id)
+
+    // Find related activity documents for all sponsorForConference records
+    let relatedActivityIds: string[] = []
+    if (sfcIds.length > 0) {
+      relatedActivityIds = await clientWrite.fetch<string[]>(
+        `*[_type == "sponsorActivity" && sponsorForConference._ref in $sfcIds]._id`,
+        { sfcIds },
+      )
+    }
+
+    // Find contract assets that are safe to delete (not referenced by other SFC docs)
+    const candidateAssetIds = [
+      ...new Set(
+        sfcDocs.map((d) => d.contractAssetRef).filter(Boolean) as string[],
+      ),
+    ]
+    let safeAssetIds: string[] = []
+    if (candidateAssetIds.length > 0) {
+      safeAssetIds = await clientWrite.fetch<string[]>(
+        `*[
+          _type == "sanity.fileAsset" &&
+          _id in $assetIds &&
+          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(sponsor._ref == $id)]) == 0
+        ]._id`,
+        { assetIds: candidateAssetIds, id },
+      )
+    }
+
+    const transaction = clientWrite.transaction()
+    transaction.delete(id)
+    for (const sfcId of sfcIds) {
+      transaction.delete(sfcId)
+    }
+    for (const activityId of relatedActivityIds) {
+      transaction.delete(activityId)
+    }
+    for (const assetId of safeAssetIds) {
+      transaction.delete(assetId)
+    }
+    await transaction.commit()
+
     return {}
   } catch (error) {
     return { error: error as Error }
@@ -317,6 +372,20 @@ export async function getSponsorEmailTemplate(
     const template = await clientWrite.fetch(
       `*[_type == "sponsorEmailTemplate" && _id == $id][0] ${EMAIL_TEMPLATE_PROJECTION}`,
       { id },
+    )
+    return { template: template ?? undefined }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function getSponsorEmailTemplateBySlug(
+  slug: string,
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await clientWrite.fetch(
+      `*[_type == "sponsorEmailTemplate" && slug.current == $slug][0] ${EMAIL_TEMPLATE_PROJECTION}`,
+      { slug },
     )
     return { template: template ?? undefined }
   } catch (error) {

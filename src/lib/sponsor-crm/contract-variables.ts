@@ -2,6 +2,8 @@ import {
   processTemplateVariables,
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
+import { formatDate, getCurrentDateTime } from '@/lib/time'
+import { formatOrgNumber, formatCurrency } from '@/lib/format'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   SPONSOR_NAME: 'Legal name of the sponsor company',
@@ -12,7 +14,8 @@ export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   CONTACT_EMAIL: 'Email of the primary contact person',
   TIER_NAME: 'Sponsor tier name',
   TIER_TAGLINE: 'Sponsor tier tagline/description',
-  CONTRACT_VALUE: 'Contract amount (formatted with currency)',
+  CONTRACT_VALUE:
+    'Contract amount with currency, excl. VAT (e.g. 50 000 kr ex. mva)',
   CONTRACT_VALUE_NUMBER: 'Contract amount (number only)',
   CONTRACT_CURRENCY: 'Currency code (e.g. NOK)',
   CONFERENCE_TITLE: 'Full conference title',
@@ -50,6 +53,7 @@ export interface ContractVariableContext {
   }>
   contractValue?: number
   contractCurrency?: string
+  language?: 'nb' | 'en'
   conference: {
     title: string
     startDate?: string
@@ -61,25 +65,8 @@ export interface ContractVariableContext {
     venueName?: string
     venueAddress?: string
     sponsorEmail?: string
+    logoBright?: string
   }
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat('nb-NO', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
 }
 
 export function buildContractVariables(
@@ -88,11 +75,11 @@ export function buildContractVariables(
   const vars: Record<string, string> = {
     SPONSOR_NAME: ctx.sponsor.name,
     CONFERENCE_TITLE: ctx.conference.title,
-    TODAY_DATE: formatDate(new Date().toISOString()),
+    TODAY_DATE: formatDate(getCurrentDateTime()),
   }
 
   if (ctx.sponsor.orgNumber) {
-    vars.SPONSOR_ORG_NUMBER = ctx.sponsor.orgNumber
+    vars.SPONSOR_ORG_NUMBER = formatOrgNumber(ctx.sponsor.orgNumber)
   }
   if (ctx.sponsor.address) {
     vars.SPONSOR_ADDRESS = ctx.sponsor.address
@@ -121,7 +108,8 @@ export function buildContractVariables(
   vars.CONTRACT_CURRENCY = currency
 
   if (ctx.contractValue != null) {
-    vars.CONTRACT_VALUE = formatCurrency(ctx.contractValue, currency)
+    const vatSuffix = ctx.language === 'en' ? 'excl. VAT' : 'ex. mva'
+    vars.CONTRACT_VALUE = `${formatCurrency(ctx.contractValue, currency)} ${vatSuffix}`
     vars.CONTRACT_VALUE_NUMBER = String(ctx.contractValue)
   }
 
@@ -148,7 +136,7 @@ export function buildContractVariables(
     vars.ORG_NAME = ctx.conference.organizer
   }
   if (ctx.conference.organizerOrgNumber) {
-    vars.ORG_ORG_NUMBER = ctx.conference.organizerOrgNumber
+    vars.ORG_ORG_NUMBER = formatOrgNumber(ctx.conference.organizerOrgNumber)
   }
   if (ctx.conference.organizerAddress) {
     vars.ORG_ADDRESS = ctx.conference.organizerAddress

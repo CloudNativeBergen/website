@@ -4,9 +4,16 @@ import { useState } from 'react'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/MobileFilterSheet',
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Bottom sheet filter panel optimized for mobile devices. Provides status, tier, and organizer filter controls with chip-based active filter display and clear-all action.',
+      },
+    },
   },
 } satisfies Meta
 

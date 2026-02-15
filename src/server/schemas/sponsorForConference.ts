@@ -20,6 +20,7 @@ export const InvoiceStatusSchema = z.enum([
 export const ContractStatusSchema = z.enum([
   'none',
   'verbal-agreement',
+  'registration-sent',
   'contract-sent',
   'contract-signed',
 ])
@@ -62,7 +63,9 @@ export const SponsorForConferenceInputSchema = z.object({
     ),
   contractStatus: ContractStatusSchema,
   signatureStatus: SignatureStatusSchema.optional(),
+  signerName: z.string().optional(),
   signerEmail: z.string().email().optional(),
+  signingUrl: z.string().url().optional(),
   contractTemplate: z.string().optional(),
   status: SponsorStatusSchema,
   assignedTo: z.string().nullable().optional(),
@@ -104,7 +107,9 @@ export const SponsorForConferenceUpdateSchema = z.object({
     ),
   contractStatus: ContractStatusSchema.optional(),
   signatureStatus: SignatureStatusSchema.optional(),
+  signerName: z.string().nullable().optional(),
   signerEmail: z.string().email().nullable().optional(),
+  signingUrl: z.string().url().nullable().optional(),
   contractTemplate: z.string().nullable().optional(),
   status: SponsorStatusSchema.optional(),
   assignedTo: z.string().nullable().optional(),
@@ -132,6 +137,12 @@ export const SponsorForConferenceUpdateSchema = z.object({
 
 export const SponsorForConferenceIdSchema = z.object({
   id: z.string().min(1, 'ID is required'),
+})
+
+export const DeleteSponsorSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  cancelAgreement: z.boolean().optional(),
+  deleteContractAsset: z.boolean().optional(),
 })
 
 export const MoveStageSchema = z.object({
@@ -176,6 +187,8 @@ export const BulkDeleteSponsorCRMSchema = z.object({
   ids: z
     .array(z.string().min(1))
     .min(1, 'At least one sponsor must be selected'),
+  cancelAgreements: z.boolean().optional(),
+  deleteContractAssets: z.boolean().optional(),
 })
 
 export const ImportAllHistoricSponsorsSchema = z.object({

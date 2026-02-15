@@ -6,6 +6,7 @@ export const TEMPLATE_CATEGORY_OPTIONS = [
   { title: 'International Sponsor', value: 'international' },
   { title: 'Local / Community', value: 'local-community' },
   { title: 'Follow-up', value: 'follow-up' },
+  { title: 'Contract', value: 'contract' },
   { title: 'Custom', value: 'custom' },
 ] as const
 

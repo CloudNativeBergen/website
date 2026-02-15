@@ -17,6 +17,7 @@ export type InvoiceStatus =
 export type ContractStatus =
   | 'none'
   | 'verbal-agreement'
+  | 'registration-sent'
   | 'contract-sent'
   | 'contract-signed'
 
@@ -37,7 +38,7 @@ export type ActivityType =
   | 'call'
   | 'meeting'
   | 'signature_status_change'
-  | 'onboarding_complete'
+  | 'registration_complete'
   | 'contract_reminder_sent'
 
 export type SponsorTag =
@@ -66,7 +67,9 @@ export interface SponsorForConference {
   contractStatus: ContractStatus
   signatureStatus?: SignatureStatus
   signatureId?: string
+  signerName?: string
   signerEmail?: string
+  signingUrl?: string
   contractSentAt?: string
   contractDocument?: {
     asset: { _ref: string }
@@ -83,6 +86,8 @@ export interface SponsorForConference {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency: 'NOK' | 'USD' | 'EUR'
   invoiceStatus: InvoiceStatus
@@ -90,9 +95,9 @@ export interface SponsorForConference {
   invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
-  onboardingToken?: string
-  onboardingComplete?: boolean
-  onboardingCompletedAt?: string
+  registrationToken?: string
+  registrationComplete?: boolean
+  registrationCompletedAt?: string
 }
 
 export interface SponsorForConferenceExpanded {
@@ -114,12 +119,16 @@ export interface SponsorForConferenceExpanded {
     organizer?: string
     organizerOrgNumber?: string
     organizerAddress?: string
+    signingProvider?: 'self-hosted' | 'adobe-sign'
     city?: string
     venueName?: string
     venueAddress?: string
     startDate?: string
     endDate?: string
     sponsorEmail?: string
+    domains?: string[]
+    socialLinks?: string[]
+    logoBright?: string
   }
   tier?: {
     _id: string
@@ -145,7 +154,9 @@ export interface SponsorForConferenceExpanded {
   contractStatus: ContractStatus
   signatureStatus?: SignatureStatus
   signatureId?: string
+  signerName?: string
   signerEmail?: string
+  signingUrl?: string
   contractSentAt?: string
   contractDocument?: {
     asset: {
@@ -167,6 +178,8 @@ export interface SponsorForConferenceExpanded {
   }
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
@@ -176,9 +189,9 @@ export interface SponsorForConferenceExpanded {
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  onboardingToken?: string
-  onboardingComplete?: boolean
-  onboardingCompletedAt?: string
+  registrationToken?: string
+  registrationComplete?: boolean
+  registrationCompletedAt?: string
 }
 
 export interface SponsorActivityExpanded {
@@ -205,7 +218,7 @@ export interface SponsorActivityExpanded {
     name: string
     email: string
     image?: string
-  }
+  } | null
   createdAt: string
 }
 
@@ -216,7 +229,9 @@ export interface SponsorForConferenceInput {
   addons?: string[]
   contractStatus: ContractStatus
   signatureStatus?: SignatureStatus
+  signerName?: string
   signerEmail?: string
+  signingUrl?: string | null
   contractTemplate?: string
   status: SponsorStatus
   assignedTo?: string | null
@@ -224,6 +239,8 @@ export interface SponsorForConferenceInput {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus

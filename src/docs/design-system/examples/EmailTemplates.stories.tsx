@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
+import { ContractSigningTemplate } from '@/components/email/ContractSigningTemplate'
+import { ContractSignedTemplate } from '@/components/email/ContractSignedTemplate'
+import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
 import {
   EnvelopeIcon,
   CheckCircleIcon,
@@ -8,6 +11,7 @@ import {
   ClockIcon,
   UserGroupIcon,
   TicketIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 
 const meta = {
@@ -182,6 +186,104 @@ export const EmailTemplates: Story = {
           </EmailPreviewFrame>
         </section>
 
+        {/* Contract Signing Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Contract Signing Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent to the designated signer when a sponsorship contract is ready
+            for digital signing via Adobe Sign.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="sponsor@acmecorp.com"
+            subject="Sponsorship Agreement — Cloud Native Days Norway 2026"
+            time="Just now"
+          >
+            <ContractSigningTemplate
+              sponsorName="Acme Corp"
+              signerName="Jane Smith"
+              signerEmail="sponsor@acmecorp.com"
+              signingUrl="https://secure.adobesign.com/sign/abc123"
+              tierName="Service"
+              contractValue="50 000 NOK"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
+        {/* Contract Reminder Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Contract Reminder Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent automatically by a daily cron job when a contract has been
+            pending for more than 5 days (up to 2 reminders).
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="sponsor@acmecorp.com"
+            subject="Reminder: Sponsorship Agreement — Cloud Native Days Norway 2026"
+            time="5 days after contract sent"
+          >
+            <ContractReminderTemplate
+              sponsorName="Acme Corp"
+              signerName="Jane Smith"
+              signingUrl="https://secure.adobesign.com/sign/abc123"
+              reminderNumber={1}
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
+        {/* Contract Signed Confirmation Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Contract Signed Confirmation Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent automatically to the sponsor after they successfully sign the
+            sponsorship agreement, with a copy of the signed PDF attached.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="sponsor@acmecorp.com"
+            subject="Contract confirmed – Welcome aboard Cloud Native Days Norway 2026!"
+            time="Immediately after signing"
+          >
+            <ContractSignedTemplate
+              sponsorName="Acme Corp"
+              signerName="Jane Smith"
+              tierName="Service"
+              contractValue="50 000 NOK"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
         {/* Template Categories */}
         <section className="mb-16">
           <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
@@ -241,12 +343,24 @@ export const EmailTemplates: Story = {
             />
 
             <EmailCategoryCard
+              icon={DocumentTextIcon}
+              title="Contract Emails"
+              description="Digital contract signing and reminder templates"
+              templates={[
+                'Contract Signing Request',
+                'Contract Signed Confirmation',
+                'Contract Reminder (#1)',
+                'Contract Reminder (#2)',
+              ]}
+              color="bg-brand-cloud-blue"
+            />
+
+            <EmailCategoryCard
               icon={UserGroupIcon}
               title="Sponsor Emails"
               description="Sponsor communication templates"
               templates={[
                 'Welcome Package',
-                'Contract Reminder',
                 'Logistics Information',
                 'Thank You',
               ]}

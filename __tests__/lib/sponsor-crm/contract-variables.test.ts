@@ -55,7 +55,7 @@ describe('contract-variables', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
-      expect(vars.SPONSOR_ORG_NUMBER).toBe('123456789')
+      expect(vars.SPONSOR_ORG_NUMBER).toBe('123\u00A0456\u00A0789')
       expect(vars.SPONSOR_ADDRESS).toBe('Main Street 123, Oslo, Norway')
       expect(vars.SPONSOR_WEBSITE).toBe('https://acme.com')
     })
@@ -83,14 +83,24 @@ describe('contract-variables', () => {
       expect(vars.ADDONS_LIST).toBe('Workshop Sponsorship, Party Sponsorship')
     })
 
-    it('should format contract value with currency', () => {
+    it('should format contract value with currency and Norwegian VAT suffix by default', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
       expect(vars.CONTRACT_VALUE).toContain('75')
       expect(vars.CONTRACT_VALUE).toContain('000')
+      expect(vars.CONTRACT_VALUE).toContain('ex. mva')
       expect(vars.CONTRACT_VALUE_NUMBER).toBe('75000')
       expect(vars.CONTRACT_CURRENCY).toBe('NOK')
+    })
+
+    it('should use English VAT suffix when language is en', () => {
+      const ctx = createBasicContext()
+      ctx.language = 'en'
+      const vars = buildContractVariables(ctx)
+
+      expect(vars.CONTRACT_VALUE).toContain('excl. VAT')
+      expect(vars.CONTRACT_VALUE).not.toContain('ex. mva')
     })
 
     it('should handle different currencies', () => {
@@ -159,7 +169,7 @@ describe('contract-variables', () => {
       const vars = buildContractVariables(ctx)
 
       expect(vars.ORG_NAME).toBe('Cloud Native Bergen')
-      expect(vars.ORG_ORG_NUMBER).toBe('987654321')
+      expect(vars.ORG_ORG_NUMBER).toBe('987\u00A0654\u00A0321')
       expect(vars.ORG_ADDRESS).toBe('Conference Street 1, Bergen, Norway')
       expect(vars.ORG_EMAIL).toBe('sponsors@cloudnativebergen.no')
     })

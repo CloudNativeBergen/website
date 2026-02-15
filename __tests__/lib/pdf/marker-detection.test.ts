@@ -1,0 +1,188 @@
+import { describe, it, expect } from '@jest/globals'
+import { parseTextPosition } from '@/lib/pdf/marker-detection'
+
+describe('parseTextPosition', () => {
+  it('finds marker within a single TJ operation', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 100 200 Tm',
+      '[(Hello World)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'Hello World')
+    expect(result).toEqual({ x: 100, y: 200 })
+  })
+
+  it('finds marker spanning multiple TJ operations in the same BT block', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 50 300 Tm',
+      '[({{)] TJ',
+      '[(Sig_es_:organizer:signature}})] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
+    expect(result).toEqual({ x: 50, y: 300 })
+  })
+
+  it('finds marker spanning separate BT..ET blocks (react-pdf renderer behavior)', () => {
+    // @react-pdf/renderer puts {{ in its own BT..ET block
+    const stream = [
+      'BT',
+      '1 0 0 1 50 100 Tm',
+      '[(Date / Signature)] TJ',
+      'ET',
+      'BT',
+      '1 0 0 1 50 90 Tm',
+      '[({{)] TJ',
+      'ET',
+      'BT',
+      '1 0 0 1 50 80 Tm',
+      '[(Sig_es_:organizer:signature}})] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
+    // Returns position of the segment where {{ starts
+    expect(result).toEqual({ x: 50, y: 90 })
+  })
+
+  it('finds sponsor marker in separate BT..ET blocks', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 300 90 Tm',
+      '[({{)] TJ',
+      'ET',
+      'BT',
+      '1 0 0 1 300 80 Tm',
+      '[(Sig_es_:signer1:signature}})] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:signer1:signature}}')
+    expect(result).toEqual({ x: 300, y: 90 })
+  })
+
+  it('returns null when marker is not present', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 50 100 Tm',
+      '[(Some other text)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
+    expect(result).toBeNull()
+  })
+
+  it('handles Td position updates', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 0 500 Tm',
+      '50 -100 Td',
+      '[({{)] TJ',
+      'ET',
+      'BT',
+      '1 0 0 1 50 390 Tm',
+      '[(Sig_es_:organizer:signature}})] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
+    // {{ is at Tm(0,500) + Td(50,-100) = (50, 400)
+    expect(result).toEqual({ x: 50, y: 400 })
+  })
+
+  it('handles hex-decoded parenthesized strings with multiple parts in TJ array', () => {
+    // After decodeHexStringsInStream, hex becomes parenthesized:
+    // <7b7b> -> ({{), <5369675f65735f3a6f7267616e697a> -> (Sig_es_:organiz)
+    const stream = [
+      'BT',
+      '1 0 0 1 50 90 Tm',
+      '[({{) 0] TJ',
+      'ET',
+      'BT',
+      '1 0 0 1 50 80 Tm',
+      '[(Sig_es_:organiz) 15 (er) -30 (:signature}}) 0] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
+    expect(result).toEqual({ x: 50, y: 90 })
+  })
+
+  it('applies Y-flip cm transform to get absolute page coordinates', () => {
+    // @react-pdf/renderer emits a Y-flip transform at each page start
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'BT',
+      '1 0 0 1 50 120 Tm',
+      '[(Hello World)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'Hello World')
+    // Y-flip: y' = 842 - 120 = 722
+    expect(result).toEqual({ x: 50, y: 722 })
+  })
+
+  it('composes nested cm transforms (Y-flip + translation)', () => {
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'q',
+      '1 0 0 1 40 50 cm',
+      'BT',
+      '1 0 0 1 10 20 Tm',
+      '[(Marker)] TJ',
+      'ET',
+      'Q',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'Marker')
+    // CTM: Y-flip(842) then translate(40,50)
+    // Composed: x' = x + 40, y' = 842 - (y + 50) = 792 - y
+    // Point (10, 20): x' = 50, y' = 792 - 20 = 772
+    expect(result).toEqual({ x: 50, y: 772 })
+  })
+
+  it('restores CTM after Q (graphics state pop)', () => {
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'q',
+      '1 0 0 1 0 100 cm',
+      'BT',
+      '1 0 0 1 50 10 Tm',
+      '[(Inside)] TJ',
+      'ET',
+      'Q',
+      'BT',
+      '1 0 0 1 50 10 Tm',
+      '[(Outside)] TJ',
+      'ET',
+    ].join('\n')
+
+    // Inside q..Q: CTM = Y-flip + translate(0,100)
+    // x' = 50, y' = 842 - (10 + 100) = 732
+    const inside = parseTextPosition(stream, 'Inside')
+    expect(inside).toEqual({ x: 50, y: 732 })
+
+    // After Q: CTM restored to just Y-flip
+    // x' = 50, y' = 842 - 10 = 832
+    const outside = parseTextPosition(stream, 'Outside')
+    expect(outside).toEqual({ x: 50, y: 832 })
+  })
+
+  it('returns identity coordinates when no cm transforms exist', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 100 200 Tm',
+      '[(No transforms)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'No transforms')
+    expect(result).toEqual({ x: 100, y: 200 })
+  })
+})

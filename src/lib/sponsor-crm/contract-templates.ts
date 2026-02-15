@@ -157,28 +157,57 @@ export async function updateContractTemplate(
 ): Promise<{ template?: ContractTemplate; error?: Error }> {
   try {
     const updates: Record<string, unknown> = {}
+    const fieldsToUnset: string[] = []
 
     if (data.title !== undefined) updates.title = data.title
     if (data.tier !== undefined) {
-      updates.tier = data.tier ? { _type: 'reference', _ref: data.tier } : null
+      if (data.tier) {
+        updates.tier = { _type: 'reference', _ref: data.tier }
+      } else {
+        fieldsToUnset.push('tier')
+      }
     }
     if (data.language !== undefined) updates.language = data.language
     if (data.currency !== undefined) updates.currency = data.currency
     if (data.sections !== undefined) {
-      // Preserve existing keys when provided, generate unique keys for new sections
       updates.sections = data.sections.map((s, index) => ({
         _key: s._key || `section-${Date.now()}-${index}`,
         heading: s.heading,
         body: s.body,
       }))
     }
-    if (data.headerText !== undefined) updates.headerText = data.headerText
-    if (data.footerText !== undefined) updates.footerText = data.footerText
-    if (data.terms !== undefined) updates.terms = data.terms
+    if (data.headerText !== undefined) {
+      if (data.headerText) {
+        updates.headerText = data.headerText
+      } else {
+        fieldsToUnset.push('headerText')
+      }
+    }
+    if (data.footerText !== undefined) {
+      if (data.footerText) {
+        updates.footerText = data.footerText
+      } else {
+        fieldsToUnset.push('footerText')
+      }
+    }
+    if (data.terms !== undefined) {
+      if (data.terms && data.terms.length > 0) {
+        updates.terms = data.terms
+      } else {
+        fieldsToUnset.push('terms')
+      }
+    }
     if (data.isDefault !== undefined) updates.isDefault = data.isDefault
     if (data.isActive !== undefined) updates.isActive = data.isActive
 
-    await clientWrite.patch(id).set(updates).commit()
+    let patch = clientWrite.patch(id)
+    if (Object.keys(updates).length > 0) {
+      patch = patch.set(updates)
+    }
+    if (fieldsToUnset.length > 0) {
+      patch = patch.unset(fieldsToUnset)
+    }
+    await patch.commit()
 
     const template = await clientRead.fetch<ContractTemplate>(
       `*[_type == "contractTemplate" && _id == $id][0]{${CONTRACT_TEMPLATE_FIELDS}}`,

@@ -71,7 +71,8 @@ export default defineType({
       title: 'Created By',
       type: 'reference',
       to: [{ type: 'speaker' }],
-      validation: (Rule) => Rule.required(),
+      description:
+        'The organizer who performed this action. Omitted for system-generated activities.',
       options: {
         filter: 'isOrganizer == true',
       },

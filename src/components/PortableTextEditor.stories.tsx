@@ -38,6 +38,24 @@ export const Empty: Story = {
   },
 }
 
+export const Compact: Story = {
+  render: () => {
+    const Wrapper = () => {
+      const [value, setValue] = useState<PortableTextBlock[]>([])
+      return (
+        <PortableTextEditor
+          label="Short answer"
+          value={value}
+          onChange={setValue}
+          compact
+          helpText="Compact mode uses a shorter editor area."
+        />
+      )
+    }
+    return <Wrapper />
+  },
+}
+
 export const WithContent: Story = {
   render: () => {
     const Wrapper = () => {

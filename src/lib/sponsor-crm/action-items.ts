@@ -3,6 +3,7 @@ import {
   type ActionItemType,
   calculateSponsorValue,
 } from '@/components/admin/sponsor-crm/utils'
+import { formatNumber } from '@/lib/format'
 
 export interface ActionItem {
   id: string
@@ -82,16 +83,17 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
-        description: `${sponsor.sponsor.name} is a high-value prospect (${value.toLocaleString()} NOK) not yet contacted`,
+        description: `${sponsor.sponsor.name} is a high-value prospect (${formatNumber(value)} NOK) not yet contacted`,
         priority: 1.7,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })
     }
 
-    // Priority 2: Invoice not sent for closed deals with value
+    // Priority 2: Invoice not sent for closed deals with signed contract
     if (
       sponsor.status === 'closed-won' &&
       sponsor.contractValue &&
+      sponsor.contractStatus === 'contract-signed' &&
       sponsor.invoiceStatus === 'not-sent'
     ) {
       actions.push({
@@ -127,6 +129,7 @@ export function generateActionItems(
     // Priority 4: Contract in progress (not signed yet)
     if (
       sponsor.status === 'closed-won' &&
+      sponsor.contractStatus &&
       sponsor.contractStatus !== 'contract-signed' &&
       sponsor.contractStatus !== 'none'
     ) {
@@ -166,6 +169,26 @@ export function generateActionItems(
       })
     }
 
+    // Priority 2: Registration complete — send contract
+    if (
+      sponsor.registrationComplete &&
+      sponsor.contractStatus !== 'contract-sent' &&
+      sponsor.contractStatus !== 'contract-signed'
+    ) {
+      actions.push({
+        id: `${sponsor._id}-registration-complete`,
+        type: 'registration-complete',
+        title: 'Send Contract',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} completed registration — generate and send the contract`,
+        priority: 2,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
     // Priority 2.5: Rejected digital signature
     if (sponsor.signatureStatus === 'rejected') {
       actions.push({
@@ -198,21 +221,21 @@ export function generateActionItems(
       })
     }
 
-    // Priority 6: Onboarding not completed for closed-won sponsors
+    // Priority 6: Registration not completed for closed-won sponsors
     if (
       sponsor.status === 'closed-won' &&
-      sponsor.onboardingToken &&
-      !sponsor.onboardingComplete
+      sponsor.registrationToken &&
+      !sponsor.registrationComplete
     ) {
       actions.push({
-        id: `${sponsor._id}-onboarding`,
-        type: 'onboarding-pending',
-        title: 'Onboarding Pending',
+        id: `${sponsor._id}-registration-pending`,
+        type: 'registration-pending',
+        title: 'Registration Pending',
         sponsor: {
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
-        description: `${sponsor.sponsor.name} has not completed onboarding`,
+        description: `${sponsor.sponsor.name} has not completed registration`,
         priority: 6,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })

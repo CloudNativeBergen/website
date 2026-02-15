@@ -1,73 +1,94 @@
 import type { SponsorForConferenceExpanded } from './types'
 
 export type ReadinessSource = 'organizer' | 'sponsor' | 'pipeline'
+export type ReadinessSeverity = 'required' | 'recommended'
 
 export interface MissingField {
   field: string
   label: string
   source: ReadinessSource
+  severity: ReadinessSeverity
 }
 
 export interface ContractReadiness {
   ready: boolean
+  canSend: boolean
   missing: MissingField[]
 }
 
-const ORGANIZER_FIELDS: Array<{
+interface FieldDef {
   field: string
   label: string
+  source: ReadinessSource
+  severity: ReadinessSeverity
   check: (sfc: SponsorForConferenceExpanded) => boolean
-}> = [
+}
+
+const ORGANIZER_FIELDS: FieldDef[] = [
   {
     field: 'conference.organizer',
     label: 'Organizer name',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.organizer,
   },
   {
     field: 'conference.organizerOrgNumber',
     label: 'Organizer org. number',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.organizerOrgNumber,
   },
   {
     field: 'conference.organizerAddress',
     label: 'Organizer address',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.organizerAddress,
   },
   {
     field: 'conference.startDate',
     label: 'Conference start date',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.startDate,
   },
   {
     field: 'conference.venueName',
     label: 'Venue name',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.venueName,
   },
   {
     field: 'conference.sponsorEmail',
     label: 'Sponsor liaison email',
+    source: 'organizer',
+    severity: 'recommended',
     check: (sfc) => !!sfc.conference.sponsorEmail,
   },
 ]
 
-const SPONSOR_FIELDS: Array<{
-  field: string
-  label: string
-  check: (sfc: SponsorForConferenceExpanded) => boolean
-}> = [
+const SPONSOR_FIELDS: FieldDef[] = [
   {
     field: 'sponsor.orgNumber',
     label: 'Sponsor org. number',
+    source: 'sponsor',
+    severity: 'recommended',
     check: (sfc) => !!sfc.sponsor.orgNumber,
   },
   {
     field: 'sponsor.address',
     label: 'Sponsor address',
+    source: 'sponsor',
+    severity: 'recommended',
     check: (sfc) => !!sfc.sponsor.address,
   },
   {
     field: 'contactPersons',
     label: 'Primary contact person',
+    source: 'sponsor',
+    severity: 'required',
     check: (sfc) =>
       !!sfc.contactPersons?.some(
         (c) =>
@@ -78,19 +99,19 @@ const SPONSOR_FIELDS: Array<{
   },
 ]
 
-const PIPELINE_FIELDS: Array<{
-  field: string
-  label: string
-  check: (sfc: SponsorForConferenceExpanded) => boolean
-}> = [
+const PIPELINE_FIELDS: FieldDef[] = [
   {
     field: 'tier',
     label: 'Sponsor tier',
+    source: 'pipeline',
+    severity: 'recommended',
     check: (sfc) => !!sfc.tier,
   },
   {
     field: 'contractValue',
     label: 'Contract value',
+    source: 'pipeline',
+    severity: 'recommended',
     check: (sfc) => sfc.contractValue != null && sfc.contractValue > 0,
   },
 ]
@@ -100,25 +121,25 @@ export function checkContractReadiness(
 ): ContractReadiness {
   const missing: MissingField[] = []
 
-  for (const { field, label, check } of ORGANIZER_FIELDS) {
+  const ALL_FIELDS = [
+    ...ORGANIZER_FIELDS,
+    ...SPONSOR_FIELDS,
+    ...PIPELINE_FIELDS,
+  ]
+
+  for (const { field, label, source, severity, check } of ALL_FIELDS) {
     if (!check(sfc)) {
-      missing.push({ field, label, source: 'organizer' })
+      missing.push({ field, label, source, severity })
     }
   }
 
-  for (const { field, label, check } of SPONSOR_FIELDS) {
-    if (!check(sfc)) {
-      missing.push({ field, label, source: 'sponsor' })
-    }
-  }
+  const allRequiredPresent = !missing.some((m) => m.severity === 'required')
 
-  for (const { field, label, check } of PIPELINE_FIELDS) {
-    if (!check(sfc)) {
-      missing.push({ field, label, source: 'pipeline' })
-    }
+  return {
+    ready: missing.length === 0,
+    canSend: allRequiredPresent,
+    missing,
   }
-
-  return { ready: missing.length === 0, missing }
 }
 
 export function groupMissingBySource(

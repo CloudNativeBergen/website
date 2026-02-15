@@ -104,7 +104,7 @@ function UserAvatar({
 }) {
   const sizeClasses = size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
 
-  if (image) {
+  if (image && image.length > 0) {
     return (
       <Image
         src={image}
@@ -157,8 +157,8 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
         <UserAvatar
-          name={activity.createdBy.name}
-          image={activity.createdBy.image}
+          name={activity.createdBy?.name ?? 'System'}
+          image={activity.createdBy?.image}
           size="sm"
         />
         <time className="text-xs text-gray-400 dark:text-gray-500">

@@ -27,8 +27,8 @@ const mockTemplates = [
     subject: 'Invoice reminder for Cloud Native Days Norway 2025',
   },
   {
-    id: 'onboarding',
-    name: 'Onboarding Link',
+    id: 'registration',
+    name: 'Registration Link',
     subject: 'Complete your sponsor profile',
   },
   {

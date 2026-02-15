@@ -11,6 +11,7 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline'
 import { MetricCard } from '../stats'
+import { formatCurrency } from '@/lib/format'
 
 interface SponsorDashboardMetricsProps {
   conferenceId: string
@@ -97,14 +98,6 @@ export function SponsorDashboardMetrics({
   }, [sponsors, exchangeRates, convertCurrency])
 
   const isLoading = isLoadingSponsors || isLoadingRates
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
 
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

@@ -6,6 +6,12 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Architecture overview of the sponsor system. Covers the two-document data model, CRM pipeline, contract signing flow, portal onboarding, and email communication patterns.',
+      },
+    },
   },
 } satisfies Meta
 
@@ -22,8 +28,8 @@ export const Architecture: Story = {
         <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Manages the full lifecycle of conference sponsorships — from initial
           prospecting through contract generation, digital signatures,
-          invoicing, and self-service onboarding. Built on a two-document model
-          separating the conference-independent sponsor entity from
+          invoicing, and self-service registration. Built on a two-document
+          model separating the conference-independent sponsor entity from
           per-conference CRM records.
         </p>
 
@@ -115,6 +121,7 @@ export const Architecture: Story = {
                     'not-started → pending → signed / rejected / expired',
                   ],
                   ['signatureId / signerEmail', 'External e-signing tracking'],
+                  ['signingUrl', 'Signing URL for portal/email'],
                   ['contractSentAt / contractSignedAt', 'Timestamps'],
                   ['contractDocument', 'Generated PDF file'],
                   ['contractTemplate', 'Reference to contractTemplate'],
@@ -151,11 +158,11 @@ export const Architecture: Story = {
                 ]}
               />
               <FieldGroup
-                label="Onboarding"
+                label="Registration"
                 fields={[
-                  ['onboardingToken', 'Unique token for self-service portal'],
+                  ['registrationToken', 'Unique token for self-service portal'],
                   [
-                    'onboardingComplete / onboardingCompletedAt',
+                    'registrationComplete / registrationCompletedAt',
                     'Completion tracking',
                   ],
                 ]}
@@ -343,8 +350,8 @@ export const Architecture: Story = {
                   label="Sponsorship terms &amp; conditions"
                 />
                 <RouteCard
-                  path="/sponsor/onboarding/[token]"
-                  label="Self-service onboarding portal"
+                  path="/sponsor/portal/[token]"
+                  label="Self-service sponsor portal"
                 />
               </div>
             </div>
@@ -475,32 +482,255 @@ export const Architecture: Story = {
         </section>
 
         {/* Data Flow */}
-        <section>
+        <section className="mb-16">
           <h2 className="font-space-grotesk mb-6 text-3xl font-semibold text-brand-cloud-blue dark:text-blue-400">
             Data Flow
           </h2>
           <div className="rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
             <pre className="font-jetbrains overflow-x-auto text-sm text-brand-slate-gray dark:text-gray-300">
-              {`Sponsor onboarding
+              {`Sponsor registration
   → CRM: create sponsorForConference (auto-assign to current user)
   → Pipeline: prospect → contacted → negotiating → closed-won
   → Each stage change logged to sponsorActivity
 
-Contract flow
-  → contractTemplates.findBest → match tier + language
-  → contractTemplates.generatePdf → render with {{{VARIABLE}}} substitution
-  → crm.updateContractStatus → contract-sent
-  → crm.updateSignatureStatus → pending → signed
-  → Signed atomically sets contractStatus → contract-signed + timestamp
+Contract flow (via generateAndSendContract)
+  → findBestContractTemplate → match conference + tier + language
+  → generateContractPdf → React-PDF with {{{VARIABLE}}} substitution
+  → Upload PDF to Sanity (permanent storage)
+  → signingProvider.sendForSigning(pdf, signerEmail, ...)
+    → provider handles upload + agreement creation internally
+    → returns { agreementId, signingUrl? }
+  → Update SFC: contractStatus=contract-sent, signatureStatus=pending
+  → Log contract_status_change + signature_status_change activities
+
+Webhooks (/api/webhooks/adobe-sign — provider-specific)
+  → AGREEMENT_WORKFLOW_COMPLETED → download signed PDF → mark signed
+  → AGREEMENT_RECALLED → mark rejected
+  → AGREEMENT_EXPIRED → mark expired
+
+Automated reminders (/api/cron/contract-reminders, daily)
+  → Query pending > 5 days, < 2 reminders
+  → signingProvider.sendReminder(agreementId) → increment reminderCount
 
 Invoicing
   → crm.updateInvoiceStatus → sent (auto-sets invoiceSentAt)
   → paid (auto-sets invoicePaidAt) | overdue | cancelled
 
-Self-service onboarding
-  → /sponsor/onboarding/[token] → logo upload, billing, contacts
-  → Sets onboardingComplete + onboardingCompletedAt`}
+Self-service portal
+  → /sponsor/portal/[token] → logo upload, billing, contacts, signer selection
+  → Sets registrationComplete + registrationCompletedAt
+  → Slack notification sent to salesNotificationChannel
+  → Admin triggers contract send manually from CRM`}
             </pre>
+          </div>
+        </section>
+
+        {/* Contract Signing */}
+        <section>
+          <h2 className="font-space-grotesk mb-6 text-3xl font-semibold text-brand-cloud-blue dark:text-blue-400">
+            Contract Signing
+          </h2>
+          <p className="font-inter mb-6 text-sm text-brand-slate-gray dark:text-gray-300">
+            Digital contract signing via a provider-agnostic abstraction layer (
+            <code className="text-xs">ContractSigningProvider</code> interface
+            in <code className="text-xs">src/lib/contract-signing/</code>).
+            Currently backed by Adobe Acrobat Sign REST API v6. The CRM, router,
+            and UI never interact with Adobe Sign directly &mdash; only through
+            the provider interface.
+          </p>
+
+          <div className="mb-8 rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+              Architecture
+            </h3>
+            <pre className="font-jetbrains overflow-x-auto text-xs text-brand-slate-gray dark:text-gray-300">
+              {`┌─────────────────────────────────────────────────┐
+│              Admin CRM UI                       │
+│  SponsorContractView / Contract Board           │
+└────────────┬────────────────┬───────────────────┘
+             │ Manual "Send"  │ Registration trigger
+             ▼                ▼
+┌─────────────────────────────────────────────────┐
+│         tRPC Router (sponsor.*)                 │
+│  1. getSigningProvider()                        │
+│  2. generateAndSendContract(provider, ...)      │
+└──────────────────────┬──────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────┐
+│    ContractSigningProvider (interface)           │
+│  sendForSigning()   checkStatus()               │
+│  cancelAgreement()  sendReminder()              │
+│  getConnectionStatus()  disconnect()            │
+│  getAuthorizeUrl()  registerWebhook()           │
+└──────────────────────┬──────────────────────────┘
+                       │ Currently: AdobeSignProvider
+                       ▼
+┌─────────────────────────────────────────────────┐
+│         Adobe Sign REST API v6                  │
+│  POST /transientDocuments → transientDocId      │
+│  POST /agreements → agreementId                 │
+│  POST /agreements/{id}/reminders                │
+│  GET  /agreements/{id}/combinedDocument         │
+└──────────────────────┬──────────────────────────┘
+                       │ Webhook notifications
+                       ▼
+┌─────────────────────────────────────────────────┐
+│    /api/webhooks/adobe-sign (provider-specific) │
+│  WORKFLOW_COMPLETED → download PDF, mark signed │
+│  RECALLED → mark rejected                       │
+│  EXPIRED → mark expired                         │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│    /api/cron/contract-reminders (daily)         │
+│  Pending > 5 days, < 2 reminders → send         │
+└─────────────────────────────────────────────────┘`}
+            </pre>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Provider Abstraction
+              </h3>
+              <p className="font-inter mb-3 text-xs text-brand-slate-gray dark:text-gray-400">
+                src/lib/contract-signing/
+              </p>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">types.ts</code> —
+                  ContractSigningProvider interface
+                </li>
+                <li>
+                  <code className="text-xs">adobe-sign.ts</code> —
+                  AdobeSignProvider implementation
+                </li>
+                <li>
+                  <code className="text-xs">index.ts</code> —
+                  getSigningProvider() factory
+                </li>
+                <li>
+                  <code className="text-xs">sendForSigning()</code> — Upload PDF
+                  + create signing request
+                </li>
+                <li>
+                  <code className="text-xs">checkStatus()</code> — Poll provider
+                  for agreement status
+                </li>
+                <li>
+                  <code className="text-xs">cancelAgreement()</code> — Cancel
+                  pending agreement
+                </li>
+                <li>
+                  <code className="text-xs">sendReminder()</code> — Nudge signer
+                </li>
+                <li>
+                  <code className="text-xs">
+                    getConnectionStatus() / disconnect()
+                  </code>{' '}
+                  — Session management
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Environment Variables
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_APPLICATION_ID</code> —
+                  OAuth client ID
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_APPLICATION_SECRET</code>{' '}
+                  — OAuth client secret
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_CLIENT_ID</code> —
+                  Webhook verification
+                </li>
+                <li>
+                  <code className="text-xs">ADOBE_SIGN_SHARD</code> — API shard
+                  (default: eu2)
+                </li>
+                <li>
+                  <code className="text-xs">CRON_SECRET</code> — Cron job auth
+                  token
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Contract Data Fields (SFC)
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <code className="text-xs">contractStatus</code> — none →
+                  verbal → sent → signed
+                </li>
+                <li>
+                  <code className="text-xs">signatureStatus</code> — not-started
+                  → pending → signed
+                </li>
+                <li>
+                  <code className="text-xs">signatureId</code> — Signing
+                  provider agreement ID
+                </li>
+                <li>
+                  <code className="text-xs">signerEmail</code> — Designated
+                  signer
+                </li>
+                <li>
+                  <code className="text-xs">signingUrl</code> — Signing URL
+                </li>
+                <li>
+                  <code className="text-xs">
+                    contractSentAt / contractSignedAt
+                  </code>{' '}
+                  — Timestamps
+                </li>
+                <li>
+                  <code className="text-xs">contractDocument</code> — PDF file
+                  asset
+                </li>
+                <li>
+                  <code className="text-xs">reminderCount</code> — Reminders
+                  sent (max 2)
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-jetbrains mb-3 text-sm font-semibold text-brand-nordic-purple dark:text-purple-400">
+                Design Decisions
+              </h3>
+              <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
+                <li>
+                  <strong>Provider abstraction</strong> — CRM/router use
+                  ContractSigningProvider interface only
+                </li>
+                <li>
+                  <strong>Graceful degradation</strong> — PDF generated even
+                  without signing provider
+                </li>
+                <li>
+                  <strong>Webhook-driven</strong> — No polling; provider pushes
+                  status updates
+                </li>
+                <li>
+                  <strong>Dual storage</strong> — Sanity (permanent) + Adobe
+                  Sign (transient 7d)
+                </li>
+                <li>
+                  <strong>Unified send</strong> — Same function for manual +
+                  auto-registration
+                </li>
+                <li>
+                  <strong>Two-tier readiness</strong> — Required vs recommended
+                  field checks
+                </li>
+              </ul>
+            </div>
           </div>
         </section>
       </div>

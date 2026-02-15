@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
@@ -9,6 +9,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 import type { PortableTextBlock as EditorBlock } from '@portabletext/editor'
 import { CONTRACT_VARIABLE_DESCRIPTIONS } from '@/lib/sponsor-crm/contract-variables'
+import { findUnsupportedVariables } from '@/lib/sponsor/templates'
 import { Dropdown } from '@/components/Form'
 import { CurrencySelect } from '@/components/CurrencySelect'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
@@ -20,6 +21,8 @@ import {
   ChevronDownIcon,
   InformationCircleIcon,
   ClipboardDocumentIcon,
+  EyeIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 interface ContractSection {
@@ -51,6 +54,9 @@ export function ContractTemplateEditorPage({
   const [terms, setTerms] = useState<PortableTextBlock[]>([])
   const [showVariables, setShowVariables] = useState(false)
   const [sectionEditorKeys, setSectionEditorKeys] = useState<number[]>([0])
+  const [termsEditorKey, setTermsEditorKey] = useState(0)
+  const [previewPdf, setPreviewPdf] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const isEditing = !!templateId
 
@@ -84,18 +90,23 @@ export function ContractTemplateEditorPage({
       if (existingTemplate.terms) {
         setTerms(existingTemplate.terms)
       }
+      setTermsEditorKey(Date.now())
     }
   }, [existingTemplate])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const createMutation = api.sponsor.contractTemplates.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       showNotification({
         type: 'success',
         title: 'Template created',
         message: 'Contract template has been created',
       })
-      router.push('/admin/sponsors/contracts')
+      if (data?._id) {
+        router.replace(`/admin/sponsors/contracts/${data._id}`)
+      } else {
+        router.push('/admin/sponsors/contracts')
+      }
     },
     onError: (error) => {
       showNotification({
@@ -110,10 +121,9 @@ export function ContractTemplateEditorPage({
     onSuccess: () => {
       showNotification({
         type: 'success',
-        title: 'Template updated',
+        title: 'Template saved',
         message: 'Contract template has been updated',
       })
-      router.push('/admin/sponsors/contracts')
     },
     onError: (error) => {
       showNotification({
@@ -138,24 +148,34 @@ export function ContractTemplateEditorPage({
         return
       }
 
-      const data = {
-        title,
-        conference: conference._id,
-        tier: tier || undefined,
-        language,
-        currency,
-        sections: validSections,
-        headerText: headerText || undefined,
-        footerText: footerText || undefined,
-        terms: terms.length > 0 ? terms : undefined,
-        isDefault,
-        isActive,
-      }
-
       if (isEditing && templateId) {
-        updateMutation.mutate({ id: templateId, ...data })
+        updateMutation.mutate({
+          id: templateId,
+          title,
+          tier: tier || null,
+          language,
+          currency,
+          sections: validSections,
+          headerText: headerText || null,
+          footerText: footerText || null,
+          terms: terms.length > 0 ? terms : null,
+          isDefault,
+          isActive,
+        })
       } else {
-        createMutation.mutate(data)
+        createMutation.mutate({
+          title,
+          conference: conference._id,
+          tier: tier || undefined,
+          language,
+          currency,
+          sections: validSections,
+          headerText: headerText || undefined,
+          footerText: footerText || undefined,
+          terms: terms.length > 0 ? terms : undefined,
+          isDefault,
+          isActive,
+        })
       }
     },
     [
@@ -225,6 +245,68 @@ export function ContractTemplateEditorPage({
     [showNotification],
   )
 
+  const previewMutation = api.sponsor.contractTemplates.previewPdf.useMutation({
+    onSuccess: (data) => {
+      setPreviewPdf(data.pdf)
+      setShowPreview(true)
+    },
+    onError: (error) => {
+      showNotification({
+        type: 'error',
+        title: 'Preview failed',
+        message: error.message,
+      })
+    },
+  })
+
+  const handlePreview = useCallback(() => {
+    const validSections = sections.filter((s) => s.heading.trim())
+    if (validSections.length === 0) {
+      showNotification({
+        type: 'error',
+        title: 'Cannot preview',
+        message: 'Add at least one section with a heading first',
+      })
+      return
+    }
+    previewMutation.mutate({
+      conferenceId: conference._id,
+      title: title || 'Sponsor Agreement',
+      language,
+      currency,
+      sections: validSections,
+      headerText: headerText || undefined,
+      footerText: footerText || undefined,
+      terms: terms.length > 0 ? terms : undefined,
+      tierId: tier || undefined,
+    })
+  }, [
+    sections,
+    conference._id,
+    title,
+    language,
+    currency,
+    headerText,
+    footerText,
+    terms,
+    tier,
+    previewMutation,
+    showNotification,
+  ])
+
+  const unsupportedVars = useMemo(
+    () =>
+      findUnsupportedVariables(
+        CONTRACT_VARIABLE_DESCRIPTIONS,
+        headerText,
+        footerText,
+        ...sections.map((s) => s.heading),
+        ...sections.filter((s) => s.body).map((s) => s.body!),
+        terms,
+      ),
+    [headerText, footerText, sections, terms],
+  )
+
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (isEditing && isLoadingTemplate) {
@@ -235,12 +317,49 @@ export function ContractTemplateEditorPage({
     )
   }
 
+  if (showPreview && previewPdf) {
+    return (
+      <div>
+        <AdminPageHeader
+          title="Contract Preview"
+          description="Preview with sample sponsor data — variables are replaced with example values"
+          icon={<EyeIcon />}
+          backLink={{ href: '/admin/sponsors/contracts', label: 'Contracts' }}
+        />
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setShowPreview(false)}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            &larr; Back to Editor
+          </button>
+          <button
+            type="button"
+            onClick={handlePreview}
+            disabled={previewMutation.isPending}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            <EyeIcon className="h-4 w-4" />
+            {previewMutation.isPending ? 'Refreshing...' : 'Refresh Preview'}
+          </button>
+        </div>
+        <iframe
+          src={`data:application/pdf;base64,${previewPdf}`}
+          className="h-[80vh] w-full rounded-lg border border-gray-200 dark:border-gray-700"
+          title="Contract preview"
+        />
+      </div>
+    )
+  }
+
   return (
     <div>
       <AdminPageHeader
         title={isEditing ? 'Edit Contract Template' : 'New Contract Template'}
         description="Configure the contract template structure and settings"
         icon={<DocumentTextIcon />}
+        backLink={{ href: '/admin/sponsors/contracts', label: 'Contracts' }}
       />
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -412,7 +531,7 @@ export function ContractTemplateEditorPage({
 
         {/* Contract Sections */}
         <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">
               Contract Sections
             </h3>
@@ -425,6 +544,16 @@ export function ContractTemplateEditorPage({
               Add Section
             </button>
           </div>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            These are the main clauses of the contract (e.g. &quot;1.
+            Parties&quot;, &quot;2. Scope&quot;, &quot;3. Payment Terms&quot;).
+            They appear on page 1 of the PDF between the sponsor details and the
+            signature area. Use{' '}
+            <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-800">
+              {'{{{VARIABLE_NAME}}}'}
+            </code>{' '}
+            syntax in both headings and body text for dynamic values.
+          </p>
 
           <div className="space-y-4">
             {sections.map((section, index) => (
@@ -491,12 +620,22 @@ export function ContractTemplateEditorPage({
                       }
                       forceRemountKey={sectionEditorKeys[index]}
                       helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic values."
+                      compact
                     />
                   </div>
                 </div>
               </div>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={addSection}
+            className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-1 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-300"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Add Section
+          </button>
         </div>
 
         {/* General Terms & Conditions (Appendix 1) */}
@@ -520,12 +659,32 @@ export function ContractTemplateEditorPage({
             label="Terms &amp; Conditions"
             value={(terms as unknown as EditorBlock[]) || []}
             onChange={(val) => setTerms(val as unknown as PortableTextBlock[])}
-            forceRemountKey={
-              existingTemplate ? `terms-${existingTemplate._id}` : 'terms-new'
-            }
+            forceRemountKey={termsEditorKey}
             helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic values. Variables are substituted in the contract PDF."
+            compact
           />
         </div>
+
+        {/* Unsupported variable warning */}
+        {unsupportedVars.length > 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-900/20">
+            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-medium">Unsupported variables detected</p>
+              <p className="mt-1">
+                The following variables will not be replaced in the contract:{' '}
+                {unsupportedVars.map((v, i) => (
+                  <span key={v}>
+                    {i > 0 && ', '}
+                    <code className="rounded bg-amber-100 px-1 font-mono text-xs dark:bg-amber-800">
+                      {`{{{${v}}}}`}
+                    </code>
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Submit */}
         <div className="flex items-center justify-end gap-3">
@@ -534,18 +693,24 @@ export function ContractTemplateEditorPage({
             onClick={() => router.push('/admin/sponsors/contracts')}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
           >
-            Cancel
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={handlePreview}
+            disabled={previewMutation.isPending}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-900/20"
+            title="Generate a preview PDF with sample sponsor data (does not save)"
+          >
+            <EyeIcon className="h-4 w-4" />
+            {previewMutation.isPending ? 'Generating...' : 'Preview PDF'}
           </button>
           <button
             type="submit"
             disabled={isPending || !title.trim()}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {isPending
-              ? 'Saving...'
-              : isEditing
-                ? 'Update Template'
-                : 'Create Template'}
+            {isPending ? 'Saving...' : 'Save'}
           </button>
         </div>
       </form>

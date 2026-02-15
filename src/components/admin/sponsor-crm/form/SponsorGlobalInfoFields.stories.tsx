@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { SponsorGlobalInfoFields } from './SponsorGlobalInfoFields'
 
 const meta = {
-  title: 'Systems/Sponsors/Form/SponsorGlobalInfoFields',
+  title: 'Systems/Sponsors/Admin/Form/SponsorGlobalInfoFields',
   component: SponsorGlobalInfoFields,
   parameters: {
     layout: 'padded',
@@ -104,6 +104,9 @@ export const NameChangeTest: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement)
+    // Component starts collapsed — click Edit to expand
+    const editButton = canvas.getByRole('button', { name: /edit/i })
+    await userEvent.click(editButton)
     const nameInput = canvas.getByLabelText('Company Name *')
     await userEvent.type(nameInput, 'Test Company')
     await expect(args.onNameChange).toHaveBeenCalled()
@@ -119,6 +122,9 @@ export const WebsiteChangeTest: Story = {
   },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement)
+    // Component starts collapsed — click Edit to expand
+    const editButton = canvas.getByRole('button', { name: /edit/i })
+    await userEvent.click(editButton)
     const websiteInput = canvas.getByLabelText('Website *')
     await userEvent.type(websiteInput, 'https://test.com')
     await expect(args.onWebsiteChange).toHaveBeenCalled()

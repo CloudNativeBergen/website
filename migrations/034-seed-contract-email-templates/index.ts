@@ -24,27 +24,26 @@ const TEMPLATES = [
     title: 'Contract Sent (English)',
     slug: { _type: 'slug', current: 'contract-sent' },
     category: 'contract',
-    subject: 'Sponsorship contract: {{{CONFERENCE_TITLE}}}',
+    language: 'en',
+    subject: 'Sponsorship Agreement \u2014 {{{CONFERENCE_TITLE}}}',
     description:
       'Sent to the sponsor when a contract is generated and shared for signing',
-    is_default: true,
-    sort_order: 20,
+    isDefault: true,
+    sortOrder: 20,
     body: [
-      textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
+      textBlock('Dear {{{SIGNER_NAME}}},', 'b1'),
       textBlock(
-        'Please find attached the sponsorship contract for {{{CONFERENCE_TITLE}}}.',
+        'Your sponsorship agreement for {{{CONFERENCE_TITLE}}} is ready for review and digital signing.',
         'b2',
       ),
       textBlock(
-        'The contract covers your {{{TIER_NAME}}} sponsorship at {{{CONTRACT_VALUE}}} {{{CONTRACT_CURRENCY}}}.',
+        'The link below is unique to your email address. Use it to review the full agreement and provide your digital signature.',
         'b3',
       ),
       textBlock(
-        'Please review and sign the contract at your earliest convenience. If you have any questions, feel free to reply to this email.',
+        'If you have any questions or need assistance, simply reply to this email.',
         'b4',
       ),
-      textBlock('Best regards,', 'b5'),
-      textBlock('{{{SENDER_NAME}}}', 'b6'),
     ],
   },
   {
@@ -53,22 +52,21 @@ const TEMPLATES = [
     title: 'Contract Reminder (English)',
     slug: { _type: 'slug', current: 'contract-reminder' },
     category: 'contract',
-    subject: 'Reminder: Sponsorship contract for {{{CONFERENCE_TITLE}}}',
+    language: 'en',
+    subject: 'Reminder: Sponsorship Agreement \u2014 {{{CONFERENCE_TITLE}}}',
     description: 'Follow-up reminder for unsigned contracts',
-    is_default: false,
-    sort_order: 21,
+    isDefault: true,
+    sortOrder: 21,
     body: [
-      textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
+      textBlock('Dear {{{SIGNER_NAME}}},', 'b1'),
       textBlock(
-        'This is a friendly reminder that we are still awaiting your signed sponsorship contract for {{{CONFERENCE_TITLE}}}.',
+        'Your sponsorship agreement for {{{CONFERENCE_TITLE}}} is still awaiting your signature. We\u2019d love to finalize the partnership \u2014 please take a moment to review and sign the document.',
         'b2',
       ),
       textBlock(
-        'The contract was sent on {{{CONTRACT_SENT_DATE}}}. If you need a new copy or have any questions, please let us know.',
+        'If you have any questions or need assistance, simply reply to this email.',
         'b3',
       ),
-      textBlock('Best regards,', 'b4'),
-      textBlock('{{{SENDER_NAME}}}', 'b5'),
     ],
   },
   {
@@ -77,27 +75,31 @@ const TEMPLATES = [
     title: 'Contract Signed Confirmation (English)',
     slug: { _type: 'slug', current: 'contract-signed' },
     category: 'contract',
-    subject: 'Contract confirmed \u2013 Welcome aboard {{{CONFERENCE_TITLE}}}!',
+    language: 'en',
+    subject:
+      'Agreement Confirmed \u2014 Welcome aboard {{{CONFERENCE_TITLE}}}!',
     description:
       'Confirmation sent to the sponsor after the contract has been signed',
-    is_default: false,
-    sort_order: 22,
+    isDefault: true,
+    sortOrder: 22,
     body: [
-      textBlock('Hi {{{CONTACT_NAMES}}},', 'b1'),
+      textBlock('Dear {{{SIGNER_NAME}}},', 'b1'),
       textBlock(
-        'Thank you for signing the sponsorship contract for {{{CONFERENCE_TITLE}}}! We are thrilled to have {{{SPONSOR_NAME}}} on board.',
+        'Thank you for signing the sponsorship agreement for {{{CONFERENCE_TITLE}}}! We are thrilled to have {{{SPONSOR_NAME}}} on board as a partner.',
         'b2',
       ),
       textBlock(
-        'Next steps: We will send you an onboarding link shortly where you can provide company details, logos, and contact information for the event.',
+        'A copy of the signed agreement is attached to this email for your records.',
         'b3',
       ),
       textBlock(
-        'If you have any questions in the meantime, don\u0027t hesitate to reach out.',
+        'We look forward to a great partnership and an amazing event together!',
         'b4',
       ),
-      textBlock('Best regards,', 'b5'),
-      textBlock('{{{SENDER_NAME}}}', 'b6'),
+      textBlock(
+        'If you have any questions or need assistance, simply reply to this email.',
+        'b5',
+      ),
     ],
   },
 ]

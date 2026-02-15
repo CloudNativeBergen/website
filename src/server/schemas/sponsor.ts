@@ -11,7 +11,10 @@ export const ContactPersonSchema = z.object({
   role: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+export const InvoiceFormatSchema = z.enum(['ehf', 'pdf'])
+
 export const BillingInfoSchema = z.object({
+  invoiceFormat: InvoiceFormatSchema.default('pdf'),
   email: z.string().email('Valid billing email is required'),
   reference: z.string().nullable().optional().transform(nullToUndefined),
   comments: z.string().nullable().optional().transform(nullToUndefined),
@@ -23,6 +26,7 @@ export const SponsorInputSchema = z.object({
   logo: z.string().nullable().optional().or(z.literal('')),
   logoBright: z.string().nullable().optional(),
   orgNumber: z.string().nullable().optional().transform(nullToUndefined),
+  address: z.string().nullable().optional().transform(nullToUndefined),
   tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 
@@ -66,6 +70,7 @@ export const TemplateCategorySchema = z.enum([
   'international',
   'local-community',
   'follow-up',
+  'contract',
   'custom',
 ])
 

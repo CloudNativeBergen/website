@@ -38,6 +38,7 @@ export function mockBillingInfo(
   overrides: Partial<BillingInfo> = {},
 ): BillingInfo {
   return {
+    invoiceFormat: 'pdf',
     email: 'billing@example.com',
     reference: 'PO-2026-001',
     comments: 'Invoice quarterly',
@@ -111,7 +112,7 @@ export function mockSponsor(
     billing: mockBillingInfo(),
     tags: ['warm-lead', 'returning-sponsor'] as SponsorTag[],
     notes: 'Very interested in premium package',
-    onboardingComplete: false,
+    registrationComplete: false,
     ...overrides,
   }
 }
@@ -119,6 +120,7 @@ export function mockSponsor(
 export function mockReadinessReady(): ContractReadiness {
   return {
     ready: true,
+    canSend: true,
     missing: [],
   }
 }
@@ -131,18 +133,35 @@ export function mockReadinessMissing(
       field: 'sponsor.orgNumber',
       label: 'Organization number',
       source: 'sponsor',
+      severity: 'recommended',
     },
-    { field: 'sponsor.address', label: 'Address', source: 'sponsor' },
+    {
+      field: 'sponsor.address',
+      label: 'Address',
+      source: 'sponsor',
+      severity: 'recommended',
+    },
     {
       field: 'conference.organizerOrgNumber',
       label: 'Organizer org number',
       source: 'organizer',
+      severity: 'recommended',
     },
-    { field: 'tier', label: 'Sponsor tier', source: 'pipeline' },
+    {
+      field: 'tier',
+      label: 'Sponsor tier',
+      source: 'pipeline',
+      severity: 'recommended',
+    },
   ]
+
+  const anyRequiredMissing = defaultMissing.some(
+    (m) => m.severity === 'required',
+  )
 
   return {
     ready: false,
+    canSend: !anyRequiredMissing,
     missing: defaultMissing,
   }
 }

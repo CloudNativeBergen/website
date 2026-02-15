@@ -1,5 +1,6 @@
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker/sanity'
+import { formatNumber } from '@/lib/format'
 import { Action } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
@@ -19,6 +20,21 @@ async function sendSlackNotification(
     })
   } catch (error) {
     console.error('Error sending Slack notification:', error)
+  }
+}
+
+async function sendSalesNotification(
+  message: SlackMessage,
+  conference: Conference,
+) {
+  if (!conference.salesNotificationChannel) return
+
+  try {
+    await postSlackMessage(message, {
+      channel: conference.salesNotificationChannel,
+    })
+  } catch (error) {
+    console.error('Error sending Slack sales notification:', error)
   }
 }
 
@@ -308,4 +324,69 @@ export async function notifyNewVolunteer(
 
   const message = { blocks }
   await sendSlackNotification(message, conference)
+}
+
+export async function notifySponsorRegistrationComplete(
+  sponsorName: string,
+  tierTitle: string | null,
+  contractValue: number | null,
+  contractCurrency: string | null,
+  conference: Conference,
+) {
+  const domain = getDomainFromConference(conference)
+
+  const valueStr =
+    contractValue != null && contractCurrency
+      ? `${formatNumber(contractValue)} ${contractCurrency}`
+      : null
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '✅ Sponsor Registration Complete',
+        emoji: true,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Sponsor:*\n${sponsorName}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Tier:*\n${tierTitle || 'Not set'}`,
+        },
+      ],
+    },
+  ]
+
+  if (valueStr) {
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Contract Value:*\n${valueStr}`,
+        },
+      ],
+    })
+  }
+
+  if (domain) {
+    blocks.push(
+      createAdminLinkButton(
+        domain,
+        '/admin/sponsors/crm',
+        'Open Sponsor CRM',
+        'open_sponsor_crm',
+      ),
+    )
+  }
+
+  const message = { blocks }
+  await sendSalesNotification(message, conference)
 }

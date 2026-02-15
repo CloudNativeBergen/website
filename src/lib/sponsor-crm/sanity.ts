@@ -35,12 +35,16 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     organizer,
     organizerOrgNumber,
     organizerAddress,
+    signingProvider,
     city,
     venueName,
     venueAddress,
     startDate,
     endDate,
-    sponsorEmail
+    sponsorEmail,
+    domains,
+    socialLinks,
+    logoBright
   },
   tier->{
     _id,
@@ -67,7 +71,9 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   contractStatus,
   signatureStatus,
   signatureId,
+  signerName,
   signerEmail,
+  signingUrl,
   contractSentAt,
   contractDocument{
     asset->{
@@ -88,6 +94,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   contactInitiatedAt,
   contractSignedAt,
+  organizerSignedAt,
+  organizerSignedBy,
   contractValue,
   contractCurrency,
   invoiceStatus,
@@ -104,13 +112,14 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     isPrimary
   },
   billing{
+    invoiceFormat,
     email,
     reference,
     comments
   },
-  onboardingToken,
-  onboardingComplete,
-  onboardingCompletedAt
+  registrationToken,
+  registrationComplete,
+  registrationCompletedAt
 `
 
 export async function getPublicSponsorsForConference(
@@ -163,9 +172,11 @@ export async function createSponsorForConference(
           }))
         : undefined,
       status: data.status,
+      contractStatus: data.contractStatus || 'none',
       assignedTo: data.assignedTo
         ? { _type: 'reference', _ref: data.assignedTo }
         : undefined,
+      signerName: data.signerName,
       signerEmail: data.signerEmail,
       contractTemplate: data.contractTemplate
         ? { _type: 'reference', _ref: data.contractTemplate }
@@ -230,6 +241,7 @@ export async function updateSponsorForConference(
     if (data.status !== undefined) updates.status = data.status
     if (data.contractStatus !== undefined)
       updates.contractStatus = data.contractStatus
+    if (data.signerName !== undefined) updates.signerName = data.signerName
     if (data.signerEmail !== undefined) updates.signerEmail = data.signerEmail
     if (data.contractTemplate !== undefined) {
       updates.contractTemplate = data.contractTemplate
@@ -284,9 +296,51 @@ export async function updateSponsorForConference(
 
 export async function deleteSponsorForConference(
   id: string,
+  options?: { deleteContractAsset?: boolean },
 ): Promise<{ error?: Error }> {
   try {
-    await clientWrite.delete(id)
+    // Look up contract asset before deleting
+    let contractAssetId: string | undefined
+    if (options?.deleteContractAsset) {
+      const doc = await clientWrite.fetch<{
+        contractDocument?: { asset?: { _ref: string } }
+      }>(
+        `*[_type == "sponsorForConference" && _id == $id][0]{ contractDocument }`,
+        { id },
+      )
+      contractAssetId = doc?.contractDocument?.asset?._ref
+    }
+
+    // Only delete the asset if it's not referenced by other documents
+    let safeContractAssetId: string | undefined
+    if (contractAssetId) {
+      const safe = await clientWrite.fetch<string[]>(
+        `*[
+          _type == "sanity.fileAsset" &&
+          _id == $assetId &&
+          count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && _id != $id]) == 0
+        ]._id`,
+        { assetId: contractAssetId, id },
+      )
+      safeContractAssetId = safe?.[0]
+    }
+
+    // Clean up related activity documents to prevent orphans
+    const relatedActivityIds = await clientWrite.fetch<string[]>(
+      `*[_type == "sponsorActivity" && sponsorForConference._ref == $id]._id`,
+      { id },
+    )
+
+    const transaction = clientWrite.transaction()
+    transaction.delete(id)
+    for (const activityId of relatedActivityIds) {
+      transaction.delete(activityId)
+    }
+    if (safeContractAssetId) {
+      transaction.delete(safeContractAssetId)
+    }
+    await transaction.commit()
+
     return {}
   } catch (error) {
     return { error: error as Error }
@@ -386,7 +440,7 @@ export async function copySponsorsFromPreviousYear(
         contractCurrency,
         tags,
         contactPersons[]{ _key, name, email, phone, role, isPrimary },
-        billing{ email, reference, comments }
+        billing{ invoiceFormat, email, reference, comments }
       }`,
       { conferenceId: sourceConferenceId },
     )

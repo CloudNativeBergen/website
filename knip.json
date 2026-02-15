@@ -38,7 +38,8 @@
     "src/lib/empty-module.ts",
     "scripts/strip-comments.ts",
     "storybook-static/**",
-    "src/components/email/CoSpeakerResponseTemplate.tsx"
+    "src/components/email/CoSpeakerResponseTemplate.tsx",
+    "src/lib/sponsor-crm/contract-send.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",

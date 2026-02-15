@@ -1,323 +1,291 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { fn } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
+import { SponsorCRMForm } from './SponsorCRMForm'
 import {
-  XMarkIcon,
-  ClockIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/outline'
+  mockSponsor,
+  mockSponsorTier,
+  mockReadinessReady,
+} from '@/__mocks__/sponsor-data'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
+
+const mockTiers = [
+  mockSponsorTier({
+    _id: 'tier-platinum',
+    title: 'Platinum',
+    price: [{ _key: 'nok', amount: 150000, currency: 'NOK' }],
+  }),
+  mockSponsorTier({
+    _id: 'tier-ingress',
+    title: 'Ingress',
+    price: [{ _key: 'nok', amount: 100000, currency: 'NOK' }],
+  }),
+  mockSponsorTier({
+    _id: 'tier-service',
+    title: 'Service',
+    price: [{ _key: 'nok', amount: 50000, currency: 'NOK' }],
+  }),
+]
+
+const mockAddonTiers = [
+  mockSponsorTier({
+    _id: 'addon-speakers-dinner',
+    title: 'Speakers Dinner',
+    tierType: 'addon',
+    price: [{ _key: 'nok', amount: 25000, currency: 'NOK' }],
+  }),
+  mockSponsorTier({
+    _id: 'addon-lanyard',
+    title: 'Lanyard Sponsorship',
+    tierType: 'addon',
+    price: [{ _key: 'nok', amount: 15000, currency: 'NOK' }],
+  }),
+]
+
+const mockOrganizers = [
+  {
+    _id: 'org-1',
+    name: 'Hans Kristian Flaatten',
+    email: 'hans@example.com',
+    avatar: null,
+  },
+  {
+    _id: 'org-2',
+    name: 'Maria Jensen',
+    email: 'maria@example.com',
+    avatar: null,
+  },
+]
+
+const mockAllSponsors = [
+  {
+    _id: 'sponsor-123',
+    name: 'Acme Corporation',
+    website: 'https://acme.example.com',
+    logo: null,
+  },
+  {
+    _id: 'sponsor-456',
+    name: 'TechGiant Corp',
+    website: 'https://techgiant.com',
+    logo: null,
+  },
+  {
+    _id: 'sponsor-789',
+    name: 'CloudSoft Solutions',
+    website: 'https://cloudsoft.io',
+    logo: null,
+  },
+]
+
+const defaultHandlers = [
+  http.get('/api/trpc/sponsor.list', () =>
+    HttpResponse.json({ result: { data: mockAllSponsors } }),
+  ),
+  http.get('/api/trpc/sponsor.tiers.listByConference', () =>
+    HttpResponse.json({
+      result: { data: [...mockTiers, ...mockAddonTiers] },
+    }),
+  ),
+  http.get('/api/trpc/sponsor.crm.listOrganizers', () =>
+    HttpResponse.json({ result: { data: mockOrganizers } }),
+  ),
+  http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () =>
+    HttpResponse.json({ result: { data: mockReadinessReady() } }),
+  ),
+  http.get('/api/trpc/sponsor.contractTemplates.findBest', () =>
+    HttpResponse.json({
+      result: {
+        data: {
+          _id: 'tmpl-1',
+          title: 'Standard Sponsorship Agreement',
+          language: 'en',
+        },
+      },
+    }),
+  ),
+  http.post('/api/trpc/sponsor.crm.update', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+  http.post('/api/trpc/sponsor.crm.create', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+  http.post('/api/trpc/sponsor.update', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+]
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMForm',
+  component: SponsorCRMForm,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
-    options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Modal dialog for managing sponsor pipeline entries. Contains tabbed views for Pipeline (main form), Contract (send & track agreements), Logo (upload/manage), Contacts (manage contact persons), and History (activity timeline). Keyboard shortcut CMD+S saves the pipeline form.',
+      },
+    },
+    msw: { handlers: defaultHandlers },
   },
-} satisfies Meta
+  args: {
+    conferenceId: 'conf-2026',
+    isOpen: true,
+    onClose: fn(),
+    onSuccess: fn(),
+  },
+  decorators: [
+    (Story) => (
+      <NotificationProvider>
+        <Story />
+      </NotificationProvider>
+    ),
+  ],
+} satisfies Meta<typeof SponsorCRMForm>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-const PIPELINE_STATUSES = [
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'negotiating', label: 'Negotiating' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'declined', label: 'Declined' },
-]
-
-const TIERS = [
-  { id: 'platinum', name: 'Platinum', value: 100000 },
-  { id: 'gold', name: 'Gold', value: 50000 },
-  { id: 'silver', name: 'Silver', value: 25000 },
-  { id: 'bronze', name: 'Bronze', value: 10000 },
-  { id: 'community', name: 'Community', value: 0 },
-]
-
-function CRMFormPreview() {
-  return (
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl dark:bg-gray-800">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            TechGiant Corp
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Edit sponsor pipeline entry
-          </p>
-        </div>
-        <button className="rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
-          <XMarkIcon className="h-5 w-5 text-gray-500" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <div className="flex gap-6 px-6">
-          <button className="border-b-2 border-indigo-500 py-3 text-sm font-medium text-indigo-600 dark:text-indigo-400">
-            Pipeline
-          </button>
-          <button className="border-b-2 border-transparent py-3 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400">
-            <span className="flex items-center gap-1">
-              <ClockIcon className="h-4 w-4" />
-              History
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-6 p-6">
-        {/* Sponsor Selection */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Sponsor
-          </label>
-          <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-              TG
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
-                TechGiant Corp
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                techgiant.com
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Status & Tier Row */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Pipeline Status
-            </label>
-            <select className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-              {PIPELINE_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Assigned To
-            </label>
-            <select className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-              <option value="">Unassigned</option>
-              <option value="hans">Hans Kristian</option>
-              <option value="maria">Maria Jensen</option>
-              <option value="erik">Erik Olsen</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Tier Selection */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Sponsor Tier
-          </label>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {TIERS.slice(0, 3).map((tier) => (
-              <label
-                key={tier.id}
-                className={`cursor-pointer rounded-lg border p-3 transition-colors ${
-                  tier.id === 'gold'
-                    ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20'
-                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="tier"
-                    checked={tier.id === 'gold'}
-                    readOnly
-                    className="text-indigo-600"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tier.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {tier.value > 0
-                        ? new Intl.NumberFormat('nb-NO', {
-                            style: 'currency',
-                            currency: 'NOK',
-                            maximumFractionDigits: 0,
-                          }).format(tier.value)
-                        : 'Free'}
-                    </p>
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Contract Value */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Contract Value
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              value={50000}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            />
-            <select className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-              <option>NOK</option>
-              <option>EUR</option>
-              <option>USD</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Tags */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Tags
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <span className="flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-sm text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-              returning
-              <button className="hover:text-indigo-900">×</button>
-            </span>
-            <span className="flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-sm text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-              priority
-              <button className="hover:text-indigo-900">×</button>
-            </span>
-            <button className="rounded-full border border-dashed border-gray-300 px-2.5 py-1 text-sm text-gray-500 hover:border-gray-400 dark:border-gray-600">
-              + Add tag
-            </button>
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Notes
-          </label>
-          <textarea
-            rows={3}
-            placeholder="Internal notes about this sponsor..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          />
-        </div>
-
-        {/* Info Box */}
-        <div className="flex items-start gap-2 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-          <InformationCircleIcon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            Contract status and invoice status are managed separately on their
-            respective tabs.
-          </p>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-        <button className="text-sm text-red-600 hover:text-red-700 dark:text-red-400">
-          Delete Entry
-        </button>
-        <div className="flex gap-3">
-          <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-            Cancel
-          </button>
-          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-            Save Changes
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+const mockSponsorRef = {
+  _id: 'sfc-123',
+  sponsor: { _id: 'sponsor-123', name: 'Acme Corporation' },
 }
 
-export const Default: Story = {
-  render: () => (
-    <div className="p-6">
-      <CRMFormPreview />
-    </div>
-  ),
+const mockActivities = [
+  {
+    _id: 'act-1',
+    _createdAt: '2026-02-10T14:30:00Z',
+    _updatedAt: '2026-02-10T14:30:00Z',
+    sponsorForConference: mockSponsorRef,
+    activityType: 'stage_change',
+    description: 'Status changed from contacted to negotiating',
+    metadata: { oldValue: 'contacted', newValue: 'negotiating' },
+    createdBy: {
+      _id: 'org-1',
+      name: 'Hans Kristian Flaatten',
+      email: 'hans@example.com',
+    },
+    createdAt: '2026-02-10T14:30:00Z',
+  },
+  {
+    _id: 'act-2',
+    _createdAt: '2026-02-09T10:00:00Z',
+    _updatedAt: '2026-02-09T10:00:00Z',
+    sponsorForConference: mockSponsorRef,
+    activityType: 'contract_status_change',
+    description: 'Contract sent to sponsor',
+    metadata: { oldValue: 'none', newValue: 'contract-sent' },
+    createdBy: {
+      _id: 'org-1',
+      name: 'Hans Kristian Flaatten',
+      email: 'hans@example.com',
+    },
+    createdAt: '2026-02-09T10:00:00Z',
+  },
+  {
+    _id: 'act-3',
+    _createdAt: '2026-02-08T09:15:00Z',
+    _updatedAt: '2026-02-08T09:15:00Z',
+    sponsorForConference: mockSponsorRef,
+    activityType: 'email',
+    description: 'Outreach email sent to sponsor contact',
+    createdBy: {
+      _id: 'org-2',
+      name: 'Maria Jensen',
+      email: 'maria@example.com',
+    },
+    createdAt: '2026-02-08T09:15:00Z',
+  },
+  {
+    _id: 'act-4',
+    _createdAt: '2026-02-05T16:45:00Z',
+    _updatedAt: '2026-02-05T16:45:00Z',
+    sponsorForConference: mockSponsorRef,
+    activityType: 'note',
+    description: 'Spoke with CTO at meetup, very interested in platinum tier',
+    createdBy: {
+      _id: 'org-2',
+      name: 'Maria Jensen',
+      email: 'maria@example.com',
+    },
+    createdAt: '2026-02-05T16:45:00Z',
+  },
+  {
+    _id: 'act-5',
+    _createdAt: '2026-02-01T11:00:00Z',
+    _updatedAt: '2026-02-01T11:00:00Z',
+    sponsorForConference: mockSponsorRef,
+    activityType: 'stage_change',
+    description: 'Status changed from prospect to contacted',
+    metadata: { oldValue: 'prospect', newValue: 'contacted' },
+    createdBy: {
+      _id: 'org-1',
+      name: 'Hans Kristian Flaatten',
+      email: 'hans@example.com',
+    },
+    createdAt: '2026-02-01T11:00:00Z',
+  },
+]
+
+/** Viewing an existing sponsor — opens on the Pipeline tab (default view) */
+export const EditExisting: Story = {
+  args: {
+    sponsor: mockSponsor(),
+  },
 }
 
-export const Documentation: Story = {
-  render: () => (
-    <div className="max-w-lg space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          SponsorCRMForm
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Main edit modal for sponsor pipeline entries. Includes all CRM fields
-          organized into tabs: Pipeline details, History timeline.
-        </p>
-      </div>
+/** Adding a new sponsor to the pipeline */
+export const AddNew: Story = {
+  args: {
+    sponsor: null,
+    existingSponsorsInCRM: ['sponsor-123'],
+  },
+}
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              isOpen
-            </code>{' '}
-            - Whether modal is visible
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onClose
-            </code>{' '}
-            - Callback when closed
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sponsor
-            </code>{' '}
-            - SponsorForConference to edit (null for new)
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              conference
-            </code>{' '}
-            - Conference with tier definitions
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              initialView
-            </code>{' '}
-            - Tab to open (pipeline/history)
-          </li>
-        </ul>
-      </div>
+/** Contract view showing the contract management tab */
+export const ContractView: Story = {
+  args: {
+    sponsor: mockSponsor({
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agreement-123',
+      contractSentAt: '2026-02-01T12:00:00Z',
+    }),
+    initialView: 'contract',
+  },
+}
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Form Sections
-        </h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>• Sponsor selection (existing or create new)</li>
-          <li>• Pipeline status and assignee</li>
-          <li>• Tier selection with radio group</li>
-          <li>• Contract value with currency</li>
-          <li>• Add-ons checkbox group</li>
-          <li>• Tags combobox</li>
-          <li>• Notes textarea</li>
-        </ul>
-      </div>
+/** History view showing the activity timeline with multiple activity types */
+export const HistoryView: Story = {
+  args: {
+    sponsor: mockSponsor(),
+    initialView: 'history',
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        ...defaultHandlers,
+        http.get('/api/trpc/sponsor.crm.activities.list', () =>
+          HttpResponse.json({ result: { data: mockActivities } }),
+        ),
+      ],
+    },
+  },
+}
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Tabs</h3>
-        <ul className="mt-2 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <strong>Pipeline</strong> - Main form fields for sponsor details
-          </li>
-          <li>
-            <strong>History</strong> - Activity timeline with all events
-          </li>
-        </ul>
-      </div>
-    </div>
-  ),
+/** Logo view for uploading and managing sponsor logos */
+export const LogoView: Story = {
+  args: {
+    sponsor: mockSponsor(),
+    initialView: 'logo',
+  },
+}
+
+/** Contacts view for managing sponsor contact persons */
+export const ContactsView: Story = {
+  args: {
+    sponsor: mockSponsor(),
+    initialView: 'contacts',
+  },
 }

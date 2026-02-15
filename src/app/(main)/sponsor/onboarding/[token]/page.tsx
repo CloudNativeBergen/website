@@ -1,17 +1,12 @@
-import { SponsorOnboardingForm } from '@/components/sponsor/SponsorOnboardingForm'
+import { redirect } from 'next/navigation'
 
-interface OnboardingPageProps {
+interface RegistrationRedirectPageProps {
   params: Promise<{ token: string }>
 }
 
-export default async function SponsorOnboardingPage({
+export default async function SponsorRegistrationRedirect({
   params,
-}: OnboardingPageProps) {
+}: RegistrationRedirectPageProps) {
   const { token } = await params
-
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-      <SponsorOnboardingForm token={token} />
-    </div>
-  )
+  redirect(`/sponsor/portal/${token}`)
 }
