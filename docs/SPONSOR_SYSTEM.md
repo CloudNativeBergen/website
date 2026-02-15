@@ -168,6 +168,7 @@ src/
 │   ├── contract-signing/              # Provider-agnostic contract signing abstraction
 │   │   ├── types.ts                # ContractSigningProvider interface, result types
 │   │   ├── adobe-sign.ts           # Adobe Sign implementation of the provider
+│   │   ├── self-hosted.ts          # Self-hosted signing (built-in signature pad)
 │   │   └── index.ts                # Provider factory (getSigningProvider)
 │   └── sponsor-crm/                # CRM pipeline domain
 │       ├── types.ts                # CRM-specific types (statuses, activities, inputs)
@@ -184,10 +185,12 @@ src/
 │       └── pipeline.ts             # Pipeline aggregation utilities
 ├── server/
 │   ├── routers/sponsor.ts          # tRPC router (all sponsor procedures)
+│   ├── routers/signing.ts          # tRPC router (public contract signing)
 │   └── schemas/
 │       ├── sponsor.ts              # Zod schemas for core sponsor operations
 │       ├── sponsorForConference.ts # Zod schemas for CRM operations
-│       └── registration.ts         # Zod schemas for registration submissions
+│       ├── registration.ts         # Zod schemas for registration submissions
+│       └── signing.ts              # Zod schemas for contract signing
 ├── components/
 │   ├── Sponsors.tsx                # Public sponsor display (grouped by tier)
 │   ├── SponsorLogo.tsx             # Public inline SVG logo renderer
@@ -197,7 +200,9 @@ src/
 │   │   └── ContractReminderTemplate.tsx # Automated contract reminder email
 │   ├── sponsor/
 │   │   ├── SponsorPortal.tsx       # Sponsor self-service portal (setup + status)
-│   │   └── SponsorProspectus.tsx   # Public sponsorship prospectus page
+│   │   ├── SponsorProspectus.tsx   # Public sponsorship prospectus page
+│   │   ├── ContractSigningPage.tsx # Self-hosted contract signing (3-step flow)
+│   │   └── SignaturePadCanvas.tsx  # Canvas-based signature capture component
 │   └── admin/
 │       ├── sponsor/                # Sponsor management admin UI
 │       │   ├── SponsorAddModal.tsx          # Create/edit sponsor company
@@ -248,7 +253,8 @@ src/
     ├── (main)/sponsor/
     │   ├── page.tsx                # Public /sponsor prospectus page
     │   ├── terms/page.tsx          # Public sponsor terms page
-    │   └── onboarding/[token]/page.tsx # Legacy redirect to /sponsor/portal/[token]
+    │   ├── onboarding/[token]/page.tsx # Legacy redirect to /sponsor/portal/[token]
+    │   └── contract/sign/[token]/page.tsx # Self-hosted contract signing page
     └── (admin)/admin/
         ├── sponsors/
         │   ├── page.tsx            # Sponsor management page
@@ -374,7 +380,14 @@ Key result types:
 
 #### Provider Factory
 
-`getSigningProvider()` in `src/lib/contract-signing/index.ts` returns the configured provider. Currently always returns `AdobeSignProvider`. To add a new provider:
+`getSigningProvider()` in `src/lib/contract-signing/index.ts` returns the configured provider based on the `CONTRACT_SIGNING_PROVIDER` environment variable:
+
+| Value         | Provider                    | Description                                 |
+| ------------- | --------------------------- | ------------------------------------------- |
+| `adobe-sign`  | `AdobeSignProvider`         | Adobe Acrobat Sign (default)                |
+| `self-hosted` | `SelfHostedSigningProvider` | Built-in signature pad, no external service |
+
+To add a new provider:
 
 1. Create a class implementing `ContractSigningProvider` in `src/lib/contract-signing/<provider-name>.ts`
 2. Update `getSigningProvider()` to select the provider based on an env var or conference-level setting
@@ -566,26 +579,28 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 │  sendForSigning()   checkStatus()   cancelAgreement()           │
 │  sendReminder()     getConnectionStatus()   disconnect()        │
 │  getAuthorizeUrl()  registerWebhook()                           │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │ Currently: AdobeSignProvider
-                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Adobe Sign REST API v6                        │
-│                                                                 │
-│  POST /transientDocuments → transientDocumentId                 │
-│  POST /agreements → agreementId                                 │
-│  POST /agreements/{id}/reminders → reminder sent                │
-│  GET  /agreements/{id}/combinedDocument → signed PDF            │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │ Webhook notifications
-                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              /api/webhooks/adobe-sign                            │
-│                                                                 │
-│  AGREEMENT_WORKFLOW_COMPLETED → extract inline PDF, mark signed │
-│  AGREEMENT_RECALLED → mark rejected                             │
-│  AGREEMENT_EXPIRED → mark expired                               │
-└─────────────────────────────────────────────────────────────────┘
+└────────┬───────────────────────────────────────┬────────────────┘
+         │ CONTRACT_SIGNING_PROVIDER=adobe-sign  │ =self-hosted
+         ▼                                       ▼
+┌────────────────────────────┐   ┌────────────────────────────────┐
+│   Adobe Sign REST API v6   │   │  Self-Hosted Signing           │
+│                            │   │                                │
+│  POST /transientDocuments  │   │  UUID token → signatureId      │
+│  POST /agreements          │   │  signingUrl → /sponsor/        │
+│  POST /{id}/reminders      │   │    contract/sign/{token}       │
+│  GET  /{id}/combinedDoc    │   │                                │
+└────────────┬───────────────┘   └──────────────┬─────────────────┘
+             │ Webhook                          │ Direct submit
+             ▼                                  ▼
+┌────────────────────────────┐   ┌────────────────────────────────┐
+│ /api/webhooks/adobe-sign   │   │  signing.submitSignature       │
+│                            │   │  (tRPC, public)                │
+│ WORKFLOW_COMPLETED → signed│   │                                │
+│ RECALLED → rejected        │   │  1. Fetch PDF from Sanity      │
+│ EXPIRED → expired          │   │  2. Embed signature via pdf-lib│
+└────────────────────────────┘   │  3. Upload signed PDF          │
+                                 │  4. Patch sfc → signed         │
+                                 └────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │              /api/cron/contract-reminders (daily)                │
@@ -608,6 +623,107 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 **Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated registration-triggered sends, ensuring consistent behavior and logging.
 
 **Two-tier readiness.** Contract readiness distinguishes between `required` fields (blocks sending entirely) and `recommended` fields (allows sending with warnings). Only the primary contact person is strictly required — other fields like org number and address produce warnings but don't block the flow.
+
+### Self-Hosted Signing Provider
+
+The self-hosted provider (`SelfHostedSigningProvider` in `src/lib/contract-signing/self-hosted.ts`) removes the dependency on external e-signing services by handling the entire signature lifecycle within the application itself. Activated by setting `CONTRACT_SIGNING_PROVIDER=self-hosted`.
+
+#### How It Works
+
+1. **Send for signing:** Generates a UUID token and constructs a signing URL (`/sponsor/contract/sign/{token}`). The token is stored as `signatureId` on the `sponsorForConference` record, and the URL is included in the signing email sent to the sponsor.
+2. **Signing page:** The sponsor opens the URL, reviews the contract details and embedded PDF preview, draws their signature on a canvas pad, and submits. The `signing` tRPC router handles the submission.
+3. **Signature embedding:** On submit, the server fetches the original contract PDF from Sanity, embeds the PNG signature image and signer metadata (name + date) into the PDF via `pdf-lib`, uploads the signed PDF back to Sanity, and updates the `sponsorForConference` record to `signatureStatus: 'signed'` / `contractStatus: 'contract-signed'`.
+
+#### Components
+
+| Component             | Location                                         | Purpose                                         |
+| --------------------- | ------------------------------------------------ | ----------------------------------------------- |
+| `SignaturePadCanvas`  | `src/components/sponsor/SignaturePadCanvas.tsx`  | Canvas wrapper around `signature_pad` library   |
+| `ContractSigningPage` | `src/components/sponsor/ContractSigningPage.tsx` | 3-step signing flow (review → sign → complete)  |
+| `signingRouter`       | `src/server/routers/signing.ts`                  | Public tRPC router for contract lookup + submit |
+| Signing schemas       | `src/server/schemas/signing.ts`                  | Zod validation for signing token and submission |
+| Signing route         | `src/app/(main)/sponsor/contract/sign/[token]/`  | Next.js page extracting token from URL params   |
+
+#### Signing Page Flow
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  /sponsor/contract/sign/{token}                              │
+│                                                              │
+│  1. REVIEW STEP                                              │
+│     - Fetch contract via signing.getContract(token)          │
+│     - Display: sponsor, event, tier, value, PDF preview      │
+│     - Button: "Proceed to Sign"                              │
+│                                                              │
+│  2. SIGN STEP                                                │
+│     - Full name input                                        │
+│     - SignaturePadCanvas (draw signature)                    │
+│     - Legal agreement checkbox                               │
+│     - Button: "Submit Signature"                             │
+│     - Calls signing.submitSignature mutation                 │
+│                                                              │
+│  3. COMPLETE STEP                                            │
+│     - Success confirmation with green checkmark              │
+│     - Signed document stored in Sanity                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### CRM Integration
+
+The self-hosted provider integrates seamlessly with the existing CRM workflow:
+
+```text
+Admin CRM: "Send Contract"
+    │
+    ▼
+generateAndSendContract()
+    │
+    ├── Generates PDF via React-PDF
+    ├── Uploads PDF to Sanity
+    ├── Calls provider.sendForSigning()
+    │     └── SelfHostedSigningProvider returns { agreementId: UUID, signingUrl }
+    ├── Stores signatureId + signingUrl on sponsorForConference
+    └── Sends signing email via Resend with the signing URL
+    │
+    ▼
+Sponsor opens /sponsor/contract/sign/{token}
+    │
+    ├── Reviews contract → Signs on canvas → Submits
+    │
+    ▼
+signing.submitSignature (tRPC)
+    │
+    ├── Fetches original PDF from Sanity
+    ├── Embeds PNG signature + name + date via pdf-lib
+    ├── Uploads signed PDF to Sanity (replaces original)
+    └── Patches sponsorForConference:
+          signatureStatus → "signed"
+          contractStatus  → "contract-signed"
+          contractSignedAt → now
+          contractSignedBy → signer name
+```
+
+The CRM board, activity log, and sponsor portal all reflect the updated status automatically since they read from the same `sponsorForConference` record.
+
+#### Provider Limitations
+
+- **No automated reminders** — `sendReminder()` is a no-op. The daily cron job still sends email reminders via Resend using the stored `signingUrl`, so reminders work at the application level.
+- **No webhooks** — status updates happen synchronously during signature submission, so webhooks are unnecessary.
+- **No OAuth** — `getAuthorizeUrl()` and `disconnect()` are no-ops. The Adobe Sign config panel is hidden when using self-hosted signing.
+
+#### Dependencies
+
+| Package         | Version | Purpose                                         |
+| --------------- | ------- | ----------------------------------------------- |
+| `signature_pad` | 5.x     | Canvas-based signature capture (client-side)    |
+| `pdf-lib`       | 1.x     | PDF manipulation — embed signature image + text |
+
+#### Self-Hosted Environment Variables
+
+| Variable                    | Required | Default      | Purpose                                      |
+| --------------------------- | -------- | ------------ | -------------------------------------------- |
+| `CONTRACT_SIGNING_PROVIDER` | No       | `adobe-sign` | Set to `self-hosted` to enable this provider |
+| `NEXTAUTH_URL`              | Yes      | —            | Base URL for constructing the signing link   |
 
 ## Sponsor Portal
 
