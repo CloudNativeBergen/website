@@ -1365,6 +1365,7 @@ export const sponsorRouter = router({
               venueName: sfc.conference.venueName,
               venueAddress: sfc.conference.venueAddress,
               sponsorEmail: sfc.conference.sponsorEmail,
+              logoBright: sfc.conference.logoBright,
             },
           })
         } catch (pdfError) {
@@ -1908,9 +1909,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -2023,6 +2024,7 @@ export const sponsorRouter = router({
               venueName: conference.venueName,
               venueAddress: conference.venueAddress,
               sponsorEmail: conference.sponsorEmail,
+              logoBright: conference.logoBright,
             },
           })
 
