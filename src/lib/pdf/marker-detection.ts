@@ -25,7 +25,11 @@ export function findMarkerInPdf(
       if (!streamContent) continue
 
       const decoded = decodeHexStringsInStream(streamContent)
-      if (!decoded.includes(marker)) continue
+
+      // Extract all text from the stream to check for markers that may
+      // span multiple TJ operations (e.g. `{{` in one TJ, rest in next)
+      const allText = extractAllText(decoded)
+      if (!allText.includes(marker)) continue
 
       const pos = parseTextPosition(decoded, marker)
       if (pos) {
@@ -40,6 +44,10 @@ export function findMarkerInPdf(
 /**
  * Parses PDF content stream operators to find the position of a text string.
  * Tracks the text matrix via Td, TD, Tm, T* and BT operators.
+ *
+ * Accumulates text segments across ALL BT..ET blocks in the stream because
+ * @react-pdf/renderer may split marker text across separate BT..ET blocks
+ * (e.g. `{{` in one block and `Sig_es_:organizer:signature}}` in the next).
  */
 export function parseTextPosition(
   stream: string,
@@ -47,6 +55,9 @@ export function parseTextPosition(
 ): { x: number; y: number } | null {
   let tx = 0
   let ty = 0
+
+  // Collect all text segments across the entire stream
+  const allSegments: Array<{ text: string; x: number; y: number }> = []
 
   const lines = stream.split('\n')
   for (const line of lines) {
@@ -76,7 +87,7 @@ export function parseTextPosition(
       continue
     }
 
-    // Check if this line shows the marker text
+    // Extract text from Tj / TJ operations
     if (trimmed.includes('Tj') || trimmed.includes('TJ')) {
       const tjTexts: string[] = []
       const tjMatch = trimmed.match(/\(([^)]*)\)\s*Tj/)
@@ -93,16 +104,71 @@ export function parseTextPosition(
       }
 
       const combined = tjTexts.join('')
-      if (combined.includes(marker)) {
-        return { x: tx, y: ty }
+      if (combined.length > 0) {
+        allSegments.push({ text: combined, x: tx, y: ty })
       }
     }
   }
 
-  return null
+  return findMarkerInSegments(allSegments, marker)
 }
 
 // ── Internal helpers ──────────────────────────────────────────────
+
+/**
+ * Extracts all text from a decoded PDF content stream by joining
+ * text from all Tj/TJ operations. Used to detect markers that may
+ * span multiple text operations.
+ */
+function extractAllText(stream: string): string {
+  const texts: string[] = []
+  for (const line of stream.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.includes('Tj') && !trimmed.includes('TJ')) continue
+
+    const tjMatch = trimmed.match(/\(([^)]*)\)\s*Tj/)
+    if (tjMatch) texts.push(tjMatch[1])
+
+    const tjArrayMatch = trimmed.match(/\[(.*)\]\s*TJ/)
+    if (tjArrayMatch) {
+      const parts = tjArrayMatch[1].match(/\(([^)]*)\)/g)
+      if (parts) {
+        for (const part of parts) {
+          texts.push(part.slice(1, -1))
+        }
+      }
+    }
+  }
+  return texts.join('')
+}
+
+/**
+ * Searches accumulated text segments for a marker string that may span
+ * multiple segments. Returns the position of the segment where the
+ * marker text begins.
+ */
+function findMarkerInSegments(
+  segments: Array<{ text: string; x: number; y: number }>,
+  marker: string,
+): { x: number; y: number } | null {
+  if (segments.length === 0) return null
+
+  // Build a combined string and track which segment each char belongs to
+  const combined = segments.map((s) => s.text).join('')
+  const idx = combined.indexOf(marker)
+  if (idx === -1) return null
+
+  // Find which segment contains the start of the marker
+  let charCount = 0
+  for (const seg of segments) {
+    if (charCount + seg.text.length > idx) {
+      return { x: seg.x, y: seg.y }
+    }
+    charCount += seg.text.length
+  }
+
+  return segments[0] ? { x: segments[0].x, y: segments[0].y } : null
+}
 
 /**
  * Finds content stream object numbers for each page in the PDF.

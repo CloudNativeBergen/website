@@ -1,15 +1,19 @@
 import { formatDate, getCurrentDateTime } from '@/lib/time'
 
 import { addAttestationPage, type SigningAttestation } from './attestation-page'
-import { SPONSOR_SIGNATURE_MARKER, SPONSOR_DATE_MARKER } from './constants'
+import {
+  SPONSOR_SIGNATURE_MARKER,
+  SPONSOR_DATE_MARKER,
+  ORGANIZER_SIGNATURE_MARKER,
+} from './constants'
 import { findMarkerInPdf } from './marker-detection'
 
 const SIGNATURE_MAX_WIDTH = 150
 const SIGNATURE_MAX_HEIGHT = 60
 
-// Vertical offset: signature image is placed above the marker
-const SIGNATURE_OFFSET_Y = 10
-// Name and date are placed below the marker
+// Y position for signature image above the signature line (pdf-lib coords, 0=bottom)
+const SIGNATURE_Y = 120
+// Offsets for name and date text below the signature image
 const SIGNER_NAME_OFFSET_Y = 2
 const SIGNER_DATE_OFFSET_Y = 14
 
@@ -22,6 +26,15 @@ export interface EmbedSignatureOptions {
 
 /**
  * Core implementation: embeds a PNG signature into PDF bytes.
+ *
+ * Uses hidden marker text strings in the PDF to find the correct page for the
+ * signature. The X position is determined by which block we're targeting:
+ * organizer (left, ~8%) or sponsor (right, ~55%). The Y position uses a
+ * a fixed offset from the page bottom where the signature area is rendered.
+ *
+ * This approach is needed because @react-pdf/renderer uses cumulative `cm`
+ * transforms (including y-axis flips) that make raw text coordinates from the
+ * content stream unreliable for direct use with pdf-lib's coordinate system.
  */
 async function embedSignatureCore(
   pdfBytes: Uint8Array,
@@ -55,24 +68,17 @@ async function embedSignatureCore(
   const drawWidth = sigDims.width * scale
   const drawHeight = sigDims.height * scale
 
+  // Use marker detection to find the correct page
   const sigMarker = findMarkerInPdf(pdfBytes, sigMarkerText)
-  const dateMarkerPos = findMarkerInPdf(pdfBytes, dateMarkerText)
+  const pageIndex = sigMarker?.pageIndex ?? 0
+  const targetPage = pdfDoc.getPage(pageIndex)
+  const { width: pageWidth } = targetPage.getSize()
 
-  let targetPage: ReturnType<typeof pdfDoc.getPage>
-  let sigX: number
-  let sigY: number
-
-  if (sigMarker) {
-    targetPage = pdfDoc.getPage(sigMarker.pageIndex)
-    sigX = sigMarker.x + (SIGNATURE_MAX_WIDTH - drawWidth) / 2
-    sigY = sigMarker.y + SIGNATURE_OFFSET_Y
-  } else {
-    const lastPageIndex = pdfDoc.getPageCount() - 1
-    targetPage = pdfDoc.getPage(lastPageIndex)
-    const { width: pageWidth } = targetPage.getSize()
-    sigX = pageWidth * 0.55 + (SIGNATURE_MAX_WIDTH - drawWidth) / 2
-    sigY = 120
-  }
+  // Position based on which signature block: organizer (left) or sponsor (right)
+  const isOrganizer = sigMarkerText === ORGANIZER_SIGNATURE_MARKER
+  const xPercent = isOrganizer ? 0.08 : 0.55
+  const sigX = pageWidth * xPercent + (SIGNATURE_MAX_WIDTH - drawWidth) / 2
+  const sigY = SIGNATURE_Y
 
   targetPage.drawImage(signatureImage, {
     x: sigX,
@@ -84,22 +90,14 @@ async function embedSignatureCore(
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const dateStr = formatDate(getCurrentDateTime())
 
-  // Text (name/date) may be on a different page than the signature image
-  const textPage = dateMarkerPos
-    ? pdfDoc.getPage(dateMarkerPos.pageIndex)
-    : targetPage
+  // Name and date text placed below the signature image, potentially on a different page
+  const dateMarkerPos = findMarkerInPdf(pdfBytes, dateMarkerText)
+  const textPageIndex = dateMarkerPos?.pageIndex ?? pageIndex
+  const textPage = pdfDoc.getPage(textPageIndex)
 
-  const nameX = dateMarkerPos ? dateMarkerPos.x : sigMarker ? sigMarker.x : sigX
-  const nameY = dateMarkerPos
-    ? dateMarkerPos.y + SIGNER_DATE_OFFSET_Y
-    : sigMarker
-      ? sigMarker.y - SIGNER_NAME_OFFSET_Y
-      : sigY - SIGNER_NAME_OFFSET_Y
-  const dateY = dateMarkerPos
-    ? dateMarkerPos.y
-    : sigMarker
-      ? sigMarker.y - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
-      : sigY - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
+  const nameX = sigX
+  const nameY = sigY - SIGNER_NAME_OFFSET_Y
+  const dateY = sigY - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
 
   textPage.drawText(signerName, {
     x: nameX,
