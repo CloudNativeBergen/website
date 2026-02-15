@@ -112,4 +112,77 @@ describe('parseTextPosition', () => {
     const result = parseTextPosition(stream, '{{Sig_es_:organizer:signature}}')
     expect(result).toEqual({ x: 50, y: 90 })
   })
+
+  it('applies Y-flip cm transform to get absolute page coordinates', () => {
+    // @react-pdf/renderer emits a Y-flip transform at each page start
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'BT',
+      '1 0 0 1 50 120 Tm',
+      '[(Hello World)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'Hello World')
+    // Y-flip: y' = 842 - 120 = 722
+    expect(result).toEqual({ x: 50, y: 722 })
+  })
+
+  it('composes nested cm transforms (Y-flip + translation)', () => {
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'q',
+      '1 0 0 1 40 50 cm',
+      'BT',
+      '1 0 0 1 10 20 Tm',
+      '[(Marker)] TJ',
+      'ET',
+      'Q',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'Marker')
+    // CTM: Y-flip(842) then translate(40,50)
+    // Composed: x' = x + 40, y' = 842 - (y + 50) = 792 - y
+    // Point (10, 20): x' = 50, y' = 792 - 20 = 772
+    expect(result).toEqual({ x: 50, y: 772 })
+  })
+
+  it('restores CTM after Q (graphics state pop)', () => {
+    const stream = [
+      '1 0 0 -1 0 842 cm',
+      'q',
+      '1 0 0 1 0 100 cm',
+      'BT',
+      '1 0 0 1 50 10 Tm',
+      '[(Inside)] TJ',
+      'ET',
+      'Q',
+      'BT',
+      '1 0 0 1 50 10 Tm',
+      '[(Outside)] TJ',
+      'ET',
+    ].join('\n')
+
+    // Inside q..Q: CTM = Y-flip + translate(0,100)
+    // x' = 50, y' = 842 - (10 + 100) = 732
+    const inside = parseTextPosition(stream, 'Inside')
+    expect(inside).toEqual({ x: 50, y: 732 })
+
+    // After Q: CTM restored to just Y-flip
+    // x' = 50, y' = 842 - 10 = 832
+    const outside = parseTextPosition(stream, 'Outside')
+    expect(outside).toEqual({ x: 50, y: 832 })
+  })
+
+  it('returns identity coordinates when no cm transforms exist', () => {
+    const stream = [
+      'BT',
+      '1 0 0 1 100 200 Tm',
+      '[(No transforms)] TJ',
+      'ET',
+    ].join('\n')
+
+    const result = parseTextPosition(stream, 'No transforms')
+    expect(result).toEqual({ x: 100, y: 200 })
+  })
 })

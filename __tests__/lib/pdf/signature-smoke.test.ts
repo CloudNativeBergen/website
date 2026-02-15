@@ -383,9 +383,14 @@ describe('organizer signature embedding', () => {
     expect(draw.x).toBeLessThan(pageWidth * 0.35)
   })
 
-  it('places signature at the expected Y position', async () => {
+  it('places signature at marker-derived Y position', async () => {
+    const doc = await PDFDocument.load(signedPdf)
+    const { height: pageHeight } = doc.getPage(0).getSize()
     const draws = await findImageDraws(new Uint8Array(signedPdf))
-    expect(draws[0].y).toBe(120)
+    // Y is derived from the marker position (upper portion of page),
+    // not the old fixed value of 120
+    expect(draws[0].y).toBeGreaterThan(pageHeight / 2)
+    expect(draws[0].y).toBeLessThan(pageHeight)
   })
 
   it('includes signer name in the PDF', async () => {
@@ -439,9 +444,12 @@ describe('sponsor signature embedding', () => {
     expect(draw.x).toBeLessThan(pageWidth * 0.9)
   })
 
-  it('places signature at the expected Y position', async () => {
+  it('places signature at marker-derived Y position', async () => {
+    const doc = await PDFDocument.load(signedPdf)
+    const { height: pageHeight } = doc.getPage(0).getSize()
     const draws = await findImageDraws(new Uint8Array(signedPdf))
-    expect(draws[0].y).toBe(120)
+    expect(draws[0].y).toBeGreaterThan(pageHeight / 2)
+    expect(draws[0].y).toBeLessThan(pageHeight)
   })
 
   it('includes signer name in the PDF', async () => {
@@ -499,10 +507,13 @@ describe('dual signature embedding', () => {
   })
 
   it('both signatures are at the same Y level', async () => {
+    const doc = await PDFDocument.load(dualSignedPdf)
+    const { height: pageHeight } = doc.getPage(0).getSize()
     const draws = await findImageDraws(new Uint8Array(dualSignedPdf))
     const sorted = [...draws].sort((a, b) => a.x - b.x)
     expect(sorted[0].y).toBe(sorted[1].y)
-    expect(sorted[0].y).toBe(120)
+    // Both should be at the marker-derived position (upper portion of page)
+    expect(sorted[0].y).toBeGreaterThan(pageHeight / 2)
   })
 
   it('has both signer names in the PDF', async () => {

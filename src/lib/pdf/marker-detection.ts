@@ -6,6 +6,44 @@ export interface MarkerPosition {
   y: number
 }
 
+// ── CTM (Current Transformation Matrix) tracking ──────────────────
+// PDF uses a 6-element affine transform [a, b, c, d, e, f] where:
+//   x' = a*x + c*y + e
+//   y' = b*x + d*y + f
+// @react-pdf/renderer emits a Y-flip `1 0 0 -1 0 pageHeight cm` at the
+// top of each page. Without tracking these transforms, the text matrix
+// positions (Td/Tm) are in a flipped coordinate system and cannot be
+// used directly with pdf-lib (which uses Y=0 at page bottom).
+
+type CTMatrix = [number, number, number, number, number, number]
+
+function identityCTM(): CTMatrix {
+  return [1, 0, 0, 1, 0, 0]
+}
+
+/** Compose two affine transforms: result applies m2 first, then m1. */
+function composeCTM(m1: CTMatrix, m2: CTMatrix): CTMatrix {
+  return [
+    m1[0] * m2[0] + m1[2] * m2[1],
+    m1[1] * m2[0] + m1[3] * m2[1],
+    m1[0] * m2[2] + m1[2] * m2[3],
+    m1[1] * m2[2] + m1[3] * m2[3],
+    m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+    m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+  ]
+}
+
+function applyTransform(
+  ctm: CTMatrix,
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  return {
+    x: ctm[0] * x + ctm[2] * y + ctm[4],
+    y: ctm[1] * x + ctm[3] * y + ctm[5],
+  }
+}
+
 /**
  * Scans all pages of a PDF for a text marker and returns its position.
  * Uses raw binary parsing to walk the page tree and decompress content
@@ -43,7 +81,8 @@ export function findMarkerInPdf(
 
 /**
  * Parses PDF content stream operators to find the position of a text string.
- * Tracks the text matrix via Td, TD, Tm, T* and BT operators.
+ * Tracks the CTM (cm/q/Q) and text matrix (Td, TD, Tm, BT) to compute
+ * absolute page coordinates (pdf-lib convention: Y=0 at bottom).
  *
  * Accumulates text segments across ALL BT..ET blocks in the stream because
  * @react-pdf/renderer may split marker text across separate BT..ET blocks
@@ -55,6 +94,8 @@ export function parseTextPosition(
 ): { x: number; y: number } | null {
   let tx = 0
   let ty = 0
+  let ctm = identityCTM()
+  const ctmStack: CTMatrix[] = []
 
   // Collect all text segments across the entire stream
   const allSegments: Array<{ text: string; x: number; y: number }> = []
@@ -62,6 +103,36 @@ export function parseTextPosition(
   const lines = stream.split('\n')
   for (const line of lines) {
     const trimmed = line.trim()
+
+    // q — save graphics state
+    if (trimmed === 'q') {
+      ctmStack.push([...ctm] as CTMatrix)
+      continue
+    }
+
+    // Q — restore graphics state
+    if (trimmed === 'Q') {
+      const saved = ctmStack.pop()
+      if (saved) ctm = saved
+      continue
+    }
+
+    // cm — concatenate transformation matrix
+    const cmMatch = trimmed.match(
+      /^([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s+cm$/,
+    )
+    if (cmMatch) {
+      const m: CTMatrix = [
+        parseFloat(cmMatch[1]),
+        parseFloat(cmMatch[2]),
+        parseFloat(cmMatch[3]),
+        parseFloat(cmMatch[4]),
+        parseFloat(cmMatch[5]),
+        parseFloat(cmMatch[6]),
+      ]
+      ctm = composeCTM(ctm, m)
+      continue
+    }
 
     if (trimmed === 'BT') {
       tx = 0
@@ -105,7 +176,9 @@ export function parseTextPosition(
 
       const combined = tjTexts.join('')
       if (combined.length > 0) {
-        allSegments.push({ text: combined, x: tx, y: ty })
+        // Transform text position through CTM for absolute page coordinates
+        const abs = applyTransform(ctm, tx, ty)
+        allSegments.push({ text: combined, x: abs.x, y: abs.y })
       }
     }
   }
