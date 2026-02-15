@@ -139,6 +139,20 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'organizerSignedAt',
+      title: 'Organizer Signed Date',
+      type: 'datetime',
+      description: 'When the organizer counter-signed the contract',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'organizerSignedBy',
+      title: 'Organizer Signed By',
+      type: 'string',
+      description: 'Name of the organizer who counter-signed',
+      readOnly: true,
+    }),
+    defineField({
       name: 'contractDocument',
       title: 'Contract Document',
       type: 'file',

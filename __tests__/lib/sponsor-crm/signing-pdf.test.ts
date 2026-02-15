@@ -3,8 +3,8 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import {
   findMarkerInPdf,
   parseTextPosition,
-  SIGNATURE_MARKER,
-  DATE_MARKER,
+  SPONSOR_SIGNATURE_MARKER,
+  SPONSOR_DATE_MARKER,
 } from '@/lib/pdf'
 
 /**
@@ -40,13 +40,13 @@ async function createPdfWithMarkers(options?: {
 
     if (i === markerPage) {
       // Draw the signature marker (tiny, white — invisible in print)
-      page.drawText(SIGNATURE_MARKER, {
+      page.drawText(SPONSOR_SIGNATURE_MARKER, {
         x: markerX,
         y: markerY,
         size: 1,
         font,
       })
-      page.drawText(DATE_MARKER, {
+      page.drawText(SPONSOR_DATE_MARKER, {
         x: markerX,
         y: markerY - 10,
         size: 1,
@@ -80,7 +80,7 @@ describe('findMarkerInPdf', () => {
       markerX: 300,
       markerY: 80,
     })
-    const result = findMarkerInPdf(pdfBytes, SIGNATURE_MARKER)
+    const result = findMarkerInPdf(pdfBytes, SPONSOR_SIGNATURE_MARKER)
 
     expect(result).not.toBeNull()
     expect(result!.pageIndex).toBe(0)
@@ -95,7 +95,7 @@ describe('findMarkerInPdf', () => {
       markerX: 280,
       markerY: 100,
     })
-    const result = findMarkerInPdf(pdfBytes, SIGNATURE_MARKER)
+    const result = findMarkerInPdf(pdfBytes, SPONSOR_SIGNATURE_MARKER)
 
     expect(result).not.toBeNull()
     expect(result!.pageIndex).toBe(1)
@@ -108,7 +108,7 @@ describe('findMarkerInPdf', () => {
       markerX: 300,
       markerY: 80,
     })
-    const result = findMarkerInPdf(pdfBytes, DATE_MARKER)
+    const result = findMarkerInPdf(pdfBytes, SPONSOR_DATE_MARKER)
 
     expect(result).not.toBeNull()
     expect(result!.pageIndex).toBe(0)
@@ -118,7 +118,7 @@ describe('findMarkerInPdf', () => {
 
   it('returns null when marker is not present', async () => {
     const pdfBytes = await createPdfWithoutMarkers()
-    const result = findMarkerInPdf(pdfBytes, SIGNATURE_MARKER)
+    const result = findMarkerInPdf(pdfBytes, SPONSOR_SIGNATURE_MARKER)
 
     expect(result).toBeNull()
   })
@@ -137,7 +137,7 @@ describe('findMarkerInPdf', () => {
       markerX: 310,
       markerY: 90,
     })
-    const result = findMarkerInPdf(pdfBytes, SIGNATURE_MARKER)
+    const result = findMarkerInPdf(pdfBytes, SPONSOR_SIGNATURE_MARKER)
 
     expect(result).not.toBeNull()
     expect(result!.pageIndex).toBe(4)

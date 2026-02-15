@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
+import { OrganizerSignatureCapture } from './OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
   CheckCircleIcon,
@@ -36,6 +38,24 @@ export function SponsorContractView({
     sponsor.signerEmail || getPrimaryContactEmail(sponsor) || '',
   )
   const [error, setError] = useState<string | null>(null)
+  const [organizerSignatureDataUrl, setOrganizerSignatureDataUrl] = useState<
+    string | null
+  >(null)
+
+  const { data: session } = useSession()
+  const isAssignedOrganizer =
+    !!session?.speaker?._id &&
+    !!sponsor.assignedTo?._id &&
+    session.speaker._id === sponsor.assignedTo._id
+  const organizerName =
+    session?.speaker?.name || session?.user?.name || 'Organizer'
+
+  const handleOrganizerSignatureReady = useCallback(
+    (dataUrl: string | null) => {
+      setOrganizerSignatureDataUrl(dataUrl)
+    },
+    [],
+  )
 
   const { data: readiness } =
     api.sponsor.contractTemplates.contractReadiness.useQuery({
@@ -107,6 +127,8 @@ export function SponsorContractView({
       sponsorForConferenceId: sponsor._id,
       templateId: bestTemplate._id,
       signerEmail: signerEmail.trim() || undefined,
+      organizerSignatureDataUrl: organizerSignatureDataUrl ?? undefined,
+      organizerName: organizerSignatureDataUrl ? organizerName : undefined,
     })
   }
 
@@ -192,6 +214,14 @@ export function SponsorContractView({
             </div>
           </dl>
         </div>
+
+        {isAssignedOrganizer && (
+          <OrganizerSignatureCapture
+            organizerId={session!.speaker!._id}
+            organizerName={organizerName}
+            onSignatureReady={handleOrganizerSignatureReady}
+          />
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -469,6 +499,18 @@ export function SponsorContractView({
                 <dt className="text-gray-500 dark:text-gray-400">Template</dt>
                 <dd className="font-medium text-gray-900 dark:text-white">
                   {sponsor.contractTemplate.title}
+                </dd>
+              </>
+            )}
+            {sponsor.organizerSignedBy && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">
+                  Counter-signed
+                </dt>
+                <dd className="font-medium text-gray-900 dark:text-white">
+                  {sponsor.organizerSignedBy}
+                  {sponsor.organizerSignedAt &&
+                    ` on ${new Date(sponsor.organizerSignedAt).toLocaleDateString()}`}
                 </dd>
               </>
             )}

@@ -19,6 +19,8 @@ interface SigningContractData {
   signerEmail: string
   contractStatus?: string
   contractSentAt?: string
+  organizerSignedBy?: string
+  organizerSignedAt?: string
   contractDocument?: {
     asset?: {
       url?: string
@@ -47,6 +49,8 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   signerEmail,
   contractStatus,
   contractSentAt,
+  organizerSignedBy,
+  organizerSignedAt,
   contractDocument{
     asset->{
       url
@@ -148,6 +152,8 @@ export const signingRouter = router({
         signerName: input.signerName,
         signerEmail: doc.signerEmail,
         organizerName: doc.conference?.organizer,
+        organizerSignedBy: doc.organizerSignedBy,
+        organizerSignedAt: doc.organizerSignedAt,
         contractSentAt: doc.contractSentAt,
         signedAt: now,
       }

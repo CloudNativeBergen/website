@@ -6,6 +6,8 @@ export interface SigningAttestation {
   signerName: string
   signerEmail: string
   organizerName?: string
+  organizerSignedBy?: string
+  organizerSignedAt?: string
   contractSentAt?: string
   signedAt: string
 }
@@ -237,6 +239,13 @@ export async function addAttestationPage(
 
 function buildTimelineEvents(att: SigningAttestation): TimelineEvent[] {
   const events: TimelineEvent[] = []
+
+  if (att.organizerSignedBy && att.organizerSignedAt) {
+    events.push({
+      text: `Contract counter-signed by ${att.organizerSignedBy} (organizer)`,
+      detail: formatTimestamp(att.organizerSignedAt),
+    })
+  }
 
   if (att.contractSentAt) {
     events.push({

@@ -99,4 +99,35 @@ describe('addAttestationPage', () => {
     const { width } = attestPage.getSize()
     expect(width).toBeCloseTo(595.28, 1)
   })
+
+  it('includes organizer counter-sign event when provided', async () => {
+    const doc = await createMinimalPdf()
+    const withOrganizer: SigningAttestation = {
+      ...BASE_ATTESTATION,
+      organizerSignedBy: 'Hans Admin',
+      organizerSignedAt: '2026-02-14T08:30:00Z',
+    }
+
+    await addAttestationPage(doc, withOrganizer)
+    expect(doc.getPageCount()).toBe(2)
+
+    const bytes = await doc.save()
+    const reloaded = await PDFDocument.load(bytes)
+    expect(reloaded.getPageCount()).toBe(2)
+  })
+
+  it('omits organizer event when only one organizer field is set', async () => {
+    const doc = await createMinimalPdf()
+    const partial: SigningAttestation = {
+      ...BASE_ATTESTATION,
+      organizerSignedBy: 'Hans Admin',
+      // organizerSignedAt intentionally omitted
+    }
+
+    await addAttestationPage(doc, partial)
+    expect(doc.getPageCount()).toBe(2)
+
+    const bytes = await doc.save()
+    expect(bytes.length).toBeGreaterThan(0)
+  })
 })

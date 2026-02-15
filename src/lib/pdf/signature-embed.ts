@@ -1,7 +1,7 @@
 import { formatDate, getCurrentDateTime } from '@/lib/time'
 
 import { addAttestationPage, type SigningAttestation } from './attestation-page'
-import { SIGNATURE_MARKER, DATE_MARKER } from './constants'
+import { SPONSOR_SIGNATURE_MARKER, SPONSOR_DATE_MARKER } from './constants'
 import { findMarkerInPdf } from './marker-detection'
 
 const SIGNATURE_MAX_WIDTH = 150
@@ -13,37 +13,30 @@ const SIGNATURE_OFFSET_Y = 10
 const SIGNER_NAME_OFFSET_Y = 2
 const SIGNER_DATE_OFFSET_Y = 14
 
+export interface EmbedSignatureOptions {
+  /** Marker string to locate the signature position. Defaults to sponsor signer marker. */
+  signatureMarker?: string
+  /** Marker string to locate the date position. Defaults to sponsor date marker. */
+  dateMarker?: string
+}
+
 /**
- * Embeds a PNG signature image, signer name, and date into a contract PDF.
- *
- * Locates the Adobe Sign marker in the PDF to position the signature
- * correctly, regardless of which page the signature area ends up on.
- * Falls back to last-page bottom-right positioning if markers are not found.
- *
- * When `attestation` is provided, appends a signing certificate page
- * with an audit trail of the signing process.
+ * Core implementation: embeds a PNG signature into PDF bytes.
  */
-export async function embedSignatureInPdf(
-  pdfUrl: string,
+async function embedSignatureCore(
+  pdfBytes: Uint8Array,
   signatureDataUrl: string,
   signerName: string,
-  attestation?: SigningAttestation,
+  attestation: SigningAttestation | undefined,
+  options: EmbedSignatureOptions | undefined,
 ): Promise<Buffer> {
+  const sigMarkerText = options?.signatureMarker ?? SPONSOR_SIGNATURE_MARKER
+  const dateMarkerText = options?.dateMarker ?? SPONSOR_DATE_MARKER
+
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-
-  const pdfResponse = await fetch(pdfUrl, { signal: controller.signal })
-  clearTimeout(timeout)
-
-  if (!pdfResponse.ok) {
-    throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
-  }
-  const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer())
   const pdfDoc = await PDFDocument.load(pdfBytes)
 
-  // Decode and validate signature PNG data URL
   const match = signatureDataUrl.match(
     /^data:image\/png(?:;[^,]*)?;base64,(.+)$/i,
   )
@@ -53,7 +46,6 @@ export async function embedSignatureInPdf(
   const signatureBytes = Buffer.from(match[1], 'base64')
   const signatureImage = await pdfDoc.embedPng(signatureBytes)
 
-  // Scale the signature to fit within bounds
   const sigDims = signatureImage.scale(1)
   const scale = Math.min(
     SIGNATURE_MAX_WIDTH / sigDims.width,
@@ -63,8 +55,7 @@ export async function embedSignatureInPdf(
   const drawWidth = sigDims.width * scale
   const drawHeight = sigDims.height * scale
 
-  // Find the signature marker position in the PDF
-  const sigMarker = findMarkerInPdf(pdfBytes, SIGNATURE_MARKER)
+  const sigMarker = findMarkerInPdf(pdfBytes, sigMarkerText)
 
   let targetPage: ReturnType<typeof pdfDoc.getPage>
   let sigX: number
@@ -89,19 +80,18 @@ export async function embedSignatureInPdf(
     height: drawHeight,
   })
 
-  // Add signer name and date below the signature line
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const dateStr = formatDate(getCurrentDateTime())
 
-  const dateMarker = findMarkerInPdf(pdfBytes, DATE_MARKER)
-  const nameX = dateMarker ? dateMarker.x : sigMarker ? sigMarker.x : sigX
-  const nameY = dateMarker
-    ? dateMarker.y + SIGNER_DATE_OFFSET_Y
+  const dateMarkerPos = findMarkerInPdf(pdfBytes, dateMarkerText)
+  const nameX = dateMarkerPos ? dateMarkerPos.x : sigMarker ? sigMarker.x : sigX
+  const nameY = dateMarkerPos
+    ? dateMarkerPos.y + SIGNER_DATE_OFFSET_Y
     : sigMarker
       ? sigMarker.y - SIGNER_NAME_OFFSET_Y
       : sigY - SIGNER_NAME_OFFSET_Y
-  const dateY = dateMarker
-    ? dateMarker.y
+  const dateY = dateMarkerPos
+    ? dateMarkerPos.y
     : sigMarker
       ? sigMarker.y - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
       : sigY - SIGNER_DATE_OFFSET_Y - SIGNER_NAME_OFFSET_Y
@@ -128,4 +118,65 @@ export async function embedSignatureInPdf(
 
   const signedBytes = await pdfDoc.save()
   return Buffer.from(signedBytes)
+}
+
+/**
+ * Embeds a PNG signature image, signer name, and date into a contract PDF
+ * fetched from a URL.
+ *
+ * Locates the marker text in the PDF to position the signature correctly,
+ * regardless of which page the signature area ends up on.
+ * Falls back to last-page bottom-right positioning if markers are not found.
+ *
+ * Use `options.signatureMarker` / `options.dateMarker` to target the organizer
+ * signature block instead of the default sponsor block.
+ *
+ * When `attestation` is provided, appends a signing certificate page
+ * with an audit trail of the signing process.
+ */
+export async function embedSignatureInPdf(
+  pdfUrl: string,
+  signatureDataUrl: string,
+  signerName: string,
+  attestation?: SigningAttestation,
+  options?: EmbedSignatureOptions,
+): Promise<Buffer> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  const pdfResponse = await fetch(pdfUrl, { signal: controller.signal })
+  clearTimeout(timeout)
+
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`)
+  }
+  const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer())
+
+  return embedSignatureCore(
+    pdfBytes,
+    signatureDataUrl,
+    signerName,
+    attestation,
+    options,
+  )
+}
+
+/**
+ * Embeds a PNG signature image into a contract PDF provided as a Buffer.
+ * Same as `embedSignatureInPdf` but skips the URL fetch — useful when
+ * the PDF is already in memory (e.g. organizer counter-signing before upload).
+ */
+export async function embedSignatureInPdfBuffer(
+  pdfBuffer: Buffer,
+  signatureDataUrl: string,
+  signerName: string,
+  options?: EmbedSignatureOptions,
+): Promise<Buffer> {
+  return embedSignatureCore(
+    new Uint8Array(pdfBuffer),
+    signatureDataUrl,
+    signerName,
+    undefined,
+    options,
+  )
 }

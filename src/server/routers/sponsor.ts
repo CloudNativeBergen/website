@@ -95,6 +95,11 @@ import {
   PreviewContractPdfSchema,
 } from '@/server/schemas/contractTemplate'
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
+import { embedSignatureInPdfBuffer } from '@/lib/pdf/signature-embed'
+import {
+  ORGANIZER_SIGNATURE_MARKER,
+  ORGANIZER_DATE_MARKER,
+} from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 import {
@@ -1376,6 +1381,41 @@ export const sponsorRouter = router({
           })
         }
 
+        // Embed organizer counter-signature if provided
+        if (input.organizerSignatureDataUrl && input.organizerName) {
+          const assignedToId = sfc.assignedTo?._id
+          if (!assignedToId || assignedToId !== ctx.speaker._id) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'Only the assigned organizer can counter-sign this contract.',
+            })
+          }
+
+          try {
+            pdfBuffer = await embedSignatureInPdfBuffer(
+              pdfBuffer,
+              input.organizerSignatureDataUrl,
+              input.organizerName,
+              {
+                signatureMarker: ORGANIZER_SIGNATURE_MARKER,
+                dateMarker: ORGANIZER_DATE_MARKER,
+              },
+            )
+          } catch (sigError) {
+            console.error(
+              `${logCtxFull} Organizer signature embedding failed:`,
+              sigError,
+            )
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                'Failed to embed organizer signature into the contract PDF.',
+              cause: sigError,
+            })
+          }
+        }
+
         const safeName = sfc.sponsor.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
@@ -1428,6 +1468,11 @@ export const sponsorRouter = router({
           updateFields.signerName = signerContact?.name || primaryContact.name
           updateFields.signerEmail = input.signerEmail
           updateFields.signatureStatus = 'pending'
+        }
+
+        if (input.organizerSignatureDataUrl && input.organizerName) {
+          updateFields.organizerSignedAt = now
+          updateFields.organizerSignedBy = input.organizerName
         }
 
         // Send for digital signing if signer email is provided

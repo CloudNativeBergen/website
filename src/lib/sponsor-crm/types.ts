@@ -86,6 +86,8 @@ export interface SponsorForConference {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency: 'NOK' | 'USD' | 'EUR'
   invoiceStatus: InvoiceStatus
@@ -175,6 +177,8 @@ export interface SponsorForConferenceExpanded {
   }
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
@@ -234,6 +238,8 @@ export interface SponsorForConferenceInput {
   billing?: BillingInfo
   contactInitiatedAt?: string
   contractSignedAt?: string
+  organizerSignedAt?: string
+  organizerSignedBy?: string
   contractValue?: number
   contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus

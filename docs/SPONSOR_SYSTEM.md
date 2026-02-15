@@ -63,6 +63,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `signerEmail`             | Email of the person designated to sign the contract                                                    |
 | `signingUrl`              | Adobe Sign signing URL for portal display and reminder emails (read-only)                              |
 | `contractSentAt`          | When the contract was sent for signing (read-only)                                                     |
+| `organizerSignedBy`       | Name of the organizer who counter-signed the contract (read-only)                                      |
+| `organizerSignedAt`       | When the organizer counter-signed (read-only)                                                          |
 | `contractDocument`        | Generated PDF contract stored as a Sanity file asset                                                   |
 | `reminderCount`           | Number of contract signing reminders sent (read-only)                                                  |
 | `contractTemplate`        | Reference to the `contractTemplate` used to generate the contract                                      |
@@ -232,6 +234,7 @@ src/
 │           ├── BoardViewSwitcher.tsx        # Pipeline/Contract/Invoice toggle
 │           ├── ContractReadinessIndicator.tsx # Contract readiness status display
 │           ├── SponsorContractView.tsx      # Unified contract & portal view
+│           ├── OrganizerSignatureCapture.tsx # Organizer counter-signature capture (localStorage-backed)
 │           ├── ImportHistoricSponsorsButton.tsx # Historic import dialog
 │           ├── MobileFilterSheet.tsx        # Mobile-responsive filter panel
 │           ├── utils.ts                     # CRM-specific UI utilities
@@ -335,10 +338,23 @@ PDF generation uses React-PDF (`@react-pdf/renderer`) to produce professional co
 - Info table with parties, dates, and venue details
 - Contract sections with variable substitution
 - Package/tier details table
+- Organizer and sponsor signature placeholder markers (invisible PDF text used by `pdf-lib` for signature positioning)
 - Appendix 1: General Terms & Conditions
 - Footer with organizer contact information
 
 Variable values are built from the `SponsorForConferenceExpanded` record by `buildContractVariables()` in `contract-variables.ts`.
+
+#### Organizer Counter-Signature
+
+Before a contract is sent, the assigned organizer can optionally counter-sign it. The organizer draws their signature using the `OrganizerSignatureCapture` component, which stores the signature in localStorage (never on the server) and reuses it across sessions for convenience.
+
+When sending a contract with a counter-signature:
+
+1. The organizer&apos;s signature PNG is embedded into the generated PDF via `embedSignatureInPdfBuffer()` (from `src/lib/pdf/signature-embed.ts`), targeting the organizer-specific markers (`ORGANIZER_SIGNATURE_MARKER` / `ORGANIZER_DATE_MARKER`)
+2. The `organizerSignedBy` and `organizerSignedAt` fields are recorded on the `sponsorForConference` document
+3. The counter-signed PDF is used for both Sanity storage and the signing provider
+
+Only the organizer assigned to the sponsor (`assignedTo`) can counter-sign. The attestation page timeline includes the counter-sign event when these fields are present.
 
 ### Contract Readiness
 
@@ -453,8 +469,11 @@ The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.t
 1. Load sponsorForConference record
 2. Find best contract template (by conference + tier + language)
 3. Generate PDF via React-PDF with variable substitution
-4. Upload PDF to Sanity as a file asset (permanent storage)
-5. Call provider.sendForSigning(pdf, filename, signerEmail, agreementName)
+4. If organizer counter-signature provided:
+   a. Embed organizer signature image + date in the PDF via pdf-lib
+   b. Record organizerSignedBy + organizerSignedAt on the document
+5. Upload PDF to Sanity as a file asset (permanent storage)
+6. Call provider.sendForSigning(pdf, filename, signerEmail, agreementName)
    → provider handles upload + agreement creation internally
    → returns { agreementId, signingUrl? }
 7. Update sponsorForConference:
@@ -544,18 +563,20 @@ To configure Adobe Sign for a new environment:
 
 The contract lifecycle is tracked across several fields on the `sponsorForConference` document:
 
-| Field              | Type      | Description                                                               |
-| ------------------ | --------- | ------------------------------------------------------------------------- |
-| `contractStatus`   | Enum      | Overall contract stage (none → verbal → sent → signed)                    |
-| `signatureStatus`  | Enum      | Digital signature state (not-started → pending → signed/rejected/expired) |
-| `signatureId`      | String    | Agreement ID from the contract signing provider (read-only, set on send)  |
-| `signerEmail`      | String    | Email of the designated signer                                            |
-| `signingUrl`       | String    | Signing URL for portal and reminder emails                                |
-| `contractSentAt`   | DateTime  | When the contract was sent for signing                                    |
-| `contractSignedAt` | DateTime  | When the signed PDF was received (set by webhook)                         |
-| `contractDocument` | File      | Generated/signed PDF stored as a Sanity file asset                        |
-| `contractTemplate` | Reference | The `contractTemplate` used to generate the PDF                           |
-| `reminderCount`    | Number    | Signing reminders sent (max 2, tracked by cron)                           |
+| Field               | Type      | Description                                                               |
+| ------------------- | --------- | ------------------------------------------------------------------------- |
+| `contractStatus`    | Enum      | Overall contract stage (none → verbal → sent → signed)                    |
+| `signatureStatus`   | Enum      | Digital signature state (not-started → pending → signed/rejected/expired) |
+| `signatureId`       | String    | Agreement ID from the contract signing provider (read-only, set on send)  |
+| `signerEmail`       | String    | Email of the designated signer                                            |
+| `signingUrl`        | String    | Signing URL for portal and reminder emails                                |
+| `contractSentAt`    | DateTime  | When the contract was sent for signing                                    |
+| `organizerSignedBy` | String    | Name of the organizer who counter-signed (set on send, read-only)         |
+| `organizerSignedAt` | DateTime  | When the organizer counter-signed (set on send, read-only)                |
+| `contractSignedAt`  | DateTime  | When the signed PDF was received (set by webhook)                         |
+| `contractDocument`  | File      | Generated/signed PDF stored as a Sanity file asset                        |
+| `contractTemplate`  | Reference | The `contractTemplate` used to generate the PDF                           |
+| `reminderCount`     | Number    | Signing reminders sent (max 2, tracked by cron)                           |
 
 #### Architecture Diagram
 
@@ -751,20 +772,21 @@ The public website displays sponsors using data fetched from Sanity (not through
 
 Tests are located in `__tests__/` mirroring the source structure:
 
-| Test file                                    | Covers                                       |
-| -------------------------------------------- | -------------------------------------------- |
-| `lib/sponsor/validation.test.ts`             | Sponsor and tier input validation            |
-| `lib/sponsor/utils.test.ts`                  | Tier sorting, formatting, grouping utilities |
-| `lib/sponsor/templates.test.ts`              | Template variable processing utilities       |
-| `lib/sponsor/sponsorForConference.test.ts`   | CRM Zod schema validation                    |
-| `lib/sponsor-crm/bulk.test.ts`               | Bulk update/delete operations                |
-| `lib/sponsor-crm/contract-readiness.test.ts` | Contract readiness validation logic          |
-| `lib/sponsor-crm/contract-variables.test.ts` | Contract variable building and substitution  |
-| `lib/sponsor-crm/registration.test.ts`       | Registration URL building                    |
-| `lib/contract-signing/provider.test.ts`      | Signing provider abstraction & factory       |
-| `components/Sponsors.test.tsx`               | Public sponsor display component             |
-| `components/SponsorLogo.test.tsx`            | Logo rendering                               |
-| `components/SponsorProspectus.test.tsx`      | Prospectus page                              |
+| Test file                                    | Covers                                                     |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| `lib/sponsor/validation.test.ts`             | Sponsor and tier input validation                          |
+| `lib/sponsor/utils.test.ts`                  | Tier sorting, formatting, grouping utilities               |
+| `lib/sponsor/templates.test.ts`              | Template variable processing utilities                     |
+| `lib/sponsor/sponsorForConference.test.ts`   | CRM Zod schema validation                                  |
+| `lib/sponsor-crm/bulk.test.ts`               | Bulk update/delete operations                              |
+| `lib/sponsor-crm/contract-readiness.test.ts` | Contract readiness validation logic                        |
+| `lib/sponsor-crm/contract-variables.test.ts` | Contract variable building and substitution                |
+| `lib/sponsor-crm/registration.test.ts`       | Registration URL building                                  |
+| `lib/contract-signing/provider.test.ts`      | Signing provider abstraction & factory                     |
+| `lib/pdf/attestation-page.test.ts`           | Attestation page generation (incl. organizer counter-sign) |
+| `components/Sponsors.test.tsx`               | Public sponsor display component                           |
+| `components/SponsorLogo.test.tsx`            | Logo rendering                                             |
+| `components/SponsorProspectus.test.tsx`      | Prospectus page                                            |
 
 ## Roadmap
 

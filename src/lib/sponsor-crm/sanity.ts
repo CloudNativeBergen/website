@@ -93,6 +93,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   contactInitiatedAt,
   contractSignedAt,
+  organizerSignedAt,
+  organizerSignedBy,
   contractValue,
   contractCurrency,
   invoiceStatus,

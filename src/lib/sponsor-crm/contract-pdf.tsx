@@ -7,7 +7,12 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer'
 import type { ContractTemplate } from './contract-templates'
-import { SIGNATURE_MARKER, DATE_MARKER } from '@/lib/pdf/constants'
+import {
+  SPONSOR_SIGNATURE_MARKER,
+  SPONSOR_DATE_MARKER,
+  ORGANIZER_SIGNATURE_MARKER,
+  ORGANIZER_DATE_MARKER,
+} from '@/lib/pdf/constants'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
 
 import {
@@ -406,6 +411,12 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             </Text>
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_SIGNATURE_MARKER}
+            </Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {ORGANIZER_DATE_MARKER}
+            </Text>
           </View>
           <View style={styles.signatureBlock}>
             <Text style={styles.signatureLabel}>
@@ -414,9 +425,11 @@ function ContractDocument({ template, variables }: ContractDocumentProps) {
             <View style={styles.signatureLine} />
             <Text style={styles.signatureLabel}>Date / Signature</Text>
             <Text style={{ fontSize: 1, color: '#ffffff' }}>
-              {SIGNATURE_MARKER}
+              {SPONSOR_SIGNATURE_MARKER}
             </Text>
-            <Text style={{ fontSize: 1, color: '#ffffff' }}>{DATE_MARKER}</Text>
+            <Text style={{ fontSize: 1, color: '#ffffff' }}>
+              {SPONSOR_DATE_MARKER}
+            </Text>
           </View>
         </View>
 

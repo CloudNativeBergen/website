@@ -178,3 +178,20 @@ export const WithExistingToken: Story = {
     msw: { handlers: defaultHandlers },
   },
 }
+
+export const CounterSigned: Story = {
+  args: {
+    conferenceId: 'conf-2026',
+    sponsor: mockSponsor({
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      signatureId: 'agreement-456',
+      contractSentAt: '2026-02-01T12:00:00Z',
+      organizerSignedBy: 'Jane Doe',
+      organizerSignedAt: '2026-02-01T11:55:00Z',
+    }),
+  },
+  parameters: {
+    msw: { handlers: defaultHandlers },
+  },
+}
