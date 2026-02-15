@@ -157,8 +157,8 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
         <UserAvatar
-          name={activity.createdBy.name}
-          image={activity.createdBy.image}
+          name={activity.createdBy?.name ?? 'System'}
+          image={activity.createdBy?.image}
           size="sm"
         />
         <time className="text-xs text-gray-400 dark:text-gray-500">
@@ -229,7 +229,7 @@ export function SponsorActivityTimeline({
       <div
         className={clsx(
           showHeaderFooter &&
-            'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800',
+          'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800',
         )}
       >
         {showHeaderFooter && (
@@ -256,7 +256,7 @@ export function SponsorActivityTimeline({
     <div
       className={clsx(
         showHeaderFooter &&
-          'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800',
+        'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800',
       )}
     >
       {showHeaderFooter && (

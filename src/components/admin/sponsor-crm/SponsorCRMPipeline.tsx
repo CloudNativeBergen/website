@@ -124,6 +124,16 @@ export function SponsorCRMPipeline({
     },
   )
 
+  // Keep selectedSponsor in sync with fresh query data
+  useEffect(() => {
+    if (!selectedSponsor || !sponsors.length) return
+    const fresh = sponsors.find((s) => s._id === selectedSponsor._id)
+    if (fresh && fresh !== selectedSponsor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSponsor(fresh)
+    }
+  }, [sponsors, selectedSponsor])
+
   // Filter logic
   const filteredSponsors = useMemo(() => {
     let filtered =
@@ -131,8 +141,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contractValue != null,
-            )
+            (s) => s.status === 'closed-won' && s.contractValue != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -426,8 +436,25 @@ export function SponsorCRMPipeline({
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
-          onSuccess={() => {
-            utils.sponsor.crm.list.invalidate()
+          onSuccess={(createdId) => {
+            if (createdId) {
+              const created = utils.sponsor.crm.list
+                .getData({
+                  conferenceId,
+                  assignedTo:
+                    assignedToFilter === 'unassigned'
+                      ? undefined
+                      : assignedToFilter,
+                  unassignedOnly: assignedToFilter === 'unassigned',
+                  tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+                  tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+                })
+                ?.find((s) => s._id === createdId)
+              if (created) {
+                setSelectedSponsor(created)
+                setInitialFormView('pipeline')
+              }
+            }
           }}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
@@ -671,7 +698,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                      ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -788,8 +815,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={() => { }}
+                onDelete={() => { }}
               />
             </div>
           )}

@@ -275,6 +275,11 @@ export function SponsorPortal({ token }: { token: string }) {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Fields marked with <span className="text-red-500">*</span> are
+          required.
+        </p>
+
         {error && (
           <div
             ref={errorRef}

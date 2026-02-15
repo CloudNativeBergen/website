@@ -41,7 +41,7 @@ interface SponsorCRMFormProps {
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (createdId?: string) => void
   existingSponsorsInCRM?: string[]
   initialView?: FormView
 }
@@ -292,8 +292,14 @@ export function SponsorCRMForm({
                               )}
                               {(sponsor.contractStatus === 'contract-sent' ||
                                 sponsor.signatureStatus === 'pending') && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
+                              {sponsor.registrationComplete &&
+                                sponsor.contractStatus !== 'contract-sent' &&
+                                sponsor.contractStatus !==
+                                'contract-signed' && (
+                                  <span className="absolute -top-1 -right-1 h-2 w-2 animate-pulse rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
+                                )}
                               <DocumentTextIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Contract</span>
                             </button>

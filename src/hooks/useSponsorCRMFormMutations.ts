@@ -33,7 +33,7 @@ interface UseSponsorCRMFormMutationsOptions {
   conferenceId: string
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
-  onSuccess: () => void
+  onSuccess: (createdId?: string) => void
 }
 
 export function useSponsorCRMFormMutations({
@@ -46,14 +46,14 @@ export function useSponsorCRMFormMutations({
   const utils = api.useUtils()
 
   const createMutation = api.sponsor.crm.create.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await utils.sponsor.crm.list.invalidate()
       showNotification({
         title: 'Success',
         message: 'Sponsor added to pipeline',
         type: 'success',
       })
-      onSuccess()
+      onSuccess(data?._id)
     },
     onError: (error) => {
       showNotification({

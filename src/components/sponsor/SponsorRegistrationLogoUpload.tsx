@@ -29,6 +29,7 @@ function LogoUploadField({
   value,
   sponsorName,
   filenameSuffix,
+  required,
   onChange,
 }: {
   label: string
@@ -37,6 +38,7 @@ function LogoUploadField({
   value: string | null
   sponsorName: string
   filenameSuffix: string
+  required?: boolean
   onChange: (svg: string | null) => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -62,6 +64,7 @@ function LogoUploadField({
     <div>
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
         {label}
+        {required && <span className="text-red-500"> *</span>}
       </label>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         {description}
@@ -155,6 +158,7 @@ export function SponsorRegistrationLogoUpload({
           value={logo}
           sponsorName={sponsorName}
           filenameSuffix="-logo"
+          required
           onChange={(svg) => onChange({ logo: svg })}
         />
         <LogoUploadField

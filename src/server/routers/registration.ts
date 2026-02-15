@@ -19,6 +19,7 @@ import {
   logContractStatusChange,
 } from '@/lib/sponsor-crm/activity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import type { Conference } from '@/lib/conference/types'
 
@@ -123,16 +124,8 @@ export const registrationRouter = router({
         })
       }
 
-      const sfc = await clientReadUncached.fetch<{
-        domain: string | null
-      }>(
-        `*[_type == "sponsorForConference" && _id == $id][0]{
-          "domain": conference->domains[0]
-        }`,
-        { id: input.sponsorForConferenceId },
-      )
-
-      if (!sfc?.domain) {
+      const { domain } = await getConferenceForCurrentDomain()
+      if (!domain) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message:
@@ -140,7 +133,7 @@ export const registrationRouter = router({
         })
       }
 
-      const baseUrl = `https://${sfc.domain}`
+      const baseUrl = `https://${domain}`
       const url = buildPortalUrl(baseUrl, token)
 
       return { token, url }
@@ -175,7 +168,6 @@ export const registrationRouter = router({
           organizer: string | null
           sponsorEmail: string | null
           socialLinks: string[] | null
-          domains: string[] | null
         } | null
       }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{
@@ -194,8 +186,7 @@ export const registrationRouter = router({
             startDate,
             organizer,
             sponsorEmail,
-            socialLinks,
-            domains
+            socialLinks
           }
         }`,
         { id: input.sponsorForConferenceId },
@@ -240,8 +231,8 @@ export const registrationRouter = router({
         })
       }
 
-      const domain = sfc.conference.domains?.[0]
-      if (!domain) {
+      const { domain: currentDomain } = await getConferenceForCurrentDomain()
+      if (!currentDomain) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'Conference has no domain configured.',
@@ -263,7 +254,7 @@ export const registrationRouter = router({
         token = result.token
       }
 
-      const baseUrl = `https://${domain}`
+      const baseUrl = `https://${currentDomain}`
       const portalUrl = buildPortalUrl(baseUrl, token)
 
       // Send email
@@ -287,7 +278,7 @@ export const registrationRouter = router({
         eventDate: sfc.conference.startDate
           ? formatConferenceDateLong(sfc.conference.startDate)
           : '',
-        eventUrl: `https://${domain}`,
+        eventUrl: `https://${currentDomain}`,
         socialLinks: sfc.conference.socialLinks || [],
       })
 
