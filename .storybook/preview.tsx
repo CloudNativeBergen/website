@@ -2,6 +2,7 @@ import type { Preview } from '@storybook/nextjs-vite'
 import type { Decorator } from '@storybook/nextjs-vite'
 import { initialize, mswLoader } from 'msw-storybook-addon'
 import { TRPCDecorator } from './decorators/TRPCDecorator'
+import { SessionDecorator } from './decorators/SessionDecorator'
 import '../src/styles/tailwind.css'
 
 // Initialize MSW
@@ -196,6 +197,7 @@ const preview: Preview = {
   },
   decorators: [
     TRPCDecorator,
+    SessionDecorator,
     ((Story, context) => {
       const theme = context.globals.theme || 'light'
       return (
