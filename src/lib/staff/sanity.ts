@@ -6,8 +6,9 @@ export async function getStaffMembers(
   role: string,
 ): Promise<{ data: Staff[]; err?: Error }> {
   const query = defineQuery(`
-    * [_type == "staff" && role == "${role}"]
+    * [_type == "staff" && role == $role]
     {
+      _id,
       name,
       role,
       email,
@@ -18,7 +19,7 @@ export async function getStaffMembers(
   `)
 
   try {
-    const queryResult = await clientRead.fetch<Staff[]>(query)
+    const queryResult = await clientRead.fetch<Staff[]>(query, { role: role })
     const resultOrError = { data: queryResult, error: null }
     return resultOrError
   } catch (error) {

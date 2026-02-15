@@ -39,6 +39,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     dashboardConfig,
     imageGallery,
     volunteer,
+    staff,
 
     // Topics & Talks
     talk,
@@ -55,19 +56,10 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Sponsors
     sponsor,
-    sponsorTier,
-    sponsorForConference,
     sponsorActivity,
     sponsorEmailTemplate,
     sponsorForConference,
     sponsorTier,
-    talk,
-    topic,
-    travelSupport,
-    travelExpense,
-    volunteer,
-    workshopSignup,
-    staff,
     contractTemplate,
   ],
 }
