@@ -9,21 +9,25 @@ export default defineType({
       name: 'name',
       title: 'Name',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'role',
       title: 'Role',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'email',
       title: 'Email',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'company',
       title: 'Company',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'image',
@@ -44,6 +48,7 @@ export default defineType({
       name: 'link',
       title: 'Link',
       type: 'url',
+      validation: (Rule) => Rule.required(),
     }),
   ],
   preview: {

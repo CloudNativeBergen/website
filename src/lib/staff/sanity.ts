@@ -8,7 +8,7 @@ export async function getStaffMembers(
   const query = defineQuery(`
     * [_type == "staff" && role == $role]
     {
-      _id,
+      "id": _id,
       name,
       role,
       email,

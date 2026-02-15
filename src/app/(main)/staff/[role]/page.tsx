@@ -53,7 +53,7 @@ async function CachedStaffContent({ role }: { role: string }) {
 export default async function StaffPage({
   params,
 }: {
-  params: { role: string }
+  params: Promise<{ role: string }>
 }) {
   const { role } = await params
   return <CachedStaffContent role={role} />
