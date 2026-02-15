@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
 import { SignaturePadCanvas } from './SignaturePadCanvas'
+import { formatDateTimeSafe } from '@/lib/time'
 
 type Step = 'review' | 'sign' | 'complete'
 
