@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
-import { getCurrentDateTime, formatConferenceDateLong } from '@/lib/time'
+import { getCurrentDateTime } from '@/lib/time'
 import { resend, retryWithBackoff } from '@/lib/email/config'
-import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
-import * as React from 'react'
 import { unstable_noStore as noStore } from 'next/cache'
 
 const MAX_REMINDERS = 2
@@ -84,23 +82,44 @@ export async function GET(request: NextRequest) {
         const fromName = contract.conferenceOrganizer || 'Cloud Native Days'
         const eventName = contract.conferenceName || 'Cloud Native Day'
 
+        const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+          await import('@/lib/email/contract-email')
+
+        const emailResult = await renderContractEmail(
+          CONTRACT_EMAIL_SLUGS.REMINDER,
+          {
+            sponsorName: contract.sponsorName || 'Sponsor',
+            signerName: contract.signerName,
+            conference: {
+              title: eventName,
+              city: contract.conferenceCity,
+              startDate: contract.conferenceStartDate,
+              organizer: contract.conferenceOrganizer,
+              sponsorEmail: contract.conferenceSponsorEmail,
+            },
+          },
+          {
+            button: {
+              text: 'Review &amp; Sign Agreement',
+              href: contract.signingUrl,
+            },
+          },
+        )
+
+        if (!emailResult) {
+          console.error(
+            `Contract email template not found for ${contract.sponsorName}`,
+          )
+          failed++
+          continue
+        }
+
         await retryWithBackoff(async () => {
           return resend.emails.send({
             from: `${fromName} <${fromEmail}>`,
             to: [contract.signerEmail],
-            subject: `Reminder: Sponsorship Agreement — ${eventName}`,
-            react: React.createElement(ContractReminderTemplate, {
-              sponsorName: contract.sponsorName || 'Sponsor',
-              signerName: contract.signerName,
-              signingUrl: contract.signingUrl,
-              reminderNumber: newCount,
-              eventName,
-              eventLocation: contract.conferenceCity || 'Norway',
-              eventDate: contract.conferenceStartDate
-                ? formatConferenceDateLong(contract.conferenceStartDate)
-                : '',
-              eventUrl: 'https://cloudnativeday.no',
-            }),
+            subject: emailResult.subject,
+            react: emailResult.react,
           })
         })
 

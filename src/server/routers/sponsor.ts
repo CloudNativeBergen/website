@@ -1576,12 +1576,10 @@ export const sponsorRouter = router({
         // Send branded signing email if we have a signing URL (non-critical)
         if (signingUrl && input.signerEmail && sfc.conference) {
           try {
-            const { ContractSigningTemplate } =
-              await import('@/components/email/ContractSigningTemplate')
+            const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+              await import('@/lib/email/contract-email')
             const { resend, retryWithBackoff } =
               await import('@/lib/email/config')
-            const { formatConferenceDateLong } = await import('@/lib/time')
-            const React = await import('react')
 
             const contractValueStr = sfc.contractValue
               ? `${sfc.contractValue.toLocaleString()} ${sfc.contractCurrency || 'NOK'}`
@@ -1593,34 +1591,48 @@ export const sponsorRouter = router({
             const resolvedSignerName =
               signerContact?.name || primaryContact.name
 
-            const emailElement = React.createElement(ContractSigningTemplate, {
-              sponsorName: sfc.sponsor.name,
-              signerName: resolvedSignerName,
-              signerEmail: input.signerEmail,
-              signingUrl,
-              tierName: sfc.tier?.title,
-              contractValue: contractValueStr,
-              eventName: sfc.conference.title,
-              eventLocation: sfc.conference.city || 'Norway',
-              eventDate: sfc.conference.startDate
-                ? formatConferenceDateLong(sfc.conference.startDate)
-                : '',
-              eventUrl: `https://${sfc.conference.domains?.[0] || 'cloudnativeday.no'}`,
-              socialLinks: sfc.conference.socialLinks || [],
-            })
+            const result = await renderContractEmail(
+              CONTRACT_EMAIL_SLUGS.SENT,
+              {
+                sponsorName: sfc.sponsor.name,
+                signerName: resolvedSignerName,
+                signerEmail: input.signerEmail,
+                tierName: sfc.tier?.title,
+                contractValue: contractValueStr,
+                conference: {
+                  title: sfc.conference.title,
+                  city: sfc.conference.city,
+                  startDate: sfc.conference.startDate,
+                  domains: sfc.conference.domains,
+                  organizer: sfc.conference.organizer,
+                  sponsorEmail: sfc.conference.sponsorEmail,
+                  socialLinks: sfc.conference.socialLinks,
+                },
+              },
+              {
+                button: {
+                  text: 'Review &amp; Sign Agreement',
+                  href: signingUrl,
+                },
+              },
+            )
 
-            const fromEmail =
-              sfc.conference.sponsorEmail || 'sponsors@cloudnativeday.no'
-            const fromName = sfc.conference.organizer || 'Cloud Native Days'
+            if (!result) {
+              console.error(`${logCtxFull} Contract email template not found`)
+            } else {
+              const fromEmail =
+                sfc.conference.sponsorEmail || 'sponsors@cloudnativeday.no'
+              const fromName = sfc.conference.organizer || 'Cloud Native Days'
 
-            await retryWithBackoff(async () => {
-              return resend.emails.send({
-                from: `${fromName} <${fromEmail}>`,
-                to: [input.signerEmail!],
-                subject: `Sponsorship Agreement Ready for Signing — ${sfc.conference.title}`,
-                react: emailElement,
+              await retryWithBackoff(async () => {
+                return resend.emails.send({
+                  from: `${fromName} <${fromEmail}>`,
+                  to: [input.signerEmail!],
+                  subject: result.subject,
+                  react: result.react,
+                })
               })
-            })
+            }
           } catch (emailError) {
             console.error(
               `${logCtxFull} Failed to send signing notification email (non-fatal):`,
@@ -1894,9 +1906,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,

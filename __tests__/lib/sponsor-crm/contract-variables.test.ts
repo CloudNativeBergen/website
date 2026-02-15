@@ -55,7 +55,7 @@ describe('contract-variables', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
-      expect(vars.SPONSOR_ORG_NUMBER).toBe('123456789')
+      expect(vars.SPONSOR_ORG_NUMBER).toBe('123 456 789')
       expect(vars.SPONSOR_ADDRESS).toBe('Main Street 123, Oslo, Norway')
       expect(vars.SPONSOR_WEBSITE).toBe('https://acme.com')
     })
@@ -159,7 +159,7 @@ describe('contract-variables', () => {
       const vars = buildContractVariables(ctx)
 
       expect(vars.ORG_NAME).toBe('Cloud Native Bergen')
-      expect(vars.ORG_ORG_NUMBER).toBe('987654321')
+      expect(vars.ORG_ORG_NUMBER).toBe('987 654 321')
       expect(vars.ORG_ADDRESS).toBe('Conference Street 1, Bergen, Norway')
       expect(vars.ORG_EMAIL).toBe('sponsors@cloudnativebergen.no')
     })

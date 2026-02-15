@@ -1,4 +1,4 @@
-import { defineMigration, createIfNotExists } from 'sanity/migrate'
+import { defineMigration, createOrReplace } from 'sanity/migrate'
 
 function textBlock(text: string, key: string): Record<string, unknown> {
   return {
@@ -105,12 +105,16 @@ const TEMPLATES = [
 ]
 
 export default defineMigration({
-  title: 'Seed contract email templates',
+  title: 'Fix contract email templates with correct variables',
+  description:
+    'Overwrites existing contract email templates that used wrong variable ' +
+    'names (CONTACT_NAMES, SENDER_NAME, CONTRACT_CURRENCY) with the correct ' +
+    'variables (SIGNER_NAME, SPONSOR_NAME, etc.)',
   documentTypes: ['sponsorEmailTemplate'],
 
   async *migrate() {
     for (const template of TEMPLATES) {
-      yield createIfNotExists(template)
+      yield createOrReplace(template)
     }
   },
 })

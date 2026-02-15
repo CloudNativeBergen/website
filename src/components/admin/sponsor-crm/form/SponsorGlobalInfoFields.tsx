@@ -8,6 +8,7 @@ import {
   HashtagIcon,
   MapPinIcon,
 } from '@heroicons/react/24/outline'
+import { formatOrgNumber } from '@/lib/format'
 
 interface SponsorGlobalInfoFieldsProps {
   name: string
@@ -58,7 +59,7 @@ export function SponsorGlobalInfoFields({
           {orgNumber && (
             <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
               <HashtagIcon className="h-3 w-3 shrink-0" />
-              {orgNumber}
+              {formatOrgNumber(orgNumber)}
             </span>
           )}
           {address && (

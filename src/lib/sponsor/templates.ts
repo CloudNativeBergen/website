@@ -11,6 +11,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   international: 'International',
   'local-community': 'Local / Community',
   'follow-up': 'Follow-up',
+  contract: 'Contract',
   custom: 'Custom',
 }
 
@@ -37,6 +38,12 @@ export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   PROSPECTUS_URL: 'Sponsor prospectus/deck URL',
   SENDER_NAME: 'Name of the person sending the email',
   TIER_NAME: 'Sponsor tier name (if assigned)',
+  SIGNER_NAME: 'Name of the contract signer',
+  SIGNER_EMAIL: 'Email of the contract signer',
+  CONTRACT_VALUE: 'Contract total (e.g. "50,000 NOK")',
+  EVENT_URL: 'Conference website URL (https://...)',
+  EVENT_DATE: 'Conference date (long format)',
+  EVENT_LOCATION: 'Conference city / location',
 }
 
 const URL_VARIABLE_KEYS = new Set([

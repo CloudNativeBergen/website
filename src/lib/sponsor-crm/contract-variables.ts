@@ -3,6 +3,7 @@ import {
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
 import { formatDate, getCurrentDateTime } from '@/lib/time'
+import { formatOrgNumber } from '@/lib/format'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   SPONSOR_NAME: 'Legal name of the sponsor company',
@@ -86,7 +87,7 @@ export function buildContractVariables(
   }
 
   if (ctx.sponsor.orgNumber) {
-    vars.SPONSOR_ORG_NUMBER = ctx.sponsor.orgNumber
+    vars.SPONSOR_ORG_NUMBER = formatOrgNumber(ctx.sponsor.orgNumber)
   }
   if (ctx.sponsor.address) {
     vars.SPONSOR_ADDRESS = ctx.sponsor.address
@@ -142,7 +143,7 @@ export function buildContractVariables(
     vars.ORG_NAME = ctx.conference.organizer
   }
   if (ctx.conference.organizerOrgNumber) {
-    vars.ORG_ORG_NUMBER = ctx.conference.organizerOrgNumber
+    vars.ORG_ORG_NUMBER = formatOrgNumber(ctx.conference.organizerOrgNumber)
   }
   if (ctx.conference.organizerAddress) {
     vars.ORG_ADDRESS = ctx.conference.organizerAddress

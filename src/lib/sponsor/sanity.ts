@@ -379,6 +379,20 @@ export async function getSponsorEmailTemplate(
   }
 }
 
+export async function getSponsorEmailTemplateBySlug(
+  slug: string,
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await clientWrite.fetch(
+      `*[_type == "sponsorEmailTemplate" && slug.current == $slug][0] ${EMAIL_TEMPLATE_PROJECTION}`,
+      { slug },
+    )
+    return { template: template ?? undefined }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
 export async function createSponsorEmailTemplate(data: {
   title: string
   slug: string

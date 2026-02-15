@@ -246,55 +246,59 @@ export const signingRouter = router({
       // Send confirmation email (best-effort, non-critical)
       try {
         if (doc.conference?.sponsorEmail && doc.signerEmail) {
-          const { ContractSignedTemplate } =
-            await import('@/components/email/ContractSignedTemplate')
+          const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+            await import('@/lib/email/contract-email')
           const { resend, retryWithBackoff } =
             await import('@/lib/email/config')
-          const { formatConferenceDateLong } = await import('@/lib/time')
-          const React = await import('react')
 
           const contractValueStr = doc.contractValue
             ? `${doc.contractValue.toLocaleString()} ${doc.contractCurrency || 'NOK'}`
             : undefined
 
-          const eventUrl = doc.conference.domains?.[0]
-            ? `https://${doc.conference.domains[0]}`
-            : 'https://cloudnativeday.no'
+          const result = await renderContractEmail(
+            CONTRACT_EMAIL_SLUGS.SIGNED,
+            {
+              sponsorName: doc.sponsor?.name || 'Sponsor',
+              signerName: input.signerName,
+              tierName: doc.tier?.title,
+              contractValue: contractValueStr,
+              conference: {
+                title: doc.conference.title || 'Cloud Native Day',
+                city: doc.conference.city,
+                startDate: doc.conference.startDate,
+                domains: doc.conference.domains,
+                organizer: doc.conference.organizer,
+                sponsorEmail: doc.conference.sponsorEmail,
+                socialLinks: doc.conference.socialLinks,
+              },
+            },
+          )
 
-          const emailElement = React.createElement(ContractSignedTemplate, {
-            sponsorName: doc.sponsor?.name || 'Sponsor',
-            signerName: input.signerName,
-            tierName: doc.tier?.title,
-            contractValue: contractValueStr,
-            eventName: doc.conference.title || 'Cloud Native Day',
-            eventLocation: doc.conference.city || 'Norway',
-            eventDate: doc.conference.startDate
-              ? formatConferenceDateLong(doc.conference.startDate)
-              : '',
-            eventUrl,
-            socialLinks: doc.conference.socialLinks || [],
-          })
+          if (!result) {
+            console.error('[signing] Contract email template not found')
+          } else {
+            const fromEmail = doc.conference.sponsorEmail
+            const fromName = doc.conference.organizer || 'Cloud Native Days'
 
-          const fromEmail = doc.conference.sponsorEmail
-          const fromName = doc.conference.organizer || 'Cloud Native Days'
-          const eventName = doc.conference.title || 'Cloud Native Day'
-
-          await retryWithBackoff(async () => {
-            return resend.emails.send({
-              from: `${fromName} <${fromEmail}>`,
-              to: [doc.signerEmail],
-              subject: `Contract confirmed \u2013 Welcome aboard ${eventName}!`,
-              react: emailElement,
-              attachments: [
-                {
-                  filename,
-                  content: signedPdfBuffer,
-                },
-              ],
+            await retryWithBackoff(async () => {
+              return resend.emails.send({
+                from: `${fromName} <${fromEmail}>`,
+                to: [doc.signerEmail],
+                subject: result.subject,
+                react: result.react,
+                attachments: [
+                  {
+                    filename,
+                    content: signedPdfBuffer,
+                  },
+                ],
+              })
             })
-          })
 
-          console.log(`[signing] Confirmation email sent to ${doc.signerEmail}`)
+            console.log(
+              `[signing] Confirmation email sent to ${doc.signerEmail}`,
+            )
+          }
         }
       } catch (emailError) {
         console.error(

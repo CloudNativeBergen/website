@@ -41,8 +41,16 @@ jest.mock('@/lib/email/config', () => ({
   retryWithBackoff: async (fn: () => Promise<unknown>) => fn(),
 }))
 
-jest.mock('@/components/email/ContractReminderTemplate', () => ({
-  ContractReminderTemplate: () => null,
+jest.mock('@/lib/email/contract-email', () => ({
+  renderContractEmail: jest.fn<(...args: any[]) => any>().mockResolvedValue({
+    subject: 'Reminder: Sponsorship Agreement',
+    react: null,
+  }),
+  CONTRACT_EMAIL_SLUGS: {
+    SENT: 'contract-sent',
+    REMINDER: 'contract-reminder',
+    SIGNED: 'contract-signed',
+  },
 }))
 
 jest.mock('next/cache', () => ({

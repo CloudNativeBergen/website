@@ -10,6 +10,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import type { Conference } from '@/lib/conference/types'
+import { formatOrgNumber } from '@/lib/format'
 
 interface ConferenceOrgInfoPanelProps {
   conference: Conference
@@ -166,7 +167,9 @@ export function ConferenceOrgInfoPanel({
           <span className="truncate">{conference.organizer}</span>
         </div>
         <span className="text-xs text-gray-400 dark:text-gray-500">
-          {conference.organizerOrgNumber}
+          {conference.organizerOrgNumber
+            ? formatOrgNumber(conference.organizerOrgNumber)
+            : ''}
         </span>
         <span className="truncate text-xs text-gray-400 dark:text-gray-500">
           {conference.organizerAddress}

@@ -115,6 +115,7 @@ export type TemplateCategory =
   | 'international'
   | 'local-community'
   | 'follow-up'
+  | 'contract'
   | 'custom'
 
 export type TemplateLanguage = 'no' | 'en'

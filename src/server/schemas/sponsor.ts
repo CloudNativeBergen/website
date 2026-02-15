@@ -70,6 +70,7 @@ export const TemplateCategorySchema = z.enum([
   'international',
   'local-community',
   'follow-up',
+  'contract',
   'custom',
 ])
 
