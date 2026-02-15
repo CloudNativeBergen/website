@@ -1,8 +1,8 @@
 # Code Line Analysis Report
 
-**Generated:** February 10, 2026  
-**Total Lines of Code:** 224,555 lines  
-**Total Files Analyzed:** 849 files
+**Generated:** February 15, 2026  
+**Total Lines of Code:** 280,995 lines  
+**Total Files Analyzed:** 1,146 files
 
 This document provides a comprehensive breakdown of the codebase by analyzing different types of code: UI components, business logic, data access, tests, configuration, and more.
 
@@ -26,16 +26,16 @@ The script is located at `scripts/analyze-code-lines.ts` and automatically categ
 
 ## 📊 Executive Summary
 
-The Cloud Native Days Norway website codebase consists of approximately **224,555 lines** of TypeScript, JavaScript, JSON, CSS, and Markdown code spread across **849 files**.
+The Cloud Native Days Norway website codebase consists of approximately **280,995 lines** of TypeScript, JavaScript, JSON, CSS, and Markdown code spread across **1,146 files**.
 
 ### Key Insights:
 
-- **33.1% Business Logic** - Dominated by badge generation (OpenBadges spec and implementation)
-- **29.8% UI Components** - Split between admin interface (58.4%) and public-facing components (40.6%)
-- **6.9% UI Pages** - Next.js App Router pages
-- **6.7% Utilities** - Helper functions and shared logic
-- **6.2% Tests** - Unit and integration tests
-- **4.4% API** - tRPC routers and REST endpoints
+- **36.4% UI Components** - Split between admin interface (59.3%) and public-facing components (40.0%)
+- **26.6% Business Logic** - Dominated by badge generation (OpenBadges spec and implementation at 96.0%)
+- **7.4% Tests** - Unit and integration tests
+- **6.6% Utilities** - Helper functions and shared logic
+- **5.4% Documentation** - Markdown documentation and Storybook files
+- **4.3% API** - tRPC routers (69.3%) and REST endpoints (30.7%)
 
 ---
 
@@ -45,36 +45,36 @@ The Cloud Native Days Norway website codebase consists of approximately **224,55
 
 | Rank | Category | Lines | Percentage | Files | Description |
 |------|----------|-------|------------|-------|-------------|
-| 1 | Business Logic | 74,294 | 33.1% | 44 | Badge generation, email logic, authentication |
-| 2 | UI Components | 66,880 | 29.8% | 287 | Admin UI and public React components |
-| 3 | UI Pages | 15,560 | 6.9% | 64 | Next.js App Router pages and layouts |
-| 4 | Utilities | 15,020 | 6.7% | 136 | Helper functions and shared utilities |
-| 5 | Tests | 13,884 | 6.2% | 60 | Unit and integration tests |
-| 6 | API | 9,934 | 4.4% | 41 | tRPC routers and REST endpoints |
-| 7 | Documentation | 5,645 | 2.5% | 23 | Markdown documentation files |
-| 8 | Data Access | 5,052 | 2.2% | 15 | Sanity CMS queries |
-| 9 | Data Schemas | 4,972 | 2.2% | 34 | Sanity schemas and validation |
-| 10 | Migrations | 2,984 | 1.3% | 37 | Database migration scripts |
+| 1 | UI Components | 102,223 | 36.4% | 481 | Admin UI and public React components |
+| 2 | Business Logic | 74,705 | 26.6% | 46 | Badge generation, email logic, authentication |
+| 3 | Tests | 20,796 | 7.4% | 86 | Unit and integration tests |
+| 4 | Utilities | 18,457 | 6.6% | 151 | Helper functions and shared utilities |
+| 5 | Documentation | 15,202 | 5.4% | 44 | Markdown documentation and Storybook files |
+| 6 | API | 12,106 | 4.3% | 47 | tRPC routers and REST endpoints |
+| 7 | UI Pages | 11,453 | 4.1% | 70 | Next.js App Router pages and layouts |
+| 8 | Other | 5,458 | 1.9% | 64 | Miscellaneous files |
+| 9 | Data Schemas | 5,446 | 1.9% | 40 | Sanity schemas and validation |
+| 10 | Data Access | 5,139 | 1.8% | 15 | Sanity CMS queries |
 
 ### Visual Distribution
 
 ```
-Business Logic  ████████████████████████████████████ 33.1%
-UI Components   ██████████████████████████████ 29.8%
-UI Pages        ███████ 6.9%
-Utilities       ███████ 6.7%
-Tests           ██████ 6.2%
-API             ████ 4.4%
-Documentation   ██ 2.5%
-Data Access     ██ 2.2%
-Data Schemas    ██ 2.2%
-Other           ██ 2.2%
-Migrations      █ 1.3%
-UI Logic        █ 1.1%
-Styles          █ 0.5%
-Scripts         █ 0.4%
+UI Components   ████████████████████████████████████ 36.4%
+Business Logic  ███████████████████████ 26.6%
+Tests           ███████ 7.4%
+Utilities       ███████ 6.6%
+Documentation   █████ 5.4%
+API             ████ 4.3%
+UI Pages        ████ 4.1%
+Data Schemas    ██ 1.9%
+Data Access     ██ 1.8%
+Other           ██ 1.9%
+Migrations      █ 1.4%
+UI Logic        █ 0.9%
+Scripts         █ 0.5%
+Styles          █ 0.4%
 Config          █ 0.2%
-CMS             █ 0.2%
+CMS             █ 0.1%
 Server Logic    █ 0.0%
 Types           █ 0.0%
 ```
@@ -83,14 +83,14 @@ Types           █ 0.0%
 
 ## 🔍 Detailed Category Breakdown
 
-### 1. Business Logic (74,294 lines - 33.1%)
+### 2. Business Logic (74,705 lines - 26.6%)
 
 The business logic category is dominated by the OpenBadges implementation, which includes the full specification and credential schemas.
 
 **Subcategories:**
-- **Badge Generation** (71,741 lines - 96.6%): OpenBadges specification, schemas, and badge generation logic
-- **Email Logic** (2,035 lines - 2.7%): Email templates and sending functionality
-- **Authentication** (518 lines - 0.7%): NextAuth.js configuration and helpers
+- **Badge Generation** (71,741 lines - 96.0%): OpenBadges specification, schemas, and badge generation logic
+- **Email Logic** (2,179 lines - 2.9%): Email templates and sending functionality
+- **Authentication** (785 lines - 1.1%): NextAuth.js configuration and helpers
 
 **Largest Files:**
 - `src/lib/openbadges/spec/spec-e-schema.md` - 61,042 lines (OpenBadges specification)
@@ -101,21 +101,21 @@ The business logic category is dominated by the OpenBadges implementation, which
 
 ---
 
-### 2. UI Components (66,880 lines - 29.8%)
+### 1. UI Components (102,223 lines - 36.4%)
 
 React components for both the admin interface and public-facing pages.
 
 **Subcategories:**
-- **Admin UI** (39,057 lines - 58.4%): Admin dashboard, proposal management, schedule editor, sponsor management
-- **React Components** (27,147 lines - 40.6%): Public-facing UI components, speaker cards, program views
-- **UI Utilities** (676 lines - 1.0%): Shared component helpers
+- **Admin UI** (60,617 lines - 59.3%): Admin dashboard, proposal management, schedule editor, sponsor management, CRM pipeline
+- **React Components** (40,917 lines - 40.0%): Public-facing UI components, speaker cards, program views
+- **UI Utilities** (689 lines - 0.7%): Shared component helpers
 
 **Largest Files:**
 - `src/components/admin/MemeGenerator.tsx` - 1,105 lines
-- `src/components/admin/schedule/DroppableTrack.tsx` - 1,043 lines
+- `src/components/admin/schedule/DroppableTrack.tsx` - 1,041 lines
 - `src/components/travel-support/TravelSupportAdminPage.tsx` - 974 lines
-- `src/components/admin/sponsor/SponsorTierEditor.tsx` - 924 lines
-- `src/components/admin/schedule/ScheduleEditor.tsx` - 893 lines
+- `src/components/admin/sponsor/SponsorTierEditor.tsx` - 916 lines
+- `src/components/admin/sponsor-crm/SponsorCRMPipeline.tsx` - 897 lines
 
 ---
 
@@ -134,102 +134,116 @@ Next.js 15+ App Router pages and layouts.
 
 ---
 
-### 4. Utilities (15,020 lines - 6.7%)
+### 4. Utilities (18,457 lines - 6.6%)
 
 Helper functions, shared logic, and utility modules used throughout the application.
 
 **Largest Files:**
 - `src/lib/dashboard/widget-registry.ts` - 812 lines
+- `src/lib/sponsor-crm/contract-pdf.tsx` - 569 lines
 - `src/lib/slack/weeklyUpdate.ts` - 414 lines
-- `src/lib/tickets/api.ts` - 356 lines
-- `src/lib/tickets/public.ts` - 356 lines
-- `src/lib/time.ts` - 334 lines
+- `src/lib/sponsor/templates.ts` - 394 lines
+- `src/lib/slack/notify.ts` - 393 lines
 
 ---
 
-### 5. Tests (13,884 lines - 6.2%)
+### 3. Tests (20,796 lines - 7.4%)
 
 Unit and integration tests using Jest and Testing Library.
 
 **Subcategories:**
-- **Unit Tests** (13,884 lines - 100%): All test files
+- **Unit Tests** (20,796 lines - 100%): All test files
 
 **Largest Test Files:**
 - `__tests__/lib/dashboard/actions.test.ts` - 889 lines
 - `__tests__/lib/openbadges/openbadges.test.ts` - 855 lines
 - `__tests__/lib/slack/weeklyUpdate.test.ts` - 662 lines
-- `__tests__/lib/sponsor/sponsorForConference.test.ts` - 593 lines
+- `__tests__/lib/sponsor/sponsorForConference.test.ts` - 646 lines
+- `__tests__/lib/pdf/signature-smoke.test.ts` - 610 lines
 
-**Test Coverage:** 60 test files covering business logic, API endpoints, and utilities.
+**Test Coverage:** 86 test files covering business logic, API endpoints, and utilities.
+
+### 5. Documentation (15,202 lines - 5.4%)
+
+Markdown documentation files and Storybook stories covering various aspects of the system.
+
+**Largest Documentation Files:**
+- `src/docs/SponsorSystem.stories.tsx` - 1,062 lines
+- `src/docs/design-system/examples/ConferenceLandingPage.stories.tsx` - 883 lines
+- `docs/SPONSOR_SYSTEM.md` - 849 lines
+- `src/docs/design-system/examples/AdminPages.stories.tsx` - 747 lines
+- `src/docs/design-system/examples/SpeakerComponents.stories.tsx` - 628 lines
 
 ---
 
-### 6. API (9,934 lines - 4.4%)
+### 6. API (12,106 lines - 4.3%)
 
 API layer built with tRPC and Next.js API routes.
 
 **Subcategories:**
-- **tRPC Routers** (6,722 lines - 67.7%): Type-safe API with React Query integration
-- **REST Endpoints** (3,212 lines - 32.3%): Next.js API routes
+- **tRPC Routers** (8,386 lines - 69.3%): Type-safe API with React Query integration
+- **REST Endpoints** (3,720 lines - 30.7%): Next.js API routes
 
 **Largest Files:**
+- `src/server/routers/sponsor.ts` - 2,180 lines
 - `src/server/routers/proposal.ts` - 1,279 lines
-- `src/server/routers/sponsor.ts` - 1,195 lines
 - `src/server/routers/badge.ts` - 783 lines
 - `src/server/routers/travelSupport.ts` - 766 lines
 
 ---
 
-### 7. Documentation (5,645 lines - 2.5%)
+### 7. UI Pages (11,453 lines - 4.1%)
 
-Markdown documentation files covering various aspects of the system.
+Next.js 15+ App Router pages and layouts.
 
-**Largest Documentation Files:**
-- `docs/ATTACHMENT_STORAGE.md` - 568 lines
-- `docs/EMAIL_SYSTEM.md` - 546 lines
-- `docs/IMPERSONATION_SECURITY.md` - 384 lines
-- `docs/BRANDING.md` - 377 lines
-- `docs/OPENBADGES_IMPLEMENTATION.md` - 360 lines
+**Subcategories:**
+- **App Router Pages** (11,453 lines - 100%): All page.tsx and layout.tsx files
+
+**Largest Files:**
+- `src/app/(main)/privacy/page.tsx` - 1,669 lines
+- `src/app/(admin)/admin/tickets/page.tsx` - 659 lines
+- `src/app/(admin)/admin/marketing/page.tsx` - 543 lines
+- `src/app/(main)/terms/page.tsx` - 527 lines
 
 ---
 
-### 8. Data Access (5,052 lines - 2.2%)
+### 8. Data Access (5,139 lines - 1.8%)
 
 Sanity CMS queries and data fetching logic.
 
 **Subcategories:**
-- **CMS Queries** (5,052 lines - 100%): Sanity GROQ queries
+- **CMS Queries** (5,139 lines - 100%): Sanity GROQ queries
 
 **Largest Files:**
+- `src/lib/sponsor-crm/sanity.ts` - 683 lines
 - `src/lib/proposal/data/sanity.ts` - 632 lines
 - `src/lib/workshop/sanity.ts` - 563 lines
-- `src/lib/sponsor-crm/sanity.ts` - 560 lines
-- `src/lib/sponsor/sanity.ts` - 554 lines
+- `src/lib/gallery/sanity.ts` - 543 lines
 
 ---
 
-### 9. Data Schemas (4,972 lines - 2.2%)
+### 9. Data Schemas (5,446 lines - 1.9%)
 
 Schema definitions for both Sanity CMS and input validation.
 
 **Subcategories:**
-- **Sanity Schemas** (4,019 lines - 80.8%): Content models
-- **Validation Schemas** (953 lines - 19.2%): Zod validation schemas
+- **Sanity Schemas** (4,291 lines - 78.8%): Content models
+- **Validation Schemas** (1,155 lines - 21.2%): Zod validation schemas
 
 **Largest Schema Files:**
-- `sanity/schemaTypes/conference.ts` - 952 lines
-- `sanity/schemaTypes/sponsorForConference.ts` - 360 lines
-- `sanity/schemaTypes/talk.ts` - 256 lines
-- `sanity/schemaTypes/speaker.ts` - 253 lines
+- `sanity/schemaTypes/conference.ts` - 872 lines
+- `sanity/schemaTypes/sponsorForConference.ts` - 477 lines
+- `sanity/schemaTypes/talk.ts` - 268 lines
+- `sanity/schemaTypes/speaker.ts` - 233 lines
 
 ---
 
-### 10. UI Logic (2,463 lines - 1.1%)
+### 10. UI Logic (2,462 lines - 0.9%)
 
 Custom React hooks and context providers.
 
 **Subcategories:**
-- **React Hooks** (2,338 lines - 94.9%): Custom hooks for state management
+- **React Hooks** (2,337 lines - 94.9%): Custom hooks for state management
 - **React Contexts** (125 lines - 5.1%): Context providers
 
 **Largest Files:**
@@ -243,24 +257,25 @@ Custom React hooks and context providers.
 
 ### Architecture Highlights
 
-1. **Component-Based Architecture**: 287 UI component files with clear separation between admin and public interfaces
-2. **Type Safety**: Strong TypeScript usage with 34 schema files and comprehensive type definitions
-3. **Test Coverage**: 60 test files covering critical business logic and API endpoints
-4. **API Layer**: Modern tRPC implementation (67.7%) alongside traditional REST endpoints
-5. **Documentation**: Well-documented with 23 markdown files totaling 5,645 lines
+1. **Component-Based Architecture**: 481 UI component files with clear separation between admin and public interfaces
+2. **Type Safety**: Strong TypeScript usage with 40 schema files and comprehensive type definitions
+3. **Test Coverage**: 86 test files covering critical business logic and API endpoints (7.4% of codebase)
+4. **API Layer**: Modern tRPC implementation (69.3%) alongside traditional REST endpoints
+5. **Documentation**: Well-documented with 44 documentation files totaling 15,202 lines (5.4%)
 
 ### Code Distribution Patterns
 
-- **Frontend-Heavy**: 63% of code is UI-related (components + pages + logic)
-- **Backend Logic**: 33% business logic (primarily badge generation)
-- **Testing**: 6.2% test coverage (13,884 lines of tests)
+- **Frontend-Heavy**: 51% of code is UI-related (components + pages + logic)
+- **Backend Logic**: 27% business logic (primarily badge generation)
+- **Testing**: 7.4% test coverage (20,796 lines of tests)
 - **Configuration**: Minimal config overhead (0.2%)
 
 ### Complexity Analysis
 
 **Large Files (>1000 lines):**
-- 1 page file (branding page with design system examples)
 - 2 component files (MemeGenerator, DroppableTrack)
+- 1 page file (privacy page)
+- 1 router file (sponsor router - 2,180 lines)
 - Several specification/documentation files (OpenBadges spec)
 
 **Recommendation:** Consider refactoring files over 1,000 lines into smaller, more focused modules.
@@ -269,13 +284,15 @@ Custom React hooks and context providers.
 
 ## 🔄 Migration & Maintenance
 
-### Migrations (2,984 lines - 1.3%)
+### Migrations (4,017 lines - 1.4%)
 
-37 migration files covering schema updates, data migrations, and seeding operations.
+49 migration files covering schema updates, data migrations, and seeding operations.
 
 **Recent Migrations:**
 - Conference-scoped entities (talks, sponsors, reviews)
+- CamelCase field names standardization
 - Sponsor contact and billing data restructuring
+- Digital contract signing functionality
 - Ticket page content seeding
 - Email template seeding
 
@@ -283,27 +300,30 @@ Custom React hooks and context providers.
 
 ## 📦 Supporting Files
 
-### Configuration (482 lines - 0.2%)
+### Configuration (529 lines - 0.2%)
 - Next.js, TypeScript, ESLint, Prettier, Tailwind, Sanity configurations
 - Package management (package.json)
 
-### Scripts (804 lines - 0.4%)
+### Scripts (1,429 lines - 0.5%)
+- Code analysis utilities
 - File management utilities
 - Data cleanup scripts
+- PDF generation tools
 - Development tools
 
-### Styles (1,157 lines - 0.5%)
+### Styles (1,161 lines - 0.4%)
 - Single Tailwind CSS file with custom styles
 
 ---
 
 ## 💡 Recommendations
 
-1. **Badge Generation Refactoring**: Consider extracting the OpenBadges specification into a separate documentation repository to reduce codebase size
+1. **Component Organization**: Continue maintaining the strong separation between admin and public components
 2. **Component Size**: Review and refactor large component files (>500 lines) into smaller, more maintainable units
-3. **Test Coverage**: Expand test coverage to include more UI components (currently focused on business logic)
-4. **Documentation**: Continue maintaining excellent documentation practices
-5. **Type Safety**: Expand type definitions to reduce reliance on the "other" category
+3. **Test Coverage**: Expand test coverage to include more UI components (currently focused on business logic and API)
+4. **Documentation**: Maintain excellent documentation practices - now at 5.4% of codebase with Storybook integration
+5. **Type Safety**: Continue expanding type definitions to reduce reliance on the "other" category
+6. **Sponsor System**: The new sponsor CRM system adds significant functionality - consider splitting into smaller modules if it continues to grow
 
 ---
 
@@ -313,11 +333,17 @@ The Cloud Native Days Norway website is a well-structured Next.js application wi
 
 - Strong separation of concerns (UI, API, business logic)
 - Modern tech stack (Next.js 15+, tRPC, Sanity CMS)
-- Comprehensive documentation
-- Good test coverage of critical paths
+- Comprehensive documentation (5.4% of codebase)
+- Good test coverage of critical paths (7.4%)
 - Type-safe API layer with tRPC
+- Growing sponsor management system with CRM capabilities
 
-The codebase reflects a mature application with a focus on badge generation and conference management, featuring both a public-facing website and a sophisticated admin interface.
+The codebase reflects a mature application with a focus on badge generation and conference management, featuring both a public-facing website and a sophisticated admin interface with integrated sponsor CRM.
+
+**Recent Growth (since Feb 10, 2026):**
+- **+56,440 lines** (25% increase)
+- **+297 files** (35% increase)
+- Major additions: Sponsor CRM system, digital contract signing, enhanced documentation
 
 ---
 
