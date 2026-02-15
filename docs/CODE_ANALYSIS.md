@@ -1,7 +1,7 @@
 # Code Line Analysis Report
 
-**Generated:** February 15, 2026  
-**Total Lines of Code:** 281,029 lines  
+**Generated:** February 15, 2026
+**Total Lines of Code:** 281,029 lines
 **Total Files Analyzed:** 1,166 files
 
 This document provides a comprehensive breakdown of the codebase by analyzing different types of code: UI components, business logic, data access, tests, configuration, and more.
