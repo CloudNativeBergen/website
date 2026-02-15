@@ -52,8 +52,9 @@ export function SponsorContractView({
       setPdfData(data.pdf)
       setPdfFilename(data.filename)
       setStep('preview')
+      setError(null)
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => setError(friendlyError(err.message)),
   })
 
   const sendContract = api.sponsor.crm.sendContract.useMutation({
@@ -61,22 +62,36 @@ export function SponsorContractView({
       onSuccess?.()
       setStep('overview')
       setPdfData(null)
+      setError(null)
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => setError(friendlyError(err.message)),
   })
 
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+
   const checkStatus = api.sponsor.crm.checkSignatureStatus.useMutation({
-    onSuccess: () => onSuccess?.(),
-    onError: (err) =>
-      setError(`Failed to check signature status: ${err.message}`),
+    onSuccess: (data) => {
+      onSuccess?.()
+      if (data.changed) {
+        setStatusMessage(`Signing status updated: ${data.signatureStatus}.`)
+      } else {
+        setStatusMessage('No status change — still awaiting signature.')
+      }
+      setError(null)
+      setTimeout(() => setStatusMessage(null), 5000)
+    },
+    onError: (err) => setError(friendlyError(err.message)),
   })
 
   const handleGeneratePdf = () => {
     if (!bestTemplate) {
-      setError('No contract template found for this sponsor&apos;s tier.')
+      setError(
+        'No contract template found for this sponsor\u2019s tier. Create one in Settings first.',
+      )
       return
     }
     setError(null)
+    setStatusMessage(null)
     generatePdf.mutate({
       sponsorForConferenceId: sponsor._id,
       templateId: bestTemplate._id,
@@ -86,6 +101,7 @@ export function SponsorContractView({
   const handleSend = () => {
     if (!pdfData || !bestTemplate) return
     setError(null)
+    setStatusMessage(null)
     sendContract.mutate({
       sponsorForConferenceId: sponsor._id,
       templateId: bestTemplate._id,
@@ -378,22 +394,29 @@ export function SponsorContractView({
             .
           </p>
         ) : isPendingSignature ? (
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Awaiting signature from {sponsor.signerEmail || 'signer'}.
-            </p>
-            <button
-              type="button"
-              onClick={() => checkStatus.mutate({ id: sponsor._id })}
-              disabled={checkStatus.isPending}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
-              title="Check signing status with Adobe Sign"
-            >
-              <ArrowPathIcon
-                className={`h-3.5 w-3.5 ${checkStatus.isPending ? 'animate-spin' : ''}`}
-              />
-              Check status
-            </button>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Awaiting signature from {sponsor.signerEmail || 'signer'}.
+              </p>
+              <button
+                type="button"
+                onClick={() => checkStatus.mutate({ id: sponsor._id })}
+                disabled={checkStatus.isPending}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
+                title="Check signing status with Adobe Sign"
+              >
+                <ArrowPathIcon
+                  className={`h-3.5 w-3.5 ${checkStatus.isPending ? 'animate-spin' : ''}`}
+                />
+                Check status
+              </button>
+            </div>
+            {statusMessage && (
+              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                {statusMessage}
+              </p>
+            )}
           </div>
         ) : isSent ? (
           <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -430,4 +453,42 @@ function getPrimaryContact(sponsor: SponsorForConferenceExpanded) {
 
 function getPrimaryContactEmail(sponsor: SponsorForConferenceExpanded) {
   return getPrimaryContact(sponsor)?.email || null
+}
+
+const ERROR_PATTERNS: Array<[RegExp, string]> = [
+  [
+    /not connected|connect via oauth/i,
+    'Adobe Sign is not connected. Ask an admin to connect it in Settings.',
+  ],
+  [
+    /no contract template/i,
+    'No contract template found. Create one in the contract templates section first.',
+  ],
+  [
+    /contact person/i,
+    'A contact person with name and email is required. Complete sponsor registration first.',
+  ],
+  [
+    /conference title/i,
+    'Conference title is missing. Update the conference settings.',
+  ],
+  [
+    /empty document/i,
+    'The generated PDF was empty. Check the template configuration.',
+  ],
+  [
+    /upload.*failed/i,
+    'Failed to upload the contract. Please check your connection and try again.',
+  ],
+  [
+    /signing agreement/i,
+    'Failed to create the signing agreement. The contract was generated but not sent for signing.',
+  ],
+]
+
+function friendlyError(message: string): string {
+  for (const [pattern, friendly] of ERROR_PATTERNS) {
+    if (pattern.test(message)) return friendly
+  }
+  return message
 }

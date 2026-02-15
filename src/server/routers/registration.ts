@@ -46,11 +46,18 @@ export const registrationRouter = router({
         await completeRegistration(token, data as RegistrationSubmission)
 
       if (error || !success) {
+        const isConflict = error?.message.includes('already been completed')
+        if (!isConflict) {
+          console.error(
+            '[registration.complete] Registration failed:',
+            error?.message,
+          )
+        }
         throw new TRPCError({
-          code: error?.message.includes('already been completed')
-            ? 'CONFLICT'
-            : 'INTERNAL_SERVER_ERROR',
-          message: error?.message || 'Failed to complete registration',
+          code: isConflict ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
+          message:
+            error?.message ||
+            'Failed to complete registration. Please try again.',
         })
       }
 

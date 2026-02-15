@@ -34,12 +34,18 @@ export async function generateAndSendContract(
     actorId?: string
   },
 ): Promise<SendContractResult> {
+  const logCtx = `[contract-send] sfc=${sponsorForConferenceId}`
+
   const { sponsorForConference: sfc, error: sfcError } =
     await getSponsorForConference(sponsorForConferenceId)
 
   if (sfcError || !sfc) {
+    console.error(`${logCtx} Sponsor relationship lookup failed:`, sfcError)
     return { success: false, error: 'Sponsor relationship not found' }
   }
+
+  const sponsorName = sfc.sponsor?.name || 'Unknown sponsor'
+  const logCtxFull = `${logCtx} sponsor="${sponsorName}"`
 
   // Find the best template if not explicitly provided
   let templateId = options?.templateId
@@ -49,22 +55,34 @@ export async function generateAndSendContract(
       sfc.tier?._id,
     )
     if (bestError || !best) {
-      return { success: false, error: 'No contract template found' }
+      console.error(`${logCtxFull} No contract template found:`, bestError)
+      return {
+        success: false,
+        error: `No contract template found for tier "${sfc.tier?.title || 'unknown'}". Create a template in Settings first.`,
+      }
     }
     templateId = best._id
   }
 
-  const { template, error: templateError } = await getContractTemplate(
-    templateId!,
-  )
+  const { template, error: templateError } =
+    await getContractTemplate(templateId)
   if (templateError || !template) {
-    return { success: false, error: 'Contract template not found' }
+    console.error(
+      `${logCtxFull} Template ${templateId} not found:`,
+      templateError,
+    )
+    return {
+      success: false,
+      error: 'Contract template not found. It may have been deleted.',
+    }
   }
 
   if (!sfc.conference?.title) {
+    console.error(`${logCtxFull} Conference missing title`)
     return {
       success: false,
-      error: 'Conference title is required for contract generation',
+      error:
+        'Conference title is required for contract generation. Update the conference settings.',
     }
   }
 
@@ -73,18 +91,21 @@ export async function generateAndSendContract(
     sfc.contactPersons?.[0]
 
   if (!primaryContact?.name || !primaryContact?.email) {
+    console.error(`${logCtxFull} Missing contact person with name and email`)
     return {
       success: false,
-      error: 'A contact person with name and email is required',
+      error:
+        'A contact person with name and email is required. Complete sponsor registration first.',
     }
   }
 
   const signerEmail =
     options?.signerEmail || sfc.signerEmail || primaryContact.email
 
+  // Generate the PDF
+  let pdfBuffer: Buffer
   try {
-    // Generate the PDF
-    const pdfBuffer = await generateContractPdf(template, {
+    pdfBuffer = await generateContractPdf(template, {
       sponsor: {
         name: sfc.sponsor.name,
         orgNumber: sfc.sponsor.orgNumber,
@@ -111,107 +132,168 @@ export async function generateAndSendContract(
         sponsorEmail: sfc.conference.sponsorEmail,
       },
     })
-
-    const filename = `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`
-
-    // Upload PDF to Sanity
-    const asset = await clientWrite.assets.upload('file', pdfBuffer, {
-      filename,
-      contentType: 'application/pdf',
-    })
-
-    const now = getCurrentDateTime()
-    const updateFields: Record<string, unknown> = {
-      contractStatus: 'contract-sent',
-      contractSentAt: now,
-      contractTemplate: { _type: 'reference', _ref: templateId },
-      contractDocument: {
-        _type: 'file',
-        asset: { _type: 'reference', _ref: asset._id },
-      },
-    }
-
-    if (signerEmail) {
-      updateFields.signerEmail = signerEmail
-      updateFields.signatureStatus = 'pending'
-    }
-
-    // Send to Adobe Sign
-    let agreementId: string | undefined
-    let signingUrl: string | undefined
-    if (signerEmail) {
-      try {
-        const transientDoc = await uploadTransientDocument(
-          session,
-          pdfBuffer,
-          filename,
-        )
-        const agreement = await createAgreement(session, {
-          name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
-          participantEmail: signerEmail,
-          message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-          fileInfos: [
-            { transientDocumentId: transientDoc.transientDocumentId },
-          ],
-        })
-        agreementId = agreement.id
-        updateFields.signatureId = agreementId
-
-        // Capture signing URL for portal display and email notification
-        try {
-          const urlInfo = await getSigningUrls(session, agreementId)
-          const signerUrl = urlInfo.signingUrls?.find(
-            (u) => u.email === signerEmail,
-          )
-          if (signerUrl) {
-            signingUrl = signerUrl.esignUrl
-            updateFields.signingUrl = signingUrl
-          }
-        } catch (urlError) {
-          console.warn('Failed to capture signing URL (non-fatal):', urlError)
-        }
-      } catch (signError) {
-        console.error('Adobe Sign agreement creation failed:', signError)
-      }
-    }
-
-    await clientWrite.patch(sponsorForConferenceId).set(updateFields).commit()
-
-    // Log activity
-    const actorId = options?.actorId || 'system'
-    const oldContractStatus = sfc.contractStatus
-    try {
-      await logContractStatusChange(
-        sponsorForConferenceId,
-        oldContractStatus,
-        'contract-sent',
-        actorId,
-      )
-    } catch (logError) {
-      console.error('Failed to log contract send activity:', logError)
-    }
-
-    if (signerEmail) {
-      const oldSignatureStatus = sfc.signatureStatus ?? 'not-started'
-      try {
-        await logSignatureStatusChange(
-          sponsorForConferenceId,
-          oldSignatureStatus,
-          'pending',
-          actorId,
-        )
-      } catch (logError) {
-        console.error('Failed to log signature status change:', logError)
-      }
-    }
-
-    return { success: true, agreementId, signingUrl }
-  } catch (error) {
-    console.error('Contract generation/send failed:', error)
+  } catch (pdfError) {
+    console.error(`${logCtxFull} PDF generation failed:`, pdfError)
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : 'Contract generation failed',
+        'Failed to generate contract PDF. Check that the template is valid.',
     }
   }
+
+  if (!pdfBuffer || pdfBuffer.length === 0) {
+    console.error(`${logCtxFull} PDF generation returned empty buffer`)
+    return {
+      success: false,
+      error:
+        'Contract PDF generation produced an empty document. Check the template configuration.',
+    }
+  }
+
+  const filename = `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`
+
+  // Upload PDF to Sanity
+  let asset: { _id: string }
+  try {
+    asset = await clientWrite.assets.upload('file', pdfBuffer, {
+      filename,
+      contentType: 'application/pdf',
+    })
+  } catch (uploadError) {
+    console.error(`${logCtxFull} Sanity asset upload failed:`, uploadError)
+    return {
+      success: false,
+      error: 'Failed to upload contract PDF. Please try again.',
+    }
+  }
+
+  if (!asset?._id) {
+    console.error(`${logCtxFull} Asset upload returned no ID`)
+    return {
+      success: false,
+      error: 'Contract PDF upload failed — no asset reference returned.',
+    }
+  }
+
+  const now = getCurrentDateTime()
+  const updateFields: Record<string, unknown> = {
+    contractStatus: 'contract-sent',
+    contractSentAt: now,
+    contractTemplate: { _type: 'reference', _ref: templateId },
+    contractDocument: {
+      _type: 'file',
+      asset: { _type: 'reference', _ref: asset._id },
+    },
+  }
+
+  if (signerEmail) {
+    updateFields.signerEmail = signerEmail
+    updateFields.signatureStatus = 'pending'
+  }
+
+  // Send to Adobe Sign
+  let agreementId: string | undefined
+  let signingUrl: string | undefined
+  if (signerEmail) {
+    try {
+      const transientDoc = await uploadTransientDocument(
+        session,
+        pdfBuffer,
+        filename,
+      )
+
+      if (!transientDoc?.transientDocumentId) {
+        throw new Error('Adobe Sign returned no transient document ID')
+      }
+
+      const agreement = await createAgreement(session, {
+        name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
+        participantEmail: signerEmail,
+        message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
+        fileInfos: [{ transientDocumentId: transientDoc.transientDocumentId }],
+      })
+
+      if (!agreement?.id) {
+        throw new Error('Adobe Sign returned no agreement ID')
+      }
+
+      agreementId = agreement.id
+      updateFields.signatureId = agreementId
+
+      // Capture signing URL for portal display and email notification
+      try {
+        const urlInfo = await getSigningUrls(session, agreementId)
+        const signerUrl = urlInfo.signingUrls?.find(
+          (u) => u.email === signerEmail,
+        )
+        if (signerUrl) {
+          signingUrl = signerUrl.esignUrl
+          updateFields.signingUrl = signingUrl
+        }
+      } catch (urlError) {
+        console.warn(
+          `${logCtxFull} Failed to capture signing URL (non-fatal):`,
+          urlError,
+        )
+      }
+    } catch (signError) {
+      console.error(
+        `${logCtxFull} Adobe Sign agreement creation failed:`,
+        signError,
+      )
+      // Do NOT mark as contract-sent if signing was requested but failed
+      return {
+        success: false,
+        error:
+          'Failed to create digital signing agreement. The contract PDF was generated but not sent for signing. Please try again.',
+      }
+    }
+  }
+
+  try {
+    await clientWrite.patch(sponsorForConferenceId).set(updateFields).commit()
+  } catch (patchError) {
+    console.error(`${logCtxFull} Failed to update sponsor record:`, patchError)
+    return {
+      success: false,
+      error:
+        'Contract was generated but failed to update the sponsor record. Please try again.',
+    }
+  }
+
+  // Log activity (non-critical)
+  const actorId = options?.actorId || 'system'
+  const oldContractStatus = sfc.contractStatus
+  try {
+    await logContractStatusChange(
+      sponsorForConferenceId,
+      oldContractStatus,
+      'contract-sent',
+      actorId,
+    )
+  } catch (logError) {
+    console.error(
+      `${logCtxFull} Failed to log contract send activity:`,
+      logError,
+    )
+  }
+
+  if (signerEmail) {
+    const oldSignatureStatus = sfc.signatureStatus ?? 'not-started'
+    try {
+      await logSignatureStatusChange(
+        sponsorForConferenceId,
+        oldSignatureStatus,
+        'pending',
+        actorId,
+      )
+    } catch (logError) {
+      console.error(
+        `${logCtxFull} Failed to log signature status change:`,
+        logError,
+      )
+    }
+  }
+
+  return { success: true, agreementId, signingUrl }
 }

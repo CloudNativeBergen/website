@@ -125,37 +125,43 @@ export function SponsorPortalSection({
               </button>
             )}
           </div>
-          {sendInviteMutation.isError && (
+          {(sendInviteMutation.isError || generateMutation.isError) && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              {sendInviteMutation.error.message}
+              {sendInviteMutation.error?.message ||
+                generateMutation.error?.message}
             </p>
           )}
         </div>
       ) : (
-        <div className="mt-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleSendEmail}
-            disabled={isBusy}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-          >
-            <EnvelopeIcon className="h-4 w-4" />
-            {sendInviteMutation.isPending
-              ? 'Sending\u2026'
-              : 'Send registration email'}
-          </button>
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={isBusy}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700"
-          >
-            <LinkIcon className="h-4 w-4" />
-            {generateMutation.isPending ? 'Generating\u2026' : 'Copy link only'}
-          </button>
-          {sendInviteMutation.isError && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSendEmail}
+              disabled={isBusy}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            >
+              <EnvelopeIcon className="h-4 w-4" />
+              {sendInviteMutation.isPending
+                ? 'Sending\u2026'
+                : 'Send registration email'}
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isBusy}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700"
+            >
+              <LinkIcon className="h-4 w-4" />
+              {generateMutation.isPending
+                ? 'Generating\u2026'
+                : 'Copy link only'}
+            </button>
+          </div>
+          {(sendInviteMutation.isError || generateMutation.isError) && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              {sendInviteMutation.error.message}
+              {sendInviteMutation.error?.message ||
+                generateMutation.error?.message}
             </p>
           )}
         </div>

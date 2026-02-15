@@ -1048,6 +1048,8 @@ export const sponsorRouter = router({
     checkSignatureStatus: adminProcedure
       .input(SponsorForConferenceIdSchema)
       .mutation(async ({ input, ctx }) => {
+        const logCtx = `[checkSignatureStatus] sfc=${input.id}`
+
         const session = await getAdobeSignSession()
         if (!session) {
           throw new TRPCError({
@@ -1057,24 +1059,51 @@ export const sponsorRouter = router({
           })
         }
 
-        const { sponsorForConference: sfc } = await getSponsorForConference(
-          input.id,
-        )
+        const { sponsorForConference: sfc, error: sfcError } =
+          await getSponsorForConference(input.id)
         if (!sfc) {
+          console.error(`${logCtx} Sponsor lookup failed:`, sfcError)
           throw new TRPCError({
             code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found',
+            message: 'Sponsor relationship not found.',
           })
         }
 
         if (!sfc.signatureId) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'No signing agreement found for this contract',
+            message:
+              'No signing agreement found for this contract. Send the contract for signing first.',
           })
         }
 
-        const agreement = await getAgreement(session, sfc.signatureId)
+        let agreement: { status: string }
+        try {
+          agreement = await getAgreement(session, sfc.signatureId)
+        } catch (adobeError) {
+          console.error(
+            `${logCtx} Failed to fetch agreement ${sfc.signatureId}:`,
+            adobeError,
+          )
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Failed to check signing status with Adobe Sign. The service may be temporarily unavailable.',
+            cause: adobeError,
+          })
+        }
+
+        if (!agreement?.status) {
+          console.error(
+            `${logCtx} Adobe Sign returned no status for agreement ${sfc.signatureId}`,
+          )
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Adobe Sign returned an unexpected response. Please try again.',
+          })
+        }
+
         const currentStatus = sfc.signatureStatus || 'not-started'
 
         const statusMap: Record<string, string> = {
@@ -1091,9 +1120,8 @@ export const sponsorRouter = router({
         const newStatus = statusMap[agreement.status] || currentStatus
         if (!statusMap[agreement.status]) {
           console.warn(
-            '[Adobe Sign] Unknown agreement status: %s for SFC %s',
+            `${logCtx} Unknown agreement status: %s`,
             agreement.status,
-            input.id,
           )
         }
 
@@ -1106,7 +1134,20 @@ export const sponsorRouter = router({
             updateFields.contractSignedAt = getCurrentDateTime()
           }
 
-          await clientWrite.patch(input.id).set(updateFields).commit()
+          try {
+            await clientWrite.patch(input.id).set(updateFields).commit()
+          } catch (patchError) {
+            console.error(
+              `${logCtx} Failed to update signature status:`,
+              patchError,
+            )
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                'Signing status was retrieved but failed to save the update. Please try again.',
+              cause: patchError,
+            })
+          }
 
           const userId = ctx.speaker._id
           if (userId) {
@@ -1118,7 +1159,10 @@ export const sponsorRouter = router({
                 userId,
               )
             } catch (logError) {
-              console.error('Failed to log signature status change:', logError)
+              console.error(
+                `${logCtx} Failed to log signature status change:`,
+                logError,
+              )
             }
           }
         }
@@ -1133,29 +1177,43 @@ export const sponsorRouter = router({
     updateSignatureStatus: adminProcedure
       .input(UpdateSignatureStatusSchema)
       .mutation(async ({ input, ctx }) => {
-        const { sponsorForConference: existing } =
+        const logCtx = `[updateSignatureStatus] sfc=${input.id}`
+
+        const { sponsorForConference: existing, error: existingError } =
           await getSponsorForConference(input.id)
 
         if (!existing) {
+          console.error(`${logCtx} Sponsor lookup failed:`, existingError)
           throw new TRPCError({
             code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found',
+            message: 'Sponsor relationship not found.',
           })
         }
 
         const oldStatus = existing.signatureStatus || 'not-started'
 
-        // Atomic update: set signatureStatus and conditionally set contract fields
-        await clientWrite
-          .patch(input.id)
-          .set({
-            signatureStatus: input.newStatus,
-            ...(input.newStatus === 'signed' && {
-              contractStatus: 'contract-signed',
-              contractSignedAt: getCurrentDateTime(),
-            }),
+        try {
+          await clientWrite
+            .patch(input.id)
+            .set({
+              signatureStatus: input.newStatus,
+              ...(input.newStatus === 'signed' && {
+                contractStatus: 'contract-signed',
+                contractSignedAt: getCurrentDateTime(),
+              }),
+            })
+            .commit()
+        } catch (patchError) {
+          console.error(
+            `${logCtx} Failed to update signature status:`,
+            patchError,
+          )
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update the signature status. Please try again.',
+            cause: patchError,
           })
-          .commit()
+        }
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
@@ -1167,7 +1225,10 @@ export const sponsorRouter = router({
               userId,
             )
           } catch (logError) {
-            console.error('Failed to log signature status change:', logError)
+            console.error(
+              `${logCtx} Failed to log signature status change:`,
+              logError,
+            )
           }
         }
 
@@ -1178,31 +1239,43 @@ export const sponsorRouter = router({
     sendContract: adminProcedure
       .input(SendContractSchema)
       .mutation(async ({ input, ctx }) => {
+        const logCtx = `[sendContract] sfc=${input.sponsorForConferenceId}`
+
         const { sponsorForConference: sfc, error: sfcError } =
           await getSponsorForConference(input.sponsorForConferenceId)
         if (sfcError || !sfc) {
+          console.error(`${logCtx} Sponsor lookup failed:`, sfcError)
           throw new TRPCError({
             code: 'NOT_FOUND',
-            message: 'Sponsor relationship not found',
+            message: 'Sponsor relationship not found.',
             cause: sfcError,
           })
         }
+
+        const sponsorName = sfc.sponsor?.name || 'Unknown'
+        const logCtxFull = `${logCtx} sponsor="${sponsorName}"`
 
         const { template, error: templateError } = await getContractTemplate(
           input.templateId,
         )
         if (templateError || !template) {
+          console.error(
+            `${logCtxFull} Template ${input.templateId} not found:`,
+            templateError,
+          )
           throw new TRPCError({
             code: 'NOT_FOUND',
-            message: 'Contract template not found',
+            message: 'Contract template not found. It may have been deleted.',
             cause: templateError,
           })
         }
 
         if (!sfc.conference?.title) {
+          console.error(`${logCtxFull} Conference missing title`)
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'Conference title is required for contract generation',
+            message:
+              'Conference title is required for contract generation. Update the conference settings.',
           })
         }
 
@@ -1211,42 +1284,65 @@ export const sponsorRouter = router({
             (c: { isPrimary?: boolean }) => c.isPrimary,
           ) || sfc.contactPersons?.[0]
         if (!primaryContact?.name || !primaryContact?.email) {
+          console.error(`${logCtxFull} Missing contact person`)
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'A contact person with name and email is required',
+            message:
+              'A contact person with name and email is required. Complete sponsor registration first.',
           })
         }
 
         // Generate the PDF
-        const pdfBuffer = await generateContractPdf(template, {
-          sponsor: {
-            name: sfc.sponsor.name,
-            orgNumber: sfc.sponsor.orgNumber,
-            address: sfc.sponsor.address,
-            website: sfc.sponsor.website,
-          },
-          contactPerson: primaryContact
-            ? { name: primaryContact.name, email: primaryContact.email }
-            : undefined,
-          tier: sfc.tier
-            ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
-            : undefined,
-          addons: sfc.addons?.map((a) => ({ title: a.title })),
-          contractValue: sfc.contractValue,
-          contractCurrency: sfc.contractCurrency,
-          conference: {
-            title: sfc.conference.title,
-            startDate: sfc.conference.startDate,
-            endDate: sfc.conference.endDate,
-            city: sfc.conference.city,
-            organizer: sfc.conference.organizer,
-            organizerOrgNumber: sfc.conference.organizerOrgNumber,
-            organizerAddress: sfc.conference.organizerAddress,
-            venueName: sfc.conference.venueName,
-            venueAddress: sfc.conference.venueAddress,
-            sponsorEmail: sfc.conference.sponsorEmail,
-          },
-        })
+        let pdfBuffer: Buffer
+        try {
+          pdfBuffer = await generateContractPdf(template, {
+            sponsor: {
+              name: sfc.sponsor.name,
+              orgNumber: sfc.sponsor.orgNumber,
+              address: sfc.sponsor.address,
+              website: sfc.sponsor.website,
+            },
+            contactPerson: {
+              name: primaryContact.name,
+              email: primaryContact.email,
+            },
+            tier: sfc.tier
+              ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
+              : undefined,
+            addons: sfc.addons?.map((a) => ({ title: a.title })),
+            contractValue: sfc.contractValue,
+            contractCurrency: sfc.contractCurrency,
+            conference: {
+              title: sfc.conference.title,
+              startDate: sfc.conference.startDate,
+              endDate: sfc.conference.endDate,
+              city: sfc.conference.city,
+              organizer: sfc.conference.organizer,
+              organizerOrgNumber: sfc.conference.organizerOrgNumber,
+              organizerAddress: sfc.conference.organizerAddress,
+              venueName: sfc.conference.venueName,
+              venueAddress: sfc.conference.venueAddress,
+              sponsorEmail: sfc.conference.sponsorEmail,
+            },
+          })
+        } catch (pdfError) {
+          console.error(`${logCtxFull} PDF generation failed:`, pdfError)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Failed to generate contract PDF. Check that the template is valid.',
+            cause: pdfError,
+          })
+        }
+
+        if (!pdfBuffer || pdfBuffer.length === 0) {
+          console.error(`${logCtxFull} PDF generation returned empty buffer`)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Contract PDF generation produced an empty document. Check the template configuration.',
+          })
+        }
 
         const safeName = sfc.sponsor.name
           .toLowerCase()
@@ -1255,10 +1351,32 @@ export const sponsorRouter = router({
         const filename = `contract-${safeName}.pdf`
 
         // Upload PDF to Sanity as a file asset
-        const asset = await clientWrite.assets.upload('file', pdfBuffer, {
-          filename,
-          contentType: 'application/pdf',
-        })
+        let asset: { _id: string }
+        try {
+          asset = await clientWrite.assets.upload('file', pdfBuffer, {
+            filename,
+            contentType: 'application/pdf',
+          })
+        } catch (uploadError) {
+          console.error(
+            `${logCtxFull} Sanity asset upload failed:`,
+            uploadError,
+          )
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to upload contract PDF. Please try again.',
+            cause: uploadError,
+          })
+        }
+
+        if (!asset?._id) {
+          console.error(`${logCtxFull} Asset upload returned no ID`)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Contract PDF upload failed — no asset reference returned.',
+          })
+        }
 
         // Update CRM record: contract status, signer email, sent timestamp, document
         const now = getCurrentDateTime()
@@ -1289,19 +1407,28 @@ export const sponsorRouter = router({
                   'Adobe Sign not connected. Please connect via OAuth first.',
               })
             }
+
             const transientDoc = await uploadTransientDocument(
               adobeSession,
               pdfBuffer,
               filename,
             )
+            if (!transientDoc?.transientDocumentId) {
+              throw new Error('Adobe Sign returned no transient document ID')
+            }
+
             const agreement = await createAgreement(adobeSession, {
               name: `Sponsorship Agreement - ${sfc.sponsor.name}`,
               participantEmail: input.signerEmail,
-              message: `Please sign the sponsorship agreement for ${sfc.conference?.title || 'Cloud Native Days Norway'}.`,
+              message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
               fileInfos: [
                 { transientDocumentId: transientDoc.transientDocumentId },
               ],
             })
+            if (!agreement?.id) {
+              throw new Error('Adobe Sign returned no agreement ID')
+            }
+
             agreementId = agreement.id
             updateFields.signatureId = agreementId
 
@@ -1331,27 +1458,44 @@ export const sponsorRouter = router({
               }
             } catch (urlError) {
               console.warn(
-                'Failed to capture signing URL (non-fatal):',
+                `${logCtxFull} Failed to capture signing URL (non-fatal):`,
                 urlError,
               )
             }
           } catch (signError) {
             if (signError instanceof TRPCError) throw signError
-            console.error('Adobe Sign agreement creation failed:', signError)
+            console.error(
+              `${logCtxFull} Adobe Sign agreement creation failed:`,
+              signError,
+            )
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to create Adobe Sign agreement.',
+              message:
+                'Failed to create digital signing agreement. The contract PDF was generated but not sent for signing. Please try again.',
               cause: signError,
             })
           }
         }
 
-        await clientWrite
-          .patch(input.sponsorForConferenceId)
-          .set(updateFields)
-          .commit()
+        try {
+          await clientWrite
+            .patch(input.sponsorForConferenceId)
+            .set(updateFields)
+            .commit()
+        } catch (patchError) {
+          console.error(
+            `${logCtxFull} Failed to update sponsor record:`,
+            patchError,
+          )
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Contract was generated but failed to update the sponsor record. Please try again.',
+            cause: patchError,
+          })
+        }
 
-        // Log activity
+        // Log activity (non-critical)
         const userId = ctx.speaker._id
         if (userId) {
           const oldContractStatus = sfc.contractStatus
@@ -1363,7 +1507,10 @@ export const sponsorRouter = router({
               userId,
             )
           } catch (logError) {
-            console.error('Failed to log contract send activity:', logError)
+            console.error(
+              `${logCtxFull} Failed to log contract send activity:`,
+              logError,
+            )
           }
 
           if (input.signerEmail) {
@@ -1376,12 +1523,15 @@ export const sponsorRouter = router({
                 userId,
               )
             } catch (logError) {
-              console.error('Failed to log signature status change:', logError)
+              console.error(
+                `${logCtxFull} Failed to log signature status change:`,
+                logError,
+              )
             }
           }
         }
 
-        // Send branded signing email if we have a signing URL
+        // Send branded signing email if we have a signing URL (non-critical)
         if (signingUrl && input.signerEmail && sfc.conference) {
           try {
             const { ContractSigningTemplate } =
@@ -1424,7 +1574,7 @@ export const sponsorRouter = router({
             })
           } catch (emailError) {
             console.error(
-              'Failed to send signing notification email (non-fatal):',
+              `${logCtxFull} Failed to send signing notification email (non-fatal):`,
               emailError,
             )
           }

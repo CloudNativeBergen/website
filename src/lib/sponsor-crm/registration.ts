@@ -42,7 +42,44 @@ export interface RegistrationSubmission {
 export async function generateRegistrationToken(
   sponsorForConferenceId: string,
 ): Promise<{ token?: string; error?: Error }> {
+  if (!sponsorForConferenceId) {
+    return { error: new Error('Sponsor relationship ID is required') }
+  }
+
   try {
+    // Check for existing token — never overwrite a completed registration
+    const existing = await clientRead.fetch<{
+      registrationToken: string | null
+      registrationComplete: boolean
+    }>(
+      `*[_type == "sponsorForConference" && _id == $id][0]{
+        registrationToken, registrationComplete
+      }`,
+      { id: sponsorForConferenceId },
+    )
+
+    if (!existing) {
+      return { error: new Error('Sponsor relationship not found') }
+    }
+
+    if (existing.registrationComplete) {
+      // Registration already done — return existing token without resetting
+      if (existing.registrationToken) {
+        return { token: existing.registrationToken }
+      }
+      return {
+        error: new Error(
+          'Registration is already complete. Cannot generate a new token.',
+        ),
+      }
+    }
+
+    // Reuse existing token if one is already set
+    if (existing.registrationToken) {
+      return { token: existing.registrationToken }
+    }
+
+    // No token yet — generate a fresh one
     const token = randomUUID()
     await clientWrite
       .patch(sponsorForConferenceId)
@@ -50,11 +87,14 @@ export async function generateRegistrationToken(
         registrationToken: token,
         registrationComplete: false,
       })
-      .unset(['registrationCompletedAt'])
       .commit()
 
     return { token }
   } catch (error) {
+    console.error(
+      `[registration] Failed to generate token for sfc=${sponsorForConferenceId}:`,
+      error,
+    )
     return { error: error as Error }
   }
 }
@@ -62,6 +102,10 @@ export async function generateRegistrationToken(
 export async function validateRegistrationToken(
   token: string,
 ): Promise<{ sponsor?: RegistrationSponsorInfo; error?: Error }> {
+  if (!token) {
+    return { error: new Error('Registration token is required') }
+  }
+
   try {
     const result = await clientRead.fetch<RegistrationSponsorInfo | null>(
       `*[_type == "sponsorForConference" && registrationToken == $registrationToken][0]{
@@ -92,8 +136,14 @@ export async function validateRegistrationToken(
       return { error: new Error('Invalid or expired registration token') }
     }
 
+    if (!result._id) {
+      console.error('[registration] Token lookup returned document without _id')
+      return { error: new Error('Invalid registration data') }
+    }
+
     return { sponsor: result }
   } catch (error) {
+    console.error('[registration] Token validation failed:', error)
     return { error: error as Error }
   }
 }
@@ -106,6 +156,33 @@ export async function completeRegistration(
   sponsorForConferenceId?: string
   error?: Error
 }> {
+  if (!token) {
+    return { error: new Error('Registration token is required') }
+  }
+
+  if (!data.contactPersons || data.contactPersons.length === 0) {
+    return {
+      error: new Error(
+        'At least one contact person is required to complete registration',
+      ),
+    }
+  }
+
+  const invalidContacts = data.contactPersons.filter((c) => !c.name || !c.email)
+  if (invalidContacts.length > 0) {
+    return {
+      error: new Error(
+        'All contact persons must have a name and email address',
+      ),
+    }
+  }
+
+  if (!data.billing?.email) {
+    return {
+      error: new Error('Billing email is required to complete registration'),
+    }
+  }
+
   try {
     const { sponsor, error: validateError } =
       await validateRegistrationToken(token)
@@ -118,6 +195,7 @@ export async function completeRegistration(
       return { error: new Error('Registration has already been completed') }
     }
 
+    const logCtx = `[registration] sfc=${sponsor._id} sponsor="${sponsor.sponsorName}"`
     const contactPersons = prepareArrayWithKeys(data.contactPersons, 'contact')
 
     // Build sponsor updates if any company info was provided
@@ -153,6 +231,10 @@ export async function completeRegistration(
         transaction.patch(sfcDoc.sponsor._ref, {
           set: sponsorUpdates,
         })
+      } else {
+        console.warn(
+          `${logCtx} No sponsor reference found — skipping company info updates`,
+        )
       }
     }
 
@@ -160,6 +242,7 @@ export async function completeRegistration(
 
     return { success: true, sponsorForConferenceId: sponsor._id }
   } catch (error) {
+    console.error('[registration] Registration completion failed:', error)
     return { error: error as Error }
   }
 }

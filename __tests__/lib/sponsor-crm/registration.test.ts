@@ -1,7 +1,102 @@
-import { describe, it, expect } from '@jest/globals'
-import { buildPortalUrl } from '@/lib/sponsor-crm/registration'
+import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+
+jest.mock('@/lib/sanity/client', () => ({
+  clientWrite: {
+    patch: jest.fn(() => ({
+      set: jest.fn().mockReturnThis(),
+      unset: jest.fn().mockReturnThis(),
+      // @ts-ignore
+      commit: jest.fn().mockResolvedValue({}),
+    })),
+  },
+  clientReadUncached: {
+    fetch: jest.fn(),
+  },
+}))
+
+import {
+  buildPortalUrl,
+  generateRegistrationToken,
+} from '@/lib/sponsor-crm/registration'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 
 describe('registration', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  describe('generateRegistrationToken', () => {
+    it('returns existing token when registration is complete', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
+        registrationToken: 'existing-token-abc',
+        registrationComplete: true,
+      })
+
+      const result = await generateRegistrationToken('sfc-123')
+      expect(result.token).toBe('existing-token-abc')
+      expect(result.error).toBeUndefined()
+    })
+
+    it('returns error when registration is complete but no token exists', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
+        registrationToken: null,
+        registrationComplete: true,
+      })
+
+      const result = await generateRegistrationToken('sfc-123')
+      expect(result.error?.message).toMatch(/already complete/)
+    })
+
+    it('returns existing token when one is already set', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
+        registrationToken: 'existing-token-xyz',
+        registrationComplete: false,
+      })
+
+      const result = await generateRegistrationToken('sfc-123')
+      expect(result.token).toBe('existing-token-xyz')
+      expect(result.error).toBeUndefined()
+    })
+
+    it('generates new token when none exists', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
+        registrationToken: null,
+        registrationComplete: false,
+      })
+
+      const mockPatch = {
+        set: jest.fn().mockReturnThis(),
+        // @ts-ignore
+        commit: jest.fn().mockResolvedValue({}),
+      }
+      ;(clientWrite.patch as jest.Mock).mockReturnValue(mockPatch)
+
+      const result = await generateRegistrationToken('sfc-123')
+      expect(result.token).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      )
+      expect(result.error).toBeUndefined()
+      expect(clientWrite.patch).toHaveBeenCalledWith('sfc-123')
+    })
+
+    it('returns error when document not found', async () => {
+      // @ts-ignore
+      ;(clientReadUncached.fetch as any).mockResolvedValue(null)
+
+      const result = await generateRegistrationToken('sfc-missing')
+      expect(result.error?.message).toMatch(/not found/)
+    })
+
+    it('returns error for empty ID', async () => {
+      const result = await generateRegistrationToken('')
+      expect(result.error?.message).toMatch(/required/)
+    })
+  })
+
   describe('buildPortalUrl', () => {
     it('should build correct portal URL', () => {
       const baseUrl = 'https://cloudnativebergen.no'
