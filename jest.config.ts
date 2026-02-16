@@ -18,6 +18,7 @@ const config: Config = {
     'next-sanity': '<rootDir>/__tests__/mocks/sanity-client.ts',
     '@sanity/image-url': '<rootDir>/__tests__/mocks/sanity-image-url.ts',
     '^uuid$': '<rootDir>/__tests__/mocks/uuid.ts',
+    '^nanoid$': '<rootDir>/__tests__/mocks/nanoid.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
 }
