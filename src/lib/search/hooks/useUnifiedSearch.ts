@@ -20,26 +20,25 @@ export function useUnifiedSearch() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const router = useRouter()
 
-  const sponsorSearchMutation = api.sponsor.list.useMutation()
-  const speakerSearchMutation = api.speakers.search.useMutation()
+  const utils = api.useUtils()
 
   const providers = useMemo<SearchProvider[]>(() => {
     return [
       new AdminPagesSearchProvider(),
       new ProposalsSearchProvider(),
       new SponsorsSearchProvider(async (query) => {
-        const result = await sponsorSearchMutation.mutateAsync({ query })
+        const result = await utils.sponsor.list.fetch({ query })
         return result
       }),
       new SpeakersSearchProvider(async (query) => {
-        const result = await speakerSearchMutation.mutateAsync({
+        const result = await utils.speakers.search.fetch({
           query,
           includeFeatured: true,
         })
         return result
       }),
     ]
-  }, [sponsorSearchMutation, speakerSearchMutation])
+  }, [utils])
 
   const search = useCallback(
     async (query: string) => {

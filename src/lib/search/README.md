@@ -50,6 +50,7 @@ Located in `src/lib/search/providers/`:
 Located in `src/lib/search/hooks/useUnifiedSearch.ts`:
 
 The `useUnifiedSearch` hook:
+
 - Instantiates all search providers
 - Executes searches in parallel across all providers
 - Handles loading states and errors
@@ -61,6 +62,7 @@ The `useUnifiedSearch` hook:
 Located in `src/components/admin/SearchModal.tsx`:
 
 The `SearchModal` component:
+
 - Uses Headless UI's Combobox for keyboard navigation
 - Implements 300ms debounce for search queries
 - Displays results grouped by category with section headers
@@ -136,21 +138,26 @@ export type SearchCategory =
   | 'speakers'
   | 'sponsors'
   | 'myCategory' // Add your new category
-  // ...
+// ...
 ```
 
 3. **Register the provider** in `useUnifiedSearch` hook:
 
 ```typescript
-const providers = useMemo<SearchProvider[]>(() => {
-  return [
-    new AdminPagesSearchProvider(),
-    new ProposalsSearchProvider(),
-    new SponsorsSearchProvider(/* ... */),
-    new SpeakersSearchProvider(/* ... */),
-    new MyNewSearchProvider(), // Add your provider
-  ]
-}, [/* dependencies */])
+const providers = useMemo<SearchProvider[]>(
+  () => {
+    return [
+      new AdminPagesSearchProvider(),
+      new ProposalsSearchProvider(),
+      new SponsorsSearchProvider(/* ... */),
+      new SpeakersSearchProvider(/* ... */),
+      new MyNewSearchProvider(), // Add your provider
+    ]
+  },
+  [
+    /* dependencies */
+  ],
+)
 ```
 
 4. **Export the provider** from `src/lib/search/providers/index.ts`:
@@ -196,7 +203,7 @@ For static data or small datasets already loaded:
 
 ```typescript
 const items = STATIC_DATA.filter((item) =>
-  item.title.toLowerCase().includes(query.toLowerCase())
+  item.title.toLowerCase().includes(query.toLowerCase()),
 )
 ```
 

@@ -145,6 +145,26 @@ function MockSearchModal({
               </li>
             </ul>
           </li>
+          <li>
+            <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
+              Sponsors (1)
+            </h2>
+            <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
+              <li className="flex cursor-default items-center px-4 py-2 select-none">
+                <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                  <BuildingOfficeIcon className="size-4 text-gray-400 dark:text-gray-500" />
+                </div>
+                <div className="ml-3 flex-auto truncate">
+                  <div className="font-medium dark:text-white">
+                    Kubernetes Foundation
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    kubernetes.io
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </li>
         </ul>
       )}
 
@@ -213,7 +233,7 @@ export const WithResults: Story = {
     docs: {
       description: {
         story:
-          'Search results grouped into multiple categories (Pages, Proposals, Speakers), with icons for each type.',
+          'Search results grouped into all 4 supported categories (Pages, Proposals, Speakers, Sponsors), with icons for each type.',
       },
     },
   },

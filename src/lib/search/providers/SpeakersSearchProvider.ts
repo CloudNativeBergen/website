@@ -11,9 +11,7 @@ export class SpeakersSearchProvider implements SearchProvider {
   readonly label = 'Speakers'
   readonly priority = 4
 
-  constructor(
-    private searchFn: (query: string) => Promise<Speaker[]>,
-  ) {}
+  constructor(private searchFn: (query: string) => Promise<Speaker[]>) {}
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()

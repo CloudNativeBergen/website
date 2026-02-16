@@ -118,57 +118,55 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   />
                 </div>
 
-                {!isSearching &&
-                  query &&
-                  searchResults.totalCount > 0 && (
-                    <ComboboxOptions
-                      static
-                      as="ul"
-                      className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
-                    >
-                      {searchResults.groups.map((group) => (
-                        <li key={group.category}>
-                          <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-                            {group.label} ({group.items.length})
-                          </h2>
-                          <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
-                            {group.items.map((item) => {
-                              const Icon = item.icon || DocumentTextIcon
-                              return (
-                                <ComboboxOption
-                                  as="li"
-                                  key={item.id}
-                                  value={item}
-                                  className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
-                                >
-                                  <div className="shrink-0">
-                                    <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20 dark:bg-gray-700 dark:group-data-focus:bg-white/20">
-                                      <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
-                                    </div>
+                {!isSearching && query && searchResults.totalCount > 0 && (
+                  <ComboboxOptions
+                    static
+                    as="ul"
+                    className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
+                  >
+                    {searchResults.groups.map((group) => (
+                      <li key={group.category}>
+                        <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
+                          {group.label} ({group.items.length})
+                        </h2>
+                        <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
+                          {group.items.map((item) => {
+                            const Icon = item.icon || DocumentTextIcon
+                            return (
+                              <ComboboxOption
+                                as="li"
+                                key={item.id}
+                                value={item}
+                                className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
+                              >
+                                <div className="shrink-0">
+                                  <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20 dark:bg-gray-700 dark:group-data-focus:bg-white/20">
+                                    <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
                                   </div>
-                                  <div className="ml-3 flex-auto truncate">
-                                    <div className="font-medium dark:text-white">
-                                      {item.title}
-                                    </div>
-                                    {item.subtitle && (
-                                      <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
-                                        {item.subtitle}
-                                      </div>
-                                    )}
-                                    {item.description && (
-                                      <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
-                                        {item.description}
-                                      </div>
-                                    )}
+                                </div>
+                                <div className="ml-3 flex-auto truncate">
+                                  <div className="font-medium dark:text-white">
+                                    {item.title}
                                   </div>
-                                </ComboboxOption>
-                              )
-                            })}
-                          </ul>
-                        </li>
-                      ))}
-                    </ComboboxOptions>
-                  )}
+                                  {item.subtitle && (
+                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                      {item.subtitle}
+                                    </div>
+                                  )}
+                                  {item.description && (
+                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                      {item.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </ComboboxOption>
+                            )
+                          })}
+                        </ul>
+                      </li>
+                    ))}
+                  </ComboboxOptions>
+                )}
 
                 {isSearching && (
                   <div className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2">

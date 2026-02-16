@@ -4,7 +4,7 @@ import type {
   SearchProviderResult,
   SearchResultItem,
 } from '../types'
-import type { Sponsor } from '@/lib/sponsor/types'
+import type { SponsorExisting } from '@/lib/sponsor/types'
 
 export class SponsorsSearchProvider implements SearchProvider {
   readonly category = 'sponsors' as const
@@ -12,7 +12,7 @@ export class SponsorsSearchProvider implements SearchProvider {
   readonly priority = 3
 
   constructor(
-    private searchFn: (query: string) => Promise<Sponsor[]>,
+    private searchFn: (query: string) => Promise<SponsorExisting[]>,
   ) {}
 
   async search(query: string): Promise<SearchProviderResult> {
@@ -32,7 +32,7 @@ export class SponsorsSearchProvider implements SearchProvider {
       const items: SearchResultItem[] = sponsors.map((sponsor) => ({
         id: sponsor._id,
         title: sponsor.name,
-        subtitle: sponsor.url || undefined,
+        subtitle: sponsor.website || undefined,
         category: this.category,
         url: '/admin/sponsors', // Note: navigates to sponsors list where users can filter
         metadata: {
