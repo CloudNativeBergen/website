@@ -1,18 +1,9 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import {
-  describe,
-  it,
-  expect as jestExpect,
-  jest,
-  beforeEach,
-} from '@jest/globals'
 import { render, screen } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 import { mockSponsor } from '@/__mocks__/sponsor-data'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -22,19 +13,19 @@ const mockSession = {
   speaker: { _id: 'speaker-1', name: 'Test Organizer', isOrganizer: true },
   user: { name: 'Test Organizer' },
 }
-jest.mock('next-auth/react', () => ({
+vi.mock('next-auth/react', () => ({
   __esModule: true,
   useSession: () => ({ data: mockSession }),
 }))
 
 // Mock tRPC hooks
-const mockReadinessData = jest.fn<() => any>()
-const mockBestTemplateData = jest.fn<() => any>()
-const mockGeneratePdf = jest.fn<() => any>()
-const mockSendContract = jest.fn<() => any>()
-const mockCheckStatus = jest.fn<() => any>()
+const mockReadinessData = vi.fn<() => any>()
+const mockBestTemplateData = vi.fn<() => any>()
+const mockGeneratePdf = vi.fn<() => any>()
+const mockSendContract = vi.fn<() => any>()
+const mockCheckStatus = vi.fn<() => any>()
 
-jest.mock('@/lib/trpc/client', () => ({
+vi.mock('@/lib/trpc/client', () => ({
   api: {
     sponsor: {
       contractTemplates: {
@@ -61,28 +52,28 @@ jest.mock('@/lib/trpc/client', () => ({
 }))
 
 // Mock sub-components that have their own tRPC dependencies
-jest.mock('@/components/admin/sponsor-crm/ContractReadinessIndicator', () => ({
+vi.mock('@/components/admin/sponsor-crm/ContractReadinessIndicator', () => ({
   __esModule: true,
   ContractReadinessIndicator: () => (
     <div data-testid="readiness-indicator">Readiness OK</div>
   ),
 }))
 
-jest.mock('@/components/admin/sponsor-crm/SponsorPortalSection', () => ({
+vi.mock('@/components/admin/sponsor-crm/SponsorPortalSection', () => ({
   __esModule: true,
   SponsorPortalSection: () => (
     <div data-testid="portal-section">Portal Section</div>
   ),
 }))
 
-jest.mock('@/components/admin/sponsor-crm/OrganizerSignatureCapture', () => ({
+vi.mock('@/components/admin/sponsor-crm/OrganizerSignatureCapture', () => ({
   __esModule: true,
   OrganizerSignatureCapture: () => (
     <div data-testid="organizer-signature">Organizer Signature</div>
   ),
 }))
 
-jest.mock('@heroicons/react/24/outline', () => {
+vi.mock('@heroicons/react/24/outline', () => {
   const icon = (name: string) => (props: any) => (
     <svg {...props} data-testid={`icon-${name}`} />
   )
@@ -98,9 +89,8 @@ jest.mock('@heroicons/react/24/outline', () => {
   }
 })
 
-// Use require() after jest.mock to ensure mocks are applied before module loads
-const { SponsorContractView } =
-  require('@/components/admin/sponsor-crm/SponsorContractView') as typeof import('@/components/admin/sponsor-crm/SponsorContractView')
+// vi.mock calls are hoisted automatically by Vitest
+import { SponsorContractView } from '@/components/admin/sponsor-crm/SponsorContractView'
 
 describe('SponsorContractView', () => {
   const defaultTrpcMocks = () => {
@@ -115,15 +105,15 @@ describe('SponsorContractView', () => {
       },
     })
     mockGeneratePdf.mockReturnValue({
-      mutate: jest.fn(),
+      mutate: vi.fn(),
       isPending: false,
     })
     mockSendContract.mockReturnValue({
-      mutate: jest.fn(),
+      mutate: vi.fn(),
       isPending: false,
     })
     mockCheckStatus.mockReturnValue({
-      mutate: jest.fn(),
+      mutate: vi.fn(),
       isPending: false,
     })
   }

@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { actionStateMachine } from '@/lib/proposal/business/state-machine'
 import { Action, Status } from '@/lib/proposal/types'
 

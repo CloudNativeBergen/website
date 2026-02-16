@@ -1,9 +1,7 @@
-import { describe, it, expect, jest } from '@jest/globals'
-
 // Mock next/cache before importing the module under test
-jest.mock('next/cache', () => ({
-  cacheLife: jest.fn(),
-  cacheTag: jest.fn(),
+vi.mock('next/cache', () => ({
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
 }))
 
 import {

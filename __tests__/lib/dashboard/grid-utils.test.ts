@@ -1,13 +1,13 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from '@jest/globals'
 import {
   buildOccupationMap,
   getCellsForPosition,
   checkCollision,
   snapToGrid,
   getColumnCountForWidth,
+  reflowWidgetsForColumns,
 } from '@/lib/dashboard/grid-utils'
 import type { Widget, GridPosition } from '@/lib/dashboard/types'
 
@@ -153,5 +153,93 @@ describe('getColumnCountForWidth', () => {
 
   it('returns 1 column for zero width', () => {
     expect(getColumnCountForWidth(0)).toBe(1)
+  })
+})
+
+describe('reflowWidgetsForColumns', () => {
+  it('returns widgets unchanged for desktop column count (12)', () => {
+    const widgets = [makeWidget('a', 0, 0, 1, 4), makeWidget('b', 0, 4, 1, 4)]
+    const result = reflowWidgetsForColumns(widgets, 12)
+    expect(result).toBe(widgets) // same reference — no reflow
+  })
+
+  it('returns widgets unchanged for column count > desktop', () => {
+    const widgets = [makeWidget('a', 0, 0, 1, 4)]
+    expect(reflowWidgetsForColumns(widgets, 16)).toBe(widgets)
+  })
+
+  it('stacks all widgets in single column mode', () => {
+    const widgets = [
+      makeWidget('a', 0, 0, 2, 4),
+      makeWidget('b', 0, 4, 1, 4),
+      makeWidget('c', 2, 0, 1, 8),
+    ]
+    const result = reflowWidgetsForColumns(widgets, 1)
+
+    expect(result).toHaveLength(3)
+    result.forEach((w) => {
+      expect(w.position.col).toBe(0)
+      expect(w.position.colSpan).toBe(1)
+      expect(w.position.rowSpan).toBe(1)
+    })
+    // Should be stacked sequentially
+    expect(result[0].position.row).toBe(0)
+    expect(result[1].position.row).toBe(1)
+    expect(result[2].position.row).toBe(2)
+  })
+
+  it('clamps colSpan to target columns in tablet mode', () => {
+    const widgets = [makeWidget('a', 0, 0, 1, 8)]
+    const result = reflowWidgetsForColumns(widgets, 6)
+
+    expect(result[0].position.colSpan).toBe(6) // clamped from 8
+    expect(result[0].position.col).toBe(0)
+  })
+
+  it('packs two small widgets side-by-side in tablet mode', () => {
+    const widgets = [makeWidget('a', 0, 0, 1, 3), makeWidget('b', 0, 3, 1, 3)]
+    const result = reflowWidgetsForColumns(widgets, 6)
+
+    expect(result[0].position.row).toBe(0)
+    expect(result[0].position.col).toBe(0)
+    expect(result[1].position.row).toBe(0)
+    expect(result[1].position.col).toBe(3)
+  })
+
+  it('wraps to next row when widgets cannot fit', () => {
+    const widgets = [makeWidget('a', 0, 0, 1, 4), makeWidget('b', 0, 4, 1, 4)]
+    const result = reflowWidgetsForColumns(widgets, 6)
+
+    // First widget (colSpan 4) fits at col 0
+    expect(result[0].position.row).toBe(0)
+    expect(result[0].position.col).toBe(0)
+    // Second widget (colSpan 4) fits at col 0 next row (only 2 cols left)
+    // Wait — 6-4=2 remaining, 4 doesn't fit next to it, so row 1
+    expect(result[1].position.row).toBe(1)
+    expect(result[1].position.col).toBe(0)
+  })
+
+  it('sorts by original position before reflowing', () => {
+    // Provide widgets out of order
+    const widgets = [makeWidget('b', 1, 0, 1, 6), makeWidget('a', 0, 0, 1, 6)]
+    const result = reflowWidgetsForColumns(widgets, 6)
+
+    // 'a' was at row 0 originally, should be placed first
+    expect(result[0].id).toBe('a')
+    expect(result[0].position.row).toBe(0)
+    expect(result[1].id).toBe('b')
+    expect(result[1].position.row).toBe(1)
+  })
+
+  it('handles empty widget array', () => {
+    expect(reflowWidgetsForColumns([], 6)).toEqual([])
+    expect(reflowWidgetsForColumns([], 1)).toEqual([])
+  })
+
+  it('preserves rowSpan in tablet mode', () => {
+    const widgets = [makeWidget('a', 0, 0, 3, 4)]
+    const result = reflowWidgetsForColumns(widgets, 6)
+
+    expect(result[0].position.rowSpan).toBe(3)
   })
 })

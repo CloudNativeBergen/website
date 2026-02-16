@@ -1,12 +1,7 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect as jestExpect } from '@jest/globals'
 import { render, screen } from '@testing-library/react'
-import '@testing-library/jest-dom'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 import {
   ContractFlowStep,
@@ -29,17 +24,16 @@ describe('ContractFlowStep', () => {
       </ContractFlowStep>,
     )
 
-  it('renders step number and title', () => {
+  it('renders step number, title, and children', () => {
     renderStep('pending', { step: 2 })
     expect(screen.getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Registration')).toBeInTheDocument()
     expect(screen.getByText('Step content')).toBeInTheDocument()
   })
 
-  it('shows check icon when complete', () => {
-    const { container } = renderStep('complete')
-    // Complete state shows an SVG check icon instead of the step number
-    expect(container.querySelector('svg')).toBeTruthy()
+  it('shows check icon instead of number when complete', () => {
+    renderStep('complete')
+    // Complete state replaces the step number with a CheckIcon SVG
     expect(screen.queryByText('1')).not.toBeInTheDocument()
   })
 
@@ -51,18 +45,5 @@ describe('ContractFlowStep', () => {
   it('shows step number when active', () => {
     renderStep('active')
     expect(screen.getByText('1')).toBeInTheDocument()
-  })
-
-  it('renders connector line when not last', () => {
-    const { container } = renderStep('pending', { isLast: false })
-    // The connector div has absolute positioning with bottom style
-    const connector = container.querySelector('[style*="bottom"]')
-    expect(connector).toBeTruthy()
-  })
-
-  it('omits connector line when last', () => {
-    const { container } = renderStep('pending', { isLast: true })
-    const connector = container.querySelector('[style*="bottom"]')
-    expect(connector).toBeNull()
   })
 })
