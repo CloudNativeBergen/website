@@ -1,25 +1,17 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
 import { NextRequest } from 'next/server'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const mockSanityFetch = jest.fn<(...args: any[]) => any>()
-const mockPatch = jest.fn<(...args: any[]) => any>()
-const mockSet = jest.fn<(...args: any[]) => any>()
-const mockCommit = jest.fn<(...args: any[]) => any>()
-const mockCreate = jest.fn<(...args: any[]) => any>()
-const mockResendSend = jest.fn<(...args: any[]) => any>()
+const mockSanityFetch = vi.fn<(...args: any[]) => any>()
+const mockPatch = vi.fn<(...args: any[]) => any>()
+const mockSet = vi.fn<(...args: any[]) => any>()
+const mockCommit = vi.fn<(...args: any[]) => any>()
+const mockCreate = vi.fn<(...args: any[]) => any>()
+const mockResendSend = vi.fn<(...args: any[]) => any>()
 
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: (...args: unknown[]) => mockSanityFetch(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
@@ -27,12 +19,12 @@ jest.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-jest.mock('@/lib/time', () => ({
+vi.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-15T10:00:00Z',
   formatConferenceDateLong: (date: string) => date,
 }))
 
-jest.mock('@/lib/email/config', () => ({
+vi.mock('@/lib/email/config', () => ({
   resend: {
     emails: {
       send: (...args: unknown[]) => mockResendSend(...args),
@@ -41,8 +33,8 @@ jest.mock('@/lib/email/config', () => ({
   retryWithBackoff: async (fn: () => Promise<unknown>) => fn(),
 }))
 
-jest.mock('@/lib/email/contract-email', () => ({
-  renderContractEmail: jest.fn<(...args: any[]) => any>().mockResolvedValue({
+vi.mock('@/lib/email/contract-email', () => ({
+  renderContractEmail: vi.fn<(...args: any[]) => any>().mockResolvedValue({
     subject: 'Reminder: Sponsorship Agreement',
     react: null,
   }),
@@ -53,13 +45,13 @@ jest.mock('@/lib/email/contract-email', () => ({
   },
 }))
 
-jest.mock('next/cache', () => ({
-  unstable_noStore: jest.fn(),
+vi.mock('next/cache', () => ({
+  unstable_noStore: vi.fn(),
 }))
 
 describe('api/cron/contract-reminders', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     process.env.CRON_SECRET = 'test-cron-secret'
 
     mockPatch.mockReturnValue({ set: mockSet })

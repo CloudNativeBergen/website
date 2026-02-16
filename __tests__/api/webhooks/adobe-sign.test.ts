@@ -1,25 +1,17 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
 import { NextRequest } from 'next/server'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const mockSanityFetch = jest.fn<(...args: any[]) => any>()
-const mockPatch = jest.fn<(...args: any[]) => any>()
-const mockSet = jest.fn<(...args: any[]) => any>()
-const mockCommit = jest.fn<(...args: any[]) => any>()
-const mockCreate = jest.fn<(...args: any[]) => any>()
-const mockUpload = jest.fn<(...args: any[]) => any>()
+const mockSanityFetch = vi.fn<(...args: any[]) => any>()
+const mockPatch = vi.fn<(...args: any[]) => any>()
+const mockSet = vi.fn<(...args: any[]) => any>()
+const mockCommit = vi.fn<(...args: any[]) => any>()
+const mockCreate = vi.fn<(...args: any[]) => any>()
+const mockUpload = vi.fn<(...args: any[]) => any>()
 
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: (...args: unknown[]) => mockSanityFetch(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
@@ -28,15 +20,15 @@ jest.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-jest.mock('@/lib/time', () => ({
+vi.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-01-15T10:00:00Z',
 }))
 
-jest.mock('@/lib/adobe-sign', () => ({}))
+vi.mock('@/lib/adobe-sign', () => ({}))
 
 describe('api/webhooks/adobe-sign', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     process.env.ADOBE_SIGN_CLIENT_ID = 'test-client-id'
 
     mockPatch.mockReturnValue({ set: mockSet })
@@ -231,7 +223,7 @@ describe('api/webhooks/adobe-sign', () => {
         signatureStatus: 'pending',
       })
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const request = postRequest(
         {
