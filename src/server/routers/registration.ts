@@ -149,6 +149,7 @@ export const registrationRouter = router({
       // Fetch full sponsor + conference data for the email
       const sfc = await clientReadUncached.fetch<{
         _id: string
+        status: string | null
         registrationToken: string | null
         registrationComplete: boolean
         contractStatus: string | null
@@ -172,6 +173,7 @@ export const registrationRouter = router({
       }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{
           _id,
+          status,
           registrationToken,
           registrationComplete,
           contractStatus,
@@ -211,6 +213,14 @@ export const registrationRouter = router({
           code: 'PRECONDITION_FAILED',
           message:
             'Sponsor information is missing. Link a sponsor to this relationship before sending a portal invite.',
+        })
+      }
+
+      if (sfc.status !== 'closed-won') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Registration emails can only be sent to sponsors with a won deal. Move the sponsor to Closed Won first.',
         })
       }
 

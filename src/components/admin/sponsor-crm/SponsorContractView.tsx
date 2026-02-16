@@ -141,6 +141,7 @@ export function SponsorContractView({
   const isPendingSignature =
     sponsor.signatureStatus === 'pending' && !!sponsor.signatureId
   const isPortalComplete = sponsor.registrationComplete === true
+  const isSponsorWon = sponsor.status === 'closed-won'
 
   // Preview step (manual send flow)
   if (step === 'preview' && pdfData) {
@@ -314,6 +315,10 @@ export function SponsorContractView({
             Company details, contacts, billing, and logo collected.
             {sponsor.registrationCompletedAt &&
               ` Completed ${new Date(sponsor.registrationCompletedAt).toLocaleDateString()}.`}
+          </p>
+        ) : !isSponsorWon ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Move the sponsor to Closed Won before sending registration.
           </p>
         ) : (
           <SponsorPortalSection
