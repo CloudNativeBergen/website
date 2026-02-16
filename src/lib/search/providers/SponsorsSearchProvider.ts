@@ -34,7 +34,7 @@ export class SponsorsSearchProvider implements SearchProvider {
         title: sponsor.name,
         subtitle: sponsor.url || undefined,
         category: this.category,
-        url: '/admin/sponsors',
+        url: '/admin/sponsors', // Note: navigates to sponsors list where users can filter
         metadata: {
           sponsor,
         },

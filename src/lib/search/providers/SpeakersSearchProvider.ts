@@ -34,7 +34,7 @@ export class SpeakersSearchProvider implements SearchProvider {
         title: speaker.name,
         subtitle: speaker.title || speaker.email || undefined,
         category: this.category,
-        url: '/admin/speakers',
+        url: '/admin/speakers', // Note: navigates to speakers list where users can filter
         metadata: {
           speaker,
         },

@@ -1,3 +1,6 @@
+// Search categories supported by the search system
+// Currently implemented: pages, proposals, speakers, sponsors
+// Planned for future: orders, workshops, volunteers
 export type SearchCategory =
   | 'pages'
   | 'proposals'
