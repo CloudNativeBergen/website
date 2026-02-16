@@ -10,7 +10,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
-import { Status } from '@/lib/proposal/types'
+import { isWorkshopFormat, Status } from '@/lib/proposal/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BookmarkButton } from '@/components/BookmarkButton'
@@ -433,6 +433,21 @@ export function TalkCard({
                   )}
                 </button>
               )}
+            </div>
+          )}
+
+        {!compact &&
+          isConfirmed &&
+          talkData.format &&
+          isWorkshopFormat(talkData.format) &&
+          talkData.prerequisites && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20">
+              <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                Prerequisites
+              </h4>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-blue-800 dark:text-blue-300">
+                {talkData.prerequisites}
+              </p>
             </div>
           )}
 

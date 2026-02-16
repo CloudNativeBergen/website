@@ -6,6 +6,7 @@ import {
   audiences as audiencesMap,
   Format,
   formats,
+  isWorkshopFormat,
   Language,
   languages,
   Level,
@@ -57,6 +58,9 @@ export function ProposalDetailsForm({
   )
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
+  const [prerequisites, setPrerequisites] = useState(
+    proposal?.prerequisites ?? '',
+  )
 
   // Push local state changes to parent
   useEffect(() => {
@@ -70,6 +74,7 @@ export function ProposalDetailsForm({
       topics,
       outline,
       tos,
+      prerequisites,
     })
   }, [
     title,
@@ -81,6 +86,7 @@ export function ProposalDetailsForm({
     topics,
     outline,
     tos,
+    prerequisites,
     setProposal,
   ])
 
@@ -202,6 +208,17 @@ export function ProposalDetailsForm({
               {outline || 'No outline provided'}
             </p>
           </div>
+
+          {isWorkshopFormat(format) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                Prerequisites
+              </label>
+              <p className="mt-2 whitespace-pre-wrap text-gray-900 dark:text-white">
+                {prerequisites || 'No prerequisites specified'}
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
@@ -314,6 +331,23 @@ export function ProposalDetailsForm({
               to the organizers and not displayed on the website.
             </HelpText>
           </div>
+
+          {isWorkshopFormat(format) && (
+            <div className="col-span-full">
+              <Textarea
+                name="prerequisites"
+                label="Prerequisites"
+                rows={3}
+                value={prerequisites}
+                setValue={setPrerequisites}
+              />
+              <HelpText>
+                List any prerequisites participants should meet before attending
+                your workshop (e.g., &quot;Bring a computer with Docker
+                installed&quot;, &quot;Basic knowledge of Kubernetes&quot;).
+              </HelpText>
+            </div>
+          )}
 
           <div className="col-span-full">
             <Checkbox

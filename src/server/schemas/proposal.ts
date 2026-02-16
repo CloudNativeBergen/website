@@ -51,6 +51,7 @@ const ProposalInputBaseSchema = z.object({
   }),
   video: z.string().nullable().optional().transform(nullToUndefined),
   capacity: z.number().nullable().optional().transform(nullToUndefined),
+  prerequisites: z.string().nullable().optional().transform(nullToUndefined),
   speakers: z
     .array(ReferenceSchema)
     .nullable()
