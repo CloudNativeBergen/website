@@ -445,7 +445,7 @@ export function TalkCard({
               <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                 Prerequisites
               </h4>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-blue-800 dark:text-blue-300">
+              <p className="mt-1 text-sm whitespace-pre-wrap text-blue-800 dark:text-blue-300">
                 {talkData.prerequisites}
               </p>
             </div>
