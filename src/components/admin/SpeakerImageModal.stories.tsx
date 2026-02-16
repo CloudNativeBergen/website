@@ -48,7 +48,7 @@ export const Default: Story = {
     speaker: {
       name: 'Jane Smith',
       title: 'Senior Software Engineer',
-      image: 'image-abc123-800x800-jpg',
+      image: 'https://placehold.co/800x800/EEE/31343C?text=JS',
     },
   },
 }
@@ -58,7 +58,7 @@ export const WithoutTitle: Story = {
     isOpen: true,
     speaker: {
       name: 'John Doe',
-      image: 'image-def456-800x800-jpg',
+      image: 'https://placehold.co/800x800/EEE/31343C?text=JD',
     },
   },
 }
@@ -69,7 +69,7 @@ export const Interactive: Story = {
     speaker: {
       name: 'Jane Smith',
       title: 'Senior Software Engineer',
-      image: 'image-abc123-800x800-jpg',
+      image: 'https://placehold.co/800x800/EEE/31343C?text=JS',
     },
   },
   render: (args) => <SpeakerImageModalWrapper speaker={args.speaker} />,
