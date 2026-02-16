@@ -23,54 +23,6 @@ describe('api/cron/weekly-update', () => {
     })
   })
 
-  describe('Ticket Splitting', () => {
-    it('should separate paid and free tickets correctly', () => {
-      const tickets = [
-        { sum: '100' },
-        { sum: '0' },
-        { sum: '250' },
-        { sum: '0' },
-        { sum: '75' },
-      ]
-
-      const paidTickets = tickets.filter((t) => parseFloat(t.sum) > 0)
-      const freeTickets = tickets.filter((t) => parseFloat(t.sum) === 0)
-
-      expect(paidTickets.length).toBe(3)
-      expect(freeTickets.length).toBe(2)
-    })
-
-    it('should handle all paid tickets', () => {
-      const tickets = [{ sum: '100' }, { sum: '200' }]
-
-      const paidTickets = tickets.filter((t) => parseFloat(t.sum) > 0)
-      const freeTickets = tickets.filter((t) => parseFloat(t.sum) === 0)
-
-      expect(paidTickets.length).toBe(2)
-      expect(freeTickets.length).toBe(0)
-    })
-
-    it('should handle all free tickets', () => {
-      const tickets = [{ sum: '0' }, { sum: '0' }]
-
-      const paidTickets = tickets.filter((t) => parseFloat(t.sum) > 0)
-      const freeTickets = tickets.filter((t) => parseFloat(t.sum) === 0)
-
-      expect(paidTickets.length).toBe(0)
-      expect(freeTickets.length).toBe(2)
-    })
-
-    it('should handle empty ticket list', () => {
-      const tickets: { sum: string }[] = []
-
-      const paidTickets = tickets.filter((t) => parseFloat(t.sum) > 0)
-      const freeTickets = tickets.filter((t) => parseFloat(t.sum) === 0)
-
-      expect(paidTickets.length).toBe(0)
-      expect(freeTickets.length).toBe(0)
-    })
-  })
-
   describe('Sponsor Pipeline Aggregation', () => {
     function createSponsor(
       overrides: Partial<SponsorForConferenceExpanded>,

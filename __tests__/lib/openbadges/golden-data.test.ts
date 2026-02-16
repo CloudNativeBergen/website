@@ -8,7 +8,6 @@
  */
 
 import { validateCredential } from '@/lib/openbadges/validator'
-import { signCredentialJWT, verifyCredentialJWT } from '@/lib/openbadges/crypto'
 import type { Credential } from '@/lib/openbadges/types'
 import goldenPayload from '@/lib/openbadges/data/credential-jwt-body.json'
 import goldenHeader from '@/lib/openbadges/data/credential-jwt-header.json'
@@ -399,20 +398,6 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
   })
 
   describe('Cross-Validation with Our Implementation', () => {
-    it('should accept both OpenBadgeCredential and AchievementCredential types', () => {
-      // Golden data uses OpenBadgeCredential
-      expect(goldenPayload.type).toContain('OpenBadgeCredential')
-
-      // Our implementation uses OpenBadgeCredential per spec
-      // Both are valid per spec
-      const ourType = ['VerifiableCredential', 'OpenBadgeCredential']
-      const specType = ['VerifiableCredential', 'OpenBadgeCredential']
-
-      // Both should validate
-      expect(ourType).toContain('VerifiableCredential')
-      expect(specType).toContain('VerifiableCredential')
-    })
-
     it('should validate a minimal credential matching our implementation', () => {
       const minimalCredential: Credential = {
         '@context': [
@@ -456,22 +441,6 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
 
       const result = validateCredential(minimalCredential)
       expect(result.valid).toBe(true)
-    })
-  })
-
-  describe('JWT Claims Computation', () => {
-    it('should correctly compute nbf from validFrom', () => {
-      const validFrom = '2010-01-01T00:00:00Z'
-      const expectedNbf = Math.floor(new Date(validFrom).getTime() / 1000)
-
-      expect(expectedNbf).toBe(1262304000) // Unix timestamp for 2010-01-01
-    })
-
-    it('should correctly compute exp from validUntil', () => {
-      const validUntil = '2030-01-01T00:00:00Z'
-      const expectedExp = Math.floor(new Date(validUntil).getTime() / 1000)
-
-      expect(expectedExp).toBe(1893456000) // Unix timestamp for 2030-01-01
     })
   })
 })
