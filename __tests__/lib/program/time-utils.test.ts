@@ -1,7 +1,14 @@
 /**
  * @jest-environment jsdom
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals'
 import {
   isScheduleInPast,
   isScheduleToday,

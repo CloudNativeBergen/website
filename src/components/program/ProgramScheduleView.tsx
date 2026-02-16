@@ -8,10 +8,7 @@ import {
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
-import {
-  getTalkStatusKey,
-  isScheduleInPast,
-} from '@/lib/program/time-utils'
+import { getTalkStatusKey, isScheduleInPast } from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
 import { formatConferenceDateLong } from '@/lib/time'
 import clsx from 'clsx'
