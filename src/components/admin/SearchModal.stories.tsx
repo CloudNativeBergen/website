@@ -3,7 +3,8 @@ import {
   MagnifyingGlassIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
-  UserIcon,
+  BuildingOfficeIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline'
 
 const meta = {
@@ -14,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Command palette-style search modal for quickly finding proposals by title, speaker name, description, or topic. Uses `useProposalSearch` hook with debounced search. Results are grouped into Talks and Workshops sections. Keyboard shortcuts: ⌘K to open, ↵ to select, Esc to close.',
+          'Command palette-style unified search modal for quickly finding pages, proposals, speakers, and sponsors. Uses `useUnifiedSearch` hook with parallel queries and debounced search. Results are grouped by category. Keyboard shortcuts: ⌘K to open, ↵ to select, Esc to close.',
       },
     },
   },
@@ -34,7 +35,7 @@ function MockSearchModal({
       <div className="grid grid-cols-1">
         <input
           className="col-start-1 row-start-1 h-12 w-full pr-4 pl-11 text-base text-gray-900 outline-hidden placeholder:text-gray-400 sm:text-sm dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
-          placeholder="Search proposals, speakers, topics..."
+          placeholder="Search pages, proposals, speakers, sponsors..."
           defaultValue={state !== 'empty' ? 'kubernetes' : ''}
           readOnly
         />
@@ -49,11 +50,10 @@ function MockSearchModal({
         <div className="px-6 py-14 text-center text-sm sm:px-14">
           <DocumentTextIcon className="mx-auto size-6 text-gray-400 dark:text-gray-500" />
           <p className="mt-4 font-semibold text-gray-900 dark:text-white">
-            Search proposals
+            Search across all admin pages and data
           </p>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            Search through proposal titles, descriptions, speaker names, topics,
-            and more.
+            Search through proposals, speakers, sponsors, pages, and more.
           </p>
         </div>
       )}
@@ -63,43 +63,23 @@ function MockSearchModal({
         <ul className="max-h-80 space-y-4 overflow-y-auto p-4 pb-2">
           <li>
             <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-              Talks (2)
+              Pages (2)
             </h2>
             <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
               {[
-                {
-                  title: 'Building Resilient Microservices with Kubernetes',
-                  speaker: 'Jane Doe',
-                  status: 'Accepted',
-                  statusClass: 'bg-green-50 text-green-700 ring-green-600/20',
-                },
-                {
-                  title: 'Kubernetes Security Best Practices',
-                  speaker: 'John Smith',
-                  status: 'Submitted',
-                  statusClass: 'bg-blue-50 text-blue-700 ring-blue-600/20',
-                },
-              ].map((proposal) => (
+                { title: 'Sponsors', icon: BuildingOfficeIcon },
+                { title: 'Speakers', icon: UserGroupIcon },
+              ].map((page) => (
                 <li
-                  key={proposal.title}
+                  key={page.title}
                   className="flex cursor-default items-center px-4 py-2 select-none"
                 >
                   <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                    <UserIcon className="size-4 text-gray-400 dark:text-gray-500" />
+                    <page.icon className="size-4 text-gray-400 dark:text-gray-500" />
                   </div>
                   <div className="ml-3 flex-auto truncate">
                     <div className="font-medium dark:text-white">
-                      {proposal.title}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        by {proposal.speaker}
-                      </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${proposal.statusClass}`}
-                      >
-                        {proposal.status}
-                      </span>
+                      {page.title}
                     </div>
                   </div>
                 </li>
@@ -108,24 +88,58 @@ function MockSearchModal({
           </li>
           <li>
             <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-              Workshops (1)
+              Proposals (2)
+            </h2>
+            <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
+              {[
+                {
+                  title: 'Building Resilient Microservices with Kubernetes',
+                  speaker: 'Jane Doe',
+                  status: 'Accepted',
+                },
+                {
+                  title: 'Kubernetes Security Best Practices',
+                  speaker: 'John Smith',
+                  status: 'Submitted',
+                },
+              ].map((proposal) => (
+                <li
+                  key={proposal.title}
+                  className="flex cursor-default items-center px-4 py-2 select-none"
+                >
+                  <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                    <DocumentTextIcon className="size-4 text-gray-400 dark:text-gray-500" />
+                  </div>
+                  <div className="ml-3 flex-auto truncate">
+                    <div className="font-medium dark:text-white">
+                      {proposal.title}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {proposal.speaker}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {proposal.status}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </li>
+          <li>
+            <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
+              Speakers (1)
             </h2>
             <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
               <li className="flex cursor-default items-center px-4 py-2 select-none">
                 <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                  <UserIcon className="size-4 text-gray-400 dark:text-gray-500" />
+                  <UserGroupIcon className="size-4 text-gray-400 dark:text-gray-500" />
                 </div>
                 <div className="ml-3 flex-auto truncate">
                   <div className="font-medium dark:text-white">
-                    Hands-on Kubernetes Workshop
+                    Jane Kubernetes Expert
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      by Alice Johnson
-                    </div>
-                    <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-green-600/20 ring-inset">
-                      Confirmed
-                    </span>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    Cloud Architect
                   </div>
                 </div>
               </li>
@@ -139,11 +153,11 @@ function MockSearchModal({
         <div className="px-6 py-14 text-center text-sm sm:px-14">
           <ExclamationTriangleIcon className="mx-auto size-6 text-gray-400 dark:text-gray-500" />
           <p className="mt-4 font-semibold text-gray-900 dark:text-white">
-            No proposals found
+            No results found
           </p>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            We couldn&apos;t find any proposals matching &quot;kubernetes&quot;.
-            Try different keywords.
+            We couldn&apos;t find anything matching &quot;kubernetes&quot;. Try
+            different keywords.
           </p>
         </div>
       )}
@@ -156,7 +170,7 @@ function MockSearchModal({
             Search Error
           </p>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            Failed to search proposals. Please try again.
+            Failed to perform search. Please try again.
           </p>
         </div>
       )}
@@ -199,7 +213,7 @@ export const WithResults: Story = {
     docs: {
       description: {
         story:
-          'Search results grouped into Talks and Workshops sections, with speaker avatars and status badges.',
+          'Search results grouped into multiple categories (Pages, Proposals, Speakers), with icons for each type.',
       },
     },
   },
