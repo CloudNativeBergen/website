@@ -21,7 +21,7 @@ let savedBotToken: string | undefined
 let savedFetch: typeof global.fetch
 
 function setEnv(nodeEnv: string, botToken?: string) {
-  ; (process.env as Record<string, string | undefined>).NODE_ENV = nodeEnv
+  ;(process.env as Record<string, string | undefined>).NODE_ENV = nodeEnv
   if (botToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = botToken
   } else {
@@ -30,7 +30,7 @@ function setEnv(nodeEnv: string, botToken?: string) {
 }
 
 function restoreEnv() {
-  ; (process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
+  ;(process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
   if (savedBotToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = savedBotToken
   } else {
@@ -126,7 +126,7 @@ describe('weeklyUpdate', () => {
   describe('sendWeeklyUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
@@ -139,7 +139,7 @@ describe('weeklyUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')

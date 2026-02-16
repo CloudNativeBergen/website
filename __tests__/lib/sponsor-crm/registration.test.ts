@@ -28,7 +28,7 @@ describe('registration', () => {
   describe('generateRegistrationToken', () => {
     it('returns existing token when registration is complete', async () => {
       // @ts-ignore
-      ; (clientReadUncached.fetch as any).mockResolvedValue({
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
         registrationToken: 'existing-token-abc',
         registrationComplete: true,
       })
@@ -40,7 +40,7 @@ describe('registration', () => {
 
     it('returns error when registration is complete but no token exists', async () => {
       // @ts-ignore
-      ; (clientReadUncached.fetch as any).mockResolvedValue({
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
         registrationToken: null,
         registrationComplete: true,
       })
@@ -51,7 +51,7 @@ describe('registration', () => {
 
     it('returns existing token when one is already set', async () => {
       // @ts-ignore
-      ; (clientReadUncached.fetch as any).mockResolvedValue({
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
         registrationToken: 'existing-token-xyz',
         registrationComplete: false,
       })
@@ -63,7 +63,7 @@ describe('registration', () => {
 
     it('generates new token when none exists', async () => {
       // @ts-ignore
-      ; (clientReadUncached.fetch as any).mockResolvedValue({
+      ;(clientReadUncached.fetch as any).mockResolvedValue({
         registrationToken: null,
         registrationComplete: false,
       })
@@ -73,7 +73,7 @@ describe('registration', () => {
         // @ts-ignore
         commit: vi.fn().mockResolvedValue({}),
       }
-        ; (clientWrite.patch as Mock).mockReturnValue(mockPatch)
+      ;(clientWrite.patch as Mock).mockReturnValue(mockPatch)
 
       const result = await generateRegistrationToken('sfc-123')
       expect(result.token).toMatch(
@@ -85,7 +85,7 @@ describe('registration', () => {
 
     it('returns error when document not found', async () => {
       // @ts-ignore
-      ; (clientReadUncached.fetch as any).mockResolvedValue(null)
+      ;(clientReadUncached.fetch as any).mockResolvedValue(null)
 
       const result = await generateRegistrationToken('sfc-missing')
       expect(result.error?.message).toMatch(/not found/)
