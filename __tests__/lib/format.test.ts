@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { formatOrgNumber } from '@/lib/format'
 
 const nbsp = '\u00A0'

@@ -1,17 +1,10 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
+import type { MockedFunction } from 'vitest'
 import type { AdobeSignSession } from '@/lib/adobe-sign/auth'
 
-const mockFetch = jest.fn() as jest.MockedFunction<typeof global.fetch>
+const mockFetch = vi.fn() as MockedFunction<typeof global.fetch>
 let savedFetch: typeof global.fetch
 
 const testSession: AdobeSignSession = {
@@ -23,7 +16,7 @@ const testSession: AdobeSignSession = {
 
 describe('Adobe Sign client', () => {
   beforeEach(() => {
-    jest.resetModules()
+    vi.resetModules()
     savedFetch = global.fetch
     global.fetch = mockFetch
     mockFetch.mockReset()

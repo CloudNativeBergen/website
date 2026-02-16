@@ -1,16 +1,14 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: jest.fn(),
-    transaction: jest.fn(() => ({
-      delete: jest.fn().mockReturnThis(),
+    fetch: vi.fn(),
+    transaction: vi.fn(() => ({
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     })),
   },
   clientReadUncached: {
-    fetch: jest.fn(),
+    fetch: vi.fn(),
   },
 }))
 
@@ -19,7 +17,7 @@ import { clientWrite } from '@/lib/sanity/client'
 
 describe('deleteSponsorForConference', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('deletes sponsor and related activities in a transaction', async () => {
@@ -29,9 +27,9 @@ describe('deleteSponsorForConference', () => {
     ]) // related activities
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -48,9 +46,9 @@ describe('deleteSponsorForConference', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -70,9 +68,9 @@ describe('deleteSponsorForConference', () => {
       .mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -91,9 +89,9 @@ describe('deleteSponsorForConference', () => {
       .mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -111,9 +109,9 @@ describe('deleteSponsorForConference', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // activities only
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -132,9 +130,9 @@ describe('deleteSponsorForConference', () => {
       .mockResolvedValueOnce([]) // no activities
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -152,9 +150,9 @@ describe('deleteSponsorForConference', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockRejectedValue(new Error('Transaction failed')),
+      commit: vi.fn().mockRejectedValue(new Error('Transaction failed')),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 

@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { createTestConfiguration } from '@/lib/badge/config'
 import { generateBadgeSVG } from '@/lib/badge/svg'
