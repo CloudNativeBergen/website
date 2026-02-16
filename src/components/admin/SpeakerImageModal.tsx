@@ -20,6 +20,11 @@ export function SpeakerImageModal({
   onClose,
   speaker,
 }: SpeakerImageModalProps) {
+  // Handle both Sanity image references and regular URLs (for Storybook)
+  const imageUrl = speaker.image.startsWith('http')
+    ? speaker.image
+    : sanityImage(speaker.image).width(800).height(800).fit('max').url()
+
   return (
     <ModalShell isOpen={isOpen} onClose={onClose} size="3xl">
       <div className="mb-4 flex items-start justify-between">
@@ -45,11 +50,7 @@ export function SpeakerImageModal({
 
       <div className="flex justify-center rounded-xl bg-gray-50 p-8 dark:bg-gray-800">
         <img
-          src={sanityImage(speaker.image)
-            .width(800)
-            .height(800)
-            .fit('max')
-            .url()}
+          src={imageUrl}
           alt={speaker.name}
           className="max-h-[600px] max-w-full rounded-lg object-contain"
           loading="eager"
