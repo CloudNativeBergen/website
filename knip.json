@@ -44,7 +44,6 @@
   "ignoreDependencies": [
     "eslint-config-next",
     "postcss",
-    "jest-environment-jsdom",
     "ts-node",
     "chromatic"
   ],

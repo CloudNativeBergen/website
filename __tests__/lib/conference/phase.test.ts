@@ -1,14 +1,6 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  jest,
-} from '@jest/globals'
 import {
   getCurrentPhase,
   getPhaseContext,
@@ -43,48 +35,48 @@ const baseConference: Conference = {
 
 describe('Conference Phase Detection', () => {
   beforeEach(() => {
-    jest.useFakeTimers()
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
 
   describe('getCurrentPhase', () => {
     it('returns initialization before CFP opens', () => {
-      jest.setSystemTime(new Date('2024-12-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('initialization')
     })
 
     it('returns planning when CFP is open', () => {
-      jest.setSystemTime(new Date('2025-02-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('planning')
     })
 
     it('returns planning during review period (after CFP close, before program)', () => {
-      jest.setSystemTime(new Date('2025-04-10T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-04-10T12:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('planning')
     })
 
     it('returns execution when program is published', () => {
-      jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-15T12:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('execution')
     })
 
     it('returns execution during conference days', () => {
-      jest.setSystemTime(new Date('2025-06-01T14:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-01T14:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('execution')
     })
 
     it('returns post-conference after event ends', () => {
-      jest.setSystemTime(new Date('2025-06-03T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-03T12:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('post-conference')
     })
   })
 
   describe('getPhaseContext', () => {
     it('provides comprehensive context during planning phase', () => {
-      jest.setSystemTime(new Date('2025-02-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
       const context = getPhaseContext(baseConference)
 
       expect(context.phase).toBe('planning')
@@ -105,7 +97,7 @@ describe('Conference Phase Detection', () => {
     })
 
     it('calculates countdown timers correctly', () => {
-      jest.setSystemTime(new Date('2025-03-25T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-03-25T00:00:00Z'))
       const context = getPhaseContext(baseConference)
 
       // 6 days until CFP closes (March 31)
@@ -119,7 +111,7 @@ describe('Conference Phase Detection', () => {
     })
 
     it('provides post-conference metrics', () => {
-      jest.setSystemTime(new Date('2025-06-10T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-10T12:00:00Z'))
       const context = getPhaseContext(baseConference)
 
       expect(context.phase).toBe('post-conference')
@@ -165,7 +157,7 @@ describe('Conference Phase Detection', () => {
         programDate: '',
       }
 
-      jest.setSystemTime(new Date('2025-02-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
       const phase = getCurrentPhase(incompleteConference)
       expect(phase).toBe('initialization')
 
@@ -176,23 +168,23 @@ describe('Conference Phase Detection', () => {
 
     it('handles conference on boundary dates', () => {
       // Exactly on CFP start date
-      jest.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('planning')
 
       // Exactly on CFP end date
-      jest.setSystemTime(new Date('2025-03-31T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-03-31T23:59:59Z'))
       expect(getCurrentPhase(baseConference)).toBe('planning')
 
       // Day after CFP ends (still planning - review period)
-      jest.setSystemTime(new Date('2025-04-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-04-01T00:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('planning')
 
       // Exactly on program date
-      jest.setSystemTime(new Date('2025-05-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-01T00:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('execution')
 
       // Day after conference ends
-      jest.setSystemTime(new Date('2025-06-03T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-03T00:00:00Z'))
       expect(getCurrentPhase(baseConference)).toBe('post-conference')
     })
   })

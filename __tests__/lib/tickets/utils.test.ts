@@ -1,13 +1,14 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from '@jest/globals'
 import {
   calculateTicketStatistics,
   calculateFreeTicketClaimRate,
   calculateCapacityPercentage,
   calculateCategoryStats,
   calculateFreeTicketAllocation,
+  calculateSponsorTickets,
+  createDefaultAnalysis,
 } from '@/lib/tickets/utils'
 import type { EventTicket } from '@/lib/tickets/types'
 
@@ -427,6 +428,99 @@ describe('Ticket Utils', () => {
       expect(result.totalPaidTickets).toBe(2)
       expect(result.totalRevenue).toBe(300)
       expect(isNaN(result.totalRevenue)).toBe(false)
+    })
+  })
+
+  describe('calculateSponsorTickets', () => {
+    it('should group tickets by tier', () => {
+      const conference = {
+        sponsors: [
+          { tier: { title: 'Gold' } },
+          { tier: { title: 'Gold' } },
+          { tier: { title: 'Silver' } },
+        ],
+      }
+      const tierAllocation = { Gold: 5, Silver: 3 }
+
+      const result = calculateSponsorTickets(conference, tierAllocation)
+
+      expect(result['Gold']).toEqual({ sponsors: 2, tickets: 10 })
+      expect(result['Silver']).toEqual({ sponsors: 1, tickets: 3 })
+    })
+
+    it('should return empty object when no sponsors', () => {
+      expect(calculateSponsorTickets({ sponsors: [] }, {})).toEqual({})
+      expect(calculateSponsorTickets({}, {})).toEqual({})
+    })
+
+    it('should handle sponsors with unknown tier', () => {
+      const conference = {
+        sponsors: [{ tier: { title: 'Unknown' } }],
+      }
+      const result = calculateSponsorTickets(conference, { Gold: 5 })
+
+      expect(result['Unknown']).toEqual({ sponsors: 1, tickets: 0 })
+    })
+
+    it('should handle sponsors with missing tier', () => {
+      const conference = {
+        sponsors: [{ tier: undefined }, { tier: { title: 'Gold' } }],
+      }
+      const result = calculateSponsorTickets(conference, { Gold: 3 })
+
+      expect(result['Unknown']).toEqual({ sponsors: 1, tickets: 0 })
+      expect(result['Gold']).toEqual({ sponsors: 1, tickets: 3 })
+    })
+
+    it('should aggregate multiple sponsors of same tier', () => {
+      const conference = {
+        sponsors: [
+          { tier: { title: 'Gold' } },
+          { tier: { title: 'Gold' } },
+          { tier: { title: 'Gold' } },
+        ],
+      }
+      const result = calculateSponsorTickets(conference, { Gold: 2 })
+
+      expect(result['Gold']).toEqual({ sponsors: 3, tickets: 6 })
+    })
+  })
+
+  describe('createDefaultAnalysis', () => {
+    it('should return default structure with empty tickets', () => {
+      const result = createDefaultAnalysis([], 200)
+
+      expect(result.progression).toEqual([])
+      expect(result.performance.isOnTrack).toBe(true)
+      expect(result.performance.currentPercentage).toBe(0)
+      expect(result.performance.nextMilestone).toBeNull()
+      expect(result.capacity).toBe(200)
+      expect(result.statistics.totalPaidTickets).toBe(0)
+      expect(result.statistics.totalRevenue).toBe(0)
+      expect(result.statistics.sponsorTickets).toBe(0)
+      expect(result.statistics.speakerTickets).toBe(0)
+      expect(result.statistics.totalCapacityUsed).toBe(0)
+    })
+
+    it('should calculate basic stats from tickets', () => {
+      const tickets = [
+        createMockTicket({ order_id: 1, sum: '100' }),
+        createMockTicket({ order_id: 2, sum: '200' }),
+        createMockTicket({ order_id: 3, sum: '0' }),
+      ]
+
+      const result = createDefaultAnalysis(tickets, 100)
+
+      expect(result.statistics.totalPaidTickets).toBe(2)
+      expect(result.statistics.totalRevenue).toBe(300)
+      expect(result.statistics.totalCapacityUsed).toBe(3)
+      expect(result.capacity).toBe(100)
+    })
+
+    it('should have empty category breakdown', () => {
+      const result = createDefaultAnalysis([], 50)
+
+      expect(result.statistics.categoryBreakdown).toEqual({})
     })
   })
 })

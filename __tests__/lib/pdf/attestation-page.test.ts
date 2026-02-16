@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { addAttestationPage, type SigningAttestation } from '@/lib/pdf'
 

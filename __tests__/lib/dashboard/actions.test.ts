@@ -5,51 +5,43 @@
  * and dashboard widgets. Each server action fetches from the domain
  * layer and reshapes data for widget consumption.
  */
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  jest,
-} from '@jest/globals'
 
 // --- Mocks ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFn = (...args: any[]) => any
 
 // Auth — no external variable in factory to avoid hoisting issues
-jest.mock('@/lib/auth', () => ({
-  getAuthSession: jest.fn(),
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: vi.fn(),
   // Re-export AppEnvironment that auth.ts re-exports
   AppEnvironment: {},
 }))
 
 // Proposals
-const mockGetProposals = jest.fn<AnyFn>()
-jest.mock('@/lib/proposal/server', () => ({
+const mockGetProposals = vi.fn<AnyFn>()
+vi.mock('@/lib/proposal/server', () => ({
   getProposals: (...args: unknown[]) => mockGetProposals(...args),
 }))
 
 // Speakers
-const mockGetSpeakers = jest.fn<AnyFn>()
-jest.mock('@/lib/speaker/sanity', () => ({
+const mockGetSpeakers = vi.fn<AnyFn>()
+vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: (...args: unknown[]) => mockGetSpeakers(...args),
 }))
 
-const mockGetFeaturedSpeakers = jest.fn<AnyFn>()
-jest.mock('@/lib/featured/sanity', () => ({
+const mockGetFeaturedSpeakers = vi.fn<AnyFn>()
+vi.mock('@/lib/featured/sanity', () => ({
   getFeaturedSpeakers: (...args: unknown[]) => mockGetFeaturedSpeakers(...args),
 }))
 
 // Sponsors
-const mockListSponsors = jest.fn<AnyFn>()
-jest.mock('@/lib/sponsor-crm/sanity', () => ({
+const mockListSponsors = vi.fn<AnyFn>()
+vi.mock('@/lib/sponsor-crm/sanity', () => ({
   listSponsorsForConference: (...args: unknown[]) => mockListSponsors(...args),
 }))
 
-jest.mock('@/lib/sponsor-crm/pipeline', () => ({
-  aggregateSponsorPipeline: jest.fn(() => ({
+vi.mock('@/lib/sponsor-crm/pipeline', () => ({
+  aggregateSponsorPipeline: vi.fn(() => ({
     byStatus: { prospect: 3, contacted: 2, negotiating: 1, 'closed-won': 1 },
     byStatusValue: {
       prospect: 0,
@@ -63,19 +55,19 @@ jest.mock('@/lib/sponsor-crm/pipeline', () => ({
   })),
 }))
 
-const mockListActivities = jest.fn<AnyFn>()
-jest.mock('@/lib/sponsor-crm/activities', () => ({
+const mockListActivities = vi.fn<AnyFn>()
+vi.mock('@/lib/sponsor-crm/activities', () => ({
   listActivitiesForConference: (...args: unknown[]) =>
     mockListActivities(...args),
 }))
 
 // Tickets
-jest.mock('@/lib/tickets/api', () => ({
-  fetchEventTickets: jest.fn(() => Promise.resolve([])),
+vi.mock('@/lib/tickets/api', () => ({
+  fetchEventTickets: vi.fn(() => Promise.resolve([])),
 }))
 
-jest.mock('@/lib/tickets/processor', () => ({
-  TicketSalesProcessor: jest.fn().mockImplementation(() => ({
+vi.mock('@/lib/tickets/processor', () => ({
+  TicketSalesProcessor: vi.fn().mockImplementation(() => ({
     process: () => ({
       statistics: { totalPaidTickets: 0, totalRevenue: 0 },
       progression: [],
@@ -85,42 +77,42 @@ jest.mock('@/lib/tickets/processor', () => ({
   })),
 }))
 
-jest.mock('@/lib/tickets/config', () => ({
+vi.mock('@/lib/tickets/config', () => ({
   DEFAULT_TARGET_CONFIG: {},
   DEFAULT_CAPACITY: 500,
 }))
 
 // Travel support
-const mockGetAllTravelSupport = jest.fn<AnyFn>()
-jest.mock('@/lib/travel-support/sanity', () => ({
+const mockGetAllTravelSupport = vi.fn<AnyFn>()
+vi.mock('@/lib/travel-support/sanity', () => ({
   getAllTravelSupport: (...args: unknown[]) => mockGetAllTravelSupport(...args),
 }))
 
 // Workshops
-const mockGetWorkshopStatistics = jest.fn<AnyFn>()
-jest.mock('@/lib/workshop/sanity', () => ({
+const mockGetWorkshopStatistics = vi.fn<AnyFn>()
+vi.mock('@/lib/workshop/sanity', () => ({
   getWorkshopStatistics: (...args: unknown[]) =>
     mockGetWorkshopStatistics(...args),
 }))
 
 // Sanity client (for dashboard config persistence)
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: jest.fn(() => Promise.resolve(null)),
-    create: jest.fn(() => Promise.resolve({ _id: 'new-config' })),
-    patch: jest.fn(() => ({
-      set: jest.fn(() => ({
-        commit: jest.fn(() => Promise.resolve()),
+    fetch: vi.fn(() => Promise.resolve(null)),
+    create: vi.fn(() => Promise.resolve({ _id: 'new-config' })),
+    patch: vi.fn(() => ({
+      set: vi.fn(() => ({
+        commit: vi.fn(() => Promise.resolve()),
       })),
     })),
   },
 }))
 
 // Time utilities
-jest.mock('@/lib/time', () => ({
-  formatRelativeTime: jest.fn((d: string) => d || 'unknown'),
-  formatLabel: jest.fn((v: string) => v.charAt(0).toUpperCase() + v.slice(1)),
-  formatConferenceDateShort: jest.fn((d: string) => d || 'unknown'),
+vi.mock('@/lib/time', () => ({
+  formatRelativeTime: vi.fn((d: string) => d || 'unknown'),
+  formatLabel: vi.fn((v: string) => v.charAt(0).toUpperCase() + v.slice(1)),
+  formatConferenceDateShort: vi.fn((d: string) => d || 'unknown'),
 }))
 
 import type { Conference } from '@/lib/conference/types'
@@ -141,31 +133,8 @@ import type {
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import type { SerializedWidget } from '@/app/(admin)/admin/actions'
 
-// Use require() for the actions module so jest.mock factories are
-// registered before the module loads (avoids SWC hoisting issues
-// with the @/lib/auth ↔ next-auth mock circular dependency).
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const actions = require('@/app/(admin)/admin/actions') as {
-  fetchDeadlines: (c: Conference) => Promise<DeadlineData[]>
-  fetchCFPHealth: (c: Conference) => Promise<CFPHealthData>
-  fetchProposalPipeline: (id: string) => Promise<ProposalPipelineData>
-  fetchReviewProgress: (id: string) => Promise<ReviewProgressData>
-  fetchSponsorPipelineData: (
-    id: string,
-    goal: number,
-  ) => Promise<SponsorPipelineWidgetData>
-  fetchSpeakerEngagement: (id: string) => Promise<SpeakerEngagementData>
-  fetchTravelSupport: (c: Conference) => Promise<TravelSupportData>
-  fetchWorkshopCapacity: (id: string) => Promise<WorkshopStatistics>
-  fetchScheduleStatus: (c: Conference) => Promise<ScheduleStatusData>
-  fetchRecentActivity: (id: string) => Promise<ActivityItem[]>
-  fetchQuickActions: (c: Conference, phase: string) => Promise<QuickAction[]>
-  fetchTicketSales: (c: Conference) => Promise<TicketSalesData | null>
-  loadDashboardConfig: (id: string) => Promise<SerializedWidget[] | null>
-  saveDashboardConfig: (id: string, w: SerializedWidget[]) => Promise<void>
-}
-
-const {
+// vi.mock calls are hoisted automatically by Vitest
+import {
   fetchDeadlines,
   fetchCFPHealth,
   fetchProposalPipeline,
@@ -180,13 +149,11 @@ const {
   fetchTicketSales,
   loadDashboardConfig,
   saveDashboardConfig,
-} = actions
+} from '@/app/(admin)/admin/actions'
+import type { Mock } from 'vitest'
+import { getAuthSession } from '@/lib/auth'
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { getAuthSession } = require('@/lib/auth') as {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getAuthSession: jest.Mock<any>
-}
+const mockGetAuthSession = getAuthSession as Mock
 
 // --- Test fixtures ---
 
@@ -239,10 +206,10 @@ function makeProposal(overrides: Record<string, unknown> = {}) {
 
 describe('Dashboard Server Actions', () => {
   beforeEach(() => {
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date('2025-02-15T12:00:00Z'))
-    jest.clearAllMocks()
-    getAuthSession.mockResolvedValue({
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
+    vi.clearAllMocks()
+    mockGetAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
       speaker: { isOrganizer: true },
@@ -250,7 +217,7 @@ describe('Dashboard Server Actions', () => {
   })
 
   afterEach(() => {
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
 
   describe('fetchDeadlines', () => {

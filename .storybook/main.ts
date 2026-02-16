@@ -44,11 +44,11 @@ const config: StorybookConfig = {
   },
   typescript: {
     check: false,
-    reactDocgen: 'react-docgen-typescript',
-    reactDocgenTypescriptOptions: {
-      shouldExtractLiteralValuesFromEnum: true,
-      propFilter: (prop) =>
-        prop.parent ? !/node_modules/.test(prop.parent.fileName) : true,
+    reactDocgen: 'react-docgen',
+  },
+  build: {
+    test: {
+      disabledAddons: ['@storybook/addon-docs'],
     },
   },
   core: {
