@@ -150,6 +150,47 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
   }
 }
 
+async function sendContractSignedSlackNotification(
+  sfcId: string,
+  sfc: {
+    sponsor?: { name?: string }
+    signerName?: string
+    tier?: { title?: string }
+    contractValue?: number
+    contractCurrency?: string
+    conference?: { _id?: string; domains?: string[] }
+  },
+) {
+  try {
+    const salesChannel = sfc.conference?._id
+      ? await clientReadUncached.fetch<string | null>(
+          `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
+          { id: sfc.conference._id },
+        )
+      : null
+
+    if (!salesChannel) return
+
+    const { notifySponsorContractSigned } = await import('@/lib/slack/notify')
+    await notifySponsorContractSigned(
+      sfc.sponsor?.name || 'Unknown Sponsor',
+      sfc.signerName,
+      sfc.tier?.title || null,
+      sfc.contractValue ?? null,
+      sfc.contractCurrency ?? null,
+      {
+        ...sfc.conference,
+        salesNotificationChannel: salesChannel,
+      } as Parameters<typeof notifySponsorContractSigned>[5],
+    )
+  } catch (slackError) {
+    console.error(
+      `[sendContractSignedSlackNotification] Failed for ${sfcId}:`,
+      slackError,
+    )
+  }
+}
+
 export const sponsorRouter = router({
   list: adminProcedure
     .input(z.object({ query: z.string().optional() }).optional())
@@ -1198,6 +1239,10 @@ export const sponsorRouter = router({
               )
             }
           }
+
+          if (newStatus === 'signed') {
+            await sendContractSignedSlackNotification(input.id, sfc)
+          }
         }
 
         return {
@@ -1263,6 +1308,10 @@ export const sponsorRouter = router({
               logError,
             )
           }
+        }
+
+        if (input.newStatus === 'signed') {
+          await sendContractSignedSlackNotification(input.id, existing)
         }
 
         const { sponsorForConference } = await getSponsorForConference(input.id)

@@ -15,6 +15,7 @@ export interface SponsorPortalSectionProps {
   sponsorForConferenceId: string
   existingToken?: string
   portalComplete?: boolean
+  registrationSent?: boolean
   onCheckStatus?: () => void
 }
 
@@ -22,11 +23,17 @@ export function SponsorPortalSection({
   sponsorForConferenceId,
   existingToken,
   portalComplete,
+  registrationSent,
   onCheckStatus,
 }: SponsorPortalSectionProps) {
-  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(() => {
+    if (registrationSent && existingToken && typeof window !== 'undefined') {
+      return `${window.location.origin}/sponsor/portal/${existingToken}`
+    }
+    return null
+  })
   const [copied, setCopied] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
+  const [emailSent, setEmailSent] = useState(registrationSent ?? false)
 
   const generateMutation = api.registration.generateToken.useMutation({
     onSuccess: (data) => setGeneratedUrl(data.url),

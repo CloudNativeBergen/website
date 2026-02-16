@@ -320,6 +320,11 @@ export function SponsorContractView({
             sponsorForConferenceId={sponsor._id}
             existingToken={sponsor.registrationToken}
             portalComplete={false}
+            registrationSent={
+              sponsor.contractStatus === 'registration-sent' ||
+              sponsor.contractStatus === 'contract-sent' ||
+              sponsor.contractStatus === 'contract-signed'
+            }
             onCheckStatus={
               sponsor.registrationToken ? () => onSuccess?.() : undefined
             }
