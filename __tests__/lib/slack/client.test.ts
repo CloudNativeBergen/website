@@ -11,7 +11,7 @@ let savedBotToken: string | undefined
 let savedFetch: typeof global.fetch
 
 function setEnv(opts: { nodeEnv: string; botToken?: string }) {
-  ; (process.env as Record<string, string | undefined>).NODE_ENV = opts.nodeEnv
+  ;(process.env as Record<string, string | undefined>).NODE_ENV = opts.nodeEnv
   if (opts.botToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = opts.botToken
   } else {
@@ -21,7 +21,7 @@ function setEnv(opts: { nodeEnv: string; botToken?: string }) {
 
 function restoreEnv() {
   if (savedNodeEnv !== undefined) {
-    ; (process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
+    ;(process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
   } else {
     delete (process.env as Record<string, string | undefined>).NODE_ENV
   }
@@ -54,7 +54,7 @@ describe('Slack client', () => {
   describe('development mode', () => {
     it('should log to console instead of sending', async () => {
       setEnv({ nodeEnv: 'development' })
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage, { channel: '#test' })
@@ -149,7 +149,7 @@ describe('Slack client', () => {
   describe('missing configuration', () => {
     it('should warn when no bot token', async () => {
       setEnv({ nodeEnv: 'production' })
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage, { channel: '#test' })
@@ -159,7 +159,7 @@ describe('Slack client', () => {
 
     it('should warn when no channel specified', async () => {
       setEnv({ nodeEnv: 'production', botToken: 'xoxb-test' })
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage)
