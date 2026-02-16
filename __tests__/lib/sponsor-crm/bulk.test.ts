@@ -38,9 +38,9 @@ describe('Bulk Sponsor CRM Operations', () => {
         { _id: 's1', _type: 'sponsorForConference', status: 'prospect' },
         { _id: 's2', _type: 'sponsorForConference', status: 'prospect' },
       ]
-        ; (clientWrite.fetch as any).mockResolvedValue(mockSponsors)
+      ;(clientWrite.fetch as any).mockResolvedValue(mockSponsors)
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       const result = await bulkUpdateSponsors(
         { ids: ['s1', 's2'], status: 'contacted' },
@@ -65,11 +65,11 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('handles tag additions and removals', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([
+      ;(clientWrite.fetch as any).mockResolvedValue([
         { _id: 's1', _type: 'sponsorForConference', tags: ['warm-lead'] },
       ])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkUpdateSponsors(
         { ids: ['s1'], addTags: ['high-priority'], removeTags: ['warm-lead'] },
@@ -83,7 +83,7 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('deduplicates tags when adding existing ones', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([
+      ;(clientWrite.fetch as any).mockResolvedValue([
         {
           _id: 's1',
           _type: 'sponsorForConference',
@@ -91,7 +91,7 @@ describe('Bulk Sponsor CRM Operations', () => {
         },
       ])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkUpdateSponsors(
         { ids: ['s1'], addTags: ['warm-lead', 'referral'] },
@@ -107,9 +107,9 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('skips commit when no sponsors match the IDs', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([])
+      ;(clientWrite.fetch as any).mockResolvedValue([])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       const result = await bulkUpdateSponsors(
         { ids: ['nonexistent'], status: 'contacted' },
@@ -121,11 +121,11 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('does not create activity log when status is unchanged', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([
+      ;(clientWrite.fetch as any).mockResolvedValue([
         { _id: 's1', _type: 'sponsorForConference', status: 'contacted' },
       ])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkUpdateSponsors({ ids: ['s1'], status: 'contacted' }, mockUserId)
 
@@ -135,12 +135,12 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('propagates transaction commit failures', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([
+      ;(clientWrite.fetch as any).mockResolvedValue([
         { _id: 's1', _type: 'sponsorForConference', status: 'prospect' },
       ])
       const tx = createMockTransaction()
       tx.commit.mockRejectedValue(new Error('Transaction failed'))
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await expect(
         bulkUpdateSponsors({ ids: ['s1'], status: 'contacted' }, mockUserId),
@@ -148,13 +148,13 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('resolves assignee name for activity logs', async () => {
-      ; (clientWrite.fetch as any)
+      ;(clientWrite.fetch as any)
         .mockResolvedValueOnce([
           { _id: 's1', _type: 'sponsorForConference', status: 'prospect' },
         ])
         .mockResolvedValueOnce({ name: 'Jane Doe' })
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkUpdateSponsors(
         { ids: ['s1'], assignedTo: 'user-jane' },
@@ -171,12 +171,12 @@ describe('Bulk Sponsor CRM Operations', () => {
 
   describe('bulkDeleteSponsors', () => {
     it('deletes sponsors and their related activities', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([
+      ;(clientWrite.fetch as any).mockResolvedValue([
         'activity-1',
         'activity-2',
       ])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       const result = await bulkDeleteSponsors(['s1', 's2'])
 
@@ -193,12 +193,12 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('deletes contract assets when deleteContractAssets option is true', async () => {
-      ; (clientWrite.fetch as any)
+      ;(clientWrite.fetch as any)
         .mockResolvedValueOnce(['activity-1'])
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkDeleteSponsors(['s1'], { deleteContractAssets: true })
 
@@ -209,9 +209,9 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('does not fetch contract assets when deleteContractAssets is false', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([])
+      ;(clientWrite.fetch as any).mockResolvedValue([])
       const tx = createMockTransaction()
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await bulkDeleteSponsors(['s1'])
 
@@ -219,10 +219,10 @@ describe('Bulk Sponsor CRM Operations', () => {
     })
 
     it('propagates transaction commit failures', async () => {
-      ; (clientWrite.fetch as any).mockResolvedValue([])
+      ;(clientWrite.fetch as any).mockResolvedValue([])
       const tx = createMockTransaction()
       tx.commit.mockRejectedValue(new Error('Delete failed'))
-        ; (clientWrite.transaction as any).mockReturnValue(tx)
+      ;(clientWrite.transaction as any).mockReturnValue(tx)
 
       await expect(bulkDeleteSponsors(['s1'])).rejects.toThrow('Delete failed')
     })
