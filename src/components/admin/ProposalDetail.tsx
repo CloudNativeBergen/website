@@ -79,7 +79,7 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
             <button
               onClick={() => setIsImageModalOpen(true)}
               className="cursor-pointer transition-opacity hover:opacity-80"
-              aria-label={`View ${speaker.name}&apos;s photo in fullscreen`}
+              aria-label={`View ${speaker.name}'s photo in fullscreen`}
             >
               <img
                 src={sanityImage(speaker.image)
