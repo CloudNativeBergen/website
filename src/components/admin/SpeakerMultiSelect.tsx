@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-// Speaker type is used by SpeakerAvatars but not directly here
 import {
   UserIcon,
   XMarkIcon,
@@ -10,6 +9,7 @@ import {
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import type { Speaker } from '@/lib/speaker/types'
 import { SearchInput } from '@/components/SearchInput'
+import { api } from '@/lib/trpc/client'
 
 // Define minimal speaker type for admin selection
 type AdminSpeakerPick = {
@@ -40,39 +40,14 @@ export function SpeakerMultiSelect({
   required = false,
   error,
 }: SpeakerMultiSelectProps) {
-  const [speakers, setSpeakers] = useState<AdminSpeakerPick[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Fetch speakers on mount and when conferenceId changes
-  useEffect(() => {
-    const fetchSpeakers = async () => {
-      setIsLoading(true)
-      setFetchError(null)
-
-      try {
-        const url = `/api/admin/speakers${conferenceId ? `?conferenceId=${conferenceId}` : ''}`
-        const response = await fetch(url)
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch speakers')
-        }
-
-        const data = await response.json()
-        setSpeakers(data.speakers || [])
-      } catch (err) {
-        console.error('Error fetching speakers:', err)
-        setFetchError('Failed to load speakers')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchSpeakers()
-  }, [conferenceId])
+  const { data: speakers = [], isLoading, error: fetchError } = api.speakers.list.useQuery(
+    { conferenceId },
+    { staleTime: 5 * 60 * 1000 }, // Cache for 5 minutes
+  )
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -279,7 +254,7 @@ export function SpeakerMultiSelect({
       {(fetchError || error) && (
         <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
           <XMarkIcon className="h-4 w-4" />
-          {fetchError || error}
+          {fetchError?.message || error}
         </div>
       )}
     </div>
