@@ -45,7 +45,11 @@ export function SpeakerImageModal({
 
       <div className="flex justify-center rounded-xl bg-gray-50 p-8 dark:bg-gray-800">
         <img
-          src={sanityImage(speaker.image).width(800).height(800).fit('max').url()}
+          src={sanityImage(speaker.image)
+            .width(800)
+            .height(800)
+            .fit('max')
+            .url()}
           alt={speaker.name}
           className="max-h-[600px] max-w-full rounded-lg object-contain"
           loading="eager"
@@ -55,7 +59,7 @@ export function SpeakerImageModal({
       <div className="mt-6 flex justify-end">
         <button
           onClick={onClose}
-          className="rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue/90 dark:bg-brand-cloud-blue dark:hover:bg-brand-aqua"
+          className="dark:hover:bg-brand-aqua rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue/90 dark:bg-brand-cloud-blue"
         >
           Close
         </button>

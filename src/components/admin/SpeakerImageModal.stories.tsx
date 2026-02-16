@@ -48,8 +48,7 @@ export const Default: Story = {
     speaker: {
       name: 'Jane Smith',
       title: 'Senior Software Engineer',
-      image:
-        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+      image: 'image-abc123-800x800-jpg',
     },
   },
 }
@@ -59,8 +58,7 @@ export const WithoutTitle: Story = {
     isOpen: true,
     speaker: {
       name: 'John Doe',
-      image:
-        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+      image: 'image-def456-800x800-jpg',
     },
   },
 }
@@ -71,8 +69,7 @@ export const Interactive: Story = {
     speaker: {
       name: 'Jane Smith',
       title: 'Senior Software Engineer',
-      image:
-        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+      image: 'image-abc123-800x800-jpg',
     },
   },
   render: (args) => <SpeakerImageModalWrapper speaker={args.speaker} />,
