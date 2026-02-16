@@ -82,6 +82,10 @@ describe('ContractSigningPage', () => {
     submitOnError = undefined
   })
 
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
   describe('loading state', () => {
     it('shows loading spinner while fetching contract', () => {
       mockGetContract.mockReturnValue({

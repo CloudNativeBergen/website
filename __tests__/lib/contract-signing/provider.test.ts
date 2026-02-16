@@ -53,6 +53,10 @@ describe('AdobeSignProvider', () => {
     provider = new AdobeSignProvider()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('has name "Adobe Sign"', () => {
     expect(provider.name).toBe('Adobe Sign')
   })
@@ -96,7 +100,6 @@ describe('AdobeSignProvider', () => {
         message: 'Please sign',
         fileInfos: [{ transientDocumentId: 'td-123' }],
       })
-      vi.useRealTimers()
     })
 
     it('throws when session is not connected', async () => {
@@ -165,7 +168,6 @@ describe('AdobeSignProvider', () => {
 
       expect(result.agreementId).toBe('agr-1')
       expect(result.signingUrl).toBeUndefined()
-      vi.useRealTimers()
     })
   })
 
