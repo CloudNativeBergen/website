@@ -11,6 +11,7 @@ import {
   HeartIcon,
   XMarkIcon,
   BellIcon,
+  ClockIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { TrashIcon } from '@heroicons/react/24/solid'
@@ -36,6 +37,12 @@ function colorForAction(action: Action): [string, string, string] {
         'bg-green-100 dark:bg-green-900/30',
         'text-green-600 dark:text-green-400',
         'bg-green-600 hover:bg-green-500 dark:bg-green-700 dark:hover:bg-green-600',
+      ]
+    case Action.waitlist:
+      return [
+        'bg-orange-100 dark:bg-orange-900/30',
+        'text-orange-600 dark:text-orange-400',
+        'bg-orange-600 hover:bg-orange-500 dark:bg-orange-700 dark:hover:bg-orange-600',
       ]
     case Action.remind:
       return [
@@ -69,6 +76,8 @@ function iconForAction(
     case Action.accept:
     case Action.confirm:
       return HeartIcon
+    case Action.waitlist:
+      return ClockIcon
     case Action.remind:
       return BellIcon
     case Action.reject:
