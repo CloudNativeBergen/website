@@ -1275,4 +1275,120 @@ export const proposalRouter = router({
         }
       }),
   }),
+
+  // Proposal action (status change)
+  action: protectedProcedure
+    .input(
+      IdParamSchema.extend({
+        action: ProposalActionSchema.shape.action,
+        notify: ProposalActionSchema.shape.notify,
+        comment: ProposalActionSchema.shape.comment,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const {
+          conference,
+          domain,
+          error: conferenceError,
+        } = await getConferenceForCurrentDomain({})
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+            cause: conferenceError,
+          })
+        }
+
+        const { proposal, proposalError } = await getProposalSanity({
+          id: input.id,
+          speakerId: ctx.speaker._id,
+          isOrganizer: ctx.speaker.isOrganizer === true,
+        })
+
+        if (proposalError || !proposal || proposal._id !== input.id) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found or access denied',
+            cause: proposalError,
+          })
+        }
+
+        const { status, isValidAction } = actionStateMachine(
+          proposal.status,
+          input.action,
+          ctx.speaker.isOrganizer === true,
+        )
+
+        if (!isValidAction) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Invalid action ${input.action} for status ${proposal.status}`,
+          })
+        }
+
+        if (status === Status.deleted) {
+          const { err: deleteError } = await deleteProposal(input.id)
+          if (deleteError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to delete proposal',
+              cause: deleteError,
+            })
+          }
+          return {
+            proposalStatus: Status.deleted,
+            status: 200,
+          }
+        }
+
+        const { proposal: updatedProposal, err: updateErr } =
+          await updateProposalStatus(input.id, status)
+
+        if (updateErr) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update proposal status',
+            cause: updateErr,
+          })
+        }
+
+        const statusChangeEvent: ProposalStatusChangeEvent = {
+          eventType: 'proposal.status.changed',
+          timestamp: new Date(),
+          proposal: updatedProposal,
+          previousStatus: proposal.status,
+          newStatus: status,
+          action: input.action,
+          conference,
+          speakers: proposal.speakers as Speaker[],
+          metadata: {
+            triggeredBy: {
+              speakerId: ctx.speaker._id,
+              isOrganizer: ctx.speaker.isOrganizer === true,
+            },
+            shouldNotify: input.notify ?? true,
+            comment: input.comment,
+            domain,
+          },
+        }
+
+        eventBus.publish(statusChangeEvent).catch((error) => {
+          console.error('Failed to publish status change event:', error)
+        })
+
+        return {
+          proposalStatus: updatedProposal.status,
+          status: 200,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to process proposal action',
+          cause: error,
+        })
+      }
+    }),
 })

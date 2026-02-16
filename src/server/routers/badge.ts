@@ -14,6 +14,7 @@ import {
   BadgeIdInputSchema,
   ResendBadgeEmailInputSchema,
   DeleteBadgeInputSchema,
+  ValidateBadgeInputSchema,
 } from '@/server/schemas/badge'
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { createBadgeConfiguration } from '@/lib/badge/config'
@@ -775,6 +776,27 @@ export const badgeRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete badge',
+          cause: error,
+        })
+      }
+    }),
+
+  /**
+   * Validate badge credential (public endpoint)
+   */
+  validate: publicProcedure
+    .input(ValidateBadgeInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const { validateBadge } = await import('@/lib/badge/validation')
+        const result = await validateBadge(input.svg)
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message:
+            error instanceof Error ? error.message : 'Validation failed',
           cause: error,
         })
       }

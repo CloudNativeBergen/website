@@ -1,23 +1,93 @@
 import { TRPCError } from '@trpc/server'
-import { router, adminProcedure } from '../trpc'
+import { router, adminProcedure, publicProcedure } from '../trpc'
 import {
   GetVolunteerByIdSchema,
   GetVolunteersByConferenceSchema,
   UpdateVolunteerStatusSchema,
   SendVolunteerEmailSchema,
   DeleteVolunteerSchema,
+  CreateVolunteerSchema,
 } from '../schemas/volunteer'
 import {
   getVolunteersByConference,
   getVolunteerById,
   updateVolunteerStatus,
   deleteVolunteer,
+  createVolunteer,
 } from '@/lib/volunteer/sanity'
 import { VolunteerStatus } from '@/lib/volunteer/types'
+import type { VolunteerInput } from '@/lib/volunteer/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
+import { notifyNewVolunteer } from '@/lib/slack/notify'
 
 export const volunteerRouter = router({
+  create: publicProcedure
+    .input(CreateVolunteerSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const ipAddress = ctx.ipAddress || ''
+
+        const volunteerInput: VolunteerInput = {
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          occupation: input.occupation,
+          availability: input.availability,
+          preferredTasks: input.preferredTasks,
+          tshirtSize: input.tshirtSize,
+          dietaryRestrictions: input.dietaryRestrictions,
+          otherInfo: input.otherInfo,
+          conference: {
+            _type: 'reference',
+            _ref: input.conferenceId,
+          },
+          consent: {
+            dataProcessing: {
+              granted: true,
+              grantedAt: new Date().toISOString(),
+              ipAddress,
+            },
+            privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+          },
+        }
+
+        const result = await createVolunteer(volunteerInput)
+
+        if (result.error || !result.volunteer) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              result.error?.message || 'Failed to create volunteer record',
+            cause: result.error,
+          })
+        }
+
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (!error && conference) {
+            void notifyNewVolunteer(result.volunteer, conference)
+          }
+        } catch {
+          // Ignore notification errors
+        }
+
+        return {
+          success: true,
+          volunteerId: result.volunteer._id,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create volunteer application',
+          cause: error,
+        })
+      }
+    }),
+
   list: adminProcedure
     .input(GetVolunteersByConferenceSchema)
     .query(async ({ input }) => {
