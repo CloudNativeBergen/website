@@ -1365,7 +1365,6 @@ export const sponsorRouter = router({
               venueName: sfc.conference.venueName,
               venueAddress: sfc.conference.venueAddress,
               sponsorEmail: sfc.conference.sponsorEmail,
-              logoBright: sfc.conference.logoBright,
             },
           })
         } catch (pdfError) {
@@ -2024,7 +2023,6 @@ export const sponsorRouter = router({
               venueName: conference.venueName,
               venueAddress: conference.venueAddress,
               sponsorEmail: conference.sponsorEmail,
-              logoBright: conference.logoBright,
             },
           })
 

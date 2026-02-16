@@ -1,6 +1,5 @@
 import {
   Document,
-  Image,
   Page,
   Text,
   View,
@@ -58,10 +57,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: TEXT_MUTED,
   },
-  headerLogo: {
-    height: 28,
-    objectFit: 'contain' as const,
-  },
+
   title: {
     fontSize: 20,
     fontFamily: 'Helvetica-Bold',
@@ -408,21 +404,13 @@ function PackageDetails({ variables }: PackageDetailsProps) {
 interface ContractDocumentProps {
   template: ContractTemplate
   variables: Record<string, string>
-  logoDataUrl?: string
-}
-
-function svgToDataUrl(svg: string): string {
-  const base64 = Buffer.from(svg, 'utf-8').toString('base64')
-  return `data:image/svg+xml;base64,${base64}`
 }
 
 function PageHeader({
   headerText,
-  logoDataUrl,
   variables,
 }: {
   headerText?: string
-  logoDataUrl?: string
   variables: Record<string, string>
 }) {
   const text = headerText
@@ -434,17 +422,12 @@ function PageHeader({
       <View style={styles.accentBar} fixed />
       <View style={styles.headerArea}>
         <Text style={styles.headerText}>{text || ''}</Text>
-        {logoDataUrl && <Image style={styles.headerLogo} src={logoDataUrl} />}
       </View>
     </>
   )
 }
 
-function ContractDocument({
-  template,
-  variables,
-  logoDataUrl,
-}: ContractDocumentProps) {
+function ContractDocument({ template, variables }: ContractDocumentProps) {
   const title = processTemplateVariables(template.title, variables)
 
   return (
@@ -454,11 +437,7 @@ function ContractDocument({
     >
       {/* Page 1: Partner Agreement */}
       <Page size="A4" style={styles.page}>
-        <PageHeader
-          headerText={template.headerText}
-          logoDataUrl={logoDataUrl}
-          variables={variables}
-        />
+        <PageHeader headerText={template.headerText} variables={variables} />
 
         <Text style={styles.title}>{title}</Text>
         <View style={styles.titleDivider} />
@@ -518,11 +497,7 @@ function ContractDocument({
       {/* Appendix 1: General Terms & Conditions */}
       {template.terms && template.terms.length > 0 && (
         <Page size="A4" style={styles.page}>
-          <PageHeader
-            headerText={template.headerText}
-            logoDataUrl={logoDataUrl}
-            variables={variables}
-          />
+          <PageHeader headerText={template.headerText} variables={variables} />
 
           <Text style={styles.appendixTitle}>
             Appendix 1: General Terms &amp; Conditions
@@ -551,16 +526,7 @@ export async function generateContractPdf(
     ...context,
     language: template.language,
   })
-  const logoDataUrl = context.conference.logoBright
-    ? svgToDataUrl(context.conference.logoBright)
-    : undefined
-  const doc = (
-    <ContractDocument
-      template={template}
-      variables={variables}
-      logoDataUrl={logoDataUrl}
-    />
-  )
+  const doc = <ContractDocument template={template} variables={variables} />
   const buffer = await renderToBuffer(doc)
   return Buffer.from(buffer)
 }
