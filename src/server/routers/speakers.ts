@@ -13,6 +13,47 @@ const speakerSearchSchema = z.object({
 })
 
 export const speakersRouter = router({
+  list: adminProcedure
+    .input(
+      z.object({
+        conferenceId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        const { speakers, err } = await getSpeakers(
+          input.conferenceId || undefined,
+          [Status.submitted, Status.accepted, Status.confirmed],
+          true,
+        )
+
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch speakers',
+            cause: err,
+          })
+        }
+
+        return speakers.map((speaker) => ({
+          _id: speaker._id,
+          name: speaker.name || '',
+          title: speaker.title || '',
+          email: speaker.email || '',
+          image: speaker.image || null,
+          slug: speaker.slug || null,
+        }))
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch speakers',
+          cause: error,
+        })
+      }
+    }),
+
   search: adminProcedure.input(speakerSearchSchema).query(async ({ input }) => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()
