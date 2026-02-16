@@ -50,6 +50,7 @@ export interface ContractSigningProvider {
     signerEmail: string
     agreementName: string
     message?: string
+    baseUrl?: string
   }): Promise<SendForSigningResult>
 
   /**

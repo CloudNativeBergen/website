@@ -1490,12 +1490,16 @@ export const sponsorRouter = router({
         if (input.signerEmail) {
           try {
             const provider = getSigningProvider(sfc.conference.signingProvider)
+            const conferenceDomain = sfc.conference.domains?.[0]
             const signingResult = await provider.sendForSigning({
               pdf: pdfBuffer,
               filename,
               signerEmail: input.signerEmail,
               agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
               message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
+              baseUrl: conferenceDomain
+                ? `https://${conferenceDomain}`
+                : undefined,
             })
 
             agreementId = signingResult.agreementId
