@@ -15,6 +15,7 @@ import type {
   ContractReadiness,
   MissingField,
 } from '@/lib/sponsor-crm/contract-readiness'
+import { nanoid } from 'nanoid'
 
 /**
  * Mock data factories for sponsor-related components in Storybook
@@ -24,7 +25,7 @@ export function mockContactPerson(
   overrides: Partial<ContactPerson> = {},
 ): ContactPerson {
   return {
-    _key: `contact-${Math.random().toString(36).substr(2, 9)}`,
+    _key: nanoid(),
     name: 'Jane Smith',
     email: 'jane.smith@example.com',
     phone: '+47 12 34 56 78',

@@ -1,7 +1,8 @@
 import { Reference } from 'sanity'
+import { nanoid } from 'nanoid'
 
 export function generateKey(prefix: string = 'item'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+  return `${prefix}-${nanoid()}`
 }
 
 export function ensureArrayKeys<T extends Record<string, unknown>>(
