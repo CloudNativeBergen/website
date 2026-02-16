@@ -1,7 +1,7 @@
-import { jest } from '@jest/globals'
+import { vi } from 'vitest'
 
-export const createImageUrlBuilder = jest.fn(() => ({
-  image: jest.fn(() => ({
-    url: jest.fn(() => 'https://example.com/image.png'),
+export const createImageUrlBuilder = vi.fn(() => ({
+  image: vi.fn(() => ({
+    url: vi.fn(() => 'https://example.com/image.png'),
   })),
 }))

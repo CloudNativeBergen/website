@@ -1,16 +1,16 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import type { Mock } from 'vitest'
 
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    patch: jest.fn(() => ({
-      set: jest.fn().mockReturnThis(),
-      unset: jest.fn().mockReturnThis(),
+    patch: vi.fn(() => ({
+      set: vi.fn().mockReturnThis(),
+      unset: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     })),
   },
   clientReadUncached: {
-    fetch: jest.fn(),
+    fetch: vi.fn(),
   },
 }))
 
@@ -22,7 +22,7 @@ import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 
 describe('registration', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('generateRegistrationToken', () => {
@@ -69,11 +69,11 @@ describe('registration', () => {
       })
 
       const mockPatch = {
-        set: jest.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
-      ;(clientWrite.patch as jest.Mock).mockReturnValue(mockPatch)
+      ;(clientWrite.patch as Mock).mockReturnValue(mockPatch)
 
       const result = await generateRegistrationToken('sfc-123')
       expect(result.token).toMatch(

@@ -5,11 +5,9 @@
  */
 
 // Unmock jose and noble-ed25519 for this test - we need real crypto operations
-import { jest } from '@jest/globals'
-jest.unmock('jose')
-jest.unmock('@noble/ed25519')
+vi.unmock('jose')
+vi.unmock('@noble/ed25519')
 
-import { describe, it, expect } from '@jest/globals'
 import {
   createCredential,
   signCredential,

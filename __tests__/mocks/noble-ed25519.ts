@@ -2,8 +2,7 @@
  * Mock for @noble/ed25519
  *
  * Provides Ed25519 cryptographic operations using Node.js crypto module.
- * This mock is necessary because @noble/ed25519 v3 is pure ESM and Jest
- * with ts-jest cannot transform it properly.
+ * This mock is necessary because @noble/ed25519 v3 is pure ESM.
  */
 
 import { randomBytes, createHash } from 'crypto'
