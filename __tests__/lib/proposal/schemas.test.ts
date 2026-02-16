@@ -132,6 +132,25 @@ describe('ProposalInputSchema (strict)', () => {
     expect(result.success).toBe(true)
   })
 
+  it('accepts workshop format with prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: 'Bring a computer with Docker installed',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts non-workshop format without prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.presentation_40,
+      prerequisites: undefined,
+    })
+    expect(result.success).toBe(true)
+  })
+
   it('rejects missing title', () => {
     const { title: _, ...withoutTitle } = fullProposal
     const result = ProposalInputSchema.safeParse(withoutTitle)
