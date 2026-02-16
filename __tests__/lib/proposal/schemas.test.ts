@@ -157,6 +157,41 @@ describe('ProposalInputSchema (strict)', () => {
     expect(result.success).toBe(true)
   })
 
+  it('rejects prerequisites for non-workshop formats', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.presentation_40,
+      prerequisites: 'Should not be allowed',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('normalizes empty prerequisites to undefined', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: '   ',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.prerequisites).toBeUndefined()
+    }
+  })
+
+  it('trims whitespace from prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: '  Docker required  ',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.prerequisites).toBe('Docker required')
+    }
+  })
+
   it('rejects missing title', () => {
     const { title: _, ...withoutTitle } = fullProposal
     const result = ProposalInputSchema.safeParse(withoutTitle)

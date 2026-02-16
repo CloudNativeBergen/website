@@ -51,7 +51,15 @@ const ProposalInputBaseSchema = z.object({
   }),
   video: z.string().nullable().optional().transform(nullToUndefined),
   capacity: z.number().nullable().optional().transform(nullToUndefined),
-  prerequisites: z.string().nullable().optional().transform(nullToUndefined),
+  prerequisites: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === null || val === undefined) return undefined
+      const trimmed = val.trim()
+      return trimmed.length > 0 ? trimmed : undefined
+    }),
   speakers: z
     .array(ReferenceSchema)
     .nullable()
@@ -71,6 +79,18 @@ export const ProposalInputSchema = ProposalInputBaseSchema.refine(
   {
     message: 'Workshop capacity is required for workshop formats',
     path: ['capacity'],
+  },
+).refine(
+  (data) => {
+    // Prerequisites should only be provided for workshop formats
+    if (data.prerequisites && !isWorkshopFormat(data.format)) {
+      return false
+    }
+    return true
+  },
+  {
+    message: 'Prerequisites are only allowed for workshop formats',
+    path: ['prerequisites'],
   },
 )
 

@@ -62,6 +62,14 @@ export function ProposalDetailsForm({
     proposal?.prerequisites ?? '',
   )
 
+  // Clear prerequisites when format changes to non-workshop
+  useEffect(() => {
+    if (!isWorkshopFormat(format)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale prerequisites when switching to non-workshop format
+      setPrerequisites('')
+    }
+  }, [format])
+
   // Push local state changes to parent
   useEffect(() => {
     setProposal({
@@ -74,7 +82,7 @@ export function ProposalDetailsForm({
       topics,
       outline,
       tos,
-      prerequisites,
+      prerequisites: prerequisites.trim() || undefined,
     })
   }, [
     title,
