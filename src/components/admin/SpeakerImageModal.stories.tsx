@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SpeakerImageModal } from './SpeakerImageModal'
 import { useState } from 'react'
+import { fn } from 'storybook/test'
 
 const meta = {
   title: 'Components/Admin/SpeakerImageModal',
@@ -8,6 +9,9 @@ const meta = {
   tags: ['autodocs'],
   parameters: {
     layout: 'centered',
+  },
+  args: {
+    onClose: fn(),
   },
 } satisfies Meta<typeof SpeakerImageModal>
 
@@ -39,26 +43,37 @@ const SpeakerImageModalWrapper = ({
 }
 
 export const Default: Story = {
-  render: () => (
-    <SpeakerImageModalWrapper
-      speaker={{
-        name: 'Jane Smith',
-        title: 'Senior Software Engineer',
-        image:
-          'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
-      }}
-    />
-  ),
+  args: {
+    isOpen: true,
+    speaker: {
+      name: 'Jane Smith',
+      title: 'Senior Software Engineer',
+      image:
+        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+    },
+  },
 }
 
 export const WithoutTitle: Story = {
-  render: () => (
-    <SpeakerImageModalWrapper
-      speaker={{
-        name: 'John Doe',
-        image:
-          'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
-      }}
-    />
-  ),
+  args: {
+    isOpen: true,
+    speaker: {
+      name: 'John Doe',
+      image:
+        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+    },
+  },
+}
+
+export const Interactive: Story = {
+  args: {
+    isOpen: false,
+    speaker: {
+      name: 'Jane Smith',
+      title: 'Senior Software Engineer',
+      image:
+        'https://cdn.sanity.io/images/your-project-id/production/example-image.jpg',
+    },
+  },
+  render: (args) => <SpeakerImageModalWrapper speaker={args.speaker} />,
 }
