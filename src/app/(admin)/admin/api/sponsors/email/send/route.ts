@@ -71,6 +71,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       conference,
       subject,
       htmlContent: htmlContent!,
+      unsubscribeUrl: undefined,
     })
 
     if (!conference.sponsorEmail) {
