@@ -157,8 +157,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
   // Step 2b: RDF Dataset Canonicalization (only for Data Integrity Proof)
   if (!isJWT) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- proof extracted but not used
-      const { proof: _proof, ...unsigned } = credential
+      const { proof, ...unsigned } = credential
 
       type JsonLdContext = Record<string, unknown>
       const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
@@ -267,12 +266,9 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
         status: 'success',
         message: 'Canonicalization completed (URDNA2015)',
         details: {
-          canonicalDocLines: (canonicalDoc as string)
-            .split('\n')
-            .filter(Boolean).length,
-          canonicalProofLines: (canonicalProof as string)
-            .split('\n')
-            .filter(Boolean).length,
+          canonicalDocLines: canonicalDoc.split('\n').filter(Boolean).length,
+          canonicalProofLines: canonicalProof.split('\n').filter(Boolean)
+            .length,
           canonicalizationResult,
         },
       })
