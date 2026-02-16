@@ -1,7 +1,6 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import { describe, it, expect } from '@jest/globals'
 import { aggregateSponsorPipeline } from '@/lib/sponsor-crm/pipeline'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { isConferenceOver } from '@/lib/conference/state'

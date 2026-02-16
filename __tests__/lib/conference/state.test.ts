@@ -1,14 +1,6 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  jest,
-} from '@jest/globals'
 import {
   isConferenceOver,
   isCfpOpen,
@@ -45,58 +37,58 @@ const baseConference: Conference = {
 
 describe('Conference State Helpers', () => {
   beforeEach(() => {
-    jest.useFakeTimers()
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
-    jest.useRealTimers()
+    vi.useRealTimers()
   })
 
   describe('isConferenceOver', () => {
     it('returns false before conference ends', () => {
-      jest.setSystemTime(new Date('2025-06-01T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-01T12:00:00Z'))
       expect(isConferenceOver(baseConference)).toBe(false)
     })
 
     it('returns false on end date', () => {
-      jest.setSystemTime(new Date('2025-06-02T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-06-02T23:59:59Z'))
       expect(isConferenceOver(baseConference)).toBe(false)
     })
 
     it('returns true day after conference ends', () => {
-      jest.setSystemTime(new Date('2025-06-03T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-03T00:00:00Z'))
       expect(isConferenceOver(baseConference)).toBe(true)
     })
 
     it('returns true after conference ends', () => {
-      jest.setSystemTime(new Date('2025-06-10T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-10T12:00:00Z'))
       expect(isConferenceOver(baseConference)).toBe(true)
     })
   })
 
   describe('isCfpOpen', () => {
     it('returns true during CFP period', () => {
-      jest.setSystemTime(new Date('2025-02-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
       expect(isCfpOpen(baseConference)).toBe(true)
     })
 
     it('returns true on start date', () => {
-      jest.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
       expect(isCfpOpen(baseConference)).toBe(true)
     })
 
     it('returns true on end date', () => {
-      jest.setSystemTime(new Date('2025-03-31T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-03-31T23:59:59Z'))
       expect(isCfpOpen(baseConference)).toBe(true)
     })
 
     it('returns false before CFP starts', () => {
-      jest.setSystemTime(new Date('2024-12-31T23:59:59Z'))
+      vi.setSystemTime(new Date('2024-12-31T23:59:59Z'))
       expect(isCfpOpen(baseConference)).toBe(false)
     })
 
     it('returns false after CFP ends', () => {
-      jest.setSystemTime(new Date('2025-04-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-04-01T00:00:00Z'))
       expect(isCfpOpen(baseConference)).toBe(false)
     })
 
@@ -112,17 +104,17 @@ describe('Conference State Helpers', () => {
 
   describe('isProgramPublished', () => {
     it('returns true after program date', () => {
-      jest.setSystemTime(new Date('2025-05-02T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-02T12:00:00Z'))
       expect(isProgramPublished(baseConference)).toBe(true)
     })
 
     it('returns true on program date', () => {
-      jest.setSystemTime(new Date('2025-05-01T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-01T00:00:00Z'))
       expect(isProgramPublished(baseConference)).toBe(true)
     })
 
     it('returns false before program date', () => {
-      jest.setSystemTime(new Date('2025-04-30T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-04-30T23:59:59Z'))
       expect(isProgramPublished(baseConference)).toBe(false)
     })
 
@@ -137,34 +129,34 @@ describe('Conference State Helpers', () => {
 
   describe('isRegistrationAvailable', () => {
     it('returns true when enabled, link exists, and conference not over', () => {
-      jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-15T12:00:00Z'))
       expect(isRegistrationAvailable(baseConference)).toBe(true)
     })
 
     it('returns false when registration disabled', () => {
-      jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-15T12:00:00Z'))
       const conference = { ...baseConference, registrationEnabled: false }
       expect(isRegistrationAvailable(conference)).toBe(false)
     })
 
     it('returns false when registration link missing', () => {
-      jest.setSystemTime(new Date('2025-05-15T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-15T12:00:00Z'))
       const conference = { ...baseConference, registrationLink: undefined }
       expect(isRegistrationAvailable(conference)).toBe(false)
     })
 
     it('returns false when conference is over', () => {
-      jest.setSystemTime(new Date('2025-06-03T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-03T12:00:00Z'))
       expect(isRegistrationAvailable(baseConference)).toBe(false)
     })
 
     it('returns false on day after conference', () => {
-      jest.setSystemTime(new Date('2025-06-03T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-06-03T00:00:00Z'))
       expect(isRegistrationAvailable(baseConference)).toBe(false)
     })
 
     it('returns true on conference end date', () => {
-      jest.setSystemTime(new Date('2025-06-02T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-06-02T23:59:59Z'))
       expect(isRegistrationAvailable(baseConference)).toBe(true)
     })
   })
@@ -177,17 +169,17 @@ describe('Conference State Helpers', () => {
     }
 
     it('returns true during registration period', () => {
-      jest.setSystemTime(new Date('2025-05-10T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-10T12:00:00Z'))
       expect(isWorkshopRegistrationOpen(workshopConference)).toBe(true)
     })
 
     it('returns false before registration starts', () => {
-      jest.setSystemTime(new Date('2025-04-30T23:59:59Z'))
+      vi.setSystemTime(new Date('2025-04-30T23:59:59Z'))
       expect(isWorkshopRegistrationOpen(workshopConference)).toBe(false)
     })
 
     it('returns false after registration ends', () => {
-      jest.setSystemTime(new Date('2025-05-16T00:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-16T00:00:00Z'))
       expect(isWorkshopRegistrationOpen(workshopConference)).toBe(false)
     })
 
@@ -198,12 +190,12 @@ describe('Conference State Helpers', () => {
 
   describe('isSeekingSponsors', () => {
     it('returns true more than 4 weeks before conference', () => {
-      jest.setSystemTime(new Date('2025-04-01T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-04-01T12:00:00Z'))
       expect(isSeekingSponsors(baseConference)).toBe(true)
     })
 
     it('returns false less than 4 weeks before conference', () => {
-      jest.setSystemTime(new Date('2025-05-25T12:00:00Z'))
+      vi.setSystemTime(new Date('2025-05-25T12:00:00Z'))
       expect(isSeekingSponsors(baseConference)).toBe(false)
     })
 

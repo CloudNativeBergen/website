@@ -1,12 +1,9 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect as jestExpect } from '@jest/globals'
 import { render, screen } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 import {
   ContractFlowStep,

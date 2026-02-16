@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { Metadata } from 'next'
 
 // Test the metadata generation logic independently

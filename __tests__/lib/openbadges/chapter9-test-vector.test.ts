@@ -15,7 +15,6 @@
  * against the official examples, ensuring spec compliance.
  */
 
-import { describe, it, expect } from '@jest/globals'
 import { createCredential } from '@/lib/openbadges'
 import type { Credential } from '@/lib/openbadges/types'
 

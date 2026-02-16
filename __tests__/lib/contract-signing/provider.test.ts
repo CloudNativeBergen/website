@@ -1,23 +1,22 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import type { ContractSigningProvider } from '@/lib/contract-signing/types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const mockUploadTransientDocument = jest.fn<(...args: any[]) => any>()
-const mockCreateAgreement = jest.fn<(...args: any[]) => any>()
-const mockGetAgreement = jest.fn<(...args: any[]) => any>()
-const mockGetSigningUrls = jest.fn<(...args: any[]) => any>()
-const mockCancelAgreement = jest.fn<(...args: any[]) => any>()
-const mockSendReminder = jest.fn<(...args: any[]) => any>()
-const mockListWebhooks = jest.fn<(...args: any[]) => any>()
-const mockRegisterWebhook = jest.fn<(...args: any[]) => any>()
-const mockGetAdobeSignSession = jest.fn<(...args: any[]) => any>()
-const mockClearAdobeSignSession = jest.fn<(...args: any[]) => any>()
-const mockGetAuthorizeUrl = jest.fn<(...args: any[]) => any>()
+const mockUploadTransientDocument = vi.fn<(...args: any[]) => any>()
+const mockCreateAgreement = vi.fn<(...args: any[]) => any>()
+const mockGetAgreement = vi.fn<(...args: any[]) => any>()
+const mockGetSigningUrls = vi.fn<(...args: any[]) => any>()
+const mockCancelAgreement = vi.fn<(...args: any[]) => any>()
+const mockSendReminder = vi.fn<(...args: any[]) => any>()
+const mockListWebhooks = vi.fn<(...args: any[]) => any>()
+const mockRegisterWebhook = vi.fn<(...args: any[]) => any>()
+const mockGetAdobeSignSession = vi.fn<(...args: any[]) => any>()
+const mockClearAdobeSignSession = vi.fn<(...args: any[]) => any>()
+const mockGetAuthorizeUrl = vi.fn<(...args: any[]) => any>()
 
-jest.mock('@/lib/adobe-sign/client', () => ({
+vi.mock('@/lib/adobe-sign/client', () => ({
   uploadTransientDocument: (...args: unknown[]) =>
     mockUploadTransientDocument(...args),
   createAgreement: (...args: unknown[]) => mockCreateAgreement(...args),
@@ -29,7 +28,7 @@ jest.mock('@/lib/adobe-sign/client', () => ({
   registerWebhook: (...args: unknown[]) => mockRegisterWebhook(...args),
 }))
 
-jest.mock('@/lib/adobe-sign/auth', () => ({
+vi.mock('@/lib/adobe-sign/auth', () => ({
   getAdobeSignSession: (...args: unknown[]) => mockGetAdobeSignSession(...args),
   clearAdobeSignSession: (...args: unknown[]) =>
     mockClearAdobeSignSession(...args),
@@ -47,7 +46,7 @@ describe('AdobeSignProvider', () => {
   let provider: ContractSigningProvider
 
   beforeEach(async () => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     mockGetAdobeSignSession.mockResolvedValue(testSession)
     const { AdobeSignProvider } =
       await import('@/lib/contract-signing/adobe-sign')
@@ -60,7 +59,7 @@ describe('AdobeSignProvider', () => {
 
   describe('sendForSigning', () => {
     it('uploads document, creates agreement, and returns ID + signing URL', async () => {
-      jest.useFakeTimers()
+      vi.useFakeTimers()
       mockUploadTransientDocument.mockResolvedValue({
         transientDocumentId: 'td-123',
       })
@@ -80,7 +79,7 @@ describe('AdobeSignProvider', () => {
       })
 
       // Advance through the first retry delay
-      await jest.advanceTimersByTimeAsync(10_000)
+      await vi.advanceTimersByTimeAsync(10_000)
 
       const result = await promise
 
@@ -97,7 +96,7 @@ describe('AdobeSignProvider', () => {
         message: 'Please sign',
         fileInfos: [{ transientDocumentId: 'td-123' }],
       })
-      jest.useRealTimers()
+      vi.useRealTimers()
     })
 
     it('throws when session is not connected', async () => {
@@ -143,7 +142,7 @@ describe('AdobeSignProvider', () => {
     })
 
     it('returns without signing URL when getSigningUrls fails', async () => {
-      jest.useFakeTimers()
+      vi.useFakeTimers()
       mockUploadTransientDocument.mockResolvedValue({
         transientDocumentId: 'td-1',
       })
@@ -159,14 +158,14 @@ describe('AdobeSignProvider', () => {
 
       // Advance through the retry delays (2s, 4s, 6s)
       for (let i = 0; i < 3; i++) {
-        await jest.advanceTimersByTimeAsync(10_000)
+        await vi.advanceTimersByTimeAsync(10_000)
       }
 
       const result = await promise
 
       expect(result.agreementId).toBe('agr-1')
       expect(result.signingUrl).toBeUndefined()
-      jest.useRealTimers()
+      vi.useRealTimers()
     })
   })
 

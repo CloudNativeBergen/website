@@ -1,12 +1,9 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect as jestExpect, jest } from '@jest/globals'
 import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 import {
   BoardViewSwitcher,
@@ -15,7 +12,7 @@ import {
 
 describe('BoardViewSwitcher', () => {
   const setup = (currentView: BoardView = 'pipeline') => {
-    const onViewChange = jest.fn<(view: BoardView) => void>()
+    const onViewChange = vi.fn<(view: BoardView) => void>()
     const result = render(
       <BoardViewSwitcher
         currentView={currentView}

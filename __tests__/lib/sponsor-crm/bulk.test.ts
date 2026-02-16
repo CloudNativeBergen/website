@@ -1,22 +1,20 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-
 // Mock clientWrite BEFORE importing the module that uses it
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: jest.fn(),
-    transaction: jest.fn(() => ({
-      patch: jest.fn().mockReturnThis(),
-      create: jest.fn().mockReturnThis(),
-      delete: jest.fn().mockReturnThis(),
+    fetch: vi.fn(),
+    transaction: vi.fn(() => ({
+      patch: vi.fn().mockReturnThis(),
+      create: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore - Mocking commit which returns a promise
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     })),
   },
 }))
 
 // Mock formatStatusName to avoid importing more dependencies that might break
-jest.mock('@/components/admin/sponsor-crm/utils', () => ({
-  formatStatusName: jest.fn((s) => s),
+vi.mock('@/components/admin/sponsor-crm/utils', () => ({
+  formatStatusName: vi.fn((s) => s),
 }))
 
 import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
@@ -26,7 +24,7 @@ describe('Bulk Sponsor CRM Operations', () => {
   const mockUserId = 'user-123'
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('bulkUpdateSponsors', () => {
@@ -40,11 +38,11 @@ describe('Bulk Sponsor CRM Operations', () => {
       ;(clientWrite.fetch as any).mockResolvedValue(mockSponsors)
 
       const mockTransactionInstance = {
-        patch: jest.fn().mockReturnThis(),
-        create: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
+        patch: vi.fn().mockReturnThis(),
+        create: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
 
       // @ts-ignore
@@ -82,11 +80,11 @@ describe('Bulk Sponsor CRM Operations', () => {
       // @ts-ignore
       ;(clientWrite.fetch as any).mockResolvedValue(mockSponsors)
       const mockTransactionInstance = {
-        patch: jest.fn().mockReturnThis(),
-        create: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
+        patch: vi.fn().mockReturnThis(),
+        create: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
       // @ts-ignore
       ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
@@ -119,11 +117,11 @@ describe('Bulk Sponsor CRM Operations', () => {
       ])
 
       const mockTransactionInstance = {
-        patch: jest.fn().mockReturnThis(),
-        create: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
+        patch: vi.fn().mockReturnThis(),
+        create: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
       // @ts-ignore
       ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
@@ -152,11 +150,11 @@ describe('Bulk Sponsor CRM Operations', () => {
         .mockResolvedValueOnce(['asset-pdf-1', 'asset-pdf-2'])
 
       const mockTransactionInstance = {
-        patch: jest.fn().mockReturnThis(),
-        create: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
+        patch: vi.fn().mockReturnThis(),
+        create: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
       // @ts-ignore
       ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)
@@ -179,11 +177,11 @@ describe('Bulk Sponsor CRM Operations', () => {
       ;(clientWrite.fetch as any).mockResolvedValue([])
 
       const mockTransactionInstance = {
-        patch: jest.fn().mockReturnThis(),
-        create: jest.fn().mockReturnThis(),
-        delete: jest.fn().mockReturnThis(),
+        patch: vi.fn().mockReturnThis(),
+        create: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
         // @ts-ignore
-        commit: jest.fn().mockResolvedValue({}),
+        commit: vi.fn().mockResolvedValue({}),
       }
       // @ts-ignore
       ;(clientWrite.transaction as any).mockReturnValue(mockTransactionInstance)

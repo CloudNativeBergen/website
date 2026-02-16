@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 
 // Test the sorting logic without rendering the component

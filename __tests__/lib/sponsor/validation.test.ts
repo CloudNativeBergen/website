@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { validateSponsorTier, validateSponsor } from '@/lib/sponsor/validation'
 import { SponsorTierInput, SponsorInput } from '@/lib/sponsor/types'
 

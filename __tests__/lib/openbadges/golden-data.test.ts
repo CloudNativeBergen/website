@@ -7,7 +7,6 @@
  * Reference: https://purl.imsglobal.org/spec/ob/v3p0
  */
 
-import { describe, it, expect } from '@jest/globals'
 import { validateCredential } from '@/lib/openbadges/validator'
 import { signCredentialJWT, verifyCredentialJWT } from '@/lib/openbadges/crypto'
 import type { Credential } from '@/lib/openbadges/types'

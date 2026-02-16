@@ -1,14 +1,7 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
+import type { MockedFunction } from 'vitest'
 import {
   createSponsorPipelineBlocks,
   createProposalSummaryBlocks,
@@ -21,18 +14,14 @@ import type {
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
 
-const mockFetch = jest.fn() as jest.MockedFunction<typeof global.fetch>
+const mockFetch = vi.fn() as MockedFunction<typeof global.fetch>
 
 let savedNodeEnv: string | undefined
 let savedBotToken: string | undefined
 let savedFetch: typeof global.fetch
 
 function setEnv(nodeEnv: string, botToken?: string) {
-  Object.defineProperty(process.env, 'NODE_ENV', {
-    value: nodeEnv,
-    writable: true,
-    configurable: true,
-  })
+  ; (process.env as Record<string, string | undefined>).NODE_ENV = nodeEnv
   if (botToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = botToken
   } else {
@@ -41,11 +30,7 @@ function setEnv(nodeEnv: string, botToken?: string) {
 }
 
 function restoreEnv() {
-  Object.defineProperty(process.env, 'NODE_ENV', {
-    value: savedNodeEnv,
-    writable: true,
-    configurable: true,
-  })
+  ; (process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
   if (savedBotToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = savedBotToken
   } else {
@@ -125,8 +110,8 @@ function allBlockText(body: { blocks: SlackBlock[] }): string {
 
 describe('weeklyUpdate', () => {
   beforeEach(() => {
-    jest.resetModules()
-    jest.restoreAllMocks()
+    vi.resetModules()
+    vi.restoreAllMocks()
     mockFetch.mockReset()
     savedNodeEnv = process.env.NODE_ENV
     savedBotToken = process.env.SLACK_BOT_TOKEN
@@ -141,7 +126,7 @@ describe('weeklyUpdate', () => {
   describe('sendWeeklyUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => { })
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
@@ -154,7 +139,7 @@ describe('weeklyUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { })
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
