@@ -180,6 +180,42 @@ The project uses Chromatic for visual regression testing. PRs automatically trig
 2. PRs will show visual diff status checks
 3. Changes to main are auto-accepted as the new baseline
 
+**Deterministic Date Rendering:**
+
+Stories that display relative dates (e.g. "5 days ago", "Pending (14d)") must mock `globalThis.Date` in a `beforeEach` hook to pin `Date.now()` to a fixed timestamp. Without this, Chromatic detects a visual change every day as the rendered text shifts. Use the pattern from `PaymentDetailsModal.stories.tsx`:
+
+```typescript
+const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
+
+const meta = {
+  // ...
+  beforeEach: () => {
+    const OriginalDate = globalThis.Date
+    const fixedTime = FIXED_NOW.getTime()
+
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(fixedTime)
+      return new (Function.prototype.bind.apply(OriginalDate, [
+        null,
+        ...args,
+      ]) as typeof OriginalDate)()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => fixedTime
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
+} satisfies Meta<typeof MyComponent>
+```
+
+This applies to any component using `formatDistanceToNow`, `getDaysPending`, or other relative date calculations.
+
 ### Privacy and GDPR Compliance
 
 - **User Data Protection:** Always abide by GDPR regulations when handling any user data, including but not limited to:
