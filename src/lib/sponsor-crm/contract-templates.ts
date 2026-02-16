@@ -3,6 +3,7 @@ import {
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
+import { nanoid } from 'nanoid'
 
 export interface ContractSection {
   _key: string
@@ -114,7 +115,6 @@ export async function createContractTemplate(
   data: ContractTemplateInput,
 ): Promise<{ template?: ContractTemplate; error?: Error }> {
   try {
-    let keyCounter = 0
     const doc = {
       _type: 'contractTemplate',
       title: data.title,
@@ -123,7 +123,7 @@ export async function createContractTemplate(
       language: data.language,
       currency: data.currency,
       sections: data.sections.map((s) => ({
-        _key: `section-${++keyCounter}`,
+        _key: nanoid(),
         heading: s.heading,
         body: s.body,
       })),
@@ -170,8 +170,8 @@ export async function updateContractTemplate(
     if (data.language !== undefined) updates.language = data.language
     if (data.currency !== undefined) updates.currency = data.currency
     if (data.sections !== undefined) {
-      updates.sections = data.sections.map((s, index) => ({
-        _key: s._key || `section-${Date.now()}-${index}`,
+      updates.sections = data.sections.map((s) => ({
+        _key: s._key || nanoid(),
         heading: s.heading,
         body: s.body,
       }))

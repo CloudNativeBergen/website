@@ -15,6 +15,7 @@ import {
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { SponsorRegistrationLogoUpload } from '@/components/sponsor/SponsorRegistrationLogoUpload'
 import { formatNumber } from '@/lib/format'
+import { nanoid } from 'nanoid'
 
 interface ContactPersonForm {
   name: string
@@ -228,8 +229,8 @@ export function SponsorPortal({ token }: { token: string }) {
 
     const validContacts = contacts
       .filter((c) => c.name.trim() && c.email.trim())
-      .map((c, index) => ({
-        _key: `contact-${Date.now()}-${index}`,
+      .map((c) => ({
+        _key: nanoid(),
         name: c.name.trim(),
         email: c.email.trim(),
         phone: c.phone.trim() || undefined,
