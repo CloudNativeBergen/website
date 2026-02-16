@@ -9,6 +9,9 @@ import {
 } from '@/__mocks__/sponsor-data'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
+// Fixed date so relative timestamps (e.g. "5 days ago") are deterministic in Chromatic
+const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
+
 const mockTiers = [
   mockSponsorTier({
     _id: 'tier-platinum',
@@ -119,6 +122,29 @@ const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMForm',
   component: SponsorCRMForm,
   tags: ['autodocs'],
+  beforeEach: () => {
+    const OriginalDate = globalThis.Date
+    const fixedTime = FIXED_NOW.getTime()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(fixedTime)
+      return new (Function.prototype.bind.apply(OriginalDate, [
+        null,
+        ...args,
+      ]) as typeof OriginalDate)()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => fixedTime
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
   parameters: {
     layout: 'centered',
     docs: {

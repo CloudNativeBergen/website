@@ -342,3 +342,90 @@ When refactoring code:
 - Document any complex or non-obvious props
 
 This structure ensures the codebase remains maintainable, testable, and scalable as the project grows.
+
+## Testing Guidelines
+
+The project uses **Vitest** with `@testing-library/react` for unit and integration tests, and **Storybook interaction tests** for component behavior.
+
+### Test Philosophy
+
+- **Test behavior, not implementation.** Assert on observable outcomes (return values, rendered output, side effects) rather than internal state or private methods.
+- **Every test must exercise real source code.** A test that only asserts on values defined within the test file itself is worthless — delete it. If a test doesn&apos;t import from `src/`, it&apos;s not testing the application.
+- **Prefer integration tests over isolated unit tests.** Test modules working together through their public APIs. Reserve heavy mocking for true external boundaries (network, database, third-party services).
+- **Tests are documentation.** A reader should understand what the code does by reading the test names and assertions.
+
+### What to Test
+
+- **Domain logic and data transformations** (e.g., validation functions, formatters, business rules).
+- **API route handlers** — test request/response contracts with realistic payloads.
+- **React components** — test user-visible behavior: rendering, interactions, conditional display. Use `@testing-library/react` queries (`getByRole`, `getByText`) over implementation details like CSS classes or component internals.
+- **Error handling paths** — verify that errors produce correct user-facing messages or status codes.
+- **Edge cases and boundary conditions** — empty arrays, null values, missing optional fields, maximum lengths.
+
+### What NOT to Test
+
+- **Type definitions and interfaces** — TypeScript already validates these at compile time.
+- **Simple pass-through functions** — if a function just calls another with the same arguments, the value of testing it is near zero.
+- **Third-party library internals** — trust that Sanity, NextAuth, tRPC work correctly. Mock them at the boundary and test your integration logic.
+- **Styling and layout** — use Storybook visual testing and Chromatic for visual regression instead.
+
+### Writing Tests
+
+```typescript
+// Test file location: __tests__/{path matching src/}
+// e.g., src/lib/proposal/validation.ts → __tests__/lib/proposal/validation.test.ts
+
+// Use descriptive test names that explain the scenario and expected outcome
+describe('validateProposal', () => {
+  it('should reject proposals without a title', () => { ... })
+  it('should accept proposals with all required fields', () => { ... })
+})
+```
+
+- **File naming:** `{module}.test.ts` or `{Component}.test.tsx`, mirroring the source path under `__tests__/`.
+- **Structure:** Use `describe` blocks to group by function or feature, `it` blocks for individual scenarios.
+- **Setup:** Use factory functions or test fixtures over complex `beforeEach` setup. Keep test data close to where it&apos;s used.
+- **Assertions:** Be specific. Prefer `toEqual` over `toBeTruthy`. Assert on error messages, not just that an error was thrown.
+- **Async:** Always `await` async operations. Never use `done` callbacks.
+
+### Mocking
+
+- **Mock at boundaries, not internally.** Mock external services (Sanity client, email provider, Slack API), not internal utility functions.
+- **Use `vi.mock()` for module-level mocks.** Vitest auto-hoists these, so standard ESM `import` works — no need for `require()` workarounds.
+- **Prefer dependency injection** where possible over module mocking.
+- **Avoid `Object.defineProperty` on `process.env`** — Vitest makes env properties non-configurable. Use direct assignment: `process.env.MY_VAR = 'value'`.
+- **Clean up mocks** with `vi.restoreAllMocks()` in `afterEach` or `beforeEach` to prevent test pollution.
+
+### Environment Directives
+
+Tests run in `node` environment by default. For component tests that need DOM APIs, add a docblock at the top of the file:
+
+```typescript
+/**
+ * @vitest-environment jsdom
+ */
+```
+
+### Storybook Interaction Tests
+
+For component behavior testing in context, prefer Storybook `play` functions using `storybook/test`:
+
+```typescript
+import { expect, fn, userEvent, within } from 'storybook/test'
+
+export const ClickTest: Story = {
+  args: { onClick: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button'))
+  },
+}
+```
+
+These run in CI via `pnpm run storybook:test-ci` and complement unit tests by verifying components in a realistic rendering context.
+
+### Performance
+
+- **Avoid creating large data structures in tests.** Use `new Uint8Array(size)` instead of `new Array(size).fill('a').join('')` for large binary blobs — the latter is orders of magnitude slower.
+- **Keep tests fast.** The full suite should run in under 15 seconds. If a test needs more than 5 seconds, reconsider the approach.
+- **Use `vi.resetModules()` + dynamic `import()` for tests that need fresh module state** (e.g., environment variable–dependent config). Avoid `vi.isolateModules` which doesn&apos;t exist in Vitest.

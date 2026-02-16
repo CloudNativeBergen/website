@@ -1,7 +1,6 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from '@jest/globals'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
 import type { Widget } from '@/lib/dashboard/types'
 

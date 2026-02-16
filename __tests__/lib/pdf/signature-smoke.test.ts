@@ -20,7 +20,6 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { inflateSync } from 'zlib'
-import { describe, it, expect, beforeAll } from '@jest/globals'
 import {
   PDFDocument,
   StandardFonts,
