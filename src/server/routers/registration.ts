@@ -249,7 +249,10 @@ export const registrationRouter = router({
         })
       }
 
-      if (currentDomain.includes('localhost')) {
+      if (
+        currentDomain === 'localhost' ||
+        currentDomain.startsWith('localhost:')
+      ) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message:
