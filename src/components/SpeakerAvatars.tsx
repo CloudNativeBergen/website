@@ -1,4 +1,3 @@
-import { sanityImage } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
 import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
@@ -112,11 +111,7 @@ export function SpeakerAvatars({
           >
             {speaker.image ? (
               <img
-                src={sanityImage(speaker.image)
-                  .width(imageDimensions[size].width)
-                  .height(imageDimensions[size].height)
-                  .fit('crop')
-                  .url()}
+                src={speaker.image}
                 alt={speaker.name}
                 className="absolute inset-0 h-full w-full rounded-full object-cover object-center"
               />
