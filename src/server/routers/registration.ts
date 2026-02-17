@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   RegistrationTokenSchema,
   RegistrationSubmissionSchema,
@@ -249,10 +250,7 @@ export const registrationRouter = router({
         })
       }
 
-      if (
-        currentDomain === 'localhost' ||
-        currentDomain.startsWith('localhost:')
-      ) {
+      if (isLocalhostDomain(currentDomain)) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message:

@@ -2,6 +2,8 @@
  * Shared social sharing utilities
  */
 
+import { protocolForDomain } from '@/lib/environment/localhost'
+
 export type SocialPlatform = 'bluesky'
 
 interface ShareOptions {
@@ -69,6 +71,5 @@ export function shareToCredly(jsonUrl: string): void {
  * Constructs a full URL from domain and path
  */
 export function buildFullUrl(domain: string, path: string): string {
-  const protocol = domain.includes('localhost') ? 'http' : 'https'
-  return `${protocol}://${domain}${path}`
+  return `${protocolForDomain(domain)}://${domain}${path}`
 }

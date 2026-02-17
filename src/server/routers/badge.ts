@@ -7,6 +7,7 @@
 
 import { router, adminProcedure, publicProcedure } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
+import { isLocalhostEnvironment } from '@/lib/environment/localhost'
 import {
   IssueBadgeInputSchema,
   BulkIssueBadgeInputSchema,
@@ -31,18 +32,6 @@ import {
   deleteBadge,
 } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-
-/**
- * Check if running in development/localhost mode
- */
-function isLocalhostEnvironment(): boolean {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ''
-  return (
-    baseUrl.includes('localhost') ||
-    baseUrl.includes('127.0.0.1') ||
-    process.env.NODE_ENV === 'development'
-  )
-}
 
 export const badgeRouter = router({
   /**
