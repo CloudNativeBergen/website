@@ -90,7 +90,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     _id,
     name,
     email,
-    image
+    "image": coalesce(image.asset->url, imageURL)
   },
   contactInitiatedAt,
   contractSignedAt,

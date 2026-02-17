@@ -19,7 +19,7 @@ const SPONSOR_ACTIVITY_FIELDS = `
     _id,
     name,
     email,
-    image
+    "image": coalesce(image.asset->url, imageURL)
   },
   createdAt
 `
