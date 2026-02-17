@@ -99,9 +99,10 @@ export function buildContractVariables(
     }
   }
 
-  if (ctx.addons && ctx.addons.length > 0) {
-    vars.ADDONS_LIST = ctx.addons.map((a) => a.title).join(', ')
-  }
+  vars.ADDONS_LIST =
+    ctx.addons && ctx.addons.length > 0
+      ? ctx.addons.map((a) => a.title).join(', ')
+      : 'add-on menu'
 
   const currency = ctx.contractCurrency || 'NOK'
   vars.CONTRACT_CURRENCY = currency

@@ -10,6 +10,7 @@ import {
 } from '@headlessui/react'
 import { useTheme } from 'next-themes'
 import { api } from '@/lib/trpc/client'
+import { isLocalhostClient } from '@/lib/environment/localhost'
 import type { BadgeType } from '@/lib/badge/types'
 import {
   AcademicCapIcon,
@@ -354,11 +355,7 @@ export function BadgeManagementClient({
     setDeleteBadgeInfo(null)
   }
 
-  const isDevelopment =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      process.env.NODE_ENV === 'development')
+  const isDevelopment = isLocalhostClient()
 
   return (
     <div className="space-y-6">

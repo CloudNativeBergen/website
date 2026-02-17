@@ -138,6 +138,8 @@ describe('RegistrationSubmissionSchema', () => {
       email: 'billing@example.com',
     },
     logo: '<svg>logo</svg>',
+    address: 'Test Street 1, Oslo',
+    orgNumber: '123456789',
   }
 
   it('passes with minimal valid submission', () => {
@@ -149,11 +151,37 @@ describe('RegistrationSubmissionSchema', () => {
     const result = RegistrationSubmissionSchema.safeParse({
       ...validSubmission,
       logoBright: '<svg>bright</svg>',
-      orgNumber: '123456789',
-      address: 'Test Street 1, Oslo',
       signerEmail: 'signer@example.com',
     })
     expect(result.success).toBe(true)
+  })
+
+  it('fails without orgNumber', () => {
+    const { orgNumber: _, ...withoutOrgNumber } = validSubmission
+    const result = RegistrationSubmissionSchema.safeParse(withoutOrgNumber)
+    expect(result.success).toBe(false)
+  })
+
+  it('fails with empty orgNumber', () => {
+    const result = RegistrationSubmissionSchema.safeParse({
+      ...validSubmission,
+      orgNumber: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('fails without address', () => {
+    const { address: _, ...withoutAddress } = validSubmission
+    const result = RegistrationSubmissionSchema.safeParse(withoutAddress)
+    expect(result.success).toBe(false)
+  })
+
+  it('fails with empty address', () => {
+    const result = RegistrationSubmissionSchema.safeParse({
+      ...validSubmission,
+      address: '',
+    })
+    expect(result.success).toBe(false)
   })
 
   it('fails without logo', () => {

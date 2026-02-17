@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { BoltIcon } from '@heroicons/react/24/solid'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Activity Timeline',
@@ -105,13 +106,10 @@ export const ActivityTimeline: Story = {
                 </span>
                 <div className="h-px flex-1 bg-gray-100 dark:bg-gray-700/50" />
               </div>
-              <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-700/30">
-                <div className="mb-1.5 flex items-center gap-2">
+              <div>
+                <div className="mb-1 flex items-center gap-2">
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     Tieto Tech Consulting
-                  </span>
-                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                    1
                   </span>
                 </div>
                 <div className="flex items-start gap-2.5 py-1.5">
@@ -120,9 +118,12 @@ export const ActivityTimeline: Story = {
                     Status changed from Prospect to Negotiating
                   </p>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400">
-                      HK
-                    </div>
+                    <img
+                      src="https://i.pravatar.cc/20?u=hans"
+                      alt="Hans K."
+                      className="h-5 w-5 rounded-full object-cover"
+                      title="Hans K."
+                    />
                     <time className="text-xs text-gray-400">
                       about 2 hours ago
                     </time>
@@ -139,14 +140,11 @@ export const ActivityTimeline: Story = {
                 </span>
                 <div className="h-px flex-1 bg-gray-100 dark:bg-gray-700/50" />
               </div>
-              <div className="space-y-2">
-                <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-700/30">
-                  <div className="mb-1.5 flex items-center gap-2">
+              <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">
                       Aiven
-                    </span>
-                    <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                      1
                     </span>
                   </div>
                   <div className="flex items-start gap-2.5 py-1.5">
@@ -154,14 +152,22 @@ export const ActivityTimeline: Story = {
                     <p className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
                       Sponsor opportunity created in pipeline
                     </p>
-                    <time className="text-xs text-gray-400">
-                      about 15 hours ago
-                    </time>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <img
+                        src="https://i.pravatar.cc/20?u=erik"
+                        alt="Erik S."
+                        className="h-5 w-5 rounded-full object-cover"
+                        title="Erik S."
+                      />
+                      <time className="text-xs text-gray-400">
+                        about 15 hours ago
+                      </time>
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-700/30">
-                  <div className="mb-1.5 flex items-center gap-2">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">
                       KS Digital
                     </span>
@@ -175,18 +181,34 @@ export const ActivityTimeline: Story = {
                       <p className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
                         Contract status changed from None to Verbal Agreement
                       </p>
-                      <time className="text-xs text-gray-400">
-                        about 20 hours ago
-                      </time>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <div
+                          className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30"
+                          title="Automatic"
+                        >
+                          <BoltIcon className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <time className="text-xs text-gray-400">
+                          about 20 hours ago
+                        </time>
+                      </div>
                     </div>
                     <div className="flex items-start gap-2.5 py-1.5">
                       <ActivityIcon type="status_change" />
                       <p className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
                         Status changed from Negotiating to Closed Won
                       </p>
-                      <time className="text-xs text-gray-400">
-                        about 20 hours ago
-                      </time>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <img
+                          src="https://i.pravatar.cc/20?u=hans"
+                          alt="Hans K."
+                          className="h-5 w-5 rounded-full object-cover"
+                          title="Hans K."
+                        />
+                        <time className="text-xs text-gray-400">
+                          about 20 hours ago
+                        </time>
+                      </div>
                     </div>
                   </div>
                 </div>

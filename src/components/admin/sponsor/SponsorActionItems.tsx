@@ -2,10 +2,12 @@
 
 import React, { useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
@@ -92,6 +94,23 @@ function ActionRow({ item }: { item: ActionItem }) {
           {item.description}
         </p>
       </div>
+      {item.assignedTo && (
+        <div className="shrink-0" title={item.assignedTo.name}>
+          {item.assignedTo.image ? (
+            <Image
+              src={item.assignedTo.image}
+              alt={item.assignedTo.name}
+              width={48}
+              height={48}
+              className="h-6 w-6 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-600">
+              <UserIcon className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+            </div>
+          )}
+        </div>
+      )}
     </Link>
   )
 }

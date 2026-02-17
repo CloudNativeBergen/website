@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   RegistrationTokenSchema,
   RegistrationSubmissionSchema,
@@ -246,6 +247,14 @@ export const registrationRouter = router({
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'Conference has no domain configured.',
+        })
+      }
+
+      if (isLocalhostDomain(currentDomain)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
         })
       }
 
