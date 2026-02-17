@@ -5,9 +5,8 @@ import type {
   SponsorTag,
   SignatureStatus,
 } from '@/lib/sponsor-crm/types'
-import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
-import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { formatNumber } from '@/lib/format'
 import {
   PencilIcon,
@@ -186,19 +185,24 @@ export function SponsorCard({
         </div>
         {/* Assignee */}
         {sponsor.assignedTo && (
-          <div className="scale-[0.8] transform">
-            <SpeakerAvatars
-              speakers={[
-                {
-                  _id: sponsor.assignedTo._id,
-                  name: sponsor.assignedTo.name,
-                  image: sponsor.assignedTo.image,
-                } as Speaker,
-              ]}
-              size="sm"
-              maxVisible={1}
-              showTooltip={true}
-            />
+          <div
+            className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-gray-200/60 shadow-sm dark:border-gray-600"
+            title={sponsor.assignedTo.name}
+          >
+            {sponsor.assignedTo.image ? (
+              <img
+                src={sponsor.assignedTo.image}
+                alt={sponsor.assignedTo.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <MissingAvatar
+                name={sponsor.assignedTo.name}
+                size={24}
+                className="rounded-full"
+                textSizeClass="text-[10px]"
+              />
+            )}
           </div>
         )}
       </div>
