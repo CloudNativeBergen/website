@@ -249,6 +249,14 @@ export const registrationRouter = router({
         })
       }
 
+      if (currentDomain.includes('localhost')) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
+        })
+      }
+
       // Generate token if not already present
       let token = sfc.registrationToken
       if (!token) {
