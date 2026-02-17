@@ -179,6 +179,7 @@ export async function updateSponsor(
         logo: data.logo,
         logoBright: data.logoBright,
         orgNumber: data.orgNumber,
+        address: data.address,
       })
       .commit()
 
