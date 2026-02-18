@@ -262,9 +262,25 @@ export async function updateSpeaker(
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- image is excluded from patch
-    const { image: _image, ...speakerWithoutImage } = speaker
-    await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
+    const { image, ...speakerWithoutImage } = speaker
+
+    const patch = clientWrite.patch(spekaerId).set(speakerWithoutImage)
+
+    // Convert image asset ID string to a Sanity image reference object
+    if (image) {
+      patch.set({
+        ...speakerWithoutImage,
+        image: {
+          _type: 'image',
+          asset: {
+            _type: 'reference',
+            _ref: image,
+          },
+        },
+      })
+    }
+
+    await patch.commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
       await getSpeaker(spekaerId)
