@@ -23,6 +23,7 @@ import travelSupport from './schemaTypes/travelSupport'
 import travelExpense from './schemaTypes/travelExpense'
 import volunteer from './schemaTypes/volunteer'
 import workshopSignup from './schemaTypes/workshopSignup'
+import staff from './schemaTypes/staff'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -38,6 +39,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     dashboardConfig,
     imageGallery,
     volunteer,
+    staff,
 
     // Topics & Talks
     talk,
@@ -54,10 +56,10 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Sponsors
     sponsor,
-    sponsorTier,
-    sponsorForConference,
     sponsorActivity,
     sponsorEmailTemplate,
+    sponsorForConference,
+    sponsorTier,
     contractTemplate,
   ],
 }
