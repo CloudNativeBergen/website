@@ -255,7 +255,7 @@ export async function getPublicSpeaker(
 }
 
 export async function updateSpeaker(
-  spekaerId: string,
+  speakerId: string,
   speaker: Partial<SpeakerInput>,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
@@ -264,26 +264,19 @@ export async function updateSpeaker(
   try {
     const { image, ...speakerWithoutImage } = speaker
 
-    const patch = clientWrite.patch(spekaerId).set(speakerWithoutImage)
+    const patchData: Record<string, unknown> = { ...speakerWithoutImage }
 
-    // Convert image asset ID string to a Sanity image reference object
-    if (image) {
-      patch.set({
-        ...speakerWithoutImage,
-        image: {
-          _type: 'image',
-          asset: {
-            _type: 'reference',
-            _ref: image,
-          },
-        },
-      })
+    if (typeof image === 'string' && image) {
+      patchData.image = {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: image },
+      }
     }
 
-    await patch.commit()
+    await clientWrite.patch(speakerId).set(patchData).commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
-      await getSpeaker(spekaerId)
+      await getSpeaker(speakerId)
     if (fetchErr) {
       throw fetchErr
     }

@@ -1,7 +1,7 @@
 const { mockCommit, mockSet, mockPatch, mockFetch } = vi.hoisted(() => {
   const mockCommit = vi.fn().mockResolvedValue({})
   const mockSet = vi.fn()
-  mockSet.mockReturnValue({ commit: mockCommit, set: mockSet })
+  mockSet.mockReturnValue({ commit: mockCommit })
   const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
   const mockFetch = vi.fn()
   return { mockCommit, mockSet, mockPatch, mockFetch }
@@ -62,7 +62,8 @@ describe('updateSpeaker', () => {
     expect(err).toBeNull()
     expect(speaker).toEqual(baseSpeaker)
 
-    // Second .set() call should include the image reference
+    // Single .set() call should include both fields and the image reference
+    expect(mockSet).toHaveBeenCalledTimes(1)
     expect(mockSet).toHaveBeenCalledWith({
       name: 'Updated Name',
       image: {
