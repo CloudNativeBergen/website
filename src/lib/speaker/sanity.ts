@@ -255,19 +255,28 @@ export async function getPublicSpeaker(
 }
 
 export async function updateSpeaker(
-  spekaerId: string,
+  speakerId: string,
   speaker: Partial<SpeakerInput>,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- image is excluded from patch
-    const { image: _image, ...speakerWithoutImage } = speaker
-    await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
+    const { image, ...speakerWithoutImage } = speaker
+
+    const patchData: Record<string, unknown> = { ...speakerWithoutImage }
+
+    if (typeof image === 'string' && image) {
+      patchData.image = {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: image },
+      }
+    }
+
+    await clientWrite.patch(speakerId).set(patchData).commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
-      await getSpeaker(spekaerId)
+      await getSpeaker(speakerId)
     if (fetchErr) {
       throw fetchErr
     }
