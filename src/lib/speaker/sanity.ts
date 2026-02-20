@@ -266,7 +266,7 @@ export async function updateSpeaker(
 
     const patchData: Record<string, unknown> = { ...speakerWithoutImage }
 
-    if (typeof image === 'string' && image) {
+    if (typeof image === 'string' && image.startsWith('image-')) {
       patchData.image = {
         _type: 'image',
         asset: { _type: 'reference', _ref: image },
