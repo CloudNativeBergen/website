@@ -28,6 +28,7 @@ import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
+import { SpeakerImageModal } from '@/components/admin/SpeakerImageModal'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -56,6 +57,7 @@ interface SpeakerCardProps {
 
 function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
   const [isBioExpanded, setIsBioExpanded] = useState(false)
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
   const bioText = speaker.bio || ''
   const shouldShowExpand = bioText.length > 150
 
@@ -74,18 +76,24 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
       <div>
         <div className="float-left mr-4 mb-2">
           {speaker.image ? (
-            <img
-              src={sanityImage(speaker.image)
-                .width(128)
-                .height(128)
-                .fit('crop')
-                .url()}
-              alt={speaker.name}
-              width={64}
-              height={64}
-              className="h-16 w-16 rounded-full object-cover"
-              loading="lazy"
-            />
+            <button
+              onClick={() => setIsImageModalOpen(true)}
+              className="cursor-pointer transition-opacity hover:opacity-80"
+              aria-label={`View ${speaker.name}'s photo in fullscreen`}
+            >
+              <img
+                src={sanityImage(speaker.image)
+                  .width(128)
+                  .height(128)
+                  .fit('crop')
+                  .url()}
+                alt={speaker.name}
+                width={64}
+                height={64}
+                className="h-16 w-16 rounded-full object-cover"
+                loading="lazy"
+              />
+            </button>
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
               <UserIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
@@ -145,6 +153,18 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
         </div>
         <div className="clear-both" />
       </div>
+
+      {speaker.image && (
+        <SpeakerImageModal
+          isOpen={isImageModalOpen}
+          onClose={() => setIsImageModalOpen(false)}
+          speaker={{
+            name: speaker.name,
+            title: speaker.title,
+            image: speaker.image,
+          }}
+        />
+      )}
     </div>
   )
 }
