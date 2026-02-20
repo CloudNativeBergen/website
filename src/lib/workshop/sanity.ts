@@ -218,7 +218,7 @@ export async function getWorkshopById(
         name,
         "slug": slug.current,
         bio,
-        "avatar": image.asset->url,
+        "avatar": coalesce(image.asset->url, imageURL),
         company
       },
       "signupCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])
@@ -551,7 +551,7 @@ export async function getWorkshopStatistics(
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
-          workshopsWithData.length
+        workshopsWithData.length
         : 0,
   }
 
