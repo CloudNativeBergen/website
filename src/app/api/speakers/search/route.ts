@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         email,
         title,
         bio,
-        "image": image.asset->url,
+        "image": coalesce(image.asset->url, imageURL),
         "slug": slug.current,
         flags
       }`,

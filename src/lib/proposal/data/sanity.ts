@@ -45,7 +45,7 @@ export async function getProposal({
       ...,
       speakers[]-> {
         ...,
-        "image": image.asset->url,
+        "image": coalesce(image.asset->url, imageURL),
         ${
           isOrganizer && includeSubmittedTalks
             ? `"submittedTalks": *[
@@ -167,7 +167,7 @@ export async function getProposals({
   const query = groq`*[${filters}]{
     ...,
     speakers[]-> {
-      _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current,
+      _id, name, email, providers, "image": coalesce(image.asset->url, imageURL), flags, "slug": slug.current,
       ${
         includePreviousAcceptedTalks
           ? `"previousAcceptedTalks": *[
@@ -456,7 +456,7 @@ export async function searchProposals({
         email,
         providers,
         bio,
-        "image": image.asset->url,
+        "image": coalesce(image.asset->url, imageURL),
         flags,
         "slug": slug.current
         ${
