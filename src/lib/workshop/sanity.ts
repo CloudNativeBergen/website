@@ -551,7 +551,7 @@ export async function getWorkshopStatistics(
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
-        workshopsWithData.length
+          workshopsWithData.length
         : 0,
   }
 
