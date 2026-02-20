@@ -4,7 +4,7 @@ import { SpeakerSharingActions } from '@/components/speaker/SpeakerSharingAction
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import type { SpeakerShareClientProps } from '@/components/SpeakerShare'
 import { formatConfig, Format } from '@/lib/proposal'
@@ -95,11 +95,11 @@ export function SpeakerShareWrapper({
               <div className="shrink-0">
                 {image ? (
                   <img
-                    src={sanityImage(image)
-                      .width(800)
-                      .height(800)
-                      .fit('crop')
-                      .url()}
+                    src={speakerImageUrl(image, {
+                      width: 800,
+                      height: 800,
+                      fit: 'crop',
+                    })}
                     alt={name}
                     width={400}
                     height={400}
