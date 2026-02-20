@@ -35,3 +35,28 @@ const builder = createImageUrlBuilder(clientReadCached)
 export function sanityImage(source: SanityImageSource) {
   return builder.image(source)
 }
+
+const SANITY_CDN_PREFIX = 'https://cdn.sanity.io/'
+
+/**
+ * Resolves a speaker image URL for display. Handles both Sanity CDN URLs
+ * (from uploaded images) and external URLs (from OAuth providers like GitHub/LinkedIn).
+ * Only Sanity URLs are passed through the image builder for transforms.
+ */
+export function speakerImageUrl(
+  image: string,
+  opts: { width: number; height: number; fit?: 'crop' | 'max' } = {
+    width: 400,
+    height: 400,
+    fit: 'crop',
+  },
+): string {
+  if (image.startsWith(SANITY_CDN_PREFIX)) {
+    return sanityImage(image)
+      .width(opts.width)
+      .height(opts.height)
+      .fit(opts.fit ?? 'crop')
+      .url()
+  }
+  return image
+}

@@ -23,7 +23,7 @@ import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
@@ -75,11 +75,11 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
         <div className="float-left mr-4 mb-2">
           {speaker.image ? (
             <img
-              src={sanityImage(speaker.image)
-                .width(128)
-                .height(128)
-                .fit('crop')
-                .url()}
+              src={speakerImageUrl(speaker.image, {
+                width: 128,
+                height: 128,
+                fit: 'crop',
+              })}
               alt={speaker.name}
               width={64}
               height={64}

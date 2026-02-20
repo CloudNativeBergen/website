@@ -1,6 +1,6 @@
 import React from 'react'
 import { ImageResponse } from 'next/og'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
 import {
   createSvgDataUrl,
@@ -259,8 +259,12 @@ export default async function Image({
   }
 
   const primaryTalk = talks[0]
-  const speakerImageUrl = speakerData.image
-    ? sanityImage(speakerData.image).width(500).height(500).fit('crop').url()
+  const speakerImgUrl = speakerData.image
+    ? speakerImageUrl(speakerData.image, {
+        width: 500,
+        height: 500,
+        fit: 'crop',
+      })
     : null
 
   const ingressSponsors = conferenceData.sponsors.filter(
@@ -442,7 +446,7 @@ export default async function Image({
             zIndex: 1,
           }}
         >
-          <SpeakerImage imageUrl={speakerImageUrl} name={speakerData.name} />
+          <SpeakerImage imageUrl={speakerImgUrl} name={speakerData.name} />
 
           <h2
             style={{

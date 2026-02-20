@@ -15,7 +15,7 @@ import Link from 'next/link'
 import type { BadgeRecord } from '@/lib/badge/types'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Conference } from '@/lib/conference/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { BlueskyIcon, LinkedInIcon } from '@/components/SocialIcons'
@@ -85,8 +85,8 @@ export function BadgeDisplay({
     })
   }
 
-  const speakerImageUrl = speaker.image
-    ? sanityImage(speaker.image).width(400).height(400).fit('crop').url()
+  const speakerImgUrl = speaker.image
+    ? speakerImageUrl(speaker.image)
     : undefined
 
   // Get first talk for evidence (if available)
@@ -150,9 +150,9 @@ export function BadgeDisplay({
 
           {/* Recipient Info */}
           <div className="mb-6 flex flex-col items-center gap-4">
-            {speakerImageUrl ? (
+            {speakerImgUrl ? (
               <img
-                src={speakerImageUrl}
+                src={speakerImgUrl}
                 alt={speaker.name}
                 className="h-24 w-24 rounded-full border-4 border-white/30 object-cover shadow-xl"
               />

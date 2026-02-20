@@ -3,7 +3,7 @@
 import { StarIcon } from '@heroicons/react/24/solid'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalReviewListProps {
@@ -80,11 +80,11 @@ export function ProposalReviewList({
               <div className="shrink-0">
                 {reviewer?.image ? (
                   <img
-                    src={sanityImage(reviewer.image)
-                      .width(64)
-                      .height(64)
-                      .fit('crop')
-                      .url()}
+                    src={speakerImageUrl(reviewer.image, {
+                      width: 64,
+                      height: 64,
+                      fit: 'crop',
+                    })}
                     alt={reviewer.name || 'Reviewer'}
                     width={32}
                     height={32}
