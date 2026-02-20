@@ -116,7 +116,7 @@ export async function getConferenceForDomain(
           ? `organizers[]->{
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
       },`
           : ''
       }
@@ -125,7 +125,7 @@ export async function getConferenceForDomain(
           ? `featuredSpeakers[]->{
       ...,
       "slug": slug.current,
-      "image": image.asset->url,
+      "image": coalesce(image.asset->url, imageURL),
       "talks": *[_type == "talk" && references(^._id) && conference._ref == ^.^._id && status == "confirmed"]{
       _id,
       title,
@@ -158,7 +158,7 @@ export async function getConferenceForDomain(
         name,
         "slug": slug.current,
         title,
-        "image": image.asset->url
+        "image": coalesce(image.asset->url, imageURL)
       }
       },`
           : ''
@@ -194,7 +194,7 @@ export async function getConferenceForDomain(
           name,
           "slug": slug.current,
           title,
-          "image": image.asset->url
+          "image": coalesce(image.asset->url, imageURL)
           }
         }
         }

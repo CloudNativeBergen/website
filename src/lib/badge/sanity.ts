@@ -13,7 +13,7 @@ const BADGE_FIELDS = `
     _id,
     name,
     email,
-    "image": image.asset->url,
+    "image": coalesce(image.asset->url, imageURL),
     title,
     "slug": slug.current,
     talks[]->{

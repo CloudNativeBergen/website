@@ -48,6 +48,7 @@ export function SpeakerDetailsForm({
   const [speakerBio, setSpeakerBio] = useState(speaker?.bio ?? '')
   const [speakerEmail, setSpeakerEmail] = useState(email ?? '')
   const [speakerImage, setSpeakerImage] = useState(speaker?.image ?? '')
+  const [imageChanged, setImageChanged] = useState(false)
   const [speakerImagePreviewUrl, setSpeakerImagePreviewUrl] = useState<
     string | null
   >(speaker?.image && speaker.image.startsWith('http') ? speaker.image : null)
@@ -153,6 +154,7 @@ export function SpeakerDetailsForm({
           const { assetId, url } = await onImageUpload(file)
           setSpeakerImage(assetId)
           setSpeakerImagePreviewUrl(url)
+          setImageChanged(true)
         } catch (error) {
           setImageError(
             error instanceof Error ? error.message : 'Failed to upload image',
@@ -164,6 +166,7 @@ export function SpeakerDetailsForm({
           setImageError(error.message)
         } else if (image) {
           setSpeakerImage(image.image)
+          setImageChanged(true)
         }
       }
 
@@ -211,7 +214,7 @@ export function SpeakerDetailsForm({
       bio: speakerBio,
       flags: speakerFlags,
       links,
-      ...(speakerImage && { image: speakerImage }),
+      ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
           granted: dataProcessingConsent,
@@ -240,6 +243,7 @@ export function SpeakerDetailsForm({
     speakerFlags,
     speakerLinks,
     speakerImage,
+    imageChanged,
     dataProcessingConsent,
     marketingConsent,
     publicProfileConsent,
