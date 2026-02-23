@@ -197,6 +197,69 @@ const multiDayData: FilteredProgramData = {
   },
 }
 
+const pastDayData: FilteredProgramData = {
+  schedules: [
+    {
+      _id: 'schedule-day1',
+      date: '2024-09-15',
+      tracks: [
+        {
+          trackTitle: 'Main Stage',
+          trackDescription: 'Keynotes and featured presentations',
+          talks: [
+            {
+              talk: createTalk('t1', 'Opening Keynote'),
+              startTime: '09:00',
+              endTime: '09:45',
+            },
+            {
+              placeholder: 'Coffee Break',
+              startTime: '09:45',
+              endTime: '10:00',
+            },
+            {
+              talk: createTalk('t2', 'GitOps Best Practices'),
+              startTime: '10:00',
+              endTime: '10:45',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      _id: 'schedule-day2',
+      date: '2099-09-16',
+      tracks: [
+        {
+          trackTitle: 'Main Stage',
+          trackDescription: 'Day 2 keynotes',
+          talks: [
+            {
+              talk: createTalk('t7', 'Platform Engineering in 2025'),
+              startTime: '09:00',
+              endTime: '09:45',
+            },
+            {
+              talk: createTalk('t8', 'eBPF for Beginners'),
+              startTime: '10:00',
+              endTime: '10:45',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  allTalks: [],
+  availableFilters: {
+    days: ['2024-09-15', '2099-09-16'],
+    tracks: ['Main Stage'],
+    formats: [Format.presentation_45],
+    levels: [Level.intermediate],
+    audiences: [Audience.developer],
+    topics: mockTopics,
+  },
+}
+
 const emptyData: FilteredProgramData = {
   schedules: [],
   allTalks: [],
@@ -292,5 +355,19 @@ export const WithLiveStatus: Story = {
 export const Empty: Story = {
   args: {
     data: emptyData,
+  },
+}
+
+export const PastDayCollapsed: Story = {
+  args: {
+    data: pastDayData,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multi-day schedule showing the collapsible feature for past days. The first day (in the past) is automatically collapsed, while the future day remains expanded. Click the past day header to expand/collapse it.',
+      },
+    },
   },
 }

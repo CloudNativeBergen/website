@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import {
+  MagnifyingGlassIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
-import { getTalkStatusKey } from '@/lib/program/time-utils'
+import { getTalkStatusKey, isScheduleInPast } from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
 import { formatConferenceDateLong } from '@/lib/time'
 import clsx from 'clsx'
@@ -383,6 +387,9 @@ const DaySchedule = React.memo(function DaySchedule({
   scheduleIndex: number
   scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
+  const isPast = isScheduleInPast(schedule.date)
+  const [isOpen, setIsOpen] = useState(!isPast)
+
   if (schedule.tracks.length === 0) {
     return (
       <div className="py-12 text-center">
@@ -397,33 +404,58 @@ const DaySchedule = React.memo(function DaySchedule({
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
-          {formatConferenceDateLong(schedule.date)}
-        </h2>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={clsx(
+            'group inline-flex items-center gap-2 transition-colors',
+            isPast && 'hover:text-brand-cloud-blue dark:hover:text-blue-400',
+          )}
+          aria-expanded={isOpen}
+        >
+          <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            {formatConferenceDateLong(schedule.date)}
+          </h2>
+          {isPast && (
+            <span className="text-brand-slate-gray dark:text-gray-400">
+              {isOpen ? (
+                <ChevronDownIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
+              ) : (
+                <ChevronRightIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
+              )}
+            </span>
+          )}
+        </button>
         <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
           {schedule.tracks.length} track
           {schedule.tracks.length !== 1 ? 's' : ''}
+          {isPast && (
+            <span className="ml-2 text-gray-500 dark:text-gray-500">
+              {isOpen ? '' : '(click to expand)'}
+            </span>
+          )}
         </p>
       </div>
 
-      <div className="space-y-6">
-        <ScheduleTabbed
-          tracks={schedule.tracks}
-          date={schedule.date}
-          talkStatusMap={talkStatusMap}
-          currentPosition={currentPosition}
-          scheduleIndex={scheduleIndex}
-          scrollTargetRef={scrollTargetRef}
-        />
-        <ScheduleStatic
-          tracks={schedule.tracks}
-          date={schedule.date}
-          talkStatusMap={talkStatusMap}
-          currentPosition={currentPosition}
-          scheduleIndex={scheduleIndex}
-          scrollTargetRef={scrollTargetRef}
-        />
-      </div>
+      {isOpen && (
+        <div className="space-y-6">
+          <ScheduleTabbed
+            tracks={schedule.tracks}
+            date={schedule.date}
+            talkStatusMap={talkStatusMap}
+            currentPosition={currentPosition}
+            scheduleIndex={scheduleIndex}
+            scrollTargetRef={scrollTargetRef}
+          />
+          <ScheduleStatic
+            tracks={schedule.tracks}
+            date={schedule.date}
+            talkStatusMap={talkStatusMap}
+            currentPosition={currentPosition}
+            scheduleIndex={scheduleIndex}
+            scrollTargetRef={scrollTargetRef}
+          />
+        </div>
+      )}
     </div>
   )
 })

@@ -77,6 +77,16 @@ export function isScheduleToday(
   )
 }
 
+export function isScheduleInPast(
+  scheduleDate: string,
+  currentTime: Date = getCurrentConferenceTime(),
+): boolean {
+  return (
+    stripTime(new Date(scheduleDate)).getTime() <
+    stripTime(currentTime).getTime()
+  )
+}
+
 export function findCurrentTalkPosition(
   schedules: ConferenceSchedule[],
   currentTime: Date = getCurrentConferenceTime(),
