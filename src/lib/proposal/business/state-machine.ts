@@ -23,6 +23,8 @@ export function actionStateMachine(
         status = Status.draft
       } else if (isOrganizer && action === Action.accept) {
         status = Status.accepted
+      } else if (isOrganizer && action === Action.waitlist) {
+        status = Status.waitlisted
       } else if (isOrganizer && action === Action.reject) {
         status = Status.rejected
       } else {
@@ -37,6 +39,17 @@ export function actionStateMachine(
         status = Status.withdrawn
       } else if (isOrganizer && action === Action.reject) {
         status = Status.rejected
+      } else {
+        isValidAction = false
+      }
+      break
+    case Status.waitlisted:
+      if (isOrganizer && action === Action.accept) {
+        status = Status.accepted
+      } else if (isOrganizer && action === Action.reject) {
+        status = Status.rejected
+      } else if (action === Action.withdraw) {
+        status = Status.withdrawn
       } else {
         isValidAction = false
       }

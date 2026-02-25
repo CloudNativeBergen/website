@@ -8,7 +8,9 @@ export async function handleEmailNotification(
 ): Promise<void> {
   if (
     !event.metadata.shouldNotify ||
-    ![Action.accept, Action.reject, Action.remind].includes(event.action)
+    ![Action.accept, Action.reject, Action.waitlist, Action.remind].includes(
+      event.action,
+    )
   ) {
     return
   }

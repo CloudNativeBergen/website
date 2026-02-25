@@ -44,6 +44,11 @@ describe('actionStateMachine', () => {
       expect(result).toEqual({ status: Status.accepted, isValidAction: true })
     })
 
+    it('allows organizer to waitlist', () => {
+      const result = actionStateMachine(Status.submitted, Action.waitlist, true)
+      expect(result).toEqual({ status: Status.waitlisted, isValidAction: true })
+    })
+
     it('allows organizer to reject', () => {
       const result = actionStateMachine(Status.submitted, Action.reject, true)
       expect(result).toEqual({ status: Status.rejected, isValidAction: true })
@@ -51,6 +56,15 @@ describe('actionStateMachine', () => {
 
     it('prevents non-organizer from accepting', () => {
       const result = actionStateMachine(Status.submitted, Action.accept, false)
+      expect(result.isValidAction).toBe(false)
+    })
+
+    it('prevents non-organizer from waitlisting', () => {
+      const result = actionStateMachine(
+        Status.submitted,
+        Action.waitlist,
+        false,
+      )
       expect(result.isValidAction).toBe(false)
     })
 
@@ -110,6 +124,53 @@ describe('actionStateMachine', () => {
     })
   })
 
+  describe('waitlisted status', () => {
+    it('allows organizer to accept', () => {
+      const result = actionStateMachine(
+        Status.waitlisted,
+        Action.accept,
+        true,
+      )
+      expect(result).toEqual({ status: Status.accepted, isValidAction: true })
+    })
+
+    it('allows organizer to reject', () => {
+      const result = actionStateMachine(
+        Status.waitlisted,
+        Action.reject,
+        true,
+      )
+      expect(result).toEqual({ status: Status.rejected, isValidAction: true })
+    })
+
+    it('allows speaker to withdraw', () => {
+      const result = actionStateMachine(
+        Status.waitlisted,
+        Action.withdraw,
+        false,
+      )
+      expect(result).toEqual({ status: Status.withdrawn, isValidAction: true })
+    })
+
+    it('prevents non-organizer from accepting', () => {
+      const result = actionStateMachine(
+        Status.waitlisted,
+        Action.accept,
+        false,
+      )
+      expect(result.isValidAction).toBe(false)
+    })
+
+    it('prevents non-organizer from rejecting', () => {
+      const result = actionStateMachine(
+        Status.waitlisted,
+        Action.reject,
+        false,
+      )
+      expect(result.isValidAction).toBe(false)
+    })
+  })
+
   describe('full lifecycle: draft → submitted → accepted → confirmed', () => {
     it('transitions through the complete happy path', () => {
       let { status } = actionStateMachine(Status.draft, Action.submit, false)
@@ -118,6 +179,15 @@ describe('actionStateMachine', () => {
       expect(status).toBe(Status.accepted)
       ;({ status } = actionStateMachine(status, Action.confirm, false))
       expect(status).toBe(Status.confirmed)
+    })
+
+    it('transitions through waitlist path: draft → submitted → waitlisted → accepted', () => {
+      let { status } = actionStateMachine(Status.draft, Action.submit, false)
+      expect(status).toBe(Status.submitted)
+      ;({ status } = actionStateMachine(status, Action.waitlist, true))
+      expect(status).toBe(Status.waitlisted)
+      ;({ status } = actionStateMachine(status, Action.accept, true))
+      expect(status).toBe(Status.accepted)
     })
   })
 })

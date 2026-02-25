@@ -2,6 +2,7 @@ import { Action } from '../types'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
+  ProposalWaitlistTemplate,
 } from '@/components/email'
 import { resend } from '@/lib/email/config'
 import {
@@ -24,6 +25,8 @@ function getEmailTemplate(
       return ProposalAcceptTemplate(
         templateProps as ProposalAcceptTemplateProps,
       )
+    case Action.waitlist:
+      return ProposalWaitlistTemplate(templateProps)
     case Action.reject:
       return ProposalRejectTemplate(templateProps)
     default:
@@ -35,6 +38,8 @@ function getEmailSubject(action: Action, eventName: string): string {
   switch (action) {
     case Action.accept:
       return `🎉 Your proposal has been accepted for ${eventName}`
+    case Action.waitlist:
+      return `Your proposal has been waitlisted for ${eventName}`
     case Action.remind:
       return `⏰ Reminder: Please confirm your participation in ${eventName}`
     case Action.reject:
@@ -51,6 +56,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
     !action ||
     (action !== Action.accept &&
       action !== Action.remind &&
+      action !== Action.waitlist &&
       action !== Action.reject)
   ) {
     throw new Error(`Invalid action for notification: ${action}`)

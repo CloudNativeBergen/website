@@ -44,6 +44,14 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         ringColor: 'ring-green-600/20',
         borderColor: 'border-l-green-500',
       }
+    case Status.waitlisted:
+      return {
+        text: statuses.get(Status.waitlisted) || 'Waitlisted',
+        bgColor: 'bg-orange-100',
+        textColor: 'text-orange-800',
+        ringColor: 'ring-orange-600/20',
+        borderColor: 'border-l-orange-500',
+      }
     case Status.confirmed:
       return {
         text: statuses.get(Status.confirmed) || 'Confirmed',
