@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
+import { nanoid } from 'nanoid'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactEditor',
@@ -68,7 +69,7 @@ function ContactEditorDemo() {
     setContacts([
       ...contacts,
       {
-        _key: String(Date.now()),
+        _key: nanoid(),
         name: '',
         email: '',
         phone: '',
