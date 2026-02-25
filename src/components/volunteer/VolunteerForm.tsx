@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { Button } from '@/components/Button'
+import { api } from '@/lib/trpc/client'
 
 interface VolunteerFormProps {
   conferenceId: string
@@ -45,13 +46,26 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
   })
 
   const [dataProcessingConsent, setDataProcessingConsent] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<{
     message: string
     fieldErrors?: Record<string, string[]>
     formErrors?: string[]
   } | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+
+  const createVolunteerMutation = api.volunteer.create.useMutation({
+    onSuccess: () => {
+      setShowSuccess(true)
+      resetForm()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    onError: (error) => {
+      setSubmitError({
+        message: error.message || 'Failed to submit volunteer application',
+      })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+  })
 
   const occupationOptions = new Map<string, string>([
     [Occupation.STUDENT, 'Student'],
@@ -111,68 +125,26 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       return
     }
 
-    setIsSubmitting(true)
+    const preferredTasksArray = formData.preferredTasks
+      ? formData.preferredTasks
+          .split(',')
+          .map((task) => task.trim())
+          .filter(Boolean)
+      : []
 
-    try {
-      const preferredTasksArray = formData.preferredTasks
-        ? formData.preferredTasks
-            .split(',')
-            .map((task) => task.trim())
-            .filter(Boolean)
-        : []
-
-      const payload = {
-        ...formData,
-        tshirtSize: formData.tshirtSize || undefined,
-        availability: formData.availability || undefined,
-        dietaryRestrictions: formData.dietaryRestrictions || undefined,
-        otherInfo: formData.otherInfo || undefined,
-        preferredTasks: preferredTasksArray,
-        conferenceId,
-        consent: {
-          dataProcessing: dataProcessingConsent,
-        },
-      }
-
-      const response = await fetch('/api/volunteer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (data.details?.formErrors || data.details?.fieldErrors) {
-          setSubmitError({
-            message: data.error || 'Validation failed',
-            formErrors: data.details.formErrors,
-            fieldErrors: data.details.fieldErrors,
-          })
-        } else {
-          setSubmitError({
-            message: data.error || 'Failed to submit volunteer application',
-          })
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-        setIsSubmitting(false)
-        return
-      }
-
-      setShowSuccess(true)
-      resetForm()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    } catch (error) {
-      setSubmitError({
-        message:
-          error instanceof Error
-            ? error.message
-            : 'An unexpected error occurred',
-      })
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    } finally {
-      setIsSubmitting(false)
-    }
+    createVolunteerMutation.mutate({
+      ...formData,
+      occupation: formData.occupation as Occupation,
+      tshirtSize: formData.tshirtSize || undefined,
+      availability: formData.availability || undefined,
+      dietaryRestrictions: formData.dietaryRestrictions || undefined,
+      otherInfo: formData.otherInfo || undefined,
+      preferredTasks: preferredTasksArray,
+      conferenceId,
+      consent: {
+        dataProcessing: dataProcessingConsent,
+      },
+    })
   }
 
   useEffect(() => {
@@ -394,13 +366,13 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         <Button
           type="button"
           onClick={resetForm}
-          disabled={isSubmitting}
+          disabled={createVolunteerMutation.isPending}
           variant="outline"
         >
           Reset Form
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Submitting...' : 'Submit Application'}
+        <Button type="submit" disabled={createVolunteerMutation.isPending}>
+          {createVolunteerMutation.isPending ? 'Submitting...' : 'Submit Application'}
         </Button>
       </div>
     </form>

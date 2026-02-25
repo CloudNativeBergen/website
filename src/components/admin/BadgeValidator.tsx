@@ -9,6 +9,7 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { api } from '@/lib/trpc/client'
 
 interface ValidationCheck {
   name: string
@@ -48,17 +49,36 @@ interface BadgeCredential {
 
 export default function BadgeValidator() {
   const [file, setFile] = useState<File | null>(null)
-  const [isValidating, setIsValidating] = useState(false)
   const [checks, setChecks] = useState<ValidationCheck[]>([])
   const [credential, setCredential] = useState<BadgeCredential | null>(null)
   const [svgPreview, setSvgPreview] = useState<string | null>(null)
+
+  const validateMutation = api.badge.validate.useMutation({
+    onSuccess: (data) => {
+      if (data.checks) {
+        setChecks(data.checks)
+      }
+      if (data.credential) {
+        setCredential(data.credential)
+      }
+    },
+    onError: (error) => {
+      setChecks([
+        {
+          name: 'error',
+          status: 'error',
+          message: `Validation error: ${error.message}`,
+        },
+      ])
+    },
+  })
 
   const resetState = () => {
     setFile(null)
     setChecks([])
     setCredential(null)
     setSvgPreview(null)
-    setIsValidating(false)
+    validateMutation.reset()
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,76 +101,23 @@ export default function BadgeValidator() {
     }
   }
 
-  const updateCheck = (
-    name: string,
-    status: ValidationCheck['status'],
-    message: string,
-    details?: Record<string, unknown>,
-  ) => {
-    setChecks((prev) => {
-      const existing = prev.find((c) => c.name === name)
-      if (existing) {
-        return prev.map((c) =>
-          c.name === name ? { name, status, message, details } : c,
-        )
-      }
-      return [...prev, { name, status, message, details }]
-    })
-  }
-
   const validateBadge = async () => {
     if (!file) return
 
-    setIsValidating(true)
     setChecks([])
     setCredential(null)
 
     try {
-      // Step 1: Read SVG content
-      updateCheck('file', 'pending', 'Reading SVG file...')
       const svgContent = await file.text()
-      updateCheck('file', 'success', 'SVG file loaded successfully')
-
-      // Call server-side API (avoids CORS issues)
-      const response = await fetch('/api/badge/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ svg: svgContent }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        updateCheck(
-          'validation',
-          'error',
-          `Server validation failed: ${errorData.error || 'Unknown error'}`,
-        )
-        setIsValidating(false)
-        return
-      }
-
-      const { checks: serverChecks, credential: extractedCredential } =
-        await response.json()
-
-      // Update all checks from server response
-      serverChecks.forEach((check: ValidationCheck) => {
-        updateCheck(check.name, check.status, check.message, check.details)
-      })
-
-      // Set credential if extracted
-      if (extractedCredential) {
-        setCredential(extractedCredential)
-      }
+      validateMutation.mutate({ svg: svgContent })
     } catch (err) {
-      updateCheck(
-        'error',
-        'error',
-        `Validation error: ${err instanceof Error ? err.message : 'Unknown error'}`,
-      )
-    } finally {
-      setIsValidating(false)
+      setChecks([
+        {
+          name: 'error',
+          status: 'error',
+          message: `Failed to read file: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        },
+      ])
     }
   }
 
@@ -215,13 +182,13 @@ export default function BadgeValidator() {
               color="blue"
               size="md"
               onClick={validateBadge}
-              disabled={isValidating}
+              disabled={validateMutation.isPending}
             >
-              {isValidating ? 'Validating...' : 'Validate Badge'}
+              {validateMutation.isPending ? 'Validating...' : 'Validate Badge'}
             </AdminButton>
           )}
 
-          {file && !isValidating && (
+          {file && !validateMutation.isPending && (
             <AdminButton variant="secondary" size="md" onClick={resetState}>
               Clear
             </AdminButton>
