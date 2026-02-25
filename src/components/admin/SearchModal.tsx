@@ -15,18 +15,11 @@ import { MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { SkeletonSearchResult } from './LoadingSkeleton'
-import { useProposalSearch } from './hooks/useProposalSearch'
-import {
-  ProposalExisting,
-  statuses,
-  isWorkshopFormat,
-} from '@/lib/proposal/types'
-import { SpeakerAvatars } from '@/components/SpeakerAvatars'
-import { getStatusBadgeStyle } from './utils'
+import { useUnifiedSearch } from '@/lib/search'
+import type { SearchResultItem } from '@/lib/search'
 
 interface SearchModalProps {
   open: boolean
@@ -41,9 +34,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     isSearching,
     searchResults,
     searchError,
-    navigateToProposal,
+    navigateTo,
     clearSearch,
-  } = useProposalSearch()
+  } = useUnifiedSearch()
 
   const query = rawQuery.toLowerCase().trim()
 
@@ -65,11 +58,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     onClose()
   }
 
-  const handleSelect = (proposal: ProposalExisting | null) => {
-    if (!proposal || !proposal._id) {
+  const handleSelect = (item: SearchResultItem | null) => {
+    if (!item) {
       return
     }
-    navigateToProposal(proposal._id)
+    navigateTo(item.url)
     handleClose()
   }
 
@@ -105,13 +98,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               className="mx-auto max-w-xl transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700"
             >
               <Combobox
-                onChange={(proposal) => {
-                  if (
-                    proposal &&
-                    typeof proposal === 'object' &&
-                    '_id' in proposal
-                  ) {
-                    handleSelect(proposal as ProposalExisting)
+                onChange={(item) => {
+                  if (item && typeof item === 'object' && 'id' in item) {
+                    handleSelect(item as SearchResultItem)
                   }
                 }}
               >
@@ -119,7 +108,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   <ComboboxInput
                     autoFocus
                     className="col-start-1 row-start-1 h-12 w-full pr-4 pl-11 text-base text-gray-900 outline-hidden placeholder:text-gray-400 sm:text-sm dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
-                    placeholder="Search proposals, speakers, topics..."
+                    placeholder="Search pages, proposals, speakers, sponsors..."
                     value={rawQuery}
                     onChange={(event) => setRawQuery(event.target.value)}
                   />
@@ -129,109 +118,62 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   />
                 </div>
 
-                {!isSearching &&
-                  query &&
-                  searchResults.length > 0 &&
-                  (() => {
-                    const nonWorkshops = searchResults.filter(
-                      (p) => !isWorkshopFormat(p.format),
-                    )
-                    const workshops = searchResults.filter((p) =>
-                      isWorkshopFormat(p.format),
-                    )
-
-                    const renderProposalOption = (
-                      proposal: ProposalExisting,
-                    ) => {
-                      const speakers =
-                        proposal.speakers && Array.isArray(proposal.speakers)
-                          ? proposal.speakers.filter(
-                              (speaker) =>
-                                typeof speaker === 'object' &&
-                                speaker &&
-                                'name' in speaker,
-                            )
-                          : []
-                      return (
-                        <ComboboxOption
-                          as="li"
-                          key={proposal._id}
-                          value={proposal}
-                          className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
-                        >
-                          <div className="shrink-0">
-                            {proposal.speakers &&
-                            Array.isArray(proposal.speakers) &&
-                            proposal.speakers.length > 0 ? (
-                              <SpeakerAvatars
-                                speakers={proposal.speakers}
-                                size="sm"
-                                maxVisible={1}
-                              />
-                            ) : (
-                              <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20 dark:bg-gray-700 dark:group-data-focus:bg-white/20">
-                                <UserIcon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-3 flex-auto truncate">
-                            <div className="font-medium dark:text-white">
-                              {proposal.title}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
-                                by{' '}
-                                {speakers.map((s) => s.name).join(', ') ||
-                                  'Unknown Speaker'}
-                              </div>
-                              <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
+                {!isSearching && query && searchResults.totalCount > 0 && (
+                  <ComboboxOptions
+                    static
+                    as="ul"
+                    className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
+                  >
+                    {searchResults.groups.map((group) => (
+                      <li key={group.category}>
+                        <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
+                          {group.label} ({group.items.length})
+                        </h2>
+                        <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
+                          {group.items.map((item) => {
+                            const Icon = item.icon || DocumentTextIcon
+                            return (
+                              <ComboboxOption
+                                as="li"
+                                key={item.id}
+                                value={item}
+                                className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
                               >
-                                {statuses.get(proposal.status) ||
-                                  proposal.status}
-                              </span>
-                            </div>
-                          </div>
-                        </ComboboxOption>
-                      )
-                    }
-
-                    return (
-                      <ComboboxOptions
-                        static
-                        as="ul"
-                        className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
-                      >
-                        {nonWorkshops.length > 0 && (
-                          <li>
-                            <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-                              Talks ({nonWorkshops.length})
-                            </h2>
-                            <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
-                              {nonWorkshops.map(renderProposalOption)}
-                            </ul>
-                          </li>
-                        )}
-                        {workshops.length > 0 && (
-                          <li>
-                            <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-                              Workshops ({workshops.length})
-                            </h2>
-                            <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
-                              {workshops.map(renderProposalOption)}
-                            </ul>
-                          </li>
-                        )}
-                      </ComboboxOptions>
-                    )
-                  })()}
+                                <div className="shrink-0">
+                                  <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20 dark:bg-gray-700 dark:group-data-focus:bg-white/20">
+                                    <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
+                                  </div>
+                                </div>
+                                <div className="ml-3 flex-auto truncate">
+                                  <div className="font-medium dark:text-white">
+                                    {item.title}
+                                  </div>
+                                  {item.subtitle && (
+                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                      {item.subtitle}
+                                    </div>
+                                  )}
+                                  {item.description && (
+                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                      {item.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </ComboboxOption>
+                            )
+                          })}
+                        </ul>
+                      </li>
+                    ))}
+                  </ComboboxOptions>
+                )}
 
                 {isSearching && (
                   <div className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2">
                     <SkeletonSearchResult items={3} />
                     <div className="text-center">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Searching proposals...
+                        Searching...
                       </p>
                     </div>
                   </div>
@@ -255,18 +197,17 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                 {!isSearching &&
                   query &&
                   !searchError &&
-                  searchResults.length === 0 && (
+                  searchResults.totalCount === 0 && (
                     <div className="px-6 py-14 text-center text-sm sm:px-14">
                       <ExclamationTriangleIcon
                         className="mx-auto size-6 text-gray-400 dark:text-gray-500"
                         aria-hidden="true"
                       />
                       <p className="mt-4 font-semibold text-gray-900 dark:text-white">
-                        No proposals found
+                        No results found
                       </p>
                       <p className="mt-2 text-gray-500 dark:text-gray-400">
-                        We couldn&apos;t find any proposals matching &quot;
-                        {query}
+                        We couldn&apos;t find anything matching &quot;{query}
                         &quot;. Try different keywords.
                       </p>
                     </div>
@@ -279,11 +220,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                       aria-hidden="true"
                     />
                     <p className="mt-4 font-semibold text-gray-900 dark:text-white">
-                      Search proposals
+                      Search across all admin pages and data
                     </p>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">
-                      Search through proposal titles, descriptions, speaker
-                      names, topics, and more.
+                      Search through proposals, speakers, sponsors, pages, and
+                      more.
                     </p>
                   </div>
                 )}
