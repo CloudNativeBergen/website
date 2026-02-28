@@ -70,18 +70,6 @@ const ProposalInputBaseSchema = z.object({
 // Proposal input schema (for create/update)
 export const ProposalInputSchema = ProposalInputBaseSchema.refine(
   (data) => {
-    // Workshop formats require capacity
-    if (isWorkshopFormat(data.format) && !data.capacity) {
-      return false
-    }
-    return true
-  },
-  {
-    message: 'Workshop capacity is required for workshop formats',
-    path: ['capacity'],
-  },
-).refine(
-  (data) => {
     // Prerequisites should only be provided for workshop formats
     if (data.prerequisites && !isWorkshopFormat(data.format)) {
       return false
