@@ -10,14 +10,15 @@ const STATUS_PRIORITY: Record<Status, number> = {
   [Status.accepted]: 0,
   [Status.confirmed]: 1,
   [Status.submitted]: 2,
-  [Status.draft]: 3,
-  [Status.rejected]: 4,
-  [Status.withdrawn]: 5,
-  [Status.deleted]: 6,
+  [Status.waitlisted]: 3,
+  [Status.draft]: 4,
+  [Status.rejected]: 5,
+  [Status.withdrawn]: 6,
+  [Status.deleted]: 7,
 } as const
 
 // Default priority for unknown status values (lowest priority)
-const DEFAULT_STATUS_PRIORITY = 7
+const DEFAULT_STATUS_PRIORITY = 8
 
 export function useProposalSearch() {
   const [isSearching, setIsSearching] = useState(false)

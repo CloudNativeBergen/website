@@ -98,6 +98,18 @@ export const RemindAction: Story = {
   },
 }
 
+export const WaitlistAction: Story = {
+  args: {
+    open: true,
+    close: fn(),
+    proposal: mockProposal,
+    action: Action.waitlist,
+    adminUI: true,
+    onAction: fn(),
+    domain: 'cloudnativedays.no',
+  },
+}
+
 export const DeleteAction: Story = {
   args: {
     open: true,

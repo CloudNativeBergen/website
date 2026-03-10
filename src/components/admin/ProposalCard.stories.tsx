@@ -167,6 +167,17 @@ export const Confirmed: Story = {
   },
 }
 
+export const Waitlisted: Story = {
+  args: {
+    proposal: createMockProposal({
+      status: Status.waitlisted,
+      title: 'Cloud Native CI/CD Pipelines',
+      format: Format.presentation_25,
+    }),
+    href: '/admin/proposals/proposal-8',
+  },
+}
+
 export const Rejected: Story = {
   args: {
     proposal: createMockProposal({
@@ -253,6 +264,14 @@ export const AllStatuses: Story = {
       <ProposalCard
         proposal={createMockProposal({
           _id: 'p5',
+          status: Status.waitlisted,
+          title: 'Waitlisted Proposal',
+        })}
+        href="#"
+      />
+      <ProposalCard
+        proposal={createMockProposal({
+          _id: 'p6',
           status: Status.rejected,
           title: 'Rejected Proposal',
         })}
@@ -260,7 +279,7 @@ export const AllStatuses: Story = {
       />
       <ProposalCard
         proposal={createMockProposal({
-          _id: 'p6',
+          _id: 'p7',
           status: Status.withdrawn,
           title: 'Withdrawn Proposal',
         })}
