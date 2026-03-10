@@ -13,7 +13,7 @@ export class SponsorsSearchProvider implements SearchProvider {
 
   constructor(
     private searchFn: (query: string) => Promise<SponsorExisting[]>,
-  ) { }
+  ) {}
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()
