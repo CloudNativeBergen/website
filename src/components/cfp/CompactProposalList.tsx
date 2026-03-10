@@ -57,8 +57,10 @@ function getProposalStatusConfig(
       return hasApprovedTalk
         ? { color: 'gray', icon: MinusCircleIcon, label: 'Not selected' }
         : { color: 'red', icon: XCircleIcon, label: 'Rejected' }
+    case 'waitlisted':
+      return { color: 'orange', icon: ClockIcon, label: 'Waitlisted' }
     case 'withdrawn':
-      return { color: 'orange', icon: XCircleIcon, label: 'Withdrawn' }
+      return { color: 'purple', icon: XCircleIcon, label: 'Withdrawn' }
     case 'draft':
       return { color: 'gray', icon: DocumentTextIcon, label: 'Draft' }
     default:
