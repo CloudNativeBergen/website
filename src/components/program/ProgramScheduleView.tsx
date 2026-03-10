@@ -404,18 +404,15 @@ const DaySchedule = React.memo(function DaySchedule({
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={clsx(
-            'group inline-flex items-center gap-2 transition-colors',
-            isPast && 'hover:text-brand-cloud-blue dark:hover:text-blue-400',
-          )}
-          aria-expanded={isOpen}
-        >
-          <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
-            {formatConferenceDateLong(schedule.date)}
-          </h2>
-          {isPast && (
+        {isPast ? (
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="group inline-flex items-center gap-2 transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
+            aria-expanded={isOpen}
+          >
+            <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+              {formatConferenceDateLong(schedule.date)}
+            </h2>
             <span className="text-brand-slate-gray dark:text-gray-400">
               {isOpen ? (
                 <ChevronDownIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
@@ -423,8 +420,12 @@ const DaySchedule = React.memo(function DaySchedule({
                 <ChevronRightIcon className="h-6 w-6 transition-transform group-hover:scale-110" />
               )}
             </span>
-          )}
-        </button>
+          </button>
+        ) : (
+          <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            {formatConferenceDateLong(schedule.date)}
+          </h2>
+        )}
         <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
           {schedule.tracks.length} track
           {schedule.tracks.length !== 1 ? 's' : ''}
