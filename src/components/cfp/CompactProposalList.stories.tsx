@@ -83,6 +83,12 @@ const mixedStatusProposals: ProposalExisting[] = [
   ),
   createMockProposal(
     'talk-4',
+    'Cloud Native CI/CD Pipelines',
+    Status.waitlisted,
+    Format.presentation_25,
+  ),
+  createMockProposal(
+    'talk-5',
     'Service Mesh Deep Dive',
     Status.rejected,
     Format.presentation_45,

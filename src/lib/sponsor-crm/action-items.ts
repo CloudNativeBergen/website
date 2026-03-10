@@ -13,6 +13,10 @@ export interface ActionItem {
     id: string
     name: string
   }
+  assignedTo?: {
+    name: string
+    image?: string
+  }
   description: string
   priority: number
   link: string
@@ -37,6 +41,10 @@ export function generateActionItems(
       return
     }
 
+    const assignedTo = sponsor.assignedTo
+      ? { name: sponsor.assignedTo.name, image: sponsor.assignedTo.image }
+      : undefined
+
     // Priority 1: Overdue invoices
     if (sponsor.invoiceStatus === 'overdue') {
       actions.push({
@@ -47,6 +55,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `Invoice is overdue for ${sponsor.sponsor.name}`,
         priority: 1,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -66,6 +75,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `${sponsor.sponsor.name} is a high-priority prospect not yet contacted`,
         priority: 1.5,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -83,6 +93,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `${sponsor.sponsor.name} is a high-value prospect (${formatNumber(value)} NOK) not yet contacted`,
         priority: 1.7,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -104,6 +115,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `Invoice not yet sent to ${sponsor.sponsor.name}`,
         priority: 2,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -120,6 +132,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `Deal closed but no contract status set for ${sponsor.sponsor.name}`,
         priority: 3,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -144,6 +157,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description:
           sponsor.contractStatus === 'contract-sent'
             ? `Contract sent, awaiting signature from ${sponsor.sponsor.name}`
@@ -163,6 +177,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `Sponsor ${sponsor.sponsor.name} is marked for follow-up`,
         priority: 4.5,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -183,6 +198,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `${sponsor.sponsor.name} completed registration — generate and send the contract`,
         priority: 2,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -199,6 +215,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `${sponsor.sponsor.name} rejected the contract signature`,
         priority: 2.5,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -215,6 +232,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `Contract signature expired for ${sponsor.sponsor.name}`,
         priority: 3.5,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -235,6 +253,7 @@ export function generateActionItems(
           id: sponsor._id,
           name: sponsor.sponsor.name,
         },
+        assignedTo,
         description: `${sponsor.sponsor.name} has not completed registration`,
         priority: 6,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
@@ -256,6 +275,7 @@ export function generateActionItems(
             id: sponsor._id,
             name: sponsor.sponsor.name,
           },
+          assignedTo,
           description: `No activity in 7+ days with ${sponsor.sponsor.name}`,
           priority: 5,
           link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,

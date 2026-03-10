@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { isLocalhostClient } from '@/lib/environment/localhost'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -9,12 +10,14 @@ import {
   ClipboardDocumentIcon,
   CheckIcon,
   EnvelopeIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 export interface SponsorPortalSectionProps {
   sponsorForConferenceId: string
   existingToken?: string
   portalComplete?: boolean
+  registrationSent?: boolean
   onCheckStatus?: () => void
 }
 
@@ -22,11 +25,17 @@ export function SponsorPortalSection({
   sponsorForConferenceId,
   existingToken,
   portalComplete,
+  registrationSent,
   onCheckStatus,
 }: SponsorPortalSectionProps) {
-  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(() => {
+    if (registrationSent && existingToken && typeof window !== 'undefined') {
+      return `${window.location.origin}/sponsor/portal/${existingToken}`
+    }
+    return null
+  })
   const [copied, setCopied] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
+  const [emailSent, setEmailSent] = useState(registrationSent ?? false)
 
   const generateMutation = api.registration.generateToken.useMutation({
     onSuccess: (data) => setGeneratedUrl(data.url),
@@ -71,6 +80,7 @@ export function SponsorPortalSection({
   }
 
   const isBusy = generateMutation.isPending || sendInviteMutation.isPending
+  const isLocalhost = isLocalhostClient()
 
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -119,9 +129,13 @@ export function SponsorPortalSection({
               <button
                 type="button"
                 onClick={handleSendEmail}
-                disabled={sendInviteMutation.isPending}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                title="Send registration link via email to sponsor contacts"
+                disabled={sendInviteMutation.isPending || isLocalhost}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                title={
+                  isLocalhost
+                    ? 'Emails cannot be sent from localhost'
+                    : 'Send registration link via email to sponsor contacts'
+                }
               >
                 <EnvelopeIcon className="h-3.5 w-3.5" />
                 {sendInviteMutation.isPending ? 'Sending\u2026' : 'Send'}
@@ -152,8 +166,8 @@ export function SponsorPortalSection({
             <button
               type="button"
               onClick={handleSendEmail}
-              disabled={isBusy}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              disabled={isBusy || isLocalhost}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <EnvelopeIcon className="h-4 w-4" />
               {sendInviteMutation.isPending
@@ -172,6 +186,13 @@ export function SponsorPortalSection({
                 : 'Copy link only'}
             </button>
           </div>
+          {isLocalhost && (
+            <div className="flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" />
+              Emails cannot be sent from localhost. Use &quot;Copy link
+              only&quot; for local testing.
+            </div>
+          )}
           {(sendInviteMutation.isError || generateMutation.isError) && (
             <p className="text-xs text-red-600 dark:text-red-400">
               {sendInviteMutation.error?.message ||

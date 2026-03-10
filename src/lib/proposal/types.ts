@@ -46,6 +46,7 @@ export enum Status {
   draft = 'draft',
   submitted = 'submitted',
   accepted = 'accepted',
+  waitlisted = 'waitlisted',
   confirmed = 'confirmed',
   rejected = 'rejected',
   withdrawn = 'withdrawn',
@@ -58,6 +59,7 @@ export enum Action {
   submit = 'submit',
   unsubmit = 'unsubmit',
   accept = 'accept',
+  waitlist = 'waitlist',
   remind = 'remind',
   confirm = 'confirm',
   reject = 'reject',
@@ -84,6 +86,7 @@ interface Proposal {
   tos: boolean
   video?: string
   capacity?: number
+  prerequisites?: string
   audienceFeedback?: AudienceFeedback
   attachments?: Attachment[]
 }
@@ -149,8 +152,9 @@ export const statuses = new Map([
   [Status.draft, 'Draft'],
   [Status.submitted, 'Submitted'],
   [Status.accepted, 'Accepted'],
-  [Status.rejected, 'Rejected'],
+  [Status.waitlisted, 'Waitlisted'],
   [Status.confirmed, 'Confirmed'],
+  [Status.rejected, 'Rejected'],
   [Status.withdrawn, 'Withdrawn'],
   [Status.deleted, 'Deleted'],
 ])

@@ -65,3 +65,15 @@ export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure.use(requireAuth)
 export const adminProcedure = t.procedure.use(requireAuth).use(requireAdmin)
 export const router = t.router
+
+const CLIENT_ERROR_CODES = new Set([
+  'NOT_FOUND',
+  'BAD_REQUEST',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'PARSE_ERROR',
+])
+
+export function isClientError(code: string): boolean {
+  return CLIENT_ERROR_CODES.has(code)
+}
