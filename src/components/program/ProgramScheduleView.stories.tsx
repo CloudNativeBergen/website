@@ -273,6 +273,10 @@ const emptyData: FilteredProgramData = {
   },
 }
 
+// Pin Date.now() to Sep 15, 2025 10:30 so schedule dates are "today"/"future"
+// and visual snapshots don't drift as real time passes.
+const FIXED_NOW = new Date('2025-09-15T10:30:00Z')
+
 const meta = {
   title: 'Systems/Program/ProgramScheduleView',
   component: ProgramScheduleView,
@@ -286,6 +290,29 @@ const meta = {
     },
   },
   tags: ['autodocs'],
+  beforeEach: () => {
+    const OriginalDate = globalThis.Date
+    const fixedTime = FIXED_NOW.getTime()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(fixedTime)
+      return new (Function.prototype.bind.apply(OriginalDate, [
+        null,
+        ...args,
+      ]) as typeof OriginalDate)()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => fixedTime
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
   decorators: [
     (Story: React.ComponentType) => (
       <BookmarksProvider>
