@@ -51,9 +51,10 @@ const EXCLUDE_FILES = new Set([
 /**
  * Categorize a file based on its path and name
  */
-function categorizeFile(
-  filePath: string,
-): { category: string; subcategory?: string } {
+function categorizeFile(filePath: string): {
+  category: string
+  subcategory?: string
+} {
   const normalizedPath = filePath.toLowerCase()
   const fileName = path.basename(filePath)
 
@@ -243,7 +244,17 @@ function walkDirectory(dir: string, stats: Map<string, FileStats[]>) {
       // Only count code files
       const ext = path.extname(entry.name)
       if (
-        ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.mdx', '.css', '.scss'].includes(ext)
+        [
+          '.ts',
+          '.tsx',
+          '.js',
+          '.jsx',
+          '.json',
+          '.md',
+          '.mdx',
+          '.css',
+          '.scss',
+        ].includes(ext)
       ) {
         const lines = countLines(fullPath)
         const { category, subcategory } = categorizeFile(fullPath)

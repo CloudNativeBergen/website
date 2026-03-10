@@ -43,18 +43,18 @@ The Cloud Native Days Norway website codebase consists of approximately **281,02
 
 ### Main Categories (Top 10)
 
-| Rank | Category | Lines | Percentage | Files | Description |
-|------|----------|-------|------------|-------|-------------|
-| 1 | Business Logic | 74,705 | 26.6% | 46 | Badge generation, email logic, authentication |
-| 2 | UI Components | 72,743 | 25.9% | 322 | Admin UI and public React components |
-| 3 | Storybook | 38,040 | 13.5% | 179 | Component stories for design system |
-| 4 | Tests | 20,796 | 7.4% | 86 | Unit and integration tests |
-| 5 | Utilities | 18,457 | 6.6% | 151 | Helper functions and shared utilities |
-| 6 | API | 12,106 | 4.3% | 47 | tRPC routers and REST endpoints |
-| 7 | UI Pages | 11,453 | 4.1% | 70 | Next.js App Router pages and layouts |
-| 8 | Documentation | 6,668 | 2.4% | 24 | Markdown documentation files |
-| 9 | Other | 5,458 | 1.9% | 64 | Miscellaneous files |
-| 10 | Data Schemas | 5,446 | 1.9% | 40 | Sanity schemas and validation |
+| Rank | Category       | Lines  | Percentage | Files | Description                                   |
+| ---- | -------------- | ------ | ---------- | ----- | --------------------------------------------- |
+| 1    | Business Logic | 74,705 | 26.6%      | 46    | Badge generation, email logic, authentication |
+| 2    | UI Components  | 72,743 | 25.9%      | 322   | Admin UI and public React components          |
+| 3    | Storybook      | 38,040 | 13.5%      | 179   | Component stories for design system           |
+| 4    | Tests          | 20,796 | 7.4%       | 86    | Unit and integration tests                    |
+| 5    | Utilities      | 18,457 | 6.6%       | 151   | Helper functions and shared utilities         |
+| 6    | API            | 12,106 | 4.3%       | 47    | tRPC routers and REST endpoints               |
+| 7    | UI Pages       | 11,453 | 4.1%       | 70    | Next.js App Router pages and layouts          |
+| 8    | Documentation  | 6,668  | 2.4%       | 24    | Markdown documentation files                  |
+| 9    | Other          | 5,458  | 1.9%       | 64    | Miscellaneous files                           |
+| 10   | Data Schemas   | 5,446  | 1.9%       | 40    | Sanity schemas and validation                 |
 
 ### Visual Distribution
 
@@ -89,11 +89,13 @@ Types           █ 0.0%
 The business logic category is dominated by the OpenBadges implementation, which includes the full specification and credential schemas.
 
 **Subcategories:**
+
 - **Badge Generation** (71,741 lines - 96.0%): OpenBadges specification, schemas, and badge generation logic
 - **Email Logic** (2,179 lines - 2.9%): Email templates and sending functionality
 - **Authentication** (785 lines - 1.1%): NextAuth.js configuration and helpers
 
 **Largest Files:**
+
 - `src/lib/openbadges/spec/spec-e-schema.md` - 61,042 lines (OpenBadges specification)
 - `src/lib/openbadges/schema/json/ob_v3p0_achievementcredential_schema.json` - 3,564 lines
 - `src/lib/openbadges/spec/spec-d-examples.md` - 1,713 lines
@@ -107,11 +109,13 @@ The business logic category is dominated by the OpenBadges implementation, which
 React components for both the admin interface and public-facing pages.
 
 **Subcategories:**
+
 - **Admin UI** (42,362 lines - 58.2%): Admin dashboard, proposal management, schedule editor, sponsor management, CRM pipeline
 - **React Components** (29,692 lines - 40.8%): Public-facing UI components, speaker cards, program views
 - **UI Utilities** (689 lines - 0.9%): Shared component helpers
 
 **Largest Files:**
+
 - `src/components/admin/MemeGenerator.tsx` - 1,105 lines
 - `src/components/admin/schedule/DroppableTrack.tsx` - 1,041 lines
 - `src/components/travel-support/TravelSupportAdminPage.tsx` - 974 lines
@@ -125,9 +129,11 @@ React components for both the admin interface and public-facing pages.
 Storybook component stories for design system documentation and component development.
 
 **Subcategories:**
+
 - **Component Stories** (38,040 lines - 100%): Interactive component documentation and examples
 
 **Largest Files:**
+
 - `src/docs/SponsorSystem.stories.tsx` - 1,062 lines
 - `src/docs/design-system/examples/ConferenceLandingPage.stories.tsx` - 883 lines
 - `src/docs/design-system/examples/AdminPages.stories.tsx` - 747 lines
@@ -143,6 +149,7 @@ Storybook component stories for design system documentation and component develo
 Helper functions, shared logic, and utility modules used throughout the application.
 
 **Largest Files:**
+
 - `src/lib/dashboard/widget-registry.ts` - 812 lines
 - `src/lib/sponsor-crm/contract-pdf.tsx` - 569 lines
 - `src/lib/slack/weeklyUpdate.ts` - 414 lines
@@ -156,9 +163,11 @@ Helper functions, shared logic, and utility modules used throughout the applicat
 Unit and integration tests using Jest and Testing Library.
 
 **Subcategories:**
+
 - **Unit Tests** (20,796 lines - 100%): All test files
 
 **Largest Test Files:**
+
 - `__tests__/lib/dashboard/actions.test.ts` - 889 lines
 - `__tests__/lib/openbadges/openbadges.test.ts` - 855 lines
 - `__tests__/lib/slack/weeklyUpdate.test.ts` - 662 lines
@@ -174,6 +183,7 @@ Unit and integration tests using Jest and Testing Library.
 Helper functions, shared logic, and utility modules used throughout the application.
 
 **Largest Files:**
+
 - `src/lib/dashboard/widget-registry.ts` - 812 lines
 - `src/lib/sponsor-crm/contract-pdf.tsx` - 569 lines
 - `src/lib/slack/weeklyUpdate.ts` - 414 lines
@@ -187,10 +197,12 @@ Helper functions, shared logic, and utility modules used throughout the applicat
 API layer built with tRPC and Next.js API routes.
 
 **Subcategories:**
+
 - **tRPC Routers** (8,386 lines - 69.3%): Type-safe API with React Query integration
 - **REST Endpoints** (3,720 lines - 30.7%): Next.js API routes
 
 **Largest Files:**
+
 - `src/server/routers/sponsor.ts` - 2,180 lines
 - `src/server/routers/proposal.ts` - 1,279 lines
 - `src/server/routers/badge.ts` - 783 lines
@@ -203,9 +215,11 @@ API layer built with tRPC and Next.js API routes.
 Next.js 15+ App Router pages and layouts.
 
 **Subcategories:**
+
 - **App Router Pages** (11,453 lines - 100%): All page.tsx and layout.tsx files
 
 **Largest Files:**
+
 - `src/app/(main)/privacy/page.tsx` - 1,669 lines
 - `src/app/(admin)/admin/tickets/page.tsx` - 659 lines
 - `src/app/(admin)/admin/marketing/page.tsx` - 543 lines
@@ -218,6 +232,7 @@ Next.js 15+ App Router pages and layouts.
 Markdown documentation files covering various aspects of the system.
 
 **Largest Documentation Files:**
+
 - `docs/SPONSOR_SYSTEM.md` - 849 lines
 - `docs/ATTACHMENT_STORAGE.md` - 568 lines
 - `docs/EMAIL_SYSTEM.md` - 546 lines
@@ -231,10 +246,12 @@ Markdown documentation files covering various aspects of the system.
 Schema definitions for both Sanity CMS and input validation.
 
 **Subcategories:**
+
 - **Sanity Schemas** (4,291 lines - 78.8%): Content models
 - **Validation Schemas** (1,155 lines - 21.2%): Zod validation schemas
 
 **Largest Schema Files:**
+
 - `sanity/schemaTypes/conference.ts` - 872 lines
 - `sanity/schemaTypes/sponsorForConference.ts` - 477 lines
 - `sanity/schemaTypes/talk.ts` - 268 lines
@@ -247,9 +264,11 @@ Schema definitions for both Sanity CMS and input validation.
 Sanity CMS queries and data fetching logic.
 
 **Subcategories:**
+
 - **CMS Queries** (5,139 lines - 100%): Sanity GROQ queries
 
 **Largest Files:**
+
 - `src/lib/sponsor-crm/sanity.ts` - 683 lines
 - `src/lib/proposal/data/sanity.ts` - 632 lines
 - `src/lib/workshop/sanity.ts` - 563 lines
@@ -260,10 +279,12 @@ Sanity CMS queries and data fetching logic.
 Custom React hooks and context providers.
 
 **Subcategories:**
+
 - **React Hooks** (2,337 lines - 94.9%): Custom hooks for state management
 - **React Contexts** (125 lines - 5.1%): Context providers
 
 **Largest Files:**
+
 - `src/hooks/useScheduleEditor.ts` - 467 lines
 - `src/hooks/useEmailModalStorage.ts` - 290 lines
 - `src/hooks/useProgramFilter.ts` - 289 lines
@@ -292,6 +313,7 @@ Custom React hooks and context providers.
 ### Complexity Analysis
 
 **Large Files (>1000 lines):**
+
 - 3 Storybook story files (SponsorSystem, ConferenceLandingPage examples)
 - 2 component files (MemeGenerator, DroppableTrack)
 - 1 page file (privacy page)
@@ -309,6 +331,7 @@ Custom React hooks and context providers.
 49 migration files covering schema updates, data migrations, and seeding operations.
 
 **Recent Migrations:**
+
 - Conference-scoped entities (talks, sponsors, reviews)
 - CamelCase field names standardization
 - Sponsor contact and billing data restructuring
@@ -321,10 +344,12 @@ Custom React hooks and context providers.
 ## 📦 Supporting Files
 
 ### Configuration (529 lines - 0.2%)
+
 - Next.js, TypeScript, ESLint, Prettier, Tailwind, Sanity configurations
 - Package management (package.json)
 
 ### Scripts (1,429 lines - 0.5%)
+
 - Code analysis utilities
 - File management utilities
 - Data cleanup scripts
@@ -332,6 +357,7 @@ Custom React hooks and context providers.
 - Development tools
 
 ### Styles (1,161 lines - 0.4%)
+
 - Single Tailwind CSS file with custom styles
 
 ---
@@ -361,10 +387,11 @@ The Cloud Native Days Norway website is a well-structured Next.js application wi
 The codebase reflects a mature application with a focus on badge generation and conference management, featuring both a public-facing website and a sophisticated admin interface with integrated sponsor CRM.
 
 **Recent Growth (since Feb 10, 2026):**
+
 - **+56,474 lines** (25% increase)
 - **+317 files** (37% increase)
 - Major additions: Sponsor CRM system, digital contract signing, enhanced Storybook documentation (179 stories)
 
 ---
 
-*This analysis was generated automatically by analyzing all TypeScript, JavaScript, JSON, CSS, and Markdown files in the repository.*
+_This analysis was generated automatically by analyzing all TypeScript, JavaScript, JSON, CSS, and Markdown files in the repository._
