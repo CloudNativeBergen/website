@@ -784,8 +784,7 @@ export const badgeRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message:
-            error instanceof Error ? error.message : 'Validation failed',
+          message: error instanceof Error ? error.message : 'Validation failed',
           cause: error,
         })
       }
