@@ -100,9 +100,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
       name: 'extraction',
       status: 'error',
       message:
-        error instanceof Error
-          ? error.message
-          : 'Failed to extract credential',
+        error instanceof Error ? error.message : 'Failed to extract credential',
     })
     return { checks, credential: null }
   }
@@ -157,7 +155,8 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
   // Step 2b: RDF Dataset Canonicalization (only for Data Integrity Proof)
   if (!isJWT) {
     try {
-      const { proof, ...unsigned } = credential
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { proof: _proof, ...unsigned } = credential
 
       type JsonLdContext = Record<string, unknown>
       const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
@@ -184,8 +183,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
         },
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json': {
           '@context': {
-            Profile:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
+            Profile: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
             Achievement:
               'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement',
             AchievementSubject:
@@ -604,9 +602,7 @@ function validateURLFormat(
     }
 
     const issuerUrl =
-      typeof credential.issuer === 'object'
-        ? credential.issuer.url
-        : undefined
+      typeof credential.issuer === 'object' ? credential.issuer.url : undefined
     if (issuerUrl?.endsWith('/api/badge/issuer')) {
       urlIssues.push(
         'issuer.url should point to organization homepage, not /api/badge/issuer endpoint',

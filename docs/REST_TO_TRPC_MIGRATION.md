@@ -7,6 +7,7 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 ### APIs Successfully Migrated to tRPC
 
 #### 1. Volunteer Application (`/api/volunteer` → `volunteer.create`)
+
 - **Priority**: Medium
 - **Type**: Public endpoint (POST)
 - **Schema**: `CreateVolunteerSchema` in `/src/server/schemas/volunteer.ts`
@@ -19,6 +20,7 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 - **Status**: ✅ Complete - Ready for testing
 
 #### 2. Proposal Actions (`/api/proposal/[id]/action` → `proposal.action`)
+
 - **Priority**: High
 - **Type**: Protected endpoint (POST)
 - **Schema**: `ProposalActionSchema` already existed in `/src/server/schemas/proposal.ts`
@@ -31,6 +33,7 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 - **Status**: ✅ Complete - Ready for testing
 
 #### 3. Admin Speakers List (`/api/admin/speakers` → `speakers.list`)
+
 - **Priority**: Medium
 - **Type**: Admin-only endpoint (GET)
 - **Schema**: Inline schema in `/src/server/routers/speakers.ts`
@@ -43,6 +46,7 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 - **Status**: ✅ Complete - Ready for testing
 
 #### 4. Badge Validation (`/api/badge/validate` → `badge.validate`)
+
 - **Priority**: Medium
 - **Type**: Public endpoint (POST)
 - **Schema**: `ValidateBadgeInputSchema` in `/src/server/schemas/badge.ts`
@@ -60,12 +64,14 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 ### APIs Already Handled
 
 #### 5. Speaker Search (`/api/speakers/search`)
+
 - **Status**: ✅ Already exists as `speaker.search` and `speakers.search` in tRPC routers
 - **Note**: No migration needed - existing tRPC endpoints provide this functionality
 
 ### Infrastructure Changes
 
 #### tRPC Context Enhancement
+
 - **File**: `/src/server/trpc.ts`
 - **Change**: Added `ipAddress` extraction to context
 - **Purpose**: Support IP address logging for GDPR compliance in volunteer applications
@@ -76,14 +82,17 @@ This document summarizes the REST API to tRPC migration completed as part of iss
 The following REST endpoints should remain as REST and will NOT be migrated:
 
 ### 1. Image Proxy (`/api/proxy-image`)
+
 - **Reason**: Returns binary image data
 - **Note**: tRPC doesn't support binary responses efficiently
 
 ### 2. Session Clearing (`/api/admin/clear-session`)
+
 - **Reason**: Development-only utility
 - **Note**: Low priority, acceptable to keep as REST
 
 ### 3. File Uploads (Multiple endpoints)
+
 - **Endpoints**:
   - `/api/upload/proposal-attachment`
   - `/api/upload/speaker-image`
@@ -94,10 +103,12 @@ The following REST endpoints should remain as REST and will NOT be migrated:
 - **Note**: tRPC doesn't support multipart uploads - these require REST/FormData
 
 ### 4. Authentication Handlers
+
 - `/api/auth/[...nextauth]` - NextAuth.js framework requirement
 - `/api/auth/callback` - WorkOS AuthKit callback
 
 ### 5. Public/External APIs
+
 - Badge system endpoints (`/api/badge/*`) - OpenBadges 3.0 spec compliance
 - Webhook receivers - External service integration
 - Cron jobs - Vercel cron integration
@@ -106,11 +117,13 @@ The following REST endpoints should remain as REST and will NOT be migrated:
 ## Deprecation Plan
 
 ### Phase 1: Testing (Current)
+
 1. Test all migrated tRPC endpoints
 2. Verify client integrations work correctly
 3. Ensure no regressions in functionality
 
 ### Phase 2: Cleanup (After successful testing)
+
 Once the migrated tRPC endpoints are tested and verified:
 
 1. Remove REST endpoints:
@@ -126,6 +139,7 @@ Once the migrated tRPC endpoints are tested and verified:
 ## Testing Checklist
 
 ### Volunteer Application
+
 - [ ] Test form submission with valid data
 - [ ] Test validation errors
 - [ ] Verify IP address capture
@@ -133,6 +147,7 @@ Once the migrated tRPC endpoints are tested and verified:
 - [ ] Test privacy consent flow
 
 ### Proposal Actions
+
 - [ ] Test status transitions (submit, accept, reject, etc.)
 - [ ] Test delete action
 - [ ] Verify event bus notifications
@@ -140,12 +155,14 @@ Once the migrated tRPC endpoints are tested and verified:
 - [ ] Verify state machine validation
 
 ### Admin Speakers List
+
 - [ ] Test speaker list retrieval
 - [ ] Test conference filtering
 - [ ] Verify caching behavior
 - [ ] Test in SpeakerMultiSelect component
 
 ### Badge Validation
+
 - [ ] Test JWT credential validation
 - [ ] Test Data Integrity Proof validation
 - [ ] Test invalid credentials
@@ -164,22 +181,27 @@ Once the migrated tRPC endpoints are tested and verified:
 ## Files Modified
 
 ### Router Files
+
 - `/src/server/routers/volunteer.ts` - Added `create` mutation
-- `/src/server/routers/proposal.ts` - Added `action` mutation  
+- `/src/server/routers/proposal.ts` - Added `action` mutation
 - `/src/server/routers/speakers.ts` - Added `list` query
 - `/src/server/routers/badge.ts` - Added `validate` mutation
 
 ### Schema Files
+
 - `/src/server/schemas/volunteer.ts` - Added `CreateVolunteerSchema`
 - `/src/server/schemas/badge.ts` - Added `ValidateBadgeInputSchema`
 
 ### Helper Modules
+
 - `/src/lib/badge/validation.ts` - New file with badge validation logic
 
 ### Infrastructure
+
 - `/src/server/trpc.ts` - Enhanced context with IP address
 
 ### Client Components
+
 - `/src/components/volunteer/VolunteerForm.tsx` - Migrated to tRPC
 - `/src/components/admin/SpeakerMultiSelect.tsx` - Migrated to tRPC
 - `/src/components/admin/BadgeValidator.tsx` - Migrated to tRPC

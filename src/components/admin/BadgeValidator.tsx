@@ -19,7 +19,7 @@ interface ValidationCheck {
 }
 
 interface BadgeCredential {
-  '@context': string[]
+  '@context': readonly string[] | string[]
   id: string
   type: string[]
   issuer: {
@@ -205,9 +205,10 @@ export default function BadgeValidator() {
               <h3 className="mb-4 text-base font-semibold text-gray-900 dark:text-gray-100">
                 Badge Preview
               </h3>
-              <div
-                className="flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
-                dangerouslySetInnerHTML={{ __html: svgPreview }}
+              <img
+                src={`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgPreview)))}`}
+                alt="Badge preview"
+                className="max-h-64 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
               />
             </div>
           )}
