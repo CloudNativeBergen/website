@@ -1,19 +1,4 @@
-/**
- * @jest-environment jsdom
- */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
-import {
-  isScheduleInPast,
-  isScheduleToday,
-  getCurrentConferenceTime,
-} from '@/lib/program/time-utils'
+import { isScheduleInPast, isScheduleToday } from '@/lib/program/time-utils'
 
 describe('program/time-utils.ts', () => {
   describe('isScheduleInPast', () => {
