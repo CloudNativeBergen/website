@@ -84,6 +84,7 @@ interface Proposal {
   tos: boolean
   video?: string
   capacity?: number
+  prerequisites?: string
   audienceFeedback?: AudienceFeedback
   attachments?: Attachment[]
 }

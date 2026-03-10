@@ -207,13 +207,22 @@ describe('contract-variables', () => {
       expect(vars.TIER_TAGLINE).toBeUndefined()
     })
 
-    it('should handle empty addons list', () => {
+    it('should use fallback text for empty addons list', () => {
       const ctx = createBasicContext()
       ctx.addons = []
 
       const vars = buildContractVariables(ctx)
 
-      expect(vars.ADDONS_LIST).toBeUndefined()
+      expect(vars.ADDONS_LIST).toBe('add-on menu')
+    })
+
+    it('should use fallback text when addons is undefined', () => {
+      const ctx = createBasicContext()
+      delete ctx.addons
+
+      const vars = buildContractVariables(ctx)
+
+      expect(vars.ADDONS_LIST).toBe('add-on menu')
     })
 
     it('should default to NOK when currency not specified', () => {

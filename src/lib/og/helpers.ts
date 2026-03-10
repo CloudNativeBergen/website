@@ -1,3 +1,5 @@
+import { protocolForDomain } from '@/lib/environment/localhost'
+
 export function createSvgDataUrl(svgString: string): string | null {
   if (!svgString?.trim()) return null
 
@@ -101,8 +103,7 @@ export function formatDateRange(
  * Returns an array of font objects compatible with next/og ImageResponse.
  */
 export async function loadBrandFonts(domain: string) {
-  const protocol = domain.includes('localhost') ? 'http' : 'https'
-  const baseUrl = `${protocol}://${domain}/fonts`
+  const baseUrl = `${protocolForDomain(domain)}://${domain}/fonts`
 
   const [spaceGroteskFont, jetbrainsMonoFont, interFont] = await Promise.all([
     fetch(`${baseUrl}/SpaceGrotesk-Bold.ttf`).then((res) => res.arrayBuffer()),

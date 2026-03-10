@@ -153,7 +153,7 @@ export function SponsorCard({
       {/* Selection Checkbox */}
       <div
         className={clsx(
-          'absolute top-1 left-1 z-20 transition-opacity',
+          'absolute top-1 left-1 z-10 transition-opacity',
           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
         onClick={handleSelectClick}

@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { SponsorActivityExpanded } from '@/lib/sponsor-crm/types'
 import { ArrowPathIcon, UserIcon } from '@heroicons/react/24/outline'
+import { BoltIcon } from '@heroicons/react/24/solid'
 import { formatDistanceToNow, isToday, isYesterday, format } from 'date-fns'
 import clsx from 'clsx'
 import {
@@ -96,23 +97,43 @@ function groupActivities(
 function UserAvatar({
   name,
   image,
+  isSystem,
   size = 'sm',
 }: {
   name: string
   image?: string
+  isSystem?: boolean
   size?: 'sm' | 'md'
 }) {
-  const sizeClasses = size === 'md' ? 'h-8 w-8' : 'h-5 w-5'
+  const sizeClasses = size === 'md' ? 'h-8 w-8' : 'h-6 w-6'
+  const iconSize = size === 'md' ? 'h-5 w-5' : 'h-3.5 w-3.5'
 
   if (image && image.length > 0) {
     return (
       <Image
         src={image}
         alt={name}
-        width={size === 'md' ? 32 : 20}
-        height={size === 'md' ? 32 : 20}
+        width={size === 'md' ? 64 : 48}
+        height={size === 'md' ? 64 : 48}
         className={clsx(sizeClasses, 'rounded-full object-cover')}
+        title={name}
       />
+    )
+  }
+
+  if (isSystem) {
+    return (
+      <div
+        className={clsx(
+          sizeClasses,
+          'flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30',
+        )}
+        title="Automatic"
+      >
+        <BoltIcon
+          className={clsx(iconSize, 'text-amber-600 dark:text-amber-400')}
+        />
+      </div>
     )
   }
 
@@ -122,12 +143,10 @@ function UserAvatar({
         sizeClasses,
         'flex items-center justify-center rounded-full bg-gray-200 dark:bg-gray-600',
       )}
+      title={name}
     >
       <UserIcon
-        className={clsx(
-          size === 'md' ? 'h-4 w-4' : 'h-3 w-3',
-          'text-gray-500 dark:text-gray-400',
-        )}
+        className={clsx(iconSize, 'text-gray-500 dark:text-gray-400')}
       />
     </div>
   )
@@ -157,8 +176,9 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
         <UserAvatar
-          name={activity.createdBy?.name ?? 'System'}
+          name={activity.createdBy?.name ?? 'Automatic'}
           image={activity.createdBy?.image}
+          isSystem={!activity.createdBy}
           size="sm"
         />
         <time className="text-xs text-gray-400 dark:text-gray-500">
@@ -181,18 +201,20 @@ function SponsorCard({
   hideSponsorName: boolean
 }) {
   return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-700/30">
+    <div>
       {!hideSponsorName && (
-        <div className="mb-1.5 flex items-center gap-2">
+        <div className="mb-1 flex items-center gap-2">
           <Link
             href={`/admin/sponsors/crm?sponsor=${sponsorForConferenceId}&view=history`}
             className="text-sm font-semibold text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400"
           >
             {sponsorName}
           </Link>
-          <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-            {activities.length}
-          </span>
+          {activities.length > 1 && (
+            <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+              {activities.length}
+            </span>
+          )}
         </div>
       )}
       <div
@@ -290,7 +312,7 @@ export function SponsorActivityTimeline({
                 </span>
                 <div className="h-px flex-1 bg-gray-100 dark:bg-gray-700/50" />
               </div>
-              <div className="space-y-2">
+              <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
                 {dayGroup.sponsorGroups.map((group) => (
                   <SponsorCard
                     key={group.sponsorId}

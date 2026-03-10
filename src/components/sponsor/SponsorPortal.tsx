@@ -220,6 +220,18 @@ export function SponsorPortal({ token }: { token: string }) {
       return
     }
 
+    if (!company.address.trim()) {
+      setError('Please provide your company address.')
+      scrollToError()
+      return
+    }
+
+    if (!company.orgNumber.trim()) {
+      setError('Please provide your organization number.')
+      scrollToError()
+      return
+    }
+
     if (!billing.email.trim()) {
       setError('Please provide a billing email address.')
       scrollToError()
@@ -248,8 +260,8 @@ export function SponsorPortal({ token }: { token: string }) {
       },
       logo: logo!,
       logoBright: logoBright || undefined,
-      orgNumber: company.orgNumber.trim() || undefined,
-      address: company.address.trim() || undefined,
+      orgNumber: company.orgNumber.trim(),
+      address: company.address.trim(),
       signerName: contacts.find((c) => c.email === signerEmail.trim())?.name,
       signerEmail: signerEmail.trim() || undefined,
     })
@@ -308,7 +320,7 @@ export function SponsorPortal({ token }: { token: string }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Organization Number
+                  Organization Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -317,12 +329,13 @@ export function SponsorPortal({ token }: { token: string }) {
                     setCompany({ ...company, orgNumber: e.target.value })
                   }
                   placeholder="e.g. 123 456 789"
+                  required
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  Company Address
+                  Company Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -331,6 +344,7 @@ export function SponsorPortal({ token }: { token: string }) {
                     setCompany({ ...company, address: e.target.value })
                   }
                   placeholder="Street, City, Country"
+                  required
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>

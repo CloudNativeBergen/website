@@ -141,8 +141,18 @@ describe('SponsorContractView', () => {
     })
 
     it('shows portal section when registration not complete', () => {
-      renderView({ registrationComplete: false })
+      renderView({ registrationComplete: false, status: 'closed-won' })
       expect(screen.getByTestId('portal-section')).toBeInTheDocument()
+    })
+
+    it('shows warning instead of portal when sponsor is not closed-won', () => {
+      renderView({ registrationComplete: false, status: 'negotiating' })
+      expect(
+        screen.getByText(
+          /Move the sponsor to Closed Won before sending registration/,
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByTestId('portal-section')).not.toBeInTheDocument()
     })
 
     it('shows completion message when registration is done', () => {

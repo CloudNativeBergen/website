@@ -213,6 +213,23 @@ export default defineType({
           }),
     }),
     defineField({
+      name: 'prerequisites',
+      title: 'Prerequisites',
+      type: 'text',
+      description:
+        'Prerequisites for workshop participants (e.g., "Bring a computer with Docker installed")',
+      hidden: ({ document }) => {
+        const format = document?.format as string | undefined
+        const prerequisites = document?.prerequisites as string | undefined
+        const isWorkshop =
+          format === 'workshop_120' || format === 'workshop_240'
+        return !(
+          isWorkshop ||
+          (prerequisites !== undefined && prerequisites !== null)
+        )
+      },
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',

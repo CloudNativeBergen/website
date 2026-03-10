@@ -12,7 +12,7 @@ export async function getSpeakerByEmail(
         name,
         email,
         isOrganizer,
-        "image": image.asset->url,
+        "image": coalesce(image.asset->url, imageURL),
         "slug": slug.current
       }
     `

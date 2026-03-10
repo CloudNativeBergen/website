@@ -14,7 +14,7 @@ import {
   languages,
 } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { ShowMore } from '@/components/ShowMore'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
@@ -69,13 +69,7 @@ export default function SpeakerProfilePreview({
             <div className="sticky top-8 space-y-6">
               {speaker.image ? (
                 <img
-                  src={
-                    sanityImage(speaker.image)
-                      .width(400)
-                      .height(400)
-                      .fit('crop')
-                      .url() || undefined
-                  }
+                  src={speakerImageUrl(speaker.image)}
                   alt={speaker.name}
                   className="mx-auto h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:mx-0 lg:h-64 lg:w-64 dark:ring-gray-700"
                 />

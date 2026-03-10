@@ -390,3 +390,71 @@ export async function notifySponsorRegistrationComplete(
   const message = { blocks }
   await sendSalesNotification(message, conference)
 }
+
+export async function notifySponsorContractSigned(
+  sponsorName: string,
+  signerName: string | undefined,
+  tierTitle: string | null,
+  contractValue: number | null,
+  contractCurrency: string | null,
+  conference: Conference,
+) {
+  const domain = getDomainFromConference(conference)
+
+  const valueStr =
+    contractValue != null && contractCurrency
+      ? `${formatNumber(contractValue)} ${contractCurrency}`
+      : null
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '🎉 Contract Signed',
+        emoji: true,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Sponsor:*\n${sponsorName}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Tier:*\n${tierTitle || 'Not set'}`,
+        },
+      ],
+    },
+  ]
+
+  if (signerName || valueStr) {
+    const fields: Array<{ type: string; text: string }> = []
+    if (signerName) {
+      fields.push({ type: 'mrkdwn', text: `*Signed by:*\n${signerName}` })
+    }
+    if (valueStr) {
+      fields.push({
+        type: 'mrkdwn',
+        text: `*Contract Value:*\n${valueStr}`,
+      })
+    }
+    blocks.push({ type: 'section', fields })
+  }
+
+  if (domain) {
+    blocks.push(
+      createAdminLinkButton(
+        domain,
+        '/admin/sponsors/crm',
+        'View in Sponsor CRM',
+        'view_sponsor_crm',
+      ),
+    )
+  }
+
+  const message = { blocks }
+  await sendSalesNotification(message, conference)
+}

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 import {
   RegistrationTokenSchema,
   RegistrationSubmissionSchema,
@@ -149,6 +150,7 @@ export const registrationRouter = router({
       // Fetch full sponsor + conference data for the email
       const sfc = await clientReadUncached.fetch<{
         _id: string
+        status: string | null
         registrationToken: string | null
         registrationComplete: boolean
         contractStatus: string | null
@@ -172,6 +174,7 @@ export const registrationRouter = router({
       }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{
           _id,
+          status,
           registrationToken,
           registrationComplete,
           contractStatus,
@@ -214,6 +217,14 @@ export const registrationRouter = router({
         })
       }
 
+      if (sfc.status !== 'closed-won') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Registration emails can only be sent to sponsors with a won deal. Move the sponsor to Closed Won first.',
+        })
+      }
+
       const contacts = sfc.contactPersons || []
       const recipients = Array.from(
         new Set(
@@ -236,6 +247,14 @@ export const registrationRouter = router({
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'Conference has no domain configured.',
+        })
+      }
+
+      if (isLocalhostDomain(currentDomain)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
         })
       }
 
