@@ -126,20 +126,12 @@ describe('actionStateMachine', () => {
 
   describe('waitlisted status', () => {
     it('allows organizer to accept', () => {
-      const result = actionStateMachine(
-        Status.waitlisted,
-        Action.accept,
-        true,
-      )
+      const result = actionStateMachine(Status.waitlisted, Action.accept, true)
       expect(result).toEqual({ status: Status.accepted, isValidAction: true })
     })
 
     it('allows organizer to reject', () => {
-      const result = actionStateMachine(
-        Status.waitlisted,
-        Action.reject,
-        true,
-      )
+      const result = actionStateMachine(Status.waitlisted, Action.reject, true)
       expect(result).toEqual({ status: Status.rejected, isValidAction: true })
     })
 
@@ -153,20 +145,12 @@ describe('actionStateMachine', () => {
     })
 
     it('prevents non-organizer from accepting', () => {
-      const result = actionStateMachine(
-        Status.waitlisted,
-        Action.accept,
-        false,
-      )
+      const result = actionStateMachine(Status.waitlisted, Action.accept, false)
       expect(result.isValidAction).toBe(false)
     })
 
     it('prevents non-organizer from rejecting', () => {
-      const result = actionStateMachine(
-        Status.waitlisted,
-        Action.reject,
-        false,
-      )
+      const result = actionStateMachine(Status.waitlisted, Action.reject, false)
       expect(result.isValidAction).toBe(false)
     })
   })

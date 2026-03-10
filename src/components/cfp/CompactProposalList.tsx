@@ -85,11 +85,12 @@ export function CompactProposalList({
     const statusOrder: Record<Status, number> = {
       confirmed: 1,
       accepted: 2,
-      submitted: 3,
-      draft: 4,
-      rejected: 5,
-      withdrawn: 6,
-      deleted: 7,
+      waitlisted: 3,
+      submitted: 4,
+      draft: 5,
+      rejected: 6,
+      withdrawn: 7,
+      deleted: 8,
     }
     return statusOrder[a.status] - statusOrder[b.status]
   })
@@ -106,8 +107,8 @@ export function CompactProposalList({
           const audienceFeedback = proposal.audienceFeedback
           const totalFeedback = audienceFeedback
             ? audienceFeedback.greenCount +
-              audienceFeedback.yellowCount +
-              audienceFeedback.redCount
+            audienceFeedback.yellowCount +
+            audienceFeedback.redCount
             : 0
           const showFeedback =
             conferenceHasEnded &&
@@ -132,11 +133,10 @@ export function CompactProposalList({
           return (
             <div
               key={proposal._id}
-              className={`flex flex-col gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors sm:flex-row sm:items-center sm:justify-between ${
-                isMuted
+              className={`flex flex-col gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors sm:flex-row sm:items-center sm:justify-between ${isMuted
                   ? 'border-gray-200/50 bg-gray-50/50 opacity-60 hover:opacity-80 dark:border-gray-700/50 dark:bg-gray-800/50'
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
-              }`}
+                }`}
             >
               <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
                 {proposal.speakers && proposal.speakers.length > 0 && (
@@ -158,11 +158,10 @@ export function CompactProposalList({
                       ? `/cfp/proposal?id=${proposal._id}${queryString ? `&${queryString.slice(1)}` : ''}`
                       : `/cfp/proposal/${proposal._id}${queryString}`
                   }
-                  className={`flex-1 truncate font-medium hover:text-brand-cloud-blue dark:hover:text-blue-400 ${
-                    isMuted
+                  className={`flex-1 truncate font-medium hover:text-brand-cloud-blue dark:hover:text-blue-400 ${isMuted
                       ? 'text-gray-600 dark:text-gray-400'
                       : 'text-gray-900 dark:text-white'
-                  }`}
+                    }`}
                 >
                   {proposal.title}
                 </Link>
