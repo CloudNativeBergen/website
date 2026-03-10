@@ -19,6 +19,7 @@ export class ProposalsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
       }
     }
@@ -30,6 +31,7 @@ export class ProposalsSearchProvider implements SearchProvider {
         return {
           category: this.category,
           label: this.label,
+          priority: this.priority,
           items: [],
           error: response.error.message,
         }
@@ -40,9 +42,9 @@ export class ProposalsSearchProvider implements SearchProvider {
         const speakers =
           proposal.speakers && Array.isArray(proposal.speakers)
             ? proposal.speakers.filter(
-                (speaker) =>
-                  typeof speaker === 'object' && speaker && 'name' in speaker,
-              )
+              (speaker) =>
+                typeof speaker === 'object' && speaker && 'name' in speaker,
+            )
             : []
 
         const speakerNames = speakers.map((s) => s.name).join(', ')
@@ -68,6 +70,7 @@ export class ProposalsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items,
         totalCount: items.length,
       }
@@ -76,6 +79,7 @@ export class ProposalsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
         error: 'Failed to search proposals',
       }

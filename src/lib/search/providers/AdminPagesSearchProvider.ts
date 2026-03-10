@@ -160,6 +160,7 @@ export class AdminPagesSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
       }
     }
@@ -182,6 +183,7 @@ export class AdminPagesSearchProvider implements SearchProvider {
     return {
       category: this.category,
       label: this.label,
+      priority: this.priority,
       items,
       totalCount: items.length,
     }

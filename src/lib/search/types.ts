@@ -28,6 +28,7 @@ export interface SearchProviderResult {
   label: string
   items: SearchResultItem[]
   totalCount?: number
+  priority: number
   error?: string
 }
 

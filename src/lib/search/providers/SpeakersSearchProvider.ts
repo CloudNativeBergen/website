@@ -11,7 +11,7 @@ export class SpeakersSearchProvider implements SearchProvider {
   readonly label = 'Speakers'
   readonly priority = 4
 
-  constructor(private searchFn: (query: string) => Promise<Speaker[]>) {}
+  constructor(private searchFn: (query: string) => Promise<Speaker[]>) { }
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()
@@ -20,6 +20,7 @@ export class SpeakersSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
       }
     }
@@ -42,6 +43,7 @@ export class SpeakersSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items,
         totalCount: items.length,
       }
@@ -50,6 +52,7 @@ export class SpeakersSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
         error: 'Failed to search speakers',
       }

@@ -13,7 +13,7 @@ export class SponsorsSearchProvider implements SearchProvider {
 
   constructor(
     private searchFn: (query: string) => Promise<SponsorExisting[]>,
-  ) {}
+  ) { }
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()
@@ -22,6 +22,7 @@ export class SponsorsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
       }
     }
@@ -44,6 +45,7 @@ export class SponsorsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items,
         totalCount: items.length,
       }
@@ -52,6 +54,7 @@ export class SponsorsSearchProvider implements SearchProvider {
       return {
         category: this.category,
         label: this.label,
+        priority: this.priority,
         items: [],
         error: 'Failed to search sponsors',
       }

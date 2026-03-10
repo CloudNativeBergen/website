@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import type { SearchProvider, SearchResults } from '../types'
@@ -18,6 +18,7 @@ export function useUnifiedSearch() {
     totalCount: 0,
   })
   const [searchError, setSearchError] = useState<string | null>(null)
+  const requestId = useRef(0)
   const router = useRouter()
 
   const utils = api.useUtils()
@@ -48,6 +49,9 @@ export function useUnifiedSearch() {
         return
       }
 
+      requestId.current += 1
+      const currentId = requestId.current
+
       setIsSearching(true)
       setSearchError(null)
 
@@ -56,13 +60,11 @@ export function useUnifiedSearch() {
           providers.map((provider) => provider.search(query)),
         )
 
+        if (currentId !== requestId.current) return
+
         const groups = results
           .filter((result) => result.items.length > 0)
-          .sort((a, b) => {
-            const providerA = providers.find((p) => p.category === a.category)
-            const providerB = providers.find((p) => p.category === b.category)
-            return (providerA?.priority || 0) - (providerB?.priority || 0)
-          })
+          .sort((a, b) => a.priority - b.priority)
 
         const totalCount = groups.reduce(
           (sum, group) => sum + group.items.length,
@@ -76,11 +78,14 @@ export function useUnifiedSearch() {
           console.warn('Search errors:', errors)
         }
       } catch (error) {
+        if (currentId !== requestId.current) return
         console.error('Unified search error:', error)
         setSearchError('Failed to perform search')
         setSearchResults({ groups: [], totalCount: 0 })
       } finally {
-        setIsSearching(false)
+        if (currentId === requestId.current) {
+          setIsSearching(false)
+        }
       }
     },
     [providers],
