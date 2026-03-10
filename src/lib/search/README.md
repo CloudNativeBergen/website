@@ -217,12 +217,21 @@ const items = STATIC_DATA.filter((item) =>
 
 ## Testing
 
-The search modal includes Storybook stories in `SearchModal.stories.tsx`:
+Unit tests for each provider are in `__tests__/lib/search/`:
+
+- `AdminPagesSearchProvider.test.ts`
+- `ProposalsSearchProvider.test.ts`
+- `SponsorsSearchProvider.test.ts`
+- `SpeakersSearchProvider.test.ts`
+
+Storybook stories in `SearchModal.stories.tsx`:
 
 - **EmptyState**: Initial state before search
 - **WithResults**: Example multi-category results
+- **Loading**: Skeleton loading state
 - **NoResults**: Empty results state
 - **SearchError**: Error state
+- **PagesOnly**: Single-category results
 
 ## Future Enhancements
 
