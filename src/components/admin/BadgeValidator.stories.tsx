@@ -1,6 +1,34 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import BadgeValidator from './BadgeValidator'
+
+const mockSvgContent =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#4A90D9"/><text x="100" y="110" text-anchor="middle" fill="white" font-size="16">Badge</text></svg>'
+
+async function uploadAndValidate(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  const file = new File([mockSvgContent], 'badge.svg', {
+    type: 'image/svg+xml',
+  })
+  const input = canvasElement.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement
+  await userEvent.upload(input, file)
+  await waitFor(() => {
+    expect(canvas.getByText('badge.svg')).toBeInTheDocument()
+  })
+  const validateButton = canvas.getByRole('button', {
+    name: /validate badge/i,
+  })
+  await userEvent.click(validateButton)
+  await waitFor(
+    () => {
+      expect(canvas.queryByText('Validating...')).not.toBeInTheDocument()
+    },
+    { timeout: 3000 },
+  )
+}
 
 const mockSuccessResponse = {
   checks: [
@@ -196,6 +224,9 @@ export const ValidationSuccess: Story = {
       ],
     },
   },
+  play: async ({ canvasElement }) => {
+    await uploadAndValidate(canvasElement)
+  },
 }
 
 export const ValidationErrors: Story = {
@@ -210,6 +241,9 @@ export const ValidationErrors: Story = {
       ],
     },
   },
+  play: async ({ canvasElement }) => {
+    await uploadAndValidate(canvasElement)
+  },
 }
 
 export const ValidationWarnings: Story = {
@@ -223,6 +257,9 @@ export const ValidationWarnings: Story = {
         }),
       ],
     },
+  },
+  play: async ({ canvasElement }) => {
+    await uploadAndValidate(canvasElement)
   },
 }
 
@@ -244,5 +281,8 @@ export const ServerError: Story = {
         }),
       ],
     },
+  },
+  play: async ({ canvasElement }) => {
+    await uploadAndValidate(canvasElement)
   },
 }
