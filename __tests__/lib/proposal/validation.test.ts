@@ -103,42 +103,6 @@ describe('validateProposalForm', () => {
     expect(errors.tos).toBe(PROPOSAL_VALIDATION_MESSAGES.TOS_REQUIRED)
   })
 
-  it('returns capacity error for workshop_120 without capacity', () => {
-    const errors = validateProposalForm(
-      makeValidProposal({ format: Format.workshop_120 }),
-    )
-    expect(errors.capacity).toBe(PROPOSAL_VALIDATION_MESSAGES.CAPACITY_REQUIRED)
-  })
-
-  it('returns capacity error for workshop_240 without capacity', () => {
-    const errors = validateProposalForm(
-      makeValidProposal({ format: Format.workshop_240 }),
-    )
-    expect(errors.capacity).toBe(PROPOSAL_VALIDATION_MESSAGES.CAPACITY_REQUIRED)
-  })
-
-  it('accepts workshop format with capacity', () => {
-    const errors = validateProposalForm(
-      makeValidProposal({ format: Format.workshop_120, capacity: 30 }),
-    )
-    expect(errors.capacity).toBeUndefined()
-  })
-
-  it('does not return capacity error for non-workshop formats', () => {
-    const errors = validateProposalForm(
-      makeValidProposal({ format: Format.presentation_40 }),
-    )
-    expect(errors.capacity).toBeUndefined()
-  })
-
-  it('suppresses capacity check when requireCapacity is false', () => {
-    const errors = validateProposalForm(
-      makeValidProposal({ format: Format.workshop_120 }),
-      { requireCapacity: false },
-    )
-    expect(errors.capacity).toBeUndefined()
-  })
-
   it('returns multiple errors simultaneously', () => {
     const errors = validateProposalForm(
       makeValidProposal({

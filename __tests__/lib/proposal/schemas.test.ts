@@ -121,19 +121,19 @@ describe('ProposalInputSchema (strict)', () => {
     expect(result.success).toBe(false)
   })
 
-  it('requires capacity for workshop formats', () => {
-    const result = ProposalInputSchema.safeParse({
-      ...fullProposal,
-      format: Format.workshop_120,
-    })
-    expect(result.success).toBe(false)
-  })
-
   it('accepts workshop format with capacity', () => {
     const result = ProposalInputSchema.safeParse({
       ...fullProposal,
       format: Format.workshop_120,
       capacity: 30,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts workshop format without capacity', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
     })
     expect(result.success).toBe(true)
   })
