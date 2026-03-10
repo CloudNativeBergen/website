@@ -11,7 +11,7 @@ import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
 import { ShowMore } from '@/components/ShowMore'
 import { UserIcon } from '@heroicons/react/24/solid'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
@@ -151,11 +151,7 @@ async function CachedSpeakerContent({
                 <div className="mb-6 flex justify-center lg:justify-start">
                   {speaker.image ? (
                     <img
-                      src={sanityImage(speaker.image)
-                        .width(400)
-                        .height(400)
-                        .fit('crop')
-                        .url()}
+                      src={speakerImageUrl(speaker.image)}
                       alt={speaker.name}
                       className="h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:h-64 lg:w-64 dark:ring-gray-700"
                     />

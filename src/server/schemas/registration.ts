@@ -32,8 +32,8 @@ export const RegistrationSubmissionSchema = z.object({
   billing: RegistrationBillingSchema,
   logo: z.string().min(1, 'Company logo is required'),
   logoBright: z.string().nullable().optional(),
-  orgNumber: z.string().optional(),
-  address: z.string().optional(),
+  orgNumber: z.string().min(1, 'Organization number is required'),
+  address: z.string().min(1, 'Company address is required'),
   signerName: z.string().optional(),
   signerEmail: z.string().email().optional(),
 })

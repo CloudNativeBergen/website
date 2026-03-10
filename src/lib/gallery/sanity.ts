@@ -292,7 +292,7 @@ export async function getGalleryImage(
           _id,
           name,
           "slug": slug.current,
-          "image": image.asset->url
+          "image": coalesce(image.asset->url, imageURL)
         }
       }
     `
@@ -397,7 +397,7 @@ export async function getGalleryImages(
           _id,
           name,
           "slug": slug.current,
-          "image": image.asset->url
+          "image": coalesce(image.asset->url, imageURL)
         }
       }
     `

@@ -143,7 +143,6 @@ export async function generateAndSendContract(
         venueName: sfc.conference.venueName,
         venueAddress: sfc.conference.venueAddress,
         sponsorEmail: sfc.conference.sponsorEmail,
-        logoBright: sfc.conference.logoBright,
       },
     })
   } catch (pdfError) {
@@ -211,12 +210,14 @@ export async function generateAndSendContract(
   let signingUrl: string | undefined
   if (signerEmail) {
     try {
+      const conferenceDomain = sfc.conference.domains?.[0]
       const result = await signingProvider.sendForSigning({
         pdf: pdfBuffer,
         filename,
         signerEmail,
         agreementName: `Sponsorship Agreement - ${sponsorName}`,
         message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
+        baseUrl: conferenceDomain ? `https://${conferenceDomain}` : undefined,
       })
 
       agreementId = result.agreementId

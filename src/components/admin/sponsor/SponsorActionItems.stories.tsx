@@ -5,6 +5,7 @@ import {
   DocumentTextIcon,
   CheckCircleIcon,
   PaperAirplaneIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
@@ -36,6 +37,10 @@ interface ActionItem {
   description: string
   severity: Severity
   link: string
+  assignedTo?: {
+    name: string
+    image?: string
+  }
 }
 
 const severityBorder: Record<Severity, string> = {
@@ -71,6 +76,7 @@ const mockItems: ActionItem[] = [
     description: 'Invoice is overdue for DataSys',
     severity: 'critical',
     link: '#',
+    assignedTo: { name: 'Hans K.', image: 'https://i.pravatar.cc/48?u=hans' },
   },
   {
     id: '2',
@@ -80,6 +86,7 @@ const mockItems: ActionItem[] = [
     description: 'Microsoft is a high-priority prospect not yet contacted',
     severity: 'critical',
     link: '#',
+    assignedTo: { name: 'Erik S.', image: 'https://i.pravatar.cc/48?u=erik' },
   },
   {
     id: '3',
@@ -90,6 +97,7 @@ const mockItems: ActionItem[] = [
     description: 'Invoice not yet sent to Acme Corp',
     severity: 'critical',
     link: '#',
+    assignedTo: { name: 'Hans K.', image: 'https://i.pravatar.cc/48?u=hans' },
   },
   {
     id: '4',
@@ -110,6 +118,7 @@ const mockItems: ActionItem[] = [
     description: 'Scale AQ has not completed registration',
     severity: 'info',
     link: '#',
+    assignedTo: { name: 'Unset User' },
   },
 ]
 
@@ -140,6 +149,21 @@ function ActionRow({ item }: { item: ActionItem }) {
           {item.description}
         </p>
       </div>
+      {item.assignedTo && (
+        <div className="shrink-0" title={item.assignedTo.name}>
+          {item.assignedTo.image ? (
+            <img
+              src={item.assignedTo.image}
+              alt={item.assignedTo.name}
+              className="h-6 w-6 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-600">
+              <UserIcon className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

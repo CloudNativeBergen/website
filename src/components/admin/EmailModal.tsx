@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { useNotification } from './NotificationProvider'
+import { isLocalhostClient } from '@/lib/environment/localhost'
 import {
   XMarkIcon,
   EyeIcon,
@@ -96,10 +97,7 @@ export function EmailModal({
     isOpen,
   })
 
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1')
+  const isLocalhost = isLocalhostClient()
 
   useEffect(() => {
     const currentStorageKey = storageKey || 'email-modal-default'

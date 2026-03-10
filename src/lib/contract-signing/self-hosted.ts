@@ -29,21 +29,25 @@ const ID_QUERY = `*[_type == "sponsorForConference" && signatureId == $id][0]{ _
 export class SelfHostedSigningProvider implements ContractSigningProvider {
   readonly name = PROVIDER_NAME
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async sendForSigning(params: {
     pdf: Buffer
     filename: string
     signerEmail: string
     agreementName: string
     message?: string
+    baseUrl?: string
   }): Promise<SendForSigningResult> {
     const token = randomUUID()
 
     const rawBaseUrl =
-      process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL
+      params.baseUrl ||
+      process.env.NEXTAUTH_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
     if (!rawBaseUrl) {
       throw new Error(
-        'Missing NEXTAUTH_URL or NEXT_PUBLIC_BASE_URL for self-hosted signing URL',
+        'Missing base URL for self-hosted signing. Set NEXTAUTH_URL or pass baseUrl.',
       )
     }
 

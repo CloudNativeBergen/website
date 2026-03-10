@@ -121,14 +121,6 @@ describe('ProposalInputSchema (strict)', () => {
     expect(result.success).toBe(false)
   })
 
-  it('requires capacity for workshop formats', () => {
-    const result = ProposalInputSchema.safeParse({
-      ...fullProposal,
-      format: Format.workshop_120,
-    })
-    expect(result.success).toBe(false)
-  })
-
   it('accepts workshop format with capacity', () => {
     const result = ProposalInputSchema.safeParse({
       ...fullProposal,
@@ -136,6 +128,68 @@ describe('ProposalInputSchema (strict)', () => {
       capacity: 30,
     })
     expect(result.success).toBe(true)
+  })
+
+  it('accepts workshop format without capacity', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts workshop format with prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: 'Bring a computer with Docker installed',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts non-workshop format without prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.presentation_40,
+      prerequisites: undefined,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects prerequisites for non-workshop formats', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.presentation_40,
+      prerequisites: 'Should not be allowed',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('normalizes empty prerequisites to undefined', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: '   ',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.prerequisites).toBeUndefined()
+    }
+  })
+
+  it('trims whitespace from prerequisites', () => {
+    const result = ProposalInputSchema.safeParse({
+      ...fullProposal,
+      format: Format.workshop_120,
+      capacity: 30,
+      prerequisites: '  Docker required  ',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.prerequisites).toBe('Docker required')
+    }
   })
 
   it('rejects missing title', () => {

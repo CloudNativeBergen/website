@@ -9,7 +9,7 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { UserIcon, MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
-import { sanityImage } from '@/lib/sanity/client'
+import { speakerImageUrl } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
@@ -157,11 +157,11 @@ const SpeakerImage = ({
   if (image) {
     return (
       <img
-        src={sanityImage(image)
-          .width(size * 2)
-          .height(size * 2)
-          .fit('crop')
-          .url()}
+        src={speakerImageUrl(image, {
+          width: size * 2,
+          height: size * 2,
+          fit: 'crop',
+        })}
         alt={name}
         width={size}
         height={size}

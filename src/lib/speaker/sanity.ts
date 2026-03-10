@@ -43,7 +43,7 @@ async function findSpeakerByProvider(
       `*[ _type == "speaker" && $id in providers][0]{
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
     }`,
       { id },
     )
@@ -65,7 +65,7 @@ async function findSpeakerByEmail(
       `*[ _type == "speaker" && email == $email][0]{
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
     }`,
       { email },
     )
@@ -165,7 +165,7 @@ export async function getSpeaker(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
     }`,
       { speakerId },
       { cache: 'no-store' },
@@ -187,7 +187,7 @@ export async function getPublicSpeaker(
   try {
     data = await clientReadCached.fetch(
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
-        name, title, bio, links, flags, "image": image.asset->url,
+        name, title, bio, links, flags, "image": coalesce(image.asset->url, imageURL),
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
           _id, title, description, language, level, format, audiences, video,
           attachments[]{
@@ -197,7 +197,7 @@ export async function getPublicSpeaker(
             }
           },
           speakers[]-> {
-            _id, name, title, "slug": slug.current, "image": image.asset->url
+            _id, name, title, "slug": slug.current, "image": coalesce(image.asset->url, imageURL)
           },
           topics[]-> {
             _id, title, "slug": slug.current
@@ -255,19 +255,28 @@ export async function getPublicSpeaker(
 }
 
 export async function updateSpeaker(
-  spekaerId: string,
+  speakerId: string,
   speaker: Partial<SpeakerInput>,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- image is excluded from patch
-    const { image: _image, ...speakerWithoutImage } = speaker
-    await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
+    const { image, ...speakerWithoutImage } = speaker
+
+    const patchData: Record<string, unknown> = { ...speakerWithoutImage }
+
+    if (typeof image === 'string' && image.startsWith('image-')) {
+      patchData.image = {
+        _type: 'image',
+        asset: { _type: 'reference', _ref: image },
+      }
+    }
+
+    await clientWrite.patch(speakerId).set(patchData).commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
-      await getSpeaker(spekaerId)
+      await getSpeaker(speakerId)
     if (fetchErr) {
       throw fetchErr
     }
@@ -310,7 +319,7 @@ export async function getSpeakers(
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
       "slug": slug.current,
-      "image": image.asset->url,
+      "image": coalesce(image.asset->url, imageURL),
       "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
         _id,
         title,
@@ -387,7 +396,7 @@ export async function getOrganizers(): Promise<{
     const query = groq`*[_type == "speaker" && isOrganizer == true] {
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
     } | order(name asc)`
 
     speakers = await clientRead.fetch(query, {}, { cache: 'no-store' })
@@ -410,7 +419,7 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
     const query = groq`*[_type == "conference" && _id == $conferenceId][0].organizers[]-> {
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": coalesce(image.asset->url, imageURL)
     } | order(name asc)`
 
     speakers = await clientRead.fetch(
