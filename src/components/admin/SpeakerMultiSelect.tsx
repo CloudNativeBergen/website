@@ -44,7 +44,11 @@ export function SpeakerMultiSelect({
   const [searchQuery, setSearchQuery] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: speakers = [], isLoading, error: fetchError } = api.speakers.list.useQuery(
+  const {
+    data: speakers = [],
+    isLoading,
+    error: fetchError,
+  } = api.speakers.list.useQuery(
     { conferenceId },
     { staleTime: 5 * 60 * 1000 }, // Cache for 5 minutes
   )

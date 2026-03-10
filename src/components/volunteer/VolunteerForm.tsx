@@ -372,7 +372,9 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
           Reset Form
         </Button>
         <Button type="submit" disabled={createVolunteerMutation.isPending}>
-          {createVolunteerMutation.isPending ? 'Submitting...' : 'Submit Application'}
+          {createVolunteerMutation.isPending
+            ? 'Submitting...'
+            : 'Submit Application'}
         </Button>
       </div>
     </form>
