@@ -328,7 +328,7 @@ export const proposalRouter = router({
         if (!ctx.speaker.isOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-              '_id' in existing.conference
+            '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
