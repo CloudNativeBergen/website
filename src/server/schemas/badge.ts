@@ -36,5 +36,8 @@ export const DeleteBadgeInputSchema = z.object({
 })
 
 export const ValidateBadgeInputSchema = z.object({
-  svg: z.string().min(1, 'SVG content is required'),
+  svg: z
+    .string()
+    .min(1, 'SVG content is required')
+    .max(5 * 1024 * 1024, 'SVG content must be less than 5MB'),
 })

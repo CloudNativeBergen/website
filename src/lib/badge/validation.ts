@@ -10,6 +10,8 @@ import {
   verifyCredential,
   verifyCredentialJWT,
   didKeyToPublicKeyHex,
+  decodeMultibase,
+  bytesToHex,
 } from '@/lib/openbadges'
 import * as jsonld from 'jsonld'
 import crypto from 'node:crypto'
@@ -38,7 +40,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
 
     if (typeof credentialData === 'string') {
       isJWT = true
-      const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+      const publicKey = process.env.BADGE_ISSUER_PUBLIC_KEY
 
       if (!publicKey) {
         checks.push({
@@ -427,22 +429,52 @@ async function validateIssuerAndProof(
               },
             })
           } else {
-            await validateController(
+            const publicKeyHex = await validateController(
               proof,
               verificationMethod,
               issuerId,
               checks,
             )
-            checks.push({
-              name: 'proof',
-              status: 'success',
-              message: `Proof validation passed (${proof.cryptosuite})`,
-              details: {
-                cryptosuite: proof.cryptosuite,
-                created: proof.created,
-                verificationMethod: proof.verificationMethod,
-              },
-            })
+
+            if (publicKeyHex) {
+              try {
+                const isValid = await verifyCredential(credential, publicKeyHex)
+                checks.push({
+                  name: 'proof',
+                  status: isValid ? 'success' : 'error',
+                  message: isValid
+                    ? `Proof signature verified (${proof.cryptosuite})`
+                    : `Proof signature invalid (${proof.cryptosuite})`,
+                  details: {
+                    cryptosuite: proof.cryptosuite,
+                    created: proof.created,
+                    verificationMethod: proof.verificationMethod,
+                    signatureValid: isValid,
+                  },
+                })
+              } catch (error) {
+                checks.push({
+                  name: 'proof',
+                  status: 'error',
+                  message: `Signature verification error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                  details: {
+                    cryptosuite: proof.cryptosuite,
+                    verificationMethod: proof.verificationMethod,
+                  },
+                })
+              }
+            } else {
+              checks.push({
+                name: 'proof',
+                status: 'warning',
+                message:
+                  'Could not verify proof — public key unavailable from key document',
+                details: {
+                  cryptosuite: proof.cryptosuite,
+                  verificationMethod: proof.verificationMethod,
+                },
+              })
+            }
           }
         }
       }
@@ -466,9 +498,10 @@ async function validateController(
   verificationMethod: { controller?: string },
   issuerId: string,
   checks: ValidationCheck[],
-): Promise<void> {
+): Promise<string | null> {
   const controller = verificationMethod.controller
   const controllerIssues: string[] = []
+  let publicKeyHex: string | null = null
 
   if (!controller) {
     controllerIssues.push('Missing controller on verification method')
@@ -501,6 +534,13 @@ async function validateController(
       }
       if (!keyDoc.publicKeyMultibase) {
         controllerIssues.push('Missing publicKeyMultibase in key document')
+      } else {
+        try {
+          const publicKeyBytes = decodeMultibase(keyDoc.publicKeyMultibase)
+          publicKeyHex = bytesToHex(publicKeyBytes)
+        } catch {
+          controllerIssues.push('Failed to decode publicKeyMultibase')
+        }
       }
     } else {
       controllerIssues.push(
@@ -520,6 +560,7 @@ async function validateController(
       message: 'Controller / key document consistency issues',
       details: { issues: controllerIssues },
     })
+    return null
   } else {
     checks.push({
       name: 'controller',
@@ -527,6 +568,7 @@ async function validateController(
       message: 'Controller and key document are consistent',
       details: { controller },
     })
+    return publicKeyHex
   }
 }
 
