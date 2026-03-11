@@ -60,8 +60,20 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
     onError: (error) => {
+      const zodError = (
+        error.data as
+          | (typeof error.data & {
+              zodError?: {
+                fieldErrors?: Record<string, string[]>
+                formErrors?: string[]
+              }
+            })
+          | undefined
+      )?.zodError
       setSubmitError({
         message: error.message || 'Failed to submit volunteer application',
+        fieldErrors: zodError?.fieldErrors,
+        formErrors: zodError?.formErrors,
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },

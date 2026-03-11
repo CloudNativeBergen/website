@@ -21,6 +21,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
+import { getCurrentDateTime } from '@/lib/time'
 
 export const volunteerRouter = router({
   create: publicProcedure
@@ -46,7 +47,7 @@ export const volunteerRouter = router({
           consent: {
             dataProcessing: {
               granted: true,
-              grantedAt: new Date().toISOString(),
+              grantedAt: getCurrentDateTime(),
               ipAddress,
             },
             privacyPolicyVersion: PRIVACY_POLICY_VERSION,
