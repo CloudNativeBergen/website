@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { parseTextPosition } from '@/lib/pdf/marker-detection'
 
 describe('parseTextPosition', () => {

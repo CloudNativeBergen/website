@@ -1,26 +1,17 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import {
-  describe,
-  it,
-  expect as jestExpect,
-  jest,
-  beforeEach,
-} from '@jest/globals'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 // Mock tRPC hooks before importing the component
-const mockGetContract = jest.fn<() => any>()
-const mockSubmitSignature = jest.fn<() => any>()
+const mockGetContract = vi.fn<() => any>()
+const mockSubmitSignature = vi.fn<() => any>()
 let submitOnSuccess: ((...args: any[]) => void) | undefined
 let submitOnError: ((...args: any[]) => void) | undefined
 
-jest.mock('@/lib/trpc/client', () => ({
+vi.mock('@/lib/trpc/client', () => ({
   api: {
     signing: {
       getContract: {
@@ -37,7 +28,7 @@ jest.mock('@/lib/trpc/client', () => ({
   },
 }))
 
-jest.mock('@heroicons/react/24/outline', () => {
+vi.mock('@heroicons/react/24/outline', () => {
   const icon = (name: string) => (props: any) => (
     <svg {...props} data-testid={`icon-${name}`} />
   )
@@ -55,7 +46,7 @@ jest.mock('@heroicons/react/24/outline', () => {
 
 // Mock SignaturePadCanvas
 let capturedOnSignatureChange: ((dataUrl: string | null) => void) | null = null
-jest.mock('@/components/sponsor/SignaturePadCanvas', () => ({
+vi.mock('@/components/sponsor/SignaturePadCanvas', () => ({
   __esModule: true,
   SignaturePadCanvas: ({
     onSignatureChange,
@@ -67,9 +58,8 @@ jest.mock('@/components/sponsor/SignaturePadCanvas', () => ({
   },
 }))
 
-// Use require() after jest.mock to ensure mocks are applied before module loads
-const { ContractSigningPage } =
-  require('@/components/sponsor/ContractSigningPage') as typeof import('@/components/sponsor/ContractSigningPage')
+// vi.mock calls are hoisted automatically by Vitest
+import { ContractSigningPage } from '@/components/sponsor/ContractSigningPage'
 
 const MOCK_CONTRACT = {
   status: 'pending',
@@ -92,6 +82,10 @@ describe('ContractSigningPage', () => {
     submitOnError = undefined
   })
 
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
   describe('loading state', () => {
     it('shows loading spinner while fetching contract', () => {
       mockGetContract.mockReturnValue({
@@ -100,7 +94,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -117,7 +111,7 @@ describe('ContractSigningPage', () => {
         error: { message: 'Token expired' },
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -133,7 +127,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -150,7 +144,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -171,7 +165,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -195,7 +189,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -215,7 +209,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
     })
@@ -246,7 +240,7 @@ describe('ContractSigningPage', () => {
   })
 
   describe('sign step', () => {
-    const mutate = jest.fn()
+    const mutate = vi.fn()
 
     beforeEach(() => {
       mockGetContract.mockReturnValue({
@@ -353,7 +347,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -371,7 +365,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -410,7 +404,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
 
@@ -439,7 +433,7 @@ describe('ContractSigningPage', () => {
         error: null,
       })
       mockSubmitSignature.mockReturnValue({
-        mutate: jest.fn(),
+        mutate: vi.fn(),
         isPending: false,
       })
     })

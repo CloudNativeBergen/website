@@ -1,18 +1,15 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect as jestExpect, jest } from '@jest/globals'
 import { render, screen } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 
 // Mock icons
-jest.mock('@heroicons/react/24/outline', () => ({
+vi.mock('@heroicons/react/24/outline', () => ({
   __esModule: true,
   UserGroupIcon: (props: any) => (
     <svg {...props} data-testid="icon-user-group" />
@@ -26,18 +23,18 @@ jest.mock('@heroicons/react/24/outline', () => ({
 }))
 
 // Mock Sponsors component
-jest.mock('@/components/Sponsors', () => ({
+vi.mock('@/components/Sponsors', () => ({
   __esModule: true,
   Sponsors: () => <div data-testid="sponsors-grid">Sponsors Grid</div>,
 }))
 
 // Mock BackgroundImage
-jest.mock('@/components/BackgroundImage', () => ({
+vi.mock('@/components/BackgroundImage', () => ({
   BackgroundImage: () => <div data-testid="background-image" />,
 }))
 
 // Mock Next/Image
-jest.mock('next/image', () => ({
+vi.mock('next/image', () => ({
   __esModule: true,
   default: (props: any) => <img {...props} />,
 }))

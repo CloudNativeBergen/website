@@ -1,12 +1,10 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-
-jest.mock('@/lib/sanity/client', () => ({
+vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: jest.fn(),
-    transaction: jest.fn(() => ({
-      delete: jest.fn().mockReturnThis(),
+    fetch: vi.fn(),
+    transaction: vi.fn(() => ({
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     })),
   },
 }))
@@ -16,7 +14,7 @@ import { clientWrite } from '@/lib/sanity/client'
 
 describe('deleteSponsor', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('deletes sponsor and all related sponsorForConference, activities, and assets', async () => {
@@ -29,9 +27,9 @@ describe('deleteSponsor', () => {
       .mockResolvedValueOnce(['asset-1']) // safe-to-delete assets
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -51,9 +49,9 @@ describe('deleteSponsor', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([]) // no SFC docs
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -68,9 +66,9 @@ describe('deleteSponsor', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -89,9 +87,9 @@ describe('deleteSponsor', () => {
       .mockResolvedValueOnce([]) // safety check: asset referenced elsewhere
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -113,9 +111,9 @@ describe('deleteSponsor', () => {
       .mockResolvedValueOnce(['asset-1']) // safe to delete
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockResolvedValue({}),
+      commit: vi.fn().mockResolvedValue({}),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 
@@ -132,9 +130,9 @@ describe('deleteSponsor', () => {
     ;(clientWrite.fetch as any).mockResolvedValueOnce([])
 
     const mockTransaction = {
-      delete: jest.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
       // @ts-ignore
-      commit: jest.fn().mockRejectedValue(new Error('Transaction failed')),
+      commit: vi.fn().mockRejectedValue(new Error('Transaction failed')),
     }
     ;(clientWrite.transaction as any).mockReturnValue(mockTransaction)
 

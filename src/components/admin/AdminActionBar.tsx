@@ -5,6 +5,7 @@ import {
   CheckIcon,
   XMarkIcon,
   BellIcon,
+  ClockIcon,
   StarIcon,
   UserPlusIcon,
   MapPinIcon,
@@ -94,10 +95,14 @@ export function AdminActionBar({
     setShowEditModal(false)
   }
 
-  const canApprove = proposal.status === 'submitted'
+  const canApprove =
+    proposal.status === 'submitted' || proposal.status === 'waitlisted'
+  const canWaitlist = proposal.status === 'submitted'
   const canRemind = proposal.status === 'accepted'
   const canReject =
-    proposal.status === 'submitted' || proposal.status === 'accepted'
+    proposal.status === 'submitted' ||
+    proposal.status === 'accepted' ||
+    proposal.status === 'waitlisted'
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -158,11 +163,13 @@ export function AdminActionBar({
               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                 proposal.status === 'accepted'
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                  : proposal.status === 'rejected'
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    : proposal.status === 'submitted'
-                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                  : proposal.status === 'waitlisted'
+                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                    : proposal.status === 'rejected'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      : proposal.status === 'submitted'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
               }`}
             >
               {proposal.status.charAt(0).toUpperCase() +
@@ -296,6 +303,16 @@ export function AdminActionBar({
             >
               <CheckIcon className="h-3 w-3" />
               Approve
+            </AdminButton>
+          )}
+          {canWaitlist && (
+            <AdminButton
+              color="orange"
+              size="xs"
+              onClick={() => handleAction(Action.waitlist)}
+            >
+              <ClockIcon className="h-3 w-3" />
+              Waitlist
             </AdminButton>
           )}
           {canRemind && (

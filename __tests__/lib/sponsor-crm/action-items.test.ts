@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { generateActionItems } from '@/lib/sponsor-crm/action-items'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 

@@ -1,7 +1,6 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import { describe, it, expect } from '@jest/globals'
 
 import {
   TicketSalesProcessor,

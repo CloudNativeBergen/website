@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { aggregateSponsorPipeline } from '@/lib/sponsor-crm/pipeline'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 

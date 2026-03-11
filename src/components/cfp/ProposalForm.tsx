@@ -169,6 +169,7 @@ export function ProposalForm({
       audiences: proposal.audiences,
       tos: proposal.tos,
       capacity: proposal.capacity,
+      prerequisites: proposal.prerequisites,
       topics: topicRefs,
       speakers: allSpeakers.map((id) => ({
         _type: 'reference' as const,

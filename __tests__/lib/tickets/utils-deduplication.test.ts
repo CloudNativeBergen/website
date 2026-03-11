@@ -1,7 +1,6 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from '@jest/globals'
 import { deduplicateTicketsByEmail } from '@/lib/tickets/utils'
 import type { EventTicket } from '@/lib/tickets/types'
 

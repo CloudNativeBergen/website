@@ -5,6 +5,7 @@ type AdminButtonColor =
   | 'indigo'
   | 'blue'
   | 'green'
+  | 'orange'
   | 'red'
   | 'purple'
   | 'yellow'
@@ -22,6 +23,8 @@ const colorStyles: Record<AdminButtonColor, string> = {
   blue: 'bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:outline-blue-600',
   green:
     'bg-green-600 text-white shadow-sm hover:bg-green-700 focus-visible:outline-green-600',
+  orange:
+    'bg-orange-600 text-white shadow-sm hover:bg-orange-700 focus-visible:outline-orange-600',
   red: 'bg-red-600 text-white shadow-sm hover:bg-red-700 focus-visible:outline-red-600',
   purple:
     'bg-purple-600 text-white shadow-sm hover:bg-purple-700 focus-visible:outline-purple-600',

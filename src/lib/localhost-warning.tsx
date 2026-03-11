@@ -1,5 +1,6 @@
 import React from 'react'
 import { BellIcon } from '@heroicons/react/24/outline'
+import { isLocalhostDomain } from '@/lib/environment/localhost'
 
 /**
  * Creates a localhost warning component to display when running in development mode.
@@ -12,7 +13,7 @@ export function createLocalhostWarning(
   domain: string | undefined,
   audience: string,
 ): React.JSX.Element | undefined {
-  if (!domain || !domain.includes('localhost')) {
+  if (!domain || !isLocalhostDomain(domain)) {
     return undefined
   }
 

@@ -1,23 +1,14 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import {
-  describe,
-  it,
-  expect as jestExpect,
-  jest,
-  beforeEach,
-} from '@jest/globals'
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import '@testing-library/jest-dom'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 // Capture the onSignatureChange callback passed to SignaturePadCanvas
 let capturedOnSignatureChange: ((dataUrl: string | null) => void) | null = null
 
-jest.mock('@/components/sponsor/SignaturePadCanvas', () => ({
+vi.mock('@/components/sponsor/SignaturePadCanvas', () => ({
   __esModule: true,
   SignaturePadCanvas: ({
     onSignatureChange,
@@ -29,7 +20,7 @@ jest.mock('@/components/sponsor/SignaturePadCanvas', () => ({
   },
 }))
 
-jest.mock('@heroicons/react/24/outline', () => ({
+vi.mock('@heroicons/react/24/outline', () => ({
   __esModule: true,
   CheckIcon: (props: any) => <svg {...props} data-testid="icon-check" />,
   PencilSquareIcon: (props: any) => (
@@ -38,15 +29,14 @@ jest.mock('@heroicons/react/24/outline', () => ({
   TrashIcon: (props: any) => <svg {...props} data-testid="icon-trash" />,
 }))
 
-// Use require() after jest.mock to ensure mocks are applied before module loads
-const { OrganizerSignatureCapture } =
-  require('@/components/admin/sponsor-crm/OrganizerSignatureCapture') as typeof import('@/components/admin/sponsor-crm/OrganizerSignatureCapture')
+// vi.mock calls are hoisted automatically by Vitest
+import { OrganizerSignatureCapture } from '@/components/admin/sponsor-crm/OrganizerSignatureCapture'
 
 const STORAGE_KEY = 'organizer-signature-org-1'
 const FAKE_SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='
 
 describe('OrganizerSignatureCapture', () => {
-  const onSignatureReady = jest.fn<(dataUrl: string | null) => void>()
+  const onSignatureReady = vi.fn<(dataUrl: string | null) => void>()
 
   beforeEach(() => {
     onSignatureReady.mockClear()

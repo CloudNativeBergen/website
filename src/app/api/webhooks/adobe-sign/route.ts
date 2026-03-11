@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
           updateFields.contractDocument ? 'attached' : 'not attached',
         )
         await logActivity(sfc._id, sfc.signatureStatus, 'signed')
+        await sendContractSignedNotification(sfc._id)
         break
       }
 
@@ -248,5 +249,52 @@ async function logActivity(
     })
   } catch (logError) {
     console.error('Failed to log webhook activity:', logError)
+  }
+}
+
+async function sendContractSignedNotification(sfcId: string) {
+  try {
+    const sfcData = await clientWrite.fetch<{
+      sponsorName: string
+      signerName: string | null
+      tierTitle: string | null
+      contractValue: number | null
+      contractCurrency: string | null
+      conference: {
+        _id: string
+        title: string
+        salesNotificationChannel?: string
+        domains?: string[]
+      } | null
+    }>(
+      `*[_type == "sponsorForConference" && _id == $id][0]{
+        "sponsorName": sponsor->name,
+        "signerName": signerName,
+        "tierTitle": tier->title,
+        contractValue,
+        contractCurrency,
+        "conference": conference->{
+          _id, title, salesNotificationChannel, domains
+        }
+      }`,
+      { id: sfcId },
+    )
+
+    if (sfcData?.conference) {
+      const { notifySponsorContractSigned } = await import('@/lib/slack/notify')
+      await notifySponsorContractSigned(
+        sfcData.sponsorName || 'Unknown Sponsor',
+        sfcData.signerName ?? undefined,
+        sfcData.tierTitle,
+        sfcData.contractValue,
+        sfcData.contractCurrency,
+        sfcData.conference as Parameters<typeof notifySponsorContractSigned>[5],
+      )
+    }
+  } catch (slackError) {
+    console.error(
+      '[Adobe Sign webhook] Failed to send Slack notification:',
+      slackError,
+    )
   }
 }

@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import { getNonRecordingAttachments } from '@/lib/attachment/filters'
 import type { Attachment } from '@/lib/attachment/types'
 

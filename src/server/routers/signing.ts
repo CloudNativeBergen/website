@@ -33,6 +33,7 @@ interface SigningContractData {
     title?: string
   }
   conference?: {
+    _id?: string
     title?: string
     startDate?: string
     city?: string
@@ -40,6 +41,7 @@ interface SigningContractData {
     sponsorEmail?: string
     domains?: string[]
     socialLinks?: string[]
+    salesNotificationChannel?: string
   }
   contactPersons?: Array<{ name?: string; email?: string; isPrimary?: boolean }>
   contractValue?: number
@@ -62,7 +64,7 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   },
   "sponsor": sponsor->{ name },
   "tier": tier->{ title },
-  "conference": conference->{ title, startDate, city, organizer, sponsorEmail, domains, socialLinks },
+  "conference": conference->{ _id, title, startDate, city, organizer, sponsorEmail, domains, socialLinks, salesNotificationChannel },
   contactPersons[]{ name, email, isPrimary },
   contractValue,
   contractCurrency
@@ -241,6 +243,27 @@ export const signingRouter = router({
         )
       } catch (logError) {
         console.error('[signing] Failed to log signing activity:', logError)
+      }
+
+      // Send Slack notification (best-effort, non-critical)
+      try {
+        if (doc.conference) {
+          const { notifySponsorContractSigned } =
+            await import('@/lib/slack/notify')
+          await notifySponsorContractSigned(
+            doc.sponsor?.name || 'Unknown Sponsor',
+            input.signerName,
+            doc.tier?.title || null,
+            doc.contractValue ?? null,
+            doc.contractCurrency ?? null,
+            doc.conference as Parameters<typeof notifySponsorContractSigned>[5],
+          )
+        }
+      } catch (slackError) {
+        console.error(
+          '[signing] Failed to send Slack notification:',
+          slackError,
+        )
       }
 
       // Send confirmation email (best-effort, non-critical)

@@ -57,8 +57,10 @@ function getProposalStatusConfig(
       return hasApprovedTalk
         ? { color: 'gray', icon: MinusCircleIcon, label: 'Not selected' }
         : { color: 'red', icon: XCircleIcon, label: 'Rejected' }
+    case 'waitlisted':
+      return { color: 'orange', icon: ClockIcon, label: 'Waitlisted' }
     case 'withdrawn':
-      return { color: 'orange', icon: XCircleIcon, label: 'Withdrawn' }
+      return { color: 'purple', icon: XCircleIcon, label: 'Withdrawn' }
     case 'draft':
       return { color: 'gray', icon: DocumentTextIcon, label: 'Draft' }
     default:
@@ -85,11 +87,12 @@ export function CompactProposalList({
     const statusOrder: Record<Status, number> = {
       confirmed: 1,
       accepted: 2,
-      submitted: 3,
-      draft: 4,
-      rejected: 5,
-      withdrawn: 6,
-      deleted: 7,
+      waitlisted: 3,
+      submitted: 4,
+      draft: 5,
+      rejected: 6,
+      withdrawn: 7,
+      deleted: 8,
     }
     return statusOrder[a.status] - statusOrder[b.status]
   })

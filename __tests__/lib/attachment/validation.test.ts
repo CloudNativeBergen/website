@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals'
 import {
   validateAttachmentFile,
   formatFileSize,
@@ -58,7 +57,7 @@ describe('attachment/validation', () => {
     })
 
     it('should reject file exceeding size limit', () => {
-      const largeContent = new Array(51 * 1024 * 1024).fill('a').join('')
+      const largeContent = new Uint8Array(51 * 1024 * 1024)
       const file = new File([largeContent], 'large.pdf', {
         type: 'application/pdf',
       })
@@ -107,7 +106,7 @@ describe('attachment/validation', () => {
     })
 
     it('should accept file at exact size limit (50MB)', () => {
-      const exactContent = new Array(50 * 1024 * 1024).fill('a').join('')
+      const exactContent = new Uint8Array(50 * 1024 * 1024)
       const file = new File([exactContent], 'exact.pdf', {
         type: 'application/pdf',
       })

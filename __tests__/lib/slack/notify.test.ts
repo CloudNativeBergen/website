@@ -1,30 +1,23 @@
 /**
- * @jest-environment node
+ * @vitest-environment node
  */
-import {
-  describe,
-  it,
-  expect,
-  jest,
-  beforeEach,
-  afterEach,
-} from '@jest/globals'
+import type { MockedFunction } from 'vitest'
 import { Format, Level, Language, Status, Action } from '@/lib/proposal/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import type { Conference } from '@/lib/conference/types'
 
-const mockPostSlackMessage = jest.fn() as jest.MockedFunction<
+const mockPostSlackMessage = vi.fn() as MockedFunction<
   typeof import('@/lib/slack/client').postSlackMessage
 >
 
-jest.mock('@/lib/slack/client', () => ({
+vi.mock('@/lib/slack/client', () => ({
   postSlackMessage: (
     ...args: Parameters<typeof import('@/lib/slack/client').postSlackMessage>
   ) => mockPostSlackMessage(...args),
 }))
 
-jest.mock('@/lib/speaker/sanity', () => ({
-  getSpeaker: jest
+vi.mock('@/lib/speaker/sanity', () => ({
+  getSpeaker: vi
     .fn<() => Promise<{ speaker: { name: string }; err: null }>>()
     .mockResolvedValue({
       speaker: { name: 'Resolved Speaker' },
@@ -110,7 +103,7 @@ describe('Slack notifications', () => {
   })
 
   afterEach(() => {
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 
   describe('notifyNewProposal', () => {
@@ -242,7 +235,7 @@ describe('Slack notifications', () => {
 
     it('should catch and log errors from postSlackMessage', async () => {
       mockPostSlackMessage.mockRejectedValue(new Error('Slack API failed'))
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
 

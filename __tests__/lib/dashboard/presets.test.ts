@@ -1,7 +1,6 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect } from '@jest/globals'
 import {
   PRESET_CONFIGS,
   EMPTY_PRESET,

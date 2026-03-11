@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi } from 'vitest'
 
 import { NextAuthRequest } from '@/lib/auth'
 import { NextRequest } from 'next/server'
@@ -15,7 +15,7 @@ export class AuthError extends Error {
 }
 
 const NextAuth = () => ({
-  auth: jest.fn((handler: (req: NextAuthRequest, ctx: any) => any) => {
+  auth: vi.fn((handler: (req: NextAuthRequest, ctx: any) => any) => {
     return (req: NextAuthRequest, ctx: any) => {
       if (!req) req = {} as NextAuthRequest
 
@@ -53,11 +53,11 @@ const NextAuth = () => ({
       return handler(req, ctx)
     }
   }),
-  signIn: jest.fn(),
-  signOut: jest.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
   handlers: {
-    GET: jest.fn(),
-    POST: jest.fn(),
+    GET: vi.fn(),
+    POST: vi.fn(),
   },
   AuthError: AuthError,
 })

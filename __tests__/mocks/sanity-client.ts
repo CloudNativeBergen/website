@@ -1,14 +1,14 @@
-import { jest } from '@jest/globals'
+import { vi } from 'vitest'
 
-export const createClient = jest.fn(() => ({
-  fetch: jest.fn(),
-  create: jest.fn(),
-  patch: jest.fn(),
-  delete: jest.fn(),
-  transaction: jest.fn(() => ({
-    create: jest.fn(),
-    patch: jest.fn(),
-    delete: jest.fn(),
-    commit: jest.fn(),
+export const createClient = vi.fn(() => ({
+  fetch: vi.fn(),
+  create: vi.fn(),
+  patch: vi.fn(),
+  delete: vi.fn(),
+  transaction: vi.fn(() => ({
+    create: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    commit: vi.fn(),
   })),
 }))

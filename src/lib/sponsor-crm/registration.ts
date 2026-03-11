@@ -35,8 +35,8 @@ export interface RegistrationSubmission {
   billing: BillingInfo
   logo: string
   logoBright?: string | null
-  orgNumber?: string
-  address?: string
+  orgNumber: string
+  address: string
   signerName?: string
   signerEmail?: string
 }
@@ -189,6 +189,20 @@ export async function completeRegistration(
   if (!data.logo) {
     return {
       error: new Error('Company logo is required to complete registration'),
+    }
+  }
+
+  if (!data.address?.trim()) {
+    return {
+      error: new Error('Company address is required to complete registration'),
+    }
+  }
+
+  if (!data.orgNumber?.trim()) {
+    return {
+      error: new Error(
+        'Organization number is required to complete registration',
+      ),
     }
   }
 

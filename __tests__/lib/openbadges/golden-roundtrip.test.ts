@@ -7,7 +7,6 @@
  * 3. Sign and verify credentials in JWT format
  */
 
-import { describe, it, expect } from '@jest/globals'
 import { createCredential } from '@/lib/openbadges/credential'
 import { validateCredential } from '@/lib/openbadges/validator'
 import { signCredentialJWT, verifyCredentialJWT } from '@/lib/openbadges/crypto'

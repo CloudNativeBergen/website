@@ -1,4 +1,4 @@
-import { ProposalInput, isWorkshopFormat } from './types'
+import { ProposalInput } from './types'
 
 export const PROPOSAL_VALIDATION_MESSAGES = {
   TITLE_REQUIRED: 'Title is required',
@@ -9,20 +9,12 @@ export const PROPOSAL_VALIDATION_MESSAGES = {
   TOPICS_REQUIRED: 'At least one topic is required',
   SPEAKERS_REQUIRED: 'At least one speaker is required',
   TOS_REQUIRED: 'You must accept the terms of service',
-  CAPACITY_REQUIRED: 'Workshop capacity is required for workshop formats',
 } as const
-
-export interface ProposalValidationOptions {
-  requireSpeakers?: boolean
-  requireCapacity?: boolean
-}
 
 export function validateProposalForm(
   proposal: ProposalInput,
-  options: ProposalValidationOptions = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {}
-  const { requireCapacity = true } = options
 
   if (!proposal.title || proposal.title.trim() === '') {
     errors.title = PROPOSAL_VALIDATION_MESSAGES.TITLE_REQUIRED
@@ -52,15 +44,6 @@ export function validateProposalForm(
     errors.tos = PROPOSAL_VALIDATION_MESSAGES.TOS_REQUIRED
   }
 
-  // Workshop-specific validation
-  if (
-    requireCapacity &&
-    isWorkshopFormat(proposal.format) &&
-    !proposal.capacity
-  ) {
-    errors.capacity = PROPOSAL_VALIDATION_MESSAGES.CAPACITY_REQUIRED
-  }
-
   return errors
 }
 
@@ -68,7 +51,7 @@ export function validateProposalForAdmin(
   proposal: ProposalInput,
   speakerIds: string[],
 ): Record<string, string> {
-  const errors = validateProposalForm(proposal, { requireSpeakers: true })
+  const errors = validateProposalForm(proposal)
 
   if (!speakerIds || speakerIds.length === 0) {
     errors.speakers = PROPOSAL_VALIDATION_MESSAGES.SPEAKERS_REQUIRED

@@ -1,12 +1,7 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
-import { describe, it, expect as jestExpect, jest } from '@jest/globals'
 import { render, screen, fireEvent } from '@testing-library/react'
-import '@testing-library/jest-dom'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const expect = jestExpect as any
 
 import {
   BoardViewSwitcher,
@@ -15,46 +10,38 @@ import {
 
 describe('BoardViewSwitcher', () => {
   const setup = (currentView: BoardView = 'pipeline') => {
-    const onViewChange = jest.fn<(view: BoardView) => void>()
-    const result = render(
+    const onViewChange = vi.fn<(view: BoardView) => void>()
+    render(
       <BoardViewSwitcher
         currentView={currentView}
         onViewChange={onViewChange}
       />,
     )
-    return { onViewChange, ...result }
+    return { onViewChange }
   }
 
-  it('renders all three view buttons with labels', () => {
+  it('renders all three view buttons', () => {
     setup()
     expect(screen.getByText('Full Pipeline')).toBeInTheDocument()
     expect(screen.getByText('Contract Board')).toBeInTheDocument()
     expect(screen.getByText('Invoice Board')).toBeInTheDocument()
   })
 
-  it('calls onViewChange when clicking a different view', () => {
+  it('calls onViewChange with contract when clicking Contract Board', () => {
     const { onViewChange } = setup('pipeline')
-    const buttons = screen.getAllByRole('button')
-
-    // Click the contract button (second one)
-    fireEvent.click(buttons[1])
+    fireEvent.click(screen.getByText('Contract Board'))
     expect(onViewChange).toHaveBeenCalledWith('contract')
+  })
 
-    // Click the invoice button (third one)
-    fireEvent.click(buttons[2])
+  it('calls onViewChange with invoice when clicking Invoice Board', () => {
+    const { onViewChange } = setup('pipeline')
+    fireEvent.click(screen.getByText('Invoice Board'))
     expect(onViewChange).toHaveBeenCalledWith('invoice')
   })
 
-  it('calls onViewChange when clicking the current view', () => {
+  it('calls onViewChange with pipeline when clicking Full Pipeline', () => {
     const { onViewChange } = setup('pipeline')
-    const buttons = screen.getAllByRole('button')
-    fireEvent.click(buttons[0])
+    fireEvent.click(screen.getByText('Full Pipeline'))
     expect(onViewChange).toHaveBeenCalledWith('pipeline')
-  })
-
-  it('renders three buttons for the three views', () => {
-    setup()
-    const buttons = screen.getAllByRole('button')
-    expect(buttons).toHaveLength(3)
   })
 })

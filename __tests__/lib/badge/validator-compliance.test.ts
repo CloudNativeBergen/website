@@ -17,7 +17,6 @@
  * @see https://github.com/1EdTech/digital-credentials-public-validator
  */
 
-import { describe, it, expect } from '@jest/globals'
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { createTestConfiguration } from '@/lib/badge/config'
 import { validateCredential, verifyCredentialJWT } from '@/lib/openbadges'

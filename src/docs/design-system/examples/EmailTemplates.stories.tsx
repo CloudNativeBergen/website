@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { ProposalRejectTemplate } from '@/components/email/ProposalRejectTemplate'
+import { ProposalWaitlistTemplate } from '@/components/email/ProposalWaitlistTemplate'
 import { ContractSigningTemplate } from '@/components/email/ContractSigningTemplate'
 import { ContractSignedTemplate } from '@/components/email/ContractSignedTemplate'
 import { ContractReminderTemplate } from '@/components/email/ContractReminderTemplate'
@@ -178,6 +179,37 @@ export const EmailTemplates: Story = {
               eventDate="June 15-16, 2026"
               eventUrl="https://cloudnativedays.no"
               comment="While we loved the topic, we received many similar introductory submissions this year. Consider focusing on a more specific use case or advanced pattern for next time!"
+              socialLinks={[
+                'https://twitter.com/cloudnativeno',
+                'https://linkedin.com/company/cloudnativeno',
+              ]}
+            />
+          </EmailPreviewFrame>
+        </section>
+
+        {/* Live Waitlist Email */}
+        <section className="mb-16">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
+            Proposal Waitlisted Email
+          </h2>
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent when a speaker&apos;s proposal is placed on the waitlist as a
+            backup.
+          </p>
+          <EmailPreviewFrame
+            from="Cloud Native Days Norway <hello@cloudnativedays.no>"
+            to="charlie.davis@example.com"
+            subject="Your proposal has been waitlisted"
+            time="Just now"
+          >
+            <ProposalWaitlistTemplate
+              speakerName="Charlie Davis"
+              proposalTitle="Cloud Native CI/CD Pipelines"
+              eventName="Cloud Native Days Norway 2026"
+              eventLocation="Oslo, Norway"
+              eventDate="June 15-16, 2026"
+              eventUrl="https://cloudnativedays.no"
+              comment="Your proposal scored highly and we'd love to include it if a slot opens up. We'll notify you as soon as possible!"
               socialLinks={[
                 'https://twitter.com/cloudnativeno',
                 'https://linkedin.com/company/cloudnativeno',
