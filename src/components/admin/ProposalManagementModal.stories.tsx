@@ -14,6 +14,7 @@ import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { fn } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
 
 const mockTopics: Topic[] = [
   {
@@ -106,6 +107,25 @@ const mockEditingProposal: ProposalExisting = {
   conference: { _type: 'reference', _ref: 'conf-1' },
 }
 
+const mockSpeakers = [
+  {
+    _id: 'speaker-1',
+    name: 'Alice Johnson',
+    title: 'Platform Engineer',
+    email: 'alice@example.com',
+    image: null,
+    slug: 'alice-johnson',
+  },
+  {
+    _id: 'speaker-2',
+    name: 'Bob Smith',
+    title: 'SRE Lead',
+    email: 'bob@example.com',
+    image: null,
+    slug: 'bob-smith',
+  },
+]
+
 const meta: Meta<typeof ProposalManagementModal> = {
   title: 'Systems/Proposals/Admin/ProposalManagementModal',
   component: ProposalManagementModal,
@@ -116,6 +136,45 @@ const meta: Meta<typeof ProposalManagementModal> = {
         component:
           'A full-featured modal for creating or editing proposals from the admin interface. Includes speaker multi-select, the shared ProposalDetailsForm (title, description, format, level, audience, topics, outline), validation errors, and keyboard shortcuts (Cmd+S to save).',
       },
+    },
+    msw: {
+      handlers: [
+        http.get('/api/trpc/speakers.list', () => {
+          return HttpResponse.json({
+            result: { data: mockSpeakers },
+          })
+        }),
+        http.post('/api/trpc/proposal.admin.create', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                _id: 'new-proposal',
+                _rev: '1',
+                _type: 'talk',
+                _createdAt: new Date().toISOString(),
+                _updatedAt: new Date().toISOString(),
+                title: 'New Proposal',
+                status: 'submitted',
+              },
+            },
+          })
+        }),
+        http.post('/api/trpc/proposal.admin.update', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                _id: 'proposal-1',
+                _rev: '2',
+                _type: 'talk',
+                _createdAt: '2024-11-15T10:30:00Z',
+                _updatedAt: new Date().toISOString(),
+                title: 'Updated Proposal',
+                status: 'submitted',
+              },
+            },
+          })
+        }),
+      ],
     },
   },
   decorators: [

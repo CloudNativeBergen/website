@@ -34,3 +34,10 @@ export const ResendBadgeEmailInputSchema = z.object({
 export const DeleteBadgeInputSchema = z.object({
   badgeId: z.string().min(1, 'Badge ID is required'),
 })
+
+export const ValidateBadgeInputSchema = z.object({
+  svg: z
+    .string()
+    .min(1, 'SVG content is required')
+    .max(5 * 1024 * 1024, 'SVG content must be less than 5MB'),
+})

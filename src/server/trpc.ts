@@ -5,11 +5,23 @@ import { getAuthSession } from '@/lib/auth'
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({ url: opts.req.url })
 
+  // Extract IP address from headers
+  const forwardedFor = opts.req.headers.get('x-forwarded-for')
+  const realIp = opts.req.headers.get('x-real-ip')
+
+  let ipAddress = ''
+  if (forwardedFor) {
+    ipAddress = forwardedFor.split(',')[0].trim()
+  } else if (realIp) {
+    ipAddress = realIp
+  }
+
   return {
     req: opts.req,
     session,
     speaker: session?.speaker,
     user: session?.user,
+    ipAddress,
   }
 }
 
