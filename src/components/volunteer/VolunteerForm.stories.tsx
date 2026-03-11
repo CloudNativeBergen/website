@@ -1,6 +1,28 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse, delay } from 'msw'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import VolunteerForm from './VolunteerForm'
+
+async function fillAndSubmit(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement)
+  await userEvent.type(canvas.getByLabelText('Full Name *'), 'Jane Doe')
+  await userEvent.type(
+    canvas.getByLabelText('Email Address *'),
+    'jane@example.com',
+  )
+  await userEvent.type(
+    canvas.getByLabelText('Phone Number *'),
+    '+47 123 45 678',
+  )
+  await userEvent.selectOptions(
+    canvas.getByLabelText('Occupation *'),
+    'working',
+  )
+  await userEvent.click(canvas.getByLabelText('Data Processing Consent'))
+  await userEvent.click(
+    canvas.getByRole('button', { name: 'Submit Application' }),
+  )
+}
 
 const successHandler = http.post('/api/trpc/volunteer.create', async () => {
   await delay(500)
@@ -60,6 +82,21 @@ export const Default: Story = {
   },
 }
 
+export const SubmissionSuccess: Story = {
+  args: {
+    conferenceId: 'conf-2025',
+  },
+  play: async ({ canvasElement }) => {
+    await fillAndSubmit(canvasElement)
+    const canvas = within(canvasElement)
+    await waitFor(() => {
+      expect(
+        canvas.getByText(/thank you for volunteering/i),
+      ).toBeInTheDocument()
+    })
+  },
+}
+
 export const SubmissionError: Story = {
   args: {
     conferenceId: 'conf-2025',
@@ -68,5 +105,14 @@ export const SubmissionError: Story = {
     msw: {
       handlers: [errorHandler],
     },
+  },
+  play: async ({ canvasElement }) => {
+    await fillAndSubmit(canvasElement)
+    const canvas = within(canvasElement)
+    await waitFor(() => {
+      expect(
+        canvas.getByText(/a volunteer with this email already exists/i),
+      ).toBeInTheDocument()
+    })
   },
 }
