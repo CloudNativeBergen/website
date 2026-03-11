@@ -261,12 +261,12 @@ export const volunteerRouter = router({
             organizer: currentConf.organizer,
             socialLinks:
               Array.isArray(currentConf.socialLinks) &&
-              currentConf.socialLinks.length > 0 &&
-              typeof currentConf.socialLinks[0] === 'object'
+                currentConf.socialLinks.length > 0 &&
+                typeof currentConf.socialLinks[0] === 'object'
                 ? (currentConf.socialLinks as unknown as Array<{
-                    platform: string
-                    url: string
-                  }>)
+                  platform: string
+                  url: string
+                }>)
                 : [],
           }
         }
