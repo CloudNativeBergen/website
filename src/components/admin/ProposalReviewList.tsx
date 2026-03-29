@@ -4,6 +4,7 @@ import { StarIcon } from '@heroicons/react/24/solid'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
 import { speakerImageUrl } from '@/lib/sanity/client'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalReviewListProps {
@@ -78,7 +79,7 @@ export function ProposalReviewList({
             {/* Reviewer Info */}
             <div className="mb-3 flex items-start space-x-3">
               <div className="shrink-0">
-                {reviewer?.image ? (
+                {reviewer?.image && typeof reviewer.image === 'string' ? (
                   <img
                     src={speakerImageUrl(reviewer.image, {
                       width: 64,
@@ -92,11 +93,7 @@ export function ProposalReviewList({
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                      {reviewer?.name?.charAt(0) || 'U'}
-                    </span>
-                  </div>
+                  <MissingAvatar name={reviewer?.name || 'Unknown'} size={32} />
                 )}
               </div>
               <div className="min-w-0 flex-1">

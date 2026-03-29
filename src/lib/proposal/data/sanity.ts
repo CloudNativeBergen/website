@@ -97,7 +97,7 @@ export async function getProposal({
           ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
-          _id, name, email, image
+          _id, name, email, "image": coalesce(image.asset->url, imageURL)
         }
       }`
           : ''
@@ -204,7 +204,7 @@ export async function getProposals({
         ? `,"reviews": *[_type == "review" && proposal._ref == ^._id]{
       ...,
       reviewer-> {
-        _id, name, email, image
+        _id, name, email, "image": coalesce(image.asset->url, imageURL)
       }
     }`
         : ''
@@ -498,7 +498,7 @@ export async function searchProposals({
       "reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
-          _id, name, email, image
+          _id, name, email, "image": coalesce(image.asset->url, imageURL)
         }
       }`
           : ''
