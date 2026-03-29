@@ -10,7 +10,7 @@ import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
 import { ShowMore } from '@/components/ShowMore'
-import { UserIcon } from '@heroicons/react/24/solid'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
@@ -149,16 +149,18 @@ async function CachedSpeakerContent({
                 </div>
 
                 <div className="mb-6 flex justify-center lg:justify-start">
-                  {speaker.image ? (
+                  {speaker.image && typeof speaker.image === 'string' ? (
                     <img
                       src={speakerImageUrl(speaker.image)}
                       alt={speaker.name}
                       className="h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:h-64 lg:w-64 dark:ring-gray-700"
                     />
                   ) : (
-                    <div className="flex h-48 w-48 items-center justify-center rounded-full bg-blue-100 shadow-lg ring-4 ring-white lg:h-64 lg:w-64 dark:bg-blue-900/30 dark:ring-gray-700">
-                      <UserIcon className="h-24 w-24 text-blue-500 lg:h-32 lg:w-32 dark:text-blue-400" />
-                    </div>
+                    <MissingAvatar
+                      name={speaker.name}
+                      size={256}
+                      className="rounded-full shadow-lg ring-4 ring-white dark:ring-gray-700"
+                    />
                   )}
                 </div>
 

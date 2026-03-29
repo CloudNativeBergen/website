@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import {
-  UserIcon,
   ClockIcon,
   CalendarIcon,
   TagIcon,
@@ -24,6 +23,7 @@ import { Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { speakerImageUrl } from '@/lib/sanity/client'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
@@ -73,7 +73,7 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
       </div>
       <div>
         <div className="float-left mr-4 mb-2">
-          {speaker.image ? (
+          {speaker.image && typeof speaker.image === 'string' ? (
             <img
               src={speakerImageUrl(speaker.image, {
                 width: 128,
@@ -87,9 +87,11 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
               loading="lazy"
             />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-              <UserIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-            </div>
+            <MissingAvatar
+              name={speaker.name}
+              size={64}
+              className="rounded-full"
+            />
           )}
         </div>
         <div className="min-w-0">

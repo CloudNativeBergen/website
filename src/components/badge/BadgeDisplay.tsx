@@ -85,9 +85,10 @@ export function BadgeDisplay({
     })
   }
 
-  const speakerImgUrl = speaker.image
-    ? speakerImageUrl(speaker.image)
-    : undefined
+  const speakerImgUrl =
+    speaker.image && typeof speaker.image === 'string'
+      ? speakerImageUrl(speaker.image)
+      : undefined
 
   // Get first talk for evidence (if available)
   const speakerTalks =

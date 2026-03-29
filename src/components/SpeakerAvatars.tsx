@@ -1,6 +1,7 @@
 import { Speaker } from '@/lib/speaker/types'
 import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { Reference } from 'sanity'
 
 interface SpeakerAvatarsProps {
@@ -109,11 +110,13 @@ export function SpeakerAvatars({
             }}
             title={showTooltip ? speaker.name : undefined}
           >
-            {speaker.image ? (
-              <img
+            {speaker.image && typeof speaker.image === 'string' ? (
+              <SpeakerAvatarImage
                 src={speaker.image}
-                alt={speaker.name}
-                className="absolute inset-0 h-full w-full rounded-full object-cover object-center"
+                name={speaker.name}
+                size={imageDimensions[size].width / 2}
+                className="absolute inset-0 rounded-full"
+                textSizeClass={classes.text}
               />
             ) : (
               <MissingAvatar

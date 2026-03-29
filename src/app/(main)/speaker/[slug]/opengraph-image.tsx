@@ -259,13 +259,14 @@ export default async function Image({
   }
 
   const primaryTalk = talks[0]
-  const speakerImgUrl = speakerData.image
-    ? speakerImageUrl(speakerData.image, {
-        width: 500,
-        height: 500,
-        fit: 'crop',
-      })
-    : null
+  const speakerImgUrl =
+    speakerData.image && typeof speakerData.image === 'string'
+      ? speakerImageUrl(speakerData.image, {
+          width: 500,
+          height: 500,
+          fit: 'crop',
+        })
+      : null
 
   const ingressSponsors = conferenceData.sponsors.filter(
     (s) => s.tier?.title === 'Ingress',

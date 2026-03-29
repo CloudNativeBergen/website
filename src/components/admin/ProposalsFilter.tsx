@@ -13,7 +13,7 @@ import {
 } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
-import { getStatusBadgeStyle } from './utils'
+import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 
 export enum ReviewStatus {
   unreviewed = 'unreviewed',
@@ -87,7 +87,7 @@ export function ProposalsFilter({
                 keepOpen
               >
                 <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeStyle(status)}`}
+                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeConfig(status).bgColor} ${getStatusBadgeConfig(status).textColor}`}
                 >
                   {statuses.get(status)}
                 </span>

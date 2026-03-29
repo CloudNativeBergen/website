@@ -2,7 +2,6 @@
 
 import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { UserIcon as UserIconSolid } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Speaker, Flags, flags } from '@/lib/speaker/types'
@@ -15,6 +14,7 @@ import {
 } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
 import { speakerImageUrl } from '@/lib/sanity/client'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { ShowMore } from '@/components/ShowMore'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
@@ -67,16 +67,18 @@ export default function SpeakerProfilePreview({
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <div className="sticky top-8 space-y-6">
-              {speaker.image ? (
+              {speaker.image && typeof speaker.image === 'string' ? (
                 <img
                   src={speakerImageUrl(speaker.image)}
                   alt={speaker.name}
                   className="mx-auto h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:mx-0 lg:h-64 lg:w-64 dark:ring-gray-700"
                 />
               ) : (
-                <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-full bg-blue-100 shadow-lg ring-4 ring-white lg:mx-0 lg:h-64 lg:w-64 dark:bg-blue-900/30 dark:ring-gray-700">
-                  <UserIconSolid className="h-24 w-24 text-blue-500 dark:text-blue-400" />
-                </div>
+                <MissingAvatar
+                  name={speaker.name}
+                  size={256}
+                  className="mx-auto rounded-full shadow-lg ring-4 ring-white lg:mx-0 dark:ring-gray-700"
+                />
               )}
 
               {speaker.flags?.includes(Flags.localSpeaker) && (
