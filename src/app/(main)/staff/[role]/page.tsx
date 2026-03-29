@@ -18,10 +18,10 @@ async function CachedStaffContent({ role }: { role: string }) {
             Photographers
           </h1>
           {staff.data.length === 0 && 'No staff found'}
-          {staff.data.map((member) => {
+          {staff.data.map((member, index) => {
             return (
               <div
-                key={member.id ?? Math.floor(Math.random() * 10000)}
+                key={member.id ?? `staff-${index}`}
                 className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8"
               >
                 <h3 className="font-jetbrains text-3xl font-bold tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
