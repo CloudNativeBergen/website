@@ -56,7 +56,9 @@ export async function getProposal({
             && status != "draft"
           ]{
             _id, title, status, _createdAt,
-            topics[]-> { _id, title, color }
+            topics[]-> { _id, title, color },
+            "reviewCount": count(*[_type == "review" && proposal._ref == ^._id]),
+            "reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}
           },`
             : ''
         }
@@ -70,7 +72,9 @@ export async function getProposal({
           ]{
             _id, title, status, _createdAt,
             conference-> { _id, title, startDate },
-            topics[]-> { _id, title, color }
+            topics[]-> { _id, title, color },
+            "reviewCount": count(*[_type == "review" && proposal._ref == ^._id]),
+            "reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}
           }`
             : ''
         }

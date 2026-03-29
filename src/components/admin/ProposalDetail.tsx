@@ -25,12 +25,25 @@ import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import { RatingDisplay } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
+}
+
+function computeAverageRating(
+  talkData: Record<string, unknown>,
+): { reviewCount: number; averageRating: number } | null {
+  const reviewCount = (talkData.reviewCount as number) || 0
+  const reviewScores = talkData.reviewScores as { total: number }[] | undefined
+  if (!reviewCount || !reviewScores || reviewScores.length === 0) return null
+  const totalScore = reviewScores.reduce((sum, r) => sum + (r.total || 0), 0)
+  const maxPossible = reviewScores.length * 15
+  const rating = maxPossible > 0 ? (totalScore / maxPossible) * 5 : 0
+  return { reviewCount, averageRating: rating }
 }
 
 function isTopicObject(topic: unknown): topic is Topic {
@@ -233,49 +246,65 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                     {speakers
                       .flatMap((speaker) => speaker.submittedTalks || [])
                       .filter((talk) => talk._id !== proposal._id)
-                      .map((talk) => (
-                        <div
-                          key={talk._id}
-                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                              {talk.title}
-                            </p>
-                            <div className="mt-1 flex items-center space-x-2">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
-                                  const config = getStatusBadgeConfig(
-                                    talk.status,
-                                  )
-                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
-                                })()}`}
-                              >
-                                {statuses.get(talk.status) || talk.status}
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatDateSafe(talk._createdAt)}
-                              </span>
-                            </div>
-                            {talk.topics && talk.topics.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {talk.topics.map((topic) => {
-                                  if (!isTopicObject(topic)) return null
+                      .map((talk) => {
+                        const rating = computeAverageRating(
+                          talk as unknown as Record<string, unknown>,
+                        )
 
-                                  return (
-                                    <span
-                                      key={topic._id}
-                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
-                                    >
-                                      {topic.title}
-                                    </span>
-                                  )
-                                })}
+                        return (
+                          <div
+                            key={talk._id}
+                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                                {talk.title}
+                              </p>
+                              <div className="mt-1 flex items-center space-x-2">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                    const config = getStatusBadgeConfig(
+                                      talk.status,
+                                    )
+                                    return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                  })()}`}
+                                >
+                                  {statuses.get(talk.status) || talk.status}
+                                </span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {formatDateSafe(talk._createdAt)}
+                                </span>
                               </div>
-                            )}
+                              {rating && (
+                                <div className="mt-1">
+                                  <RatingDisplay
+                                    rating={rating.averageRating}
+                                    reviewCount={rating.reviewCount}
+                                    size="sm"
+                                    showText={true}
+                                  />
+                                </div>
+                              )}
+                              {talk.topics && talk.topics.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {talk.topics.map((topic) => {
+                                    if (!isTopicObject(topic)) return null
+
+                                    return (
+                                      <span
+                                        key={topic._id}
+                                        className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
+                                      >
+                                        {topic.title}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                   </div>
                 </div>
               )}
@@ -294,67 +323,83 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   <div className="space-y-3">
                     {speakers
                       .flatMap((speaker) => speaker.previousAcceptedTalks || [])
-                      .map((talk) => (
-                        <div
-                          key={talk._id}
-                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                              {talk.title}
-                            </p>
-                            <div className="mt-1 flex items-center space-x-2">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
-                                  const config = getStatusBadgeConfig(
-                                    talk.status,
-                                  )
-                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
-                                })()}`}
-                              >
-                                {statuses.get(talk.status) || talk.status}
-                              </span>
-                              {talk.conference && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {(() => {
-                                    const isConferenceObject = (
-                                      c: unknown,
-                                    ): c is {
-                                      title: string
-                                      startDate: string
-                                    } =>
-                                      c !== null &&
-                                      typeof c === 'object' &&
-                                      'title' in c &&
-                                      'startDate' in c
+                      .map((talk) => {
+                        const rating = computeAverageRating(
+                          talk as unknown as Record<string, unknown>,
+                        )
 
-                                    if (isConferenceObject(talk.conference)) {
-                                      return `${talk.conference.title} (${formatDateSafe(talk.conference.startDate)})`
-                                    }
-                                    return 'Conference'
-                                  })()}
+                        return (
+                          <div
+                            key={talk._id}
+                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                                {talk.title}
+                              </p>
+                              <div className="mt-1 flex items-center space-x-2">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                    const config = getStatusBadgeConfig(
+                                      talk.status,
+                                    )
+                                    return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                  })()}`}
+                                >
+                                  {statuses.get(talk.status) || talk.status}
                                 </span>
+                                {talk.conference && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {(() => {
+                                      const isConferenceObject = (
+                                        c: unknown,
+                                      ): c is {
+                                        title: string
+                                        startDate: string
+                                      } =>
+                                        c !== null &&
+                                        typeof c === 'object' &&
+                                        'title' in c &&
+                                        'startDate' in c
+
+                                      if (isConferenceObject(talk.conference)) {
+                                        return `${talk.conference.title} (${formatDateSafe(talk.conference.startDate)})`
+                                      }
+                                      return 'Conference'
+                                    })()}
+                                  </span>
+                                )}
+                              </div>
+                              {rating && (
+                                <div className="mt-1">
+                                  <RatingDisplay
+                                    rating={rating.averageRating}
+                                    reviewCount={rating.reviewCount}
+                                    size="sm"
+                                    showText={true}
+                                  />
+                                </div>
+                              )}
+                              {talk.topics && talk.topics.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {talk.topics.map((topic) => {
+                                    if (!isTopicObject(topic)) return null
+
+                                    return (
+                                      <span
+                                        key={topic._id}
+                                        className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
+                                      >
+                                        {topic.title}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
                               )}
                             </div>
-                            {talk.topics && talk.topics.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {talk.topics.map((topic) => {
-                                  if (!isTopicObject(topic)) return null
-
-                                  return (
-                                    <span
-                                      key={topic._id}
-                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
-                                    >
-                                      {topic.title}
-                                    </span>
-                                  )
-                                })}
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                   </div>
                 </div>
               )}
