@@ -103,7 +103,6 @@ export default async function ProposalPage({
 
       if (!proposalId && conference && !loadingError) {
         const { getProposals } = await import('@/lib/proposal/data/sanity')
-        const { Status } = await import('@/lib/proposal/types')
         const { proposals: existingProposals } = await getProposals({
           speakerId: session.speaker._id,
           conferenceId: conference._id,

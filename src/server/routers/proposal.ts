@@ -452,6 +452,27 @@ export const proposalRouter = router({
           })
         }
 
+        // Enforce cap when submitting a draft (draft → submitted transition)
+        if (
+          proposal.status === Status.draft &&
+          status === Status.submitted &&
+          !ctx.speaker.isOrganizer
+        ) {
+          const { proposals: existingProposals } = await getProposals({
+            speakerId: ctx.speaker._id,
+            conferenceId: conference._id,
+            returnAll: false,
+          })
+
+          if (countActiveProposals(existingProposals) >= 3) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+            })
+          }
+        }
+
         // Handle deletion separately
         if (status === Status.deleted) {
           const { err: deleteError } = await deleteProposal(id)
