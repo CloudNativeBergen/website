@@ -2,6 +2,7 @@ import {
   extractSpeakersFromProposal,
   extractSpeakerIds,
   calculateReviewScore,
+  countActiveProposals,
 } from '@/lib/proposal/utils'
 import { Status, Language, Format, Level, Audience } from '@/lib/proposal/types'
 import type { ProposalExisting } from '@/lib/proposal/types'

@@ -37,6 +37,7 @@ import { createReference } from '@/lib/sanity/helpers'
 import type { ProposalInput } from '@/lib/proposal/types'
 import { Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
+import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
@@ -253,9 +254,7 @@ export const proposalRouter = router({
           returnAll: false,
         })
 
-        const proposalCount = (existingProposals || []).filter(
-          (p) => p.status !== Status.deleted && p.status !== Status.draft,
-        ).length
+        const proposalCount = countActiveProposals(existingProposals)
 
         if (proposalCount >= 3) {
           throw new TRPCError({

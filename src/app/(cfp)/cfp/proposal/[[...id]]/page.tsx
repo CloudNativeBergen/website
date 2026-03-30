@@ -9,6 +9,7 @@ import {
   ProposalExisting,
 } from '@/lib/proposal/types'
 import { getProposalSanity } from '@/lib/proposal/server'
+import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
@@ -109,9 +110,7 @@ export default async function ProposalPage({
           returnAll: false,
         })
 
-        const proposalCount = (existingProposals || []).filter(
-          (p) => p.status !== Status.deleted && p.status !== Status.draft,
-        ).length
+        const proposalCount = countActiveProposals(existingProposals)
 
         if (proposalCount >= 3) {
           loadingError = {
