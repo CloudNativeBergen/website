@@ -1,6 +1,14 @@
-import { ProposalExisting } from './types'
+import { ProposalExisting, Status } from './types'
 import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
 import { Reference } from 'sanity'
+
+export function countActiveProposals(
+  proposals: ProposalExisting[] | null | undefined,
+): number {
+  return (proposals || []).filter(
+    (p) => p.status !== Status.deleted && p.status !== Status.draft,
+  ).length
+}
 
 export function extractSpeakersFromProposal(
   proposal: ProposalExisting,

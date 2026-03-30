@@ -37,6 +37,7 @@ import { createReference } from '@/lib/sanity/helpers'
 import type { ProposalInput } from '@/lib/proposal/types'
 import { Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
+import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
@@ -253,9 +254,7 @@ export const proposalRouter = router({
           returnAll: false,
         })
 
-        const proposalCount = (existingProposals || []).filter(
-          (p) => p.status !== Status.deleted,
-        ).length
+        const proposalCount = countActiveProposals(existingProposals)
 
         if (proposalCount >= 3) {
           throw new TRPCError({
@@ -451,6 +450,27 @@ export const proposalRouter = router({
             code: 'BAD_REQUEST',
             message: `Invalid action ${action} for status ${proposal.status}`,
           })
+        }
+
+        // Enforce cap when submitting a draft (draft → submitted transition)
+        if (
+          proposal.status === Status.draft &&
+          status === Status.submitted &&
+          !ctx.speaker.isOrganizer
+        ) {
+          const { proposals: existingProposals } = await getProposals({
+            speakerId: ctx.speaker._id,
+            conferenceId: conference._id,
+            returnAll: false,
+          })
+
+          if (countActiveProposals(existingProposals) >= 3) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+            })
+          }
         }
 
         // Handle deletion separately

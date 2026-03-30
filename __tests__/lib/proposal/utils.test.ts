@@ -2,6 +2,7 @@ import {
   extractSpeakersFromProposal,
   extractSpeakerIds,
   calculateReviewScore,
+  countActiveProposals,
 } from '@/lib/proposal/utils'
 import { Status, Language, Format, Level, Audience } from '@/lib/proposal/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
@@ -201,5 +202,81 @@ describe('calculateReviewScore', () => {
       },
     ]
     expect(calculateReviewScore(reviews, 'speaker')).toBe(0)
+  })
+})
+
+describe('countActiveProposals', () => {
+  it('returns 0 for null', () => {
+    expect(countActiveProposals(null)).toBe(0)
+  })
+
+  it('returns 0 for undefined', () => {
+    expect(countActiveProposals(undefined)).toBe(0)
+  })
+
+  it('returns 0 for empty array', () => {
+    expect(countActiveProposals([])).toBe(0)
+  })
+
+  it('counts submitted proposals', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.submitted }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(2)
+  })
+
+  it('excludes draft proposals from count', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.draft }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(1)
+  })
+
+  it('excludes deleted proposals from count', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.deleted }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(1)
+  })
+
+  it('returns 0 when all proposals are drafts or deleted', () => {
+    const proposals = [
+      makeProposal({ status: Status.draft }),
+      makeProposal({ status: Status.draft }),
+      makeProposal({ status: Status.deleted }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(0)
+  })
+
+  it('counts accepted, confirmed, and waitlisted proposals', () => {
+    const proposals = [
+      makeProposal({ status: Status.accepted }),
+      makeProposal({ status: Status.confirmed }),
+      makeProposal({ status: Status.waitlisted }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(3)
+  })
+
+  it('3 drafts do not trigger the cap, allowing a new submission', () => {
+    const proposals = [
+      makeProposal({ status: Status.draft }),
+      makeProposal({ status: Status.draft }),
+      makeProposal({ status: Status.draft }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(0)
+    expect(countActiveProposals(proposals) < 3).toBe(true)
+  })
+
+  it('3 submitted proposals trigger the cap', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.submitted }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(3)
+    expect(countActiveProposals(proposals) >= 3).toBe(true)
   })
 })

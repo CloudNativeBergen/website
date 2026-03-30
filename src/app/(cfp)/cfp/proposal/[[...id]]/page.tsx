@@ -9,6 +9,7 @@ import {
   ProposalExisting,
 } from '@/lib/proposal/types'
 import { getProposalSanity } from '@/lib/proposal/server'
+import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
@@ -102,16 +103,13 @@ export default async function ProposalPage({
 
       if (!proposalId && conference && !loadingError) {
         const { getProposals } = await import('@/lib/proposal/data/sanity')
-        const { Status } = await import('@/lib/proposal/types')
         const { proposals: existingProposals } = await getProposals({
           speakerId: session.speaker._id,
           conferenceId: conference._id,
           returnAll: false,
         })
 
-        const proposalCount = (existingProposals || []).filter(
-          (p) => p.status !== Status.deleted,
-        ).length
+        const proposalCount = countActiveProposals(existingProposals)
 
         if (proposalCount >= 3) {
           loadingError = {
