@@ -254,7 +254,7 @@ export const proposalRouter = router({
         })
 
         const proposalCount = (existingProposals || []).filter(
-          (p) => p.status !== Status.deleted,
+          (p) => p.status !== Status.deleted && p.status !== Status.draft,
         ).length
 
         if (proposalCount >= 3) {
