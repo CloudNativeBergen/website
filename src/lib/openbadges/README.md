@@ -122,7 +122,7 @@ The library is used by several API endpoints:
 - **`/api/badge/[id]/verify`** - Verify signature and validate structure
 - **`/api/badge/[id]/achievement`** - Extract achievement definition
 - **`/api/badge/.well-known/jwks.json`** - Public key set (JWKS)
-- **`/api/badge/validate`** - Comprehensive validation tool
+- **`badge.validate`** (tRPC) - Comprehensive validation tool
 
 ## Error Handling
 

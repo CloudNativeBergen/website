@@ -125,9 +125,9 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
 
     const preferredTasksArray = formData.preferredTasks
       ? formData.preferredTasks
-        .split(',')
-        .map((task) => task.trim())
-        .filter(Boolean)
+          .split(',')
+          .map((task) => task.trim())
+          .filter(Boolean)
       : []
 
     createVolunteerMutation.mutate({

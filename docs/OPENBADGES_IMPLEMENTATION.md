@@ -45,7 +45,7 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 │  /api/badge/[id]/image   - SVG image                       │
 │  /api/badge/[id]/download - Baked SVG download            │
 │  /api/badge/issuer       - DID issuer profile             │
-│  /api/badge/validate     - Admin validation tool          │
+│  badge.validate (tRPC)   - Admin validation tool          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,13 +124,15 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 | `GET /api/badge/[id]/image`       | Badge SVG visual                   | `image/svg+xml`       |
 | `GET /api/badge/[id]/download`    | Baked SVG download                 | `image/svg+xml`       |
 | `GET /api/badge/[id]/achievement` | Achievement definition             | `application/ld+json` |
-| `POST /api/badge/validate`        | Admin validation tool              | `application/json`    |
+| `badge.validate` (tRPC)           | Admin validation tool              | `application/json`    |
 
 ---
 
-#### 5. Badge Validator (`/app/api/badge/validate/route.ts`)
+#### 5. Badge Validator (`badge.validate` tRPC mutation)
 
 **Purpose:** Comprehensive server-side badge verification for admin UI.
+
+**Router:** `/server/routers/badge.ts` · **Validation Logic:** `/lib/badge/validation.ts`
 
 **Admin Interface:** `/components/admin/BadgeValidator.tsx`
 
