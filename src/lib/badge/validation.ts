@@ -1,10 +1,3 @@
-/**
- * Badge Validation Module
- *
- * Server-side validation of OpenBadges 3.0 credentials
- * Extracted from REST API for use in tRPC
- */
-
 import {
   extractBadge,
   verifyCredential,
@@ -13,8 +6,6 @@ import {
   decodeMultibase,
   bytesToHex,
 } from '@/lib/openbadges'
-import * as jsonld from 'jsonld'
-import crypto from 'node:crypto'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
 export interface ValidationCheck {
@@ -154,134 +145,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
     })
   }
 
-  // Step 2b: RDF Dataset Canonicalization (only for Data Integrity Proof)
-  if (!isJWT) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { proof: _proof, ...unsigned } = credential
-
-      type JsonLdContext = Record<string, unknown>
-      const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
-        'https://www.w3.org/ns/credentials/v2': {
-          '@context': {
-            id: '@id',
-            type: '@type',
-            VerifiableCredential:
-              'https://www.w3.org/2018/credentials#VerifiableCredential',
-            credentialSubject:
-              'https://www.w3.org/2018/credentials#credentialSubject',
-            issuer: 'https://www.w3.org/2018/credentials#issuer',
-            validFrom: 'https://www.w3.org/2018/credentials#validFrom',
-            DataIntegrityProof: 'https://w3id.org/security#DataIntegrityProof',
-            verificationMethod: 'https://w3id.org/security#verificationMethod',
-            proofPurpose: 'https://w3id.org/security#proofPurpose',
-            assertionMethod: 'https://w3id.org/security#assertionMethod',
-            cryptosuite: 'https://w3id.org/security#cryptosuite',
-            created: {
-              '@id': 'http://purl.org/dc/terms/created',
-              '@type': 'http://www.w3.org/2001/XMLSchema#dateTime',
-            },
-          },
-        },
-        'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json': {
-          '@context': {
-            Profile: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
-            Achievement:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement',
-            AchievementSubject:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#AchievementSubject',
-            AchievementCredential:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#OpenBadgeCredential',
-            Criteria:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Criteria',
-            Evidence:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Evidence',
-            Image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Image',
-            achievement:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievement',
-            narrative:
-              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#narrative',
-            image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#image',
-            name: 'https://schema.org/name',
-            description: 'https://schema.org/description',
-            email: 'https://schema.org/email',
-            url: 'https://schema.org/url',
-            caption: 'https://schema.org/caption',
-          },
-        },
-      }
-
-      const customDocLoader = async (url: string) => {
-        if (LOCAL_CONTEXTS[url]) {
-          return {
-            contextUrl: null,
-            documentUrl: url,
-            document: LOCAL_CONTEXTS[url],
-          }
-        }
-        throw new Error(`Context not found: ${url}`)
-      }
-
-      const canonicalDoc = await (
-        jsonld.canonize as (
-          doc: unknown,
-          options: Record<string, unknown>,
-        ) => Promise<string>
-      )(unsigned as unknown as Record<string, unknown>, {
-        algorithm: 'URDNA2015',
-        format: 'application/n-quads',
-        documentLoader: customDocLoader,
-        safe: false,
-      })
-
-      const proofObj = credential.proof[0]
-      const canonicalProofInput = {
-        '@context': 'https://www.w3.org/ns/credentials/v2',
-        type: proofObj.type,
-        created: proofObj.created,
-        verificationMethod: proofObj.verificationMethod,
-        cryptosuite: proofObj.cryptosuite,
-        proofPurpose: proofObj.proofPurpose,
-      }
-      const canonicalProof = await (
-        jsonld.canonize as (
-          doc: unknown,
-          options: Record<string, unknown>,
-        ) => Promise<string>
-      )(canonicalProofInput, {
-        algorithm: 'URDNA2015',
-        format: 'application/n-quads',
-        documentLoader: customDocLoader,
-        safe: false,
-      })
-
-      const concatenated = canonicalDoc + canonicalProof
-      const canonicalizationResult = crypto
-        .createHash('sha256')
-        .update(concatenated, 'utf8')
-        .digest('hex')
-
-      checks.push({
-        name: 'canonicalization',
-        status: 'success',
-        message: 'Canonicalization completed (URDNA2015)',
-        details: {
-          canonicalDocLines: canonicalDoc.split('\n').filter(Boolean).length,
-          canonicalProofLines: canonicalProof.split('\n').filter(Boolean)
-            .length,
-          canonicalizationResult,
-        },
-      })
-    } catch (error) {
-      checks.push({
-        name: 'canonicalization',
-        status: 'error',
-        message: `Canonicalization failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      })
-    }
-  }
-
-  // Step 3-7: Validate issuer, proof, achievement, URLs, and temporal validity
+  // Validate issuer, proof, achievement, URLs, and temporal validity
   await validateIssuerAndProof(credential, isJWT, issuerId, checks)
   await validateAchievement(credential, checks)
   validateURLFormat(credential, checks)

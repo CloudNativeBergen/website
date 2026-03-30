@@ -48,8 +48,6 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
   const [dataProcessingConsent, setDataProcessingConsent] = useState(false)
   const [submitError, setSubmitError] = useState<{
     message: string
-    fieldErrors?: Record<string, string[]>
-    formErrors?: string[]
   } | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
 
@@ -60,20 +58,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
     onError: (error) => {
-      const zodError = (
-        error.data as
-          | (typeof error.data & {
-              zodError?: {
-                fieldErrors?: Record<string, string[]>
-                formErrors?: string[]
-              }
-            })
-          | undefined
-      )?.zodError
       setSubmitError({
         message: error.message || 'Failed to submit volunteer application',
-        fieldErrors: zodError?.fieldErrors,
-        formErrors: zodError?.formErrors,
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
@@ -139,9 +125,9 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
 
     const preferredTasksArray = formData.preferredTasks
       ? formData.preferredTasks
-          .split(',')
-          .map((task) => task.trim())
-          .filter(Boolean)
+        .split(',')
+        .map((task) => task.trim())
+        .filter(Boolean)
       : []
 
     createVolunteerMutation.mutate({
@@ -209,26 +195,6 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               <p className="text-sm font-medium text-red-800 dark:text-red-200">
                 {submitError.message}
               </p>
-              {submitError.formErrors && submitError.formErrors.length > 0 && (
-                <ul className="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                  {submitError.formErrors.map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                </ul>
-              )}
-              {submitError.fieldErrors &&
-                Object.keys(submitError.fieldErrors).length > 0 && (
-                  <ul className="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                    {Object.entries(submitError.fieldErrors).map(
-                      ([field, errors]) =>
-                        errors.map((error, index) => (
-                          <li key={`${field}-${index}`}>
-                            {field}: {error}
-                          </li>
-                        )),
-                    )}
-                  </ul>
-                )}
             </div>
           </div>
         </div>

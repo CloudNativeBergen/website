@@ -6,14 +6,13 @@ import {
   XCircleIcon,
   ExclamationTriangleIcon,
   ArrowUpTrayIcon,
-  ClockIcon,
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { api } from '@/lib/trpc/client'
 
 interface ValidationCheck {
   name: string
-  status: 'pending' | 'success' | 'warning' | 'error'
+  status: 'success' | 'warning' | 'error'
   message: string
   details?: Record<string, unknown>
 }
@@ -131,8 +130,6 @@ export default function BadgeValidator() {
         return <XCircleIcon className="h-5 w-5 text-red-500" />
       case 'warning':
         return <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />
-      case 'pending':
-        return <ClockIcon className="h-5 w-5 animate-spin text-blue-500" />
     }
   }
 
@@ -144,8 +141,6 @@ export default function BadgeValidator() {
         return 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950'
       case 'warning':
         return 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950'
-      case 'pending':
-        return 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950'
     }
   }
 

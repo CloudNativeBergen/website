@@ -29,7 +29,8 @@ const successHandler = http.post('/api/trpc/volunteer.create', async () => {
   return HttpResponse.json({
     result: {
       data: {
-        volunteer: { _id: 'vol-1', name: 'Test Volunteer' },
+        success: true,
+        volunteerId: 'vol-1',
       },
     },
   })

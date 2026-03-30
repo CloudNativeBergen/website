@@ -770,9 +770,6 @@ export const badgeRouter = router({
       }
     }),
 
-  /**
-   * Validate badge credential (admin-only endpoint)
-   */
   validate: adminProcedure
     .input(ValidateBadgeInputSchema)
     .mutation(async ({ input }) => {
