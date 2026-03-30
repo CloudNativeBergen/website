@@ -12,6 +12,8 @@ import {
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
+import { ArrowUturnLeftIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
@@ -108,11 +110,13 @@ export function ProposalForm({
 
   const actionMutation = api.proposal.action.useMutation({
     onSuccess: () => {
-      router.push('/cfp/list?success=true')
+      router.push('/cfp/list')
     },
   })
 
   const updateSpeakerMutation = api.speaker.update.useMutation()
+
+  const [confirmAction, setConfirmAction] = useState<Action | null>(null)
 
   const isDraft = initialStatus === Status.draft || !currentProposalId
   const isExistingDraft =
@@ -205,6 +209,45 @@ export function ProposalForm({
     } else {
       createProposalMutation.mutate({ data, status: Status.draft })
     }
+  }
+
+  const handleProposalAction = (action: Action) => {
+    if (!currentProposalId) return
+    actionMutation.mutate({ id: currentProposalId, action })
+  }
+
+  const canUnsubmit =
+    mode === 'user' && currentProposalId && initialStatus === Status.submitted
+  const canWithdraw =
+    mode === 'user' &&
+    currentProposalId &&
+    (initialStatus === Status.accepted ||
+      initialStatus === Status.waitlisted ||
+      initialStatus === Status.confirmed)
+  const canDeleteDraft =
+    mode === 'user' && currentProposalId && initialStatus === Status.draft
+
+  const confirmActionLabels: Partial<
+    Record<Action, { title: string; message: string; button: string }>
+  > = {
+    [Action.unsubmit]: {
+      title: 'Unsubmit proposal?',
+      message:
+        'This will move your proposal back to draft. You can continue editing and resubmit it later.',
+      button: 'Unsubmit',
+    },
+    [Action.withdraw]: {
+      title: 'Withdraw proposal?',
+      message:
+        'This will withdraw your proposal from the conference. This action cannot be undone.',
+      button: 'Withdraw',
+    },
+    [Action.delete]: {
+      title: 'Delete draft?',
+      message:
+        'This will permanently delete your draft proposal. This action cannot be undone.',
+      button: 'Delete',
+    },
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -411,41 +454,94 @@ export function ProposalForm({
       )}
 
       {!isReadOnly && (
-        <div className="mt-6 flex items-center justify-end gap-x-6">
-          <Link
-            href="/cfp/list"
-            type="button"
-            className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
-          >
-            Cancel
-          </Link>
-          {mode === 'user' && isDraft && (
-            <button
+        <div className="mt-6 flex items-center justify-between">
+          <div className="flex items-center gap-x-3">
+            {canDeleteDraft && (
+              <button
+                type="button"
+                onClick={() => setConfirmAction(Action.delete)}
+                disabled={isMutating}
+                className="font-space-grotesk inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <TrashIcon className="h-4 w-4" />
+                Delete Draft
+              </button>
+            )}
+            {canUnsubmit && (
+              <button
+                type="button"
+                onClick={() => setConfirmAction(Action.unsubmit)}
+                disabled={isMutating}
+                className="font-space-grotesk inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-amber-600 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
+              >
+                <ArrowUturnLeftIcon className="h-4 w-4" />
+                Unsubmit
+              </button>
+            )}
+            {canWithdraw && (
+              <button
+                type="button"
+                onClick={() => setConfirmAction(Action.withdraw)}
+                disabled={isMutating}
+                className="font-space-grotesk inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <XCircleIcon className="h-4 w-4" />
+                Withdraw
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-x-4">
+            <Link
+              href="/cfp/list"
               type="button"
-              onClick={handleSaveDraft}
+              className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+            >
+              Cancel
+            </Link>
+            {mode === 'user' && isDraft && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isMutating}
+                className="font-space-grotesk cursor-pointer rounded-xl bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 transition-colors ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
+              >
+                {(createProposalMutation.isPending ||
+                  updateProposalMutation.isPending) &&
+                lastAction === 'draft'
+                  ? 'Saving...'
+                  : 'Save Draft'}
+              </button>
+            )}
+            <button
+              type="submit"
               disabled={isMutating}
-              className="font-space-grotesk cursor-pointer rounded-xl bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 transition-colors ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
+              className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
             >
               {(createProposalMutation.isPending ||
-                updateProposalMutation.isPending) &&
-              lastAction === 'draft'
-                ? 'Saving...'
-                : 'Save Draft'}
+                updateProposalMutation.isPending ||
+                updateSpeakerMutation.isPending) &&
+              lastAction === 'submit'
+                ? buttonPrimaryLoading
+                : buttonPrimary}
             </button>
-          )}
-          <button
-            type="submit"
-            disabled={isMutating}
-            className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
-          >
-            {(createProposalMutation.isPending ||
-              updateProposalMutation.isPending ||
-              updateSpeakerMutation.isPending) &&
-            lastAction === 'submit'
-              ? buttonPrimaryLoading
-              : buttonPrimary}
-          </button>
+          </div>
         </div>
+      )}
+
+      {confirmAction && confirmActionLabels[confirmAction] && (
+        <ConfirmationModal
+          isOpen={true}
+          onClose={() => setConfirmAction(null)}
+          onConfirm={() => {
+            handleProposalAction(confirmAction)
+            setConfirmAction(null)
+          }}
+          title={confirmActionLabels[confirmAction]!.title}
+          message={confirmActionLabels[confirmAction]!.message}
+          confirmButtonText={confirmActionLabels[confirmAction]!.button}
+          variant={confirmAction === Action.unsubmit ? 'warning' : 'danger'}
+          isLoading={actionMutation.isPending}
+        />
       )}
     </form>
   )
