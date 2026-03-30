@@ -51,6 +51,9 @@ export function speakerImageUrl(
     fit: 'crop',
   },
 ): string {
+  if (typeof image !== 'string') {
+    return ''
+  }
   if (image.startsWith(SANITY_CDN_PREFIX)) {
     return sanityImage(image)
       .width(opts.width)

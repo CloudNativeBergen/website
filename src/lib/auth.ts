@@ -94,7 +94,7 @@ const config = {
           return {}
         }
 
-        if (speaker.image) {
+        if (speaker.image && typeof speaker.image === 'string') {
           token.picture = speakerImageUrl(speaker.image, {
             width: 192,
             height: 192,
