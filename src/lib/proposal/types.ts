@@ -133,16 +133,6 @@ export interface FormValidationError {
   field: string
 }
 
-export interface ProposalActionResponse extends ProposalBaseResponse {
-  proposalStatus?: Status
-  error?: FormError
-}
-
-export interface ProposalResponse extends ProposalBaseResponse {
-  proposal?: ProposalExisting
-  error?: FormError
-}
-
 export interface ProposalListResponse extends ProposalBaseResponse {
   proposals?: ProposalExisting[]
   error?: FormError

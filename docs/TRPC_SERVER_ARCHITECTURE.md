@@ -12,9 +12,15 @@ The Cloud Native Days Norway website uses tRPC to provide type-safe, end-to-end 
 src/
 ├── server/
 │   ├── routers/           # tRPC route definitions
-│   │   └── sponsor.ts     # Feature-specific routers
+│   │   ├── sponsor.ts     # Feature-specific routers
+│   │   ├── badge.ts
+│   │   ├── volunteer.ts
+│   │   ├── speakers.ts
+│   │   └── proposal.ts
 │   ├── schemas/           # Zod validation schemas
-│   │   └── sponsor.ts     # Input validation schemas
+│   │   ├── sponsor.ts     # Input validation schemas
+│   │   ├── badge.ts
+│   │   └── volunteer.ts
 │   └── trpc.ts           # tRPC configuration and procedures
 ├── lib/
 │   └── contract-signing/  # Provider-agnostic contract signing abstraction

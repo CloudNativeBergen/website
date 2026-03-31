@@ -476,32 +476,26 @@ describe('Badge System E2E', () => {
       // Bake JWT string into SVG
       const bakedSVG = bakeBadge(svg, assertion)
 
-      // 2. Validate through API (which includes cryptographic verification)
-      const { POST } = await import('@/app/api/badge/validate/route')
-      const request = {
-        json: async () => ({ svg: bakedSVG }),
-      } as any
+      // 2. Validate through the validation module (migrated from REST to tRPC)
+      const { validateBadge } = await import('@/lib/badge/validation')
+      const result = await validateBadge(bakedSVG)
 
-      const response = await POST(request)
-      expect(response.status).toBe(200)
-
-      const result = await response.json()
       expect(result.checks).toBeDefined()
 
       // Verify canonicalization check (RDF Dataset Canonicalization)
       const canonCheck = result.checks.find(
-        (c: any) => c.name === 'canonicalization',
+        (c) => c.name === 'canonicalization',
       )
       expect(canonCheck).toBeDefined()
-      expect(canonCheck.status).toBe('success')
-      expect(canonCheck.details?.canonicalizationResult).toBeDefined()
-      expect(typeof canonCheck.details?.canonicalizationResult).toBe('string')
+      expect(canonCheck!.status).toBe('success')
+      expect(canonCheck!.details?.canonicalizationResult).toBeDefined()
+      expect(typeof canonCheck!.details?.canonicalizationResult).toBe('string')
 
       // Find the proof check
-      const proofCheck = result.checks.find((c: any) => c.name === 'proof')
+      const proofCheck = result.checks.find((c) => c.name === 'proof')
       expect(proofCheck).toBeDefined()
-      expect(proofCheck.status).toBe('success')
-      expect(proofCheck.details?.signatureValid).toBe(true)
+      expect(proofCheck!.status).toBe('success')
+      expect(proofCheck!.details?.signatureValid).toBe(true)
 
       console.log(
         '✓ Validator API cryptographically verified badge signature with RDF canonicalization',

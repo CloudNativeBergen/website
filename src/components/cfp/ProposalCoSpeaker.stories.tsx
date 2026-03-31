@@ -62,20 +62,28 @@ const mixedInvitations: CoSpeakerInvitationMinimal[] = [
 ]
 
 const handlers = [
-  http.post('/cfp/api/invitations/send', () => {
+  http.post('/api/trpc/proposal.invitation.send', () => {
     return HttpResponse.json({
-      success: true,
-      invitation: {
-        _id: 'new-inv',
-        invitedEmail: 'newco@example.com',
-        status: 'pending',
-        token: 'newtoken',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      result: {
+        data: {
+          _id: 'new-inv',
+          invitedEmail: 'newco@example.com',
+          invitedName: 'New Co-Speaker',
+          status: 'pending',
+          token: 'newtoken',
+          expiresAt: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+        },
       },
     })
   }),
-  http.post('/cfp/api/invitations/cancel', () => {
-    return HttpResponse.json({ success: true })
+  http.post('/api/trpc/proposal.invitation.cancel', () => {
+    return HttpResponse.json({
+      result: {
+        data: { success: true },
+      },
+    })
   }),
 ]
 
