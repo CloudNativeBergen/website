@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { MissingAvatar } from './MissingAvatar'
 
 interface SpeakerAvatarImageProps {
@@ -20,6 +20,14 @@ export function SpeakerAvatarImage({
 }: SpeakerAvatarImageProps) {
   const [failed, setFailed] = useState(false)
 
+  // Callback ref detects images that already failed before React hydration
+  // attached the onError handler (e.g. broken URLs on slow connections).
+  const imgRef = useCallback((img: HTMLImageElement | null) => {
+    if (img?.complete && img.naturalWidth === 0) {
+      setFailed(true)
+    }
+  }, [])
+
   if (failed) {
     return (
       <MissingAvatar
@@ -33,6 +41,7 @@ export function SpeakerAvatarImage({
 
   return (
     <img
+      ref={imgRef}
       src={src}
       alt={name}
       className={`${className} h-full w-full object-cover object-center`}
