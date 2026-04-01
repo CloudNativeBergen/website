@@ -153,15 +153,14 @@ export function AdminActionBar({
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
               Status:
             </span>
             <span
-              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                proposal.status === 'accepted'
+              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${proposal.status === 'accepted'
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                   : proposal.status === 'waitlisted'
                     ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
@@ -170,7 +169,7 @@ export function AdminActionBar({
                       : proposal.status === 'submitted'
                         ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                         : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-              }`}
+                }`}
             >
               {proposal.status.charAt(0).toUpperCase() +
                 proposal.status.slice(1)}
@@ -252,17 +251,14 @@ export function AdminActionBar({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           <AdminButton
             size="xs"
             onClick={handleEditProposal}
-            title="Edit proposal"
+            title="Edit proposal (⌘E)"
           >
             <PencilIcon className="h-3 w-3" />
-            <span>Edit</span>
-            <kbd className="ml-1 hidden rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-indigo-600 dark:bg-indigo-700">
-              ⌘E
-            </kbd>
+            Edit
           </AdminButton>
 
           {speakers.length > 0 && (
@@ -270,13 +266,10 @@ export function AdminActionBar({
               color="purple"
               size="xs"
               onClick={handlePreviewSpeaker}
-              title="Preview speaker profile"
+              title="Preview speaker profile (⌘P)"
             >
               <EyeIcon className="h-3 w-3" />
-              <span>Preview</span>
-              <kbd className="ml-1 hidden rounded border border-purple-400 bg-purple-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-purple-600 dark:bg-purple-700">
-                ⌘P
-              </kbd>
+              Preview
             </AdminButton>
           )}
 
@@ -285,13 +278,10 @@ export function AdminActionBar({
               color="blue"
               size="xs"
               onClick={handleEmailSpeakers}
-              title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
+              title={`Email speaker (⌘M)`}
             >
               <EnvelopeIcon className="h-3 w-3" />
-              <span>Email</span>
-              <kbd className="ml-1 hidden rounded border border-blue-400 bg-blue-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-blue-600 dark:bg-blue-700">
-                ⌘M
-              </kbd>
+              Email
             </AdminButton>
           )}
 

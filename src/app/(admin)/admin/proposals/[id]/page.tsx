@@ -56,9 +56,9 @@ export default async function ProposalDetailPage({
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-4xl p-4 lg:p-0">
-            <div className="mb-8">
-              <div className="mb-4 flex items-center justify-between">
+          <div className="mx-auto max-w-4xl p-4">
+            <div className="mb-5">
+              <div className="mb-3 flex items-center justify-between">
                 <BackLink fallbackUrl="/admin/proposals">
                   Back to Proposals
                 </BackLink>
@@ -86,7 +86,7 @@ export default async function ProposalDetailPage({
         </div>
 
         <div className="w-full lg:w-96 lg:shrink-0">
-          <div className="space-y-4 p-4 lg:p-4">
+          <div className="space-y-4 p-4">
             <ProposalPublishedContent
               proposalId={proposal._id}
               currentVideoUrl={getProposalVideoUrl(proposal)}
@@ -100,13 +100,13 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               conferenceStartDate={conference.startDate}
             />
+            <ProposalReviewPanel
+              proposalId={proposal._id}
+              initialReviews={proposal.reviews || []}
+              currentUser={session?.speaker}
+              domain={domain}
+            />
           </div>
-          <ProposalReviewPanel
-            proposalId={proposal._id}
-            initialReviews={proposal.reviews || []}
-            currentUser={session?.speaker}
-            domain={domain}
-          />
         </div>
       </div>
     )

@@ -1087,11 +1087,11 @@ export const proposalRouter = router({
       .input(InvitationCreateSchema)
       .mutation(async ({ input, ctx }) => {
         try {
-          // Verify user owns the proposal
+          // Verify user owns the proposal (or is organizer)
           const { proposal, proposalError } = await getProposal({
             id: input.proposalId,
             speakerId: ctx.speaker._id,
-            isOrganizer: false,
+            isOrganizer: ctx.speaker.isOrganizer === true,
           })
 
           if (proposalError || !proposal || !proposal._id) {
@@ -1265,7 +1265,7 @@ export const proposalRouter = router({
             })
           }
 
-          // Verify user owns the proposal
+          // Verify user owns the proposal (or is organizer)
           const proposalRef = invitation.proposal as
             | { _ref: string }
             | undefined
@@ -1279,7 +1279,7 @@ export const proposalRouter = router({
           const { proposal, proposalError } = await getProposal({
             id: proposalRef._ref,
             speakerId: ctx.speaker._id,
-            isOrganizer: false,
+            isOrganizer: ctx.speaker.isOrganizer === true,
           })
 
           if (proposalError || !proposal || !proposal._id) {

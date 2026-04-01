@@ -20,6 +20,10 @@ import { Topic } from '@/lib/topic/types'
 import { extractSpeakerIds } from '@/lib/proposal/utils'
 import { validateProposalForAdmin } from '@/lib/proposal/validation'
 import { SpeakerMultiSelect } from '@/components/admin/SpeakerMultiSelect'
+import { ProposalCoSpeaker } from '@/components/cfp/ProposalCoSpeaker'
+import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import { Speaker } from '@/lib/speaker/types'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { api } from '@/lib/trpc/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
@@ -105,6 +109,19 @@ export function ProposalManagementModal({
     Record<string, string>
   >({})
 
+  const getInitialCoSpeakers = (): Speaker[] => {
+    if (!editingProposal) return []
+    const allSpeakers = extractSpeakersFromProposal(editingProposal)
+    return allSpeakers.slice(1)
+  }
+
+  const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(
+    getInitialCoSpeakers(),
+  )
+  const [invitations, setInvitations] = useState<CoSpeakerInvitationMinimal[]>(
+    editingProposal?.coSpeakerInvitations || [],
+  )
+
   // Validate that topics are properly expanded - this will throw a helpful error
   // if the parent page forgot to pass `topics: true` to getConferenceForCurrentDomain
   useEffect(() => {
@@ -186,32 +203,37 @@ export function ProposalManagementModal({
       setProposalData(
         editingProposal
           ? {
-              title: editingProposal.title || '',
-              description: editingProposal.description || [],
-              language: editingProposal.language || Language.norwegian,
-              format:
-                editingProposal.format ||
-                conference.formats?.[0] ||
-                Format.lightning_10,
-              level: editingProposal.level || Level.beginner,
-              audiences: editingProposal.audiences || [],
-              topics: validTopics,
-              outline: editingProposal.outline || '',
-              tos: true,
-            }
+            title: editingProposal.title || '',
+            description: editingProposal.description || [],
+            language: editingProposal.language || Language.norwegian,
+            format:
+              editingProposal.format ||
+              conference.formats?.[0] ||
+              Format.lightning_10,
+            level: editingProposal.level || Level.beginner,
+            audiences: editingProposal.audiences || [],
+            topics: validTopics,
+            outline: editingProposal.outline || '',
+            tos: true,
+          }
           : {
-              title: '',
-              description: [],
-              language: Language.norwegian,
-              format: conference.formats?.[0] || Format.lightning_10,
-              level: Level.beginner,
-              audiences: [],
-              topics: [],
-              outline: '',
-              tos: false,
-            },
+            title: '',
+            description: [],
+            language: Language.norwegian,
+            format: conference.formats?.[0] || Format.lightning_10,
+            level: Level.beginner,
+            audiences: [],
+            topics: [],
+            outline: '',
+            tos: false,
+          },
       )
       setSelectedSpeakerIds(extractSpeakerIds(editingProposal?.speakers) || [])
+      const allSpeakers = editingProposal
+        ? extractSpeakersFromProposal(editingProposal)
+        : []
+      setCoSpeakers(allSpeakers.slice(1))
+      setInvitations(editingProposal?.coSpeakerInvitations || [])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conference.formats and editingProposal are stable, isOpen triggers reset
   }, [isOpen])
@@ -378,6 +400,32 @@ export function ProposalManagementModal({
               error={validationErrors.speakers}
             />
           </div>
+
+          {editingProposal && (
+            <div className="mb-6">
+              <ProposalCoSpeaker
+                selectedSpeakers={coSpeakers}
+                onSpeakersChange={(speakers) => {
+                  setCoSpeakers(speakers)
+                  const primaryId = selectedSpeakerIds[0]
+                  const allIds = [
+                    primaryId,
+                    ...speakers.map((s) => s._id),
+                  ].filter(Boolean)
+                  setSelectedSpeakerIds(allIds)
+                }}
+                format={proposalData.format}
+                proposalId={editingProposal._id}
+                pendingInvitations={invitations}
+                onInvitationSent={(inv) =>
+                  setInvitations((prev) => [...prev, inv])
+                }
+                onInvitationCanceled={(id) =>
+                  setInvitations((prev) => prev.filter((inv) => inv._id !== id))
+                }
+              />
+            </div>
+          )}
 
           {/* Proposal Details Section */}
           <ProposalDetailsForm

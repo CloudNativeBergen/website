@@ -30,11 +30,11 @@ export function ProposalReviewPanel({
 
   const currentUserReview = currentUser
     ? reviews.find(
-        (review) =>
-          typeof review.reviewer === 'object' &&
-          '_id' in review.reviewer &&
-          review.reviewer._id === currentUser._id,
-      )
+      (review) =>
+        typeof review.reviewer === 'object' &&
+        '_id' in review.reviewer &&
+        review.reviewer._id === currentUser._id,
+    )
     : undefined
 
   const handleReviewSubmit = (newReview: Review) => {
@@ -95,23 +95,21 @@ export function ProposalReviewPanel({
   }, [proposalId])
   return (
     <>
-      <div className="w-full lg:w-96 lg:shrink-0 lg:overflow-y-auto">
-        <div className="space-y-4 p-4 lg:p-4">
-          <ProposalReviewSummary reviews={reviews} />
+      <div className="space-y-4">
+        <ProposalReviewSummary reviews={reviews} />
 
-          {currentUser && (
-            <ProposalReviewForm
-              proposalId={proposalId}
-              existingReview={currentUserReview}
-              onReviewSubmit={handleReviewSubmit}
-            />
-          )}
-
-          <ProposalReviewList
-            reviews={reviews}
-            currentUserId={currentUser?._id}
+        {currentUser && (
+          <ProposalReviewForm
+            proposalId={proposalId}
+            existingReview={currentUserReview}
+            onReviewSubmit={handleReviewSubmit}
           />
-        </div>
+        )}
+
+        <ProposalReviewList
+          reviews={reviews}
+          currentUserId={currentUser?._id}
+        />
       </div>
 
       {proposalForAction && (

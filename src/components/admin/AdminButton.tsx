@@ -39,7 +39,7 @@ const variantStyles: Record<Exclude<AdminButtonVariant, 'primary'>, string> = {
 }
 
 const sizeStyles: Record<AdminButtonSize, string> = {
-  xs: 'px-3 py-1.5 text-xs',
+  xs: 'px-2 py-1 text-xs',
   sm: 'px-3 py-2 text-sm',
   md: 'px-4 py-2 text-sm',
 }
@@ -54,7 +54,7 @@ export function AdminButton({
   return (
     <button
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         variant === 'primary' ? colorStyles[color] : variantStyles[variant],
         sizeStyles[size],
         className,
