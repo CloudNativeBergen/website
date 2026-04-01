@@ -30,11 +30,11 @@ export function ProposalReviewPanel({
 
   const currentUserReview = currentUser
     ? reviews.find(
-      (review) =>
-        typeof review.reviewer === 'object' &&
-        '_id' in review.reviewer &&
-        review.reviewer._id === currentUser._id,
-    )
+        (review) =>
+          typeof review.reviewer === 'object' &&
+          '_id' in review.reviewer &&
+          review.reviewer._id === currentUser._id,
+      )
     : undefined
 
   const handleReviewSubmit = (newReview: Review) => {

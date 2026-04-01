@@ -203,30 +203,30 @@ export function ProposalManagementModal({
       setProposalData(
         editingProposal
           ? {
-            title: editingProposal.title || '',
-            description: editingProposal.description || [],
-            language: editingProposal.language || Language.norwegian,
-            format:
-              editingProposal.format ||
-              conference.formats?.[0] ||
-              Format.lightning_10,
-            level: editingProposal.level || Level.beginner,
-            audiences: editingProposal.audiences || [],
-            topics: validTopics,
-            outline: editingProposal.outline || '',
-            tos: true,
-          }
+              title: editingProposal.title || '',
+              description: editingProposal.description || [],
+              language: editingProposal.language || Language.norwegian,
+              format:
+                editingProposal.format ||
+                conference.formats?.[0] ||
+                Format.lightning_10,
+              level: editingProposal.level || Level.beginner,
+              audiences: editingProposal.audiences || [],
+              topics: validTopics,
+              outline: editingProposal.outline || '',
+              tos: true,
+            }
           : {
-            title: '',
-            description: [],
-            language: Language.norwegian,
-            format: conference.formats?.[0] || Format.lightning_10,
-            level: Level.beginner,
-            audiences: [],
-            topics: [],
-            outline: '',
-            tos: false,
-          },
+              title: '',
+              description: [],
+              language: Language.norwegian,
+              format: conference.formats?.[0] || Format.lightning_10,
+              level: Level.beginner,
+              audiences: [],
+              topics: [],
+              outline: '',
+              tos: false,
+            },
       )
       setSelectedSpeakerIds(extractSpeakerIds(editingProposal?.speakers) || [])
       const allSpeakers = editingProposal
