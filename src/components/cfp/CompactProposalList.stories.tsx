@@ -10,6 +10,7 @@ import {
 } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { expect, within } from 'storybook/test'
 
 const mockSpeakers: Speaker[] = [
   {
@@ -255,6 +256,112 @@ export const WithVideo: Story = {
         story: 'Proposal with video recording shows purple Video badge.',
       },
     },
+  },
+}
+
+export const RendersAllStatusBadges: Story = {
+  args: {
+    proposals: mixedStatusProposals,
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText('Confirmed')).toBeInTheDocument()
+    expect(canvas.getByText('Accepted')).toBeInTheDocument()
+    expect(canvas.getByText('Submitted')).toBeInTheDocument()
+    expect(canvas.getByText('Waitlisted')).toBeInTheDocument()
+    // When an approved talk exists, rejected shows "Not selected"
+    expect(canvas.getByText('Not selected')).toBeInTheDocument()
+  },
+}
+
+export const SortsByStatusPriority: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Rejected Talk', Status.rejected),
+      createMockProposal('talk-2', 'Confirmed Talk', Status.confirmed),
+      createMockProposal('talk-3', 'Submitted Talk', Status.submitted),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const links = canvas.getAllByRole('link', {
+      name: /Talk$/,
+    })
+    // Confirmed should be first, Submitted second, Rejected last
+    expect(links[0]).toHaveTextContent('Confirmed Talk')
+    expect(links[1]).toHaveTextContent('Submitted Talk')
+    expect(links[2]).toHaveTextContent('Rejected Talk')
+  },
+}
+
+export const EditableShowsEditLinks: Story = {
+  args: {
+    proposals: [createMockProposal('talk-1', 'My Talk', Status.submitted)],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const editLink = canvas.getByTitle('Edit proposal')
+    expect(editLink).toBeInTheDocument()
+    expect(editLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('/cfp/proposal?id=talk-1'),
+    )
+  },
+}
+
+export const ReadOnlyHidesEditLinks: Story = {
+  args: {
+    proposals: [createMockProposal('talk-1', 'My Talk', Status.submitted)],
+    canEdit: false,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.queryByTitle('Edit proposal')).not.toBeInTheDocument()
+  },
+}
+
+export const RejectedShowsNotSelectedWithApprovedTalk: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Accepted Talk', Status.confirmed),
+      createMockProposal('talk-2', 'Other Proposal', Status.rejected),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // When speaker has an approved talk, rejected shows "Not selected"
+    expect(canvas.getByText('Not selected')).toBeInTheDocument()
+    expect(canvas.queryByText('Rejected')).not.toBeInTheDocument()
+  },
+}
+
+export const WithdrawnStatusRendered: Story = {
+  args: {
+    proposals: [
+      createMockProposal('talk-1', 'Withdrawn Talk', Status.withdrawn),
+      createMockProposal('talk-2', 'Active Talk', Status.submitted),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText('Withdrawn')).toBeInTheDocument()
+    expect(canvas.getByText('Submitted')).toBeInTheDocument()
+  },
+}
+
+export const ShowsProposalCount: Story = {
+  args: {
+    proposals: allSubmittedProposals,
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByText('Proposals (3)')).toBeInTheDocument()
   },
 }
 

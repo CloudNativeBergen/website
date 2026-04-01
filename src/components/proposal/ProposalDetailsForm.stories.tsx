@@ -10,6 +10,7 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { Topic } from '@/lib/topic/types'
 import { fn } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 
 const mockTopics: Topic[] = [
@@ -171,5 +172,117 @@ export const WorkshopFormat: Story = {
     setProposal: fn(),
     conference: mockConference,
     allowedFormats: [Format.workshop_120],
+  },
+}
+
+export const TitleInputCallsSetProposal: Story = {
+  args: {
+    proposal: emptyProposal,
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [Format.lightning_10, Format.presentation_25],
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement)
+    const titleInput = canvas.getByLabelText('Title')
+    await userEvent.type(titleInput, 'My New Talk')
+    await waitFor(() => {
+      expect(args.setProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'My New Talk' }),
+      )
+    })
+  },
+}
+
+export const FormatDropdownChange: Story = {
+  args: {
+    proposal: emptyProposal,
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [
+      Format.lightning_10,
+      Format.presentation_25,
+      Format.presentation_45,
+    ],
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement)
+    const formatSelect = canvas.getByLabelText('Presentation Format')
+    await userEvent.selectOptions(formatSelect, Format.presentation_45)
+    await waitFor(() => {
+      expect(args.setProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ format: Format.presentation_45 }),
+      )
+    })
+  },
+}
+
+export const TosCheckboxToggle: Story = {
+  args: {
+    proposal: emptyProposal,
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [Format.lightning_10],
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement)
+    const tosCheckbox = canvas.getByLabelText('I agree to the Code of Conduct')
+    expect(tosCheckbox).not.toBeChecked()
+    await userEvent.click(tosCheckbox)
+    await waitFor(() => {
+      expect(args.setProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ tos: true }),
+      )
+    })
+  },
+}
+
+export const ReadOnlyShowsContent: Story = {
+  args: {
+    proposal: filledProposal,
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [Format.presentation_45],
+    readOnly: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // Read-only mode renders text, not inputs
+    expect(
+      canvas.getByText('Building Scalable Kubernetes Applications'),
+    ).toBeInTheDocument()
+    expect(canvas.getByText('English')).toBeInTheDocument()
+    expect(canvas.getByText('Intermediate')).toBeInTheDocument()
+    // Should not have editable inputs
+    expect(canvas.queryByLabelText('Title')).not.toBeInTheDocument()
+  },
+}
+
+export const WorkshopShowsPrerequisites: Story = {
+  args: {
+    proposal: {
+      ...emptyProposal,
+      format: Format.workshop_120,
+    },
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [Format.workshop_120],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByLabelText('Prerequisites')).toBeInTheDocument()
+  },
+}
+
+export const NonWorkshopHidesPrerequisites: Story = {
+  args: {
+    proposal: emptyProposal,
+    setProposal: fn(),
+    conference: mockConference,
+    allowedFormats: [Format.lightning_10],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.queryByLabelText('Prerequisites')).not.toBeInTheDocument()
   },
 }
