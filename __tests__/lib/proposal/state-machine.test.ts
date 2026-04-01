@@ -72,6 +72,15 @@ describe('actionStateMachine', () => {
       const result = actionStateMachine(Status.submitted, Action.reject, false)
       expect(result.isValidAction).toBe(false)
     })
+
+    it('allows withdraw action', () => {
+      const result = actionStateMachine(
+        Status.submitted,
+        Action.withdraw,
+        false,
+      )
+      expect(result).toEqual({ status: Status.withdrawn, isValidAction: true })
+    })
   })
 
   describe('accepted status', () => {

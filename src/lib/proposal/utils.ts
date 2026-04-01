@@ -6,7 +6,11 @@ export function countActiveProposals(
   proposals: ProposalExisting[] | null | undefined,
 ): number {
   return (proposals || []).filter(
-    (p) => p.status !== Status.deleted && p.status !== Status.draft,
+    (p) =>
+      p.status !== Status.deleted &&
+      p.status !== Status.draft &&
+      p.status !== Status.withdrawn &&
+      p.status !== Status.rejected,
   ).length
 }
 

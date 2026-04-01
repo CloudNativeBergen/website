@@ -1,4 +1,5 @@
 import { XCircleIcon } from '@heroicons/react/24/solid'
+import Link from 'next/link'
 import {
   Format,
   Language,
@@ -115,7 +116,8 @@ export default async function ProposalPage({
           loadingError = {
             type: 'Maximum Reached',
             message:
-              'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+              'You have reached the maximum of 3 proposals per conference. Please go to your proposals list to unsubmit or withdraw an existing proposal if you need to submit a new one.',
+            link: { href: '/cfp/list', label: 'Go to your proposals' },
           }
         }
       }
@@ -209,6 +211,16 @@ export default async function ProposalPage({
               </h3>
               <div className="font-inter mt-2 text-blue-800 dark:text-blue-300">
                 <p>{loadingError.message}</p>
+                {loadingError.link && (
+                  <p className="mt-3">
+                    <Link
+                      href={loadingError.link.href}
+                      className="font-semibold text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {loadingError.link.label}
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
           </div>

@@ -251,6 +251,22 @@ describe('countActiveProposals', () => {
     expect(countActiveProposals(proposals)).toBe(0)
   })
 
+  it('excludes withdrawn proposals from count', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.withdrawn }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(1)
+  })
+
+  it('excludes rejected proposals from count', () => {
+    const proposals = [
+      makeProposal({ status: Status.submitted }),
+      makeProposal({ status: Status.rejected }),
+    ]
+    expect(countActiveProposals(proposals)).toBe(1)
+  })
+
   it('counts accepted, confirmed, and waitlisted proposals', () => {
     const proposals = [
       makeProposal({ status: Status.accepted }),

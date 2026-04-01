@@ -1,6 +1,7 @@
 'use client'
 
 import { Conference } from '@/lib/conference/types'
+import { isCfpOpen } from '@/lib/conference/state'
 import { api } from '@/lib/trpc/client'
 import {
   Format,
@@ -216,14 +217,19 @@ export function ProposalForm({
     actionMutation.mutate({ id: currentProposalId, action })
   }
 
+  const cfpOpen = isCfpOpen(conference)
   const canUnsubmit =
-    mode === 'user' && currentProposalId && initialStatus === Status.submitted
+    mode === 'user' &&
+    currentProposalId &&
+    initialStatus === Status.submitted &&
+    cfpOpen
   const canWithdraw =
     mode === 'user' &&
     currentProposalId &&
     (initialStatus === Status.accepted ||
       initialStatus === Status.waitlisted ||
-      initialStatus === Status.confirmed)
+      initialStatus === Status.confirmed ||
+      (initialStatus === Status.submitted && !cfpOpen))
   const canDeleteDraft =
     mode === 'user' && currentProposalId && initialStatus === Status.draft
 

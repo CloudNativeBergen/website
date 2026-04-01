@@ -126,6 +126,7 @@ export interface FormError {
   message: string
   type: string
   validationErrors?: FormValidationError[]
+  link?: { href: string; label: string }
 }
 
 export interface FormValidationError {

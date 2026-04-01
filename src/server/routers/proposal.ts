@@ -35,7 +35,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import type { ProposalInput } from '@/lib/proposal/types'
-import { Status } from '@/lib/proposal/types'
+import { Action, Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
@@ -260,7 +260,7 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:
-              'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+              'You have reached the maximum of 3 proposals per conference. Please unsubmit or withdraw an existing proposal from your proposals list if you need to submit a new one.',
           })
         }
 
@@ -452,6 +452,18 @@ export const proposalRouter = router({
           })
         }
 
+        // Block unsubmit after CFP closes — speakers should withdraw instead
+        if (action === Action.unsubmit && !ctx.speaker.isOrganizer) {
+          const { isCfpOpen } = await import('@/lib/conference/state')
+          if (!isCfpOpen(conference)) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'The Call for Papers has closed. You can no longer move proposals back to draft. Use withdraw instead if you want to remove your proposal.',
+            })
+          }
+        }
+
         // Enforce cap when submitting a draft (draft → submitted transition)
         if (
           proposal.status === Status.draft &&
@@ -468,7 +480,7 @@ export const proposalRouter = router({
             throw new TRPCError({
               code: 'FORBIDDEN',
               message:
-                'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+                'You have reached the maximum of 3 proposals per conference. Please unsubmit or withdraw an existing proposal from your proposals list if you need to submit a new one.',
             })
           }
         }

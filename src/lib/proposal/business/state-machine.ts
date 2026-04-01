@@ -21,6 +21,8 @@ export function actionStateMachine(
     case Status.submitted:
       if (action === Action.unsubmit) {
         status = Status.draft
+      } else if (action === Action.withdraw) {
+        status = Status.withdrawn
       } else if (isOrganizer && action === Action.accept) {
         status = Status.accepted
       } else if (isOrganizer && action === Action.waitlist) {

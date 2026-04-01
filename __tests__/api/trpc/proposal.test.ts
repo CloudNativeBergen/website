@@ -223,7 +223,10 @@ describe('proposal router', () => {
           data: validProposalData,
           status: Status.submitted,
         }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Call for Papers is currently closed'),
+      })
     })
 
     it('should enforce max 3 proposals per conference', async () => {
@@ -243,7 +246,58 @@ describe('proposal router', () => {
           data: validProposalData,
           status: Status.submitted,
         }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('maximum of 3 proposals'),
+      })
+    })
+
+    it('should allow new proposal when one of 3 is withdrawn', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [
+          { ...mockProposal, _id: 'p1', status: Status.submitted },
+          { ...mockProposal, _id: 'p2', status: Status.accepted },
+          { ...mockProposal, _id: 'p3', status: Status.withdrawn },
+        ] as any,
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: validProposalData,
+        status: Status.submitted,
+      })
+      expect(result._id).toBe('proposal-1')
+      expect(createProposal).toHaveBeenCalled()
+    })
+
+    it('should allow new proposal when one of 3 is rejected', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [
+          { ...mockProposal, _id: 'p1', status: Status.submitted },
+          { ...mockProposal, _id: 'p2', status: Status.accepted },
+          { ...mockProposal, _id: 'p3', status: Status.rejected },
+        ] as any,
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: validProposalData,
+        status: Status.submitted,
+      })
+      expect(result._id).toBe('proposal-1')
+      expect(createProposal).toHaveBeenCalled()
     })
 
     it('should create a draft without strict validation', async () => {
@@ -328,7 +382,8 @@ describe('proposal router', () => {
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     })
 
-    it('should allow speaker to unsubmit their proposal', async () => {
+    it('should allow speaker to unsubmit their proposal when CFP is open', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
       vi.mocked(getProposalSanity).mockResolvedValue({
         proposal: mockProposal as any,
         proposalError: null,
@@ -344,6 +399,62 @@ describe('proposal router', () => {
         action: Action.unsubmit,
       })
       expect(result.proposalStatus).toBe(Status.draft)
+    })
+
+    it('should block speaker from unsubmitting after CFP closes', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.unsubmit,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Call for Papers has closed'),
+      })
+    })
+
+    it('should allow organizer to unsubmit even after CFP closes', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        err: null,
+      })
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.unsubmit,
+      })
+      expect(result.proposalStatus).toBe(Status.draft)
+    })
+
+    it('should allow speaker to withdraw a submitted proposal', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.withdrawn } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+      })
+      expect(result.proposalStatus).toBe(Status.withdrawn)
     })
 
     it('should allow organizer to accept a submitted proposal', async () => {
@@ -378,6 +489,7 @@ describe('proposal router', () => {
     })
 
     it('should enforce proposal cap when submitting a draft', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
       const draftProposal = { ...mockProposal, status: Status.draft }
       vi.mocked(getProposalSanity).mockResolvedValue({
         proposal: draftProposal as any,
@@ -395,7 +507,10 @@ describe('proposal router', () => {
       const caller = createAuthenticatedCaller(regularSpeaker._id)
       await expect(
         caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('maximum of 3 proposals'),
+      })
     })
 
     it('should return NOT_FOUND for nonexistent proposal', async () => {
