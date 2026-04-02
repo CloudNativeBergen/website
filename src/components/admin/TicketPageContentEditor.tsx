@@ -17,7 +17,7 @@ import type {
   TicketFaq,
   ConferenceVanityMetric,
 } from '@/lib/conference/types'
-import { nanoid } from 'nanoid'
+import { generateKey } from '@/lib/sanity/helpers'
 
 const ICON_OPTIONS = [
   { value: 'MicrophoneIcon', label: 'Microphone' },
@@ -41,10 +41,6 @@ const ICON_OPTIONS = [
   { value: 'MusicalNoteIcon', label: 'Musical Note' },
   { value: 'CheckBadgeIcon', label: 'Check Badge' },
 ]
-
-function generateKey(): string {
-  return nanoid()
-}
 
 interface TicketPageContentEditorProps {
   conferenceId: string

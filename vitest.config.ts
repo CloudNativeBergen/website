@@ -38,10 +38,6 @@ export default defineConfig({
         find: /^uuid$/,
         replacement: path.resolve(__dirname, '__tests__/mocks/uuid.ts'),
       },
-      {
-        find: /^nanoid$/,
-        replacement: path.resolve(__dirname, '__tests__/mocks/nanoid.ts'),
-      },
     ],
   },
   test: {
