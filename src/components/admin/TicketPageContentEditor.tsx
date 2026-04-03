@@ -17,6 +17,7 @@ import type {
   TicketFaq,
   ConferenceVanityMetric,
 } from '@/lib/conference/types'
+import { generateKey } from '@/lib/sanity/helpers'
 
 const ICON_OPTIONS = [
   { value: 'MicrophoneIcon', label: 'Microphone' },
@@ -40,10 +41,6 @@ const ICON_OPTIONS = [
   { value: 'MusicalNoteIcon', label: 'Musical Note' },
   { value: 'CheckBadgeIcon', label: 'Check Badge' },
 ]
-
-function generateKey(): string {
-  return Math.random().toString(36).substring(2, 10)
-}
 
 interface TicketPageContentEditorProps {
   conferenceId: string
