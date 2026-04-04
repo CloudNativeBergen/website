@@ -86,7 +86,7 @@ The encrypted JWT contains:
     name: string
     email: string
     image: string       // Sanity image reference
-    isOrganizer: boolean
+    isOrganizer: boolean  // Computed via GROQ from conference.organizers[]
     flags: Flags[]      // e.g., ["local", "first-time"]
   }
   account: {
@@ -127,7 +127,7 @@ Three layers of protection are used depending on the route type:
 The top-level middleware routes requests to the correct auth system:
 
 - `/workshop*` &rarr; WorkOS AuthKit middleware
-- `/cfp/*` (except `/cfp`) and `/admin/*` &rarr; NextAuth middleware
+- `/cfp/*` (except `/cfp`), `/admin/*`, and `/cli/*` &rarr; NextAuth middleware
 - Everything else &rarr; passes through
 
 The NextAuth middleware (`auth()` wrapper) checks `req.auth`. If absent, redirects to
@@ -153,7 +153,8 @@ Three procedure tiers:
 - `protectedProcedure` &mdash; requires `session.speaker._id` (401 otherwise)
 - `adminProcedure` &mdash; requires `session.speaker.isOrganizer` (403 otherwise)
 
-Session is obtained via `getAuthSession({ url: req.url })` in `createTRPCContext()`.
+Session is obtained via `getAuthSession({ url, headers })` in `createTRPCContext()`,
+which supports both cookie-based and Bearer token authentication.
 
 ### Admin Route Helper (`src/lib/auth/admin.ts`)
 
@@ -188,11 +189,21 @@ See `docs/CLI_AUTH.md` for the full implementation plan.
 
 1. CLI opens browser to `/cli/login?port=PORT&state=STATE`
 2. User authenticates via NextAuth (GitHub/LinkedIn) if not already signed in
-3. Browser page calls `POST /api/auth/cli/token` (cookie-authenticated)
-4. Endpoint returns a 30-day JWE token with the same payload structure as a regular
-   NextAuth JWT
-5. Browser redirects to `http://localhost:PORT/callback?token=TOKEN&state=STATE`
+3. The CLI login page (`src/app/cli/login/page.tsx`) calls `POST /api/auth/cli/token`
+4. If `port` and `state` are present, redirects to
+   `http://localhost:PORT/callback?token=TOKEN&state=STATE`
+5. If no `port`, the token is displayed for manual copy-paste
 6. CLI stores token locally and uses it as `Authorization: Bearer TOKEN`
+
+### CLI Login Page
+
+`/cli/login` (`src/app/cli/login/page.tsx` + `cli-login-client.tsx`):
+
+- Server component reads session and passes user identity to the client component
+- Client component fetches the token and handles redirect or display
+- Protected by NextAuth middleware (redirects to `/signin` if not authenticated)
+- **Security**: redirect target must be `localhost` or `127.0.0.1`, port 1024–65535,
+  `state` required when `port` is present
 
 ### Token Generation Endpoint
 
@@ -205,11 +216,36 @@ See `docs/CLI_AUTH.md` for the full implementation plan.
 - Token lifetime: 30 days
 - Returns: `{ token: string, expiresAt: string }`
 
+### Bearer Token Support
+
+`getSessionFromBearerToken()` in `src/lib/auth.ts` decodes CLI tokens:
+
+- Uses `decode` from `next-auth/jwt` with the same secret and salt
+- Validates token expiry (`exp` check — `decode()` does not check this automatically)
+- Validates required fields: `sub`, `speaker._id`, `account`
+- Returns a `Session` object or `null` on any failure
+
+`getAuthSession()` transparently supports Bearer tokens:
+
+1. Tries cookie-based auth via `_auth()` first (always takes precedence)
+2. If no cookie session, checks `req.headers` for `Authorization: Bearer <token>`
+3. Calls `getSessionFromBearerToken()` and returns the result
+4. Bearer sessions never get impersonation (only cookie sessions in dev mode)
+
+This is wired into `createTRPCContext()` which passes both `url` and `headers` to
+`getAuthSession()`, enabling Bearer auth for all tRPC endpoints automatically.
+
 ### Token Compatibility
 
 CLI tokens are encoded with the same secret, salt, and format as regular NextAuth JWTs.
 They can be decoded with `decode` from `next-auth/jwt` using the same parameters. The
 only difference is the `maxAge` (30 days vs the default session duration).
+
+### Limitations
+
+- **No token revocation**: JWTs are stateless. A denylist can be added later if needed.
+- **No refresh tokens**: users re-run `cli login` when the token expires.
+- **Full permission parity**: CLI tokens have the same permissions as browser sessions.
 
 ## WorkOS AuthKit (Workshops)
 

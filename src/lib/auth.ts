@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
 import LinkedIn from 'next-auth/providers/linkedin'
 import type { NextAuthConfig, Session, User } from 'next-auth'
+import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 import { speakerImageUrl } from '@/lib/sanity/client'
@@ -140,15 +141,62 @@ export const auth = _auth as typeof _auth &
 
 const SANITY_ID_PATTERN = /^[a-zA-Z0-9_-]+$/
 const MAX_IMPERSONATION_ID_LENGTH = 100
+const CLI_JWT_SALT = 'authjs.session-token'
+
+function extractBearerToken(headers?: Headers): string | null {
+  const value = headers?.get('authorization')
+  if (!value?.startsWith('Bearer ')) return null
+  return value.slice(7)
+}
+
+export async function getSessionFromBearerToken(
+  token: string,
+): Promise<Session | null> {
+  const secret = process.env.AUTH_SECRET
+  if (!secret) return null
+
+  try {
+    const decoded = await decode({ token, secret, salt: CLI_JWT_SALT })
+    if (!decoded) return null
+
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) return null
+
+    const speaker = decoded.speaker as Session['speaker']
+    const account = decoded.account as Session['account']
+    if (!decoded.sub || !speaker?._id || !account) return null
+
+    return {
+      expires: new Date((decoded.exp ?? 0) * 1000).toISOString(),
+      user: {
+        sub: decoded.sub,
+        name: decoded.name as string,
+        email: decoded.email as string,
+        picture: decoded.picture as string,
+      },
+      speaker,
+      account,
+    }
+  } catch {
+    return null
+  }
+}
 
 export async function getAuthSession(req?: {
   url?: string
+  headers?: Headers
 }): Promise<Session | null> {
   if (AppEnvironment.isTestMode) {
     return AppEnvironment.createMockAuthContext()
   }
 
   const session = await _auth()
+
+  // If no cookie session, try Bearer token from Authorization header
+  if (!session) {
+    const bearerToken = extractBearerToken(req?.headers)
+    if (bearerToken) return getSessionFromBearerToken(bearerToken)
+    return null
+  }
 
   // SECURITY: Impersonation is ONLY allowed in development mode
   // Explicitly check for production to prevent any bypass

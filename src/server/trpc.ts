@@ -3,7 +3,10 @@ import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
-  const session = await getAuthSession({ url: opts.req.url })
+  const session = await getAuthSession({
+    url: opts.req.url,
+    headers: opts.req.headers,
+  })
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')
