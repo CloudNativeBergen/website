@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getAuthSession } from '@/lib/auth'
@@ -45,6 +44,8 @@ interface WorkshopDetails {
 export default async function WorkshopDetailsPage({
   params,
 }: WorkshopDetailsPageProps) {
+  await connection()
+
   const { id: workshopId } = await params
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''

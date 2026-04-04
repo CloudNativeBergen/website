@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import {
@@ -29,6 +28,8 @@ export default async function ProposalPage({
   params: Promise<{ id?: string[] }>
   searchParams: Promise<{ id?: string }>
 }) {
+  await connection()
+
   // Support both /cfp/proposal/[id] and /cfp/proposal?id=[id] patterns
   const routeParams = await params
   const queryParams = await searchParams

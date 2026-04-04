@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { redirect } from 'next/navigation'
@@ -8,6 +7,8 @@ import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export default async function ProfilePage() {
+  await connection()
+
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const session = await getAuthSession({ url: fullUrl })

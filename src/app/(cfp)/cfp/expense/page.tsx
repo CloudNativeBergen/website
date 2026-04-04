@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
@@ -41,6 +40,8 @@ function NotEligibleDisplay() {
 }
 
 export default async function TravelExpensePage() {
+  await connection()
+
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const session = await getAuthSession({ url: fullUrl })

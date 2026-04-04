@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
@@ -23,6 +22,8 @@ interface ProposalViewPageProps {
 export default async function ProposalViewPage({
   params,
 }: ProposalViewPageProps) {
+  await connection()
+
   const { id } = await params
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''

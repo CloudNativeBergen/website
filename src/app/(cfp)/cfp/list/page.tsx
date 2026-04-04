@@ -1,5 +1,4 @@
-export const dynamic = 'force-dynamic'
-
+import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
@@ -21,6 +20,8 @@ import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
 
 export default async function SpeakerDashboard() {
+  await connection()
+
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const { domain } = await getConferenceForCurrentDomain({})
