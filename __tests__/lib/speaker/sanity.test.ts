@@ -24,7 +24,11 @@ vi.mock('uuid', () => ({
   v4: () => 'mock-uuid-1234',
 }))
 
-import { updateSpeaker, getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import {
+  updateSpeaker,
+  getOrCreateSpeaker,
+  getSpeaker,
+} from '@/lib/speaker/sanity'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Account, User } from 'next-auth'
 
@@ -223,5 +227,88 @@ describe('getOrCreateSpeaker', () => {
     const createArg = mockCreate.mock.calls[0][0]
     expect(createArg.imageURL).toBe('')
     expect(createArg.image).toBeUndefined()
+  })
+})
+
+describe('isOrganizer computed from conference.organizers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should propagate isOrganizer: true from Sanity response through getOrCreateSpeaker', async () => {
+    const organizer = {
+      ...baseSpeaker,
+      isOrganizer: true,
+      providers: ['github:12345'],
+    }
+    mockFetch.mockResolvedValue(organizer)
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      { email: organizer.email, name: organizer.name },
+      { provider: 'github', providerAccountId: '12345', type: 'oauth' },
+    )
+
+    expect(err).toBeNull()
+    expect(speaker.isOrganizer).toBe(true)
+  })
+
+  it('should propagate isOrganizer: false from Sanity response through getOrCreateSpeaker', async () => {
+    const regular = {
+      ...baseSpeaker,
+      isOrganizer: false,
+      providers: ['github:67890'],
+    }
+    mockFetch.mockResolvedValue(regular)
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      { email: regular.email, name: regular.name },
+      { provider: 'github', providerAccountId: '67890', type: 'oauth' },
+    )
+
+    expect(err).toBeNull()
+    expect(speaker.isOrganizer).toBe(false)
+  })
+
+  it('should propagate isOrganizer through getSpeaker', async () => {
+    mockFetch.mockResolvedValue({ ...baseSpeaker, isOrganizer: true })
+
+    const { speaker, err } = await getSpeaker('speaker-1')
+
+    expect(err).toBeNull()
+    expect(speaker.isOrganizer).toBe(true)
+  })
+
+  it('should handle undefined isOrganizer as falsy', async () => {
+    const speakerWithoutFlag = { ...baseSpeaker }
+    delete (speakerWithoutFlag as Record<string, unknown>).isOrganizer
+    mockFetch.mockResolvedValue(speakerWithoutFlag)
+
+    const { speaker, err } = await getSpeaker('speaker-1')
+
+    expect(err).toBeNull()
+    expect(speaker.isOrganizer).toBeFalsy()
+  })
+
+  it('should include isOrganizer in GROQ query for findSpeakerByProvider', async () => {
+    mockFetch.mockResolvedValue(null)
+
+    await getOrCreateSpeaker(
+      { email: 'test@test.com', name: 'Test' },
+      { provider: 'github', providerAccountId: '99', type: 'oauth' },
+    )
+
+    const query = mockFetch.mock.calls[0][0] as string
+    expect(query).toContain('isOrganizer')
+    expect(query).toContain('conference')
+  })
+
+  it('should include isOrganizer in GROQ query for getSpeaker', async () => {
+    mockFetch.mockResolvedValue(baseSpeaker)
+
+    await getSpeaker('speaker-1')
+
+    const query = mockFetch.mock.calls[0][0] as string
+    expect(query).toContain('isOrganizer')
+    expect(query).toContain('conference')
   })
 })

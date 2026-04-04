@@ -9,6 +9,10 @@ import { v4 as randomUUID } from 'uuid'
 import { Account, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
 import { cacheLife, cacheTag } from 'next/cache'
+
+// Computed field: speaker is an organizer if referenced in any conference's organizers array
+const IS_ORGANIZER_FIELD =
+  '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
 export function providerAccount(
   provider: string,
   providerAccountId: string,
@@ -43,7 +47,8 @@ async function findSpeakerByProvider(
       `*[ _type == "speaker" && $id in providers][0]{
       ...,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": coalesce(image.asset->url, imageURL),
+      ${IS_ORGANIZER_FIELD}
     }`,
       { id },
     )
@@ -65,7 +70,8 @@ async function findSpeakerByEmail(
       `*[ _type == "speaker" && email == $email][0]{
       ...,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": coalesce(image.asset->url, imageURL),
+      ${IS_ORGANIZER_FIELD}
     }`,
       { email },
     )
@@ -165,7 +171,8 @@ export async function getSpeaker(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": coalesce(image.asset->url, imageURL),
+      ${IS_ORGANIZER_FIELD}
     }`,
       { speakerId },
       { cache: 'no-store' },
@@ -376,7 +383,7 @@ export async function getOrganizerCount(): Promise<{
   let err = null
 
   try {
-    const query = groq`count(*[_type == "speaker" && isOrganizer == true])`
+    const query = groq`count(*[_type == "conference"].organizers[]._ref)`
     count = await clientRead.fetch(query, {}, { cache: 'no-store' })
   } catch (error) {
     err = error as Error
@@ -393,10 +400,11 @@ export async function getOrganizers(): Promise<{
   let err = null
 
   try {
-    const query = groq`*[_type == "speaker" && isOrganizer == true] {
+    const query = groq`*[_type == "speaker" && _id in *[_type == "conference"].organizers[]._ref] {
       ...,
       "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
+      "image": coalesce(image.asset->url, imageURL),
+      "isOrganizer": true
     } | order(name asc)`
 
     speakers = await clientRead.fetch(query, {}, { cache: 'no-store' })

@@ -11,7 +11,7 @@ export async function getSpeakerByEmail(
         _id,
         name,
         email,
-        isOrganizer,
+        "isOrganizer": _id in *[_type == "conference"].organizers[]._ref,
         "image": coalesce(image.asset->url, imageURL),
         "slug": slug.current
       }

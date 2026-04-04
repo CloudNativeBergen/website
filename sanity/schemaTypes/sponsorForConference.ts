@@ -204,7 +204,7 @@ export default defineType({
         filter: ({ document }: { document: any }) => {
           if (!document?.conference?._ref) {
             return {
-              filter: 'isOrganizer == true',
+              filter: '_id in *[_type == \"conference\"].organizers[]._ref',
             }
           }
 

@@ -108,12 +108,6 @@ export default defineType({
       description: 'Speaker biography displayed on the public profile',
     }),
     defineField({
-      name: 'isOrganizer',
-      title: 'Is this a organizer?',
-      type: 'boolean',
-      description: 'Grants access to the admin interface',
-    }),
-    defineField({
       title: 'Flags',
       description: 'Meta information about the speaker',
       name: 'flags',
