@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   CheckCircleIcon,
   ClipboardDocumentIcon,
+  CommandLineIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
-type Status = 'loading' | 'redirecting' | 'display-token' | 'error'
+type Status = 'confirm' | 'loading' | 'redirecting' | 'display-token' | 'error'
 
 const MIN_PORT = 1024
 const MAX_PORT = 65535
@@ -25,10 +26,12 @@ export function buildCallbackUrl(
   port: string,
   token: string,
   state: string,
+  name: string,
 ): URL {
   const url = new URL(`http://localhost:${port}/callback`)
   url.searchParams.set('token', token)
   url.searchParams.set('state', state)
+  url.searchParams.set('name', name)
   if (!isLocalhostOrigin(url)) {
     throw new Error('Redirect target must be localhost')
   }
@@ -48,7 +51,7 @@ export default function CLILoginClient({
   userName,
   userEmail,
 }: CLILoginClientProps) {
-  const [status, setStatus] = useState<Status>('loading')
+  const [status, setStatus] = useState<Status>('confirm')
   const [token, setToken] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState(false)
@@ -67,6 +70,8 @@ export default function CLILoginClient({
       }
     }
 
+    setStatus('loading')
+
     try {
       const res = await fetch('/api/auth/cli/token', { method: 'POST' })
       if (!res.ok) {
@@ -80,7 +85,7 @@ export default function CLILoginClient({
 
       if (port && state) {
         setStatus('redirecting')
-        const callbackUrl = buildCallbackUrl(port, jwt, state)
+        const callbackUrl = buildCallbackUrl(port, jwt, state, userName)
         window.location.href = callbackUrl.toString()
       } else {
         setToken(jwt)
@@ -90,12 +95,7 @@ export default function CLILoginClient({
       setError('Failed to connect to authentication service')
       setStatus('error')
     }
-  }, [port, state])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount pattern
-    fetchTokenAndRedirect()
-  }, [fetchTokenAndRedirect])
+  }, [port, state, userName])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(token)
@@ -114,6 +114,23 @@ export default function CLILoginClient({
           {userName} ({userEmail})
         </span>
       </p>
+
+      {status === 'confirm' && (
+        <div className="mt-8">
+          <CommandLineIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            The <span className="font-mono font-medium">cnctl</span> CLI is
+            requesting access to your account.
+          </p>
+          <button
+            type="button"
+            onClick={fetchTokenAndRedirect}
+            className="mt-6 rounded-lg bg-brand-cloud-blue px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-cloud-blue-hover"
+          >
+            Authorize CLI
+          </button>
+        </div>
+      )}
 
       {status === 'loading' && (
         <div className="mt-8">

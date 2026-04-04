@@ -9,17 +9,18 @@ import CLILoginClient, {
 
 describe('buildCallbackUrl', () => {
   it('should build a valid localhost callback URL', () => {
-    const url = buildCallbackUrl('8080', 'my-token', 'my-state')
+    const url = buildCallbackUrl('8080', 'my-token', 'my-state', 'Alice')
     expect(url.hostname).toBe('localhost')
     expect(url.port).toBe('8080')
     expect(url.pathname).toBe('/callback')
     expect(url.searchParams.get('token')).toBe('my-token')
     expect(url.searchParams.get('state')).toBe('my-state')
+    expect(url.searchParams.get('name')).toBe('Alice')
   })
 
   it('should reject non-localhost hosts', () => {
     // buildCallbackUrl hardcodes localhost, so this tests the safety check
-    expect(() => buildCallbackUrl('8080', 't', 's')).not.toThrow()
+    expect(() => buildCallbackUrl('8080', 't', 's', 'n')).not.toThrow()
   })
 })
 
@@ -35,22 +36,26 @@ describe('CLILoginClient', () => {
     vi.restoreAllMocks()
   })
 
-  it('should show loading state initially', () => {
-    fetchMock.mockReturnValue(new Promise(() => {})) // never resolves
+  it('should show confirm screen initially', () => {
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
-    expect(screen.getByText(/generating token/i)).toBeInTheDocument()
+    expect(screen.getByText(/requesting access/i)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /authorize cli/i }),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(/Test User \(test@example\.com\)/),
     ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('should display token for manual copy when no port is provided', async () => {
+  it('should display token for manual copy after authorizing', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ token: 'jwt-token-value' }),
     })
 
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText('jwt-token-value')).toBeInTheDocument()
@@ -58,7 +63,7 @@ describe('CLILoginClient', () => {
     expect(screen.getByText(/copy this token/i)).toBeInTheDocument()
   })
 
-  it('should redirect to localhost callback when port and state are provided', async () => {
+  it('should redirect to localhost callback after authorizing', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ token: 'jwt-token-value' }),
@@ -90,6 +95,8 @@ describe('CLILoginClient', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
+
     await waitFor(() => {
       expect(hrefSetter).toHaveBeenCalledWith(
         expect.stringContaining('http://localhost:9876/callback'),
@@ -99,6 +106,7 @@ describe('CLILoginClient', () => {
     const redirectUrl = new URL(hrefSetter.mock.calls[0][0])
     expect(redirectUrl.searchParams.get('token')).toBe('jwt-token-value')
     expect(redirectUrl.searchParams.get('state')).toBe('random-state')
+    expect(redirectUrl.searchParams.get('name')).toBe('Test User')
 
     locationHref.mockRestore()
   })
@@ -112,6 +120,8 @@ describe('CLILoginClient', () => {
         userEmail="test@example.com"
       />,
     )
+
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
@@ -129,6 +139,8 @@ describe('CLILoginClient', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
+
     await waitFor(() => {
       expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
     })
@@ -144,6 +156,8 @@ describe('CLILoginClient', () => {
       />,
     )
 
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
+
     await waitFor(() => {
       expect(screen.getByText(/missing state/i)).toBeInTheDocument()
     })
@@ -158,6 +172,7 @@ describe('CLILoginClient', () => {
     })
 
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Unauthorized')).toBeInTheDocument()
@@ -168,6 +183,7 @@ describe('CLILoginClient', () => {
     fetchMock.mockRejectedValue(new Error('Network error'))
 
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/failed to connect/i)).toBeInTheDocument()
@@ -184,6 +200,7 @@ describe('CLILoginClient', () => {
     Object.assign(navigator, { clipboard: { writeText } })
 
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText('copy-me')).toBeInTheDocument()
@@ -210,6 +227,7 @@ describe('CLILoginClient', () => {
       })
 
     render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Server error')).toBeInTheDocument()
