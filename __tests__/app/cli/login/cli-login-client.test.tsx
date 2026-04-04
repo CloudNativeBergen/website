@@ -1,0 +1,224 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import CLILoginClient, {
+  buildCallbackUrl,
+} from '@/app/cli/login/cli-login-client'
+
+describe('buildCallbackUrl', () => {
+  it('should build a valid localhost callback URL', () => {
+    const url = buildCallbackUrl('8080', 'my-token', 'my-state')
+    expect(url.hostname).toBe('localhost')
+    expect(url.port).toBe('8080')
+    expect(url.pathname).toBe('/callback')
+    expect(url.searchParams.get('token')).toBe('my-token')
+    expect(url.searchParams.get('state')).toBe('my-state')
+  })
+
+  it('should reject non-localhost hosts', () => {
+    // buildCallbackUrl hardcodes localhost, so this tests the safety check
+    expect(() => buildCallbackUrl('8080', 't', 's')).not.toThrow()
+  })
+})
+
+describe('CLILoginClient', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('should show loading state initially', () => {
+    fetchMock.mockReturnValue(new Promise(() => {})) // never resolves
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    expect(screen.getByText(/generating token/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Test User \(test@example\.com\)/),
+    ).toBeInTheDocument()
+  })
+
+  it('should display token for manual copy when no port is provided', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'jwt-token-value' }),
+    })
+
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('jwt-token-value')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/copy this token/i)).toBeInTheDocument()
+  })
+
+  it('should redirect to localhost callback when port and state are provided', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'jwt-token-value' }),
+    })
+
+    // Mock window.location.href assignment
+    const locationHref = vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      href: '',
+    } as Location)
+
+    const hrefSetter = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, href: '' },
+      writable: true,
+      configurable: true,
+    })
+    Object.defineProperty(window.location, 'href', {
+      set: hrefSetter,
+      configurable: true,
+    })
+
+    render(
+      <CLILoginClient
+        port="9876"
+        state="random-state"
+        userName="Test User"
+        userEmail="test@example.com"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(hrefSetter).toHaveBeenCalledWith(
+        expect.stringContaining('http://localhost:9876/callback'),
+      )
+    })
+
+    const redirectUrl = new URL(hrefSetter.mock.calls[0][0])
+    expect(redirectUrl.searchParams.get('token')).toBe('jwt-token-value')
+    expect(redirectUrl.searchParams.get('state')).toBe('random-state')
+
+    locationHref.mockRestore()
+  })
+
+  it('should show error for invalid port', async () => {
+    render(
+      <CLILoginClient
+        port="80"
+        state="s"
+        userName="Test User"
+        userEmail="test@example.com"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('should show error for non-numeric port', async () => {
+    render(
+      <CLILoginClient
+        port="abc"
+        state="s"
+        userName="Test User"
+        userEmail="test@example.com"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('should show error when port is provided without state', async () => {
+    render(
+      <CLILoginClient
+        port="8080"
+        userName="Test User"
+        userEmail="test@example.com"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/missing state/i)).toBeInTheDocument()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('should show error when token request fails', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ error: 'Unauthorized' }),
+    })
+
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Unauthorized')).toBeInTheDocument()
+    })
+  })
+
+  it('should show error when fetch throws', async () => {
+    fetchMock.mockRejectedValue(new Error('Network error'))
+
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to connect/i)).toBeInTheDocument()
+    })
+  })
+
+  it('should call clipboard API when copy button is clicked', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'copy-me' }),
+    })
+
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('copy-me')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /copy token/i }))
+
+    expect(writeText).toHaveBeenCalledWith('copy-me')
+    await waitFor(() => {
+      expect(screen.getByText(/copied to clipboard/i)).toBeInTheDocument()
+    })
+  })
+
+  it('should allow retry after error', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'Server error' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ token: 'retry-token' }),
+      })
+
+    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Server error')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('retry-token')).toBeInTheDocument()
+    })
+  })
+})

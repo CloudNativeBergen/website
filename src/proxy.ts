@@ -74,7 +74,8 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 
   if (
     (pathname.startsWith('/cfp') && pathname !== '/cfp') ||
-    pathname.startsWith('/admin')
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/cli')
   ) {
     return nextAuthMiddleware(req, { params: Promise.resolve({}) })
   }
@@ -83,5 +84,11 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ['/cfp/:path*', '/admin/:path*', '/workshop', '/workshop/:path*'],
+  matcher: [
+    '/cfp/:path*',
+    '/admin/:path*',
+    '/cli/:path*',
+    '/workshop',
+    '/workshop/:path*',
+  ],
 }
