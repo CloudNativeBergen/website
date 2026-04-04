@@ -5,7 +5,12 @@
  * All endpoints are admin-only except for public verification
  */
 
-import { router, adminProcedure, publicProcedure } from '@/server/trpc'
+import {
+  router,
+  adminProcedure,
+  publicProcedure,
+  resolveConferenceId,
+} from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { isLocalhostEnvironment } from '@/lib/environment/localhost'
 import {
@@ -42,9 +47,10 @@ export const badgeRouter = router({
     .input(IssueBadgeInputSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        const conferenceId = await resolveConferenceId()
         const { exists, badge: existingBadge } = await checkBadgeExists(
           input.speakerId,
-          input.conferenceId,
+          conferenceId,
           input.badgeType,
         )
 
@@ -89,7 +95,7 @@ export const badgeRouter = router({
               references($conferenceId) &&
               status in ["accepted", "confirmed"]
             ]) > 0`,
-            { speakerId: speaker._id, conferenceId: input.conferenceId },
+            { speakerId: speaker._id, conferenceId },
           )
 
           if (!hasAcceptedTalk) {
@@ -106,14 +112,6 @@ export const badgeRouter = router({
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Conference not found',
-          })
-        }
-
-        // Verify the conference matches the requested conferenceId
-        if (conference._id !== input.conferenceId) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Conference ID does not match current domain',
           })
         }
 
@@ -142,7 +140,7 @@ export const badgeRouter = router({
               references($conferenceId) &&
               status in ["accepted", "confirmed"]
             ][0]{_id, title}`,
-            { speakerId: speaker._id, conferenceId: input.conferenceId },
+            { speakerId: speaker._id, conferenceId },
           )
           if (acceptedTalk) {
             talkId = acceptedTalk._id
@@ -248,6 +246,7 @@ export const badgeRouter = router({
   bulkIssue: adminProcedure
     .input(BulkIssueBadgeInputSchema)
     .mutation(async ({ input, ctx }) => {
+      const conferenceId = await resolveConferenceId()
       const results: Array<{
         speakerId: string
         success: boolean
@@ -260,7 +259,7 @@ export const badgeRouter = router({
         try {
           const { exists } = await checkBadgeExists(
             speakerId,
-            input.conferenceId,
+            conferenceId,
             input.badgeType,
           )
 
@@ -310,7 +309,7 @@ export const badgeRouter = router({
                 references($conferenceId) &&
                 status in ["accepted", "confirmed"]
               ]) > 0`,
-              { speakerId: speaker._id, conferenceId: input.conferenceId },
+              { speakerId: speaker._id, conferenceId },
             )
 
             if (!hasAcceptedTalk) {
@@ -331,16 +330,6 @@ export const badgeRouter = router({
               speakerId,
               success: false,
               error: 'Conference not found',
-            })
-            continue
-          }
-
-          // Verify the conference matches the requested conferenceId
-          if (conference._id !== input.conferenceId) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Conference ID does not match current domain',
             })
             continue
           }
@@ -370,7 +359,7 @@ export const badgeRouter = router({
                 references($conferenceId) &&
                 status in ["accepted", "confirmed"]
               ][0]{_id, title}`,
-              { speakerId: speaker._id, conferenceId: input.conferenceId },
+              { speakerId: speaker._id, conferenceId },
             )
             if (acceptedTalk) {
               talkId = acceptedTalk._id
@@ -470,20 +459,6 @@ export const badgeRouter = router({
    */
   list: adminProcedure.input(ListBadgesInputSchema).query(async ({ input }) => {
     try {
-      if (input.conferenceId) {
-        const { badges, error } = await listBadgesForConference(
-          input.conferenceId,
-        )
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to list badges',
-            cause: error,
-          })
-        }
-        return badges || []
-      }
-
       if (input.speakerId) {
         const { badges, error } = await listBadgesForSpeaker(input.speakerId)
         if (error) {
@@ -496,10 +471,16 @@ export const badgeRouter = router({
         return badges || []
       }
 
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Either conferenceId or speakerId must be provided',
-      })
+      const conferenceId = await resolveConferenceId()
+      const { badges, error } = await listBadgesForConference(conferenceId)
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list badges',
+          cause: error,
+        })
+      }
+      return badges || []
     } catch (error) {
       if (error instanceof TRPCError) throw error
 

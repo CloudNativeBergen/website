@@ -125,7 +125,7 @@ async function CachedVolunteerContent({ domain }: { domain: string }) {
           </div>
 
           <div className="mt-10">
-            <VolunteerForm conferenceId={conference._id} />
+            <VolunteerForm />
           </div>
 
           <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">

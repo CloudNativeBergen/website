@@ -36,9 +36,7 @@ export function ContractTemplateListPage({
     data: templates,
     isLoading,
     refetch,
-  } = api.sponsor.contractTemplates.list.useQuery({
-    conferenceId: conference._id,
-  })
+  } = api.sponsor.contractTemplates.list.useQuery({})
 
   const deleteMutation = api.sponsor.contractTemplates.delete.useMutation({
     onSuccess: () => {

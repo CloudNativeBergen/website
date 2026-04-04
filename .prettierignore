@@ -7,3 +7,4 @@ coverage
 .turbo
 node_modules
 .vercel
+cli

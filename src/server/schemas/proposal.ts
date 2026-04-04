@@ -85,7 +85,6 @@ export const ProposalInputSchema = ProposalInputBaseSchema.refine(
 // Admin-specific proposal creation (includes speaker IDs)
 export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
   speakers: z.array(z.string()).min(1, 'At least one speaker is required'),
-  conferenceId: z.string().min(1, 'Conference ID is required'),
 }).refine(
   (data) => {
     // Workshop formats require capacity

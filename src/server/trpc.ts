@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({
@@ -91,4 +92,15 @@ const CLIENT_ERROR_CODES = new Set([
 
 export function isClientError(code: string): boolean {
   return CLIENT_ERROR_CODES.has(code)
+}
+
+export async function resolveConferenceId(): Promise<string> {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?._id) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Could not resolve conference from domain',
+    })
+  }
+  return conference._id
 }

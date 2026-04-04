@@ -9,18 +9,25 @@ import CLILoginClient, {
 
 describe('buildCallbackUrl', () => {
   it('should build a valid localhost callback URL', () => {
-    const url = buildCallbackUrl('8080', 'my-token', 'my-state', 'Alice')
+    const url = buildCallbackUrl(
+      '8080',
+      'my-token',
+      'my-state',
+      'Alice',
+      'conf-123',
+    )
     expect(url.hostname).toBe('localhost')
     expect(url.port).toBe('8080')
     expect(url.pathname).toBe('/callback')
     expect(url.searchParams.get('token')).toBe('my-token')
     expect(url.searchParams.get('state')).toBe('my-state')
     expect(url.searchParams.get('name')).toBe('Alice')
+    expect(url.searchParams.get('conference_id')).toBe('conf-123')
   })
 
   it('should reject non-localhost hosts', () => {
     // buildCallbackUrl hardcodes localhost, so this tests the safety check
-    expect(() => buildCallbackUrl('8080', 't', 's', 'n')).not.toThrow()
+    expect(() => buildCallbackUrl('8080', 't', 's', 'n', 'c')).not.toThrow()
   })
 })
 
@@ -37,7 +44,13 @@ describe('CLILoginClient', () => {
   })
 
   it('should show confirm screen initially', () => {
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     expect(screen.getByText(/requesting access/i)).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /authorize cli/i }),
@@ -54,7 +67,13 @@ describe('CLILoginClient', () => {
       json: () => Promise.resolve({ token: 'jwt-token-value' }),
     })
 
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
@@ -92,6 +111,7 @@ describe('CLILoginClient', () => {
         state="random-state"
         userName="Test User"
         userEmail="test@example.com"
+        conferenceId="conf-123"
       />,
     )
 
@@ -118,6 +138,7 @@ describe('CLILoginClient', () => {
         state="s"
         userName="Test User"
         userEmail="test@example.com"
+        conferenceId="conf-123"
       />,
     )
 
@@ -136,6 +157,7 @@ describe('CLILoginClient', () => {
         state="s"
         userName="Test User"
         userEmail="test@example.com"
+        conferenceId="conf-123"
       />,
     )
 
@@ -153,6 +175,7 @@ describe('CLILoginClient', () => {
         port="8080"
         userName="Test User"
         userEmail="test@example.com"
+        conferenceId="conf-123"
       />,
     )
 
@@ -171,7 +194,13 @@ describe('CLILoginClient', () => {
       json: () => Promise.resolve({ error: 'Unauthorized' }),
     })
 
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
@@ -182,7 +211,13 @@ describe('CLILoginClient', () => {
   it('should show error when fetch throws', async () => {
     fetchMock.mockRejectedValue(new Error('Network error'))
 
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
@@ -199,7 +234,13 @@ describe('CLILoginClient', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
@@ -226,7 +267,13 @@ describe('CLILoginClient', () => {
         json: () => Promise.resolve({ token: 'retry-token' }),
       })
 
-    render(<CLILoginClient userName="Test User" userEmail="test@example.com" />)
+    render(
+      <CLILoginClient
+        userName="Test User"
+        userEmail="test@example.com"
+        conferenceId="conf-123"
+      />,
+    )
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {

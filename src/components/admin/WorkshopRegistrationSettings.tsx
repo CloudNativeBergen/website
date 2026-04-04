@@ -11,13 +11,11 @@ import { api } from '@/lib/trpc/client'
 import { AdminButton } from '@/components/admin/AdminButton'
 
 interface WorkshopRegistrationSettingsProps {
-  conferenceId: string
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
 }
 
 export function WorkshopRegistrationSettings({
-  conferenceId,
   workshopRegistrationStart,
   workshopRegistrationEnd,
 }: WorkshopRegistrationSettingsProps) {
@@ -49,7 +47,6 @@ export function WorkshopRegistrationSettings({
   const handleSave = async () => {
     setError(null)
     updateRegistrationTimes.mutate({
-      conferenceId,
       startDate: startDate || null,
       endDate: endDate || null,
     })

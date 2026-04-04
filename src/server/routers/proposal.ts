@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { v4 as uuidv4 } from 'uuid'
-import { router, protectedProcedure, adminProcedure } from '@/server/trpc'
+import {
+  router,
+  protectedProcedure,
+  adminProcedure,
+  resolveConferenceId,
+} from '@/server/trpc'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
 import {
   ProposalInputSchema,
@@ -635,7 +640,8 @@ export const proposalRouter = router({
       .input(ProposalAdminCreateSchema)
       .mutation(async ({ input }) => {
         try {
-          const { speakers, conferenceId, ...proposalData } = input
+          const { speakers, ...proposalData } = input
+          const conferenceId = await resolveConferenceId()
 
           // Convert speaker IDs to references
           const speakerRefs = speakers.map((id) => createReference(id))

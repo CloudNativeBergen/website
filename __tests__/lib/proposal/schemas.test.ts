@@ -266,7 +266,6 @@ describe('ProposalAdminCreateSchema', () => {
     const result = ProposalAdminCreateSchema.safeParse({
       ...fullProposal,
       speakers: ['speaker-1'],
-      conferenceId: 'conf-1',
     })
     expect(result.success).toBe(true)
   })
@@ -275,16 +274,6 @@ describe('ProposalAdminCreateSchema', () => {
     const result = ProposalAdminCreateSchema.safeParse({
       ...fullProposal,
       speakers: [],
-      conferenceId: 'conf-1',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('requires conferenceId', () => {
-    const result = ProposalAdminCreateSchema.safeParse({
-      ...fullProposal,
-      speakers: ['s1'],
-      conferenceId: '',
     })
     expect(result.success).toBe(false)
   })
@@ -294,7 +283,6 @@ describe('ProposalAdminCreateSchema', () => {
       ...fullProposal,
       format: Format.workshop_240,
       speakers: ['s1'],
-      conferenceId: 'conf-1',
     })
     expect(result.success).toBe(false)
   })

@@ -78,7 +78,6 @@ export function WorkshopsClientPage({
   const { data: signupsData, refetch: refetchSignups } =
     api.workshop.getAllSignups.useQuery(
       {
-        conferenceId,
         pageSize: 100,
       },
       {
@@ -98,14 +97,9 @@ export function WorkshopsClientPage({
     )
 
   const { data: statsData, refetch: refetchStats } =
-    api.workshop.getWorkshopSummary.useQuery(
-      {
-        conferenceId,
-      },
-      {
-        enabled: !!conferenceId,
-      },
-    )
+    api.workshop.getWorkshopSummary.useQuery(undefined, {
+      enabled: !!conferenceId,
+    })
 
   const confirmMutation = api.workshop.batchConfirmSignups.useMutation({
     onSuccess: () => {

@@ -118,7 +118,6 @@ export function SponsorCRMPipeline({
   // Fetch with filters
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery(
     {
-      conferenceId,
       assignedTo:
         assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
       unassignedOnly: assignedToFilter === 'unassigned',
@@ -275,9 +274,7 @@ export function SponsorCRMPipeline({
   }, [session?.speaker?._id, searchParams, router])
 
   // Fetch tiers for filters
-  const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery({
-    conferenceId,
-  })
+  const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery()
 
   // Use organizers from conference data
   const organizers = useMemo(() => {
@@ -480,7 +477,6 @@ export function SponsorCRMPipeline({
             if (createdId) {
               const created = utils.sponsor.crm.list
                 .getData({
-                  conferenceId,
                   assignedTo:
                     assignedToFilter === 'unassigned'
                       ? undefined

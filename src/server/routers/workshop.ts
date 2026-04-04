@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { router, publicProcedure, adminProcedure } from '@/server/trpc'
+import {
+  router,
+  publicProcedure,
+  adminProcedure,
+  resolveConferenceId,
+} from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { clientWrite } from '@/lib/sanity/client'
@@ -37,10 +42,11 @@ import { WorkshopSignupStatus } from '@/lib/workshop/types'
 export const workshopRouter = router({
   listWorkshops: publicProcedure
     .input(workshopListInputSchema)
-    .query(async ({ input }) => {
+    .query(async () => {
       try {
+        const conferenceId = await resolveConferenceId()
         const { workshops, workshopsError } = await getWorkshops({
-          conferenceId: input.conferenceId,
+          conferenceId,
           statuses: [Status.confirmed],
           includeScheduleInfo: true,
         })
@@ -67,9 +73,10 @@ export const workshopRouter = router({
     .input(workshopAvailabilitySchema)
     .query(async ({ input }) => {
       try {
+        const conferenceId = await resolveConferenceId()
         const belongs = await verifyWorkshopBelongsToConference(
           input.workshopId,
-          input.conferenceId,
+          conferenceId,
         )
 
         if (!belongs) {
@@ -112,7 +119,9 @@ export const workshopRouter = router({
         const userWorkOSId =
           input.userWorkOSId || sessionUser?.id || sessionUser?.sub
 
-        if (!userWorkOSId || !input.conferenceId) {
+        const conferenceId = await resolveConferenceId()
+
+        if (!userWorkOSId) {
           return {
             success: true,
             data: [],
@@ -122,7 +131,7 @@ export const workshopRouter = router({
 
         const signups = await getWorkshopSignups(
           userWorkOSId,
-          input.conferenceId,
+          conferenceId,
           'status' in input && typeof input.status === 'string'
             ? input.status
             : undefined,
@@ -293,8 +302,9 @@ export const workshopRouter = router({
     .input(workshopSignupFiltersSchema)
     .query(async ({ input }) => {
       try {
+        const conferenceId = await resolveConferenceId()
         const signups = await getAllWorkshopSignups({
-          conferenceId: input.conferenceId,
+          conferenceId,
           workshopId: input.workshopId,
           status: input.status as WorkshopSignupStatus | undefined,
           page: input.page,
@@ -302,7 +312,7 @@ export const workshopRouter = router({
         })
 
         const allSignups = await getAllWorkshopSignups({
-          conferenceId: input.conferenceId,
+          conferenceId,
           workshopId: input.workshopId,
           status: input.status as WorkshopSignupStatus | undefined,
         })
@@ -605,25 +615,24 @@ export const workshopRouter = router({
       }
     }),
 
-  getWorkshopSummary: adminProcedure
-    .input(z.object({ conferenceId: z.string() }))
-    .query(async ({ input }) => {
-      try {
-        const statistics = await getWorkshopStatistics(input.conferenceId)
+  getWorkshopSummary: adminProcedure.query(async () => {
+    try {
+      const conferenceId = await resolveConferenceId()
+      const statistics = await getWorkshopStatistics(conferenceId)
 
-        return {
-          success: true,
-          data: statistics,
-          generatedAt: new Date().toISOString(),
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to generate workshop summary',
-          cause: error,
-        })
+      return {
+        success: true,
+        data: statistics,
+        generatedAt: new Date().toISOString(),
       }
-    }),
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to generate workshop summary',
+        cause: error,
+      })
+    }
+  }),
 
   manualSignupForWorkshop: adminProcedure
     .input(workshopSignupInputSchema)
@@ -698,14 +707,14 @@ export const workshopRouter = router({
   updateRegistrationTimes: adminProcedure
     .input(
       z.object({
-        conferenceId: z.string().min(1, 'Conference ID is required'),
         startDate: z.string().nullable(),
         endDate: z.string().nullable(),
       }),
     )
     .mutation(async ({ input }) => {
       try {
-        const { conferenceId, startDate, endDate } = input
+        const conferenceId = await resolveConferenceId()
+        const { startDate, endDate } = input
 
         // Validate dates
         if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {

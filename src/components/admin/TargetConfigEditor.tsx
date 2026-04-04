@@ -10,14 +10,12 @@ import { CurveSelectionGrid } from './CurvePreview'
 import { getCurveMetadata } from '@/lib/tickets/curve-utils'
 
 interface TargetConfigEditorProps {
-  conferenceId: string
   currentConfig?: SalesTargetConfig
   capacity: number
   currentTicketsSold?: number
 }
 
 export function TargetConfigEditor({
-  conferenceId,
   currentConfig,
   capacity,
   currentTicketsSold = 0,
@@ -55,7 +53,6 @@ export function TargetConfigEditor({
     if (!config.salesStartDate) return
 
     updateSettings.mutate({
-      conferenceId,
       ticketCapacity: editCapacity,
       ticketTargets: config,
     })

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { router, adminProcedure } from '@/server/trpc'
+import { router, adminProcedure, resolveConferenceId } from '@/server/trpc'
 import { getSpeakers, getOrganizers } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
@@ -13,46 +13,41 @@ const speakerSearchSchema = z.object({
 })
 
 export const speakersRouter = router({
-  list: adminProcedure
-    .input(
-      z.object({
-        conferenceId: z.string().optional(),
-      }),
-    )
-    .query(async ({ input }) => {
-      try {
-        const { speakers, err } = await getSpeakers(
-          input.conferenceId || undefined,
-          [Status.submitted, Status.accepted, Status.confirmed],
-          true,
-        )
+  list: adminProcedure.query(async () => {
+    try {
+      const conferenceId = await resolveConferenceId()
+      const { speakers, err } = await getSpeakers(
+        conferenceId,
+        [Status.submitted, Status.accepted, Status.confirmed],
+        true,
+      )
 
-        if (err) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch speakers',
-            cause: err,
-          })
-        }
-
-        return speakers.map((speaker) => ({
-          _id: speaker._id,
-          name: speaker.name || '',
-          title: speaker.title || '',
-          email: speaker.email || '',
-          image: speaker.image || null,
-          slug: speaker.slug || null,
-        }))
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
+      if (err) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch speakers',
-          cause: error,
+          cause: err,
         })
       }
-    }),
+
+      return speakers.map((speaker) => ({
+        _id: speaker._id,
+        name: speaker.name || '',
+        title: speaker.title || '',
+        email: speaker.email || '',
+        image: speaker.image || null,
+        slug: speaker.slug || null,
+      }))
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch speakers',
+        cause: error,
+      })
+    }
+  }),
 
   search: adminProcedure.input(speakerSearchSchema).query(async ({ input }) => {
     try {

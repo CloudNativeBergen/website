@@ -57,7 +57,6 @@ const severityHeaderColor: Record<Severity, string> = {
 }
 
 interface SponsorActionItemsProps {
-  conferenceId: string
   organizerId?: string
 }
 
@@ -115,13 +114,8 @@ function ActionRow({ item }: { item: ActionItem }) {
   )
 }
 
-export function SponsorActionItems({
-  conferenceId,
-  organizerId,
-}: SponsorActionItemsProps) {
-  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
-    conferenceId,
-  })
+export function SponsorActionItems({ organizerId }: SponsorActionItemsProps) {
+  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({})
 
   const actionItems = useMemo(() => {
     if (!sponsors.length) return []

@@ -18,6 +18,7 @@ const meta = {
   args: {
     userName: 'Jane Doe',
     userEmail: 'jane@example.com',
+    conferenceId: 'conf-123',
   },
 } satisfies Meta<typeof CLILoginClient>
 

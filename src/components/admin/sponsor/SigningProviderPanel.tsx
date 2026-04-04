@@ -44,7 +44,6 @@ export function SigningProviderPanel({
   const handleChange = (value: 'self-hosted' | 'adobe-sign') => {
     if (value === currentProvider) return
     mutation.mutate({
-      conferenceId: conference._id,
       signingProvider: value,
     })
   }

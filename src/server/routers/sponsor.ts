@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
-import { router, adminProcedure } from '../trpc'
+import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   SponsorInputSchema,
   SponsorUpdateSchema,
@@ -373,23 +373,20 @@ export const sponsorRouter = router({
       return sponsorTiers || []
     }),
 
-    listByConference: adminProcedure
-      .input(z.object({ conferenceId: z.string() }))
-      .query(async ({ input }) => {
-        const { sponsorTiers, error } = await getAllSponsorTiers(
-          input.conferenceId,
-        )
+    listByConference: adminProcedure.query(async () => {
+      const conferenceId = await resolveConferenceId()
+      const { sponsorTiers, error } = await getAllSponsorTiers(conferenceId)
 
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch sponsor tiers for conference',
-            cause: error,
-          })
-        }
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch sponsor tiers for conference',
+          cause: error,
+        })
+      }
 
-        return sponsorTiers || []
-      }),
+      return sponsorTiers || []
+    }),
 
     getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
       const { sponsorTier, error } = await getSponsorTier(input.id)
@@ -536,38 +533,33 @@ export const sponsorRouter = router({
   }),
 
   crm: router({
-    listOrganizers: adminProcedure
-      .input(z.object({ conferenceId: z.string().optional() }).optional())
-      .query(async ({ input }) => {
-        const { getOrganizers, getOrganizersByConference } =
-          await import('@/lib/speaker/sanity')
+    listOrganizers: adminProcedure.query(async () => {
+      const conferenceId = await resolveConferenceId()
+      const { getOrganizersByConference } = await import('@/lib/speaker/sanity')
 
-        const { speakers, err } = input?.conferenceId
-          ? await getOrganizersByConference(input.conferenceId)
-          : await getOrganizers()
+      const { speakers, err } = await getOrganizersByConference(conferenceId)
 
-        if (err) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to list organizers',
-            cause: err,
-          })
-        }
+      if (err) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list organizers',
+          cause: err,
+        })
+      }
 
-        return (
-          speakers?.map((s) => ({
-            _id: s._id,
-            name: s.name,
-            email: s.email,
-            avatar: s.image,
-          })) || []
-        )
-      }),
+      return (
+        speakers?.map((s) => ({
+          _id: s._id,
+          name: s.name,
+          email: s.email,
+          avatar: s.image,
+        })) || []
+      )
+    }),
 
     list: adminProcedure
       .input(
         z.object({
-          conferenceId: z.string().min(1),
           status: z.array(z.string()).optional(),
           invoiceStatus: z.array(z.string()).optional(),
           assignedTo: z.string().optional(),
@@ -577,8 +569,10 @@ export const sponsorRouter = router({
         }),
       )
       .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+
         const { sponsors, error } = await listSponsorsForConference(
-          input.conferenceId,
+          conferenceId,
           {
             status: input.status,
             invoiceStatus: input.invoiceStatus,
@@ -1112,7 +1106,6 @@ export const sponsorRouter = router({
       list: adminProcedure
         .input(
           z.object({
-            conferenceId: z.string().optional(),
             sponsorForConferenceId: z.string().optional(),
             limit: z.number().optional(),
           }),
@@ -1135,24 +1128,21 @@ export const sponsorRouter = router({
             return activities || []
           }
 
-          if (input.conferenceId) {
-            const { activities, error } = await listActivitiesForConference(
-              input.conferenceId,
-              input.limit,
-            )
+          const conferenceId = await resolveConferenceId()
+          const { activities, error } = await listActivitiesForConference(
+            conferenceId,
+            input.limit,
+          )
 
-            if (error) {
-              throw new TRPCError({
-                code: 'INTERNAL_SERVER_ERROR',
-                message: 'Failed to list conference activities',
-                cause: error,
-              })
-            }
-
-            return activities || []
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to list conference activities',
+              cause: error,
+            })
           }
 
-          return []
+          return activities || []
         }),
     }),
 
@@ -1808,21 +1798,18 @@ export const sponsorRouter = router({
   }),
 
   contractTemplates: router({
-    list: adminProcedure
-      .input(ContractTemplateListSchema)
-      .query(async ({ input }) => {
-        const { templates, error } = await listContractTemplates(
-          input.conferenceId,
-        )
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to list contract templates',
-            cause: error,
-          })
-        }
-        return templates || []
-      }),
+    list: adminProcedure.input(ContractTemplateListSchema).query(async () => {
+      const conferenceId = await resolveConferenceId()
+      const { templates, error } = await listContractTemplates(conferenceId)
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list contract templates',
+          cause: error,
+        })
+      }
+      return templates || []
+    }),
 
     get: adminProcedure
       .input(ContractTemplateIdSchema)
@@ -1893,8 +1880,9 @@ export const sponsorRouter = router({
     findBest: adminProcedure
       .input(FindBestContractTemplateSchema)
       .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
         const { template, error } = await findBestContractTemplate(
-          input.conferenceId,
+          conferenceId,
           input.tierId,
           input.language,
         )
@@ -2003,9 +1991,10 @@ export const sponsorRouter = router({
     previewPdf: adminProcedure
       .input(PreviewContractPdfSchema)
       .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
         const conference = await clientReadUncached.fetch<Conference | null>(
           `*[_type == "conference" && _id == $id][0]`,
-          { id: input.conferenceId },
+          { id: conferenceId },
         )
         if (!conference) {
           throw new TRPCError({
@@ -2092,27 +2081,12 @@ export const sponsorRouter = router({
     updateConferenceOrgInfo: adminProcedure
       .input(
         z.object({
-          conferenceId: z.string().min(1),
           organizerOrgNumber: z.string().optional(),
           organizerAddress: z.string().optional(),
         }),
       )
       .mutation(async ({ input }) => {
-        const { conference: currentConf, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !currentConf) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
-          })
-        }
-        if (input.conferenceId !== currentConf._id) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Cannot update a different conference.',
-          })
-        }
+        const conferenceId = await resolveConferenceId()
 
         const fields: Record<string, string> = {}
         if (input.organizerOrgNumber !== undefined) {
@@ -2127,7 +2101,7 @@ export const sponsorRouter = router({
             message: 'No fields to update',
           })
         }
-        await clientWrite.patch(input.conferenceId).set(fields).commit()
+        await clientWrite.patch(conferenceId).set(fields).commit()
         return { success: true }
       }),
 
@@ -2200,28 +2174,13 @@ export const sponsorRouter = router({
     updateSigningProvider: adminProcedure
       .input(
         z.object({
-          conferenceId: z.string(),
           signingProvider: z.enum(['self-hosted', 'adobe-sign']),
         }),
       )
       .mutation(async ({ input }) => {
-        const { conference: currentConf, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !currentConf) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
-          })
-        }
-        if (input.conferenceId !== currentConf._id) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Cannot update a different conference.',
-          })
-        }
+        const conferenceId = await resolveConferenceId()
         await clientWrite
-          .patch(input.conferenceId)
+          .patch(conferenceId)
           .set({ signingProvider: input.signingProvider })
           .commit()
         return { success: true }

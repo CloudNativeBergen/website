@@ -18,11 +18,7 @@ import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { Button } from '@/components/Button'
 import { api } from '@/lib/trpc/client'
 
-interface VolunteerFormProps {
-  conferenceId: string
-}
-
-export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
+export default function VolunteerForm() {
   const [formData, setFormData] = useState<{
     name: string
     email: string
@@ -138,7 +134,6 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       dietaryRestrictions: formData.dietaryRestrictions || undefined,
       otherInfo: formData.otherInfo || undefined,
       preferredTasks: preferredTasksArray,
-      conferenceId,
       consent: {
         dataProcessing: dataProcessingConsent,
       },

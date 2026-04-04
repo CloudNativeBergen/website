@@ -103,7 +103,6 @@ export function TicketAnalysisClient({
 
       <div className="mt-8">
         <TargetConfigEditor
-          conferenceId={conference._id}
           currentConfig={conference.ticketTargets || defaultTargetConfig}
           capacity={conference.ticketCapacity || defaultCapacity}
           currentTicketsSold={currentData.tickets.length}

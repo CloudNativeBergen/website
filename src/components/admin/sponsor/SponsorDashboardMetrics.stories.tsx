@@ -178,49 +178,13 @@ export const Metrics: Story = {
         <pre className="overflow-x-auto rounded-md bg-gray-900 p-4 text-sm text-gray-100">
           {`import { SponsorDashboardMetrics } from '@/components/admin/sponsor'
 
-function DashboardPage({ conferenceId }: { conferenceId: string }) {
-  return <SponsorDashboardMetrics conferenceId={conferenceId} />
+function DashboardPage() {
+  return <SponsorDashboardMetrics />
 }`}
         </pre>
       </div>
 
       {/* Props */}
-      <div>
-        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-          Props
-        </h2>
-        <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                  Prop
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                  Description
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              <tr>
-                <td className="px-4 py-3 font-mono text-sm text-gray-900 dark:text-white">
-                  conferenceId
-                </td>
-                <td className="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-400">
-                  string
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                  Conference ID for fetching sponsor metrics
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       {/* Features */}
       <div>
         <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">

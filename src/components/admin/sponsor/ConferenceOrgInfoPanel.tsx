@@ -38,7 +38,6 @@ export function ConferenceOrgInfoPanel({
 
   const handleSave = () => {
     updateMutation.mutate({
-      conferenceId: conference._id,
       organizerOrgNumber: orgNumber,
       organizerAddress: address,
     })

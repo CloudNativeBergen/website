@@ -18,13 +18,8 @@ export const SalesTargetConfigSchema = z.object({
 })
 
 export const TicketSettingsUpdateSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   ticketCapacity: z.number().min(1, 'Capacity must be at least 1').optional(),
   ticketTargets: SalesTargetConfigSchema.optional(),
-})
-
-export const ConferenceIdSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
 })
 
 export const TicketCustomizationSchema = z.object({
@@ -49,7 +44,6 @@ export const TicketFaqSchema = z.object({
 })
 
 export const UpdateTicketPageContentSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   ticketCustomization: TicketCustomizationSchema.optional(),
   ticketInclusions: z.array(TicketInclusionSchema).optional(),
   ticketFaqs: z.array(TicketFaqSchema).optional(),

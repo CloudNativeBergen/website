@@ -5,10 +5,6 @@ export const GetVolunteerByIdSchema = z.object({
   id: z.string(),
 })
 
-export const GetVolunteersByConferenceSchema = z.object({
-  conferenceId: z.string().optional(),
-})
-
 export const UpdateVolunteerStatusSchema = z.object({
   volunteerId: z.string(),
   status: z.nativeEnum(VolunteerStatus),
@@ -58,7 +54,6 @@ export const CreateVolunteerSchema = z.object({
     .string()
     .max(1000, 'Other information must be less than 1000 characters')
     .optional(),
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   consent: z.object({
     dataProcessing: z.boolean().refine((val) => val === true, {
       message: 'You must agree to the data processing terms',

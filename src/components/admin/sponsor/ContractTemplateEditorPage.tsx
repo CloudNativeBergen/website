@@ -66,9 +66,7 @@ export function ContractTemplateEditorPage({
       { enabled: isEditing },
     )
 
-  const { data: tiers } = api.sponsor.tiers.listByConference.useQuery({
-    conferenceId: conference._id,
-  })
+  const { data: tiers } = api.sponsor.tiers.listByConference.useQuery()
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -270,7 +268,6 @@ export function ContractTemplateEditorPage({
       return
     }
     previewMutation.mutate({
-      conferenceId: conference._id,
       title: title || 'Sponsor Agreement',
       language,
       currency,
@@ -282,7 +279,6 @@ export function ContractTemplateEditorPage({
     })
   }, [
     sections,
-    conference._id,
     title,
     language,
     currency,

@@ -43,7 +43,6 @@ import type { ProposalExisting } from '@/lib/proposal/types'
 type SpeakerWithProposals = Speaker & { proposals?: ProposalExisting[] }
 
 interface BadgeManagementClientProps {
-  conferenceId: string
   conferenceTitle: string
   conferenceStartDate: string
   domain?: string
@@ -54,7 +53,6 @@ interface BadgeManagementClientProps {
 type TabView = 'issue' | 'validate'
 
 export function BadgeManagementClient({
-  conferenceId,
   conferenceTitle,
   conferenceStartDate,
   domain,
@@ -91,7 +89,7 @@ export function BadgeManagementClient({
   }, [searchQuery])
 
   const { data: existingBadges, refetch: refetchBadges } =
-    api.badge.list.useQuery({ conferenceId }, { initialData: initialBadges })
+    api.badge.list.useQuery({}, { initialData: initialBadges })
 
   const issueMutation = api.badge.issue.useMutation({
     onSuccess: (data) => {
@@ -229,14 +227,12 @@ export function BadgeManagementClient({
       const speakerId = Array.from(selectedSpeakers)[0]
       issueMutation.mutate({
         speakerId,
-        conferenceId,
         badgeType,
         sendEmail,
       })
     } else {
       bulkIssueMutation.mutate({
         speakerIds: Array.from(selectedSpeakers),
-        conferenceId,
         badgeType,
         sendEmail,
       })

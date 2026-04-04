@@ -233,21 +233,9 @@ describe('ContractTemplateIdSchema', () => {
 })
 
 describe('ContractTemplateListSchema', () => {
-  it('passes with valid conferenceId', () => {
-    const result = ContractTemplateListSchema.safeParse({
-      conferenceId: 'conf-1',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('fails with empty conferenceId', () => {
-    const result = ContractTemplateListSchema.safeParse({ conferenceId: '' })
-    expect(result.success).toBe(false)
-  })
-
-  it('fails without conferenceId', () => {
+  it('passes with empty input', () => {
     const result = ContractTemplateListSchema.safeParse({})
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
   })
 })
 
@@ -290,16 +278,13 @@ describe('GenerateContractPdfSchema', () => {
 })
 
 describe('FindBestContractTemplateSchema', () => {
-  it('passes with conferenceId only', () => {
-    const result = FindBestContractTemplateSchema.safeParse({
-      conferenceId: 'conf-1',
-    })
+  it('passes with no fields', () => {
+    const result = FindBestContractTemplateSchema.safeParse({})
     expect(result.success).toBe(true)
   })
 
-  it('passes with all fields', () => {
+  it('passes with all optional fields', () => {
     const result = FindBestContractTemplateSchema.safeParse({
-      conferenceId: 'conf-1',
       tierId: 'tier-gold',
       language: 'nb',
     })
@@ -308,7 +293,6 @@ describe('FindBestContractTemplateSchema', () => {
 
   it('passes without optional tierId', () => {
     const result = FindBestContractTemplateSchema.safeParse({
-      conferenceId: 'conf-1',
       language: 'en',
     })
     expect(result.success).toBe(true)
@@ -316,15 +300,7 @@ describe('FindBestContractTemplateSchema', () => {
 
   it('fails with invalid language', () => {
     const result = FindBestContractTemplateSchema.safeParse({
-      conferenceId: 'conf-1',
       language: 'fr',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('fails with empty conferenceId', () => {
-    const result = FindBestContractTemplateSchema.safeParse({
-      conferenceId: '',
     })
     expect(result.success).toBe(false)
   })

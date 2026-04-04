@@ -13,10 +13,6 @@ import {
 import { MetricCard } from '../stats'
 import { formatCurrency } from '@/lib/format'
 
-interface SponsorDashboardMetricsProps {
-  conferenceId: string
-}
-
 function calculateMetrics(
   sponsors: SponsorForConferenceExpanded[],
   convertCurrency: (amount: number, from: string, to: string) => number,
@@ -72,11 +68,9 @@ function calculateMetrics(
   }
 }
 
-export function SponsorDashboardMetrics({
-  conferenceId,
-}: SponsorDashboardMetricsProps) {
+export function SponsorDashboardMetrics() {
   const { data: sponsors = [], isLoading: isLoadingSponsors } =
-    api.sponsor.crm.list.useQuery({ conferenceId })
+    api.sponsor.crm.list.useQuery({})
 
   const {
     exchangeRates,

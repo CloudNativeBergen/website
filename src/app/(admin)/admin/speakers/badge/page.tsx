@@ -147,7 +147,6 @@ export default async function AdminBadgePage() {
       />
 
       <BadgeManagementClient
-        conferenceId={conference._id}
         conferenceTitle={conference.title}
         conferenceStartDate={conference.startDate}
         domain={conference.domains?.[0]}

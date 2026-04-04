@@ -24,7 +24,6 @@ type AdminSpeakerPick = {
 interface SpeakerMultiSelectProps {
   selectedSpeakerIds: string[]
   onChange: (speakerIds: string[]) => void
-  conferenceId?: string
   maxSpeakers?: number
   label?: string
   required?: boolean
@@ -34,7 +33,6 @@ interface SpeakerMultiSelectProps {
 export function SpeakerMultiSelect({
   selectedSpeakerIds,
   onChange,
-  conferenceId,
   maxSpeakers = 5,
   label = 'Speakers',
   required = false,
@@ -49,7 +47,7 @@ export function SpeakerMultiSelect({
     isLoading,
     error: fetchError,
   } = api.speakers.list.useQuery(
-    { conferenceId },
+    undefined,
     { staleTime: 5 * 60 * 1000 }, // Cache for 5 minutes
   )
 

@@ -43,9 +43,7 @@ export const ContractTemplateIdSchema = z.object({
   id: z.string().min(1, 'ID is required'),
 })
 
-export const ContractTemplateListSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
-})
+export const ContractTemplateListSchema = z.object({})
 
 export const GenerateContractPdfSchema = z.object({
   sponsorForConferenceId: z
@@ -55,7 +53,6 @@ export const GenerateContractPdfSchema = z.object({
 })
 
 export const FindBestContractTemplateSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   tierId: z.string().optional(),
   language: z.enum(['nb', 'en']).optional(),
 })
@@ -89,7 +86,6 @@ export const SendContractSchema = z.object({
 })
 
 export const PreviewContractPdfSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   title: z.string().min(1, 'Title is required'),
   language: z.enum(['nb', 'en']),
   currency: z.string().optional(),

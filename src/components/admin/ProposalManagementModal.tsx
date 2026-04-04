@@ -393,7 +393,6 @@ export function ProposalManagementModal({
             <SpeakerMultiSelect
               selectedSpeakerIds={selectedSpeakerIds}
               onChange={setSelectedSpeakerIds}
-              conferenceId={conference._id}
               maxSpeakers={5}
               label="Speakers"
               required={true}

@@ -132,7 +132,7 @@ describe('volunteer router', () => {
   describe('list', () => {
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
-      await expect(caller.volunteer.list({})).rejects.toMatchObject({
+      await expect(caller.volunteer.list()).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
       })
     })
@@ -140,7 +140,7 @@ describe('volunteer router', () => {
     it('should reject non-admin users', async () => {
       const regularUser = speakers.find((s) => !s.isOrganizer)!
       const caller = createAuthenticatedCaller(regularUser._id)
-      await expect(caller.volunteer.list({})).rejects.toMatchObject({
+      await expect(caller.volunteer.list()).rejects.toMatchObject({
         code: 'FORBIDDEN',
       })
     })

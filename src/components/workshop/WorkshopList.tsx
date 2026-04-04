@@ -40,7 +40,6 @@ export default function WorkshopList({
     isLoading: workshopsLoading,
     refetch: refetchWorkshops,
   } = api.workshop.listWorkshops.useQuery({
-    conferenceId,
     includeCapacity: true,
   })
 
@@ -48,7 +47,6 @@ export default function WorkshopList({
     api.workshop.getUserSignups.useQuery(
       {
         userWorkOSId: userWorkOSId || '',
-        conferenceId,
       },
       {
         enabled: !!userWorkOSId,

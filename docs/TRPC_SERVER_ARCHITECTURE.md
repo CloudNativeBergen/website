@@ -59,6 +59,33 @@ export const sponsorRouter = router({
 })
 ```
 
+### Conference Resolution
+
+This site is multi-tenant — each conference runs on its own subdomain. The server must determine which conference the request is for, and **this must always happen server-side**.
+
+**Rule: Never accept `conferenceId` as client input in tRPC procedures.** Instead, use `resolveConferenceId()` from `/src/server/trpc.ts`, which derives the conference from the request's `Host` header via `getConferenceForCurrentDomain()`.
+
+```typescript
+// ✅ Correct — resolve server-side
+import { resolveConferenceId } from '../trpc'
+
+list: adminProcedure.query(async () => {
+  const conferenceId = await resolveConferenceId()
+  // use conferenceId for queries...
+})
+
+// ❌ Wrong — never accept conferenceId from client
+list: adminProcedure
+  .input(z.object({ conferenceId: z.string() }))
+  .query(async ({ input }) => {
+    // DO NOT DO THIS — clients could access other conferences
+  })
+```
+
+**Why:** Accepting `conferenceId` from the client breaks multi-tenant isolation. A malicious or misconfigured client could pass a different conference's ID and access data it shouldn't. Server-side resolution guarantees each request only accesses data belonging to the conference identified by the domain.
+
+**When you need the full conference object** (not just the ID), import and call `getConferenceForCurrentDomain()` directly.
+
 ### Input Validation
 
 ```typescript

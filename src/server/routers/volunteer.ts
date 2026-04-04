@@ -1,8 +1,12 @@
 import { TRPCError } from '@trpc/server'
-import { router, adminProcedure, publicProcedure } from '../trpc'
+import {
+  router,
+  adminProcedure,
+  publicProcedure,
+  resolveConferenceId,
+} from '../trpc'
 import {
   GetVolunteerByIdSchema,
-  GetVolunteersByConferenceSchema,
   UpdateVolunteerStatusSchema,
   SendVolunteerEmailSchema,
   DeleteVolunteerSchema,
@@ -42,7 +46,7 @@ export const volunteerRouter = router({
           otherInfo: input.otherInfo,
           conference: {
             _type: 'reference',
-            _ref: input.conferenceId,
+            _ref: await resolveConferenceId(),
           },
           consent: {
             dataProcessing: {
@@ -89,41 +93,30 @@ export const volunteerRouter = router({
       }
     }),
 
-  list: adminProcedure
-    .input(GetVolunteersByConferenceSchema)
-    .query(async ({ input }) => {
-      try {
-        const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !conference?._id) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
-          })
-        }
-        const conferenceId = input.conferenceId || conference._id
-        const { volunteers, error } =
-          await getVolunteersByConference(conferenceId)
+  list: adminProcedure.query(async () => {
+    try {
+      const conferenceId = await resolveConferenceId()
+      const { volunteers, error } =
+        await getVolunteersByConference(conferenceId)
 
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch volunteers',
-            cause: error,
-          })
-        }
-
-        return volunteers
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
+      if (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch volunteers',
           cause: error,
         })
       }
-    }),
+
+      return volunteers
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch volunteers',
+        cause: error,
+      })
+    }
+  }),
 
   getById: adminProcedure
     .input(GetVolunteerByIdSchema)

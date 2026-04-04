@@ -303,6 +303,7 @@ This applies to any component using `formatDistanceToNow`, `getDaysPending`, or 
   - Complete CRUD operations for sponsors and sponsor tiers
   - Conference-sponsor assignment management (add/remove sponsors)
   - Proper query invalidation and optimistic updates
+- **Conference Resolution:** Never accept `conferenceId` as client input. Use `resolveConferenceId()` from `/src/server/trpc.ts` to derive it server-side from the request's Host header via `getConferenceForCurrentDomain()`. This ensures multi-tenant isolation and prevents clients from accessing data across conferences.
 - **Input Validation:** Zod schemas in `/src/server/schemas/` for type-safe input validation
 - **Error Handling:** Consistent TRPCError usage with proper HTTP status codes and user-friendly messages
 - **Performance:** React Query integration provides automatic caching, background updates, and optimistic UI updates
@@ -328,6 +329,19 @@ This applies to any component using `formatDistanceToNow`, `getDaysPending`, or 
 - **Qodo Chat:** `pnpm qodo:chat` - Interactive AI chat in terminal for code questions and generation.
 - **Qodo Review:** `pnpm qodo:review` - Review PR suggestions from Qodo Merge (auto-detects current branch PR, or pass PR number like `pnpm qodo:review 332`).
 - Run sanity commands with `pnpm sanity {command}` (e.g., `pnpm sanity deploy`) - do not use `npx sanity` directly.
+
+#### CLI (`cli/` — Rust)
+
+The `cnctl` CLI lives in `cli/` as a standalone Cargo project. It uses mise for toolchain management.
+
+- **Full Check:** `cd cli && mise run check` - Runs clippy, format check, and tests in parallel.
+- **Clippy:** `cd cli && mise run clippy` - Runs clippy with pedantic lints, warnings as errors.
+- **Format:** `cd cli && mise run fmt` - Formats code with rustfmt.
+- **Format Check:** `cd cli && mise run fmt-check` - Checks formatting without modifying files.
+- **Tests:** `cd cli && mise run test` - Runs all tests.
+- **Tests (Verbose):** `cd cli && mise run test-verbose` - Runs tests with output.
+- **Build:** `cd cli && mise run build` - Builds release binary.
+- **Clean:** `cd cli && mise run clean` - Removes build artifacts.
 
 ## Code Organization & Refactoring
 

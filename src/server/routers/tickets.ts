@@ -1,10 +1,9 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
-import { router, adminProcedure } from '../trpc'
+import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   TicketSettingsUpdateSchema,
-  ConferenceIdSchema,
   SalesTargetConfigSchema,
   CreateDiscountCodeSchema,
   GetDiscountsSchema,
@@ -100,17 +99,16 @@ async function getTicketSettings(conferenceId: string) {
 }
 
 export const ticketsRouter = router({
-  getSettings: adminProcedure
-    .input(ConferenceIdSchema)
-    .query(async ({ input }) => {
-      const { conferenceId } = input
-      return getTicketSettings(conferenceId)
-    }),
+  getSettings: adminProcedure.query(async () => {
+    const conferenceId = await resolveConferenceId()
+    return getTicketSettings(conferenceId)
+  }),
 
   updateSettings: adminProcedure
     .input(TicketSettingsUpdateSchema)
     .mutation(async ({ input }) => {
-      const { conferenceId, ticketCapacity, ticketTargets } = input
+      const conferenceId = await resolveConferenceId()
+      const { ticketCapacity, ticketTargets } = input
 
       await getTicketSettings(conferenceId)
 
@@ -154,12 +152,13 @@ export const ticketsRouter = router({
 
   updateCapacity: adminProcedure
     .input(
-      ConferenceIdSchema.extend({
+      z.object({
         capacity: z.number().min(1, 'Capacity must be at least 1'),
       }),
     )
     .mutation(async ({ input }) => {
-      const { conferenceId, capacity } = input
+      const conferenceId = await resolveConferenceId()
+      const { capacity } = input
       const result = await updateTicketCapacity(conferenceId, capacity)
 
       revalidateTag('admin:tickets', 'default')
@@ -169,12 +168,13 @@ export const ticketsRouter = router({
 
   updateTargets: adminProcedure
     .input(
-      ConferenceIdSchema.extend({
+      z.object({
         targets: SalesTargetConfigSchema,
       }),
     )
     .mutation(async ({ input }) => {
-      const { conferenceId, targets } = input
+      const conferenceId = await resolveConferenceId()
+      const { targets } = input
       const result = await updateTicketTargets(conferenceId, targets)
 
       revalidateTag('admin:tickets', 'default')
@@ -184,12 +184,13 @@ export const ticketsRouter = router({
 
   toggleTargetTracking: adminProcedure
     .input(
-      ConferenceIdSchema.extend({
+      z.object({
         enabled: z.boolean(),
       }),
     )
     .mutation(async ({ input }) => {
-      const { conferenceId, enabled } = input
+      const conferenceId = await resolveConferenceId()
+      const { enabled } = input
 
       const conference = await getTicketSettings(conferenceId)
       const currentTargets = conference.ticketTargets || {}
@@ -439,13 +440,11 @@ export const ticketsRouter = router({
       }
     }),
 
-  getPageContent: adminProcedure
-    .input(ConferenceIdSchema)
-    .query(async ({ input }) => {
-      const { conferenceId } = input
+  getPageContent: adminProcedure.query(async () => {
+    const conferenceId = await resolveConferenceId()
 
-      try {
-        const query = `*[_type == "conference" && _id == $conferenceId][0]{
+    try {
+      const query = `*[_type == "conference" && _id == $conferenceId][0]{
           _id,
           ticketCustomization,
           ticketInclusions,
@@ -453,35 +452,31 @@ export const ticketsRouter = router({
           vanityMetrics
         }`
 
-        const conference = await clientWrite.fetch(query, { conferenceId })
+      const conference = await clientWrite.fetch(query, { conferenceId })
 
-        if (!conference) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found',
-          })
-        }
-
-        return conference
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
+      if (!conference) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch ticket page content',
-          cause: error,
+          code: 'NOT_FOUND',
+          message: 'Conference not found',
         })
       }
-    }),
+
+      return conference
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch ticket page content',
+        cause: error,
+      })
+    }
+  }),
 
   updatePageContent: adminProcedure
     .input(UpdateTicketPageContentSchema)
     .mutation(async ({ input }) => {
-      const {
-        conferenceId,
-        ticketCustomization,
-        ticketInclusions,
-        ticketFaqs,
-      } = input
+      const conferenceId = await resolveConferenceId()
+      const { ticketCustomization, ticketInclusions, ticketFaqs } = input
 
       const updates: Record<string, unknown> = {}
 

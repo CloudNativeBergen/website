@@ -54,7 +54,7 @@ export default function VolunteerAdminPage() {
     data: volunteers,
     isLoading: loadingList,
     error: listError,
-  } = api.volunteer.list.useQuery({})
+  } = api.volunteer.list.useQuery()
 
   const {
     data: selectedVolunteer,

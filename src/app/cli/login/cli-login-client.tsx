@@ -27,11 +27,13 @@ export function buildCallbackUrl(
   token: string,
   state: string,
   name: string,
+  conferenceId: string,
 ): URL {
   const url = new URL(`http://localhost:${port}/callback`)
   url.searchParams.set('token', token)
   url.searchParams.set('state', state)
   url.searchParams.set('name', name)
+  url.searchParams.set('conference_id', conferenceId)
   if (!isLocalhostOrigin(url)) {
     throw new Error('Redirect target must be localhost')
   }
@@ -43,6 +45,7 @@ interface CLILoginClientProps {
   state?: string
   userName: string
   userEmail: string
+  conferenceId: string
 }
 
 export default function CLILoginClient({
@@ -50,6 +53,7 @@ export default function CLILoginClient({
   state,
   userName,
   userEmail,
+  conferenceId,
 }: CLILoginClientProps) {
   const [status, setStatus] = useState<Status>('confirm')
   const [token, setToken] = useState<string>('')
@@ -85,7 +89,13 @@ export default function CLILoginClient({
 
       if (port && state) {
         setStatus('redirecting')
-        const callbackUrl = buildCallbackUrl(port, jwt, state, userName)
+        const callbackUrl = buildCallbackUrl(
+          port,
+          jwt,
+          state,
+          userName,
+          conferenceId,
+        )
         window.location.href = callbackUrl.toString()
       } else {
         setToken(jwt)
@@ -95,7 +105,7 @@ export default function CLILoginClient({
       setError('Failed to connect to authentication service')
       setStatus('error')
     }
-  }, [port, state, userName])
+  }, [port, state, userName, conferenceId])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(token)

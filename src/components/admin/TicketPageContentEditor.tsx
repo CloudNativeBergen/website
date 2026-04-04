@@ -43,7 +43,6 @@ const ICON_OPTIONS = [
 ]
 
 interface TicketPageContentEditorProps {
-  conferenceId: string
   conferenceTitle: string
   initialCustomization: Partial<TicketCustomization>
   initialInclusions: TicketInclusion[]
@@ -52,7 +51,6 @@ interface TicketPageContentEditorProps {
 }
 
 export function TicketPageContentEditor({
-  conferenceId,
   conferenceTitle,
   initialCustomization,
   initialInclusions,
@@ -86,7 +84,6 @@ export function TicketPageContentEditor({
   const handleSave = useCallback(() => {
     setSaving(true)
     updateMutation.mutate({
-      conferenceId,
       ticketCustomization: {
         heroHeadline: customization.heroHeadline || undefined,
         heroSubheadline: customization.heroSubheadline || undefined,
@@ -106,7 +103,7 @@ export function TicketPageContentEditor({
         answer: faq.answer,
       })),
     })
-  }, [conferenceId, customization, inclusions, faqs, updateMutation])
+  }, [customization, inclusions, faqs, updateMutation])
 
   const addInclusion = useCallback(() => {
     setInclusions((prev) => [

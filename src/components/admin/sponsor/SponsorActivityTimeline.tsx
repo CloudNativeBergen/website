@@ -15,7 +15,6 @@ import {
 } from '@/components/admin/sponsor-crm/utils'
 
 interface SponsorActivityTimelineProps {
-  conferenceId: string
   sponsorForConferenceId?: string
   limit?: number
   showHeaderFooter?: boolean
@@ -232,14 +231,12 @@ function SponsorCard({
 }
 
 export function SponsorActivityTimeline({
-  conferenceId,
   sponsorForConferenceId,
   limit = 10,
   showHeaderFooter = true,
 }: SponsorActivityTimelineProps) {
   const { data: activities = [], isLoading } =
     api.sponsor.crm.activities.list.useQuery({
-      conferenceId: sponsorForConferenceId ? undefined : conferenceId,
       sponsorForConferenceId,
       limit,
     })

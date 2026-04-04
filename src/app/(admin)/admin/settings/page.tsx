@@ -339,7 +339,6 @@ export default async function AdminSettings() {
         </InfoCard>
 
         <WorkshopRegistrationSettings
-          conferenceId={conference._id}
           workshopRegistrationStart={conference.workshopRegistrationStart}
           workshopRegistrationEnd={conference.workshopRegistrationEnd}
         />

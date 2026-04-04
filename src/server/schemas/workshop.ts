@@ -26,20 +26,17 @@ export const workshopSignupInputSchema = z.object({
 })
 
 export const workshopListInputSchema = z.object({
-  conferenceId: z.string().min(1, 'Conference ID is required'),
   includeCapacity: z.boolean().optional().default(false),
 })
 
 export const workshopAvailabilitySchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
-  conferenceId: z.string().min(1, 'Conference ID is required'),
 })
 
 export const workshopSignupsByUserSchema = z
   .object({
     userEmail: z.string().email('Invalid email address').optional(),
     userWorkOSId: z.string().optional(),
-    conferenceId: z.string().optional(),
   })
   .refine((data) => data.userEmail || data.userWorkOSId, {
     message: 'Either userEmail or userWorkOSId is required',
@@ -72,7 +69,6 @@ export const batchCancelSignupsSchema = z.object({
 })
 
 export const workshopSignupFiltersSchema = z.object({
-  conferenceId: z.string().optional(),
   workshopId: z.string().optional(),
   status: z.nativeEnum(WorkshopSignupStatus).optional(),
   userEmail: z.string().email('Invalid email address').optional(),

@@ -30,6 +30,7 @@ const eslintConfig = [
       '__tests__/**/testdata/**',
       '__tests__/**/mocks/**',
       'storybook-static/**', // Built Storybook output
+      'cli/**',
     ],
   },
 

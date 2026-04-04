@@ -273,14 +273,12 @@ export const ActivityTimeline: Story = {
 
 // Dashboard view (with header and footer)
 <SponsorActivityTimeline
-  conferenceId={conferenceId}
   limit={10}
   showHeaderFooter={true}
 />
 
 // Single sponsor view (inline)
 <SponsorActivityTimeline
-  conferenceId={conferenceId}
   sponsorForConferenceId={sponsorId}
   showHeaderFooter={false}
   limit={20}

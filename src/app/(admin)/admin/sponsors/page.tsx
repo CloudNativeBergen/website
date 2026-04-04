@@ -45,11 +45,11 @@ export default async function AdminSponsors() {
         contextHighlight={conference.title}
       />
 
-      <SponsorDashboardMetrics conferenceId={conference._id} />
+      <SponsorDashboardMetrics />
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <SponsorActionItems conferenceId={conference._id} />
-        <SponsorActivityTimeline conferenceId={conference._id} />
+        <SponsorActionItems />
+        <SponsorActivityTimeline />
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">

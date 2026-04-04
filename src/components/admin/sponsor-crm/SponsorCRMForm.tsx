@@ -98,10 +98,7 @@ export function SponsorCRMForm({
     : allSponsors.filter((s) => !existingSponsorsInCRM.includes(s._id))
 
   const { data: sponsorTiers = [] } =
-    api.sponsor.tiers.listByConference.useQuery(
-      { conferenceId },
-      { enabled: isOpen },
-    )
+    api.sponsor.tiers.listByConference.useQuery(undefined, { enabled: isOpen })
 
   const sortedSponsorTiers = useMemo(
     () => sortSponsorTiers(sponsorTiers),
@@ -124,7 +121,7 @@ export function SponsorCRMForm({
   )
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(
-    { conferenceId },
+    undefined,
     { enabled: isOpen },
   )
 
@@ -408,7 +405,6 @@ export function SponsorCRMForm({
                       ) : view === 'history' && sponsor ? (
                         <div className="py-4">
                           <SponsorActivityTimeline
-                            conferenceId={conferenceId}
                             sponsorForConferenceId={sponsor._id}
                             showHeaderFooter={false}
                             limit={20}

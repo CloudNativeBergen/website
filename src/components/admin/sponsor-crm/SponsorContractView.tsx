@@ -65,7 +65,6 @@ export function SponsorContractView({
 
   const { data: bestTemplate } =
     api.sponsor.contractTemplates.findBest.useQuery({
-      conferenceId,
       tierId: sponsor.tier?._id,
     })
 
