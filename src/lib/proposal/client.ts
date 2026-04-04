@@ -6,12 +6,6 @@ export * from './ui'
 export * from './business'
 
 export {
-  adminFetchNextUnreviewedProposal,
-  adminSearchProposals,
-  type NextUnreviewedProposalResponse,
-} from './data/client'
-
-export {
   createTemplateProps,
   type BaseEmailTemplateProps,
   type ProposalAcceptTemplateProps,

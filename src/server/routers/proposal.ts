@@ -47,7 +47,12 @@ import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
-import { updateProposalStatus, getProposalSanity } from '@/lib/proposal/server'
+import {
+  updateProposalStatus,
+  getProposalSanity,
+  fetchNextUnreviewedProposal,
+  searchProposals,
+} from '@/lib/proposal/server'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { getFeaturedTalks } from '@/lib/featured/sanity'
 import '@/lib/events/registry'
@@ -335,7 +340,7 @@ export const proposalRouter = router({
         if (!ctx.speaker.isOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-            '_id' in existing.conference
+              '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
@@ -902,16 +907,16 @@ export const proposalRouter = router({
 
           const { review, reviewError } = existingReview
             ? await updateReview(
-                existingReview._id,
-                ctx.speaker._id,
-                reviewData,
-              )
+              existingReview._id,
+              ctx.speaker._id,
+              reviewData,
+            )
             : await createReview(
-                proposal._id,
-                ctx.speaker._id,
-                conferenceId,
-                reviewData,
-              )
+              proposal._id,
+              ctx.speaker._id,
+              conferenceId,
+              reviewData,
+            )
 
           if (reviewError || !review) {
             throw new TRPCError({
@@ -931,6 +936,60 @@ export const proposalRouter = router({
             cause: error,
           })
         }
+      }),
+
+    nextUnreviewed: adminProcedure
+      .input(
+        z.object({
+          currentProposalId: z.string().optional(),
+        }),
+      )
+      .query(async ({ input, ctx }) => {
+        const conferenceId = await resolveConferenceId()
+        const reviewerId = ctx.speaker._id
+
+        const { nextProposal, error } = await fetchNextUnreviewedProposal({
+          conferenceId,
+          reviewerId,
+          currentProposalId: input.currentProposalId,
+        })
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch next unreviewed proposal',
+            cause: error,
+          })
+        }
+
+        return { nextProposal }
+      }),
+
+    search: adminProcedure
+      .input(
+        z.object({
+          query: z.string().min(1, 'Search query is required'),
+        }),
+      )
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+
+        const { proposals, proposalsError } = await searchProposals({
+          query: input.query,
+          conferenceId,
+          includeReviews: true,
+          includePreviousAcceptedTalks: true,
+        })
+
+        if (proposalsError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to search proposals',
+            cause: proposalsError,
+          })
+        }
+
+        return proposals
       }),
 
     searchTalks: adminProcedure

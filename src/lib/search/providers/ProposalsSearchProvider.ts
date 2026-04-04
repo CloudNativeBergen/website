@@ -1,16 +1,20 @@
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
-import { adminSearchProposals } from '@/lib/proposal'
 import type {
   SearchProvider,
   SearchProviderResult,
   SearchResultItem,
 } from '../types'
 import { isWorkshopFormat, statuses } from '@/lib/proposal/types'
+import type { ProposalExisting } from '@/lib/proposal/types'
 
 export class ProposalsSearchProvider implements SearchProvider {
   readonly category = 'proposals' as const
   readonly label = 'Proposals'
   readonly priority = 2
+
+  constructor(
+    private searchFn: (query: string) => Promise<ProposalExisting[]>,
+  ) { }
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()
@@ -25,26 +29,15 @@ export class ProposalsSearchProvider implements SearchProvider {
     }
 
     try {
-      const response = await adminSearchProposals(normalizedQuery)
+      const proposals = await this.searchFn(normalizedQuery)
 
-      if (response.error) {
-        return {
-          category: this.category,
-          label: this.label,
-          priority: this.priority,
-          items: [],
-          error: response.error.message,
-        }
-      }
-
-      const proposals = response.proposals || []
       const items: SearchResultItem[] = proposals.map((proposal) => {
         const speakers =
           proposal.speakers && Array.isArray(proposal.speakers)
             ? proposal.speakers.filter(
-                (speaker) =>
-                  typeof speaker === 'object' && speaker && 'name' in speaker,
-              )
+              (speaker) =>
+                typeof speaker === 'object' && speaker && 'name' in speaker,
+            )
             : []
 
         const speakerNames = speakers.map((s) => s.name).join(', ')

@@ -9,6 +9,4 @@ export {
   searchProposals,
 } from './data/sanity'
 
-export { proposalListResponseError, proposalListResponse } from './data/server'
-
 export { sendAcceptRejectNotification } from './email/notification'

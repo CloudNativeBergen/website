@@ -30,7 +30,7 @@ Located in `src/lib/search/providers/`:
 2. **`ProposalsSearchProvider`**
    - Priority: 2
    - Searches: Proposal titles, descriptions, speakers, topics
-   - Implementation: Server-side via `adminSearchProposals()`
+   - Implementation: tRPC `proposal.admin.search` query
    - Use case: Finding talks and workshops
 
 3. **`SponsorsSearchProvider`**

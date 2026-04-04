@@ -26,7 +26,12 @@ export function useUnifiedSearch() {
   const providers = useMemo<SearchProvider[]>(() => {
     return [
       new AdminPagesSearchProvider(),
-      new ProposalsSearchProvider(),
+      new ProposalsSearchProvider(async (query) => {
+        const result = await utils.proposal.admin.search.fetch({
+          query,
+        })
+        return result
+      }),
       new SponsorsSearchProvider(async (query) => {
         const result = await utils.sponsor.list.fetch({ query })
         return result

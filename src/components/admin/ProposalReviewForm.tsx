@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { StarIcon } from '@heroicons/react/24/solid'
 import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Review } from '@/lib/review/types'
-import { adminFetchNextUnreviewedProposal } from '@/lib/proposal'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { Textarea } from '@/components/Form'
@@ -73,19 +72,9 @@ export function ProposalReviewForm({
   const handleNextProposal = async () => {
     setIsLoadingNext(true)
     try {
-      const { nextProposal, error } =
-        await adminFetchNextUnreviewedProposal(proposalId)
-
-      if (error) {
-        console.error('Error fetching next unreviewed proposal:', error)
-        showNotification({
-          type: 'error',
-          title: 'Failed to load next proposal',
-          message: 'There was an error fetching the next unreviewed proposal.',
-        })
-        setIsLoadingNext(false)
-        return
-      }
+      const { nextProposal } = await utils.proposal.admin.nextUnreviewed.fetch({
+        currentProposalId: proposalId,
+      })
 
       if (nextProposal) {
         router.push(`/admin/proposals/${nextProposal._id}`)

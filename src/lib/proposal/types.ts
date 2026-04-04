@@ -118,10 +118,6 @@ export interface ProposalExisting extends Proposal {
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
 }
 
-export interface ProposalBaseResponse {
-  status: number
-}
-
 export interface FormError {
   message: string
   type: string
@@ -132,11 +128,6 @@ export interface FormError {
 export interface FormValidationError {
   message: string
   field: string
-}
-
-export interface ProposalListResponse extends ProposalBaseResponse {
-  proposals?: ProposalExisting[]
-  error?: FormError
 }
 
 export const statuses = new Map([
