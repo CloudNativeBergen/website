@@ -99,7 +99,7 @@ export function ProposalForm({
     onSuccess: (data) => {
       if (lastAction === 'draft') {
         setCurrentProposalId(data._id)
-        window.history.replaceState(null, '', `/cfp/proposal?id=${data._id}`)
+        window.history.replaceState(null, '', `/cfp/proposal/${data._id}`)
         showDraftSaved()
       } else {
         router.push('/cfp/list?success=true')

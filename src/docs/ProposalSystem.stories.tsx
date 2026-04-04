@@ -295,9 +295,10 @@ export const Architecture: Story = {
                   path="/cfp/list"
                   label="Speaker dashboard — all conferences"
                 />
+                <RouteCard path="/cfp/proposal" label="Create new proposal" />
                 <RouteCard
-                  path="/cfp/proposal/[[...id]]"
-                  label="Create or edit proposal"
+                  path="/cfp/proposal/[id]"
+                  label="Edit or view proposal"
                 />
                 <RouteCard
                   path="/cfp/profile"

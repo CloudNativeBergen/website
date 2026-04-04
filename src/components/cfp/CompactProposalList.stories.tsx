@@ -307,8 +307,31 @@ export const EditableShowsEditLinks: Story = {
     expect(editLink).toBeInTheDocument()
     expect(editLink).toHaveAttribute(
       'href',
-      expect.stringContaining('/cfp/proposal?id=talk-1'),
+      expect.stringContaining('/cfp/proposal/talk-1'),
     )
+  },
+}
+
+export const AllLinksUsePathParams: Story = {
+  args: {
+    proposals: [
+      createMockProposal('draft-1', 'Draft Talk', Status.draft),
+      createMockProposal('submitted-1', 'Submitted Talk', Status.submitted),
+      createMockProposal('accepted-1', 'Accepted Talk', Status.accepted),
+    ],
+    canEdit: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const allLinks = canvas.getAllByRole('link')
+    for (const link of allLinks) {
+      const href = link.getAttribute('href') || ''
+      if (href.includes('/cfp/proposal')) {
+        // All proposal links must use path params, never query params
+        expect(href).not.toContain('?id=')
+        expect(href).toMatch(/\/cfp\/proposal\/[a-z0-9-]+/)
+      }
+    }
   },
 }
 

@@ -7,10 +7,7 @@ import {
   Level,
   FormError,
   ProposalInput,
-  Status,
-  ProposalExisting,
 } from '@/lib/proposal/types'
-import { getProposalSanity } from '@/lib/proposal/server'
 import { countActiveProposals } from '@/lib/proposal/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
@@ -21,32 +18,28 @@ import { headers } from 'next/headers'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
-export default async function ProposalPage({
-  params,
+export default async function NewProposalPage({
   searchParams,
 }: {
-  params: Promise<{ id?: string[] }>
   searchParams: Promise<{ id?: string }>
 }) {
   await connection()
 
-  // Support both /cfp/proposal/[id] and /cfp/proposal?id=[id] patterns
-  const routeParams = await params
-  const queryParams = await searchParams
-  const proposalId = routeParams.id?.[0] || queryParams.id
+  // Redirect old ?id= URLs to the path-based route
+  const { id } = await searchParams
+  if (id) {
+    redirect(`/cfp/proposal/${id}`)
+  }
 
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    const callbackUrl = proposalId
-      ? `/cfp/proposal/${proposalId}`
-      : '/cfp/proposal'
-    return redirect(`/api/auth/signin?callbackUrl=${callbackUrl}`)
+    return redirect('/api/auth/signin?callbackUrl=/cfp/proposal')
   }
 
-  let proposal: ProposalInput = {
+  const proposal: ProposalInput = {
     title: '',
     language: Language.norwegian,
     description: [],
@@ -60,7 +53,6 @@ export default async function ProposalPage({
   let speaker = { name: '', email: '' }
   let loadingError: FormError | null = null
   let currentUserSpeaker: Speaker | null = null
-  let proposalStatus: Status | undefined
 
   const { conference, error } = await getConferenceForCurrentDomain({
     topics: true,
@@ -74,7 +66,7 @@ export default async function ProposalPage({
     }
   }
 
-  if (conference && !proposalId) {
+  if (conference) {
     const { isCfpOpen } = await import('@/lib/conference/state')
     if (!isCfpOpen(conference)) {
       const contactEmail = conference.cfpEmail || conference.contactEmail
@@ -104,8 +96,9 @@ export default async function ProposalPage({
       }
     } else {
       currentUserSpeaker = fetchedSpeaker
+      speaker = fetchedSpeaker
 
-      if (!proposalId && conference && !loadingError) {
+      if (conference && !loadingError) {
         const { getProposals } = await import('@/lib/proposal/data/sanity')
         const { proposals: existingProposals } = await getProposals({
           speakerId: session.speaker._id,
@@ -133,69 +126,14 @@ export default async function ProposalPage({
     }
   }
 
-  try {
-    if (proposalId) {
-      const { proposal: fetchedProposal, proposalError } =
-        await getProposalSanity({
-          id: proposalId,
-          speakerId: session.speaker._id,
-          isOrganizer: false,
-        })
-      if (proposalError) {
-        console.error('Error loading proposal:', proposalError)
-        loadingError = {
-          type: 'Server Error',
-          message: 'Failed to load proposal.',
-        }
-      } else if (!fetchedProposal) {
-        loadingError = { type: 'Not Found', message: 'Proposal not found.' }
-      } else {
-        proposal = fetchedProposal
-        proposalStatus = (fetchedProposal as ProposalExisting).status
-        if (
-          fetchedProposal.speakers &&
-          Array.isArray(fetchedProposal.speakers) &&
-          fetchedProposal.speakers.length > 0
-        ) {
-          const currentUserSpeakerData = fetchedProposal.speakers.find(
-            (s): s is Speaker =>
-              typeof s === 'object' &&
-              s !== null &&
-              '_id' in s &&
-              s._id === session.speaker._id,
-          )
-
-          if (currentUserSpeakerData) {
-            speaker = currentUserSpeakerData
-          } else if (currentUserSpeaker) {
-            speaker = currentUserSpeaker
-          }
-        }
-      }
-    } else if (currentUserSpeaker) {
-      speaker = currentUserSpeaker
-    }
-  } catch (error) {
-    console.error('Error loading data:', error)
-    loadingError = { type: 'Server Error', message: 'Failed to load data.' }
-  }
-
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-6">
         <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {proposalId
-            ? proposalStatus === Status.draft
-              ? 'Edit Draft'
-              : 'Edit Proposal'
-            : 'Submit Presentation'}
+          Submit Presentation
         </h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          {proposalId
-            ? proposalStatus === Status.draft
-              ? 'Continue working on your draft. Save your progress or submit when ready.'
-              : 'Update your proposal details'
-            : 'Become our next speaker and share your knowledge with the community!'}
+          Become our next speaker and share your knowledge with the community!
         </p>
       </div>
 
@@ -235,15 +173,13 @@ export default async function ProposalPage({
           <div className="flex-1">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <ProposalForm
-                key={proposalId || 'new'}
+                key="new"
                 initialProposal={proposal}
                 initialSpeaker={speaker}
-                proposalId={proposalId}
                 userEmail={session.speaker.email}
                 conference={conference}
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
-                initialStatus={proposalStatus}
               />
             </div>
           </div>

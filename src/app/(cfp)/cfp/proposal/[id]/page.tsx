@@ -6,12 +6,15 @@ import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
+import { ProposalForm } from '@/components/cfp/ProposalForm'
+import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
+import { Speaker } from '@/lib/speaker/types'
 
 interface ProposalViewPageProps {
   params: Promise<{
@@ -63,11 +66,6 @@ export default async function ProposalViewPage({
     notFound()
   }
 
-  // Editable proposals (draft/submitted) should use the edit form
-  if (proposal.status === 'draft' || proposal.status === 'submitted') {
-    redirect(`/cfp/proposal?id=${id}`)
-  }
-
   const { speaker: currentUserSpeaker, err: speakerError } = await getSpeaker(
     session.speaker._id,
   )
@@ -109,6 +107,61 @@ export default async function ProposalViewPage({
   }
 
   const backUrl = buildUrlWithImpersonation('/cfp/list', session)
+
+  // Editable proposals (draft/submitted) render the edit form
+  if (proposal.status === 'draft' || proposal.status === 'submitted') {
+    let speakerData: { name: string; email: string } = currentUserSpeaker
+
+    if (proposal.speakers && Array.isArray(proposal.speakers)) {
+      const currentUserSpeakerData = proposal.speakers.find(
+        (s): s is Speaker =>
+          typeof s === 'object' &&
+          s !== null &&
+          '_id' in s &&
+          s._id === session.speaker._id,
+      )
+      if (currentUserSpeakerData) {
+        speakerData = currentUserSpeakerData
+      }
+    }
+
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6">
+          <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {proposal.status === 'draft' ? 'Edit Draft' : 'Edit Proposal'}
+          </h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {proposal.status === 'draft'
+              ? 'Continue working on your draft. Save your progress or submit when ready.'
+              : 'Update your proposal details'}
+          </p>
+        </div>
+
+        <div className="flex gap-6">
+          <div className="flex-1">
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <ProposalForm
+                key={id}
+                initialProposal={proposal}
+                initialSpeaker={speakerData}
+                proposalId={id}
+                userEmail={session.speaker.email}
+                conference={conference}
+                allowedFormats={conference.formats}
+                currentUserSpeaker={currentUserSpeaker}
+                initialStatus={proposal.status}
+              />
+            </div>
+          </div>
+
+          <div className="hidden w-80 shrink-0 lg:block">
+            <ProposalGuidanceSidebar conference={conference} />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-7xl">
