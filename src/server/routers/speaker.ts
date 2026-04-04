@@ -23,6 +23,10 @@ import { clientWrite } from '@/lib/sanity/client'
 import { verifiedEmails } from '@/lib/profile/github'
 import { defaultEmails } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
+import { encode } from 'next-auth/jwt'
+
+const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
+const JWT_SALT = 'authjs.session-token'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -132,6 +136,39 @@ export const speakerRouter = router({
       console.error('Error fetching emails:', error)
       return defaultEmails(session)
     }
+  }),
+
+  // Generate a CLI authentication token
+  generateCliToken: protectedProcedure.mutation(async ({ ctx }) => {
+    const secret = process.env.AUTH_SECRET
+    if (!secret) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Server configuration error',
+      })
+    }
+
+    const session = ctx.session!
+
+    const token = await encode({
+      token: {
+        sub: session.user.sub,
+        name: session.user.name,
+        email: session.user.email,
+        picture: session.user.picture,
+        speaker: session.speaker,
+        account: session.account,
+      },
+      secret,
+      maxAge: CLI_TOKEN_MAX_AGE,
+      salt: JWT_SALT,
+    })
+
+    const expiresAt = new Date(
+      Date.now() + CLI_TOKEN_MAX_AGE * 1000,
+    ).toISOString()
+
+    return { token, expiresAt }
   }),
 
   // Update speaker email

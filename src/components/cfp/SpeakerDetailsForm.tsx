@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
 import { ProfileEmail } from '@/lib/profile/types'
-import { postImage, putEmail } from '@/lib/profile/client'
+import { postImage } from '@/lib/profile/client'
+import { api } from '@/lib/trpc/client'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Image from 'next/image'
 import {
@@ -75,6 +76,7 @@ export function SpeakerDetailsForm({
   const [isUploading, setIsUploading] = useState(false)
   const isMounted = useRef(false)
   const previousSpeakerRef = useRef(speaker)
+  const updateEmailMutation = api.speaker.updateEmail.useMutation()
 
   // Initialize local state from props only on mount or when switching speakers
   useEffect(() => {
@@ -189,13 +191,8 @@ export function SpeakerDetailsForm({
       }
     } else {
       try {
-        const res = await putEmail(email)
-        if (res.error) {
-          setEmailError(res.error.message || 'Failed to update email')
-          console.error('Email update failed:', res.error)
-        } else {
-          setSpeakerEmail(email)
-        }
+        await updateEmailMutation.mutateAsync({ email })
+        setSpeakerEmail(email)
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Failed to update email'

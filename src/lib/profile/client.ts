@@ -1,20 +1,4 @@
-import { ProfileEmailResponse, ProfileImageResponse } from './types'
-
-export async function putEmail(email: string): Promise<ProfileEmailResponse> {
-  const url = `/api/profile/emails`
-
-  const res = await fetch(url, {
-    next: { revalidate: 0 },
-    cache: 'no-store',
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email }),
-  })
-
-  return (await res.json()) as ProfileEmailResponse
-}
+import { ProfileImageResponse } from './types'
 
 export async function postImage(file: File): Promise<ProfileImageResponse> {
   const url = `/api/profile/image`

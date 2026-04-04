@@ -178,10 +178,11 @@ function EmailModalMockup({
       <div className="flex shrink-0 justify-between border-t border-gray-200 p-6 dark:border-gray-700">
         <button
           onClick={() => setShowPreview(!showPreview)}
-          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold ${showPreview
+          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold ${
+            showPreview
               ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
               : 'border-gray-300 text-gray-900 dark:border-gray-600 dark:text-white'
-            }`}
+          }`}
         >
           <EyeIcon className="h-4 w-4" />
           Preview Email

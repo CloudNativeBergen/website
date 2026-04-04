@@ -3,6 +3,19 @@
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+const mockMutateAsync = vi.fn()
+
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    speaker: {
+      generateCliToken: {
+        useMutation: () => ({ mutateAsync: mockMutateAsync }),
+      },
+    },
+  },
+}))
+
 import CLILoginClient, {
   buildCallbackUrl,
 } from '@/app/cli/login/cli-login-client'
@@ -32,11 +45,8 @@ describe('buildCallbackUrl', () => {
 })
 
 describe('CLILoginClient', () => {
-  let fetchMock: ReturnType<typeof vi.fn>
-
   beforeEach(() => {
-    fetchMock = vi.fn()
-    globalThis.fetch = fetchMock as unknown as typeof fetch
+    vi.clearAllMocks()
   })
 
   afterEach(() => {
@@ -58,14 +68,11 @@ describe('CLILoginClient', () => {
     expect(
       screen.getByText(/Test User \(test@example\.com\)/),
     ).toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('should display token for manual copy after authorizing', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ token: 'jwt-token-value' }),
-    })
+    mockMutateAsync.mockResolvedValue({ token: 'jwt-token-value', expiresAt: '2026-05-04T00:00:00.000Z' })
 
     render(
       <CLILoginClient
@@ -83,10 +90,7 @@ describe('CLILoginClient', () => {
   })
 
   it('should redirect to localhost callback after authorizing', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ token: 'jwt-token-value' }),
-    })
+    mockMutateAsync.mockResolvedValue({ token: 'jwt-token-value', expiresAt: '2026-05-04T00:00:00.000Z' })
 
     // Mock window.location.href assignment
     const locationHref = vi.spyOn(window, 'location', 'get').mockReturnValue({
@@ -147,7 +151,7 @@ describe('CLILoginClient', () => {
     await waitFor(() => {
       expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
     })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('should show error for non-numeric port', async () => {
@@ -166,7 +170,7 @@ describe('CLILoginClient', () => {
     await waitFor(() => {
       expect(screen.getByText(/invalid port/i)).toBeInTheDocument()
     })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('should show error when port is provided without state', async () => {
@@ -184,15 +188,11 @@ describe('CLILoginClient', () => {
     await waitFor(() => {
       expect(screen.getByText(/missing state/i)).toBeInTheDocument()
     })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('should show error when token request fails', async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: () => Promise.resolve({ error: 'Unauthorized' }),
-    })
+    mockMutateAsync.mockRejectedValue(new Error('Authentication required'))
 
     render(
       <CLILoginClient
@@ -204,12 +204,12 @@ describe('CLILoginClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
-      expect(screen.getByText('Unauthorized')).toBeInTheDocument()
+      expect(screen.getByText('Authentication required')).toBeInTheDocument()
     })
   })
 
-  it('should show error when fetch throws', async () => {
-    fetchMock.mockRejectedValue(new Error('Network error'))
+  it('should show error when mutation throws', async () => {
+    mockMutateAsync.mockRejectedValue(new Error('Network error'))
 
     render(
       <CLILoginClient
@@ -221,15 +221,12 @@ describe('CLILoginClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /authorize cli/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/failed to connect/i)).toBeInTheDocument()
+      expect(screen.getByText('Network error')).toBeInTheDocument()
     })
   })
 
   it('should call clipboard API when copy button is clicked', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ token: 'copy-me' }),
-    })
+    mockMutateAsync.mockResolvedValue({ token: 'copy-me', expiresAt: '2026-05-04T00:00:00.000Z' })
 
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
@@ -256,16 +253,9 @@ describe('CLILoginClient', () => {
   })
 
   it('should allow retry after error', async () => {
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ error: 'Server error' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ token: 'retry-token' }),
-      })
+    mockMutateAsync
+      .mockRejectedValueOnce(new Error('Server error'))
+      .mockResolvedValueOnce({ token: 'retry-token', expiresAt: '2026-05-04T00:00:00.000Z' })
 
     render(
       <CLILoginClient

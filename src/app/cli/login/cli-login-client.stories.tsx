@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse, delay } from 'msw'
 import CLILoginClient from './cli-login-client'
 
+const TRPC_URL = '/api/trpc/speaker.generateCliToken'
+
 const meta = {
   title: 'Systems/Auth/CLILoginClient',
   component: CLILoginClient,
@@ -35,10 +37,14 @@ export const DisplayToken: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/auth/cli/token', () => {
+        http.post(TRPC_URL, () => {
           return HttpResponse.json({
-            token: mockToken,
-            expiresAt: '2026-05-04T00:00:00.000Z',
+            result: {
+              data: {
+                token: mockToken,
+                expiresAt: '2026-05-04T00:00:00.000Z',
+              },
+            },
           })
         }),
       ],
@@ -53,7 +59,7 @@ export const Loading: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/auth/cli/token', async () => {
+        http.post(TRPC_URL, async () => {
           await delay('infinite')
           return HttpResponse.json({})
         }),
@@ -74,10 +80,14 @@ export const Redirecting: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/auth/cli/token', () => {
+        http.post(TRPC_URL, () => {
           return HttpResponse.json({
-            token: mockToken,
-            expiresAt: '2026-05-04T00:00:00.000Z',
+            result: {
+              data: {
+                token: mockToken,
+                expiresAt: '2026-05-04T00:00:00.000Z',
+              },
+            },
           })
         }),
       ],
@@ -92,8 +102,17 @@ export const Unauthorized: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/auth/cli/token', () => {
-          return HttpResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        http.post(TRPC_URL, () => {
+          return HttpResponse.json(
+            {
+              error: {
+                message: 'Authentication required',
+                code: -32001,
+                data: { code: 'UNAUTHORIZED' },
+              },
+            },
+            { status: 401 },
+          )
         }),
       ],
     },

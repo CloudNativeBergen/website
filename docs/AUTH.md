@@ -189,7 +189,8 @@ See `docs/CLI_AUTH.md` for the full implementation plan.
 
 1. CLI opens browser to `/cli/login?port=PORT&state=STATE`
 2. User authenticates via NextAuth (GitHub/LinkedIn) if not already signed in
-3. The CLI login page (`src/app/cli/login/page.tsx`) calls `POST /api/auth/cli/token`
+3. The CLI login page client component (`cli-login-client.tsx`) calls the
+   `speaker.generateCliToken` tRPC mutation
 4. If `port` and `state` are present, redirects to
    `http://localhost:PORT/callback?token=TOKEN&state=STATE`
 5. If no `port`, the token is displayed for manual copy-paste
@@ -205,12 +206,12 @@ See `docs/CLI_AUTH.md` for the full implementation plan.
 - **Security**: redirect target must be `localhost` or `127.0.0.1`, port 1024–65535,
   `state` required when `port` is present
 
-### Token Generation Endpoint
+### Token Generation
 
-`POST /api/auth/cli/token` (`src/app/api/auth/cli/token/route.ts`):
+The `speaker.generateCliToken` tRPC mutation (`src/server/routers/speaker.ts`):
 
-- Requires valid NextAuth session (cookie-based, browser must be signed in)
-- Validates session has `speaker`, `account`, and `user`
+- Protected by `protectedProcedure` (requires valid NextAuth session)
+- Reads `speaker`, `account`, and `user` from the session context
 - Encodes a JWE using `encode` from `next-auth/jwt` with `AUTH_SECRET` and
   salt `"authjs.session-token"`
 - Token lifetime: 30 days
@@ -306,7 +307,6 @@ in its package. They are only needed if workshop signup is enabled.
 | ----------------------------------------- | ----------------------------------------------------- |
 | `src/lib/auth.ts`                         | NextAuth configuration, callbacks, `getAuthSession()` |
 | `src/types/next-auth.d.ts`                | Session type augmentation                             |
-| `src/lib/auth/admin.ts`                   | `checkOrganizerAccess()` helper                       |
 | `src/lib/environment/config.ts`           | `AppEnvironment` (test mode, mock sessions)           |
 | `src/lib/speaker/sanity.ts`               | `getOrCreateSpeaker()`, provider linking              |
 | `src/proxy.ts`                            | Route-level middleware (NextAuth + WorkOS)            |
@@ -314,7 +314,7 @@ in its package. They are only needed if workshop signup is enabled.
 | `src/app/(admin)/admin/api/middleware.ts` | Admin API auth guard                                  |
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth route handler                                |
 | `src/app/api/auth/callback/route.ts`      | WorkOS callback handler                               |
-| `src/app/api/auth/cli/token/route.ts`     | CLI token generation endpoint                         |
+| `src/server/routers/speaker.ts`           | `generateCliToken` mutation and auth procedures       |
 | `src/app/(main)/signin/page.tsx`          | Custom sign-in page                                   |
 
 ## Security Considerations

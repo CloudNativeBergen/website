@@ -7,6 +7,7 @@ import {
   CommandLineIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
+import { api } from '@/lib/trpc/client'
 
 type Status = 'confirm' | 'loading' | 'redirecting' | 'display-token' | 'error'
 
@@ -59,6 +60,7 @@ export default function CLILoginClient({
   const [token, setToken] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState(false)
+  const generateToken = api.speaker.generateCliToken.useMutation()
 
   const fetchTokenAndRedirect = useCallback(async () => {
     if (port) {
@@ -77,15 +79,7 @@ export default function CLILoginClient({
     setStatus('loading')
 
     try {
-      const res = await fetch('/api/auth/cli/token', { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setError(body.error ?? `Token request failed (${res.status})`)
-        setStatus('error')
-        return
-      }
-
-      const { token: jwt } = (await res.json()) as { token: string }
+      const { token: jwt } = await generateToken.mutateAsync()
 
       if (port && state) {
         setStatus('redirecting')
@@ -101,11 +95,15 @@ export default function CLILoginClient({
         setToken(jwt)
         setStatus('display-token')
       }
-    } catch {
-      setError('Failed to connect to authentication service')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to connect to authentication service',
+      )
       setStatus('error')
     }
-  }, [port, state, userName, conferenceId])
+  }, [port, state, userName, conferenceId, generateToken])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(token)
