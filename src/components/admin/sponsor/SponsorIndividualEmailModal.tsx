@@ -10,6 +10,7 @@ import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/typ
 import { formatConferenceDateLong } from '@/lib/time'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
+import { api } from '@/lib/trpc/client'
 
 interface SponsorIndividualEmailModalProps {
   isOpen: boolean
@@ -85,6 +86,7 @@ export function SponsorIndividualEmailModal({
   }
 
   const defaultSubject = getDefaultSubject()
+  const sendEmailMutation = api.sponsor.crm.sendEmail.useMutation()
 
   const handleSend = async ({
     subject,
@@ -96,29 +98,11 @@ export function SponsorIndividualEmailModal({
     try {
       const messageJSON = JSON.stringify(message as PortableTextBlockForHTML[])
 
-      const response = await fetch('/admin/api/sponsors/email/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sponsorId: sponsorForConference.sponsor._id,
-          subject,
-          message: messageJSON,
-        }),
+      const result = await sendEmailMutation.mutateAsync({
+        sponsorId: sponsorForConference.sponsor._id,
+        subject,
+        message: messageJSON,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        showNotification({
-          type: 'error',
-          title: 'Email failed',
-          message: errorData.error || 'Failed to send email',
-        })
-        return
-      }
-
-      const result = await response.json()
 
       showNotification({
         type: 'success',
@@ -130,7 +114,7 @@ export function SponsorIndividualEmailModal({
     } catch (err) {
       showNotification({
         type: 'error',
-        title: 'Network error',
+        title: 'Email failed',
         message:
           err instanceof Error ? err.message : 'An unexpected error occurred',
       })

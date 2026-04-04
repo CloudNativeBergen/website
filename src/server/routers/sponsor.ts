@@ -107,6 +107,18 @@ import {
   getSigningProvider,
   type SigningProviderType,
 } from '@/lib/contract-signing'
+import { resend, retryWithBackoff } from '@/lib/email/config'
+import { sendBroadcastEmail } from '@/lib/email/broadcast'
+import { sendIndividualEmail } from '@/lib/email/broadcast'
+import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
+import { logEmailSent, logBulkEmailSent } from '@/lib/sponsor-crm/activity'
+import {
+  convertPortableTextToHTML,
+  renderEmailTemplate,
+} from '@/lib/email/route-helpers'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+import type { PortableTextBlock } from '@portabletext/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -164,9 +176,9 @@ async function sendContractSignedSlackNotification(
   try {
     const salesChannel = sfc.conference?._id
       ? await clientReadUncached.fetch<string | null>(
-          `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
-          { id: sfc.conference._id },
-        )
+        `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
+        { id: sfc.conference._id },
+      )
       : null
 
     if (!salesChannel) return
@@ -1694,6 +1706,416 @@ export const sponsorRouter = router({
           signingUrl,
         }
       }),
+
+    sendEmail: adminProcedure
+      .input(
+        z.object({
+          sponsorId: z.string().min(1),
+          subject: z.string().min(1),
+          message: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({ sponsors: true })
+
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        const sfc = await clientReadUncached.fetch<{
+          _id: string
+          status: string
+          contactPersons?: Array<{ name: string; email: string }>
+        }>(
+          `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
+            _id,
+            status,
+            contactPersons[]{ name, email }
+          }`,
+          { sponsorId: input.sponsorId, conferenceId: conference._id },
+        )
+
+        if (!sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found in this conference',
+          })
+        }
+
+        const contacts = sfc.contactPersons || []
+        const recipients = contacts
+          .filter((c) => c.email)
+          .map((c) => ({ email: c.email, name: c.name }))
+
+        if (recipients.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Sponsor has no contact persons with email addresses',
+          })
+        }
+
+        let messagePortableText: PortableTextBlock[]
+        try {
+          const parsed = JSON.parse(input.message)
+          if (!isValidPortableText(parsed)) {
+            throw new Error('Invalid PortableText format')
+          }
+          messagePortableText = parsed
+        } catch {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid message format. Expected PortableText JSON.',
+          })
+        }
+
+        const { htmlContent, error: htmlError } =
+          await convertPortableTextToHTML(messagePortableText)
+        if (htmlError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to convert message to HTML',
+          })
+        }
+
+        const emailTemplate = renderEmailTemplate({
+          conference,
+          subject: input.subject,
+          htmlContent: htmlContent!,
+          unsubscribeUrl: undefined,
+        })
+
+        if (!conference.sponsorEmail) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Missing sponsorEmail in conference configuration',
+          })
+        }
+
+        const result = await retryWithBackoff(async () => {
+          return await resend.emails.send({
+            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            to: recipients.map((r) => r.email),
+            subject: input.subject,
+            react: emailTemplate,
+          })
+        })
+
+        if (result.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.error.message,
+          })
+        }
+
+        try {
+          const userId = ctx.speaker._id
+          if (sfc && userId) {
+            try {
+              await logEmailSent(sfc._id, input.subject, userId)
+            } catch (logError) {
+              console.error(
+                '[sendEmail] Failed to log email activity:',
+                logError,
+              )
+            }
+
+            if (sfc.status === 'prospect') {
+              try {
+                await clientWrite
+                  .patch(sfc._id)
+                  .set({ status: 'contacted' })
+                  .commit()
+                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+              } catch (statusError) {
+                console.error(
+                  '[sendEmail] Failed to update sponsor status:',
+                  statusError,
+                )
+              }
+            }
+          }
+        } catch (crmError) {
+          console.warn('[sendEmail] CRM tracking failed:', crmError)
+        }
+
+        return {
+          success: true,
+          emailId: result.data?.id,
+          recipientCount: recipients.length,
+        }
+      }),
+
+    broadcastEmail: adminProcedure
+      .input(
+        z.object({
+          subject: z.string().min(1),
+          message: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        let messagePortableText: PortableTextBlock[]
+        try {
+          const parsed = JSON.parse(input.message)
+          if (!isValidPortableText(parsed)) {
+            throw new Error('Invalid PortableText format')
+          }
+          messagePortableText = parsed
+        } catch {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid message format. Expected PortableText JSON.',
+          })
+        }
+
+        const response = await sendBroadcastEmail({
+          conference,
+          subject: input.subject,
+          messagePortableText,
+          audienceType: 'sponsors',
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: errorData.error || 'Failed to send broadcast email',
+          })
+        }
+
+        try {
+          const userId = ctx.speaker._id
+          const sponsors = await clientReadUncached.fetch<
+            Array<{ _id: string; status: string }>
+          >(
+            `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{_id, status}`,
+            { conferenceId: conference._id },
+          )
+
+          if (sponsors.length > 0 && userId) {
+            const sponsorIds = sponsors.map((s) => s._id)
+            await logBulkEmailSent(sponsorIds, input.subject, userId)
+
+            const prospectIds = sponsors
+              .filter((s) => s.status === 'prospect')
+              .map((s) => s._id)
+
+            if (prospectIds.length > 0) {
+              const transaction = clientWrite.transaction()
+              for (const id of prospectIds) {
+                transaction.patch(id, { set: { status: 'contacted' } })
+              }
+              await transaction.commit()
+            }
+          }
+        } catch (crmError) {
+          console.warn('[broadcastEmail] CRM tracking failed:', crmError)
+        }
+
+        return await response.json()
+      }),
+
+    sendDiscountEmail: adminProcedure
+      .input(
+        z.object({
+          sponsorId: z.string().min(1),
+          discountCode: z.string().min(1),
+          subject: z.string().min(1),
+          message: z.string().min(1),
+          ticketUrl: z.string().url(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        let messagePortableText: PortableTextBlock[]
+        try {
+          const parsed = JSON.parse(input.message)
+          if (!isValidPortableText(parsed)) {
+            throw new Error('Invalid PortableText format')
+          }
+          messagePortableText = parsed
+        } catch {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid message format. Expected PortableText JSON.',
+          })
+        }
+
+        const sfc = await clientReadUncached.fetch<{
+          _id: string
+          sponsor: { name: string }
+          contactPersons?: Array<{
+            _key: string
+            name: string
+            email: string
+            phone?: string
+            role?: string
+          }>
+        }>(
+          `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
+            _id,
+            sponsor->{ name },
+            contactPersons[]{ _key, name, email, phone, role }
+          }`,
+          { sponsorId: input.sponsorId, conferenceId: conference._id },
+        )
+
+        if (!sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found in this conference',
+          })
+        }
+
+        const ccEmails: string[] = []
+        if (sfc.contactPersons) {
+          sfc.contactPersons.forEach((contact) => {
+            if (contact.email && contact.email.trim().length > 0) {
+              ccEmails.push(contact.email.trim())
+            }
+          })
+        }
+
+        if (ccEmails.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `No valid contact person email addresses found for sponsor ${sfc.sponsor.name}. Please add contact persons with valid email addresses in the sponsor CRM.`,
+          })
+        }
+
+        const discountInfo = `
+          <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
+            <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+              Your Discount Code
+            </h3>
+            <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
+              <li style="margin-bottom: 8px;"><strong>Discount Code:</strong> <code style="background-color: #F1F5F9; padding: 4px 8px; border-radius: 4px; font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;">${input.discountCode}</code></li>
+              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: #1D4ED8; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
+              <li style="margin-bottom: 0;"><strong>Instructions:</strong> Enter the discount code during checkout to receive your sponsor tickets</li>
+            </ul>
+          </div>
+        `
+
+        const emailResponse = await sendIndividualEmail({
+          conference,
+          subject: input.subject,
+          messagePortableText,
+          primaryRecipient: ccEmails[0],
+          ccRecipients: ccEmails.slice(1),
+          additionalContent: discountInfo,
+        })
+
+        if (!emailResponse.ok) {
+          const errorData = await emailResponse.json()
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: errorData.error || 'Failed to send discount email',
+          })
+        }
+
+        const responseData = await emailResponse.json()
+        return {
+          ...responseData,
+          sponsorName: sfc.sponsor.name,
+          discountCode: input.discountCode,
+        }
+      }),
+
+    syncAudience: adminProcedure.mutation(async () => {
+      const { conference, error: conferenceError } =
+        await getConferenceForCurrentDomain()
+
+      if (conferenceError || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+
+      const { sponsors: crmSponsors, error: crmError } =
+        await listSponsorsForConference(conference._id)
+
+      if (crmError || !crmSponsors) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to load sponsor CRM data',
+        })
+      }
+
+      const eligibleSponsors = crmSponsors.filter(
+        (s: SponsorForConferenceExpanded) =>
+          s.contactPersons &&
+          s.contactPersons.length > 0 &&
+          s.contactPersons.some((contact) => contact.email),
+      )
+
+      if (eligibleSponsors.length === 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'No sponsors with contact information found. Add contact information to sponsors before syncing.',
+        })
+      }
+
+      const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
+        (s: SponsorForConferenceExpanded) =>
+          s.contactPersons
+            ?.filter((contact) => contact.email)
+            .map((contact) => ({
+              email: contact.email,
+              firstName: contact.name?.split(' ')[0] || '',
+              lastName: contact.name?.split(' ').slice(1).join(' ') || '',
+              organization: s.sponsor.name,
+            })) || [],
+      )
+
+      const {
+        success,
+        audienceId,
+        syncedCount,
+        addedCount,
+        removedCount,
+        error: syncError,
+      } = await syncSponsorAudience(conference, sponsorContacts)
+
+      if (!success || syncError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: syncError?.message || 'Failed to sync sponsor audience',
+        })
+      }
+
+      return {
+        success: true,
+        audienceId,
+        syncedCount,
+        addedCount,
+        removedCount,
+        message: `Successfully synced ${syncedCount} sponsor contacts (${addedCount} added, ${removedCount} removed)`,
+      }
+    }),
   }),
 
   emailTemplates: router({
@@ -1949,9 +2371,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,

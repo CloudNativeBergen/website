@@ -8,6 +8,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { api } from '@/lib/trpc/client'
 
 interface SponsorWithTierInfo {
   id: string
@@ -49,6 +50,7 @@ export function SponsorDiscountEmailModal({
   conference,
 }: SponsorDiscountEmailModalProps) {
   const { showNotification } = useNotification()
+  const sendDiscountMutation = api.sponsor.crm.sendDiscountEmail.useMutation()
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
   const [ticketUrl, setTicketUrl] = useState('')
   const [additionalFields, setAdditionalFields] = useState<
@@ -177,26 +179,13 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       processedMessage as PortableTextBlockForHTML[],
     )
 
-    const response = await fetch('/admin/api/sponsors/email/discount', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sponsorId: sponsor.id,
-        discountCode,
-        subject: processedSubject,
-        message: messageJSON,
-        ticketUrl: ticketUrl.trim(),
-      }),
+    const result = await sendDiscountMutation.mutateAsync({
+      sponsorId: sponsor.id,
+      discountCode,
+      subject: processedSubject,
+      message: messageJSON,
+      ticketUrl: ticketUrl.trim(),
     })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Failed to send email')
-    }
-
-    const result = await response.json()
 
     showNotification({
       type: 'success',
