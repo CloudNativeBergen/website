@@ -45,11 +45,15 @@ const meta: Meta<typeof SpeakerActions> = {
     },
     msw: {
       handlers: [
-        http.post('/admin/api/speakers/email/broadcast', () => {
-          return HttpResponse.json({ success: true, sentCount: 15 })
+        http.post('/api/trpc/speaker.admin.broadcastEmail', () => {
+          return HttpResponse.json({
+            result: { data: { success: true, sentCount: 15 } },
+          })
         }),
-        http.post('/admin/api/speakers/email/audience/sync', () => {
-          return HttpResponse.json({ success: true, syncedCount: 20 })
+        http.post('/api/trpc/speaker.admin.syncAudience', () => {
+          return HttpResponse.json({
+            result: { data: { success: true, syncedCount: 20 } },
+          })
         }),
       ],
     },

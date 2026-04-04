@@ -28,6 +28,14 @@ import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
+import { sendBroadcastEmail } from '@/lib/email/broadcast'
+import {
+  syncConferenceAudience,
+  getOrCreateConferenceAudience,
+} from '@/lib/email/audience'
+import { isValidPortableText } from '@/lib/portabletext/validation'
+import type { PortableTextBlock } from '@portabletext/types'
 import { generateSlug } from '@/lib/speaker/sanity'
 
 const speakerSearchSchema = z.object({
@@ -466,5 +474,133 @@ export const speakerRouter = router({
           })
         }
       }),
+
+    sendEmail: adminProcedure
+      .input(
+        z.object({
+          proposalId: z.string().min(1),
+          speakerIds: z.array(z.string()).min(1),
+          subject: z.string().min(1),
+          message: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const senderName = ctx.speaker.name || 'Conference Organizer'
+
+        const result = await sendMultiSpeakerEmail({
+          ...input,
+          senderName,
+        })
+
+        if (result.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.error.error,
+          })
+        }
+
+        return result.data!
+      }),
+
+    broadcastEmail: adminProcedure
+      .input(
+        z.object({
+          subject: z.string().min(1),
+          message: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        let messagePortableText: PortableTextBlock[]
+        try {
+          const parsed = JSON.parse(input.message)
+          if (!isValidPortableText(parsed)) {
+            throw new Error('Invalid PortableText format')
+          }
+          messagePortableText = parsed
+        } catch {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid message format. Expected PortableText JSON.',
+          })
+        }
+
+        const response = await sendBroadcastEmail({
+          conference,
+          subject: input.subject,
+          messagePortableText,
+          audienceType: 'speakers',
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: errorData.error || 'Failed to send broadcast email',
+          })
+        }
+
+        return await response.json()
+      }),
+
+    syncAudience: adminProcedure.mutation(async () => {
+      const { conference, error: conferenceError } =
+        await getConferenceForCurrentDomain()
+
+      if (conferenceError || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+
+      const conferenceId = await resolveConferenceId()
+      const { speakers, err } = await getSpeakers(conferenceId)
+
+      if (err) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch speakers',
+        })
+      }
+
+      const eligibleSpeakers = speakers.filter(
+        (speaker: Speaker & { proposals: ProposalExisting[] }) =>
+          speaker.email &&
+          speaker.proposals?.some(
+            (proposal: ProposalExisting) => proposal.status === 'confirmed',
+          ),
+      )
+
+      const { syncedCount, error } = await syncConferenceAudience(
+        conference,
+        eligibleSpeakers,
+      )
+
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to sync audience',
+        })
+      }
+
+      const { audienceId } = await getOrCreateConferenceAudience(conference)
+
+      return {
+        success: true,
+        audienceId,
+        syncedCount,
+        message: `Successfully synced ${syncedCount} speakers with the conference audience`,
+      }
+    }),
   }),
 })

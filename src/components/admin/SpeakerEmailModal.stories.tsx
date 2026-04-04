@@ -59,7 +59,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Email composition modal for sending messages to proposal speakers. Wraps the generic EmailModal with speaker-specific recipient display, greeting template, and SpeakerEmailTemplate preview. Sends via the `/admin/api/speakers/email/multi` endpoint.',
+          'Email composition modal for sending messages to proposal speakers. Wraps the generic EmailModal with speaker-specific recipient display, greeting template, and SpeakerEmailTemplate preview. Sends via the `speaker.admin.sendEmail` tRPC mutation.',
       },
     },
   },

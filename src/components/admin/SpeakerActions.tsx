@@ -2,6 +2,7 @@
 
 import { GeneralBroadcastModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
+import { api } from '@/lib/trpc/client'
 
 import { Conference } from '@/lib/conference/types'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -22,42 +23,16 @@ export function SpeakerActions({
   setIsModalOpen,
 }: SpeakerActionsProps) {
   const { showNotification } = useNotification()
+  const broadcastMutation = api.speaker.admin.broadcastEmail.useMutation()
+  const syncMutation = api.speaker.admin.syncAudience.useMutation()
 
   const handleSendBroadcast = async (subject: string, message: string) => {
-    try {
-      const response = await fetch('/admin/api/speakers/email/broadcast', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ subject, message }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to send broadcast email')
-      }
-    } catch (error: unknown) {
-      console.error('Broadcast error:', error)
-      throw error
-    }
+    await broadcastMutation.mutateAsync({ subject, message })
   }
 
   const handleSyncContacts = async () => {
     try {
-      const response = await fetch('/admin/api/speakers/email/audience/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to sync contacts')
-      }
+      const result = await syncMutation.mutateAsync()
 
       showNotification({
         type: 'success',

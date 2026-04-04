@@ -10,6 +10,7 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { api } from '@/lib/trpc/client'
 
 interface SpeakerEmailModalProps {
   isOpen: boolean
@@ -34,7 +35,7 @@ export function SpeakerEmailModal({
 }: SpeakerEmailModalProps) {
   const { showNotification } = useNotification()
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
-
+  const sendEmailMutation = api.speaker.admin.sendEmail.useMutation()
   const recipientDisplay = (
     <div className="flex flex-wrap gap-2">
       {speakers.map((speaker, index) => (
@@ -85,25 +86,12 @@ export function SpeakerEmailModal({
       message as PortableTextBlockForHTML[],
     )
 
-    const response = await fetch('/admin/api/speakers/email/multi', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        proposalId: proposal._id,
-        speakerIds: speakers.map((s) => s.id),
-        subject,
-        message: messageHTML,
-      }),
+    await sendEmailMutation.mutateAsync({
+      proposalId: proposal._id,
+      speakerIds: speakers.map((s) => s.id),
+      subject,
+      message: messageHTML,
     })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Failed to send email')
-    }
-
-    await response.json()
 
     showNotification({
       type: 'success',
