@@ -334,7 +334,7 @@ export const proposalRouter = router({
         if (!ctx.speaker.isOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-              '_id' in existing.conference
+            '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
@@ -901,16 +901,16 @@ export const proposalRouter = router({
 
           const { review, reviewError } = existingReview
             ? await updateReview(
-              existingReview._id,
-              ctx.speaker._id,
-              reviewData,
-            )
+                existingReview._id,
+                ctx.speaker._id,
+                reviewData,
+              )
             : await createReview(
-              proposal._id,
-              ctx.speaker._id,
-              conferenceId,
-              reviewData,
-            )
+                proposal._id,
+                ctx.speaker._id,
+                conferenceId,
+                reviewData,
+              )
 
           if (reviewError || !review) {
             throw new TRPCError({
