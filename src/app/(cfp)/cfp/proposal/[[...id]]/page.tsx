@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import {

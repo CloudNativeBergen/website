@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { redirect } from 'next/navigation'

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
