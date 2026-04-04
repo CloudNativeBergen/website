@@ -40,8 +40,8 @@ describe('tRPC middleware', () => {
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
 
-      await expect(caller.speakers.list()).rejects.toThrow(TRPCError)
-      await expect(caller.speakers.list()).rejects.toMatchObject({
+      await expect(caller.speaker.admin.list()).rejects.toThrow(TRPCError)
+      await expect(caller.speaker.admin.list()).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
       })
     })
@@ -50,8 +50,8 @@ describe('tRPC middleware', () => {
       const regularUser = speakers.find((s) => !s.isOrganizer)!
       const caller = createAuthenticatedCaller(regularUser._id)
 
-      await expect(caller.speakers.list()).rejects.toThrow(TRPCError)
-      await expect(caller.speakers.list()).rejects.toMatchObject({
+      await expect(caller.speaker.admin.list()).rejects.toThrow(TRPCError)
+      await expect(caller.speaker.admin.list()).rejects.toMatchObject({
         code: 'FORBIDDEN',
       })
     })
@@ -60,7 +60,7 @@ describe('tRPC middleware', () => {
       const caller = createAdminCaller()
       // Should not throw UNAUTHORIZED or FORBIDDEN — may throw due to missing mock data
       try {
-        await caller.speakers.list()
+        await caller.speaker.admin.list()
       } catch (error) {
         expect(error).toBeInstanceOf(TRPCError)
         expect((error as TRPCError).code).not.toBe('UNAUTHORIZED')

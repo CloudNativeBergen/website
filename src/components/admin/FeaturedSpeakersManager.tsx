@@ -27,12 +27,12 @@ export function FeaturedSpeakersManager({
     data: featuredSpeakers = [],
     isLoading: featuredLoading,
     refetch: refetchFeatured,
-  } = api.featured.featuredSpeakers.useQuery(undefined, {
+  } = api.featured.listSpeakers.useQuery(undefined, {
     staleTime: 5000, // 5 seconds for admin data
   })
 
   const { data: availableSpeakers = [], isLoading: searchLoading } =
-    api.speakers.search.useQuery(
+    api.speaker.admin.search.useQuery(
       { query: searchQuery },
       { enabled: showSearch && searchQuery.length > 0, staleTime: 5000 },
     )
@@ -40,7 +40,7 @@ export function FeaturedSpeakersManager({
   const addSpeakerMutation = api.featured.addSpeaker.useMutation({
     onSuccess: () => {
       refetchFeatured()
-      utils.speakers.search.invalidate()
+      utils.speaker.admin.search.invalidate()
       utils.featured.summary.invalidate()
       setSearchQuery('')
       setShowSearch(false)
@@ -53,7 +53,7 @@ export function FeaturedSpeakersManager({
   const removeSpeakerMutation = api.featured.removeSpeaker.useMutation({
     onSuccess: () => {
       refetchFeatured()
-      utils.speakers.search.invalidate()
+      utils.speaker.admin.search.invalidate()
       utils.featured.summary.invalidate()
     },
     onError: (err) => {

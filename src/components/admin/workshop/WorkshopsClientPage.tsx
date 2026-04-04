@@ -86,7 +86,7 @@ export function WorkshopsClientPage({
     )
 
   const { data: workshopSignupsData, refetch: refetchWorkshopSignups } =
-    api.workshop.getSignupsByWorkshop.useQuery(
+    api.workshop.listSignups.useQuery(
       {
         workshopId: signupModal.workshopId,
         status: signupModal.status || undefined,
@@ -97,7 +97,7 @@ export function WorkshopsClientPage({
     )
 
   const { data: statsData, refetch: refetchStats } =
-    api.workshop.getWorkshopSummary.useQuery(undefined, {
+    api.workshop.getSummary.useQuery(undefined, {
       enabled: !!conferenceId,
     })
 
@@ -117,43 +117,40 @@ export function WorkshopsClientPage({
     },
   })
 
-  const manualSignupMutation = api.workshop.manualSignupForWorkshop.useMutation(
-    {
-      onSuccess: () => {
-        refetchSignups()
-        refetchWorkshopSignups()
-        refetchStats()
-        setAddParticipantModal({
-          isOpen: false,
-          workshopId: '',
-          workshopTitle: '',
-        })
-      },
+  const manualSignupMutation = api.workshop.manualSignup.useMutation({
+    onSuccess: () => {
+      refetchSignups()
+      refetchWorkshopSignups()
+      refetchStats()
+      setAddParticipantModal({
+        isOpen: false,
+        workshopId: '',
+        workshopTitle: '',
+      })
     },
-  )
+  })
 
-  const updateCapacityMutation =
-    api.workshop.updateWorkshopCapacity.useMutation({
-      onSuccess: (result) => {
-        queryClient.invalidateQueries({
-          queryKey: [['workshop', 'listWorkshops']],
-        })
-        refetchSignups()
-        refetchStats()
+  const updateCapacityMutation = api.workshop.updateCapacity.useMutation({
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: [['workshop', 'list']],
+      })
+      refetchSignups()
+      refetchStats()
 
-        if (result.promotedCount && result.promotedCount > 0) {
-          alert(`✅ ${result.message}`)
-        }
+      if (result.promotedCount && result.promotedCount > 0) {
+        alert(`✅ ${result.message}`)
+      }
 
-        setEditCapacityModal({
-          isOpen: false,
-          workshopId: '',
-          workshopTitle: '',
-          currentCapacity: 0,
-          currentSignups: 0,
-        })
-      },
-    })
+      setEditCapacityModal({
+        isOpen: false,
+        workshopId: '',
+        workshopTitle: '',
+        currentCapacity: 0,
+        currentSignups: 0,
+      })
+    },
+  })
 
   const signups = useMemo(() => signupsData?.data || [], [signupsData?.data])
 

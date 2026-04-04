@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Modal for editing image metadata including photographer, date, time, location, alt text, speaker tags, hotspot/crop editing, and featured toggle. Supports both single-image and bulk-edit modes. Uses `api.speakers.search` for speaker search and `api.gallery.update` for saving. Includes speaker notification checkbox and ⌘S keyboard shortcut.',
+          'Modal for editing image metadata including photographer, date, time, location, alt text, speaker tags, hotspot/crop editing, and featured toggle. Supports both single-image and bulk-edit modes. Uses `api.speaker.admin.search` for speaker search and `api.gallery.update` for saving. Includes speaker notification checkbox and ⌘S keyboard shortcut.',
       },
     },
   },

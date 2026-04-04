@@ -57,12 +57,12 @@ const mockAvailableTalks = [
 ]
 
 const handlers = [
-  http.get('/api/trpc/featured.featuredTalks', () => {
+  http.get('/api/trpc/featured.listTalks', () => {
     return HttpResponse.json({
       result: { data: mockFeaturedTalks },
     })
   }),
-  http.get('/api/trpc/proposals.searchTalks', () => {
+  http.get('/api/trpc/proposal.admin.searchTalks', () => {
     return HttpResponse.json({
       result: { data: mockAvailableTalks },
     })
@@ -120,12 +120,12 @@ export const Empty: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.featuredTalks', () => {
+        http.get('/api/trpc/featured.listTalks', () => {
           return HttpResponse.json({
             result: { data: [] },
           })
         }),
-        http.get('/api/trpc/proposals.searchTalks', () => {
+        http.get('/api/trpc/proposal.admin.searchTalks', () => {
           return HttpResponse.json({
             result: { data: mockAvailableTalks },
           })
@@ -143,7 +143,7 @@ export const ManyFeaturedTalks: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.featuredTalks', () => {
+        http.get('/api/trpc/featured.listTalks', () => {
           return HttpResponse.json({
             result: {
               data: [
@@ -179,7 +179,7 @@ export const ManyFeaturedTalks: Story = {
             },
           })
         }),
-        http.get('/api/trpc/proposals.searchTalks', () => {
+        http.get('/api/trpc/proposal.admin.searchTalks', () => {
           return HttpResponse.json({
             result: { data: [] },
           })

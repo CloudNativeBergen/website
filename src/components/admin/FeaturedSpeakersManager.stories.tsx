@@ -37,12 +37,12 @@ const mockAvailableSpeakers = [
 ]
 
 const handlers = [
-  http.get('/api/trpc/featured.featuredSpeakers', () => {
+  http.get('/api/trpc/featured.listSpeakers', () => {
     return HttpResponse.json({
       result: { data: mockFeaturedSpeakers },
     })
   }),
-  http.get('/api/trpc/speakers.search', () => {
+  http.get('/api/trpc/speaker.admin.search', () => {
     return HttpResponse.json({
       result: { data: mockAvailableSpeakers },
     })
@@ -100,12 +100,12 @@ export const Empty: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.featuredSpeakers', () => {
+        http.get('/api/trpc/featured.listSpeakers', () => {
           return HttpResponse.json({
             result: { data: [] },
           })
         }),
-        http.get('/api/trpc/speakers.search', () => {
+        http.get('/api/trpc/speaker.admin.search', () => {
           return HttpResponse.json({
             result: { data: mockAvailableSpeakers },
           })
@@ -123,7 +123,7 @@ export const ManyFeaturedSpeakers: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.featuredSpeakers', () => {
+        http.get('/api/trpc/featured.listSpeakers', () => {
           return HttpResponse.json({
             result: {
               data: [
@@ -149,7 +149,7 @@ export const ManyFeaturedSpeakers: Story = {
             },
           })
         }),
-        http.get('/api/trpc/speakers.search', () => {
+        http.get('/api/trpc/speaker.admin.search', () => {
           return HttpResponse.json({
             result: { data: [] },
           })

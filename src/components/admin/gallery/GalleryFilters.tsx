@@ -118,7 +118,7 @@ export function GalleryFilters({
     [router, pathname],
   )
 
-  const { data: searchResults } = api.speakers.search.useQuery(
+  const { data: searchResults } = api.speaker.admin.search.useQuery(
     { query: debouncedQuery, includeFeatured: true },
     {
       enabled: debouncedQuery.length > 0,

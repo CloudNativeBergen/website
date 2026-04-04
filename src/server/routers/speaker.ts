@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { router, protectedProcedure, adminProcedure } from '@/server/trpc'
+import {
+  router,
+  protectedProcedure,
+  adminProcedure,
+  resolveConferenceId,
+} from '@/server/trpc'
 import {
   SpeakerInputSchema,
   SpeakerCreateSchema,
@@ -19,6 +24,7 @@ import { verifiedEmails } from '@/lib/profile/github'
 import { defaultEmails } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
@@ -46,28 +52,6 @@ export const speakerRouter = router({
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Speaker profile not found',
-      })
-    }
-
-    return speaker
-  }),
-
-  // Get speaker by ID (for admin)
-  getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-    const { speaker, err } = await getSpeaker(input.id)
-
-    if (err) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch speaker',
-        cause: err,
-      })
-    }
-
-    if (!speaker) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Speaker not found',
       })
     }
 
@@ -169,101 +153,179 @@ export const speakerRouter = router({
       }
     }),
 
-  // Admin search speakers
-  search: adminProcedure.input(speakerSearchSchema).query(async ({ input }) => {
-    try {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
+  // Admin operations
+  admin: router({
+    list: adminProcedure.query(async () => {
+      try {
+        const conferenceId = await resolveConferenceId()
+        const { speakers, err } = await getSpeakers(
+          conferenceId,
+          [Status.submitted, Status.accepted, Status.confirmed],
+          true,
+        )
+
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch speakers',
+            cause: err,
+          })
+        }
+
+        return speakers.map((speaker) => ({
+          _id: speaker._id,
+          name: speaker.name || '',
+          title: speaker.title || '',
+          email: speaker.email || '',
+          image: speaker.image || null,
+          slug: speaker.slug || null,
+        }))
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
+          message: 'Failed to fetch speakers',
           cause: error,
         })
       }
+    }),
 
-      const { speakers, err } = await getSpeakers(
-        conference._id,
-        [Status.confirmed, Status.accepted],
-        true,
-      )
+    search: adminProcedure
+      .input(speakerSearchSchema)
+      .query(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { speakers, err } = await getSpeakers(
+            conference._id,
+            [Status.confirmed, Status.accepted],
+            true,
+          )
+          if (err) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get speakers',
+              cause: err,
+            })
+          }
+
+          const { speakers: organizers, err: organizersErr } =
+            await getOrganizers()
+          if (organizersErr) {
+            console.warn('Could not get organizers:', organizersErr)
+          }
+
+          const allSpeakersMap = new Map<
+            string,
+            Speaker & { proposals?: ProposalExisting[] }
+          >()
+          speakers.forEach((s) => allSpeakersMap.set(s._id, s))
+          organizers?.forEach((o) => {
+            if (!allSpeakersMap.has(o._id)) {
+              allSpeakersMap.set(o._id, { ...o, proposals: [] })
+            }
+          })
+          const allSpeakers = Array.from(allSpeakersMap.values())
+
+          const { speakers: featuredSpeakers, error: featuredError } =
+            await getFeaturedSpeakers(conference._id)
+          if (featuredError) {
+            console.warn(
+              'Could not get featured speakers for exclusion:',
+              featuredError,
+            )
+          }
+
+          const featuredSpeakerIds =
+            featuredSpeakers?.map((speaker) => speaker._id) || []
+
+          const filteredSpeakers = allSpeakers.filter((speaker) => {
+            if (
+              !input.includeFeatured &&
+              featuredSpeakerIds.includes(speaker._id)
+            ) {
+              return false
+            }
+
+            if (!input.query || input.query.trim() === '') {
+              return true
+            }
+
+            const searchTerm = input.query.toLowerCase()
+            const nameMatch = speaker.name?.toLowerCase().includes(searchTerm)
+            const titleMatch = speaker.title?.toLowerCase().includes(searchTerm)
+            const bioMatch = speaker.bio?.toLowerCase().includes(searchTerm)
+            return nameMatch || titleMatch || bioMatch
+          })
+
+          const sortedSpeakers = filteredSpeakers.sort((a, b) => {
+            if (a.isOrganizer && !b.isOrganizer) return -1
+            if (!a.isOrganizer && b.isOrganizer) return 1
+
+            const aHasCurrentConference =
+              a.proposals?.some(
+                (p) =>
+                  typeof p.conference === 'object' &&
+                  p.conference &&
+                  '_id' in p.conference &&
+                  p.conference._id === conference._id,
+              ) ?? false
+            const bHasCurrentConference =
+              b.proposals?.some(
+                (p) =>
+                  typeof p.conference === 'object' &&
+                  p.conference &&
+                  '_id' in p.conference &&
+                  p.conference._id === conference._id,
+              ) ?? false
+
+            if (aHasCurrentConference && !bHasCurrentConference) return -1
+            if (!aHasCurrentConference && bHasCurrentConference) return 1
+
+            return a.name.localeCompare(b.name)
+          })
+
+          return sortedSpeakers
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to search speakers',
+            cause: error,
+          })
+        }
+      }),
+
+    getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+      const { speaker, err } = await getSpeaker(input.id)
+
       if (err) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get speakers',
+          message: 'Failed to fetch speaker',
           cause: err,
         })
       }
 
-      // Also get organizers (who may not have talks)
-      const { speakers: organizers, err: organizersErr } = await getOrganizers()
-      if (organizersErr) {
-        console.warn('Could not get organizers:', organizersErr)
+      if (!speaker) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Speaker not found',
+        })
       }
 
-      // Merge speakers and organizers, removing duplicates
-      const allSpeakersMap = new Map<
-        string,
-        Speaker & { proposals?: ProposalExisting[] }
-      >()
-      speakers.forEach((s) => allSpeakersMap.set(s._id, s))
-      organizers?.forEach((o) => {
-        if (!allSpeakersMap.has(o._id)) {
-          allSpeakersMap.set(o._id, { ...o, proposals: [] })
-        }
-      })
-      const allSpeakers = Array.from(allSpeakersMap.values())
+      return speaker
+    }),
 
-      // Filter speakers by search query
-      const searchTerm = input.query.toLowerCase()
-      const filteredSpeakers = allSpeakers.filter((speaker) => {
-        const nameMatch = speaker.name?.toLowerCase().includes(searchTerm)
-        const titleMatch = speaker.title?.toLowerCase().includes(searchTerm)
-        const bioMatch = speaker.bio?.toLowerCase().includes(searchTerm)
-        return nameMatch || titleMatch || bioMatch
-      })
-
-      // Sort speakers: organizers first, then speakers from current conference, then others
-      const sortedSpeakers = filteredSpeakers.sort((a, b) => {
-        if (a.isOrganizer && !b.isOrganizer) return -1
-        if (!a.isOrganizer && b.isOrganizer) return 1
-
-        const aHasCurrentConference =
-          a.proposals?.some(
-            (p) =>
-              typeof p.conference === 'object' &&
-              p.conference &&
-              '_id' in p.conference &&
-              p.conference._id === conference._id,
-          ) ?? false
-        const bHasCurrentConference =
-          b.proposals?.some(
-            (p) =>
-              typeof p.conference === 'object' &&
-              p.conference &&
-              '_id' in p.conference &&
-              p.conference._id === conference._id,
-          ) ?? false
-
-        if (aHasCurrentConference && !bHasCurrentConference) return -1
-        if (!aHasCurrentConference && bHasCurrentConference) return 1
-
-        return a.name.localeCompare(b.name)
-      })
-
-      return sortedSpeakers
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to search speakers',
-        cause: error,
-      })
-    }
-  }),
-
-  // Admin operations
-  admin: router({
     // Create speaker
     create: adminProcedure
       .input(SpeakerCreateSchema)

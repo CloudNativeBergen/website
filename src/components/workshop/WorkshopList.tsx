@@ -39,12 +39,12 @@ export default function WorkshopList({
     data: workshopsData,
     isLoading: workshopsLoading,
     refetch: refetchWorkshops,
-  } = api.workshop.listWorkshops.useQuery({
+  } = api.workshop.list.useQuery({
     includeCapacity: true,
   })
 
   const { data: signupsData, refetch: refetchSignups } =
-    api.workshop.getUserSignups.useQuery(
+    api.workshop.getMySignups.useQuery(
       {
         userWorkOSId: userWorkOSId || '',
       },
@@ -53,7 +53,7 @@ export default function WorkshopList({
       },
     )
 
-  const signupMutation = api.workshop.signupForWorkshop.useMutation({
+  const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
       setSuccessMessage(
         data.message || 'Successfully signed up for the workshop!',

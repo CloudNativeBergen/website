@@ -73,7 +73,7 @@ export function ImageMetadataModal({
   } | null>(singleImage?.image?.crop || null)
   const speakerInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: searchResults } = api.speakers.search.useQuery(
+  const { data: searchResults } = api.speaker.admin.search.useQuery(
     { query: speakerQuery, includeFeatured: true },
     {
       enabled: speakerQuery.length > 0,

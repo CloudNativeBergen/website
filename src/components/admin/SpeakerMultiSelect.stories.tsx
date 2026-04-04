@@ -59,7 +59,7 @@ const meta: Meta<typeof SpeakerMultiSelect> = {
     },
     msw: {
       handlers: [
-        http.get('/api/trpc/speakers.list', () => {
+        http.get('/api/trpc/speaker.admin.list', () => {
           return HttpResponse.json({
             result: { data: mockSpeakers },
           })

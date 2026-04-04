@@ -40,36 +40,34 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 
 export const workshopRouter = router({
-  listWorkshops: publicProcedure
-    .input(workshopListInputSchema)
-    .query(async () => {
-      try {
-        const conferenceId = await resolveConferenceId()
-        const { workshops, workshopsError } = await getWorkshops({
-          conferenceId,
-          statuses: [Status.confirmed],
-          includeScheduleInfo: true,
-        })
+  list: publicProcedure.input(workshopListInputSchema).query(async () => {
+    try {
+      const conferenceId = await resolveConferenceId()
+      const { workshops, workshopsError } = await getWorkshops({
+        conferenceId,
+        statuses: [Status.confirmed],
+        includeScheduleInfo: true,
+      })
 
-        if (workshopsError) {
-          throw workshopsError
-        }
-
-        return {
-          success: true,
-          data: workshops,
-          count: workshops.length,
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch workshops',
-          cause: error,
-        })
+      if (workshopsError) {
+        throw workshopsError
       }
-    }),
 
-  getWorkshopAvailability: publicProcedure
+      return {
+        success: true,
+        data: workshops,
+        count: workshops.length,
+      }
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch workshops',
+        cause: error,
+      })
+    }
+  }),
+
+  getAvailability: publicProcedure
     .input(workshopAvailabilitySchema)
     .query(async ({ input }) => {
       try {
@@ -109,7 +107,7 @@ export const workshopRouter = router({
       }
     }),
 
-  getUserSignups: publicProcedure
+  getMySignups: publicProcedure
     .input(workshopSignupsByUserSchema)
     .query(async ({ input, ctx }) => {
       try {
@@ -153,7 +151,7 @@ export const workshopRouter = router({
       }
     }),
 
-  signupForWorkshop: publicProcedure
+  signup: publicProcedure
     .input(workshopSignupInputSchema)
     .mutation(async ({ input }) => {
       try {
@@ -336,7 +334,7 @@ export const workshopRouter = router({
       }
     }),
 
-  getSignupsByWorkshop: adminProcedure
+  listSignups: adminProcedure
     .input(workshopSignupsByWorkshopSchema)
     .query(async ({ input }) => {
       try {
@@ -415,7 +413,7 @@ export const workshopRouter = router({
       }
     }),
 
-  updateWorkshopCapacity: adminProcedure
+  updateCapacity: adminProcedure
     .input(updateWorkshopCapacitySchema)
     .mutation(async ({ input }) => {
       try {
@@ -615,7 +613,7 @@ export const workshopRouter = router({
       }
     }),
 
-  getWorkshopSummary: adminProcedure.query(async () => {
+  getSummary: adminProcedure.query(async () => {
     try {
       const conferenceId = await resolveConferenceId()
       const statistics = await getWorkshopStatistics(conferenceId)
@@ -634,7 +632,7 @@ export const workshopRouter = router({
     }
   }),
 
-  manualSignupForWorkshop: adminProcedure
+  manualSignup: adminProcedure
     .input(workshopSignupInputSchema)
     .mutation(async ({ input }) => {
       try {

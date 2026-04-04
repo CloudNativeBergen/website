@@ -32,10 +32,10 @@ export function FeaturedTalksManager({
     data: featuredTalks = [],
     isLoading: featuredLoading,
     refetch: refetchFeatured,
-  } = api.featured.featuredTalks.useQuery()
+  } = api.featured.listTalks.useQuery()
 
   const { data: availableTalks = [], isLoading: searchLoading } =
-    api.proposals.searchTalks.useQuery(
+    api.proposal.admin.searchTalks.useQuery(
       {
         query: searchQuery,
         status: searchStatus,
@@ -46,7 +46,7 @@ export function FeaturedTalksManager({
   const addTalkMutation = api.featured.addTalk.useMutation({
     onSuccess: () => {
       refetchFeatured()
-      utils.proposals.searchTalks.invalidate()
+      utils.proposal.admin.searchTalks.invalidate()
       utils.featured.summary.invalidate()
       setSearchQuery('')
       setShowSearch(false)
@@ -59,7 +59,7 @@ export function FeaturedTalksManager({
   const removeTalkMutation = api.featured.removeTalk.useMutation({
     onSuccess: () => {
       refetchFeatured()
-      utils.proposals.searchTalks.invalidate()
+      utils.proposal.admin.searchTalks.invalidate()
       utils.featured.summary.invalidate()
     },
     onError: (err) => {

@@ -46,7 +46,7 @@ export function SpeakerMultiSelect({
     data: speakers = [],
     isLoading,
     error: fetchError,
-  } = api.speakers.list.useQuery(
+  } = api.speaker.admin.list.useQuery(
     undefined,
     { staleTime: 5 * 60 * 1000 }, // Cache for 5 minutes
   )

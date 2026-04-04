@@ -32,7 +32,7 @@ export function useUnifiedSearch() {
         return result
       }),
       new SpeakersSearchProvider(async (query) => {
-        const result = await utils.speakers.search.fetch({
+        const result = await utils.speaker.admin.search.fetch({
           query,
           includeFeatured: true,
         })

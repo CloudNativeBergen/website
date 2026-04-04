@@ -19,7 +19,7 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const featuredRouter = router({
-  featuredSpeakers: adminProcedure.query(async () => {
+  listSpeakers: adminProcedure.query(async () => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()
       if (error || !conference) {
@@ -53,7 +53,7 @@ export const featuredRouter = router({
     }
   }),
 
-  featuredTalks: adminProcedure.query(async () => {
+  listTalks: adminProcedure.query(async () => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()
       if (error || !conference) {

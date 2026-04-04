@@ -381,8 +381,8 @@ export const Architecture: Story = {
                   <code>proposal.admin.updateAttachments</code>
                 </li>
                 <li>
-                  <code>proposals.searchTalks</code> — search for featured talk
-                  selection
+                  <code>proposal.admin.searchTalks</code> — search for featured
+                  talk selection
                 </li>
               </ul>
             </div>

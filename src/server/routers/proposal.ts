@@ -40,7 +40,7 @@ import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
-import type { ProposalInput } from '@/lib/proposal/types'
+import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { Action, Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import { countActiveProposals } from '@/lib/proposal/utils'
@@ -49,6 +49,7 @@ import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { updateProposalStatus, getProposalSanity } from '@/lib/proposal/server'
 import { createReview, updateReview } from '@/lib/review/sanity'
+import { getFeaturedTalks } from '@/lib/featured/sanity'
 import '@/lib/events/registry'
 
 /**
@@ -927,6 +928,88 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to submit review',
+            cause: error,
+          })
+        }
+      }),
+
+    searchTalks: adminProcedure
+      .input(
+        z.object({
+          query: z.string().min(1, 'Search query is required'),
+          status: z
+            .enum(['confirmed', 'accepted'])
+            .optional()
+            .default('confirmed'),
+        }),
+      )
+      .query(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { proposals, proposalsError } = await getProposals({
+            conferenceId: conference._id,
+            returnAll: true,
+          })
+          if (proposalsError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get proposals',
+              cause: proposalsError,
+            })
+          }
+
+          const { talks: featuredTalks, error: featuredError } =
+            await getFeaturedTalks(conference._id)
+          if (featuredError) {
+            console.warn(
+              'Could not get featured talks for exclusion:',
+              featuredError,
+            )
+          }
+
+          const featuredTalkIds = featuredTalks?.map((talk) => talk._id) || []
+
+          const filteredProposals = proposals.filter(
+            (proposal: ProposalExisting) => {
+              const targetStatus =
+                input.status === 'confirmed'
+                  ? Status.confirmed
+                  : Status.accepted
+              if (proposal.status !== targetStatus) {
+                return false
+              }
+
+              if (featuredTalkIds.includes(proposal._id)) {
+                return false
+              }
+
+              const searchTerm = input.query.toLowerCase()
+              const titleMatch = proposal.title
+                ?.toLowerCase()
+                .includes(searchTerm)
+              const descriptionMatch = proposal.description
+                ?.toString()
+                .toLowerCase()
+                .includes(searchTerm)
+              return titleMatch || descriptionMatch
+            },
+          )
+
+          return filteredProposals
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to search talks',
             cause: error,
           })
         }
