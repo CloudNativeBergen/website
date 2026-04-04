@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { StarIcon } from '@heroicons/react/24/solid'
 import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
-import { Review, ReviewBase } from '@/lib/review/types'
-import { adminPostReview } from '@/lib/review/client'
+import { Review } from '@/lib/review/types'
 import { adminFetchNextUnreviewedProposal } from '@/lib/proposal'
+import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { Textarea } from '@/components/Form'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -26,6 +26,7 @@ export function ProposalReviewForm({
 }: ProposalReviewFormProps) {
   const router = useRouter()
   const { showNotification } = useNotification()
+  const utils = api.useUtils()
   const [ratings, setRatings] = useState<{
     content: number
     relevance: number
@@ -44,24 +45,24 @@ export function ProposalReviewForm({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [isLoadingNext, setIsLoadingNext] = useState<boolean>(false)
 
+  const submitReviewMutation = api.proposal.admin.submitReview.useMutation({
+    onSuccess: (review) => {
+      utils.proposal.admin.getById.invalidate({ id: proposalId })
+      utils.proposal.admin.list.invalidate()
+      onReviewSubmit(review as Review)
+    },
+  })
+
   const submitHandler = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    const reviewData: ReviewBase = {
-      comment,
-      score: ratings,
-    }
-
     try {
-      const res = await adminPostReview(proposalId, reviewData)
-
-      if (res.reviewError || !res.review) {
-        console.error('Error submitting review:', res.reviewError)
-        return
-      }
-
-      onReviewSubmit(res.review)
+      await submitReviewMutation.mutateAsync({
+        id: proposalId,
+        comment,
+        score: ratings,
+      })
     } catch (error) {
       console.error('Error submitting review:', error)
     } finally {

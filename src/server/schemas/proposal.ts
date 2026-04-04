@@ -170,4 +170,15 @@ export const AudienceFeedbackSchema = z.object({
   redCount: z.number().int().min(0),
 })
 
-export const IdParamSchema = CommonIdParamSchema
+export const ReviewScoreSchema = z.object({
+  content: z.number().int().min(1).max(5),
+  relevance: z.number().int().min(1).max(5),
+  speaker: z.number().int().min(1).max(5),
+})
+
+export const SubmitReviewSchema = CommonIdParamSchema.extend({
+  comment: z.string(),
+  score: ReviewScoreSchema,
+})
+
+export { CommonIdParamSchema as IdParamSchema }

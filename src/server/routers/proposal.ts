@@ -20,6 +20,7 @@ import {
   IdParamSchema,
   ProposalActionSchema,
   AudienceFeedbackSchema,
+  SubmitReviewSchema,
 } from '@/server/schemas/proposal'
 import { AttachmentSchema } from '@/server/schemas/attachment'
 import {
@@ -47,6 +48,7 @@ import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { updateProposalStatus, getProposalSanity } from '@/lib/proposal/server'
+import { createReview, updateReview } from '@/lib/review/sanity'
 import '@/lib/events/registry'
 
 /**
@@ -332,7 +334,7 @@ export const proposalRouter = router({
         if (!ctx.speaker.isOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-            '_id' in existing.conference
+              '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
@@ -859,6 +861,72 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete attachment',
+            cause: error,
+          })
+        }
+      }),
+
+    // Submit or update a review (admin)
+    submitReview: adminProcedure
+      .input(SubmitReviewSchema)
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { proposal, proposalError } = await getProposal({
+            id: input.id,
+            speakerId: ctx.speaker._id,
+            isOrganizer: true,
+            includeReviews: true,
+          })
+
+          if (proposalError || !proposal || !proposal._id) {
+            throw new TRPCError({
+              code: proposalError ? 'INTERNAL_SERVER_ERROR' : 'NOT_FOUND',
+              message: proposalError
+                ? 'Failed to fetch proposal'
+                : 'Proposal not found',
+              cause: proposalError,
+            })
+          }
+
+          const existingReview = proposal.reviews?.find(
+            (r) => 'email' in r.reviewer && r.reviewer._id === ctx.speaker._id,
+          )
+
+          const conferenceId =
+            '_id' in proposal.conference
+              ? proposal.conference._id
+              : (proposal.conference as { _ref: string })._ref
+
+          const reviewData = { comment: input.comment, score: input.score }
+
+          const { review, reviewError } = existingReview
+            ? await updateReview(
+              existingReview._id,
+              ctx.speaker._id,
+              reviewData,
+            )
+            : await createReview(
+              proposal._id,
+              ctx.speaker._id,
+              conferenceId,
+              reviewData,
+            )
+
+          if (reviewError || !review) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Failed to ${existingReview ? 'update' : 'create'} review`,
+              cause: reviewError,
+            })
+          }
+
+          return review
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to submit review',
             cause: error,
           })
         }
