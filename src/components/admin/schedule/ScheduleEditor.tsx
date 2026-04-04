@@ -23,7 +23,7 @@ import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
-import { saveSchedule } from '@/lib/schedule/client'
+import { api } from '@/lib/trpc/client'
 import {
   usePerformanceTimer,
   performanceMonitor,
@@ -369,6 +369,8 @@ export function ScheduleEditor({
   const [error, setError] = useState<string | null>(null)
   const [currentDayIndex, setCurrentDayIndex] = useState(0)
 
+  const saveMutation = api.schedule.save.useMutation()
+
   const [modifiedSchedules, setModifiedSchedules] =
     useState<ConferenceSchedule[]>(initialSchedules)
   const hasInitialized = useRef(false)
@@ -419,14 +421,12 @@ export function ScheduleEditor({
     }
 
     try {
-      const response = await saveSchedule(scheduleEditor.schedule)
+      const { schedule } = await saveMutation.mutateAsync(
+        scheduleEditor.schedule,
+      )
 
-      if (response.status !== 200 || response.error) {
-        throw new Error(response.error?.message || 'Failed to save schedule')
-      }
-
-      if (response.schedule) {
-        scheduleEditor.setSchedule(response.schedule)
+      if (schedule) {
+        scheduleEditor.setSchedule(schedule)
       }
 
       setSaveSuccess(true)
@@ -449,7 +449,13 @@ export function ScheduleEditor({
     } finally {
       setIsSaving(false)
     }
-  }, [scheduleEditor, currentDayIndex, modifiedSchedules.length, saveTimer])
+  }, [
+    scheduleEditor,
+    currentDayIndex,
+    modifiedSchedules.length,
+    saveTimer,
+    saveMutation,
+  ])
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {

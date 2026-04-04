@@ -14,7 +14,7 @@ export class ProposalsSearchProvider implements SearchProvider {
 
   constructor(
     private searchFn: (query: string) => Promise<ProposalExisting[]>,
-  ) { }
+  ) {}
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()
@@ -35,9 +35,9 @@ export class ProposalsSearchProvider implements SearchProvider {
         const speakers =
           proposal.speakers && Array.isArray(proposal.speakers)
             ? proposal.speakers.filter(
-              (speaker) =>
-                typeof speaker === 'object' && speaker && 'name' in speaker,
-            )
+                (speaker) =>
+                  typeof speaker === 'object' && speaker && 'name' in speaker,
+              )
             : []
 
         const speakerNames = speakers.map((s) => s.name).join(', ')
