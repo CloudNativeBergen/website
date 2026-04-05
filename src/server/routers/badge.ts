@@ -22,19 +22,13 @@ import {
   DeleteBadgeInputSchema,
   ValidateBadgeInputSchema,
 } from '@/server/schemas/badge'
-import { generateBadgeCredential } from '@/lib/badge/generator'
-import { createBadgeConfiguration } from '@/lib/badge/config'
-import { generateBadgeSVG } from '@/lib/badge/svg'
-import { bakeBadge, isJWTFormat } from '@/lib/openbadges'
-import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
+import { issueBadgeForSpeaker } from '@/lib/badge/issuance'
+import { isJWTFormat } from '@/lib/openbadges'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
-  createBadge,
   getBadgeById,
   listBadgesForConference,
   listBadgesForSpeaker,
-  uploadBadgeSVGAsset,
-  checkBadgeExists,
   deleteBadge,
 } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -46,176 +40,37 @@ export const badgeRouter = router({
   issue: adminProcedure
     .input(IssueBadgeInputSchema)
     .mutation(async ({ input, ctx }) => {
-      try {
-        const conferenceId = await resolveConferenceId()
-        const { exists, badge: existingBadge } = await checkBadgeExists(
-          input.speakerId,
-          conferenceId,
-          input.badgeType,
-        )
+      const conferenceId = await resolveConferenceId()
+      const isDevelopment = isLocalhostEnvironment()
 
-        if (exists && existingBadge) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message:
-              'Badge already issued for this speaker/conference/type combination',
-          })
-        }
+      const result = await issueBadgeForSpeaker({
+        speakerId: input.speakerId,
+        badgeType: input.badgeType,
+        centerGraphicSvg: input.centerGraphicSvg,
+        conferenceId,
+        currentUserEmail: ctx.user.email,
+        isDevelopment,
+      })
 
-        const { speaker, err: speakerError } = await getSpeaker(input.speakerId)
-        if (speakerError || !speaker) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Speaker not found',
-          })
-        }
-
-        if (isLocalhostEnvironment()) {
-          const currentUserEmail = ctx.user.email
-          if (speaker.email !== currentUserEmail) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: `Development mode: You can only issue badges to yourself (${currentUserEmail}). Attempted to issue to ${speaker.email}.`,
-            })
-          }
-        }
-
-        if (input.badgeType === 'organizer' && !speaker.isOrganizer) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Cannot issue organizer badge to ${speaker.name}: only organizers are eligible for organizer badges.`,
-          })
-        }
-
-        if (input.badgeType === 'speaker') {
-          const { clientReadUncached } = await import('@/lib/sanity/client')
-          const hasAcceptedTalk = await clientReadUncached.fetch(
-            `count(*[_type == "talk" &&
-              references($speakerId) &&
-              references($conferenceId) &&
-              status in ["accepted", "confirmed"]
-            ]) > 0`,
-            { speakerId: speaker._id, conferenceId },
-          )
-
-          if (!hasAcceptedTalk) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `Cannot issue speaker badge to ${speaker.name}: only speakers with accepted or confirmed talks are eligible.`,
-            })
-          }
-        }
-
-        const { conference, domain, error } =
-          await getConferenceForCurrentDomain()
-        if (error || !conference) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found',
-          })
-        }
-
-        const conferenceYear = conference.startDate
-          ? new Date(conference.startDate).getFullYear().toString()
-          : new Date().getFullYear().toString()
-
-        const conferenceDate = conference.startDate
-          ? formatConferenceDateForBadge(conference.startDate)
-          : 'TBD'
-
-        // Create badge configuration with keys and URLs
-        const config = await createBadgeConfiguration(conference, domain)
-
-        // Fetch accepted talk for evidence (speaker badges only)
-        let talkId: string | undefined
-        let talkTitle: string | undefined
-        if (input.badgeType === 'speaker') {
-          const { clientReadUncached } = await import('@/lib/sanity/client')
-          const acceptedTalk = await clientReadUncached.fetch<{
-            _id: string
-            title: string
-          } | null>(
-            `*[_type == "talk" &&
-              references($speakerId) &&
-              references($conferenceId) &&
-              status in ["accepted", "confirmed"]
-            ][0]{_id, title}`,
-            { speakerId: speaker._id, conferenceId },
-          )
-          if (acceptedTalk) {
-            talkId = acceptedTalk._id
-            talkTitle = acceptedTalk.title
-          }
-        }
-
-        const { assertion, badgeId } = await generateBadgeCredential(
-          {
-            speakerId: speaker._id,
-            speakerName: speaker.name,
-            speakerEmail: speaker.email,
-            speakerSlug: speaker.slug,
-            conferenceId: conference._id,
-            conferenceTitle: conference.title,
-            conferenceYear,
-            conferenceDate,
-            badgeType: input.badgeType,
-            centerGraphicSvg: input.centerGraphicSvg,
-            talkId,
-            talkTitle,
-          },
-          config,
-        )
-
-        const svgContent = generateBadgeSVG({
-          conferenceTitle: conference.title,
-          conferenceYear,
-          conferenceDate,
-          badgeType: input.badgeType,
-          centerGraphicSvg: input.centerGraphicSvg,
+      if (!result.success) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: result.error,
         })
+      }
 
-        const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
-        const bakedSvg = bakeBadge(svgContent, assertion)
+      if (input.sendEmail !== false && !isDevelopment) {
+        const { sendBadgeEmailWithRetry } = await import('@/lib/email/badge')
+        const { conference } = await getConferenceForCurrentDomain()
+        if (conference) {
+          const conferenceYear = conference.startDate
+            ? new Date(conference.startDate).getFullYear().toString()
+            : new Date().getFullYear().toString()
 
-        const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
-          bakedSvg,
-          `badge-${speaker.name.replace(/\s+/g, '-').toLowerCase()}-${badgeId}.svg`,
-        )
-
-        if (uploadError || !assetId) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to upload badge SVG',
-            cause: uploadError,
-          })
-        }
-
-        const { badge, error: createError } = await createBadge({
-          badgeId,
-          speakerId: speaker._id,
-          conferenceId: conference._id,
-          badgeType: input.badgeType,
-          issuedAt: getCurrentDateTime(),
-          badgeJson: assertion, // Store JWT string directly
-          bakedSvgAssetId: assetId,
-          verificationUrl,
-        })
-
-        if (createError || !badge) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to create badge record',
-            cause: createError,
-          })
-        }
-
-        // Skip email sending in development mode
-        if (input.sendEmail !== false && !isLocalhostEnvironment()) {
-          const { sendBadgeEmailWithRetry } = await import('@/lib/email/badge')
           sendBadgeEmailWithRetry({
-            badge,
-            speakerEmail: speaker.email,
-            speakerName: speaker.name,
+            badge: result.badge,
+            speakerEmail: result.speakerEmail,
+            speakerName: result.speakerName,
             conferenceName: conference.title,
             conferenceYear,
             conference,
@@ -223,20 +78,12 @@ export const badgeRouter = router({
             console.error('Failed to send badge email:', err)
           })
         }
+      }
 
-        return {
-          success: true,
-          badge,
-          message: `Badge issued successfully to ${speaker.name}`,
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to issue badge',
-          cause: error,
-        })
+      return {
+        success: true,
+        badge: result.badge,
+        message: `Badge issued successfully to ${result.speakerName}`,
       }
     }),
 
@@ -247,197 +94,28 @@ export const badgeRouter = router({
     .input(BulkIssueBadgeInputSchema)
     .mutation(async ({ input, ctx }) => {
       const conferenceId = await resolveConferenceId()
+      const isDevelopment = isLocalhostEnvironment()
       const results: Array<{
         speakerId: string
         success: boolean
         error?: string
       }> = []
-      const isDevelopment = isLocalhostEnvironment()
-      const currentUserEmail = ctx.user.email
 
       for (const speakerId of input.speakerIds) {
-        try {
-          const { exists } = await checkBadgeExists(
-            speakerId,
-            conferenceId,
-            input.badgeType,
-          )
+        const result = await issueBadgeForSpeaker({
+          speakerId,
+          badgeType: input.badgeType,
+          centerGraphicSvg: input.centerGraphicSvg,
+          conferenceId,
+          currentUserEmail: ctx.user.email,
+          isDevelopment,
+        })
 
-          if (exists) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Badge already exists',
-            })
-            continue
-          }
-
-          const { speaker, err: speakerError } = await getSpeaker(speakerId)
-          if (speakerError || !speaker) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Speaker not found',
-            })
-            continue
-          }
-
-          if (isDevelopment && speaker.email !== currentUserEmail) {
-            results.push({
-              speakerId,
-              success: false,
-              error: `Development mode: Can only issue to yourself (${currentUserEmail})`,
-            })
-            continue
-          }
-
-          if (input.badgeType === 'organizer' && !speaker.isOrganizer) {
-            results.push({
-              speakerId,
-              success: false,
-              error:
-                'Not eligible: Only organizers can receive organizer badges',
-            })
-            continue
-          }
-
-          if (input.badgeType === 'speaker') {
-            const { clientReadUncached } = await import('@/lib/sanity/client')
-            const hasAcceptedTalk = await clientReadUncached.fetch(
-              `count(*[_type == "talk" &&
-                references($speakerId) &&
-                references($conferenceId) &&
-                status in ["accepted", "confirmed"]
-              ]) > 0`,
-              { speakerId: speaker._id, conferenceId },
-            )
-
-            if (!hasAcceptedTalk) {
-              results.push({
-                speakerId,
-                success: false,
-                error:
-                  'Not eligible: Only speakers with accepted/confirmed talks',
-              })
-              continue
-            }
-          }
-
-          const { conference, domain, error } =
-            await getConferenceForCurrentDomain()
-          if (error || !conference) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Conference not found',
-            })
-            continue
-          }
-
-          const conferenceYear = conference.startDate
-            ? new Date(conference.startDate).getFullYear().toString()
-            : new Date().getFullYear().toString()
-
-          const conferenceDate = conference.startDate
-            ? formatConferenceDateForBadge(conference.startDate)
-            : 'TBD'
-
-          // Create badge configuration with keys and URLs
-          const config = await createBadgeConfiguration(conference, domain)
-
-          // Fetch accepted talk for evidence (speaker badges only)
-          let talkId: string | undefined
-          let talkTitle: string | undefined
-          if (input.badgeType === 'speaker') {
-            const { clientReadUncached } = await import('@/lib/sanity/client')
-            const acceptedTalk = await clientReadUncached.fetch<{
-              _id: string
-              title: string
-            } | null>(
-              `*[_type == "talk" &&
-                references($speakerId) &&
-                references($conferenceId) &&
-                status in ["accepted", "confirmed"]
-              ][0]{_id, title}`,
-              { speakerId: speaker._id, conferenceId },
-            )
-            if (acceptedTalk) {
-              talkId = acceptedTalk._id
-              talkTitle = acceptedTalk.title
-            }
-          }
-
-          const { assertion, badgeId } = await generateBadgeCredential(
-            {
-              speakerId: speaker._id,
-              speakerName: speaker.name,
-              speakerEmail: speaker.email,
-              speakerSlug: speaker.slug,
-              conferenceId: conference._id,
-              conferenceTitle: conference.title,
-              conferenceYear,
-              conferenceDate,
-              badgeType: input.badgeType,
-              centerGraphicSvg: input.centerGraphicSvg,
-              talkId,
-              talkTitle,
-            },
-            config,
-          )
-
-          const svgContent = generateBadgeSVG({
-            conferenceTitle: conference.title,
-            conferenceYear,
-            conferenceDate,
-            badgeType: input.badgeType,
-            centerGraphicSvg: input.centerGraphicSvg,
-          })
-
-          const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
-          const bakedSvg = bakeBadge(svgContent, assertion)
-
-          const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
-            bakedSvg,
-            `badge-${speaker.name.replace(/\s+/g, '-').toLowerCase()}-${badgeId}.svg`,
-          )
-
-          if (uploadError || !assetId) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Failed to upload SVG',
-            })
-            continue
-          }
-
-          const { error: createError } = await createBadge({
-            badgeId,
-            speakerId: speaker._id,
-            conferenceId: conference._id,
-            badgeType: input.badgeType,
-            issuedAt: getCurrentDateTime(),
-            badgeJson: assertion, // Store JWT string directly
-            bakedSvgAssetId: assetId,
-            verificationUrl,
-          })
-
-          if (createError) {
-            results.push({
-              speakerId,
-              success: false,
-              error: 'Failed to create badge record',
-            })
-            continue
-          }
-
-          results.push({ speakerId, success: true })
-        } catch (error) {
-          results.push({
-            speakerId,
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
-        }
+        results.push({
+          speakerId,
+          success: result.success,
+          error: result.success ? undefined : result.error,
+        })
       }
 
       const successCount = results.filter((r) => r.success).length

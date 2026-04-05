@@ -1,15 +1,16 @@
 import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   TicketSettingsUpdateSchema,
-  SalesTargetConfigSchema,
   CreateDiscountCodeSchema,
   GetDiscountsSchema,
   DeleteDiscountCodeSchema,
   GetPaymentDetailsSchema,
   UpdateTicketPageContentSchema,
+  UpdateTicketCapacitySchema,
+  UpdateTicketTargetsSchema,
+  ToggleTargetTrackingSchema,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -151,11 +152,7 @@ export const ticketsRouter = router({
     }),
 
   updateCapacity: adminProcedure
-    .input(
-      z.object({
-        capacity: z.number().min(1, 'Capacity must be at least 1'),
-      }),
-    )
+    .input(UpdateTicketCapacitySchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       const { capacity } = input
@@ -167,11 +164,7 @@ export const ticketsRouter = router({
     }),
 
   updateTargets: adminProcedure
-    .input(
-      z.object({
-        targets: SalesTargetConfigSchema,
-      }),
-    )
+    .input(UpdateTicketTargetsSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       const { targets } = input
@@ -183,11 +176,7 @@ export const ticketsRouter = router({
     }),
 
   toggleTargetTracking: adminProcedure
-    .input(
-      z.object({
-        enabled: z.boolean(),
-      }),
-    )
+    .input(ToggleTargetTrackingSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       const { enabled } = input
