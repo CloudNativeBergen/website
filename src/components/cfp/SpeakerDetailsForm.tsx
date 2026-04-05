@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
 import { ProfileEmail } from '@/lib/profile/types'
-import { postImage } from '@/lib/profile/client'
+import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 import { api } from '@/lib/trpc/client'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Image from 'next/image'
@@ -44,6 +44,7 @@ export function SpeakerDetailsForm({
   onImageUpload,
   onEmailSelect,
 }: SpeakerDetailsFormProps) {
+  const defaultImageUpload = useSpeakerImageUpload()
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
   const [speakerTitle, setSpeakerTitle] = useState(speaker?.title ?? '')
   const [speakerBio, setSpeakerBio] = useState(speaker?.bio ?? '')
@@ -151,25 +152,16 @@ export function SpeakerDetailsForm({
 
       const file = e.target.files[0]
 
-      if (onImageUpload) {
-        try {
-          const { assetId, url } = await onImageUpload(file)
-          setSpeakerImage(assetId)
-          setSpeakerImagePreviewUrl(url)
-          setImageChanged(true)
-        } catch (error) {
-          setImageError(
-            error instanceof Error ? error.message : 'Failed to upload image',
-          )
-        }
-      } else {
-        const { error, image } = await postImage(file)
-        if (error) {
-          setImageError(error.message)
-        } else if (image) {
-          setSpeakerImage(image.image)
-          setImageChanged(true)
-        }
+      const upload = onImageUpload ?? defaultImageUpload.uploadImage
+      try {
+        const { assetId, url } = await upload(file)
+        setSpeakerImage(assetId)
+        setSpeakerImagePreviewUrl(url)
+        setImageChanged(true)
+      } catch (error) {
+        setImageError(
+          error instanceof Error ? error.message : 'Failed to upload image',
+        )
       }
 
       setIsUploading(false)

@@ -138,13 +138,6 @@ Production hardening:
 - Blocks dev/test routes (`/api/dev/`, `debug`, `test-mode`, `clear-storage`)
 - Blocks impersonation parameter (strips `?impersonate=` and redirects)
 
-#### Admin API Middleware (`src/app/(admin)/admin/api/middleware.ts`)
-
-Protects `/admin/api/*` routes with a two-layer check:
-
-1. Session must exist with `user` and `speaker` &rarr; 401 if not
-2. `speaker.isOrganizer` must be `true` &rarr; 403 if not
-
 #### tRPC Middleware (`src/server/trpc.ts`)
 
 Three procedure tiers:
@@ -156,11 +149,8 @@ Three procedure tiers:
 Session is obtained via `getAuthSession({ url, headers })` in `createTRPCContext()`,
 which supports both cookie-based and Bearer token authentication.
 
-### Admin Route Helper (`src/lib/auth/admin.ts`)
-
-`checkOrganizerAccess(req)` is used by admin API route handlers directly wrapped with
-`auth()`. Returns `null` if authorized, or a `NextResponse` with 401/403 and
-`cache-control: no-store`.
+All admin operations previously protected by REST middleware are now handled by
+`adminProcedure` in tRPC routers.
 
 ### Test Mode
 
@@ -311,7 +301,6 @@ in its package. They are only needed if workshop signup is enabled.
 | `src/lib/speaker/sanity.ts`               | `getOrCreateSpeaker()`, provider linking              |
 | `src/proxy.ts`                            | Route-level middleware (NextAuth + WorkOS)            |
 | `src/server/trpc.ts`                      | tRPC context creation, auth middleware                |
-| `src/app/(admin)/admin/api/middleware.ts` | Admin API auth guard                                  |
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth route handler                                |
 | `src/app/api/auth/callback/route.ts`      | WorkOS callback handler                               |
 | `src/server/routers/speaker.ts`           | `generateCliToken` mutation and auth procedures       |
