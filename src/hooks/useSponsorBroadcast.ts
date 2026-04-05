@@ -10,7 +10,6 @@ export function useSponsorBroadcast() {
 
   const handleBroadcastEmail = async (subject: string, message: string) => {
     await broadcastMutation.mutateAsync({ subject, message })
-    setIsBroadcastModalOpen(false)
   }
 
   const handleSyncContacts = async () => {

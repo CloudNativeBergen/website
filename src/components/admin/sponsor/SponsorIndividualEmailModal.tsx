@@ -95,30 +95,20 @@ export function SponsorIndividualEmailModal({
     subject: string
     message: PortableTextBlock[]
   }) => {
-    try {
-      const messageJSON = JSON.stringify(message as PortableTextBlockForHTML[])
+    const messageJSON = JSON.stringify(message as PortableTextBlockForHTML[])
 
-      const result = await sendEmailMutation.mutateAsync({
-        sponsorId: sponsorForConference.sponsor._id,
-        subject,
-        message: messageJSON,
-      })
+    const result = await sendEmailMutation.mutateAsync({
+      sponsorId: sponsorForConference.sponsor._id,
+      subject,
+      message: messageJSON,
+    })
 
-      showNotification({
-        type: 'success',
-        title: 'Email sent successfully',
-        message: `Sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
-      })
-      onSent?.()
-      onClose()
-    } catch (err) {
-      showNotification({
-        type: 'error',
-        title: 'Email failed',
-        message:
-          err instanceof Error ? err.message : 'An unexpected error occurred',
-      })
-    }
+    showNotification({
+      type: 'success',
+      title: 'Email sent successfully',
+      message: `Sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
+    })
+    onSent?.()
   }
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
