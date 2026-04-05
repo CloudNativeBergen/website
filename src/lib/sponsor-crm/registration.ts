@@ -6,6 +6,7 @@ import {
 import { getCurrentDateTime } from '@/lib/time'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
+import type { Conference } from '@/lib/conference/types'
 
 export interface RegistrationSponsorInfo {
   _id: string
@@ -273,4 +274,80 @@ export async function completeRegistration(
 
 export function buildPortalUrl(baseUrl: string, token: string): string {
   return `${baseUrl}/sponsor/portal/${token}`
+}
+
+export interface SfcNotificationData {
+  sponsorName: string
+  tierTitle: string | null
+  contractValue: number | null
+  contractCurrency: string | null
+  conference: Conference | null
+}
+
+export async function getSfcForNotification(
+  sfcId: string,
+): Promise<SfcNotificationData | null> {
+  return clientRead.fetch<SfcNotificationData | null>(
+    `*[_type == "sponsorForConference" && _id == $id][0]{
+      "sponsorName": sponsor->name,
+      "tierTitle": tier->title,
+      contractValue,
+      contractCurrency,
+      "conference": conference->{ ... }
+    }`,
+    { id: sfcId },
+  )
+}
+
+export interface SfcPortalInviteData {
+  _id: string
+  status: string | null
+  registrationToken: string | null
+  registrationComplete: boolean
+  contractStatus: string | null
+  sponsor: { name: string } | null
+  contactPersons: Array<{
+    name: string
+    email: string
+    isPrimary?: boolean
+  }> | null
+  tier: { title: string } | null
+  contractValue: number | null
+  contractCurrency: string | null
+  conference: {
+    title: string
+    city: string | null
+    startDate: string | null
+    organizer: string | null
+    sponsorEmail: string | null
+    socialLinks: string[] | null
+  } | null
+}
+
+export async function getSfcForPortalInvite(
+  sfcId: string,
+): Promise<SfcPortalInviteData | null> {
+  return clientRead.fetch<SfcPortalInviteData | null>(
+    `*[_type == "sponsorForConference" && _id == $id][0]{
+      _id,
+      status,
+      registrationToken,
+      registrationComplete,
+      contractStatus,
+      sponsor->{ name },
+      contactPersons[]{ name, email, isPrimary },
+      tier->{ title },
+      contractValue,
+      contractCurrency,
+      conference->{
+        title,
+        city,
+        startDate,
+        organizer,
+        sponsorEmail,
+        socialLinks
+      }
+    }`,
+    { id: sfcId },
+  )
 }

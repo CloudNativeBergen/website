@@ -10,6 +10,7 @@ import {
   SpeakerInputSchema,
   SpeakerCreateSchema,
   SpeakerUpdateSchema,
+  SpeakerSearchSchema,
   EmailUpdateSchema,
   IdParamSchema,
 } from '@/server/schemas/speaker'
@@ -41,11 +42,6 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { generateSlug } from '@/lib/speaker/sanity'
-
-const speakerSearchSchema = z.object({
-  query: z.string().min(1, 'Search query is required'),
-  includeFeatured: z.boolean().optional().default(false),
-})
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -237,7 +233,7 @@ export const speakerRouter = router({
     }),
 
     search: adminProcedure
-      .input(speakerSearchSchema)
+      .input(SpeakerSearchSchema)
       .query(async ({ input }) => {
         try {
           const { conference, error } = await getConferenceForCurrentDomain()

@@ -45,8 +45,8 @@ export async function getTravelSupport(
 
 export async function getTravelSupportById(id: string): Promise<{
   travelSupport:
-    | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
-    | null
+  | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
+  | null
   error: Error | null
 }> {
   try {
@@ -382,14 +382,32 @@ export async function updateExpenseStatus(
   }
 }
 
+export async function getTravelExpenseById(
+  expenseId: string,
+): Promise<TravelExpense | null> {
+  return clientRead.fetch<TravelExpense | null>(
+    `*[_type == "travelExpense" && _id == $expenseId][0] {
+      ...,
+      travelSupport
+    }`,
+    { expenseId },
+  )
+}
+
+export async function getTravelExpenseRef(
+  expenseId: string,
+): Promise<{ travelSupport: { _ref: string } } | null> {
+  return clientRead.fetch<{ travelSupport: { _ref: string } } | null>(
+    `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
+    { expenseId },
+  )
+}
+
 export async function deleteTravelExpense(
   expenseId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const expense = await clientRead.fetch<{ travelSupport: { _ref: string } }>(
-      `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
-      { expenseId },
-    )
+    const expense = await getTravelExpenseRef(expenseId)
 
     await clientWrite.delete(expenseId)
 

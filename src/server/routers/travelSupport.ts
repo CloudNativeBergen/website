@@ -28,10 +28,11 @@ import {
   deleteTravelExpense,
   deleteReceipt,
   getSpeakersRequiringTravelSupport,
+  getTravelExpenseById,
+  getTravelExpenseRef,
 } from '@/lib/travel-support/sanity'
 
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { TravelExpense } from '@/lib/travel-support/types'
 import {
   checkSpeakerEligibility,
   authorizeTravelSupportOperation,
@@ -40,7 +41,6 @@ import {
   canAddExpenses,
   verifyTravelSupportOwnership,
 } from '@/lib/travel-support/auth'
-import { clientReadUncached as clientRead } from '@/lib/sanity/client'
 
 export const travelSupportRouter = router({
   getMine: protectedProcedure.query(async ({ ctx }) => {
@@ -85,7 +85,7 @@ export const travelSupportRouter = router({
 
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Unexpected error fetching travel support',
+        message: 'Failed to fetch travel support',
         cause: error,
       })
     }
@@ -144,7 +144,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error creating travel support request',
+          message: 'Failed to create travel support request',
           cause: error,
         })
       }
@@ -196,7 +196,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error updating banking details',
+          message: 'Failed to update banking details',
           cause: error,
         })
       }
@@ -260,7 +260,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error submitting travel support request',
+          message: 'Failed to submit travel support request',
           cause: error,
         })
       }
@@ -315,7 +315,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error adding expense',
+          message: 'Failed to add expense',
           cause: error,
         })
       }
@@ -325,13 +325,7 @@ export const travelSupportRouter = router({
     .input(UpdateExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const existingExpense = await clientRead.fetch<TravelExpense>(
-          `*[_type == "travelExpense" && _id == $expenseId][0] {
-            ...,
-            travelSupport
-          }`,
-          { expenseId: input.expenseId },
-        )
+        const existingExpense = await getTravelExpenseById(input.expenseId)
 
         if (!existingExpense) {
           throw new TRPCError({
@@ -391,7 +385,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error updating expense',
+          message: 'Failed to update expense',
           cause: error,
         })
       }
@@ -401,14 +395,7 @@ export const travelSupportRouter = router({
     .input(DeleteExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const expense = await clientRead.fetch<{
-          travelSupport: { _ref: string }
-        }>(
-          `*[_type == "travelExpense" && _id == $expenseId][0] {
-            travelSupport
-          }`,
-          { expenseId: input.expenseId },
-        )
+        const expense = await getTravelExpenseRef(input.expenseId)
 
         if (!expense?.travelSupport?._ref) {
           throw new TRPCError({
@@ -459,7 +446,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error deleting expense',
+          message: 'Failed to delete expense',
           cause: error,
         })
       }
@@ -469,13 +456,7 @@ export const travelSupportRouter = router({
     .input(DeleteReceiptSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const existingExpense = await clientRead.fetch<TravelExpense>(
-          `*[_type == "travelExpense" && _id == $expenseId][0] {
-            ...,
-            travelSupport
-          }`,
-          { expenseId: input.expenseId },
-        )
+        const existingExpense = await getTravelExpenseById(input.expenseId)
 
         if (!existingExpense) {
           throw new TRPCError({
@@ -535,7 +516,7 @@ export const travelSupportRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error deleting receipt',
+          message: 'Failed to delete receipt',
           cause: error,
         })
       }
@@ -569,7 +550,7 @@ export const travelSupportRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error fetching travel support',
+            message: 'Failed to fetch travel support',
             cause: error,
           })
         }
@@ -607,7 +588,7 @@ export const travelSupportRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error fetching travel support requests',
+            message: 'Failed to fetch travel support requests',
             cause: error,
           })
         }
@@ -679,7 +660,7 @@ export const travelSupportRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error updating travel support status',
+            message: 'Failed to update travel support status',
             cause: error,
           })
         }
@@ -721,7 +702,7 @@ export const travelSupportRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error updating expense status',
+            message: 'Failed to update expense status',
             cause: error,
           })
         }

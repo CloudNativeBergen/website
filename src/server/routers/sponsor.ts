@@ -5,6 +5,7 @@ import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   SponsorInputSchema,
   SponsorUpdateSchema,
+  SponsorIdSchema,
   IdParamSchema,
   SponsorTierInputSchema,
   SponsorTierUpdateSchema,
@@ -12,6 +13,7 @@ import {
   SponsorEmailTemplateUpdateSchema,
   ReorderTemplatesSchema,
   SetDefaultTemplateSchema,
+  WebhookUrlSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -176,9 +178,9 @@ async function sendContractSignedSlackNotification(
   try {
     const salesChannel = sfc.conference?._id
       ? await clientReadUncached.fetch<string | null>(
-          `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
-          { id: sfc.conference._id },
-        )
+        `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
+        { id: sfc.conference._id },
+      )
       : null
 
     if (!salesChannel) return
@@ -606,25 +608,23 @@ export const sponsorRouter = router({
         return sponsors || []
       }),
 
-    getById: adminProcedure
-      .input(z.object({ id: z.string().min(1) }))
-      .query(async ({ input }) => {
-        const { sponsorForConference, error } = await getSponsorForConference(
-          input.id,
-        )
+    getById: adminProcedure.input(SponsorIdSchema).query(async ({ input }) => {
+      const { sponsorForConference, error } = await getSponsorForConference(
+        input.id,
+      )
 
-        if (error) {
-          throw new TRPCError({
-            code: error.message.includes('not found')
-              ? 'NOT_FOUND'
-              : 'INTERNAL_SERVER_ERROR',
-            message: error.message,
-            cause: error,
-          })
-        }
+      if (error) {
+        throw new TRPCError({
+          code: error.message.includes('not found')
+            ? 'NOT_FOUND'
+            : 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+          cause: error,
+        })
+      }
 
-        return sponsorForConference
-      }),
+      return sponsorForConference
+    }),
 
     create: adminProcedure
       .input(SponsorForConferenceInputSchema)
@@ -2371,9 +2371,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
@@ -2579,7 +2579,7 @@ export const sponsorRouter = router({
     }),
 
     registerAdobeSignWebhook: adminProcedure
-      .input(z.object({ webhookUrl: z.string().url() }))
+      .input(WebhookUrlSchema)
       .mutation(async ({ input }) => {
         const { conference, error } = await getConferenceForCurrentDomain()
         if (error || !conference) {

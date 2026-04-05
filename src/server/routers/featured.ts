@@ -48,7 +48,7 @@ export const featuredRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error getting featured speakers',
+          message: 'Failed to get featured speakers',
           cause: error,
         })
       }
@@ -82,7 +82,7 @@ export const featuredRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error getting featured talks',
+          message: 'Failed to get featured talks',
           cause: error,
         })
       }
@@ -124,7 +124,7 @@ export const featuredRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error adding featured speaker',
+            message: 'Failed to add featured speaker',
             cause: error,
           })
         }
@@ -166,7 +166,7 @@ export const featuredRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error removing featured speaker',
+            message: 'Failed to remove featured speaker',
             cause: error,
           })
         }
@@ -209,7 +209,7 @@ export const featuredRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error adding featured talk',
+            message: 'Failed to add featured talk',
             cause: error,
           })
         }
@@ -252,7 +252,7 @@ export const featuredRouter = router({
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Unexpected error removing featured talk',
+            message: 'Failed to remove featured talk',
             cause: error,
           })
         }
@@ -285,7 +285,7 @@ export const featuredRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error getting featured content summary',
+          message: 'Failed to get featured content summary',
           cause: error,
         })
       }

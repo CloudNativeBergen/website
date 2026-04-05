@@ -93,3 +93,7 @@ export const updateWorkshopCapacitySchema = z.object({
 })
 
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>
+
+export const WorkshopSignupIdSchema = z.object({
+  signupId: z.string(),
+})

@@ -12,6 +12,8 @@ import {
   completeRegistration,
   generateRegistrationToken,
   buildPortalUrl,
+  getSfcForNotification,
+  getSfcForPortalInvite,
 } from '@/lib/sponsor-crm/registration'
 import type { RegistrationSubmission } from '@/lib/sponsor-crm/registration'
 import {
@@ -19,10 +21,9 @@ import {
   logEmailSent,
   logContractStatusChange,
 } from '@/lib/sponsor-crm/activity'
-import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
-import type { Conference } from '@/lib/conference/types'
 
 export const registrationRouter = router({
   validate: publicProcedure
@@ -73,26 +74,7 @@ export const registrationRouter = router({
 
         // Send Slack notification to sales channel
         try {
-          const sfcData = await clientReadUncached.fetch<{
-            sponsorName: string
-            tierTitle: string | null
-            contractValue: number | null
-            contractCurrency: string | null
-            conference: Conference | null
-          }>(
-            `*[_type == "sponsorForConference" && _id == $id][0]{
-              "sponsorName": sponsor->name,
-              "tierTitle": tier->title,
-              contractValue,
-              contractCurrency,
-              "conference": conference->{
-                _id, title, city, country, startDate, endDate,
-                organizer, salesNotificationChannel, domains,
-                socialLinks
-              }
-            }`,
-            { id: sponsorForConferenceId },
-          )
+          const sfcData = await getSfcForNotification(sponsorForConferenceId)
 
           if (sfcData?.conference) {
             await notifySponsorRegistrationComplete(
@@ -120,7 +102,7 @@ export const registrationRouter = router({
 
       if (error || !token) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
+          code: 'PRECONDITION_FAILED',
           message: error?.message || 'Failed to generate registration token',
         })
       }
@@ -148,52 +130,7 @@ export const registrationRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       // Fetch full sponsor + conference data for the email
-      const sfc = await clientReadUncached.fetch<{
-        _id: string
-        status: string | null
-        registrationToken: string | null
-        registrationComplete: boolean
-        contractStatus: string | null
-        sponsor: { name: string } | null
-        contactPersons: Array<{
-          name: string
-          email: string
-          isPrimary?: boolean
-        }> | null
-        tier: { title: string } | null
-        contractValue: number | null
-        contractCurrency: string | null
-        conference: {
-          title: string
-          city: string | null
-          startDate: string | null
-          organizer: string | null
-          sponsorEmail: string | null
-          socialLinks: string[] | null
-        } | null
-      }>(
-        `*[_type == "sponsorForConference" && _id == $id][0]{
-          _id,
-          status,
-          registrationToken,
-          registrationComplete,
-          contractStatus,
-          sponsor->{ name },
-          contactPersons[]{ name, email, isPrimary },
-          tier->{ title },
-          contractValue,
-          contractCurrency,
-          conference->{
-            title,
-            city,
-            startDate,
-            organizer,
-            sponsorEmail,
-            socialLinks
-          }
-        }`,
-        { id: input.sponsorForConferenceId },
-      )
+      const sfc = await getSfcForPortalInvite(input.sponsorForConferenceId)
 
       if (!sfc) {
         throw new TRPCError({

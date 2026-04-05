@@ -86,3 +86,8 @@ export const SpeakerUpdateSchema = SpeakerInputBaseSchema.partial()
 
 // ID parameter schema (re-exported from common)
 export const IdParamSchema = CommonIdParamSchema
+
+export const SpeakerSearchSchema = z.object({
+  query: z.string().min(1, 'Search query is required'),
+  includeFeatured: z.boolean().optional().default(false),
+})

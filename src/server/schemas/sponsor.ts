@@ -98,3 +98,11 @@ export const ReorderTemplatesSchema = z.object({
 export const SetDefaultTemplateSchema = z.object({
   id: z.string().min(1),
 })
+
+export const SponsorIdSchema = z.object({
+  id: z.string().min(1),
+})
+
+export const WebhookUrlSchema = z.object({
+  webhookUrl: z.string().url(),
+})

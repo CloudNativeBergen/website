@@ -20,6 +20,7 @@ import {
   workshopSignupFiltersSchema,
   batchConfirmSignupsSchema,
   batchCancelSignupsSchema,
+  WorkshopSignupIdSchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -239,7 +240,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {})
+        }).catch(() => { })
 
         revalidateTag('content:workshops', 'default')
         revalidateTag('admin:workshops', 'default')
@@ -390,7 +391,7 @@ export const workshopRouter = router({
                 workshopDate: (signup.workshop as { date?: string })?.date,
                 workshopTime: (signup.workshop as { startTime?: string })
                   ?.startTime,
-              }).catch(() => {})
+              }).catch(() => { })
             }
           }
 
@@ -527,7 +528,7 @@ export const workshopRouter = router({
                   workshopDate: (signup.workshop as { date?: string })?.date,
                   workshopTime: (signup.workshop as { startTime?: string })
                     ?.startTime,
-                }).catch(() => {})
+                }).catch(() => { })
               }
 
               return signup
@@ -595,7 +596,7 @@ export const workshopRouter = router({
       }),
 
     deleteSignup: adminProcedure
-      .input(z.object({ signupId: z.string() }))
+      .input(WorkshopSignupIdSchema)
       .mutation(async ({ input }) => {
         try {
           const { deleteWorkshopSignup } = await import('@/lib/workshop/sanity')
@@ -687,7 +688,7 @@ export const workshopRouter = router({
             workshopDate: (signup.workshop as { date?: string })?.date,
             workshopTime: (signup.workshop as { startTime?: string })
               ?.startTime,
-          }).catch(() => {})
+          }).catch(() => { })
 
           revalidateTag('content:workshops', 'default')
           revalidateTag('admin:workshops', 'default')

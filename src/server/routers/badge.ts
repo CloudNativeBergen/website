@@ -52,7 +52,7 @@ export const badgeRouter = router({
         const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
         if (!publicKeyHex) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: 'PRECONDITION_FAILED',
             message: 'Public key not configured',
           })
         }
