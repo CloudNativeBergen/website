@@ -178,9 +178,9 @@ async function sendContractSignedSlackNotification(
   try {
     const salesChannel = sfc.conference?._id
       ? await clientReadUncached.fetch<string | null>(
-        `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
-        { id: sfc.conference._id },
-      )
+          `*[_type == "conference" && _id == $id][0].salesNotificationChannel`,
+          { id: sfc.conference._id },
+        )
       : null
 
     if (!salesChannel) return
@@ -2371,9 +2371,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                title: sponsorForConference.tier.title,
-                tagline: sponsorForConference.tier.tagline,
-              }
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,

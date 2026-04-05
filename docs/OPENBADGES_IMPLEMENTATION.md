@@ -96,10 +96,10 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Endpoints:**
 
-- **`badge.issue`** - Issue single badge to speaker
-- **`badge.bulkIssue`** - Issue badges to multiple speakers
-- **`badge.list`** - List badges for conference/speaker
-- **`badge.verify`** - Verify badge signature (admin)
+- **`badge.admin.issue`** - Issue single badge to speaker
+- **`badge.admin.bulkIssue`** - Issue badges to multiple speakers
+- **`badge.admin.list`** - List badges for conference/speaker
+- **`badge.verify`** - Verify badge signature (public)
 
 **Features:**
 
