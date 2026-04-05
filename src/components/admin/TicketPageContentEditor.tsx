@@ -67,7 +67,7 @@ export function TicketPageContentEditor({
     'idle',
   )
 
-  const updateMutation = api.tickets.updatePageContent.useMutation({
+  const updateMutation = api.tickets.admin.updatePageContent.useMutation({
     onSuccess: () => {
       setSaveStatus('success')
       setTimeout(() => setSaveStatus('idle'), 3000)

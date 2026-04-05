@@ -52,7 +52,7 @@ export default function BadgeValidator() {
   const [credential, setCredential] = useState<BadgeCredential | null>(null)
   const [svgPreview, setSvgPreview] = useState<string | null>(null)
 
-  const validateMutation = api.badge.validate.useMutation({
+  const validateMutation = api.badge.admin.validate.useMutation({
     onSuccess: (data) => {
       if (data.checks) {
         setChecks(data.checks)

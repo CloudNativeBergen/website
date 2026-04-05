@@ -14,7 +14,7 @@ export default function AdminFeaturedPage() {
     data: summary,
     isLoading: summaryLoading,
     error: summaryError,
-  } = api.featured.summary.useQuery()
+  } = api.featured.admin.summary.useQuery()
 
   if (summaryError) {
     return (

@@ -35,7 +35,7 @@ function GalleryPageContent() {
     data: images,
     isLoading,
     refetch: refetchImages,
-  } = api.gallery.list.useQuery(
+  } = api.gallery.admin.list.useQuery(
     {
       featured: filters.featured,
       speakerId: filters.speakerId,
@@ -53,7 +53,7 @@ function GalleryPageContent() {
     },
   )
 
-  const { data: filteredCount } = api.gallery.count.useQuery({
+  const { data: filteredCount } = api.gallery.admin.count.useQuery({
     featured: filters.featured,
     speakerId: filters.speakerId,
     dateFrom: filters.dateFrom,
@@ -62,11 +62,11 @@ function GalleryPageContent() {
     locationSearch: filters.locationSearch,
   })
 
-  const deleteMutation = api.gallery.delete.useMutation({
+  const deleteMutation = api.gallery.admin.delete.useMutation({
     onSuccess: () => {
       showNotification({ title: 'Image deleted successfully', type: 'success' })
-      utils.gallery.list.invalidate()
-      utils.gallery.count.invalidate()
+      utils.gallery.admin.list.invalidate()
+      utils.gallery.admin.count.invalidate()
     },
     onError: (error) => {
       showNotification({
@@ -76,11 +76,11 @@ function GalleryPageContent() {
     },
   })
 
-  const toggleFeaturedMutation = api.gallery.toggleFeatured.useMutation({
+  const toggleFeaturedMutation = api.gallery.admin.toggleFeatured.useMutation({
     onSuccess: () => {
       showNotification({ title: 'Featured status updated', type: 'success' })
-      utils.gallery.list.invalidate()
-      utils.gallery.count.invalidate()
+      utils.gallery.admin.list.invalidate()
+      utils.gallery.admin.count.invalidate()
     },
     onError: (error) => {
       showNotification({
@@ -100,8 +100,8 @@ function GalleryPageContent() {
 
       while (attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 500))
-        await utils.gallery.list.invalidate()
-        await utils.gallery.count.invalidate()
+        await utils.gallery.admin.list.invalidate()
+        await utils.gallery.admin.count.invalidate()
         const result = await refetchImages()
 
         const newCount = result.data?.length ?? 0
@@ -117,8 +117,8 @@ function GalleryPageContent() {
   )
 
   const handleImageUpdate = useCallback(() => {
-    utils.gallery.list.invalidate()
-    utils.gallery.count.invalidate()
+    utils.gallery.admin.list.invalidate()
+    utils.gallery.admin.count.invalidate()
     setIsMetadataModalOpen(false)
     setSelectedImage(null)
   }, [utils])
@@ -148,8 +148,8 @@ function GalleryPageContent() {
   }, [selectedImages])
 
   const handleBulkUpdate = useCallback(() => {
-    utils.gallery.list.invalidate()
-    utils.gallery.count.invalidate()
+    utils.gallery.admin.list.invalidate()
+    utils.gallery.admin.count.invalidate()
     setIsMetadataModalOpen(false)
     setSelectedImage(null)
     setSelectedImages([])

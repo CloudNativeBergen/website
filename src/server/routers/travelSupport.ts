@@ -91,77 +91,6 @@ export const travelSupportRouter = router({
     }
   }),
 
-  getById: adminProcedure
-    .input(GetTravelSupportByIdSchema)
-    .query(async ({ input }) => {
-      try {
-        const { travelSupport, error } = await getTravelSupportById(input.id)
-
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch travel support',
-            cause: error,
-          })
-        }
-
-        if (!travelSupport) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Travel support request not found',
-          })
-        }
-
-        return travelSupport
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error fetching travel support',
-          cause: error,
-        })
-      }
-    }),
-
-  list: adminProcedure
-    .input(GetTravelSupportSchema)
-    .query(async ({ input }) => {
-      try {
-        const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
-        if (confError || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
-          })
-        }
-
-        const conferenceId = input.conferenceId || conference._id
-        const { travelSupports, error } =
-          await getAllTravelSupport(conferenceId)
-
-        if (error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch travel support requests',
-            cause: error,
-          })
-        }
-
-        return travelSupports
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error fetching travel support requests',
-          cause: error,
-        })
-      }
-    }),
-
   create: protectedProcedure
     .input(TravelSupportClientInputSchema)
     .mutation(async ({ input, ctx }) => {
@@ -337,79 +266,6 @@ export const travelSupportRouter = router({
       }
     }),
 
-  updateStatus: adminProcedure
-    .input(UpdateTravelSupportStatusSchema)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        const { travelSupport, error: fetchError } = await getTravelSupportById(
-          input.travelSupportId,
-        )
-
-        if (fetchError || !travelSupport) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Travel support request not found',
-            cause: fetchError,
-          })
-        }
-
-        const { authorized, error: authError } =
-          await authorizeTravelSupportOperation(
-            input.travelSupportId,
-            ctx.speaker._id,
-            ctx.speaker.isOrganizer,
-            'approve',
-          )
-
-        if (!authorized || authError) {
-          throw authError || createAuthError('FORBIDDEN', 'Access denied')
-        }
-
-        auditLog(
-          'Travel Support Status Update',
-          ctx.speaker._id,
-          ctx.speaker.name,
-          {
-            travelSupportId: input.travelSupportId,
-            speakerId: travelSupport.speaker._id,
-            oldStatus: travelSupport.status,
-            newStatus: input.status,
-            approvedAmount: input.approvedAmount,
-            reviewNotes: input.reviewNotes,
-            approverIsOwner: travelSupport.speaker._id === ctx.speaker._id,
-          },
-          'info',
-        )
-
-        const { success, error } = await updateTravelSupportStatus(
-          input.travelSupportId,
-          input.status,
-          ctx.speaker._id,
-          input.approvedAmount,
-          input.reviewNotes,
-          input.expectedPaymentDate,
-        )
-
-        if (!success || error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update travel support status',
-            cause: error,
-          })
-        }
-
-        return { success: true }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error updating travel support status',
-          cause: error,
-        })
-      }
-    }),
-
   addExpense: protectedProcedure
     .input(AddExpenseSchema)
     .mutation(async ({ input, ctx }) => {
@@ -536,48 +392,6 @@ export const travelSupportRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Unexpected error updating expense',
-          cause: error,
-        })
-      }
-    }),
-
-  updateExpenseStatus: adminProcedure
-    .input(UpdateExpenseStatusSchema)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        auditLog(
-          'Expense Status Update',
-          ctx.speaker._id,
-          ctx.speaker.name,
-          {
-            expenseId: input.expenseId,
-            newStatus: input.status,
-            reviewNotes: input.reviewNotes,
-          },
-          'info',
-        )
-
-        const { success, error } = await updateExpenseStatus(
-          input.expenseId,
-          input.status,
-          input.reviewNotes,
-        )
-
-        if (!success || error) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update expense status',
-            cause: error,
-          })
-        }
-
-        return { success: true }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error updating expense status',
           cause: error,
         })
       }
@@ -727,39 +541,227 @@ export const travelSupportRouter = router({
       }
     }),
 
-  getSpeakersRequiringSupport: adminProcedure.query(async () => {
-    try {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
+  admin: router({
+    getById: adminProcedure
+      .input(GetTravelSupportByIdSchema)
+      .query(async ({ input }) => {
+        try {
+          const { travelSupport, error } = await getTravelSupportById(input.id)
+
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to fetch travel support',
+              cause: error,
+            })
+          }
+
+          if (!travelSupport) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Travel support request not found',
+            })
+          }
+
+          return travelSupport
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error fetching travel support',
+            cause: error,
+          })
+        }
+      }),
+
+    list: adminProcedure
+      .input(GetTravelSupportSchema)
+      .query(async ({ input }) => {
+        try {
+          const { conference, error: confError } =
+            await getConferenceForCurrentDomain()
+          if (confError || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: confError,
+            })
+          }
+
+          const conferenceId = input.conferenceId || conference._id
+          const { travelSupports, error } =
+            await getAllTravelSupport(conferenceId)
+
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to fetch travel support requests',
+              cause: error,
+            })
+          }
+
+          return travelSupports
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error fetching travel support requests',
+            cause: error,
+          })
+        }
+      }),
+
+    updateStatus: adminProcedure
+      .input(UpdateTravelSupportStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { travelSupport, error: fetchError } =
+            await getTravelSupportById(input.travelSupportId)
+
+          if (fetchError || !travelSupport) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Travel support request not found',
+              cause: fetchError,
+            })
+          }
+
+          const { authorized, error: authError } =
+            await authorizeTravelSupportOperation(
+              input.travelSupportId,
+              ctx.speaker._id,
+              ctx.speaker.isOrganizer,
+              'approve',
+            )
+
+          if (!authorized || authError) {
+            throw authError || createAuthError('FORBIDDEN', 'Access denied')
+          }
+
+          auditLog(
+            'Travel Support Status Update',
+            ctx.speaker._id,
+            ctx.speaker.name,
+            {
+              travelSupportId: input.travelSupportId,
+              speakerId: travelSupport.speaker._id,
+              oldStatus: travelSupport.status,
+              newStatus: input.status,
+              approvedAmount: input.approvedAmount,
+              reviewNotes: input.reviewNotes,
+              approverIsOwner: travelSupport.speaker._id === ctx.speaker._id,
+            },
+            'info',
+          )
+
+          const { success, error } = await updateTravelSupportStatus(
+            input.travelSupportId,
+            input.status,
+            ctx.speaker._id,
+            input.approvedAmount,
+            input.reviewNotes,
+            input.expectedPaymentDate,
+          )
+
+          if (!success || error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to update travel support status',
+              cause: error,
+            })
+          }
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error updating travel support status',
+            cause: error,
+          })
+        }
+      }),
+
+    updateExpenseStatus: adminProcedure
+      .input(UpdateExpenseStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        try {
+          auditLog(
+            'Expense Status Update',
+            ctx.speaker._id,
+            ctx.speaker.name,
+            {
+              expenseId: input.expenseId,
+              newStatus: input.status,
+              reviewNotes: input.reviewNotes,
+            },
+            'info',
+          )
+
+          const { success, error } = await updateExpenseStatus(
+            input.expenseId,
+            input.status,
+            input.reviewNotes,
+          )
+
+          if (!success || error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to update expense status',
+              cause: error,
+            })
+          }
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error updating expense status',
+            cause: error,
+          })
+        }
+      }),
+
+    getSpeakersRequiringSupport: adminProcedure.query(async () => {
+      try {
+        const { conference, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
+
+        const { speakers, error } = await getSpeakersRequiringTravelSupport(
+          conference._id,
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch speakers requiring travel support',
+            cause: error,
+          })
+        }
+
+        return speakers
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { speakers, error } = await getSpeakersRequiringTravelSupport(
-        conference._id,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch speakers requiring travel support',
+          message:
+            'Unexpected error fetching speakers requiring travel support',
           cause: error,
         })
       }
-
-      return speakers
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Unexpected error fetching speakers requiring travel support',
-        cause: error,
-      })
-    }
+    }),
   }),
 })

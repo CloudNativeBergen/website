@@ -80,7 +80,7 @@ export function ImageMetadataModal({
     },
   )
 
-  const updateMutation = api.gallery.update.useMutation({
+  const updateMutation = api.gallery.admin.update.useMutation({
     onSuccess: (updatedImage: GalleryImageWithSpeakers) => {
       const message = isBulkMode
         ? `Successfully updated ${images!.length} images`

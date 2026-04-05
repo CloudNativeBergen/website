@@ -64,7 +64,7 @@ export function DiscountCodeManager({
     data: discountData,
     isLoading: discountsLoading,
     error: discountsError,
-  } = api.tickets.getDiscountCodesWithUsage.useQuery(undefined, {
+  } = api.tickets.admin.getDiscountCodesWithUsage.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: 30000,
   })
@@ -306,47 +306,49 @@ export function DiscountCodeManager({
     },
   })
 
-  const createDiscountMutation = api.tickets.createDiscountCode.useMutation({
-    onSuccess: (data) => {
-      showNotification({
-        type: 'success',
-        title: 'Discount code created',
-        message: `Successfully created discount code: ${data.discountCode}`,
-      })
-      utils.tickets.getDiscountCodesWithUsage.invalidate()
-      setLoading(null)
-    },
-    onError: (error) => {
-      console.error('Failed to create discount code:', error)
-      showNotification({
-        type: 'error',
-        title: 'Failed to create discount code',
-        message: error.message || 'An unexpected error occurred',
-      })
-      setLoading(null)
-    },
-  })
+  const createDiscountMutation =
+    api.tickets.admin.createDiscountCode.useMutation({
+      onSuccess: (data) => {
+        showNotification({
+          type: 'success',
+          title: 'Discount code created',
+          message: `Successfully created discount code: ${data.discountCode}`,
+        })
+        utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+        setLoading(null)
+      },
+      onError: (error) => {
+        console.error('Failed to create discount code:', error)
+        showNotification({
+          type: 'error',
+          title: 'Failed to create discount code',
+          message: error.message || 'An unexpected error occurred',
+        })
+        setLoading(null)
+      },
+    })
 
-  const deleteDiscountMutation = api.tickets.deleteDiscountCode.useMutation({
-    onSuccess: () => {
-      showNotification({
-        type: 'success',
-        title: 'Discount code deleted',
-        message: 'Successfully deleted discount code',
-      })
-      utils.tickets.getDiscountCodesWithUsage.invalidate()
-      setLoading(null)
-    },
-    onError: (error) => {
-      console.error('Failed to delete discount code:', error)
-      showNotification({
-        type: 'error',
-        title: 'Failed to delete discount code',
-        message: error.message || 'An unexpected error occurred',
-      })
-      setLoading(null)
-    },
-  })
+  const deleteDiscountMutation =
+    api.tickets.admin.deleteDiscountCode.useMutation({
+      onSuccess: () => {
+        showNotification({
+          type: 'success',
+          title: 'Discount code deleted',
+          message: 'Successfully deleted discount code',
+        })
+        utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+        setLoading(null)
+      },
+      onError: (error) => {
+        console.error('Failed to delete discount code:', error)
+        showNotification({
+          type: 'error',
+          title: 'Failed to delete discount code',
+          message: error.message || 'An unexpected error occurred',
+        })
+        setLoading(null)
+      },
+    })
 
   const generateDiscountCode = (sponsorName: string): string => {
     const cleanName = sponsorName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()

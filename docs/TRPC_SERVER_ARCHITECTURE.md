@@ -13,19 +13,19 @@ src/
 ├── server/
 │   ├── _app.ts            # Root router composing all feature routers
 │   ├── routers/            # tRPC route definitions (13 routers)
-│   │   ├── badge.ts        # OpenBadges management
-│   │   ├── featured.ts     # Featured talks & speakers
-│   │   ├── gallery.ts      # Photo gallery
-│   │   ├── proposal.ts     # CFP proposals + admin sub-router
+│   │   ├── badge.ts        # OpenBadges verification + admin sub-router
+│   │   ├── featured.ts     # Featured talks & speakers (admin sub-router)
+│   │   ├── gallery.ts      # Photo gallery + admin sub-router
+│   │   ├── proposal.ts     # CFP proposals + admin & invitation sub-routers
 │   │   ├── registration.ts # Attendee registration
 │   │   ├── schedule.ts     # Schedule management
 │   │   ├── signing.ts      # Contract signing
-│   │   ├── speaker.ts      # Speaker profiles, email, CLI auth + admin sub-router
-│   │   ├── sponsor.ts      # Sponsors, tiers, CRM, email + admin sub-routers
-│   │   ├── tickets.ts      # Ticket management
-│   │   ├── travelSupport.ts # Travel support applications
-│   │   ├── volunteer.ts    # Volunteer signups
-│   │   └── workshop.ts     # Workshop management
+│   │   ├── speaker.ts      # Speaker profiles + admin sub-router
+│   │   ├── sponsor.ts      # Sponsors + tiers, crm, emailTemplates, contractTemplates sub-routers
+│   │   ├── tickets.ts      # Ticket management (admin sub-router)
+│   │   ├── travelSupport.ts # Travel support + admin sub-router
+│   │   ├── volunteer.ts    # Volunteer signups + admin sub-router
+│   │   └── workshop.ts     # Workshop management + admin sub-router
 │   ├── schemas/            # Zod validation schemas
 │   │   ├── common.ts       # Shared schemas (IdParamSchema, etc.)
 │   │   ├── speaker.ts      # Speaker input/update schemas
@@ -50,16 +50,13 @@ src/
 
 ### Router Organization
 
-One router per domain, registered in `src/server/_app.ts`. Use sub-routers for scoped operations:
+One router per domain, registered in `src/server/_app.ts`. All routers with admin operations use a standardized `admin` sub-router to separate organizer-only procedures from user-facing ones:
 
 ```typescript
 export const speakerRouter = router({
-  // Top-level: user-facing procedures (protectedProcedure)
+  // Top-level: user-facing procedures (protectedProcedure / publicProcedure)
   getCurrent: protectedProcedure.query(...),
   update: protectedProcedure.input(SpeakerInputSchema).mutation(...),
-  getEmails: protectedProcedure.query(...),
-  updateEmail: protectedProcedure.input(EmailUpdateSchema).mutation(...),
-  generateCliToken: protectedProcedure.mutation(...),
 
   // admin sub-router: organizer-only operations (adminProcedure)
   admin: router({
@@ -70,11 +67,11 @@ export const speakerRouter = router({
     update: adminProcedure.input(...).mutation(...),
     delete: adminProcedure.input(IdParamSchema).mutation(...),
     sendEmail: adminProcedure.input(...).mutation(...),
-    broadcastEmail: adminProcedure.input(...).mutation(...),
-    syncAudience: adminProcedure.mutation(...),
   }),
 })
 ```
+
+**All 10 routers with admin procedures use this pattern:** badge, featured, gallery, proposal, speaker, tickets, travelSupport, volunteer, workshop. The sponsor router uses domain-specific sub-routers (tiers, crm, emailTemplates, contractTemplates) instead. Three routers stay flat: registration (2 admin ops), signing (0 admin), schedule (1 admin).
 
 ### Naming Conventions
 
@@ -82,14 +79,15 @@ export const speakerRouter = router({
 
 **Sub-routers** — group related operations under a descriptive key:
 
-| Pattern          | Example                       | Purpose                            |
-| ---------------- | ----------------------------- | ---------------------------------- |
-| `admin`          | `speaker.admin.list`          | Organizer-only CRUD and management |
-| `crm`            | `sponsor.crm.sendEmail`       | CRM-specific operations            |
-| `tiers`          | `sponsor.tiers.create`        | Domain sub-entity management       |
-| `invitation`     | `proposal.invitation.send`    | Feature-specific workflows         |
-| `activities`     | `sponsor.crm.activities.list` | Nested sub-entities                |
-| `emailTemplates` | `sponsor.emailTemplates.list` | Configuration management           |
+| Pattern             | Example                          | Purpose                            |
+| ------------------- | -------------------------------- | ---------------------------------- |
+| `admin`             | `speaker.admin.list`             | Organizer-only CRUD and management |
+| `crm`               | `sponsor.crm.sendEmail`          | CRM-specific operations            |
+| `tiers`             | `sponsor.tiers.create`           | Domain sub-entity management       |
+| `invitation`        | `proposal.invitation.send`       | Feature-specific workflows         |
+| `activities`        | `sponsor.crm.activities.list`    | Nested sub-entities                |
+| `emailTemplates`    | `sponsor.emailTemplates.list`    | Configuration management           |
+| `contractTemplates` | `sponsor.contractTemplates.list` | Template management                |
 
 **Procedures** — use verb or verb+noun, camelCase:
 
@@ -457,7 +455,7 @@ When migrating a REST route to tRPC:
 
 1. **Read the route handler** — identify auth checks, input parsing, business logic, response shape
 2. **Pick the right router** — add to existing feature router, not a new one
-3. **Pick the right sub-router** — `admin` for organizer ops, domain-specific (`crm`, `tiers`) for grouped features
+3. **Pick the right sub-router** — `admin` for organizer ops (standardized across all routers), domain-specific (`crm`, `tiers`) only for sponsor
 4. **Choose procedure type** — `adminProcedure` for organizer-only, `protectedProcedure` for authenticated users
 5. **Convert input validation** — `req.body` → Zod schema in `.input()`. Do not use `.passthrough()` on schemas that feed typed interfaces
 6. **Handle service return types** — if the existing service returns `Response` objects (REST-oriented), check `.ok` and throw `TRPCError` on failure

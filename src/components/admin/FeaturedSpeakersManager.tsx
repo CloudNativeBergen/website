@@ -27,7 +27,7 @@ export function FeaturedSpeakersManager({
     data: featuredSpeakers = [],
     isLoading: featuredLoading,
     refetch: refetchFeatured,
-  } = api.featured.listSpeakers.useQuery(undefined, {
+  } = api.featured.admin.listSpeakers.useQuery(undefined, {
     staleTime: 5000, // 5 seconds for admin data
   })
 
@@ -37,11 +37,11 @@ export function FeaturedSpeakersManager({
       { enabled: showSearch && searchQuery.length > 0, staleTime: 5000 },
     )
 
-  const addSpeakerMutation = api.featured.addSpeaker.useMutation({
+  const addSpeakerMutation = api.featured.admin.addSpeaker.useMutation({
     onSuccess: () => {
       refetchFeatured()
       utils.speaker.admin.search.invalidate()
-      utils.featured.summary.invalidate()
+      utils.featured.admin.summary.invalidate()
       setSearchQuery('')
       setShowSearch(false)
     },
@@ -50,11 +50,11 @@ export function FeaturedSpeakersManager({
     },
   })
 
-  const removeSpeakerMutation = api.featured.removeSpeaker.useMutation({
+  const removeSpeakerMutation = api.featured.admin.removeSpeaker.useMutation({
     onSuccess: () => {
       refetchFeatured()
       utils.speaker.admin.search.invalidate()
-      utils.featured.summary.invalidate()
+      utils.featured.admin.summary.invalidate()
     },
     onError: (err) => {
       console.error('Failed to remove featured speaker:', err)

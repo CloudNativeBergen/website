@@ -132,7 +132,7 @@ describe('volunteer router', () => {
   describe('list', () => {
     it('should reject unauthenticated requests', async () => {
       const caller = createAnonymousCaller()
-      await expect(caller.volunteer.list()).rejects.toMatchObject({
+      await expect(caller.volunteer.admin.list()).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
       })
     })
@@ -140,7 +140,7 @@ describe('volunteer router', () => {
     it('should reject non-admin users', async () => {
       const regularUser = speakers.find((s) => !s.isOrganizer)!
       const caller = createAuthenticatedCaller(regularUser._id)
-      await expect(caller.volunteer.list()).rejects.toMatchObject({
+      await expect(caller.volunteer.admin.list()).rejects.toMatchObject({
         code: 'FORBIDDEN',
       })
     })
@@ -151,7 +151,7 @@ describe('volunteer router', () => {
       const regularUser = speakers.find((s) => !s.isOrganizer)!
       const caller = createAuthenticatedCaller(regularUser._id)
       await expect(
-        caller.volunteer.getById({ id: 'vol-1' }),
+        caller.volunteer.admin.getById({ id: 'vol-1' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     })
 
@@ -163,7 +163,7 @@ describe('volunteer router', () => {
 
       const caller = createAdminCaller()
       await expect(
-        caller.volunteer.getById({ id: 'nonexistent' }),
+        caller.volunteer.admin.getById({ id: 'nonexistent' }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     })
 
@@ -178,7 +178,7 @@ describe('volunteer router', () => {
       })
 
       const caller = createAdminCaller()
-      const result = await caller.volunteer.getById({ id: 'vol-1' })
+      const result = await caller.volunteer.admin.getById({ id: 'vol-1' })
       expect(result._id).toBe('vol-1')
     })
   })
@@ -196,7 +196,7 @@ describe('volunteer router', () => {
 
       const caller = createAdminCaller()
       await expect(
-        caller.volunteer.sendEmail({
+        caller.volunteer.admin.sendEmail({
           volunteerId: 'vol-1',
           subject: 'Welcome',
           message: 'Congrats',

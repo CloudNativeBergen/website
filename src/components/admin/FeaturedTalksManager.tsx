@@ -32,7 +32,7 @@ export function FeaturedTalksManager({
     data: featuredTalks = [],
     isLoading: featuredLoading,
     refetch: refetchFeatured,
-  } = api.featured.listTalks.useQuery()
+  } = api.featured.admin.listTalks.useQuery()
 
   const { data: availableTalks = [], isLoading: searchLoading } =
     api.proposal.admin.searchTalks.useQuery(
@@ -43,11 +43,11 @@ export function FeaturedTalksManager({
       { enabled: showSearch && searchQuery.length > 0 },
     )
 
-  const addTalkMutation = api.featured.addTalk.useMutation({
+  const addTalkMutation = api.featured.admin.addTalk.useMutation({
     onSuccess: () => {
       refetchFeatured()
       utils.proposal.admin.searchTalks.invalidate()
-      utils.featured.summary.invalidate()
+      utils.featured.admin.summary.invalidate()
       setSearchQuery('')
       setShowSearch(false)
     },
@@ -56,11 +56,11 @@ export function FeaturedTalksManager({
     },
   })
 
-  const removeTalkMutation = api.featured.removeTalk.useMutation({
+  const removeTalkMutation = api.featured.admin.removeTalk.useMutation({
     onSuccess: () => {
       refetchFeatured()
       utils.proposal.admin.searchTalks.invalidate()
-      utils.featured.summary.invalidate()
+      utils.featured.admin.summary.invalidate()
     },
     onError: (err) => {
       console.error('Failed to remove featured talk:', err)

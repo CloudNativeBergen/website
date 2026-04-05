@@ -296,227 +296,91 @@ export const workshopRouter = router({
       }
     }),
 
-  getAllSignups: adminProcedure
-    .input(workshopSignupFiltersSchema)
-    .query(async ({ input }) => {
-      try {
-        const conferenceId = await resolveConferenceId()
-        const signups = await getAllWorkshopSignups({
-          conferenceId,
-          workshopId: input.workshopId,
-          status: input.status as WorkshopSignupStatus | undefined,
-          page: input.page,
-          pageSize: input.pageSize,
-        })
-
-        const allSignups = await getAllWorkshopSignups({
-          conferenceId,
-          workshopId: input.workshopId,
-          status: input.status as WorkshopSignupStatus | undefined,
-        })
-
-        return {
-          success: true,
-          data: signups,
-          pagination: {
-            page: input.page || 1,
-            pageSize: input.pageSize || 50,
-            total: allSignups.length,
-            totalPages: Math.ceil(allSignups.length / (input.pageSize || 50)),
-          },
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch workshop signups',
-          cause: error,
-        })
-      }
-    }),
-
-  listSignups: adminProcedure
-    .input(workshopSignupsByWorkshopSchema)
-    .query(async ({ input }) => {
-      try {
-        const signups = await getWorkshopSignupsByWorkshop(
-          input.workshopId,
-          input.status as WorkshopSignupStatus | undefined,
-        )
-
-        return {
-          success: true,
-          data: signups,
-          count: signups.length,
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch workshop signups',
-          cause: error,
-        })
-      }
-    }),
-
-  confirmSignup: adminProcedure
-    .input(confirmWorkshopSignupSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const signups = await getAllWorkshopSignups({
-          signupIds: [input.signupId],
-        })
-
-        if (signups.length === 0) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Signup not found',
+  admin: router({
+    getAllSignups: adminProcedure
+      .input(workshopSignupFiltersSchema)
+      .query(async ({ input }) => {
+        try {
+          const conferenceId = await resolveConferenceId()
+          const signups = await getAllWorkshopSignups({
+            conferenceId,
+            workshopId: input.workshopId,
+            status: input.status as WorkshopSignupStatus | undefined,
+            page: input.page,
+            pageSize: input.pageSize,
           })
-        }
 
-        const signup = signups[0]
-        const wasWaitlisted = signup.status === 'waitlist'
+          const allSignups = await getAllWorkshopSignups({
+            conferenceId,
+            workshopId: input.workshopId,
+            status: input.status as WorkshopSignupStatus | undefined,
+          })
 
-        await confirmWorkshopSignup(input.signupId)
-
-        if (input.sendEmail && wasWaitlisted) {
-          const { conference } = await getConferenceForCurrentDomain({})
-          if (conference) {
-            await sendBasicWorkshopConfirmation({
-              userEmail: signup.userEmail,
-              userName: signup.userName,
-              status: 'confirmed',
-              conference,
-              workshopTitle: signup.workshop?.title ?? 'Workshop',
-              workshopDate: (signup.workshop as { date?: string })?.date,
-              workshopTime: (signup.workshop as { startTime?: string })
-                ?.startTime,
-            }).catch(() => {})
+          return {
+            success: true,
+            data: signups,
+            pagination: {
+              page: input.page || 1,
+              pageSize: input.pageSize || 50,
+              total: allSignups.length,
+              totalPages: Math.ceil(allSignups.length / (input.pageSize || 50)),
+            },
           }
-        }
-
-        revalidateTag('admin:workshops', 'default')
-        revalidateTag('content:workshops', 'default')
-
-        return {
-          success: true,
-          message: wasWaitlisted
-            ? 'Participant confirmed and notification email sent'
-            : 'Workshop signup confirmed successfully',
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to confirm workshop signup',
-          cause: error,
-        })
-      }
-    }),
-
-  updateCapacity: adminProcedure
-    .input(updateWorkshopCapacitySchema)
-    .mutation(async ({ input }) => {
-      try {
-        const current = await checkWorkshopCapacity(input.workshopId)
-        const signupCount = current.signups
-
-        if (input.capacity < signupCount) {
+        } catch (error) {
           throw new TRPCError({
-            code: 'CONFLICT',
-            message: `Cannot reduce capacity below current signup count (${signupCount})`,
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch workshop signups',
+            cause: error,
           })
         }
+      }),
 
-        const oldCapacity = current.capacity
-        const updatedWorkshop = await updateWorkshopCapacity(
-          input.workshopId,
-          input.capacity,
-        )
-
-        const capacityIncrease = input.capacity - oldCapacity
-        let promotedCount = 0
-
-        if (capacityIncrease > 0) {
-          const waitlistSignups = await getWorkshopSignupsByWorkshop(
+    listSignups: adminProcedure
+      .input(workshopSignupsByWorkshopSchema)
+      .query(async ({ input }) => {
+        try {
+          const signups = await getWorkshopSignupsByWorkshop(
             input.workshopId,
-            'waitlist',
+            input.status as WorkshopSignupStatus | undefined,
           )
 
-          const signupsToPromote = waitlistSignups
-            .sort((a, b) => {
-              const dateA = new Date(a.signedUpAt || a._createdAt).getTime()
-              const dateB = new Date(b.signedUpAt || b._createdAt).getTime()
-              return dateA - dateB
+          return {
+            success: true,
+            data: signups,
+            count: signups.length,
+          }
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch workshop signups',
+            cause: error,
+          })
+        }
+      }),
+
+    confirmSignup: adminProcedure
+      .input(confirmWorkshopSignupSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const signups = await getAllWorkshopSignups({
+            signupIds: [input.signupId],
+          })
+
+          if (signups.length === 0) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Signup not found',
             })
-            .slice(0, capacityIncrease)
+          }
 
-          const { conference } = await getConferenceForCurrentDomain({})
+          const signup = signups[0]
+          const wasWaitlisted = signup.status === 'waitlist'
 
-          const promotionResults = await Promise.allSettled(
-            signupsToPromote.map(async (signup) => {
-              await confirmWorkshopSignup(signup._id)
+          await confirmWorkshopSignup(input.signupId)
 
-              if (conference) {
-                await sendBasicWorkshopConfirmation({
-                  userEmail: signup.userEmail,
-                  userName: signup.userName,
-                  status: 'confirmed',
-                  conference,
-                  workshopTitle: signup.workshop?.title ?? 'Workshop',
-                  workshopDate: (signup.workshop as { date?: string })?.date,
-                  workshopTime: (signup.workshop as { startTime?: string })
-                    ?.startTime,
-                })
-              }
-
-              return signup
-            }),
-          )
-
-          promotedCount = promotionResults.filter(
-            (r) => r.status === 'fulfilled',
-          ).length
-        }
-
-        revalidateTag('content:workshops', 'default')
-        revalidateTag('admin:workshops', 'default')
-
-        return {
-          success: true,
-          data: updatedWorkshop,
-          message:
-            promotedCount > 0
-              ? `Workshop capacity updated successfully. ${promotedCount} participant${promotedCount === 1 ? '' : 's'} promoted from waitlist.`
-              : 'Workshop capacity updated successfully',
-          promotedCount,
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update workshop capacity',
-          cause: error,
-        })
-      }
-    }),
-
-  batchConfirmSignups: adminProcedure
-    .input(batchConfirmSignupsSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const signups = await getAllWorkshopSignups({
-          signupIds: input.signupIds,
-        })
-
-        const { conference } = await getConferenceForCurrentDomain({})
-
-        const results = await Promise.allSettled(
-          signups.map(async (signup) => {
-            const wasWaitlisted = signup.status === 'waitlist'
-            await confirmWorkshopSignup(signup._id)
-
-            if (input.sendEmails && wasWaitlisted && conference) {
+          if (input.sendEmail && wasWaitlisted) {
+            const { conference } = await getConferenceForCurrentDomain({})
+            if (conference) {
               await sendBasicWorkshopConfirmation({
                 userEmail: signup.userEmail,
                 userName: signup.userName,
@@ -528,227 +392,374 @@ export const workshopRouter = router({
                   ?.startTime,
               }).catch(() => {})
             }
+          }
 
-            return signup
-          }),
-        )
+          revalidateTag('admin:workshops', 'default')
+          revalidateTag('content:workshops', 'default')
 
-        const succeeded = results.filter((r) => r.status === 'fulfilled').length
-        const failed = results.filter((r) => r.status === 'rejected').length
+          return {
+            success: true,
+            message: wasWaitlisted
+              ? 'Participant confirmed and notification email sent'
+              : 'Workshop signup confirmed successfully',
+          }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
 
-        revalidateTag('admin:workshops', 'default')
-        revalidateTag('content:workshops', 'default')
-
-        return {
-          success: true,
-          message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`,
-          results: {
-            succeeded,
-            failed,
-            total: input.signupIds.length,
-          },
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to batch confirm signups',
-          cause: error,
-        })
-      }
-    }),
-
-  batchCancelSignups: adminProcedure
-    .input(batchCancelSignupsSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const results = await Promise.allSettled(
-          input.signupIds.map((id) => cancelWorkshopSignup(id)),
-        )
-
-        const succeeded = results.filter((r) => r.status === 'fulfilled').length
-        const failed = results.filter((r) => r.status === 'rejected').length
-
-        revalidateTag('admin:workshops', 'default')
-        revalidateTag('content:workshops', 'default')
-
-        return {
-          success: true,
-          message: `Cancelled ${succeeded} signups${failed > 0 ? `, ${failed} failed` : ''}`,
-          results: {
-            succeeded,
-            failed,
-            total: input.signupIds.length,
-          },
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to batch cancel signups',
-          cause: error,
-        })
-      }
-    }),
-
-  deleteSignup: adminProcedure
-    .input(z.object({ signupId: z.string() }))
-    .mutation(async ({ input }) => {
-      try {
-        const { deleteWorkshopSignup } = await import('@/lib/workshop/sanity')
-
-        await deleteWorkshopSignup(input.signupId)
-
-        revalidateTag('admin:workshops', 'default')
-        revalidateTag('content:workshops', 'default')
-
-        return {
-          success: true,
-          message: 'Signup deleted successfully',
-        }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to delete signup',
-          cause: error,
-        })
-      }
-    }),
-
-  getSummary: adminProcedure.query(async () => {
-    try {
-      const conferenceId = await resolveConferenceId()
-      const statistics = await getWorkshopStatistics(conferenceId)
-
-      return {
-        success: true,
-        data: statistics,
-        generatedAt: new Date().toISOString(),
-      }
-    } catch (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to generate workshop summary',
-        cause: error,
-      })
-    }
-  }),
-
-  manualSignup: adminProcedure
-    .input(workshopSignupInputSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const belongs = await verifyWorkshopBelongsToConference(
-          input.workshop._ref,
-          input.conference._ref,
-        )
-
-        if (!belongs) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Workshop does not belong to the specified conference',
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to confirm workshop signup',
+            cause: error,
           })
         }
-
-        const capacity = await checkWorkshopCapacity(input.workshop._ref)
-        if (!capacity || capacity.available <= 0) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'Workshop is full',
-          })
-        }
-
-        const existingSignups = await getWorkshopSignups(
-          input.userWorkOSId,
-          input.conference._ref,
-          undefined,
-        )
-
-        const alreadySignedUp = existingSignups.some(
-          (signup) => signup.workshop._ref === input.workshop._ref,
-        )
-
-        if (alreadySignedUp) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'User is already signed up for this workshop',
-          })
-        }
-
-        const signup = await createWorkshopSignup(input)
-
-        await sendBasicWorkshopConfirmation({
-          userEmail: signup.userEmail,
-          userName: signup.userName,
-          workshopTitle: signup.workshop?.title ?? input.workshop._ref,
-          workshopDate: (signup.workshop as { date?: string })?.date,
-          workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {})
-
-        revalidateTag('content:workshops', 'default')
-        revalidateTag('admin:workshops', 'default')
-
-        return {
-          success: true,
-          data: signup,
-          message: 'Successfully added participant to workshop',
-        }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to add participant to workshop',
-          cause: error,
-        })
-      }
-    }),
-
-  updateRegistrationTimes: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().nullable(),
-        endDate: z.string().nullable(),
       }),
-    )
-    .mutation(async ({ input }) => {
+
+    updateCapacity: adminProcedure
+      .input(updateWorkshopCapacitySchema)
+      .mutation(async ({ input }) => {
+        try {
+          const current = await checkWorkshopCapacity(input.workshopId)
+          const signupCount = current.signups
+
+          if (input.capacity < signupCount) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: `Cannot reduce capacity below current signup count (${signupCount})`,
+            })
+          }
+
+          const oldCapacity = current.capacity
+          const updatedWorkshop = await updateWorkshopCapacity(
+            input.workshopId,
+            input.capacity,
+          )
+
+          const capacityIncrease = input.capacity - oldCapacity
+          let promotedCount = 0
+
+          if (capacityIncrease > 0) {
+            const waitlistSignups = await getWorkshopSignupsByWorkshop(
+              input.workshopId,
+              'waitlist',
+            )
+
+            const signupsToPromote = waitlistSignups
+              .sort((a, b) => {
+                const dateA = new Date(a.signedUpAt || a._createdAt).getTime()
+                const dateB = new Date(b.signedUpAt || b._createdAt).getTime()
+                return dateA - dateB
+              })
+              .slice(0, capacityIncrease)
+
+            const { conference } = await getConferenceForCurrentDomain({})
+
+            const promotionResults = await Promise.allSettled(
+              signupsToPromote.map(async (signup) => {
+                await confirmWorkshopSignup(signup._id)
+
+                if (conference) {
+                  await sendBasicWorkshopConfirmation({
+                    userEmail: signup.userEmail,
+                    userName: signup.userName,
+                    status: 'confirmed',
+                    conference,
+                    workshopTitle: signup.workshop?.title ?? 'Workshop',
+                    workshopDate: (signup.workshop as { date?: string })?.date,
+                    workshopTime: (signup.workshop as { startTime?: string })
+                      ?.startTime,
+                  })
+                }
+
+                return signup
+              }),
+            )
+
+            promotedCount = promotionResults.filter(
+              (r) => r.status === 'fulfilled',
+            ).length
+          }
+
+          revalidateTag('content:workshops', 'default')
+          revalidateTag('admin:workshops', 'default')
+
+          return {
+            success: true,
+            data: updatedWorkshop,
+            message:
+              promotedCount > 0
+                ? `Workshop capacity updated successfully. ${promotedCount} participant${promotedCount === 1 ? '' : 's'} promoted from waitlist.`
+                : 'Workshop capacity updated successfully',
+            promotedCount,
+          }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update workshop capacity',
+            cause: error,
+          })
+        }
+      }),
+
+    batchConfirmSignups: adminProcedure
+      .input(batchConfirmSignupsSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const signups = await getAllWorkshopSignups({
+            signupIds: input.signupIds,
+          })
+
+          const { conference } = await getConferenceForCurrentDomain({})
+
+          const results = await Promise.allSettled(
+            signups.map(async (signup) => {
+              const wasWaitlisted = signup.status === 'waitlist'
+              await confirmWorkshopSignup(signup._id)
+
+              if (input.sendEmails && wasWaitlisted && conference) {
+                await sendBasicWorkshopConfirmation({
+                  userEmail: signup.userEmail,
+                  userName: signup.userName,
+                  status: 'confirmed',
+                  conference,
+                  workshopTitle: signup.workshop?.title ?? 'Workshop',
+                  workshopDate: (signup.workshop as { date?: string })?.date,
+                  workshopTime: (signup.workshop as { startTime?: string })
+                    ?.startTime,
+                }).catch(() => {})
+              }
+
+              return signup
+            }),
+          )
+
+          const succeeded = results.filter(
+            (r) => r.status === 'fulfilled',
+          ).length
+          const failed = results.filter((r) => r.status === 'rejected').length
+
+          revalidateTag('admin:workshops', 'default')
+          revalidateTag('content:workshops', 'default')
+
+          return {
+            success: true,
+            message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`,
+            results: {
+              succeeded,
+              failed,
+              total: input.signupIds.length,
+            },
+          }
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to batch confirm signups',
+            cause: error,
+          })
+        }
+      }),
+
+    batchCancelSignups: adminProcedure
+      .input(batchCancelSignupsSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const results = await Promise.allSettled(
+            input.signupIds.map((id) => cancelWorkshopSignup(id)),
+          )
+
+          const succeeded = results.filter(
+            (r) => r.status === 'fulfilled',
+          ).length
+          const failed = results.filter((r) => r.status === 'rejected').length
+
+          revalidateTag('admin:workshops', 'default')
+          revalidateTag('content:workshops', 'default')
+
+          return {
+            success: true,
+            message: `Cancelled ${succeeded} signups${failed > 0 ? `, ${failed} failed` : ''}`,
+            results: {
+              succeeded,
+              failed,
+              total: input.signupIds.length,
+            },
+          }
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to batch cancel signups',
+            cause: error,
+          })
+        }
+      }),
+
+    deleteSignup: adminProcedure
+      .input(z.object({ signupId: z.string() }))
+      .mutation(async ({ input }) => {
+        try {
+          const { deleteWorkshopSignup } = await import('@/lib/workshop/sanity')
+
+          await deleteWorkshopSignup(input.signupId)
+
+          revalidateTag('admin:workshops', 'default')
+          revalidateTag('content:workshops', 'default')
+
+          return {
+            success: true,
+            message: 'Signup deleted successfully',
+          }
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete signup',
+            cause: error,
+          })
+        }
+      }),
+
+    getSummary: adminProcedure.query(async () => {
       try {
         const conferenceId = await resolveConferenceId()
-        const { startDate, endDate } = input
-
-        // Validate dates
-        if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'End date must be after start date',
-          })
-        }
-
-        await clientWrite
-          .patch(conferenceId)
-          .set({
-            workshopRegistrationStart: startDate
-              ? new Date(startDate).toISOString()
-              : null,
-            workshopRegistrationEnd: endDate
-              ? new Date(endDate).toISOString()
-              : null,
-          })
-          .commit()
-
-        revalidateTag('admin:settings', 'default')
-        revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+        const statistics = await getWorkshopStatistics(conferenceId)
 
         return {
           success: true,
-          message: 'Workshop registration times updated successfully',
+          data: statistics,
+          generatedAt: new Date().toISOString(),
         }
       } catch (error) {
-        if (error instanceof TRPCError) throw error
-
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update workshop registration times',
+          message: 'Failed to generate workshop summary',
           cause: error,
         })
       }
     }),
+
+    manualSignup: adminProcedure
+      .input(workshopSignupInputSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const belongs = await verifyWorkshopBelongsToConference(
+            input.workshop._ref,
+            input.conference._ref,
+          )
+
+          if (!belongs) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Workshop does not belong to the specified conference',
+            })
+          }
+
+          const capacity = await checkWorkshopCapacity(input.workshop._ref)
+          if (!capacity || capacity.available <= 0) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'Workshop is full',
+            })
+          }
+
+          const existingSignups = await getWorkshopSignups(
+            input.userWorkOSId,
+            input.conference._ref,
+            undefined,
+          )
+
+          const alreadySignedUp = existingSignups.some(
+            (signup) => signup.workshop._ref === input.workshop._ref,
+          )
+
+          if (alreadySignedUp) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'User is already signed up for this workshop',
+            })
+          }
+
+          const signup = await createWorkshopSignup(input)
+
+          await sendBasicWorkshopConfirmation({
+            userEmail: signup.userEmail,
+            userName: signup.userName,
+            workshopTitle: signup.workshop?.title ?? input.workshop._ref,
+            workshopDate: (signup.workshop as { date?: string })?.date,
+            workshopTime: (signup.workshop as { startTime?: string })
+              ?.startTime,
+          }).catch(() => {})
+
+          revalidateTag('content:workshops', 'default')
+          revalidateTag('admin:workshops', 'default')
+
+          return {
+            success: true,
+            data: signup,
+            message: 'Successfully added participant to workshop',
+          }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to add participant to workshop',
+            cause: error,
+          })
+        }
+      }),
+
+    updateRegistrationTimes: adminProcedure
+      .input(
+        z.object({
+          startDate: z.string().nullable(),
+          endDate: z.string().nullable(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const conferenceId = await resolveConferenceId()
+          const { startDate, endDate } = input
+
+          // Validate dates
+          if (
+            startDate &&
+            endDate &&
+            new Date(startDate) >= new Date(endDate)
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'End date must be after start date',
+            })
+          }
+
+          await clientWrite
+            .patch(conferenceId)
+            .set({
+              workshopRegistrationStart: startDate
+                ? new Date(startDate).toISOString()
+                : null,
+              workshopRegistrationEnd: endDate
+                ? new Date(endDate).toISOString()
+                : null,
+            })
+            .commit()
+
+          revalidateTag('admin:settings', 'default')
+          revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+
+          return {
+            success: true,
+            message: 'Workshop registration times updated successfully',
+          }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update workshop registration times',
+            cause: error,
+          })
+        }
+      }),
+  }),
 })

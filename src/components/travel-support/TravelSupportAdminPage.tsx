@@ -26,7 +26,7 @@ export function TravelSupportAdminPage() {
     isLoading,
     error,
     refetch,
-  } = api.travelSupport.list.useQuery({})
+  } = api.travelSupport.admin.list.useQuery({})
 
   // Filter out draft requests - only show submitted, approved, rejected, or paid
   const requests = allRequests?.filter(
@@ -34,19 +34,21 @@ export function TravelSupportAdminPage() {
   )
 
   const { data: selectedRequestDetails, isLoading: isLoadingDetails } =
-    api.travelSupport.getById.useQuery(
+    api.travelSupport.admin.getById.useQuery(
       { id: selectedRequest! },
       { enabled: !!selectedRequest },
     )
 
-  const updateStatusMutation = api.travelSupport.updateStatus.useMutation({
-    onSuccess: () => {
-      refetch()
+  const updateStatusMutation = api.travelSupport.admin.updateStatus.useMutation(
+    {
+      onSuccess: () => {
+        refetch()
+      },
     },
-  })
+  )
 
   const updateExpenseStatusMutation =
-    api.travelSupport.updateExpenseStatus.useMutation({
+    api.travelSupport.admin.updateExpenseStatus.useMutation({
       onSuccess: () => {
         refetch()
         if (selectedRequest) {
@@ -841,7 +843,7 @@ function SpeakersRequiringSupport() {
     data: speakers,
     isLoading,
     error,
-  } = api.travelSupport.getSpeakersRequiringSupport.useQuery()
+  } = api.travelSupport.admin.getSpeakersRequiringSupport.useQuery()
 
   if (isLoading) {
     return (

@@ -19,77 +19,8 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const featuredRouter = router({
-  listSpeakers: adminProcedure.query(async () => {
-    try {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-
-      const { speakers, error: speakersError } = await getFeaturedSpeakers(
-        conference._id,
-      )
-      if (speakersError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get featured speakers',
-          cause: speakersError,
-        })
-      }
-
-      return speakers
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Unexpected error getting featured speakers',
-        cause: error,
-      })
-    }
-  }),
-
-  listTalks: adminProcedure.query(async () => {
-    try {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-
-      const { talks, error: talksError } = await getFeaturedTalks(
-        conference._id,
-      )
-      if (talksError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get featured talks',
-          cause: talksError,
-        })
-      }
-
-      return talks
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Unexpected error getting featured talks',
-        cause: error,
-      })
-    }
-  }),
-
-  addSpeaker: adminProcedure
-    .input(FeaturedSpeakerInputSchema)
-    .mutation(async ({ input }) => {
+  admin: router({
+    listSpeakers: adminProcedure.query(async () => {
       try {
         const { conference, error } = await getConferenceForCurrentDomain()
         if (error || !conference) {
@@ -100,38 +31,30 @@ export const featuredRouter = router({
           })
         }
 
-        const { success, error: addError } = await addFeaturedSpeaker(
+        const { speakers, error: speakersError } = await getFeaturedSpeakers(
           conference._id,
-          input.speakerId,
         )
-
-        if (!success || addError) {
+        if (speakersError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to add featured speaker',
-            cause: addError,
+            message: 'Failed to get featured speakers',
+            cause: speakersError,
           })
         }
 
-        revalidateTag('content:featured', 'default')
-        revalidateTag('content:conferences', 'default')
-        revalidateTag(`sanity:conference-${conference._id}`, 'default')
-
-        return { success: true }
+        return speakers
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error adding featured speaker',
+          message: 'Unexpected error getting featured speakers',
           cause: error,
         })
       }
     }),
 
-  removeSpeaker: adminProcedure
-    .input(FeaturedSpeakerRemoveSchema)
-    .mutation(async ({ input }) => {
+    listTalks: adminProcedure.query(async () => {
       try {
         const { conference, error } = await getConferenceForCurrentDomain()
         if (error || !conference) {
@@ -142,38 +65,200 @@ export const featuredRouter = router({
           })
         }
 
-        const { success, error: removeError } = await removeFeaturedSpeaker(
+        const { talks, error: talksError } = await getFeaturedTalks(
           conference._id,
-          input.speakerId,
         )
-
-        if (!success || removeError) {
+        if (talksError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to remove featured speaker',
-            cause: removeError,
+            message: 'Failed to get featured talks',
+            cause: talksError,
           })
         }
 
-        revalidateTag('content:featured', 'default')
-        revalidateTag('content:conferences', 'default')
-        revalidateTag(`sanity:conference-${conference._id}`, 'default')
-
-        return { success: true }
+        return talks
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error removing featured speaker',
+          message: 'Unexpected error getting featured talks',
           cause: error,
         })
       }
     }),
 
-  addTalk: adminProcedure
-    .input(FeaturedTalkInputSchema)
-    .mutation(async ({ input }) => {
+    addSpeaker: adminProcedure
+      .input(FeaturedSpeakerInputSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { success, error: addError } = await addFeaturedSpeaker(
+            conference._id,
+            input.speakerId,
+          )
+
+          if (!success || addError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to add featured speaker',
+              cause: addError,
+            })
+          }
+
+          revalidateTag('content:featured', 'default')
+          revalidateTag('content:conferences', 'default')
+          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error adding featured speaker',
+            cause: error,
+          })
+        }
+      }),
+
+    removeSpeaker: adminProcedure
+      .input(FeaturedSpeakerRemoveSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { success, error: removeError } = await removeFeaturedSpeaker(
+            conference._id,
+            input.speakerId,
+          )
+
+          if (!success || removeError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to remove featured speaker',
+              cause: removeError,
+            })
+          }
+
+          revalidateTag('content:featured', 'default')
+          revalidateTag('content:conferences', 'default')
+          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error removing featured speaker',
+            cause: error,
+          })
+        }
+      }),
+
+    addTalk: adminProcedure
+      .input(FeaturedTalkInputSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { success, error: addError } = await addFeaturedTalk(
+            conference._id,
+            input.talkId,
+          )
+
+          if (!success || addError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to add featured talk',
+              cause: addError,
+            })
+          }
+
+          revalidateTag('content:featured', 'default')
+          revalidateTag('content:conferences', 'default')
+          revalidateTag('content:program', 'default')
+          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error adding featured talk',
+            cause: error,
+          })
+        }
+      }),
+
+    removeTalk: adminProcedure
+      .input(FeaturedTalkRemoveSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { conference, error } = await getConferenceForCurrentDomain()
+          if (error || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: error,
+            })
+          }
+
+          const { success, error: removeError } = await removeFeaturedTalk(
+            conference._id,
+            input.talkId,
+          )
+
+          if (!success || removeError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to remove featured talk',
+              cause: removeError,
+            })
+          }
+
+          revalidateTag('content:featured', 'default')
+          revalidateTag('content:conferences', 'default')
+          revalidateTag('content:program', 'default')
+          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+
+          return { success: true }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unexpected error removing featured talk',
+            cause: error,
+          })
+        }
+      }),
+
+    summary: adminProcedure.query(async () => {
       try {
         const { conference, error } = await getConferenceForCurrentDomain()
         if (error || !conference) {
@@ -184,110 +269,26 @@ export const featuredRouter = router({
           })
         }
 
-        const { success, error: addError } = await addFeaturedTalk(
-          conference._id,
-          input.talkId,
-        )
-
-        if (!success || addError) {
+        const { summary, error: summaryError } =
+          await getFeaturedContentSummary(conference._id)
+        if (summaryError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to add featured talk',
-            cause: addError,
+            message: 'Failed to get featured content summary',
+            cause: summaryError,
           })
         }
 
-        revalidateTag('content:featured', 'default')
-        revalidateTag('content:conferences', 'default')
-        revalidateTag('content:program', 'default')
-        revalidateTag(`sanity:conference-${conference._id}`, 'default')
-
-        return { success: true }
+        return summary
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error adding featured talk',
+          message: 'Unexpected error getting featured content summary',
           cause: error,
         })
       }
     }),
-
-  removeTalk: adminProcedure
-    .input(FeaturedTalkRemoveSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: error,
-          })
-        }
-
-        const { success, error: removeError } = await removeFeaturedTalk(
-          conference._id,
-          input.talkId,
-        )
-
-        if (!success || removeError) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to remove featured talk',
-            cause: removeError,
-          })
-        }
-
-        revalidateTag('content:featured', 'default')
-        revalidateTag('content:conferences', 'default')
-        revalidateTag('content:program', 'default')
-        revalidateTag(`sanity:conference-${conference._id}`, 'default')
-
-        return { success: true }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Unexpected error removing featured talk',
-          cause: error,
-        })
-      }
-    }),
-
-  summary: adminProcedure.query(async () => {
-    try {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-
-      const { summary, error: summaryError } = await getFeaturedContentSummary(
-        conference._id,
-      )
-      if (summaryError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get featured content summary',
-          cause: summaryError,
-        })
-      }
-
-      return summary
-    } catch (error) {
-      if (error instanceof TRPCError) throw error
-
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Unexpected error getting featured content summary',
-        cause: error,
-      })
-    }
   }),
 })

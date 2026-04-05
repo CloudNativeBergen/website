@@ -202,7 +202,7 @@ export const Default: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/badge.validate', () => {
+        http.post('/api/trpc/badge.admin.validate', () => {
           return HttpResponse.json({
             result: { data: mockSuccessResponse },
           })
@@ -216,7 +216,7 @@ export const ValidationSuccess: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/badge.validate', () => {
+        http.post('/api/trpc/badge.admin.validate', () => {
           return HttpResponse.json({
             result: { data: mockSuccessResponse },
           })
@@ -233,7 +233,7 @@ export const ValidationErrors: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/badge.validate', () => {
+        http.post('/api/trpc/badge.admin.validate', () => {
           return HttpResponse.json({
             result: { data: mockErrorResponse },
           })
@@ -250,7 +250,7 @@ export const ValidationWarnings: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/badge.validate', () => {
+        http.post('/api/trpc/badge.admin.validate', () => {
           return HttpResponse.json({
             result: { data: mockWarningResponse },
           })
@@ -267,7 +267,7 @@ export const ServerError: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.post('/api/trpc/badge.validate', () => {
+        http.post('/api/trpc/badge.admin.validate', () => {
           return HttpResponse.json(
             {
               error: {

@@ -17,145 +17,147 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const galleryRouter = router({
-  list: adminProcedure
-    .input(galleryImageFilterSchema)
-    .query(async ({ input }) => {
-      try {
-        const { conference } = await getConferenceForCurrentDomain({})
-        if (!conference) {
-          throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found for current domain',
-          })
-        }
+  admin: router({
+    list: adminProcedure
+      .input(galleryImageFilterSchema)
+      .query(async ({ input }) => {
+        try {
+          const { conference } = await getConferenceForCurrentDomain({})
+          if (!conference) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Conference not found for current domain',
+            })
+          }
 
-        const images = await getGalleryImages(
-          {
-            conferenceId: conference._id,
-            featured: input.featured,
-            speakerId: input.speakerId,
-            dateFrom: input.dateFrom,
-            dateTo: input.dateTo,
-            photographerSearch: input.photographerSearch,
-            locationSearch: input.locationSearch,
-            limit: input.limit,
-            offset: input.offset,
-          },
-          { useCache: false },
-        )
-        return images
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch gallery images',
-          cause: error,
-        })
-      }
-    }),
-
-  update: adminProcedure
-    .input(galleryImageUpdateSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const { id, ...updateData } = input
-        const res = await updateGalleryImage(id, updateData)
-        if (!res.image) {
+          const images = await getGalleryImages(
+            {
+              conferenceId: conference._id,
+              featured: input.featured,
+              speakerId: input.speakerId,
+              dateFrom: input.dateFrom,
+              dateTo: input.dateTo,
+              photographerSearch: input.photographerSearch,
+              locationSearch: input.locationSearch,
+              limit: input.limit,
+              offset: input.offset,
+            },
+            { useCache: false },
+          )
+          return images
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: res.error || 'Failed to update gallery image',
+            message: 'Failed to fetch gallery images',
+            cause: error,
           })
         }
-        return res.image
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update gallery image',
-          cause: error,
-        })
-      }
-    }),
+      }),
 
-  delete: adminProcedure
-    .input(galleryImageDeleteSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const ok = await deleteGalleryImage(input.id)
-        if (!ok) {
+    update: adminProcedure
+      .input(galleryImageUpdateSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { id, ...updateData } = input
+          const res = await updateGalleryImage(id, updateData)
+          if (!res.image) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: res.error || 'Failed to update gallery image',
+            })
+          }
+          return res.image
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update gallery image',
+            cause: error,
+          })
+        }
+      }),
+
+    delete: adminProcedure
+      .input(galleryImageDeleteSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const ok = await deleteGalleryImage(input.id)
+          if (!ok) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to delete gallery image',
+            })
+          }
+          return { success: ok }
+        } catch (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete gallery image',
+            cause: error,
           })
         }
-        return { success: ok }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to delete gallery image',
-          cause: error,
-        })
-      }
-    }),
+      }),
 
-  toggleFeatured: adminProcedure
-    .input(galleryImageToggleFeaturedSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const res = await updateGalleryImage(input.id, {
-          featured: input.featured,
-        })
-        if (!res.image) {
+    toggleFeatured: adminProcedure
+      .input(galleryImageToggleFeaturedSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const res = await updateGalleryImage(input.id, {
+            featured: input.featured,
+          })
+          if (!res.image) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: res.error || 'Failed to toggle featured status',
+            })
+          }
+          return res.image
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: res.error || 'Failed to toggle featured status',
+            message: 'Failed to toggle featured status',
+            cause: error,
           })
         }
-        return res.image
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to toggle featured status',
-          cause: error,
-        })
-      }
-    }),
+      }),
 
-  count: adminProcedure
-    .input(galleryImageFilterSchema)
-    .query(async ({ input }) => {
-      try {
-        const { conference } = await getConferenceForCurrentDomain({})
-        if (!conference) {
+    count: adminProcedure
+      .input(galleryImageFilterSchema)
+      .query(async ({ input }) => {
+        try {
+          const { conference } = await getConferenceForCurrentDomain({})
+          if (!conference) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Conference not found for current domain',
+            })
+          }
+
+          const count = await getGalleryImageCount(
+            {
+              conferenceId: conference._id,
+              featured: input.featured,
+              speakerId: input.speakerId,
+              dateFrom: input.dateFrom,
+              dateTo: input.dateTo,
+              photographerSearch: input.photographerSearch,
+              locationSearch: input.locationSearch,
+            },
+            false,
+          )
+          return count
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
-            code: 'NOT_FOUND',
-            message: 'Conference not found for current domain',
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch gallery image count',
+            cause: error,
           })
         }
-
-        const count = await getGalleryImageCount(
-          {
-            conferenceId: conference._id,
-            featured: input.featured,
-            speakerId: input.speakerId,
-            dateFrom: input.dateFrom,
-            dateTo: input.dateTo,
-            photographerSearch: input.photographerSearch,
-            locationSearch: input.locationSearch,
-          },
-          false,
-        )
-        return count
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch gallery image count',
-          cause: error,
-        })
-      }
-    }),
+      }),
+  }),
 
   listMine: protectedProcedure.query(async ({ ctx }) => {
     try {

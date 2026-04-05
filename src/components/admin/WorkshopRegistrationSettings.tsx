@@ -33,7 +33,7 @@ export function WorkshopRegistrationSettings({
   )
 
   const updateRegistrationTimes =
-    api.workshop.updateRegistrationTimes.useMutation({
+    api.workshop.admin.updateRegistrationTimes.useMutation({
       onSuccess: () => {
         setIsEditing(false)
         setError(null)

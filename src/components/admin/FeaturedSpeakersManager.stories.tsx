@@ -37,7 +37,7 @@ const mockAvailableSpeakers = [
 ]
 
 const handlers = [
-  http.get('/api/trpc/featured.listSpeakers', () => {
+  http.get('/api/trpc/featured.admin.listSpeakers', () => {
     return HttpResponse.json({
       result: { data: mockFeaturedSpeakers },
     })
@@ -47,15 +47,15 @@ const handlers = [
       result: { data: mockAvailableSpeakers },
     })
   }),
-  http.get('/api/trpc/featured.summary', () => {
+  http.get('/api/trpc/featured.admin.summary', () => {
     return HttpResponse.json({
       result: { data: { speakersCount: 2, talksCount: 2 } },
     })
   }),
-  http.post('/api/trpc/featured.addSpeaker', () => {
+  http.post('/api/trpc/featured.admin.addSpeaker', () => {
     return HttpResponse.json({ result: { data: { success: true } } })
   }),
-  http.post('/api/trpc/featured.removeSpeaker', () => {
+  http.post('/api/trpc/featured.admin.removeSpeaker', () => {
     return HttpResponse.json({ result: { data: { success: true } } })
   }),
 ]
@@ -100,7 +100,7 @@ export const Empty: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.listSpeakers', () => {
+        http.get('/api/trpc/featured.admin.listSpeakers', () => {
           return HttpResponse.json({
             result: { data: [] },
           })
@@ -110,7 +110,7 @@ export const Empty: Story = {
             result: { data: mockAvailableSpeakers },
           })
         }),
-        http.post('/api/trpc/featured.addSpeaker', () => {
+        http.post('/api/trpc/featured.admin.addSpeaker', () => {
           return HttpResponse.json({ result: { data: { success: true } } })
         }),
       ],
@@ -123,7 +123,7 @@ export const ManyFeaturedSpeakers: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/featured.listSpeakers', () => {
+        http.get('/api/trpc/featured.admin.listSpeakers', () => {
           return HttpResponse.json({
             result: {
               data: [
@@ -154,7 +154,7 @@ export const ManyFeaturedSpeakers: Story = {
             result: { data: [] },
           })
         }),
-        http.post('/api/trpc/featured.removeSpeaker', () => {
+        http.post('/api/trpc/featured.admin.removeSpeaker', () => {
           return HttpResponse.json({ result: { data: { success: true } } })
         }),
       ],

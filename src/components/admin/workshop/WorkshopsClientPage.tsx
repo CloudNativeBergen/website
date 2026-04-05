@@ -76,7 +76,7 @@ export function WorkshopsClientPage({
   } | null>(null)
 
   const { data: signupsData, refetch: refetchSignups } =
-    api.workshop.getAllSignups.useQuery(
+    api.workshop.admin.getAllSignups.useQuery(
       {
         pageSize: 100,
       },
@@ -86,7 +86,7 @@ export function WorkshopsClientPage({
     )
 
   const { data: workshopSignupsData, refetch: refetchWorkshopSignups } =
-    api.workshop.listSignups.useQuery(
+    api.workshop.admin.listSignups.useQuery(
       {
         workshopId: signupModal.workshopId,
         status: signupModal.status || undefined,
@@ -97,11 +97,11 @@ export function WorkshopsClientPage({
     )
 
   const { data: statsData, refetch: refetchStats } =
-    api.workshop.getSummary.useQuery(undefined, {
+    api.workshop.admin.getSummary.useQuery(undefined, {
       enabled: !!conferenceId,
     })
 
-  const confirmMutation = api.workshop.batchConfirmSignups.useMutation({
+  const confirmMutation = api.workshop.admin.batchConfirmSignups.useMutation({
     onSuccess: () => {
       refetchSignups()
       refetchWorkshopSignups()
@@ -109,7 +109,7 @@ export function WorkshopsClientPage({
     },
   })
 
-  const deleteMutation = api.workshop.deleteSignup.useMutation({
+  const deleteMutation = api.workshop.admin.deleteSignup.useMutation({
     onSuccess: () => {
       refetchSignups()
       refetchWorkshopSignups()
@@ -117,7 +117,7 @@ export function WorkshopsClientPage({
     },
   })
 
-  const manualSignupMutation = api.workshop.manualSignup.useMutation({
+  const manualSignupMutation = api.workshop.admin.manualSignup.useMutation({
     onSuccess: () => {
       refetchSignups()
       refetchWorkshopSignups()
@@ -130,7 +130,7 @@ export function WorkshopsClientPage({
     },
   })
 
-  const updateCapacityMutation = api.workshop.updateCapacity.useMutation({
+  const updateCapacityMutation = api.workshop.admin.updateCapacity.useMutation({
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: [['workshop', 'list']],

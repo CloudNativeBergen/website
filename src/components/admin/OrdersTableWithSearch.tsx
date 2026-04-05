@@ -58,7 +58,7 @@ export function OrdersTableWithSearch({
     data: paymentDetailsData,
     isLoading: paymentDetailsLoading,
     error: paymentDetailsError,
-  } = api.tickets.getPaymentDetails.useQuery(
+  } = api.tickets.admin.getPaymentDetails.useQuery(
     { orderId: selectedOrderId! },
     {
       enabled: selectedOrderId !== null,

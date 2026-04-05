@@ -23,7 +23,7 @@ export function TargetConfigEditor({
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
 
-  const updateSettings = api.tickets.updateSettings.useMutation({
+  const updateSettings = api.tickets.admin.updateSettings.useMutation({
     onSuccess: () => {
       setIsEditing(false)
 

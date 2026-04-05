@@ -89,9 +89,9 @@ export function BadgeManagementClient({
   }, [searchQuery])
 
   const { data: existingBadges, refetch: refetchBadges } =
-    api.badge.list.useQuery({}, { initialData: initialBadges })
+    api.badge.admin.list.useQuery({}, { initialData: initialBadges })
 
-  const issueMutation = api.badge.issue.useMutation({
+  const issueMutation = api.badge.admin.issue.useMutation({
     onSuccess: (data) => {
       refetchBadges()
       setSelectedSpeakers(new Set())
@@ -113,7 +113,7 @@ export function BadgeManagementClient({
     },
   })
 
-  const bulkIssueMutation = api.badge.bulkIssue.useMutation({
+  const bulkIssueMutation = api.badge.admin.bulkIssue.useMutation({
     onSuccess: (data) => {
       refetchBadges()
       setSelectedSpeakers(new Set())
@@ -146,7 +146,7 @@ export function BadgeManagementClient({
     },
   })
 
-  const deleteMutation = api.badge.delete.useMutation({
+  const deleteMutation = api.badge.admin.delete.useMutation({
     onSuccess: (data) => {
       refetchBadges()
       showNotification({

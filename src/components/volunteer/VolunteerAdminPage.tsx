@@ -54,41 +54,43 @@ export default function VolunteerAdminPage() {
     data: volunteers,
     isLoading: loadingList,
     error: listError,
-  } = api.volunteer.list.useQuery()
+  } = api.volunteer.admin.list.useQuery()
 
   const {
     data: selectedVolunteer,
     isLoading: loadingDetails,
     error: detailsError,
-  } = api.volunteer.getById.useQuery(
+  } = api.volunteer.admin.getById.useQuery(
     { id: selectedVolunteerId! },
     { enabled: !!selectedVolunteerId },
   )
 
   const utils = api.useUtils()
 
-  const updateStatus = api.volunteer.updateStatus.useMutation({
+  const updateStatus = api.volunteer.admin.updateStatus.useMutation({
     onSuccess: async () => {
       await Promise.all([
-        utils.volunteer.list.invalidate(),
+        utils.volunteer.admin.list.invalidate(),
         selectedVolunteerId
-          ? utils.volunteer.getById.invalidate({ id: selectedVolunteerId })
+          ? utils.volunteer.admin.getById.invalidate({
+              id: selectedVolunteerId,
+            })
           : Promise.resolve(),
       ])
       setReviewNotes('')
     },
   })
 
-  const sendEmail = api.volunteer.sendEmail.useMutation({
+  const sendEmail = api.volunteer.admin.sendEmail.useMutation({
     onSuccess: () => {
       setEmailModalOpen(false)
       setEmailModalVolunteer(null)
     },
   })
 
-  const deleteVolunteer = api.volunteer.delete.useMutation({
+  const deleteVolunteer = api.volunteer.admin.delete.useMutation({
     onSuccess: async () => {
-      await utils.volunteer.list.invalidate()
+      await utils.volunteer.admin.list.invalidate()
       setSelectedVolunteerId(null)
     },
   })
