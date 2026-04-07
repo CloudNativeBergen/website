@@ -343,6 +343,27 @@ The `cnctl` CLI lives in `cli/` as a standalone Cargo project. It uses mise for 
 - **Build:** `cd cli && mise run build` - Builds release binary.
 - **Clean:** `cd cli && mise run clean` - Removes build artifacts.
 
+##### Commit Messages & Release Notes
+
+CLI release notes are **auto-generated** from commit messages using [git-cliff](https://git-cliff.org/) (configured in `cli/cliff.toml`). All commits touching `cli/` **must** use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+- `feat:` / `feat(scope):` — new features (included in release notes)
+- `fix:` — bug fixes (included)
+- `perf:` — performance improvements (included)
+- `refactor:` — code refactoring (included)
+- `docs:` — documentation changes (included)
+- `chore:`, `style:`, `ci:`, `test:`, `build(deps):` — excluded from release notes
+
+Examples:
+
+```
+feat(sponsors): add email functionality with template support
+fix: handle missing conference ID in sponsor lookup
+refactor: extract shared email builder into helper module
+```
+
+The release workflow (`cli/.github/workflows/release.yml`) runs git-cliff with `--unreleased` to generate the body for each GitHub Release. Tags use date-based versioning: `YYYY.MM.DD-<shortsha>`.
+
 ## Code Organization & Refactoring
 
 ### Component Structure
