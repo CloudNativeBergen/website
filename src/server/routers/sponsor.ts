@@ -35,6 +35,11 @@ import {
   reorderSponsorEmailTemplates,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
+import {
+  buildTemplateVariables,
+  suggestTemplateCategory,
+  suggestTemplateLanguage,
+} from '@/lib/sponsor/templates'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
@@ -1849,6 +1854,147 @@ export const sponsorRouter = router({
         }
       }),
 
+    sendEmailBySfc: adminProcedure
+      .input(
+        z.object({
+          sponsorForConferenceId: z.string().min(1),
+          subject: z.string().min(1),
+          body: z.string().min(1).max(50000),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({ sponsors: true })
+
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        // Scope lookup to the current conference to prevent cross-conference access
+        const sfc = await clientReadUncached.fetch<{
+          _id: string
+          status: string
+          contactPersons?: Array<{ name: string; email: string }>
+        }>(
+          `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0]{
+            _id,
+            status,
+            contactPersons[]{ name, email }
+          }`,
+          {
+            sfcId: input.sponsorForConferenceId,
+            conferenceId: conference._id,
+          },
+        )
+
+        if (!sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found in this conference',
+          })
+        }
+
+        const recipients = (sfc.contactPersons || [])
+          .filter((c) => c.email)
+          .map((c) => ({ email: c.email, name: c.name }))
+
+        if (recipients.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Sponsor has no contact persons with email addresses',
+          })
+        }
+
+        const { markdownToPortableTextBody } =
+          await import('@/lib/email/markdown')
+        const messagePortableText = markdownToPortableTextBody(input.body)
+        if (messagePortableText.length === 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Message body is empty after conversion',
+          })
+        }
+
+        const { htmlContent, error: htmlError } =
+          await convertPortableTextToHTML(messagePortableText)
+        if (htmlError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to convert message to HTML',
+          })
+        }
+
+        const emailTemplate = renderEmailTemplate({
+          conference,
+          subject: input.subject,
+          htmlContent: htmlContent!,
+          unsubscribeUrl: undefined,
+        })
+
+        if (!conference.sponsorEmail) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Missing sponsorEmail in conference configuration',
+          })
+        }
+
+        const result = await retryWithBackoff(async () => {
+          return await resend.emails.send({
+            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            to: recipients.map((r) => r.email),
+            subject: input.subject,
+            react: emailTemplate,
+          })
+        })
+
+        if (result.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.error.message,
+          })
+        }
+
+        try {
+          const userId = ctx.speaker._id
+          if (userId) {
+            try {
+              await logEmailSent(sfc._id, input.subject, userId)
+            } catch (logError) {
+              console.error(
+                '[sendEmailBySfc] Failed to log email activity:',
+                logError,
+              )
+            }
+
+            if (sfc.status === 'prospect') {
+              try {
+                await clientWrite
+                  .patch(sfc._id)
+                  .set({ status: 'contacted' })
+                  .commit()
+                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+              } catch (statusError) {
+                console.error(
+                  '[sendEmailBySfc] Failed to update sponsor status:',
+                  statusError,
+                )
+              }
+            }
+          }
+        } catch (crmError) {
+          console.warn('[sendEmailBySfc] CRM tracking failed:', crmError)
+        }
+
+        return {
+          success: true,
+          emailId: result.data?.id,
+          recipientCount: recipients.length,
+        }
+      }),
+
     broadcastEmail: adminProcedure
       .input(
         z.object({
@@ -2130,6 +2276,153 @@ export const sponsorRouter = router({
       }
       return templates || []
     }),
+
+    listForSponsor: adminProcedure
+      .input(
+        z.object({
+          sponsorForConferenceId: z.string().min(1),
+        }),
+      )
+      .query(async ({ input, ctx }) => {
+        const { templates, error: templatesError } =
+          await getSponsorEmailTemplates()
+        if (templatesError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to list email templates',
+            cause: templatesError,
+          })
+        }
+
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({ sponsors: true })
+        if (conferenceError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        // Narrow type matching the actual GROQ projection
+        type SfcEmailContext = {
+          _id: string
+          status: string
+          tags?: string[]
+          contactPersons?: Array<{
+            name: string
+            email?: string
+            isPrimary?: boolean
+          }>
+          sponsor?: {
+            _id: string
+            name: string
+            website?: string
+            orgNumber?: string
+          }
+          tier?: { _id: string; title: string }
+          contractCurrency?: string
+        }
+
+        // Scope lookup to the current conference to prevent cross-conference access
+        const sfc = await clientReadUncached.fetch<SfcEmailContext>(
+          `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0]{
+            _id,
+            status,
+            tags,
+            contactPersons[]{ name, email, isPrimary },
+            sponsor->{ _id, name, website, orgNumber },
+            tier->{ _id, title },
+            contractCurrency
+          }`,
+          {
+            sfcId: input.sponsorForConferenceId,
+            conferenceId: conference._id,
+          },
+        )
+
+        if (!sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found in this conference',
+          })
+        }
+
+        // Build recipients from contacts with email addresses
+        const recipients = (sfc.contactPersons || [])
+          .filter((c): c is typeof c & { email: string } => !!c.email)
+          .map((c) => ({ name: c.name, email: c.email }))
+
+        // Derive CONTACT_NAMES from recipients only (not all contacts)
+        const contactNames = recipients.map((r) => r.name).join(' and ')
+        const sponsorName = sfc.sponsor?.name || 'Unknown'
+        const tierName = sfc.tier?.title
+
+        const variables = buildTemplateVariables({
+          sponsorName,
+          contactNames: contactNames || undefined,
+          conference: {
+            title: conference.title,
+            startDate: conference.startDate,
+            city: conference.city,
+            organizer: conference.organizer,
+            domains: conference.domains,
+            prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+          },
+          senderName: ctx.speaker.name || undefined,
+          tierName,
+        })
+
+        // Sort templates by relevance for this sponsor
+        const suggestedCategory = suggestTemplateCategory({
+          tags: sfc.tags,
+          status: sfc.status,
+        })
+        const suggestedLanguage = suggestTemplateLanguage({
+          currency: sfc.contractCurrency,
+          orgNumber: sfc.sponsor?.orgNumber,
+          website: sfc.sponsor?.website,
+        })
+
+        const allTemplates = templates || []
+
+        // Score each template and sort by relevance (highest first)
+        const scored = allTemplates.map((t) => {
+          let score = 0
+          if (t.category === suggestedCategory) score += 4
+          if (t.language === suggestedLanguage) score += 2
+          if (t.isDefault) score += 1
+          return { template: t, score }
+        })
+        scored.sort((a, b) => b.score - a.score)
+
+        // Convert PT bodies to markdown
+        const { portableTextBodyToMarkdown } =
+          await import('@/lib/email/markdown')
+
+        const templatesWithMarkdown = scored.map(({ template: t }) => ({
+          _id: t._id,
+          title: t.title,
+          slug: t.slug,
+          category: t.category,
+          language: t.language,
+          subject: t.subject,
+          bodyMarkdown: t.body
+            ? portableTextBodyToMarkdown(t.body as PortableTextBlock[])
+            : '',
+          description: t.description,
+          isDefault: t.isDefault,
+          sortOrder: t.sortOrder,
+        }))
+
+        return {
+          templates: templatesWithMarkdown,
+          variables,
+          recipients,
+          sponsorName,
+          suggestedCategory,
+          suggestedLanguage,
+        }
+      }),
 
     get: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
       const { template, error } = await getSponsorEmailTemplate(input.id)

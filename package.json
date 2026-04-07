@@ -43,6 +43,7 @@
     "@next/eslint-plugin-next": "^16.2.2",
     "@noble/ed25519": "^3.0.1",
     "@portabletext/editor": "^6.6.0",
+    "@portabletext/markdown": "^1.2.0",
     "@portabletext/react": "^6.0.3",
     "@portabletext/to-html": "^5.0.2",
     "@portabletext/types": "^4.0.2",

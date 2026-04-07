@@ -35,6 +35,9 @@ importers:
       '@portabletext/editor':
         specifier: ^6.6.0
         version: 6.6.0(@types/react@19.2.14)(react@19.2.4)
+      '@portabletext/markdown':
+        specifier: ^1.2.0
+        version: 1.2.0
       '@portabletext/react':
         specifier: ^6.0.3
         version: 6.0.3(react@19.2.4)

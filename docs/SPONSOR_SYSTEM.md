@@ -154,6 +154,13 @@ Reusable email templates stored in Sanity for sponsor outreach. Global (not conf
 
 **Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SENDER_NAME`, `TIER_NAME`.
 
+**Access paths:**
+
+- **Web UI**: Template picker in the sponsor detail page email modal (PortableText bodies)
+- **CLI**: `cnctl admin sponsors email <id>` — templates served with Markdown bodies via `sponsor.emailTemplates.listForSponsor`; variable substitution happens client-side before sending via `sponsor.crm.sendEmailBySfc`
+
+See [EMAIL_SYSTEM.md](EMAIL_SYSTEM.md) for the full email architecture.
+
 ## Architecture
 
 ### Directory Layout
@@ -167,6 +174,8 @@ src/
 │   │   ├── templates.ts            # Template variable processing utilities
 │   │   ├── utils.ts                # Sorting, formatting, grouping utilities
 │   │   └── validation.ts           # Input validation for sponsors and tiers
+│   ├── email/
+│   │   └── markdown.ts             # PortableText ↔ Markdown conversion for CLI email flow
 │   ├── contract-signing/              # Provider-agnostic contract signing abstraction
 │   │   ├── types.ts                # ContractSigningProvider interface, result types
 │   │   ├── adobe-sign.ts           # Adobe Sign implementation of the provider

@@ -10,18 +10,25 @@ The Cloud Native Days Norway website features a comprehensive email system built
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Email System Architecture                  │
 ├─────────────────────────────────────────────────────────────────┤
+│  CLI (cnctl)                                                     │
+│  └── cnctl admin sponsors email (Markdown → API → Resend)       │
+├─────────────────────────────────────────────────────────────────┤
 │  Frontend Components                                             │
 │  ├── EmailModal (shared Gmail-style composition modal)           │
 │  ├── SpeakerEmailModal (speaker-specific email wrapper)          │
 │  └── AdminActionBar (email integration)                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  API Routes                                                       │
+│  API Routes / tRPC                                               │
+│  ├── sponsor.crm.sendEmailBySfc (CLI: Markdown body)            │
+│  ├── sponsor.crm.sendEmail (Web UI: PortableText body)          │
+│  ├── sponsor.emailTemplates.listForSponsor (CLI: template list) │
 │  ├── /admin/api/speakers/email/multi (multi-speaker emails)      │
 │  ├── /admin/api/speakers/email/broadcast (audience emails)       │
 │  └── /admin/api/speakers/email/audience/sync (audience sync)     │
 ├─────────────────────────────────────────────────────────────────┤
 │  Core Libraries                                                   │
 │  ├── /lib/email/config.ts (shared configuration & utilities)     │
+│  ├── /lib/email/markdown.ts (PortableText ↔ Markdown conversion)│
 │  ├── /lib/email/speaker.ts (speaker-specific emails)             │
 │  ├── /lib/email/audience.ts (audience management)                │
 │  └── /lib/proposal/notification.ts (proposal notifications)      │
@@ -263,6 +270,90 @@ RESEND_API_KEY=test_key
 
 ## API Endpoints
 
+### Sponsor Email via CLI
+
+**Endpoint**: `POST /api/trpc/sponsor.crm.sendEmailBySfc` (tRPC mutation)
+
+**Purpose**: Send an email to a sponsor's contact persons, with the body provided as Markdown. Used by the CLI (`cnctl admin sponsors email`).
+
+**Authentication**: Requires organizer (admin) access.
+
+**Input**:
+
+```json
+{
+  "sponsorForConferenceId": "string",
+  "subject": "string",
+  "body": "string (Markdown)"
+}
+```
+
+The server converts Markdown → PortableText → HTML, renders the conference-branded email template, and sends via Resend. It also logs the email as a CRM activity and auto-transitions sponsors from `prospect` → `contacted`.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "emailId": "resend_email_id",
+  "recipientCount": 1
+}
+```
+
+### Sponsor Email Templates for CLI
+
+**Endpoint**: `GET /api/trpc/sponsor.emailTemplates.listForSponsor` (tRPC query)
+
+**Purpose**: Return email templates pre-sorted by relevance for a specific sponsor, with template bodies converted to Markdown and a pre-built variable map. Used by the CLI to populate the template picker.
+
+**Input**:
+
+```json
+{
+  "sponsorForConferenceId": "string"
+}
+```
+
+**Response**:
+
+```json
+{
+  "templates": [
+    {
+      "_id": "string",
+      "title": "Cold Outreach (English)",
+      "slug": { "current": "cold-outreach-en" },
+      "category": "cold-outreach",
+      "language": "en",
+      "subject": "Partnership with {{{CONFERENCE_TITLE}}}",
+      "bodyMarkdown": "Dear {{{CONTACT_NAMES}}}, ...",
+      "isDefault": true
+    }
+  ],
+  "variables": {
+    "SPONSOR_NAME": "Acme Corp",
+    "CONTACT_NAMES": "Jane Doe",
+    "CONFERENCE_TITLE": "Cloud Native Days 2026",
+    "SENDER_NAME": "Hans"
+  },
+  "recipients": [{ "name": "Jane Doe", "email": "jane@acme.com" }],
+  "sponsorName": "Acme Corp",
+  "suggestedCategory": "cold-outreach",
+  "suggestedLanguage": "en"
+}
+```
+
+Templates are scored and sorted by: category match (+4), language match (+2), default flag (+1). The variable map is built from the sponsor, conference, and current user context using `buildTemplateVariables()`.
+
+### Markdown ↔ PortableText Conversion
+
+The email system includes a bidirectional conversion layer (`/lib/email/markdown.ts`) between PortableText (used internally and by the web UI) and Markdown (used by the CLI):
+
+- `portableTextBodyToMarkdown()` — converts PT blocks to Markdown for CLI display
+- `markdownToPortableTextBody()` — converts Markdown back to PT for the email rendering pipeline
+
+This supports the email-safe subset: paragraphs, headings, bold, italic, links, ordered/unordered lists, and blockquotes.
+
 ### Multi-Speaker Email
 
 **Endpoint**: `POST /admin/api/speakers/email/multi`
@@ -353,6 +444,9 @@ Basic validation and error handling tests:
 ```bash
 # Run email system tests
 pnpm test __tests__/lib/email/speaker.test.ts
+
+# Run markdown conversion tests (26 tests)
+pnpm test __tests__/lib/email/markdown.test.ts
 
 # Run all tests
 pnpm test
@@ -493,7 +587,8 @@ The system includes automatic recovery mechanisms:
 
 ### Planned Features
 
-- [ ] **Email Templates Library**: Pre-defined templates for common communication scenarios
+- [x] **Email Templates Library**: Pre-defined templates for common communication scenarios (sponsor templates via web UI + CLI)
+- [x] **CLI Email Integration**: Send sponsor emails from the terminal with template picker and variable substitution
 - [ ] **Scheduled Email Delivery**: Queue emails for future sending with timezone support
 - [ ] **Email Analytics**: Track delivery rates, open rates, and engagement metrics
 - [ ] **Advanced Composition**: Rich text editing, attachments, and formatting options
