@@ -245,7 +245,7 @@ export function useEmailModalStorage({
     if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
     if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`
     return `${days} day${days > 1 ? 's' : ''} ago`
-  }, [storedData?.lastModified])
+  }, [storedData])
 
   return useMemo(
     () => ({

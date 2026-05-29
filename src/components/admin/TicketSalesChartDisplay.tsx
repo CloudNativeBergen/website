@@ -230,7 +230,7 @@ export function TicketSalesChartDisplay({
     tooltip: {
       shared: true,
       intersect: false,
-      theme: 'light',
+      theme: 'light' as const,
       custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
         const point = analysis.progression[dataPointIndex]
         return createTooltipContent(point, point.actualTickets, point.revenue)

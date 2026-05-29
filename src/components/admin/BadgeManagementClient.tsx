@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -239,7 +239,7 @@ export function BadgeManagementClient({
     }
   }
 
-  const badges = useMemo(() => existingBadges || [], [existingBadges])
+  const badges = existingBadges || []
   const localhostWarning = createLocalhostWarning(domain, 'badge recipients')
 
   const hasExistingBadge = (speakerId: string): boolean => {
@@ -266,7 +266,7 @@ export function BadgeManagementClient({
     )
   }
 
-  const eligibleSpeakers = useMemo(() => {
+  const eligibleSpeakers = (() => {
     let filtered = initialSpeakers.filter((speaker: SpeakerWithProposals) => {
       if (badgeType === 'organizer') {
         return speaker.isOrganizer === true
@@ -304,13 +304,7 @@ export function BadgeManagementClient({
     }
 
     return filtered
-  }, [
-    initialSpeakers,
-    badgeType,
-    debouncedSearchQuery,
-    filterAlreadyIssued,
-    badges,
-  ])
+  })()
 
   const handleViewBadge = (badge: BadgeRecord) => {
     setSelectedBadge(badge)

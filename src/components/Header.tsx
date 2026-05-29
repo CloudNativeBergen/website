@@ -10,21 +10,13 @@ import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
-import {
-  isRegistrationAvailable,
-  isConferenceOver,
-} from '@/lib/conference/state'
+import { isRegistrationAvailable, isConferenceOver } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
-import { useState, useEffect } from 'react'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
-  const [isPast, setIsPast] = useState(false)
-
-  useEffect(() => {
-    setIsPast(isConferenceOver(c))
-  }, [c])
+  const isPast = isConferenceOver(c)
 
   const currentDomain = c.domains?.[0] ?? 'cloudnativedays.no'
   const currentYear = parseInt(currentDomain.split('.')[0])
