@@ -287,7 +287,9 @@ export function SponsorActivityTimeline({
 
       {sponsorForConferenceId && (
         <div className={clsx(showHeaderFooter && 'mt-4')}>
-          <SponsorActivityInput sponsorForConferenceId={sponsorForConferenceId} />
+          <SponsorActivityInput
+            sponsorForConferenceId={sponsorForConferenceId}
+          />
         </div>
       )}
 

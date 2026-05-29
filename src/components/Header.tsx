@@ -10,7 +10,10 @@ import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
-import { isRegistrationAvailable, isConferenceOver } from '@/lib/conference/state'
+import {
+  isRegistrationAvailable,
+  isConferenceOver,
+} from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 
