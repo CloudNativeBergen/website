@@ -194,3 +194,9 @@ export const BulkDeleteSponsorCRMSchema = z.object({
 export const ImportAllHistoricSponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })
+
+export const CreateSponsorActivitySchema = z.object({
+  sponsorForConferenceId: z.string().min(1, 'Sponsor ID is required'),
+  activityType: z.enum(['note', 'call', 'meeting', 'email']),
+  description: z.string().min(1, 'Description is required'),
+})

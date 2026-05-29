@@ -13,6 +13,7 @@ import {
   getActivityIcon,
   getActivityColor,
 } from '@/components/admin/sponsor-crm/utils'
+import { SponsorActivityInput } from './SponsorActivityInput'
 
 interface SponsorActivityTimelineProps {
   sponsorForConferenceId?: string
@@ -282,6 +283,12 @@ export function SponsorActivityTimeline({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           Recent Activity
         </h3>
+      )}
+
+      {sponsorForConferenceId && (
+        <div className={clsx(showHeaderFooter && 'mt-4')}>
+          <SponsorActivityInput sponsorForConferenceId={sponsorForConferenceId} />
+        </div>
       )}
 
       {activities.length === 0 ? (

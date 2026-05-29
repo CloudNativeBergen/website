@@ -65,6 +65,7 @@ import {
   logSponsorCreated,
   logAssignmentChange,
   logSignatureStatusChange,
+  createSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -78,6 +79,7 @@ import {
   ImportAllHistoricSponsorsSchema,
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
+  CreateSponsorActivitySchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
@@ -1160,6 +1162,37 @@ export const sponsorRouter = router({
           }
 
           return activities || []
+        }),
+
+      create: adminProcedure
+        .input(CreateSponsorActivitySchema)
+        .mutation(async ({ input, ctx }) => {
+          const { sponsorForConferenceId, activityType, description } = input
+          const createdBy = ctx.speaker._id
+
+          if (!createdBy) {
+            throw new TRPCError({
+              code: 'UNAUTHORIZED',
+              message: 'You must be logged in as an organizer to add activities',
+            })
+          }
+
+          const { activityId, error } = await createSponsorActivity(
+            sponsorForConferenceId,
+            activityType,
+            description,
+            createdBy,
+          )
+
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to create sponsor activity',
+              cause: error,
+            })
+          }
+
+          return { activityId }
         }),
     }),
 
