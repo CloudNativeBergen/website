@@ -1173,7 +1173,8 @@ export const sponsorRouter = router({
           if (!createdBy) {
             throw new TRPCError({
               code: 'UNAUTHORIZED',
-              message: 'You must be logged in as an organizer to add activities',
+              message:
+                'You must be logged in as an organizer to add activities',
             })
           }
 

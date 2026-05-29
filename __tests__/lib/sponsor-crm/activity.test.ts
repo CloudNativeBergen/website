@@ -21,7 +21,10 @@ vi.mock('@/lib/time', () => ({
   getCurrentDateTime: () => '2026-05-29T12:00:00Z',
 }))
 
-import { createSponsorActivity, logBulkEmailSent } from '@/lib/sponsor-crm/activity'
+import {
+  createSponsorActivity,
+  logBulkEmailSent,
+} from '@/lib/sponsor-crm/activity'
 
 describe('sponsor-crm activity', () => {
   beforeEach(() => {
@@ -34,7 +37,7 @@ describe('sponsor-crm activity', () => {
         'sfc-123',
         'note',
         'Test note',
-        'speaker-456'
+        'speaker-456',
       )
 
       expect(error).toBeUndefined()
@@ -62,23 +65,18 @@ describe('sponsor-crm activity', () => {
         'stage_change',
         'Moved to next stage',
         'speaker-456',
-        { oldValue: 'prospect', newValue: 'contacted' }
+        { oldValue: 'prospect', newValue: 'contacted' },
       )
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: { oldValue: 'prospect', newValue: 'contacted' },
-        })
+        }),
       )
     })
 
     it('should omit createdBy when it is "system"', async () => {
-      await createSponsorActivity(
-        'sfc-123',
-        'note',
-        'System action',
-        'system'
-      )
+      await createSponsorActivity('sfc-123', 'note', 'System action', 'system')
 
       const call = mockCreate.mock.calls[0][0]
       expect(call.createdBy).toBeUndefined()
@@ -92,7 +90,7 @@ describe('sponsor-crm activity', () => {
         'sfc-1',
         'note',
         'Broken',
-        'speaker-1'
+        'speaker-1',
       )
 
       expect(activityId).toBeUndefined()
@@ -105,24 +103,24 @@ describe('sponsor-crm activity', () => {
       const { success } = await logBulkEmailSent(
         ['sfc-1', 'sfc-2'],
         'Test Subject',
-        'speaker-1'
+        'speaker-1',
       )
 
       expect(success).toBe(true)
       expect(mockTransaction).toHaveBeenCalled()
       expect(mockCreate).toHaveBeenCalledTimes(2)
       expect(mockCommit).toHaveBeenCalled()
-      
+
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           sponsorForConference: { _type: 'reference', _ref: 'sfc-1' },
           description: 'Broadcast email sent: Test Subject',
-        })
+        }),
       )
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           sponsorForConference: { _type: 'reference', _ref: 'sfc-2' },
-        })
+        }),
       )
     })
   })

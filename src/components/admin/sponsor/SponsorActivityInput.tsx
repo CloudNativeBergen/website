@@ -26,7 +26,8 @@ export function SponsorActivityInput({
   sponsorForConferenceId,
 }: SponsorActivityInputProps) {
   const [description, setDescription] = useState('')
-  const [activityType, setActivityType] = useState<(typeof ACTIVITY_TYPES)[number]['id']>('note')
+  const [activityType, setActivityType] =
+    useState<(typeof ACTIVITY_TYPES)[number]['id']>('note')
   const [isFocused, setIsFocused] = useState(false)
 
   const utils = api.useUtils()

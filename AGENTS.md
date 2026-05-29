@@ -243,6 +243,7 @@ This applies to any component using `formatDistanceToNow`, `getDaysPending`, or 
 - Keep chat interactions short and concise.
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
+- **Never push changes to a remote repository without being asked explicitly by the user.**
 - Always run `pnpm run check` before committing changes.
 - A pre-commit hook runs `pnpm run check && pnpm run test` automatically. After cloning, run `pnpm exec simple-git-hooks` to activate it.
 
