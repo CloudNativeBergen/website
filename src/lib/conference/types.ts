@@ -68,6 +68,12 @@ export interface TicketFaq {
   answer: string
 }
 
+export interface AgentConfiguration {
+  conferenceContext?: string
+  proposalReviewConfig?: string
+  sponsorCrmConfig?: string
+}
+
 export interface Conference {
   _id: string
   title: string
@@ -128,6 +134,7 @@ export interface Conference {
   schedules?: ConferenceSchedule[]
   vanityMetrics?: ConferenceVanityMetric[]
   features?: string[]
+  agentConfig?: AgentConfiguration
   featuredGalleryImages?: GalleryImageWithSpeakers[]
   galleryImages?: GalleryImageWithSpeakers[]
 }

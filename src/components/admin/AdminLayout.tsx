@@ -12,6 +12,7 @@ import {
   TicketIcon,
   PresentationChartBarIcon,
   AcademicCapIcon,
+  CpuChipIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -55,7 +56,10 @@ const navigation: NavigationSection[] = [
   },
   {
     label: 'System',
-    items: [{ name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon }],
+    items: [
+      { name: 'Agents', href: '/admin/agents', icon: CpuChipIcon },
+      { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
+    ],
   },
 ]
 

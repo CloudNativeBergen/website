@@ -64,6 +64,11 @@ export default defineType({
       title: 'Technical Configuration',
       options: { collapsible: true, collapsed: true },
     },
+    {
+      name: 'agents',
+      title: 'Agent Configuration (AI)',
+      options: { collapsible: true, collapsed: true },
+    },
   ],
   fields: [
     // === Basic Information ===
@@ -849,6 +854,42 @@ export default defineType({
       options: {
         list: [{ title: 'Test Feature', value: 'test_feature' }],
       },
+    }),
+
+    // === Agent Configuration ===
+    defineField({
+      name: 'agentConfig',
+      title: 'Agent Configuration',
+      type: 'object',
+      fieldset: 'agents',
+      description:
+        'Configuration for AI agents (Proposal Reviewers, CRM Agents, etc.)',
+      fields: [
+        defineField({
+          name: 'conferenceContext',
+          title: 'Conference Context',
+          type: 'text',
+          rows: 5,
+          description:
+            'What is the conference about? (Goals, purpose, scope, audience). This helps agents understand the general mission.',
+        }),
+        defineField({
+          name: 'proposalReviewConfig',
+          title: 'Proposal Review Configuration',
+          type: 'text',
+          rows: 5,
+          description:
+            'Criteria and instructions for proposal review agents. How should they judge submissions? What specific topics or qualities are preferred?',
+        }),
+        defineField({
+          name: 'sponsorCrmConfig',
+          title: 'Sponsor CRM Configuration',
+          type: 'text',
+          rows: 5,
+          description:
+            'Behavior and interaction rules for CRM sponsor agents. How should they behave and interact when communicating with sponsors?',
+        }),
+      ],
     }),
   ],
 
