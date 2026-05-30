@@ -83,7 +83,7 @@ export function SponsorPortalSection({
   const isLocalhost = isLocalhostClient()
 
   return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/5">
       <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
         Sponsor registration
       </h4>
@@ -94,14 +94,14 @@ export function SponsorPortalSection({
 
       {portalComplete ? (
         <div className="mt-3 flex items-center gap-1.5 text-sm font-medium text-green-700 dark:text-green-400">
-          <CheckIcon className="h-4 w-4" />
+          <CheckIcon className="size-4" />
           Sponsor completed registration
         </div>
       ) : generatedUrl ? (
         <div className="mt-3 space-y-2">
           {emailSent && (
             <div className="flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-              <CheckCircleIcon className="h-3.5 w-3.5" />
+              <CheckCircleIcon className="size-3.5" />
               Registration email sent to sponsor contacts
             </div>
           )}
@@ -110,46 +110,50 @@ export function SponsorPortalSection({
               type="text"
               value={generatedUrl}
               readOnly
-              className="flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300"
+              className="block flex-1 rounded-md bg-white px-2 py-1.5 text-xs text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:placeholder:text-gray-500"
             />
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
               title="Copy to clipboard"
             >
               {copied ? (
-                <CheckIcon className="h-3.5 w-3.5 text-green-500" />
+                <CheckIcon className="size-3.5 text-green-500" />
               ) : (
-                <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+                <ClipboardDocumentIcon className="size-3.5" />
               )}
               {copied ? 'Copied' : 'Copy'}
             </button>
-            {!emailSent && (
-              <button
-                type="button"
-                onClick={handleSendEmail}
-                disabled={sendInviteMutation.isPending || isLocalhost}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                title={
-                  isLocalhost
-                    ? 'Emails cannot be sent from localhost'
-                    : 'Send registration link via email to sponsor contacts'
-                }
-              >
-                <EnvelopeIcon className="h-3.5 w-3.5" />
-                {sendInviteMutation.isPending ? 'Sending\u2026' : 'Send'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleSendEmail}
+              disabled={sendInviteMutation.isPending || isLocalhost}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              title={
+                isLocalhost
+                  ? 'Emails cannot be sent from localhost'
+                  : emailSent
+                    ? 'Resend registration link via email'
+                    : 'Send registration link via email'
+              }
+            >
+              <EnvelopeIcon className="size-3.5" />
+              {sendInviteMutation.isPending
+                ? 'Sending\u2026'
+                : emailSent
+                  ? 'Resend'
+                  : 'Send'}
+            </button>
           </div>
           {onCheckStatus && (
             <button
               type="button"
               onClick={onCheckStatus}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-700"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-gray-400 dark:outline-white/10 dark:hover:bg-white/10"
               title="Check if sponsor completed registration"
             >
-              <ArrowPathIcon className="h-3.5 w-3.5" />
+              <ArrowPathIcon className="size-3.5" />
               Check status
             </button>
           )}
@@ -167,9 +171,9 @@ export function SponsorPortalSection({
               type="button"
               onClick={handleSendEmail}
               disabled={isBusy || isLocalhost}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
-              <EnvelopeIcon className="h-4 w-4" />
+              <EnvelopeIcon className="size-4" />
               {sendInviteMutation.isPending
                 ? 'Sending\u2026'
                 : 'Send registration email'}
@@ -178,9 +182,9 @@ export function SponsorPortalSection({
               type="button"
               onClick={handleGenerate}
               disabled={isBusy}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:hover:bg-white/10"
             >
-              <LinkIcon className="h-4 w-4" />
+              <LinkIcon className="size-4" />
               {generateMutation.isPending
                 ? 'Generating\u2026'
                 : 'Copy link only'}
@@ -188,7 +192,7 @@ export function SponsorPortalSection({
           </div>
           {isLocalhost && (
             <div className="flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" />
+              <ExclamationTriangleIcon className="size-3.5 shrink-0" />
               Emails cannot be sent from localhost. Use &quot;Copy link
               only&quot; for local testing.
             </div>
