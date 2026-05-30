@@ -1,6 +1,10 @@
 import { clientWrite } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
+import {
+  createReferenceWithKey,
+  prepareReferenceArray,
+} from '@/lib/sanity/helpers'
 
 export interface FeaturedSpeaker extends Speaker {
   talks?: ProposalExisting[]
@@ -96,7 +100,7 @@ export async function addFeaturedSpeaker(
     await clientWrite
       .patch(conferenceId)
       .setIfMissing({ featuredSpeakers: [] })
-      .append('featuredSpeakers', [{ _type: 'reference', _ref: speakerId }])
+      .append('featuredSpeakers', [createReferenceWithKey(speakerId, 'fs')])
       .commit()
 
     return { success: true, error: null }
@@ -113,13 +117,15 @@ export async function removeFeaturedSpeaker(
     const { speakers: currentSpeakers } =
       await getFeaturedSpeakers(conferenceId)
 
-    const updatedSpeakers = currentSpeakers
-      .filter((speaker) => speaker._id !== speakerId)
-      .map((speaker) => ({ _type: 'reference', _ref: speaker._id }))
+    const updatedSpeakers = currentSpeakers.filter(
+      (speaker) => speaker._id !== speakerId,
+    )
 
     await clientWrite
       .patch(conferenceId)
-      .set({ featuredSpeakers: updatedSpeakers })
+      .set({
+        featuredSpeakers: prepareReferenceArray(updatedSpeakers, 'fs') || [],
+      })
       .commit()
 
     return { success: true, error: null }
@@ -136,7 +142,7 @@ export async function addFeaturedTalk(
     await clientWrite
       .patch(conferenceId)
       .setIfMissing({ featuredTalks: [] })
-      .append('featuredTalks', [{ _type: 'reference', _ref: talkId }])
+      .append('featuredTalks', [createReferenceWithKey(talkId, 'ft')])
       .commit()
 
     return { success: true, error: null }
@@ -152,13 +158,11 @@ export async function removeFeaturedTalk(
   try {
     const { talks: currentTalks } = await getFeaturedTalks(conferenceId)
 
-    const updatedTalks = currentTalks
-      .filter((talk) => talk._id !== talkId)
-      .map((talk) => ({ _type: 'reference', _ref: talk._id }))
+    const updatedTalks = currentTalks.filter((talk) => talk._id !== talkId)
 
     await clientWrite
       .patch(conferenceId)
-      .set({ featuredTalks: updatedTalks })
+      .set({ featuredTalks: prepareReferenceArray(updatedTalks, 'ft') || [] })
       .commit()
 
     return { success: true, error: null }
