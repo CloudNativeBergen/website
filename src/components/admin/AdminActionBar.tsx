@@ -14,6 +14,7 @@ import {
   EnvelopeIcon,
   PencilIcon,
   EyeIcon,
+  ArrowUturnLeftIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
@@ -98,11 +99,14 @@ export function AdminActionBar({
   const canApprove =
     proposal.status === 'submitted' || proposal.status === 'waitlisted'
   const canWaitlist = proposal.status === 'submitted'
+  const canConfirm = proposal.status === 'accepted'
   const canRemind = proposal.status === 'accepted'
   const canReject =
     proposal.status === 'submitted' ||
     proposal.status === 'accepted' ||
     proposal.status === 'waitlisted'
+  const canWithdraw =
+    proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -296,6 +300,16 @@ export function AdminActionBar({
               Approve
             </AdminButton>
           )}
+          {canConfirm && (
+            <AdminButton
+              color="green"
+              size="xs"
+              onClick={() => handleAction(Action.confirm)}
+            >
+              <CheckIcon className="h-3 w-3" />
+              Confirm
+            </AdminButton>
+          )}
           {canWaitlist && (
             <AdminButton
               color="orange"
@@ -324,6 +338,16 @@ export function AdminActionBar({
             >
               <XMarkIcon className="h-3 w-3" />
               Reject
+            </AdminButton>
+          )}
+          {canWithdraw && (
+            <AdminButton
+              color="red"
+              size="xs"
+              onClick={() => handleAction(Action.withdraw)}
+            >
+              <ArrowUturnLeftIcon className="h-3 w-3" />
+              Withdraw
             </AdminButton>
           )}
         </div>
