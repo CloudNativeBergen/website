@@ -69,7 +69,7 @@ export function AgentConfigPageClient() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <AdminPageHeader
-        icon={<CpuChipIcon className="h-full w-full" />}
+        icon={<CpuChipIcon className="size-full" />}
         title="Agent Configuration"
         description="Configure AI agents for proposal review, sponsor management, and general conference mission."
       />
@@ -77,15 +77,15 @@ export function AgentConfigPageClient() {
       <div className="mt-8">
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <ArrowPathIcon className="h-8 w-8 animate-spin text-gray-400" />
+            <ArrowPathIcon className="size-8 animate-spin text-gray-400" />
           </div>
         ) : (
           <form onSubmit={handleSave} className="space-y-8">
             {/* Conference Context */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/5">
               <div className="mb-4 flex items-center gap-3">
                 <div className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                  <SparklesIcon className="h-6 w-6" />
+                  <SparklesIcon className="size-6" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -107,15 +107,15 @@ export function AgentConfigPageClient() {
                   })
                 }
                 placeholder="What is this conference about? Who is the target audience? What are the key themes?"
-                className="w-full rounded-lg border-gray-300 bg-white text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               />
             </div>
 
             {/* Proposal Review Config */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/5">
               <div className="mb-4 flex items-center gap-3">
                 <div className="rounded-lg bg-purple-100 p-2 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
-                  <DocumentMagnifyingGlassIcon className="h-6 w-6" />
+                  <DocumentMagnifyingGlassIcon className="size-6" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -136,15 +136,15 @@ export function AgentConfigPageClient() {
                   })
                 }
                 placeholder="What criteria should the reviewer use? Technical depth, relevancy, diversity, etc."
-                className="w-full rounded-lg border-gray-300 bg-white text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               />
             </div>
 
             {/* Sponsor CRM Config */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/5">
               <div className="mb-4 flex items-center gap-3">
                 <div className="rounded-lg bg-orange-100 p-2 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
-                  <UserGroupIcon className="h-6 w-6" />
+                  <UserGroupIcon className="size-6" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -163,7 +163,7 @@ export function AgentConfigPageClient() {
                   setFormData({ ...formData, sponsorCrmConfig: e.target.value })
                 }
                 placeholder="Tone of voice, follow-up rules, and specific sponsor relations strategy."
-                className="w-full rounded-lg border-gray-300 bg-white text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               />
             </div>
 
@@ -172,7 +172,7 @@ export function AgentConfigPageClient() {
                 type="submit"
                 disabled={updateMutation.isPending || !isDirty}
                 className={clsx(
-                  'flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none',
+                  'flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600',
                   isDirty
                     ? 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600'
                     : 'cursor-not-allowed bg-gray-400 dark:bg-gray-700',
@@ -180,12 +180,12 @@ export function AgentConfigPageClient() {
               >
                 {updateMutation.isPending ? (
                   <>
-                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                    <ArrowPathIcon className="size-4 animate-spin" />
                     Saving...
                   </>
                 ) : (
                   <>
-                    <CheckIcon className="h-4 w-4" />
+                    <CheckIcon className="size-4" />
                     Save Configuration
                   </>
                 )}
