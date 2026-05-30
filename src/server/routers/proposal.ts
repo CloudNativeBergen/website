@@ -21,6 +21,7 @@ import {
   ProposalActionSchema,
   AudienceFeedbackSchema,
   SubmitReviewSchema,
+  ProposalFilterSchema,
 } from '@/server/schemas/proposal'
 import { AttachmentSchema } from '@/server/schemas/attachment'
 import {
@@ -44,6 +45,7 @@ import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { Action, Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
 import { countActiveProposals } from '@/lib/proposal/utils'
+import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
@@ -563,44 +565,50 @@ export const proposalRouter = router({
   // Admin operations
   admin: router({
     // List all proposals (admin)
-    list: adminProcedure.query(async () => {
-      try {
-        const { conference, error: confError } =
-          await getConferenceForCurrentDomain()
+    list: adminProcedure
+      .input(ProposalFilterSchema.optional())
+      .query(async ({ input, ctx }) => {
+        try {
+          const { conference, error: confError } =
+            await getConferenceForCurrentDomain()
 
-        if (confError || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: confError,
+          if (confError || !conference) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to get current conference',
+              cause: confError,
+            })
+          }
+
+          const { proposals, proposalsError } = await getProposals({
+            conferenceId: conference._id,
+            returnAll: true,
+            includeReviews: true,
           })
-        }
 
-        const { proposals, proposalsError } = await getProposals({
-          conferenceId: conference._id,
-          returnAll: true,
-          includeReviews: true,
-        })
+          if (proposalsError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to fetch proposals',
+              cause: proposalsError,
+            })
+          }
 
-        if (proposalsError) {
+          if (input) {
+            return filterProposals(proposals || [], input, ctx.speaker._id)
+          }
+
+          return proposals || []
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch proposals',
-            cause: proposalsError,
+            cause: error,
           })
         }
-
-        return proposals || []
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch proposals',
-          cause: error,
-        })
-      }
-    }),
+      }),
 
     // Get proposal by ID (admin)
     getById: adminProcedure

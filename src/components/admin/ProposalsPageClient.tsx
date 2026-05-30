@@ -58,7 +58,7 @@ export function ProposalsPageClient({
       <div className="flex h-full">
         <div className={`flex-1 ${selectedProposal ? 'lg:mr-96' : ''}`}>
           <ProposalsList
-            proposals={proposals}
+            initialProposals={proposals}
             onProposalSelect={setSelectedProposalId}
             selectedProposalId={selectedProposalId}
             enablePreview={true}

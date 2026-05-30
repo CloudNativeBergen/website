@@ -62,7 +62,7 @@ export { ErrorDisplay } from './ErrorDisplay'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'
 
-export { useFilterStateWithURL, useProposalFiltering } from './hooks'
+export { useFilterStateWithURL } from './hooks'
 
 export type { FilterState } from './ProposalsFilter'
 export type { AdminPageHeaderProps, StatCardProps } from './AdminPageHeader'

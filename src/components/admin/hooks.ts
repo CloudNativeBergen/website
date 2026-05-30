@@ -1,201 +1,10 @@
 'use client'
 
-import { useMemo, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import {
-  ProposalExisting,
-  Status,
-  Format,
-  Level,
-  Language,
-  Audience,
-} from '@/lib/proposal/types'
-import { Speaker, Flags } from '@/lib/speaker/types'
-import { Review } from '@/lib/review/types'
+import { Status, Format, Level, Language, Audience } from '@/lib/proposal/types'
+import { Flags } from '@/lib/speaker/types'
 import { FilterState, ReviewStatus } from './ProposalsFilter'
-import { calculateAverageRating } from '@/lib/proposal'
-
-export function useProposalFiltering(
-  proposals: ProposalExisting[],
-  filters: FilterState,
-  currentUserId?: string,
-) {
-  return useMemo(() => {
-    const speakersWithAcceptedTalks = new Set<string>()
-
-    if (filters.hideMultipleTalks) {
-      proposals.forEach((proposal) => {
-        if (
-          proposal.status === Status.accepted ||
-          proposal.status === Status.confirmed
-        ) {
-          if (proposal.speakers && Array.isArray(proposal.speakers)) {
-            proposal.speakers.forEach((speaker) => {
-              if (typeof speaker === 'object' && 'name' in speaker) {
-                speakersWithAcceptedTalks.add(speaker.name)
-              } else if (typeof speaker === 'string') {
-                speakersWithAcceptedTalks.add(speaker)
-              }
-            })
-          }
-        }
-      })
-    }
-
-    const filtered = proposals.filter((proposal) => {
-      if (filters.hideMultipleTalks && proposal.status === Status.submitted) {
-        if (proposal.speakers && Array.isArray(proposal.speakers)) {
-          const hasSpeakerWithAcceptedTalk = proposal.speakers.some(
-            (speaker) => {
-              const speakerName =
-                typeof speaker === 'object' && 'name' in speaker
-                  ? speaker.name
-                  : speaker
-              return (
-                typeof speakerName === 'string' &&
-                speakersWithAcceptedTalks.has(speakerName)
-              )
-            },
-          )
-          if (hasSpeakerWithAcceptedTalk) {
-            return false
-          }
-        }
-      }
-
-      if (
-        filters.status.length > 0 &&
-        !filters.status.includes(proposal.status)
-      ) {
-        return false
-      }
-
-      if (
-        filters.format.length > 0 &&
-        !filters.format.includes(proposal.format)
-      ) {
-        return false
-      }
-
-      if (filters.level.length > 0 && !filters.level.includes(proposal.level)) {
-        return false
-      }
-
-      if (
-        filters.language.length > 0 &&
-        !filters.language.includes(proposal.language)
-      ) {
-        return false
-      }
-
-      if (filters.audience.length > 0) {
-        const hasMatchingAudience = proposal.audiences?.some((aud) =>
-          filters.audience.includes(aud),
-        )
-        if (!hasMatchingAudience) {
-          return false
-        }
-      }
-
-      if (filters.speakerFlags.length > 0) {
-        const hasMatchingSpeakerFlag = proposal.speakers?.some((speaker) => {
-          if (typeof speaker === 'object' && 'flags' in speaker) {
-            const speakerObj = speaker as Speaker
-            return speakerObj.flags?.some((flag) =>
-              filters.speakerFlags.includes(flag),
-            )
-          }
-          return false
-        })
-        if (!hasMatchingSpeakerFlag) {
-          return false
-        }
-      }
-
-      if (currentUserId && filters.reviewStatus !== ReviewStatus.all) {
-        const hasUserReview = proposal.reviews?.some((review) => {
-          const reviewObj =
-            typeof review === 'object' && 'reviewer' in review
-              ? (review as Review)
-              : null
-          if (!reviewObj) return false
-
-          const reviewerId =
-            typeof reviewObj.reviewer === 'object' &&
-            '_id' in reviewObj.reviewer
-              ? reviewObj.reviewer._id
-              : typeof reviewObj.reviewer === 'string'
-                ? reviewObj.reviewer
-                : null
-
-          return reviewerId === currentUserId
-        })
-
-        if (filters.reviewStatus === ReviewStatus.reviewed && !hasUserReview) {
-          return false
-        }
-        if (filters.reviewStatus === ReviewStatus.unreviewed && hasUserReview) {
-          return false
-        }
-      }
-
-      return true
-    })
-
-    filtered.sort((a, b) => {
-      let aValue: string | number
-      let bValue: string | number
-
-      switch (filters.sortBy) {
-        case 'title':
-          aValue = a.title.toLowerCase()
-          bValue = b.title.toLowerCase()
-          break
-        case 'status':
-          aValue = a.status
-          bValue = b.status
-          break
-        case 'speaker':
-          aValue = (
-            a.speakers &&
-            a.speakers.length > 0 &&
-            typeof a.speakers[0] === 'object' &&
-            a.speakers[0] &&
-            'name' in a.speakers[0]
-              ? (a.speakers[0] as Speaker).name
-              : 'Unknown'
-          ).toLowerCase()
-          bValue = (
-            b.speakers &&
-            b.speakers.length > 0 &&
-            typeof b.speakers[0] === 'object' &&
-            b.speakers[0] &&
-            'name' in b.speakers[0]
-              ? (b.speakers[0] as Speaker).name
-              : 'Unknown'
-          ).toLowerCase()
-          break
-        case 'rating':
-          aValue = calculateAverageRating(a)
-          bValue = calculateAverageRating(b)
-          break
-        case 'created':
-        default:
-          aValue = new Date(a._createdAt).getTime()
-          bValue = new Date(b._createdAt).getTime()
-          break
-      }
-
-      if (filters.sortOrder === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-      }
-    })
-
-    return filtered
-  }, [proposals, filters, currentUserId])
-}
 
 export function useFilterStateWithURL(initialFilters: FilterState) {
   const router = useRouter()
@@ -289,15 +98,20 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     updateFilters(newFilters)
   }, [filters, updateFilters])
 
+  const setSearchQuery = useCallback(
+    (searchQuery: string) => {
+      const newFilters = { ...filters, searchQuery }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
+
   const clearAllFilters = useCallback(() => {
     updateFilters(initialFilters)
   }, [initialFilters, updateFilters])
 
-  const defaultStatusFilters = [
-    Status.submitted,
-    Status.accepted,
-    Status.confirmed,
-  ]
+  // Count active filters (excluding default values)
+  const defaultStatusFilters = initialFilters.status
   const additionalStatusFilters = filters.status.filter(
     (status) => !defaultStatusFilters.includes(status),
   )
@@ -312,6 +126,8 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
 
   const multipleTalksFilterCount = filters.hideMultipleTalks ? 1 : 0
 
+  const searchQueryFilterCount = filters.searchQuery ? 1 : 0
+
   const activeFilterCount =
     statusFilterCount +
     filters.format.length +
@@ -320,12 +136,14 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     filters.audience.length +
     filters.speakerFlags.length +
     reviewStatusFilterCount +
-    multipleTalksFilterCount
+    multipleTalksFilterCount +
+    searchQueryFilterCount
 
   return {
     filters,
     toggleFilter,
     setReviewStatus,
+    setSearchQuery,
     setHideMultipleTalks,
     setSortBy,
     toggleSortOrder,

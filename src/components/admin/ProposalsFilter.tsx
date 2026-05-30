@@ -30,6 +30,7 @@ export interface FilterState {
   speakerFlags: Flags[]
   reviewStatus: ReviewStatus
   hideMultipleTalks: boolean
+  searchQuery: string
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
   sortOrder: 'asc' | 'desc'
 }
@@ -41,6 +42,7 @@ interface ProposalsFilterProps {
     value: Status | Format | Level | Language | Audience | Flags,
   ) => void
   onReviewStatusChange: (reviewStatus: ReviewStatus) => void
+  onSearchChange: (query: string) => void
   onMultipleTalksFilterChange: (hideMultipleTalks: boolean) => void
   onSortChange: (sortBy: FilterState['sortBy']) => void
   onSortOrderToggle: () => void
@@ -50,10 +52,13 @@ interface ProposalsFilterProps {
   allowedFormats?: Format[]
 }
 
+import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
+
 export function ProposalsFilter({
   filters,
   onFilterChange,
   onReviewStatusChange,
+  onSearchChange,
   onMultipleTalksFilterChange,
   onSortChange,
   onSortOrderToggle,
@@ -63,14 +68,33 @@ export function ProposalsFilter({
   allowedFormats,
 }: ProposalsFilterProps) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-2">
             <FunnelIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Filters:
             </span>
+          </div>
+
+          <div className="relative min-w-[240px]">
+            <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={filters.searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search proposals or speakers..."
+              className="block w-full rounded-md border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+            />
+            {filters.searchQuery && (
+              <button
+                onClick={() => onSearchChange('')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           <FilterDropdown

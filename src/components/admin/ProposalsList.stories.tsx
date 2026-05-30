@@ -1,129 +1,139 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalsList } from './ProposalsList'
+import { Status, Format, Language, Level, Audience } from '@/lib/proposal/types'
+import { ProposalExisting } from '@/lib/proposal/types'
 import { fn } from 'storybook/test'
-import {
-  ProposalExisting,
-  Status,
-  Format,
-  Language,
-  Level,
-} from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 
-const createMockSpeaker = (id: string, name: string): Speaker =>
-  ({
-    _id: id,
-    _rev: 'rev1',
-    _createdAt: '2025-01-01T00:00:00Z',
-    _updatedAt: '2025-01-01T00:00:00Z',
-    name,
-    email: `${name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-    slug: name.toLowerCase().replace(/\s+/g, '-'),
-  }) as Speaker
+const mockProposals: ProposalExisting[] = [
+  {
+    _id: 'prop-1',
+    _type: 'talk',
+    _rev: '1',
+    _createdAt: '2023-01-01T10:00:00Z',
+    _updatedAt: '2023-01-01T10:00:00Z',
+    title: 'How to Build a Cloud Native Future',
+    description: [
+      {
+        _type: 'block',
+        _key: 'desc1',
+        children: [{ _type: 'span', text: 'A deep dive into cloud native.' }],
+      },
+    ],
+    status: Status.submitted,
+    format: Format.presentation_45,
+    language: Language.english,
+    level: Level.intermediate,
+    audiences: [Audience.architect, Audience.developer],
+    outline: 'Outline here...',
+    tos: true,
+    speakers: [
+      {
+        _id: 'speaker-prop-1',
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+        _type: 'speaker',
+        _rev: '1',
+        _createdAt: '2023-01-01T10:00:00Z',
+        _updatedAt: '2023-01-01T10:00:00Z',
+      } as Speaker,
+    ],
+    conference: { _type: 'reference', _ref: 'conf-2026' },
+  },
+  {
+    _id: 'prop-2',
+    _type: 'talk',
+    _rev: '1',
+    _createdAt: '2023-01-02T10:00:00Z',
+    _updatedAt: '2023-01-02T10:00:00Z',
+    title: 'Kubernetes Cost Optimization',
+    description: [
+      {
+        _type: 'block',
+        _key: 'desc2',
+        children: [{ _type: 'span', text: 'Saving money in the cloud.' }],
+      },
+    ],
+    status: Status.accepted,
+    format: Format.lightning_10,
+    language: Language.norwegian,
+    level: Level.beginner,
+    audiences: [Audience.manager, Audience.operator],
+    outline: 'Outline here...',
+    tos: true,
+    speakers: [
+      {
+        _id: 'speaker-prop-2',
+        name: 'John Smith',
+        email: 'john@example.com',
+        _type: 'speaker',
+        _rev: '1',
+        _createdAt: '2023-01-01T10:00:00Z',
+        _updatedAt: '2023-01-01T10:00:00Z',
+      } as Speaker,
+    ],
+    conference: { _type: 'reference', _ref: 'conf-2026' },
+  },
+]
 
-const createMockProposal = (
+function createMockProposal(
   id: string,
   title: string,
   status: Status,
   format: Format,
   speakerName: string,
-): ProposalExisting => ({
-  _id: id,
-  _rev: 'rev1',
-  _type: 'proposal',
-  _createdAt: '2025-01-15T10:00:00Z',
-  _updatedAt: '2025-01-15T10:00:00Z',
-  title,
-  description: [],
-  language: Language.english,
-  format,
-  level: Level.intermediate,
-  audiences: [],
-  outline: 'Outline for the talk',
-  tos: true,
-  status,
-  speakers: [createMockSpeaker(`speaker-${id}`, speakerName)],
-  conference: { _ref: 'conf-2025', _type: 'reference' },
-})
-
-const mockProposals: ProposalExisting[] = [
-  createMockProposal(
-    'prop-1',
-    'Building Kubernetes Operators',
-    Status.submitted,
-    Format.presentation_45,
-    'Anna Hansen',
-  ),
-  createMockProposal(
-    'prop-2',
-    'Observability at Scale',
-    Status.accepted,
-    Format.presentation_25,
-    'Erik Larsen',
-  ),
-  createMockProposal(
-    'prop-3',
-    'GitOps Best Practices',
-    Status.confirmed,
-    Format.presentation_45,
-    'Sofia Berg',
-  ),
-  createMockProposal(
-    'prop-4',
-    'Lightning Talk: Quick Tips',
-    Status.submitted,
-    Format.lightning_10,
-    'Magnus Olsen',
-  ),
-  createMockProposal(
-    'prop-5',
-    'Advanced Workshop',
-    Status.draft,
-    Format.workshop_120,
-    'Ingrid Nilsen',
-  ),
-]
-
-const meta: Meta<typeof ProposalsList> = {
-  title: 'Systems/Proposals/Admin/ProposalsList',
-  component: ProposalsList,
-  tags: ['autodocs'],
-  parameters: {
-    docs: {
-      description: {
-        component:
-          'Main admin view for managing conference proposals. Displays a filterable grid of proposal cards with statistics and status indicators.',
-      },
-    },
-    nextjs: {
-      appDirectory: true,
-      navigation: {
-        pathname: '/admin/proposals',
-        query: {},
-      },
-    },
-  },
-  decorators: [
-    (Story) => (
-      <div className="p-4">
-        <Story />
-      </div>
-    ),
-  ],
+): ProposalExisting {
+  return {
+    _id: id,
+    _type: 'talk',
+    _rev: '1',
+    _createdAt: '2023-01-01T10:00:00Z',
+    _updatedAt: '2023-01-01T10:00:00Z',
+    title,
+    description: [],
+    status,
+    format,
+    language: Language.english,
+    level: Level.intermediate,
+    audiences: [],
+    outline: '',
+    tos: true,
+    speakers: [
+      {
+        _id: `speaker-${id}`,
+        name: speakerName,
+        email: 'test@example.com',
+        _type: 'speaker',
+        _rev: '1',
+        _createdAt: '2023-01-01T10:00:00Z',
+        _updatedAt: '2023-01-01T10:00:00Z',
+      } as Speaker,
+    ],
+    conference: { _type: 'reference', _ref: 'conf-1' },
+  }
 }
+
+const meta = {
+  title: 'Systems/Proposals/ProposalsList',
+  component: ProposalsList,
+  parameters: {
+    layout: 'fullscreen',
+  },
+  tags: ['autodocs'],
+} satisfies Meta<typeof ProposalsList>
 
 export default meta
 type Story = StoryObj<typeof ProposalsList>
 
 export const Default: Story = {
   args: {
-    proposals: mockProposals,
+    initialProposals: mockProposals,
   },
 }
 
 export const WithPreviewEnabled: Story = {
   args: {
-    proposals: mockProposals,
+    initialProposals: mockProposals,
     enablePreview: true,
     onProposalSelect: fn(),
     selectedProposalId: 'prop-2',
@@ -132,87 +142,82 @@ export const WithPreviewEnabled: Story = {
 
 export const WithCurrentUser: Story = {
   args: {
-    proposals: mockProposals,
+    initialProposals: mockProposals,
     currentUserId: 'speaker-prop-1',
   },
 }
 
 export const WithCreateButton: Story = {
   args: {
-    proposals: mockProposals,
+    initialProposals: mockProposals,
     onCreateProposal: fn(),
   },
 }
 
 export const EmptyList: Story = {
   args: {
-    proposals: [],
+    initialProposals: [],
   },
 }
 
 export const SingleProposal: Story = {
   args: {
-    proposals: [mockProposals[0]],
+    initialProposals: [mockProposals[0]],
   },
 }
 
-export const SubmittedOnly: Story = {
+export const OnlySubmitted: Story = {
   args: {
-    proposals: mockProposals.filter((p) => p.status === Status.submitted),
+    initialProposals: mockProposals.filter(
+      (p) => p.status === Status.submitted,
+    ),
   },
 }
 
-export const AllStatuses: Story = {
+export const MixedStatus: Story = {
   args: {
-    proposals: [
+    initialProposals: [
       createMockProposal(
         'p1',
         'Draft Proposal',
         Status.draft,
         Format.presentation_25,
-        'Speaker 1',
+        'Alice',
       ),
       createMockProposal(
         'p2',
-        'Submitted Proposal',
+        'Submitted Talk',
         Status.submitted,
-        Format.presentation_25,
-        'Speaker 2',
+        Format.presentation_45,
+        'Bob',
       ),
       createMockProposal(
         'p3',
-        'Accepted Proposal',
+        'Accepted Workshop',
         Status.accepted,
-        Format.presentation_45,
-        'Speaker 3',
+        Format.workshop_120,
+        'Charlie',
       ),
       createMockProposal(
         'p4',
-        'Confirmed Proposal',
-        Status.confirmed,
-        Format.presentation_45,
-        'Speaker 4',
+        'Rejected Lightning',
+        Status.rejected,
+        Format.lightning_10,
+        'David',
       ),
       createMockProposal(
         'p5',
-        'Waitlisted Proposal',
+        'Waitlisted Talk',
         Status.waitlisted,
-        Format.presentation_25,
-        'Speaker 5',
+        Format.presentation_40,
+        'Eve',
       ),
       createMockProposal(
         'p6',
-        'Rejected Proposal',
-        Status.rejected,
-        Format.lightning_10,
-        'Speaker 6',
-      ),
-      createMockProposal(
-        'p7',
-        'Withdrawn Proposal',
-        Status.withdrawn,
-        Format.workshop_120,
-        'Speaker 7',
+        'Confirmed Workshop',
+        Status.confirmed,
+        Format.workshop_240,
+        'Frank',
       ),
     ],
   },

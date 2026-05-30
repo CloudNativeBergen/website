@@ -6,8 +6,10 @@ import {
   Format,
   Action,
   Status,
+  ReviewStatus,
   isWorkshopFormat,
 } from '@/lib/proposal/types'
+import { Flags } from '@/lib/speaker/types'
 import {
   nullToUndefined,
   IdParamSchema as CommonIdParamSchema,
@@ -179,6 +181,23 @@ export const ReviewScoreSchema = z.object({
 export const SubmitReviewSchema = CommonIdParamSchema.extend({
   comment: z.string(),
   score: ReviewScoreSchema,
+})
+
+export const ProposalFilterSchema = z.object({
+  status: z.array(z.nativeEnum(Status)).optional().default([]),
+  format: z.array(z.nativeEnum(Format)).optional().default([]),
+  level: z.array(z.nativeEnum(Level)).optional().default([]),
+  language: z.array(z.nativeEnum(Language)).optional().default([]),
+  audience: z.array(z.nativeEnum(Audience)).optional().default([]),
+  speakerFlags: z.array(z.nativeEnum(Flags)).optional().default([]),
+  reviewStatus: z.nativeEnum(ReviewStatus).optional().default(ReviewStatus.all),
+  hideMultipleTalks: z.boolean().optional().default(false),
+  searchQuery: z.string().optional(),
+  sortBy: z
+    .enum(['title', 'status', 'created', 'speaker', 'rating'])
+    .optional()
+    .default('created'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 })
 
 export { CommonIdParamSchema as IdParamSchema }

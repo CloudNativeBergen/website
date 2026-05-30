@@ -53,6 +53,12 @@ export enum Status {
   deleted = 'deleted',
 }
 
+export enum ReviewStatus {
+  all = 'all',
+  reviewed = 'reviewed',
+  unreviewed = 'unreviewed',
+}
+
 export enum Action {
   view = 'view',
   edit = 'edit',

@@ -1,6 +1,10 @@
 'use client'
 
-import { DocumentTextIcon, PlusIcon } from '@heroicons/react/24/outline'
+import {
+  DocumentTextIcon,
+  PlusIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import Link from 'next/link'
 import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
@@ -8,11 +12,11 @@ import { Conference } from '@/lib/conference/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
 import { ProposalStatistics } from './ProposalStatistics'
-import { useProposalFiltering, useFilterStateWithURL } from './hooks'
+import { useFilterStateWithURL } from './hooks'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { api } from '@/lib/trpc/client'
 
 interface ProposalsListProps {
-  proposals: ProposalExisting[]
   onProposalSelect?: (proposalId: string | null) => void
   selectedProposalId?: string | null
   enablePreview?: boolean
@@ -20,16 +24,19 @@ interface ProposalsListProps {
   allowedFormats?: Format[]
   onCreateProposal?: () => void
   conference?: Conference
+  initialProposals?: ProposalExisting[]
 }
 
+import { useDebounce } from '@/hooks/useDebounce'
+
 export function ProposalsList({
-  proposals,
   onProposalSelect,
   selectedProposalId,
   enablePreview = false,
   currentUserId,
   allowedFormats,
   onCreateProposal,
+  initialProposals = [],
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [Status.submitted, Status.accepted, Status.confirmed],
@@ -40,6 +47,7 @@ export function ProposalsList({
     speakerFlags: [],
     reviewStatus: ReviewStatus.all,
     hideMultipleTalks: false,
+    searchQuery: '',
     sortBy: 'created',
     sortOrder: 'desc',
   }
@@ -48,6 +56,7 @@ export function ProposalsList({
     filters,
     toggleFilter,
     setReviewStatus,
+    setSearchQuery,
     setHideMultipleTalks,
     setSortBy,
     toggleSortOrder,
@@ -55,18 +64,20 @@ export function ProposalsList({
     activeFilterCount,
   } = useFilterStateWithURL(initialFilters)
 
-  const filteredProposals = useProposalFiltering(
-    proposals,
-    filters,
-    currentUserId,
-  )
+  const debouncedFilters = useDebounce(filters, 300)
+
+  // Fetch proposals from API with filters
+  const { data: filteredProposals = initialProposals, isLoading } =
+    api.proposal.admin.list.useQuery(debouncedFilters, {
+      initialData: initialProposals,
+    })
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         icon={<DocumentTextIcon />}
         title="Proposal Management"
-        description={`Review and manage all conference proposals (${filteredProposals.length} of ${proposals.length} total)`}
+        description={`Review and manage all conference proposals (${filteredProposals.length} total)`}
         actionItems={
           onCreateProposal
             ? [
@@ -85,6 +96,7 @@ export function ProposalsList({
           filters={filters}
           onFilterChange={toggleFilter}
           onReviewStatusChange={setReviewStatus}
+          onSearchChange={setSearchQuery}
           onMultipleTalksFilterChange={setHideMultipleTalks}
           onSortChange={setSortBy}
           onSortOrderToggle={toggleSortOrder}
@@ -96,31 +108,38 @@ export function ProposalsList({
       </div>
 
       <div className="mt-6">
-        <ProposalStatistics proposals={filteredProposals} />
-      </div>
-
-      <div className="mt-8">
-        {filteredProposals.length === 0 ? (
-          <EmptyState
-            hasProposals={proposals.length > 0}
-            onClearFilters={clearAllFilters}
-          />
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredProposals.map((proposal) => (
-              <ProposalCard
-                key={proposal._id}
-                proposal={proposal}
-                href={`/admin/proposals/${proposal._id}`}
-                onSelect={
-                  enablePreview && onProposalSelect
-                    ? () => onProposalSelect(proposal._id)
-                    : undefined
-                }
-                isSelected={selectedProposalId === proposal._id}
-              />
-            ))}
+        {isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <ArrowPathIcon className="h-8 w-8 animate-spin text-gray-400" />
           </div>
+        ) : (
+          <>
+            <ProposalStatistics proposals={filteredProposals} />
+            <div className="mt-8">
+              {filteredProposals.length === 0 ? (
+                <EmptyState
+                  hasProposals={initialProposals.length > 0}
+                  onClearFilters={clearAllFilters}
+                />
+              ) : (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredProposals.map((proposal) => (
+                    <ProposalCard
+                      key={proposal._id}
+                      proposal={proposal}
+                      href={`/admin/proposals/${proposal._id}`}
+                      onSelect={
+                        enablePreview && onProposalSelect
+                          ? () => onProposalSelect(proposal._id)
+                          : undefined
+                      }
+                      isSelected={selectedProposalId === proposal._id}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
