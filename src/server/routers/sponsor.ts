@@ -581,7 +581,7 @@ export const sponsorRouter = router({
 
     list: adminProcedure
       .input(SponsorCRMFilterSchema.optional())
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const conferenceId = await resolveConferenceId()
 
         let status = input?.status
@@ -590,18 +590,20 @@ export const sponsorRouter = router({
 
         if (view === 'invoice') {
           status = ['closed-won']
-          // We can't easily filter contractValue != null in GROQ if we want to be strict,
-          // but we can filter by status and then do further filtering if needed.
         } else if (view === 'contract') {
           status = ['closed-won']
         }
+
+        const assignedTo = input?.myAssignedOnly
+          ? ctx.speaker._id
+          : input?.assignedTo
 
         const { sponsors, error } = await listSponsorsForConference(
           conferenceId,
           {
             status,
             invoiceStatus,
-            assignedTo: input?.assignedTo,
+            assignedTo,
             unassignedOnly: input?.unassignedOnly,
             tags: input?.tags,
             tiers: input?.tiers,

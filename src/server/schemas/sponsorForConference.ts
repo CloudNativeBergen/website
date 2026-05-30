@@ -205,6 +205,7 @@ export const SponsorCRMFilterSchema = z.object({
   status: z.array(z.string()).optional(),
   invoiceStatus: z.array(z.string()).optional(),
   assignedTo: z.string().optional(),
+  myAssignedOnly: z.boolean().optional(),
   unassignedOnly: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   tiers: z.array(z.string()).optional(),
