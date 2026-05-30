@@ -1,5 +1,6 @@
 import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
@@ -28,9 +29,8 @@ export default async function SpeakerDashboard() {
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    // Middleware should have handled this, but if we reach here we might be in an inconsistent state.
-    // Return early to prevent crashes, but don't redirect manually to /list (losing params).
-    return null
+    const callbackUrl = encodeURIComponent(fullUrl || '/cfp/list')
+    redirect(`/api/auth/signin?callbackUrl=${callbackUrl}`)
   }
 
   const speaker = session.speaker
