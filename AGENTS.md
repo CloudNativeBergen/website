@@ -247,6 +247,23 @@ This applies to any component using `formatDistanceToNow`, `getDaysPending`, or 
 - Always run `pnpm run check` before committing changes.
 - A pre-commit hook runs `pnpm run check && pnpm run test` automatically. After cloning, run `pnpm exec simple-git-hooks` to activate it.
 
+### Technical Consistency & Standards
+
+To prevent code sprawl and maintain a high-quality codebase, agents must strictly adhere to the following standards. When in doubt, research "neighboring" components for the latest established patterns.
+
+1.  **UI & Styling (Tailwind v4.1+):**
+    - Use the latest utility syntax: `size-full` instead of `w-full h-full`, `shadow-xs` for buttons, and `outline-1` for inputs.
+    - **Reference:** See [Tailwind CSS v4 Documentation](https://tailwindcss.com/docs/v4-beta) and existing high-quality components in `src/components/admin/`.
+2.  **Architecture & Modularity:**
+    - **No Top-Level Sprawl:** New features must live in dedicated subdirectories with a barrel export (`index.ts`).
+    - **tRPC & Security:** Use `adminProcedure` for all admin-only actions. Never accept `conferenceId` from the client; always use `resolveConferenceId()` to ensure multi-tenant isolation.
+    - **Reference:** Review `docs/TRPC_SERVER_ARCHITECTURE.md` and `docs/ADMIN_SYSTEM.md`.
+3.  **Data Consistency:**
+    - Ensure all array items in Sanity include a `_key`. Use `prepareArrayWithKeys` helper when needed.
+    - **Reference:** Review `src/lib/sanity/helpers.ts`.
+4.  **Agent Context:**
+    - Before performing domain-specific tasks, fetch the latest configuration via the `agents.get` tRPC endpoint to understand the specific mission and rules for the current conference.
+
 ### Date and Time Handling
 
 - **Use Time Utilities:** Always use the utility functions from `/src/lib/time.ts` instead of directly using `new Date()` for date/time formatting and manipulation.
