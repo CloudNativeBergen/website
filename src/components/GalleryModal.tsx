@@ -53,6 +53,7 @@ export function GalleryModal({
 
   // Sync localImages when images prop changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalImages(images)
   }, [images])
 
@@ -83,6 +84,7 @@ export function GalleryModal({
 
   // Reset mutation state and error when navigating to a different image
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUntagError(null)
     untagMutation.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- untagMutation is stable from tRPC

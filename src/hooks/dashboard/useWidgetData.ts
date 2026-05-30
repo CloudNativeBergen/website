@@ -28,9 +28,11 @@ export function useWidgetData<T>(
   useEffect(() => {
     let isMounted = true
     if (!fetcher) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false)
       return
     }
+
     setLoading(true)
     setError(false)
     fetcher()

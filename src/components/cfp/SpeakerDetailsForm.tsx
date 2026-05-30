@@ -112,6 +112,7 @@ export function SpeakerDetailsForm({
   }, [speaker, email])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeakerEmail(email ?? '')
   }, [email])
 

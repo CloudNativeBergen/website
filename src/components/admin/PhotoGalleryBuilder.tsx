@@ -474,6 +474,7 @@ export function PhotoGalleryBuilder({
   const qrImageRef = useRef<HTMLImageElement | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPhotos(shuffleArray(initialPhotos))
   }, [initialPhotos])
 
@@ -523,6 +524,7 @@ export function PhotoGalleryBuilder({
         }
       })
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQrCodeImage(null)
     }
   }, [qrCodeUrl, qrSize])

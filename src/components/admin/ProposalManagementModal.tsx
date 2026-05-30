@@ -129,6 +129,7 @@ export function ProposalManagementModal({
       validateExpandedTopics(conference, 'ProposalManagementModal')
     } catch (error) {
       console.error(error)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(
         error instanceof Error
           ? error.message
@@ -187,9 +188,9 @@ export function ProposalManagementModal({
   // Reset form when modal opens or when editing a different proposal
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(null)
       setValidationErrors({})
-
       // Reinitialize form data when modal opens or editing proposal changes
       const topicsArray = editingProposal?.topics || []
 

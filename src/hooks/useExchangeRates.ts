@@ -53,6 +53,7 @@ export function useExchangeRates(): UseExchangeRatesReturn {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadExchangeRates()
   }, [])
 

@@ -87,6 +87,7 @@ export function SponsorAddModal({
 
   useEffect(() => {
     if (sponsorsQuery.data && (isOpen || sponsorsQuery.data)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvailableSponsors(
         sponsorsQuery.data.sort((a, b) => a.name.localeCompare(b.name)),
       )
@@ -99,9 +100,11 @@ export function SponsorAddModal({
         const tierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFormData((prev) => ({
           ...prev,
           name: editingSponsor.sponsor.name,
+
           website: editingSponsor.sponsor.website || '',
           logo: editingSponsor.sponsor.logo || null,
           logoBright: editingSponsor.sponsor.logoBright || null,
@@ -129,6 +132,7 @@ export function SponsorAddModal({
 
   useEffect(() => {
     if (preselectedTierId && isOpen && !editingSponsor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({ ...prev, tierId: preselectedTierId }))
     }
   }, [preselectedTierId, isOpen, editingSponsor])

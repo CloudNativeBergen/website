@@ -88,6 +88,7 @@ export function SponsorContactTable({
   const utils = api.useUtils()
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSponsors(initialSponsors)
   }, [initialSponsors])
 

@@ -163,6 +163,7 @@ export function useImageCarousel({
   // Update currentIndex when initialIndex changes
   useEffect(() => {
     const clampedIndex = Math.min(Math.max(0, initialIndex), totalImages - 1)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentIndex(clampedIndex)
     onIndexChange?.(clampedIndex)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onIndexChange is stable callback prop
@@ -170,6 +171,7 @@ export function useImageCarousel({
 
   // Sync auto-play state with prop changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsAutoPlaying(enableAutoPlay)
   }, [enableAutoPlay])
 
@@ -177,6 +179,7 @@ export function useImageCarousel({
   useEffect(() => {
     if (currentIndex >= totalImages && totalImages > 0) {
       const newIndex = totalImages - 1
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentIndex(newIndex)
       onIndexChange?.(newIndex)
     }

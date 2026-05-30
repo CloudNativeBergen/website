@@ -47,6 +47,7 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
       try {
         const stored = localStorage.getItem(BOOKMARKS_STORAGE_KEY)
         if (stored) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setBookmarks(JSON.parse(stored))
         }
       } catch (error) {

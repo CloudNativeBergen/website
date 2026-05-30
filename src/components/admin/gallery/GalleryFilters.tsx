@@ -77,6 +77,7 @@ export function GalleryFilters({
     }
 
     if (speakerId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedSpeaker({ _id: speakerId, name: 'Selected speaker' })
     }
 

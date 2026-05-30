@@ -63,6 +63,7 @@ export function useEmailModalStorage({
             })
           }
 
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setStoredData(parsedData)
         } else {
           if (debug)

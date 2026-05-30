@@ -38,7 +38,6 @@ export function useInviteFields(format: Format): UseInviteFieldsReturn {
   const prevMaxCoSpeakers = useRef(maxCoSpeakers)
   useEffect(() => {
     if (prevMaxCoSpeakers.current !== maxCoSpeakers) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Resize invite fields array when max changes
       setInviteFields(
         Array(maxCoSpeakers)
           .fill(null)

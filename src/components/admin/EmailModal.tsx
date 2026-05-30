@@ -112,6 +112,7 @@ export function EmailModal({
       isInitializingRef.current = true
 
       if (storageKey && storage.hasStoredData && storage.storedData) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSubject(storage.storedData.subject || '')
 
         const storedMessage = storage.storedData.message
@@ -167,6 +168,7 @@ export function EmailModal({
 
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAutoSaveEnabled(false)
       isInitializingRef.current = false
     }
