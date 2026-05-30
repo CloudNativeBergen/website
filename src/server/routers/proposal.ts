@@ -566,24 +566,16 @@ export const proposalRouter = router({
   admin: router({
     // List all proposals (admin)
     list: adminProcedure
-      .input(ProposalFilterSchema.optional())
+      .input(ProposalFilterSchema)
       .query(async ({ input, ctx }) => {
         try {
-          const { conference, error: confError } =
-            await getConferenceForCurrentDomain()
-
-          if (confError || !conference) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to get current conference',
-              cause: confError,
-            })
-          }
+          const conferenceId = await resolveConferenceId()
 
           const { proposals, proposalsError } = await getProposals({
-            conferenceId: conference._id,
+            conferenceId,
             returnAll: true,
             includeReviews: true,
+            includePreviousAcceptedTalks: true,
           })
 
           if (proposalsError) {
@@ -594,11 +586,7 @@ export const proposalRouter = router({
             })
           }
 
-          if (input) {
-            return filterProposals(proposals || [], input, ctx.speaker._id)
-          }
-
-          return proposals || []
+          return filterProposals(proposals || [], input, ctx.speaker._id)
         } catch (error) {
           if (error instanceof TRPCError) throw error
 

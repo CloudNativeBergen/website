@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import {
   DocumentTextIcon,
   PlusIcon,
@@ -38,19 +39,22 @@ export function ProposalsList({
   onCreateProposal,
   initialProposals = [],
 }: ProposalsListProps) {
-  const initialFilters: FilterState = {
-    status: [Status.submitted, Status.accepted, Status.confirmed],
-    format: [],
-    level: [],
-    language: [],
-    audience: [],
-    speakerFlags: [],
-    reviewStatus: ReviewStatus.all,
-    hideMultipleTalks: false,
-    searchQuery: '',
-    sortBy: 'created',
-    sortOrder: 'desc',
-  }
+  const initialFilters = useMemo<FilterState>(
+    () => ({
+      status: [Status.submitted, Status.accepted, Status.confirmed],
+      format: [],
+      level: [],
+      language: [],
+      audience: [],
+      speakerFlags: [],
+      reviewStatus: ReviewStatus.all,
+      hideMultipleTalks: false,
+      searchQuery: '',
+      sortBy: 'created',
+      sortOrder: 'desc',
+    }),
+    [],
+  )
 
   const {
     filters,
@@ -67,17 +71,29 @@ export function ProposalsList({
   const debouncedFilters = useDebounce(filters, 300)
 
   // Fetch proposals from API with filters
-  const { data: filteredProposals = initialProposals, isLoading } =
-    api.proposal.admin.list.useQuery(debouncedFilters, {
-      initialData: initialProposals,
-    })
+  const {
+    data: filteredProposals,
+    isLoading,
+    error,
+  } = api.proposal.admin.list.useQuery(debouncedFilters)
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+        <h3 className="text-sm font-medium">Failed to load proposals</h3>
+        <p className="mt-1 text-xs">{error.message}</p>
+      </div>
+    )
+  }
+
+  const displayProposals = filteredProposals || initialProposals
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         icon={<DocumentTextIcon />}
         title="Proposal Management"
-        description={`Review and manage all conference proposals (${filteredProposals.length} total)`}
+        description={`Review and manage all conference proposals (${displayProposals.length} total)`}
         actionItems={
           onCreateProposal
             ? [
@@ -114,16 +130,16 @@ export function ProposalsList({
           </div>
         ) : (
           <>
-            <ProposalStatistics proposals={filteredProposals} />
+            <ProposalStatistics proposals={displayProposals} />
             <div className="mt-8">
-              {filteredProposals.length === 0 ? (
+              {displayProposals.length === 0 ? (
                 <EmptyState
                   hasProposals={initialProposals.length > 0}
                   onClearFilters={clearAllFilters}
                 />
               ) : (
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredProposals.map((proposal) => (
+                  {displayProposals.map((proposal) => (
                     <ProposalCard
                       key={proposal._id}
                       proposal={proposal}
@@ -143,7 +159,7 @@ export function ProposalsList({
         )}
       </div>
 
-      {filteredProposals.length > 0 && (
+      {displayProposals.length > 0 && (
         <div className="mt-8 text-center">
           <Link
             href="/admin"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Status, Format, Level, Language, Audience } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
@@ -20,6 +20,22 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
       speakerFlags: urlFilters.speakerFlags || [],
     }
   })
+
+  // Sync state with URL when searchParams change (e.g. back button)
+  useEffect(() => {
+    const urlFilters = parseFiltersFromURL(searchParams)
+    const newFilters: FilterState = {
+      ...initialFilters,
+      ...urlFilters,
+      speakerFlags: urlFilters.speakerFlags || [],
+    }
+
+    // Deep comparison to avoid unnecessary state updates
+    if (JSON.stringify(newFilters) !== JSON.stringify(filters)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilters(newFilters)
+    }
+  }, [searchParams, initialFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateURL = useCallback(
     (newFilters: FilterState) => {
@@ -176,6 +192,11 @@ function parseFiltersFromURL(
     filters.status = parseArrayParam(statusParam, Object.values(Status))
   }
 
+  const searchParam = searchParams.get('search')
+  if (searchParam) {
+    filters.searchQuery = searchParam
+  }
+
   const formatParam = searchParams.get('format')
   if (formatParam) {
     filters.format = parseArrayParam(formatParam, Object.values(Format))
@@ -283,6 +304,10 @@ function serializeFiltersToURL(
 
   if (filters.hideMultipleTalks !== defaultFilters.hideMultipleTalks) {
     params.set('hideMultipleTalks', filters.hideMultipleTalks.toString())
+  }
+
+  if (filters.searchQuery) {
+    params.set('search', filters.searchQuery)
   }
 
   if (filters.sortBy !== defaultFilters.sortBy) {
