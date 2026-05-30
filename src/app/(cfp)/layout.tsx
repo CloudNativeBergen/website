@@ -1,5 +1,6 @@
 import { CFPLayout } from '@/components/cfp/CFPLayout'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { headers } from 'next/headers'
@@ -35,7 +36,9 @@ export default async function CFPGroupLayout({
           realAdmin={session.realAdmin}
         />
       )}
-      <CFPLayout conferenceLogos={conferenceLogos}>{children}</CFPLayout>
+      <NotificationProvider>
+        <CFPLayout conferenceLogos={conferenceLogos}>{children}</CFPLayout>
+      </NotificationProvider>
     </>
   )
 }
