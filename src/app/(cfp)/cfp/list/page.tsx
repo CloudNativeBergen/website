@@ -1,6 +1,5 @@
 import { connection } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
@@ -15,6 +14,7 @@ import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
 import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
+import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmationHandler'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
@@ -28,7 +28,9 @@ export default async function SpeakerDashboard() {
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/list')
+    // Middleware should have handled this, but if we reach here we might be in an inconsistent state.
+    // Return early to prevent crashes, but don't redirect manually to /list (losing params).
+    return null
   }
 
   const speaker = session.speaker
@@ -236,6 +238,8 @@ export default async function SpeakerDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl">
+      <ProposalConfirmationHandler activeConferences={activeConferences} />
+
       <div className="mb-6">
         <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           Speaker Dashboard

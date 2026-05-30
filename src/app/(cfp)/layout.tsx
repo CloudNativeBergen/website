@@ -2,7 +2,6 @@ import { CFPLayout } from '@/components/cfp/CFPLayout'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 
 export default async function CFPGroupLayout({
@@ -15,7 +14,7 @@ export default async function CFPGroupLayout({
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    redirect('/api/auth/signin?callbackUrl=/cfp')
+    return null
   }
 
   const { conference } = await getConferenceForCurrentDomain({})

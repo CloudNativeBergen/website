@@ -22,6 +22,11 @@ import { hasProposalVideo } from '@/lib/proposal/video'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { useImpersonateQueryString } from '@/lib/impersonation'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ProposalActionModal } from '@/components/admin'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { Action } from '@/lib/proposal/types'
+import { CheckIcon } from '@heroicons/react/20/solid'
 
 type BadgeColor =
   | 'gray'
@@ -78,6 +83,9 @@ export function CompactProposalList({
   conferenceHasEnded = false,
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
+  const router = useRouter()
+  const [proposalToConfirm, setProposalToConfirm] =
+    useState<ProposalExisting | null>(null)
 
   const hasApprovedTalk = proposals.some(
     (p) => p.status === 'confirmed' || p.status === 'accepted',
@@ -215,11 +223,34 @@ export function CompactProposalList({
                     <PencilIcon className="h-4 w-4" />
                   </Link>
                 )}
+                {proposal.status === 'accepted' && (
+                  <button
+                    type="button"
+                    onClick={() => setProposalToConfirm(proposal)}
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-green-600 px-2 py-1 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-green-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 dark:bg-green-500 dark:hover:bg-green-400"
+                    title="Confirm your participation"
+                  >
+                    <CheckIcon className="size-3.5" />
+                    Confirm
+                  </button>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+
+      {proposalToConfirm && (
+        <ProposalActionModal
+          open={true}
+          close={() => setProposalToConfirm(null)}
+          proposal={proposalToConfirm}
+          action={Action.confirm}
+          onAction={() => {
+            router.refresh()
+          }}
+        />
+      )}
     </div>
   )
 }
