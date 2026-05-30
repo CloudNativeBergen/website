@@ -49,6 +49,8 @@ export { BadgeManagementClient } from './BadgeManagementClient'
 export { BadgePreviewModal } from './BadgePreviewModal'
 export { default as BadgeValidator } from './BadgeValidator'
 
+export * from './agents'
+
 export {
   ImageUploadZone,
   ImageGrid,

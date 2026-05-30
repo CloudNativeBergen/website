@@ -1,6 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
-import { AgentConfigPageClient } from '@/components/admin/AgentConfigPage'
+import { AgentConfigPageClient } from '@/components/admin/agents'
 
 export default async function AdminAgentsPage() {
   const { conference, error } = await getConferenceForCurrentDomain()

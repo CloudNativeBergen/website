@@ -1,0 +1,1 @@
+export { AgentConfigPageClient } from './AgentConfigPage'
