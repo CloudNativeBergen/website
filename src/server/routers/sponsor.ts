@@ -80,6 +80,7 @@ import {
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
   CreateSponsorActivitySchema,
+  SponsorCRMFilterSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
@@ -579,28 +580,32 @@ export const sponsorRouter = router({
     }),
 
     list: adminProcedure
-      .input(
-        z.object({
-          status: z.array(z.string()).optional(),
-          invoiceStatus: z.array(z.string()).optional(),
-          assignedTo: z.string().optional(),
-          unassignedOnly: z.boolean().optional(),
-          tags: z.array(z.string()).optional(),
-          tiers: z.array(z.string()).optional(),
-        }),
-      )
+      .input(SponsorCRMFilterSchema.optional())
       .query(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
+
+        let status = input?.status
+        const invoiceStatus = input?.invoiceStatus
+        const view = input?.view || 'pipeline'
+
+        if (view === 'invoice') {
+          status = ['closed-won']
+          // We can't easily filter contractValue != null in GROQ if we want to be strict,
+          // but we can filter by status and then do further filtering if needed.
+        } else if (view === 'contract') {
+          status = ['closed-won']
+        }
 
         const { sponsors, error } = await listSponsorsForConference(
           conferenceId,
           {
-            status: input.status,
-            invoiceStatus: input.invoiceStatus,
-            assignedTo: input.assignedTo,
-            unassignedOnly: input.unassignedOnly,
-            tags: input.tags,
-            tiers: input.tiers,
+            status,
+            invoiceStatus,
+            assignedTo: input?.assignedTo,
+            unassignedOnly: input?.unassignedOnly,
+            tags: input?.tags,
+            tiers: input?.tiers,
+            searchQuery: input?.searchQuery,
           },
         )
 
@@ -612,7 +617,14 @@ export const sponsorRouter = router({
           })
         }
 
-        return sponsors || []
+        let filtered = sponsors || []
+
+        // Apply view-specific filters that are hard to do in GROQ
+        if (view === 'invoice') {
+          filtered = filtered.filter((s) => s.contractValue != null)
+        }
+
+        return filtered
       }),
 
     getById: adminProcedure.input(SponsorIdSchema).query(async ({ input }) => {

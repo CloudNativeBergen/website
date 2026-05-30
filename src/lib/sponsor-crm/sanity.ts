@@ -377,6 +377,7 @@ export async function listSponsorsForConference(
     unassignedOnly?: boolean
     tags?: string[]
     tiers?: string[]
+    searchQuery?: string
   },
 ): Promise<{
   sponsors?: SponsorForConferenceExpanded[]
@@ -403,6 +404,15 @@ export async function listSponsorsForConference(
       filterQuery += ` && tier._ref in $tierIds`
     }
 
+    if (filters?.searchQuery) {
+      filterQuery += ` && (
+        sponsor->name match $searchTerm || 
+        sponsor->website match $searchTerm || 
+        contactPersons[].name match $searchTerm || 
+        contactPersons[].email match $searchTerm
+      )`
+    }
+
     const sponsors = await clientRead.fetch<SponsorForConferenceExpanded[]>(
       `*[${filterQuery}] | order(status asc, _createdAt desc){${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
       {
@@ -412,6 +422,9 @@ export async function listSponsorsForConference(
         assignedTo: filters?.assignedTo,
         tags: filters?.tags,
         tierIds: filters?.tiers,
+        searchTerm: filters?.searchQuery
+          ? `*${filters.searchQuery}*`
+          : undefined,
       },
     )
 

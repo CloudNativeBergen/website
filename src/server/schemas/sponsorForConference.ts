@@ -200,3 +200,17 @@ export const CreateSponsorActivitySchema = z.object({
   activityType: z.enum(['note', 'call', 'meeting', 'email']),
   description: z.string().min(1, 'Description is required'),
 })
+
+export const SponsorCRMFilterSchema = z.object({
+  status: z.array(z.string()).optional(),
+  invoiceStatus: z.array(z.string()).optional(),
+  assignedTo: z.string().optional(),
+  unassignedOnly: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+  tiers: z.array(z.string()).optional(),
+  searchQuery: z.string().optional(),
+  view: z
+    .enum(['pipeline', 'invoice', 'contract'])
+    .optional()
+    .default('pipeline'),
+})

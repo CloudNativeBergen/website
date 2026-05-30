@@ -49,6 +49,8 @@ interface SponsorCRMPipelineProps {
   externalNewTrigger?: number
 }
 
+import { useDebounce } from '@/hooks/useDebounce'
+
 export function SponsorCRMPipeline({
   conferenceId,
   conference,
@@ -81,6 +83,7 @@ export function SponsorCRMPipeline({
         : 'pipeline') as BoardView,
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 
@@ -123,6 +126,11 @@ export function SponsorCRMPipeline({
       unassignedOnly: assignedToFilter === 'unassigned',
       tags: tagsFilter.length > 0 ? tagsFilter : undefined,
       tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+      searchQuery:
+        debouncedSearchQuery.trim().length >= 2
+          ? debouncedSearchQuery.trim()
+          : undefined,
+      view: currentView,
     },
     {
       refetchInterval: isUserBusy ? false : 30_000,
@@ -140,25 +148,8 @@ export function SponsorCRMPipeline({
     }
   }, [sponsors, selectedSponsor])
 
-  // Filter logic
-  const filteredSponsors = useMemo(() => {
-    let filtered =
-      currentView === 'pipeline'
-        ? sponsors
-        : currentView === 'invoice'
-          ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contractValue != null,
-            )
-          : sponsors.filter((s) => s.status === 'closed-won')
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
-      filtered = filtered.filter((s) =>
-        s.sponsor.name.toLowerCase().includes(q),
-      )
-    }
-    return filtered
-  }, [sponsors, currentView, searchQuery])
+  // All filtering now happens on the server
+  const filteredSponsors = sponsors
 
   // Helper to update URL params without triggering navigation
   const updateUrlParams = useCallback(
