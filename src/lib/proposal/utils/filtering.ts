@@ -70,17 +70,19 @@ export function filterProposals(
       }
     }
 
-    if (filters.status && filters.status.length === 0) {
-      return false
-    }
-    if (filters.status && !filters.status.includes(proposal.status)) {
+    if (
+      filters.status &&
+      filters.status.length > 0 &&
+      !filters.status.includes(proposal.status)
+    ) {
       return false
     }
 
-    if (filters.format && filters.format.length === 0) {
-      return false
-    }
-    if (filters.format && !filters.format.includes(proposal.format)) {
+    if (
+      filters.format &&
+      filters.format.length > 0 &&
+      !filters.format.includes(proposal.format)
+    ) {
       return false
     }
 
