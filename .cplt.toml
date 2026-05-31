@@ -6,6 +6,7 @@
 [propose]
 # Suggested by: (root)
 allow_localhost_any = true
+allow_env_files = true
 
 [propose.allow]
 localhost = [3000, 6006]
