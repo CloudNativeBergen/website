@@ -635,6 +635,32 @@ export const sponsorRouter = router({
           })
         }
 
+        // Filter: only sponsors missing contact info
+        if (input?.hasContactInfo === false) {
+          filtered = filtered.filter(
+            (s) => !s.contactPersons || s.contactPersons.length === 0,
+          )
+        } else if (input?.hasContactInfo === true) {
+          filtered = filtered.filter(
+            (s) => s.contactPersons && s.contactPersons.length > 0,
+          )
+        }
+
+        // Filter: follow-up due (scheduled date has passed)
+        if (input?.followUpDue) {
+          const now = new Date()
+          filtered = filtered.filter(
+            (s) => s.nextFollowUpAt && new Date(s.nextFollowUpAt) <= now,
+          )
+        }
+
+        // Filter: has a follow-up scheduled
+        if (input?.hasFollowUp === true) {
+          filtered = filtered.filter((s) => !!s.nextFollowUpAt)
+        } else if (input?.hasFollowUp === false) {
+          filtered = filtered.filter((s) => !s.nextFollowUpAt)
+        }
+
         // Apply sorting
         const sortBy = input?.sortBy
         const sortOrder = input?.sortOrder || 'desc'
@@ -667,6 +693,12 @@ export const sponsorRouter = router({
                   new Date(a._createdAt).getTime() -
                   new Date(b._createdAt).getTime()
                 break
+              case 'followUp': {
+                const aFu = a.nextFollowUpAt || '9999-12-31'
+                const bFu = b.nextFollowUpAt || '9999-12-31'
+                cmp = new Date(aFu).getTime() - new Date(bFu).getTime()
+                break
+              }
             }
             return sortOrder === 'desc' ? -cmp : cmp
           })
@@ -1828,11 +1860,15 @@ export const sponsorRouter = router({
         const sfc = await clientReadUncached.fetch<{
           _id: string
           status: string
+          contactInitiatedAt?: string
+          outreachCount?: number
           contactPersons?: Array<{ name: string; email: string }>
         }>(
           `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
             _id,
             status,
+            contactInitiatedAt,
+            outreachCount,
             contactPersons[]{ name, email }
           }`,
           { sponsorId: input.sponsorId, conferenceId: conference._id },
@@ -1922,19 +1958,27 @@ export const sponsorRouter = router({
               )
             }
 
-            if (sfc.status === 'prospect') {
-              try {
-                await clientWrite
-                  .patch(sfc._id)
-                  .set({ status: 'contacted' })
-                  .commit()
-                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
-              } catch (statusError) {
-                console.error(
-                  '[sendEmail] Failed to update sponsor status:',
-                  statusError,
-                )
+            // Track outreach metrics
+            try {
+              const patch = clientWrite.patch(sfc._id)
+              if (!sfc.contactInitiatedAt) {
+                patch.set({ contactInitiatedAt: getCurrentDateTime() })
               }
+              patch.set({ outreachCount: (sfc.outreachCount || 0) + 1 })
+
+              if (sfc.status === 'prospect') {
+                patch.set({ status: 'contacted' })
+              }
+              await patch.commit()
+
+              if (sfc.status === 'prospect') {
+                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+              }
+            } catch (statusError) {
+              console.error(
+                '[sendEmail] Failed to update sponsor tracking:',
+                statusError,
+              )
             }
           }
         } catch (crmError) {
@@ -1971,11 +2015,15 @@ export const sponsorRouter = router({
         const sfc = await clientReadUncached.fetch<{
           _id: string
           status: string
+          contactInitiatedAt?: string
+          outreachCount?: number
           contactPersons?: Array<{ name: string; email: string }>
         }>(
           `*[_type == "sponsorForConference" && _id == $sfcId && conference._ref == $conferenceId][0]{
             _id,
             status,
+            contactInitiatedAt,
+            outreachCount,
             contactPersons[]{ name, email }
           }`,
           {
@@ -2063,19 +2111,26 @@ export const sponsorRouter = router({
               )
             }
 
-            if (sfc.status === 'prospect') {
-              try {
-                await clientWrite
-                  .patch(sfc._id)
-                  .set({ status: 'contacted' })
-                  .commit()
-                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
-              } catch (statusError) {
-                console.error(
-                  '[sendEmailBySfc] Failed to update sponsor status:',
-                  statusError,
-                )
+            try {
+              const patch = clientWrite.patch(sfc._id)
+              if (!sfc.contactInitiatedAt) {
+                patch.set({ contactInitiatedAt: getCurrentDateTime() })
               }
+              patch.set({ outreachCount: (sfc.outreachCount || 0) + 1 })
+
+              if (sfc.status === 'prospect') {
+                patch.set({ status: 'contacted' })
+              }
+              await patch.commit()
+
+              if (sfc.status === 'prospect') {
+                await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+              }
+            } catch (statusError) {
+              console.error(
+                '[sendEmailBySfc] Failed to update sponsor tracking:',
+                statusError,
+              )
             }
           }
         } catch (crmError) {

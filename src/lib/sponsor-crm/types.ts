@@ -98,6 +98,8 @@ export interface SponsorForConference {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  nextFollowUpAt?: string
+  outreachCount?: number
 }
 
 export interface SponsorForConferenceExpanded {
@@ -192,6 +194,8 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  nextFollowUpAt?: string
+  outreachCount?: number
   lastActivity?: {
     activityType: ActivityType
     description: string
@@ -255,6 +259,8 @@ export interface SponsorForConferenceInput {
   invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
+  nextFollowUpAt?: string | null
+  outreachCount?: number | null
 }
 
 export interface SponsorActivityInput {

@@ -23,6 +23,7 @@ import {
   PaperAirplaneIcon,
   ShieldCheckIcon,
   BellAlertIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline'
 
 // Invoice Status Utilities
@@ -121,6 +122,7 @@ export type ActionItemType =
   | 'stale'
   | 'high-priority'
   | 'follow-up'
+  | 'missing-contact'
   | 'signature-rejected'
   | 'signature-expired'
   | 'registration-pending'
@@ -143,6 +145,8 @@ export function getActionItemIcon(type: ActionItemType) {
       return FireIcon
     case 'follow-up':
       return ArrowPathRoundedSquareIcon
+    case 'missing-contact':
+      return UserGroupIcon
     case 'signature-rejected':
       return ExclamationTriangleIcon
     case 'signature-expired':
@@ -171,6 +175,8 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
     case 'follow-up':
       return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/20'
+    case 'missing-contact':
+      return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
     case 'signature-rejected':
       return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
     case 'signature-expired':

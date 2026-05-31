@@ -1,0 +1,24 @@
+{
+  "debug.javascript.defaultRuntimeExecutable": {
+    "pwa-node": "/Users/hans/.local/share/mise/shims/node"
+  },
+  "chat.tools.terminal.autoApprove": {
+    "pnpm": true,
+    "npx tsc": true,
+    "npx jest": true,
+    "npx eslint": true,
+    "git checkout": true,
+    "npx vitest": true,
+    "cargo build": true,
+    "cargo clippy": true,
+    "cargo run": true,
+    "rustc": true,
+    "cargo update": true,
+    "cargo test": true,
+    "cargo check": true,
+    "uniq": true,
+    "mise": true,
+    "./target/release/cnctl": true,
+    "mkdir": true
+  }
+}

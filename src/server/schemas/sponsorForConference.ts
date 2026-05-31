@@ -89,6 +89,8 @@ export const SponsorForConferenceInputSchema = z.object({
       message: 'Only one contact can be marked as primary',
     }),
   billing: BillingInfoSchema.optional(),
+  nextFollowUpAt: z.string().optional(),
+  outreachCount: z.number().min(0).optional(),
 })
 
 export const SponsorForConferenceUpdateSchema = z.object({
@@ -133,6 +135,8 @@ export const SponsorForConferenceUpdateSchema = z.object({
       message: 'Only one contact can be marked as primary',
     }),
   billing: BillingInfoSchema.nullable().optional(),
+  nextFollowUpAt: z.string().nullable().optional(),
+  outreachCount: z.number().min(0).nullable().optional(),
 })
 
 export const SponsorForConferenceIdSchema = z.object({
@@ -215,8 +219,11 @@ export const SponsorCRMFilterSchema = z.object({
     .optional()
     .default('pipeline'),
   sortBy: z
-    .enum(['lastActivity', 'value', 'stale', 'name', 'createdAt'])
+    .enum(['lastActivity', 'value', 'stale', 'name', 'createdAt', 'followUp'])
     .optional(),
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
   staleDays: z.number().optional(),
+  hasContactInfo: z.boolean().optional(),
+  followUpDue: z.boolean().optional(),
+  hasFollowUp: z.boolean().optional(),
 })
