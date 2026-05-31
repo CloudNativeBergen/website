@@ -35,6 +35,8 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   }
 
   const hasSchedule = conference.schedules && conference.schedules.length > 0
+  const hasFeaturedSpeakers =
+    conference.featuredSpeakers && conference.featuredSpeakers.length > 0
   const sortedOrganizers =
     conference.organizers
       ?.slice()
@@ -56,6 +58,29 @@ async function CachedHomeContent({ domain }: { domain: string }) {
           featuredTalks={conference.featuredTalks || []}
           conference={conference}
         />
+      ) : hasFeaturedSpeakers ? (
+        <section className="py-20 sm:py-32">
+          <Container>
+            <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
+              <h2 className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
+                Featured Speakers
+              </h2>
+              <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
+                Meet the speakers at {conference.title}
+              </p>
+            </div>
+
+            <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
+              {conference.featuredSpeakers!.map((speaker) => (
+                <SpeakerPromotionCard
+                  key={speaker._id}
+                  speaker={speaker}
+                  variant="featured"
+                />
+              ))}
+            </div>
+          </Container>
+        </section>
       ) : sortedOrganizers.length > 0 ? (
         <section className="py-20 sm:py-32">
           <Container>
