@@ -626,6 +626,52 @@ export const sponsorRouter = router({
           filtered = filtered.filter((s) => s.contractValue != null)
         }
 
+        // Filter by stale days (no activity in N days)
+        if (input?.staleDays) {
+          const cutoff = Date.now() - input.staleDays * 24 * 60 * 60 * 1000
+          filtered = filtered.filter((s) => {
+            const lastAt = s.lastActivity?.createdAt || s._updatedAt
+            return new Date(lastAt).getTime() < cutoff
+          })
+        }
+
+        // Apply sorting
+        const sortBy = input?.sortBy
+        const sortOrder = input?.sortOrder || 'desc'
+        if (sortBy) {
+          filtered.sort((a, b) => {
+            let cmp = 0
+            switch (sortBy) {
+              case 'lastActivity': {
+                const aTime = a.lastActivity?.createdAt || a._createdAt
+                const bTime = b.lastActivity?.createdAt || b._createdAt
+                cmp = new Date(aTime).getTime() - new Date(bTime).getTime()
+                break
+              }
+              case 'value':
+                cmp = (a.contractValue || 0) - (b.contractValue || 0)
+                break
+              case 'stale': {
+                const aStale = a.lastActivity?.createdAt || a._updatedAt
+                const bStale = b.lastActivity?.createdAt || b._updatedAt
+                cmp = new Date(aStale).getTime() - new Date(bStale).getTime()
+                break
+              }
+              case 'name':
+                cmp = (a.sponsor?.name || '').localeCompare(
+                  b.sponsor?.name || '',
+                )
+                break
+              case 'createdAt':
+                cmp =
+                  new Date(a._createdAt).getTime() -
+                  new Date(b._createdAt).getTime()
+                break
+            }
+            return sortOrder === 'desc' ? -cmp : cmp
+          })
+        }
+
         return filtered
       }),
 

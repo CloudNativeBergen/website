@@ -119,7 +119,14 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   registrationToken,
   registrationComplete,
-  registrationCompletedAt
+  registrationCompletedAt,
+  "lastActivity": *[_type == "sponsorActivity" && sponsorForConference._ref == ^._id] | order(createdAt desc)[0]{
+    activityType,
+    description,
+    createdAt,
+    createdBy->{ _id, name }
+  },
+  "activityCount": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id])
 `
 
 export async function getPublicSponsorsForConference(

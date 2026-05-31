@@ -214,4 +214,9 @@ export const SponsorCRMFilterSchema = z.object({
     .enum(['pipeline', 'invoice', 'contract'])
     .optional()
     .default('pipeline'),
+  sortBy: z
+    .enum(['lastActivity', 'value', 'stale', 'name', 'createdAt'])
+    .optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+  staleDays: z.number().optional(),
 })

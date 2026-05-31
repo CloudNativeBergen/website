@@ -192,6 +192,13 @@ export interface SponsorForConferenceExpanded {
   registrationToken?: string
   registrationComplete?: boolean
   registrationCompletedAt?: string
+  lastActivity?: {
+    activityType: ActivityType
+    description: string
+    createdAt: string
+    createdBy?: { _id: string; name: string } | null
+  }
+  activityCount?: number
 }
 
 export interface SponsorActivityExpanded {
