@@ -40,10 +40,8 @@ export function filterProposals(
       ) {
         if (proposal.speakers && Array.isArray(proposal.speakers)) {
           proposal.speakers.forEach((speaker) => {
-            if (typeof speaker === 'object' && 'name' in speaker) {
-              speakersWithAcceptedTalks.add(speaker.name)
-            } else if (typeof speaker === 'string') {
-              speakersWithAcceptedTalks.add(speaker)
+            if (typeof speaker === 'object' && '_id' in speaker) {
+              speakersWithAcceptedTalks.add(speaker._id)
             }
           })
         }
@@ -55,14 +53,10 @@ export function filterProposals(
     if (filters.hideMultipleTalks && proposal.status === Status.submitted) {
       if (proposal.speakers && Array.isArray(proposal.speakers)) {
         const hasSpeakerWithAcceptedTalk = proposal.speakers.some((speaker) => {
-          const speakerName =
-            typeof speaker === 'object' && 'name' in speaker
-              ? speaker.name
-              : speaker
-          return (
-            typeof speakerName === 'string' &&
-            speakersWithAcceptedTalks.has(speakerName)
-          )
+          if (typeof speaker === 'object' && '_id' in speaker) {
+            return speakersWithAcceptedTalks.has(speaker._id)
+          }
+          return false
         })
         if (hasSpeakerWithAcceptedTalk) {
           return false
