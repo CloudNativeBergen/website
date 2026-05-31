@@ -114,6 +114,7 @@ export interface SponsorForConferenceExpanded {
     logoBright?: string
     orgNumber?: string
     address?: string
+    linkedinUrl?: string
   }
   conference: {
     _id: string

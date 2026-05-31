@@ -27,7 +27,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     logo,
     logoBright,
     orgNumber,
-    address
+    address,
+    linkedinUrl
   },
   conference->{
     _id,
@@ -109,6 +110,7 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     email,
     phone,
     role,
+    linkedinUrl,
     isPrimary
   },
   billing{
@@ -418,7 +420,8 @@ export async function listSponsorsForConference(
         sponsor->name match $searchTerm || 
         sponsor->website match $searchTerm || 
         contactPersons[].name match $searchTerm || 
-        contactPersons[].email match $searchTerm
+        contactPersons[].email match $searchTerm ||
+        contactPersons[].linkedinUrl match $searchTerm
       )`
     }
 

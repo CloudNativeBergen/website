@@ -14,6 +14,7 @@ export const RegistrationContactPersonSchema = z.object({
   email: z.string().email('Valid email is required'),
   phone: z.string().optional(),
   role: z.string().optional(),
+  linkedinUrl: z.string().url().optional(),
   isPrimary: z.boolean().optional(),
 })
 

@@ -77,6 +77,7 @@ export interface ContactPerson extends Record<string, unknown> {
   email: string
   phone?: string
   role?: string
+  linkedinUrl?: string
   isPrimary?: boolean
 }
 
@@ -96,6 +97,7 @@ export interface SponsorInput {
   logoBright?: string | null
   orgNumber?: string
   address?: string
+  linkedinUrl?: string
   tierId?: string
 }
 
@@ -107,6 +109,7 @@ export interface SponsorExisting {
   website: string
   logo?: string | null
   logoBright?: string | null
+  linkedinUrl?: string
 }
 
 export type TemplateCategory =

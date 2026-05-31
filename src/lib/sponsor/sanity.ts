@@ -327,7 +327,8 @@ export async function getAllSponsors(): Promise<{
         name,
         website,
         logo,
-        logoBright
+        logoBright,
+        linkedinUrl
       }`,
     )
 
