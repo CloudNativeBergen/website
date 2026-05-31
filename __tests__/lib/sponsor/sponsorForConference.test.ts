@@ -361,6 +361,41 @@ describe('ContactPersonSchema', () => {
     const result = ContactPersonSchema.safeParse(input)
     expect(result.success).toBe(false)
   })
+
+  it('passes with valid linkedinUrl', () => {
+    const result = ContactPersonSchema.safeParse({
+      ...validContact,
+      linkedinUrl: 'https://linkedin.com/in/jane-doe',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('passes without linkedinUrl (optional)', () => {
+    const result = ContactPersonSchema.safeParse(validContact)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.linkedinUrl).toBeUndefined()
+    }
+  })
+
+  it('transforms null linkedinUrl to undefined', () => {
+    const result = ContactPersonSchema.safeParse({
+      ...validContact,
+      linkedinUrl: null,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.linkedinUrl).toBeUndefined()
+    }
+  })
+
+  it('fails with invalid linkedinUrl', () => {
+    const result = ContactPersonSchema.safeParse({
+      ...validContact,
+      linkedinUrl: 'not-a-url',
+    })
+    expect(result.success).toBe(false)
+  })
 })
 
 describe('BillingInfoSchema', () => {

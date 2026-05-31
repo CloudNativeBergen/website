@@ -162,4 +162,26 @@ describe('filterProposals', () => {
     expect(result.map((p) => p._id)).toContain('1')
     expect(result.map((p) => p._id)).toContain('3')
   })
+
+  it('should not filter when status array is empty (treat as no filter)', () => {
+    const filters: ProposalFilters = { status: [] }
+    const result = filterProposals(proposals, filters)
+    expect(result).toHaveLength(3)
+  })
+
+  it('should not filter when format array is empty (treat as no filter)', () => {
+    const filters: ProposalFilters = { format: [] }
+    const result = filterProposals(proposals, filters)
+    expect(result).toHaveLength(3)
+  })
+
+  it('hideMultipleTalks handles proposals with no speakers', () => {
+    const testProposals = [
+      mockProposal({ _id: '1', title: 'No Speakers', speakers: undefined }),
+      mockProposal({ _id: '2', title: 'Empty Speakers', speakers: [] }),
+    ]
+    const filters: ProposalFilters = { hideMultipleTalks: true }
+    const result = filterProposals(testProposals, filters)
+    expect(result).toHaveLength(2)
+  })
 })

@@ -669,8 +669,8 @@ export const sponsorRouter = router({
             let cmp = 0
             switch (sortBy) {
               case 'lastActivity': {
-                const aTime = a.lastActivity?.createdAt || a._createdAt
-                const bTime = b.lastActivity?.createdAt || b._createdAt
+                const aTime = a.lastActivity?.createdAt || a._updatedAt
+                const bTime = b.lastActivity?.createdAt || b._updatedAt
                 cmp = new Date(aTime).getTime() - new Date(bTime).getTime()
                 break
               }

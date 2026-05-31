@@ -19,6 +19,7 @@ function createSponsor(
     status: 'prospect',
     invoiceStatus: 'not-sent',
     contractCurrency: 'NOK',
+    contactPersons: [{ _key: 'cp1', name: 'Jane', email: 'jane@acme.com' }],
     ...overrides,
   }
 }
@@ -339,6 +340,21 @@ describe('generateActionItems', () => {
         }),
       )
     })
+
+    it('does not trigger when nextFollowUpAt is set', () => {
+      const tomorrow = new Date(
+        Date.now() + 1 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        tags: ['needs-follow-up'],
+        nextFollowUpAt: tomorrow,
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ title: 'Follow-up Needed' }),
+      )
+    })
   })
 
   describe('stale negotiations (priority 5)', () => {
@@ -386,7 +402,7 @@ describe('generateActionItems', () => {
       expect(items).toContainEqual(expect.objectContaining({ type: 'stale' }))
     })
 
-    it('does not trigger for prospect status', () => {
+    it('does not trigger for prospect status (uses separate stale-prospect rule)', () => {
       const tenDaysAgo = new Date(
         Date.now() - 10 * 24 * 60 * 60 * 1000,
       ).toISOString()
@@ -397,7 +413,208 @@ describe('generateActionItems', () => {
       const items = generateActionItems([sponsor])
 
       expect(items).not.toContainEqual(
-        expect.objectContaining({ type: 'stale' }),
+        expect.objectContaining({ type: 'stale', title: 'Stale Negotiation' }),
+      )
+    })
+
+    it('uses lastActivity.createdAt over _updatedAt when available', () => {
+      const recentUpdatedAt = new Date().toISOString()
+      const oldActivity = new Date(
+        Date.now() - 10 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        status: 'contacted',
+        _updatedAt: recentUpdatedAt,
+        lastActivity: {
+          activityType: 'email',
+          description: 'Sent email',
+          createdAt: oldActivity,
+        },
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({ type: 'stale', title: 'Stale Negotiation' }),
+      )
+    })
+  })
+
+  describe('follow-up due (priority 2)', () => {
+    it('generates action item when nextFollowUpAt is in the past', () => {
+      const yesterday = new Date(
+        Date.now() - 1 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({ nextFollowUpAt: yesterday })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({
+          type: 'follow-up',
+          title: 'Follow-up Due',
+          priority: 2,
+        }),
+      )
+    })
+
+    it('does not trigger when nextFollowUpAt is in the future', () => {
+      const tomorrow = new Date(
+        Date.now() + 1 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({ nextFollowUpAt: tomorrow })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ title: 'Follow-up Due' }),
+      )
+    })
+
+    it('does not trigger when nextFollowUpAt is not set', () => {
+      const sponsor = createSponsor({})
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ title: 'Follow-up Due' }),
+      )
+    })
+  })
+
+  describe('missing contact info (priority 3)', () => {
+    it('generates action item for prospect with no contact persons', () => {
+      const sponsor = createSponsor({
+        status: 'prospect',
+        contactPersons: [],
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({
+          type: 'missing-contact',
+          title: 'No Contact Info',
+          priority: 3,
+        }),
+      )
+    })
+
+    it('generates action item for contacted status with no contacts', () => {
+      const sponsor = createSponsor({
+        status: 'contacted',
+        contactPersons: [],
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({ type: 'missing-contact' }),
+      )
+    })
+
+    it('does not trigger when contact persons exist', () => {
+      const sponsor = createSponsor({
+        status: 'prospect',
+        contactPersons: [
+          { _key: 'cp1', name: 'Alice', email: 'alice@acme.com' },
+        ],
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ type: 'missing-contact' }),
+      )
+    })
+
+    it('does not trigger for negotiating status', () => {
+      const sponsor = createSponsor({
+        status: 'negotiating',
+        contactPersons: [],
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ type: 'missing-contact' }),
+      )
+    })
+
+    it('triggers when contactPersons is undefined', () => {
+      const sponsor = createSponsor({
+        status: 'prospect',
+        contactPersons: undefined,
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({ type: 'missing-contact' }),
+      )
+    })
+  })
+
+  describe('stale prospects (priority 5.5)', () => {
+    it('generates action item for prospect with no activity in 14+ days', () => {
+      const fifteenDaysAgo = new Date(
+        Date.now() - 15 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        status: 'prospect',
+        _updatedAt: fifteenDaysAgo,
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({
+          type: 'stale',
+          title: 'Stale Prospect',
+          priority: 5.5,
+        }),
+      )
+    })
+
+    it('does not trigger for prospects updated within 14 days', () => {
+      const tenDaysAgo = new Date(
+        Date.now() - 10 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        status: 'prospect',
+        _updatedAt: tenDaysAgo,
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ title: 'Stale Prospect' }),
+      )
+    })
+
+    it('does not trigger for high-priority prospects even when stale', () => {
+      const twentyDaysAgo = new Date(
+        Date.now() - 20 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        status: 'prospect',
+        _updatedAt: twentyDaysAgo,
+        tags: ['high-priority'],
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).not.toContainEqual(
+        expect.objectContaining({ title: 'Stale Prospect' }),
+      )
+    })
+
+    it('uses lastActivity.createdAt when available', () => {
+      const recentUpdatedAt = new Date().toISOString()
+      const oldActivity = new Date(
+        Date.now() - 20 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const sponsor = createSponsor({
+        status: 'prospect',
+        _updatedAt: recentUpdatedAt,
+        lastActivity: {
+          activityType: 'note',
+          description: 'A note',
+          createdAt: oldActivity,
+        },
+      })
+      const items = generateActionItems([sponsor])
+
+      expect(items).toContainEqual(
+        expect.objectContaining({ title: 'Stale Prospect' }),
       )
     })
   })
@@ -500,7 +717,8 @@ describe('generateActionItems', () => {
       )
       const items = generateActionItems(sponsors)
 
-      expect(items.length).toBeLessThanOrEqual(5)
+      // No cap — all items are returned
+      expect(items.length).toBeGreaterThan(5)
     })
   })
 
