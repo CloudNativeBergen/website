@@ -269,9 +269,16 @@ export async function updateSpeaker(
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    const { image, ...speakerWithoutImage } = speaker
+    const { image, slug, ...speakerWithoutImage } = speaker
 
     const patchData: Record<string, unknown> = { ...speakerWithoutImage }
+
+    if (slug) {
+      patchData.slug = {
+        _type: 'slug',
+        current: slug,
+      }
+    }
 
     if (typeof image === 'string' && image.startsWith('image-')) {
       patchData.image = {
