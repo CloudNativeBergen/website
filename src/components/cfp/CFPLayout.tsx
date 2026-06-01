@@ -5,7 +5,6 @@ import {
   UserIcon,
   PlusIcon,
   ListBulletIcon,
-  EnvelopeIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
@@ -60,14 +59,7 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
         ]
       : baseNavigation
 
-  const navigation: NavigationItem[] = [
-    ...navigationWithTravelSupport,
-    {
-      name: 'Email Settings',
-      href: `/cfp/admin${impersonateQuery}`,
-      icon: EnvelopeIcon,
-    },
-  ]
+  const navigation: NavigationItem[] = [...navigationWithTravelSupport]
 
   return (
     <DashboardLayout
