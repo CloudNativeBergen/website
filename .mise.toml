@@ -3,8 +3,12 @@ node = "24"
 pnpm = "10"
 
 [tasks.all]
-description = "Run all checks, tests, and build"
-depends = ["check", "test", "build"]
+description = "Run all checks, tests, and build sequentially"
+run = [
+  "mise run check",
+  "mise run test",
+  "mise run build"
+]
 
 [tasks.dev]
 description = "Start the Next.js development server with Turbopack"
@@ -20,23 +24,23 @@ run = "rm -rf .next storybook-static dist"
 
 [tasks.test]
 description = "Run all tests"
-run = "pnpm run test"
+run = "pnpm run -s test"
 
 [tasks.check]
 description = "Run all checks (lint, typecheck, format, knip)"
-run = "pnpm run check"
+run = "pnpm run -s check"
 
 [tasks.format]
 description = "Format code using Prettier"
-run = "pnpm run format"
+run = "pnpm run -s format"
 
 [tasks.lint]
 description = "Run ESLint"
-run = "pnpm run lint"
+run = "pnpm run -s lint"
 
 [tasks.typecheck]
 description = "Run TypeScript type checks"
-run = "pnpm run typecheck"
+run = "pnpm run -s typecheck"
 
 [tasks.storybook]
 description = "Start Storybook development server"
