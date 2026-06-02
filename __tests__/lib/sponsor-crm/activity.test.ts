@@ -24,11 +24,91 @@ vi.mock('@/lib/time', () => ({
 import {
   createSponsorActivity,
   logBulkEmailSent,
+  deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
+
+const { mockFetch, mockDelete } = vi.hoisted(() => {
+  return {
+    mockFetch: vi.fn(),
+    mockDelete: vi.fn(),
+  }
+})
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientWrite: {
+    create: mockCreate.mockResolvedValue({ _id: 'activity-1' }),
+    transaction: mockTransaction,
+    fetch: mockFetch,
+    delete: mockDelete,
+  },
+}))
 
 describe('sponsor-crm activity', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  describe('deleteSponsorActivity', () => {
+    it('should allow deleting a custom note by its creator', async () => {
+      mockFetch.mockResolvedValueOnce({
+        activityType: 'note',
+        createdBy: { _ref: 'user-1' },
+      })
+      mockDelete.mockResolvedValueOnce({})
+
+      const { success, error } = await deleteSponsorActivity(
+        'activity-1',
+        'user-1',
+      )
+
+      expect(success).toBe(true)
+      expect(error).toBeUndefined()
+      expect(mockDelete).toHaveBeenCalledWith('activity-1')
+    })
+
+    it('should reject deleting a system-generated activity', async () => {
+      mockFetch.mockResolvedValueOnce({
+        activityType: 'stage_change',
+        createdBy: { _ref: 'user-1' },
+      })
+
+      const { success, error } = await deleteSponsorActivity(
+        'activity-1',
+        'user-1',
+      )
+
+      expect(success).toBe(false)
+      expect(error?.message).toContain('Cannot delete system-generated')
+      expect(mockDelete).not.toHaveBeenCalled()
+    })
+
+    it('should reject deleting an activity created by another user', async () => {
+      mockFetch.mockResolvedValueOnce({
+        activityType: 'note',
+        createdBy: { _ref: 'user-other' },
+      })
+
+      const { success, error } = await deleteSponsorActivity(
+        'activity-1',
+        'user-1',
+      )
+
+      expect(success).toBe(false)
+      expect(error?.message).toContain('only delete your own activities')
+      expect(mockDelete).not.toHaveBeenCalled()
+    })
+
+    it('should return error if activity is not found', async () => {
+      mockFetch.mockResolvedValueOnce(null)
+
+      const { success, error } = await deleteSponsorActivity(
+        'activity-1',
+        'user-1',
+      )
+
+      expect(success).toBe(false)
+      expect(error?.message).toContain('Activity not found')
+    })
   })
 
   describe('createSponsorActivity', () => {

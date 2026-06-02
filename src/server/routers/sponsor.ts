@@ -66,6 +66,7 @@ import {
   logAssignmentChange,
   logSignatureStatusChange,
   createSponsorActivity,
+  deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -740,6 +741,22 @@ export const sponsorRouter = router({
           data.assignedTo = userId
         }
 
+        // Ensure assigned person is an organizer of this conference
+        if (data.assignedTo) {
+          const conferenceId = await resolveConferenceId()
+          const { getOrganizersByConference } =
+            await import('@/lib/speaker/sanity')
+          const { speakers: organizers } =
+            await getOrganizersByConference(conferenceId)
+          if (!organizers?.some((o) => o._id === data.assignedTo)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Assigned person must be an organizer of this conference',
+            })
+          }
+        }
+
         const { sponsorForConference, error } =
           await createSponsorForConference(data as SponsorForConferenceInput)
 
@@ -776,6 +793,22 @@ export const sponsorRouter = router({
             code: 'NOT_FOUND',
             message: 'Sponsor relationship not found',
           })
+        }
+
+        // Ensure assigned person is an organizer of this conference
+        if (updateData.assignedTo) {
+          const conferenceId = await resolveConferenceId()
+          const { getOrganizersByConference } =
+            await import('@/lib/speaker/sanity')
+          const { speakers: organizers } =
+            await getOrganizersByConference(conferenceId)
+          if (!organizers?.some((o) => o._id === updateData.assignedTo)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Assigned person must be an organizer of this conference',
+            })
+          }
         }
 
         const { sponsorForConference, error } =
@@ -1071,8 +1104,26 @@ export const sponsorRouter = router({
         }
 
         try {
+          // Ensure assigned person is an organizer of this conference
+          if (input.assignedTo) {
+            const conferenceId = await resolveConferenceId()
+            const { getOrganizersByConference } =
+              await import('@/lib/speaker/sanity')
+            const { speakers: organizers } =
+              await getOrganizersByConference(conferenceId)
+            if (!organizers?.some((o) => o._id === input.assignedTo)) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'Assigned person must be an organizer of this conference',
+              })
+            }
+          }
+
           return await bulkUpdateSponsors(input, userId)
         } catch (error) {
+          if (error instanceof TRPCError) throw error
+
           console.error('Bulk update error:', error)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -1286,6 +1337,25 @@ export const sponsorRouter = router({
           }
 
           return { activityId }
+        }),
+
+      delete: adminProcedure
+        .input(IdParamSchema)
+        .mutation(async ({ input, ctx }) => {
+          const { success, error } = await deleteSponsorActivity(
+            input.id,
+            ctx.speaker._id,
+          )
+
+          if (error || !success) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error?.message || 'Failed to delete sponsor activity',
+              cause: error,
+            })
+          }
+
+          return { success: true }
         }),
     }),
 

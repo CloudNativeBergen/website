@@ -228,3 +228,50 @@ export async function logBulkEmailSent(
     return { success: false, error: error as Error }
   }
 }
+
+export async function deleteSponsorActivity(
+  activityId: string,
+  userId: string,
+): Promise<{ success: boolean; error?: Error }> {
+  try {
+    // Fetch the activity to check its type and creator before deleting
+    const activity = await clientWrite.fetch<{
+      activityType: ActivityType
+      createdBy?: { _ref: string }
+    }>(
+      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy }`,
+      {
+        activityId,
+      },
+    )
+
+    if (!activity) {
+      return { success: false, error: new Error('Activity not found') }
+    }
+
+    // Only allow deleting user-supplied activity types
+    const deletableTypes: ActivityType[] = ['note', 'call', 'meeting', 'email']
+    if (!deletableTypes.includes(activity.activityType)) {
+      return {
+        success: false,
+        error: new Error(
+          `Cannot delete system-generated activity of type: ${activity.activityType}`,
+        ),
+      }
+    }
+
+    // Ensure the user is the creator of the activity
+    if (activity.createdBy?._ref !== userId) {
+      return {
+        success: false,
+        error: new Error('You can only delete your own activities'),
+      }
+    }
+
+    await clientWrite.delete(activityId)
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to delete sponsor activity:', error)
+    return { success: false, error: error as Error }
+  }
+}
