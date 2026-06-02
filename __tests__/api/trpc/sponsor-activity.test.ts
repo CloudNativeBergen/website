@@ -124,6 +124,27 @@ describe('Sponsor CRM Activities & Assignments', () => {
         expect(createSponsorForConference).toHaveBeenCalled()
       })
 
+      it('should allow explicitly passing null to stay unassigned', async () => {
+        const caller = createCaller(mockOrganizer)
+        vi.mocked(createSponsorForConference).mockResolvedValue({
+          sponsorForConference: { _id: 'sfc-1' } as any,
+        })
+
+        await caller.sponsor.crm.create({
+          sponsor: 'sponsor-1',
+          conference: 'conf-1',
+          status: 'prospect',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
+          assignedTo: null,
+        })
+
+        // Verify it was passed as null to the library, bypassing auto-assign
+        expect(createSponsorForConference).toHaveBeenCalledWith(
+          expect.objectContaining({ assignedTo: null }),
+        )
+      })
+
       it('should reject assignment to a non-organizer', async () => {
         const caller = createCaller(mockOrganizer)
 
@@ -157,6 +178,26 @@ describe('Sponsor CRM Activities & Assignments', () => {
 
         expect(result).toBeDefined()
         expect(updateSponsorForConference).toHaveBeenCalled()
+      })
+
+      it('should allow updating assignment to null (unassign)', async () => {
+        const caller = createCaller(mockOrganizer)
+        vi.mocked(getSponsorForConference).mockResolvedValue({
+          sponsorForConference: { _id: 'sfc-1', status: 'prospect' } as any,
+        })
+        vi.mocked(updateSponsorForConference).mockResolvedValue({
+          sponsorForConference: { _id: 'sfc-1' } as any,
+        })
+
+        await caller.sponsor.crm.update({
+          id: 'sfc-1',
+          assignedTo: null,
+        })
+
+        expect(updateSponsorForConference).toHaveBeenCalledWith(
+          'sfc-1',
+          expect.objectContaining({ assignedTo: null }),
+        )
       })
 
       it('should reject updating assignment to a non-organizer', async () => {

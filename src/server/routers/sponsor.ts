@@ -732,12 +732,11 @@ export const sponsorRouter = router({
         const userId = ctx.speaker._id
         const data = {
           ...input,
-          assignedTo: input.assignedTo === null ? undefined : input.assignedTo,
           tags: input.tags as SponsorTag[] | undefined,
         }
 
-        // Auto-assign to current user if not provided
-        if (!data.assignedTo && userId) {
+        // Auto-assign to current user if not provided (undefined)
+        if (data.assignedTo === undefined && userId) {
           data.assignedTo = userId
         }
 
@@ -814,46 +813,7 @@ export const sponsorRouter = router({
         const { sponsorForConference, error } =
           await updateSponsorForConference(id, {
             ...updateData,
-            assignedTo:
-              updateData.assignedTo === null
-                ? undefined
-                : updateData.assignedTo,
-            billing:
-              updateData.billing === null ? undefined : updateData.billing,
-            contactInitiatedAt:
-              updateData.contactInitiatedAt === null
-                ? undefined
-                : updateData.contactInitiatedAt,
-            contractSignedAt:
-              updateData.contractSignedAt === null
-                ? undefined
-                : updateData.contractSignedAt,
-            contractValue:
-              updateData.contractValue === null
-                ? undefined
-                : updateData.contractValue,
-            invoiceSentAt:
-              updateData.invoiceSentAt === null
-                ? undefined
-                : updateData.invoiceSentAt,
-            invoicePaidAt:
-              updateData.invoicePaidAt === null
-                ? undefined
-                : updateData.invoicePaidAt,
-            notes: updateData.notes === null ? undefined : updateData.notes,
             tags: updateData.tags as SponsorTag[] | undefined,
-            signerName:
-              updateData.signerName === null
-                ? undefined
-                : updateData.signerName,
-            signerEmail:
-              updateData.signerEmail === null
-                ? undefined
-                : updateData.signerEmail,
-            contractTemplate:
-              updateData.contractTemplate === null
-                ? undefined
-                : updateData.contractTemplate,
           })
 
         if (error) {

@@ -205,6 +205,8 @@ export async function createSponsorForConference(
         ? prepareArrayWithKeys(data.contactPersons, 'contact')
         : undefined,
       billing: data.billing || undefined,
+      nextFollowUpAt: data.nextFollowUpAt,
+      outreachCount: data.outreachCount,
     }
 
     const created = await clientWrite.create(doc)
@@ -286,6 +288,10 @@ export async function updateSponsorForConference(
         : null
     }
     if (data.billing !== undefined) updates.billing = data.billing
+    if (data.nextFollowUpAt !== undefined)
+      updates.nextFollowUpAt = data.nextFollowUpAt
+    if (data.outreachCount !== undefined)
+      updates.outreachCount = data.outreachCount
 
     await clientWrite.patch(id).set(updates).commit()
 

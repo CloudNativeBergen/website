@@ -241,24 +241,24 @@ export interface SponsorForConferenceInput {
   addons?: string[]
   contractStatus: ContractStatus
   signatureStatus?: SignatureStatus
-  signerName?: string
-  signerEmail?: string
+  signerName?: string | null
+  signerEmail?: string | null
   signingUrl?: string | null
-  contractTemplate?: string
+  contractTemplate?: string | null
   status: SponsorStatus
   assignedTo?: string | null
-  contactPersons?: ContactPerson[]
-  billing?: BillingInfo
-  contactInitiatedAt?: string
-  contractSignedAt?: string
-  organizerSignedAt?: string
-  organizerSignedBy?: string
-  contractValue?: number
+  contactPersons?: ContactPerson[] | null
+  billing?: BillingInfo | null
+  contactInitiatedAt?: string | null
+  contractSignedAt?: string | null
+  organizerSignedAt?: string | null
+  organizerSignedBy?: string | null
+  contractValue?: number | null
   contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoiceStatus: InvoiceStatus
-  invoiceSentAt?: string
-  invoicePaidAt?: string
-  notes?: string
+  invoiceSentAt?: string | null
+  invoicePaidAt?: string | null
+  notes?: string | null
   tags?: SponsorTag[]
   nextFollowUpAt?: string | null
   outreachCount?: number | null
