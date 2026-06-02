@@ -331,24 +331,29 @@ To prevent code sprawl and maintain a high-quality codebase, agents must strictl
 
 ### Commands
 
-- **Linting:** `pnpm run lint` - Runs ESLint to check for code quality and style issues.
+The project uses [mise](https://mise.jdx.sh/) for toolchain and task management.
+
+- **Full Check:** `mise run check` - Runs lint, typecheck, format check, and knip in parallel.
+- **Development Server:** `mise run dev` - Starts the Next.js development server with Turbopack.
+- **Build for Production:** `mise run build` - Builds the application for production.
+- **Testing:** `mise run test` - Runs Vitest tests.
+- **Formatting:** `mise run format` - Formats code using Prettier.
+- **Type Checking:** `mise run typecheck` - Runs TypeScript type checks.
+- **Linting:** `mise run lint` - Runs ESLint.
+- **Clean:** `mise run clean` - Removes build artifacts and cached files.
+- **Storybook:** `mise run storybook` - Starts the Storybook development server.
+- **Sanity:** `mise run sanity {command}` - Runs sanity commands (e.g., `mise run sanity deploy`).
+
+#### Legacy/Direct Commands (Available via pnpm)
+
 - **Linting (Fix):** `pnpm run lint:fix` - Runs ESLint with automatic fixes.
-- **Formatting:** `pnpm run format` - Formats code using Prettier.
-- **Format Check:** `pnpm run format:check` - Checks if code is formatted correctly.
-- **Type Checking:** `pnpm run typecheck` - Runs TypeScript type checks.
-- **Development Server:** `pnpm run dev` - Starts the Next.js development server with Turbopack.
-- **Build for Production:** `pnpm run build` - Builds the application for production.
-- **Testing:** `pnpm run test` - Runs Jest tests silently.
-- **Testing (Debug):** `pnpm run test:debug` - Runs Jest tests with debug output.
-- **Testing (Watch):** `pnpm run test:watch` - Runs Jest tests in watch mode.
-- **Storybook:** `pnpm storybook` - Starts the Storybook development server for design system documentation.
+- **Testing (Debug):** `pnpm run test:debug` - Runs Vitest tests with debug output.
+- **Testing (Watch):** `pnpm run test:watch` - Runs Vitest tests in watch mode.
 - **Storybook Build:** `pnpm build-storybook` - Builds static Storybook for deployment.
-- **Storybook Tests:** `pnpm run storybook:test` - Runs Storybook interaction tests (requires Storybook running).
-- **Storybook Tests (CI):** `pnpm run storybook:test-ci` - Builds Storybook and runs tests in CI mode.
+- **Storybook Tests:** `pnpm run storybook:test` - Runs Storybook interaction tests.
 - **Qodo CLI:** `pnpm qodo` - Main Qodo CLI for AI-powered development assistance.
-- **Qodo Chat:** `pnpm qodo:chat` - Interactive AI chat in terminal for code questions and generation.
-- **Qodo Review:** `pnpm qodo:review` - Review PR suggestions from Qodo Merge (auto-detects current branch PR, or pass PR number like `pnpm qodo:review 332`).
-- Run sanity commands with `pnpm sanity {command}` (e.g., `pnpm sanity deploy`) - do not use `npx sanity` directly.
+- **Qodo Chat:** `pnpm qodo:chat` - Interactive AI chat in terminal.
+- **Qodo Review:** `pnpm qodo:review` - Review PR suggestions from Qodo Merge.
 
 #### CLI (`cli/` — Rust)
 

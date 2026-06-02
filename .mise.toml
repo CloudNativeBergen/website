@@ -1,0 +1,47 @@
+[tools]
+node = "24"
+pnpm = "10"
+
+[tasks.dev]
+description = "Start the Next.js development server with Turbopack"
+run = "pnpm run dev"
+
+[tasks.build]
+description = "Build the application for production"
+run = "pnpm run build"
+
+[tasks.clean]
+description = "Remove build artifacts and cached files"
+run = "rm -rf .next storybook-static dist"
+
+[tasks.test]
+description = "Run all tests"
+run = "pnpm run test"
+
+[tasks.check]
+description = "Run all checks (lint, typecheck, format, knip)"
+run = "pnpm run check"
+
+[tasks.format]
+description = "Format code using Prettier"
+run = "pnpm run format"
+
+[tasks.lint]
+description = "Run ESLint"
+run = "pnpm run lint"
+
+[tasks.typecheck]
+description = "Run TypeScript type checks"
+run = "pnpm run typecheck"
+
+[tasks.storybook]
+description = "Start Storybook development server"
+run = "pnpm run storybook"
+
+[tasks.sanity]
+description = "Run sanity commands"
+run = "pnpm sanity {{args}}"
+
+[tasks.install]
+description = "Install dependencies"
+run = "pnpm install"
