@@ -334,6 +334,7 @@ To prevent code sprawl and maintain a high-quality codebase, agents must strictl
 The project uses [mise](https://mise.jdx.sh/) for toolchain and task management.
 
 - **Full Check:** `mise run check` - Runs lint, typecheck, format check, and knip in parallel.
+- **Full Suite:** `mise run all` - Runs `check`, `test`, and `build` sequentially.
 - **Development Server:** `mise run dev` - Starts the Next.js development server with Turbopack.
 - **Build for Production:** `mise run build` - Builds the application for production.
 - **Testing:** `mise run test` - Runs Vitest tests.
