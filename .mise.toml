@@ -2,6 +2,10 @@
 node = "24"
 pnpm = "10"
 
+[tasks.all]
+description = "Run all checks, tests, and build"
+depends = ["check", "test", "build"]
+
 [tasks.dev]
 description = "Start the Next.js development server with Turbopack"
 run = "pnpm run dev"
