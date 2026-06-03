@@ -30,8 +30,22 @@ export function getSpeakerIndicators(
     | (Speaker & { proposals?: ProposalExisting[] })
   )[],
   currentConferenceId?: string,
+  featuredSpeakerIds: string[] = [],
 ): SpeakerIndicator[] {
   const indicators: SpeakerIndicator[] = []
+
+  const isFeatured = speakers.some((speaker) =>
+    featuredSpeakerIds.includes(speaker._id),
+  )
+
+  if (isFeatured) {
+    indicators.push({
+      icon: StarIconSolid,
+      bgColor: 'bg-yellow-100',
+      textColor: 'text-yellow-700',
+      title: 'Featured speaker',
+    })
+  }
 
   const isSeasonedSpeaker = speakers.some((speaker) => {
     if ('previousAcceptedTalks' in speaker && speaker.previousAcceptedTalks) {
@@ -40,11 +54,11 @@ export function getSpeakerIndicators(
     return hasPreviousAcceptedTalks(speaker, currentConferenceId)
   })
 
-  if (isSeasonedSpeaker) {
+  if (isSeasonedSpeaker && !isFeatured) {
     indicators.push({
       icon: StarIconSolid,
-      bgColor: 'bg-yellow-100',
-      textColor: 'text-yellow-700',
+      bgColor: 'bg-gray-100 dark:bg-gray-700',
+      textColor: 'text-gray-500 dark:text-gray-300',
       title: 'Seasoned speaker - has previous accepted talks',
     })
   }
@@ -118,6 +132,7 @@ interface SpeakerIndicatorsProps {
   maxVisible?: number
   className?: string
   currentConferenceId?: string
+  featuredSpeakerIds?: string[]
 }
 
 export function SpeakerIndicators({
@@ -126,8 +141,13 @@ export function SpeakerIndicators({
   maxVisible = 5,
   className = '',
   currentConferenceId,
+  featuredSpeakerIds = [],
 }: SpeakerIndicatorsProps) {
-  const indicators = getSpeakerIndicators(speakers, currentConferenceId)
+  const indicators = getSpeakerIndicators(
+    speakers,
+    currentConferenceId,
+    featuredSpeakerIds,
+  )
   const visibleIndicators = indicators.slice(0, maxVisible)
   const iconSize = size === 'sm' ? 'h-3 w-3' : 'h-3 w-3'
   const containerSize = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'

@@ -203,6 +203,9 @@ export default function SpeakersPageClient({
           <SpeakerTable
             speakers={speakers}
             currentConferenceId={currentConferenceId}
+            featuredSpeakerIds={
+              conference.featuredSpeakers?.map((s) => s._id) || []
+            }
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />

@@ -39,10 +39,10 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
     case Status.accepted:
       return {
         text: statuses.get(Status.accepted) || 'Accepted',
-        bgColor: 'bg-green-100',
-        textColor: 'text-green-800',
-        ringColor: 'ring-green-600/20',
-        borderColor: 'border-l-green-500',
+        bgColor: 'bg-purple-100',
+        textColor: 'text-purple-800',
+        ringColor: 'ring-purple-600/20',
+        borderColor: 'border-l-purple-500',
       }
     case Status.waitlisted:
       return {

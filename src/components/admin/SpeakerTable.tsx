@@ -15,6 +15,7 @@ import {
   PencilIcon,
   EyeIcon,
   ArrowRightCircleIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
@@ -27,9 +28,11 @@ import {
   ActionMenuDivider,
 } from '@/components/ActionMenu'
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { api } from '@/lib/trpc/client'
 import {
   TableContainer,
   TableHeader,
@@ -62,6 +65,7 @@ interface SpeakerWithProposals extends Speaker {
 interface SpeakerTableProps {
   speakers: SpeakerWithProposals[]
   currentConferenceId?: string
+  featuredSpeakerIds?: string[]
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -116,8 +120,9 @@ const getProposalConferenceId = (proposal: ProposalExisting): string | null => {
 function getProposalBadgeColor(status: Status): BadgeColor {
   switch (status) {
     case Status.confirmed:
-    case Status.accepted:
       return 'green'
+    case Status.accepted:
+      return 'purple'
     case Status.submitted:
       return 'blue'
     case Status.draft:
@@ -178,6 +183,7 @@ const CopyBlueskyUsernameButton = ({
 export function SpeakerTable({
   speakers,
   currentConferenceId,
+  featuredSpeakerIds = [],
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -195,6 +201,22 @@ export function SpeakerTable({
     linkedin: false,
     indicators: true,
   })
+
+  const router = useRouter()
+  const addFeaturedSpeaker = api.featured.admin.addSpeaker.useMutation()
+  const removeFeaturedSpeaker = api.featured.admin.removeSpeaker.useMutation()
+
+  const toggleFeatured = async (
+    speakerId: string,
+    isCurrentlyFeatured: boolean,
+  ) => {
+    if (isCurrentlyFeatured) {
+      await removeFeaturedSpeaker.mutateAsync({ speakerId })
+    } else {
+      await addFeaturedSpeaker.mutateAsync({ speakerId })
+    }
+    router.refresh()
+  }
 
   const filteredSpeakers = useMemo(() => {
     return speakers.filter((speaker) => {
@@ -485,6 +507,7 @@ export function SpeakerTable({
                         maxVisible={5}
                         className="justify-start"
                         currentConferenceId={currentConferenceId}
+                        featuredSpeakerIds={featuredSpeakerIds}
                       />
                     </Td>
                   )}
@@ -607,6 +630,20 @@ export function SpeakerTable({
                   <Td align="right" className="whitespace-nowrap">
                     <div className="flex items-center justify-end">
                       <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
+                        <ActionMenuItem
+                          onClick={() =>
+                            toggleFeatured(
+                              speaker._id,
+                              featuredSpeakerIds.includes(speaker._id),
+                            )
+                          }
+                          icon={StarIcon}
+                        >
+                          {featuredSpeakerIds.includes(speaker._id)
+                            ? 'Remove from Featured'
+                            : 'Feature Speaker'}
+                        </ActionMenuItem>
+                        <ActionMenuDivider />
                         <ActionMenuItem
                           onClick={() => onEditSpeaker(speaker)}
                           icon={PencilIcon}

@@ -47,7 +47,7 @@ export default async function AdminSpeakers() {
   noStore()
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({})
+      await getConferenceForCurrentDomain({ featuredSpeakers: true })
 
     if (conferenceError || !conference) {
       return (
