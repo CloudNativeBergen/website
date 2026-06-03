@@ -36,6 +36,7 @@ interface ComputedSpeakerData {
   expertise: string[]
   company: string | undefined
   talkCount: number
+  hasWorkshop: boolean
 }
 
 const variantConfig = {
@@ -132,12 +133,18 @@ function computeSpeakerData(speaker: SpeakerWithTalks): ComputedSpeakerData {
   const expertise = deriveExpertise(talks)
   const company = deriveCompany(speaker.title)
   const talkCount = talks.length
+  const hasWorkshop = talks.some(
+    (talk) =>
+      talk.format === Format.workshop_120 ||
+      talk.format === Format.workshop_240,
+  )
 
   return {
     talks,
     expertise,
     company,
     talkCount,
+    hasWorkshop,
   }
 }
 
@@ -190,7 +197,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
 }: SpeakerPromotionCardProps) {
   const variantSettings = variantConfig[variant]
 
-  const { expertise, company, talkCount } = useMemo(
+  const { expertise, company, talkCount, hasWorkshop } = useMemo(
     () => computeSpeakerData(speaker),
     [speaker],
   )
@@ -241,7 +248,14 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
         {variant === 'featured' && talkCount > 0 && (
           <div className="relative flex h-8 items-center rounded-full border border-brand-fresh-green/30 bg-brand-fresh-green/15 px-2 backdrop-blur-sm sm:px-3">
             <span className="font-inter text-xs font-medium text-brand-fresh-green">
-              {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
+              {talkCount}{' '}
+              {talkCount === 1
+                ? hasWorkshop
+                  ? 'Workshop'
+                  : 'Talk'
+                : hasWorkshop
+                  ? 'Sessions'
+                  : 'Talks'}
             </span>
           </div>
         )}
