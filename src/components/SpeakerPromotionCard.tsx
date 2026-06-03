@@ -246,14 +246,6 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           </div>
         )}
 
-        {variant === 'featured' && company && (
-          <div className="relative hidden h-8 items-center rounded-full border border-gray-300/30 bg-gray-100/60 px-2 backdrop-blur-sm sm:flex sm:px-3">
-            <span className="font-inter max-w-20 truncate text-xs font-medium text-gray-600 sm:max-w-none">
-              {company}
-            </span>
-          </div>
-        )}
-
         {variant === 'featured' &&
           speaker.flags &&
           speaker.flags.length > 0 && (
@@ -296,7 +288,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
   const speakerBody = (
     <div className="relative flex-1">
       <div
-        className={`mb-6 flex ${variant === 'featured' ? 'items-start space-x-6' : 'flex-col items-center space-y-3'}`}
+        className={`mb-6 flex ${variant === 'featured' ? 'flex-col items-center space-y-5 text-center' : 'flex-col items-center space-y-3 text-center'}`}
       >
         <div className="shrink-0">
           <SpeakerImage
@@ -304,7 +296,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
             name={name}
             size={
               variant === 'featured'
-                ? 96
+                ? 140
                 : variant === 'organizer'
                   ? 140
                   : variant === 'compact'
@@ -315,13 +307,11 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           />
         </div>
 
-        <div
-          className={`min-w-0 flex-1 ${variant === 'featured' ? '' : 'text-center'}`}
-        >
+        <div className="min-w-0 flex-1">
           <h3 className={`mb-3 ${variantSettings.titleClass}`}>{name}</h3>
 
           {displayTitle && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
               <span
                 className={`font-inter line-clamp-2 font-semibold ${variant === 'featured' ? 'text-lg' : ''}`}
               >
@@ -330,10 +320,14 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
             </div>
           )}
 
-          {company && variant !== 'compact' && variant !== 'featured' && (
+          {company && variant !== 'compact' && (
             <div className="mt-3 flex items-center justify-center space-x-2">
-              <BuildingOfficeIcon className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-              <span className="font-inter line-clamp-1 text-sm text-gray-600 dark:text-gray-400">
+              <BuildingOfficeIcon
+                className={`h-4 w-4 shrink-0 ${variant === 'featured' ? 'text-brand-cloud-blue dark:text-brand-cloud-blue/80' : 'text-gray-400 dark:text-gray-500'}`}
+              />
+              <span
+                className={`font-inter line-clamp-1 text-sm ${variant === 'featured' ? 'font-medium text-brand-slate-gray dark:text-gray-300' : 'text-gray-600 dark:text-gray-400'}`}
+              >
                 {company}
               </span>
             </div>
