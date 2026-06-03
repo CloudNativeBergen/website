@@ -7,6 +7,7 @@ import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
+import { CoSpeakerManager } from '@/components/cfp/CoSpeakerManager'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
@@ -183,6 +184,11 @@ export default async function ProposalViewPage({
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <ProposalReadOnlyView proposal={proposal} />
           </div>
+
+          {(proposal.status === 'confirmed' ||
+            proposal.status === 'accepted') && (
+            <CoSpeakerManager proposal={proposal} />
+          )}
         </div>
 
         {(proposal.status === 'confirmed' ||

@@ -209,7 +209,9 @@ export async function sendInvitationEmail(
     if (conferenceError || !conference) {
       console.error('Error fetching conference data:', conferenceError)
     }
-    const invitationUrl = `${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
+
+    const protocol = domain.includes('localhost') ? 'http://' : 'https://'
+    const invitationUrl = `${protocol}${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     // TODO: Fetch proposal details when we can do so without speakerId
 

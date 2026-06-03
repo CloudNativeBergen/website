@@ -40,7 +40,7 @@ import {
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
-import { createReference } from '@/lib/sanity/helpers'
+import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { Action, Status } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
@@ -1373,6 +1373,17 @@ export const proposalRouter = router({
             })
           }
 
+          if (
+            invitation.invitedEmail.toLowerCase() !==
+            ctx.speaker.email.toLowerCase()
+          ) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'This invitation was sent to a different email address. Please sign in with the invited email address to accept.',
+            })
+          }
+
           // Update invitation status
           const status = input.accept ? 'accepted' : 'declined'
           await updateInvitationStatus(
@@ -1405,7 +1416,7 @@ export const proposalRouter = router({
                 await clientWrite
                   .patch(proposalId)
                   .setIfMissing({ speakers: [] })
-                  .append('speakers', [createReference(ctx.speaker._id)])
+                  .append('speakers', [createReferenceWithKey(ctx.speaker._id)])
                   .commit()
               }
             }
