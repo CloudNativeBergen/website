@@ -204,7 +204,8 @@ export function SponsorCRMPipeline({
     setSelectedSponsor(null)
     setIsFormOpen(false)
     updateUrlParams({ sponsor: null, view: null })
-  }, [updateUrlParams])
+    utils.sponsor.crm.list.invalidate()
+  }, [updateUrlParams, utils.sponsor.crm.list])
 
   const handleFormViewChange = useCallback(
     (formView: string) => {
@@ -226,7 +227,8 @@ export function SponsorCRMPipeline({
   const handleCloseEmail = useCallback(() => {
     setEmailSponsor(null)
     setIsEmailModalOpen(false)
-  }, [])
+    utils.sponsor.crm.list.invalidate()
+  }, [utils.sponsor.crm.list])
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
