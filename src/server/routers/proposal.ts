@@ -1338,7 +1338,26 @@ export const proposalRouter = router({
           }
 
           // Send invitation email
-          await sendInvitationEmail(invitation)
+          const emailSent = await sendInvitationEmail(invitation)
+
+          if (!emailSent) {
+            // Attempt to clean up the orphaned invitation since email failed
+            try {
+              const { clientWrite } = await import('@/lib/sanity/client')
+              await clientWrite.delete(invitation._id)
+            } catch (cleanupError) {
+              console.error(
+                'Failed to cleanup orphaned invitation:',
+                cleanupError,
+              )
+            }
+
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                'Failed to send invitation email. Please check that the email address is correct and try again.',
+            })
+          }
 
           return invitation
         } catch (error) {
