@@ -137,7 +137,7 @@ export async function getPublicSponsorsForConference(
   conferenceId: string,
 ): Promise<ConferenceSponsor[]> {
   return clientRead.fetch<ConferenceSponsor[]>(
-    `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won" && defined(tier)]
+    `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]
       | order(tier->tierType asc, tier->price[0].amount desc, tier->title asc){
       "_sfcId": _id,
       sponsor->{
