@@ -4,6 +4,7 @@ import {
   sortTierNamesByValue,
   deterministicShuffle,
   groupSponsorsByTier,
+  filterPublicSponsors,
   getDailySeed,
 } from '@/lib/sponsor/utils'
 import type { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
@@ -178,6 +179,29 @@ describe('groupSponsorsByTier', () => {
     ])
     expect(Object.keys(groups)).toEqual(['Gold'])
     expect(groups['Gold']).toHaveLength(2)
+  })
+})
+
+describe('filterPublicSponsors', () => {
+  function tiered(name: string): ConferenceSponsor {
+    return {
+      sponsor: { _id: name, name, website: 'https://example.com' },
+      tier: { title: 'Gold', tagline: '', tierType: 'standard' },
+    }
+  }
+  const tierless: ConferenceSponsor = {
+    sponsor: { _id: 'X', name: 'X', website: 'https://example.com' },
+    tier: null,
+  }
+
+  it('excludes sponsors without a tier (unset or dangling reference)', () => {
+    const result = filterPublicSponsors([tiered('A'), tierless, tiered('B')])
+    expect(result.map((s) => s.sponsor.name)).toEqual(['A', 'B'])
+  })
+
+  it('returns all sponsors when every sponsor has a tier', () => {
+    const all = [tiered('A'), tiered('B')]
+    expect(filterPublicSponsors(all)).toHaveLength(2)
   })
 })
 
