@@ -68,7 +68,7 @@ export interface ConferenceSponsor {
       amount: number
       currency: string
     }>
-  }
+  } | null
 }
 
 export interface ContactPerson extends Record<string, unknown> {

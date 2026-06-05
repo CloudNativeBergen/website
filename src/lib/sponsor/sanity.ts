@@ -92,7 +92,22 @@ export async function deleteSponsorTier(
   id: string,
 ): Promise<{ error?: Error }> {
   try {
-    await clientWrite.delete(id)
+    // Clear the tier from any sponsor that references it before deleting, so we
+    // never leave a dangling reference (which projects to null and would let a
+    // tierless sponsor slip onto public surfaces). Referencing sponsors become
+    // cleanly tierless: hidden from public, surfaced under "No Tier" in admin.
+    const referencingSponsorIds = await clientWrite.fetch<string[]>(
+      `*[_type == "sponsorForConference" && tier._ref == $id]._id`,
+      { id },
+    )
+
+    const transaction = clientWrite.transaction()
+    for (const sponsorId of referencingSponsorIds) {
+      transaction.patch(sponsorId, { unset: ['tier'] })
+    }
+    transaction.delete(id)
+    await transaction.commit()
+
     return {}
   } catch (error) {
     return { error: error as Error }

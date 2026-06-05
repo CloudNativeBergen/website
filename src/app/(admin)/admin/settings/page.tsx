@@ -428,7 +428,7 @@ export default async function AdminSettings() {
             <FieldRow
               label="Sponsors"
               value={conference.sponsors.map(
-                (s) => `${s.sponsor.name} (${s.tier.title})`,
+                (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
               )}
               type="array"
             />

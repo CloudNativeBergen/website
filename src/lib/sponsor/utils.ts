@@ -36,6 +36,19 @@ export function formatTierLabel(
 }
 
 /**
+ * Returns only sponsors that are publicly displayable. A sponsor is public
+ * only if it has a tier that actually resolves — a missing tier reference and a
+ * dangling one (tier doc deleted) both project to `null`, so this single guard
+ * excludes both. Use at public render sites that don't group by tier (e.g. the
+ * stream banner); grouping sites get the same exclusion via groupSponsorsByTier.
+ */
+export function filterPublicSponsors<T extends ConferenceSponsor>(
+  sponsors: T[],
+): T[] {
+  return sponsors.filter((sponsor) => sponsor.tier != null)
+}
+
+/**
  * Groups sponsors by their tier title, handling special tiers
  */
 export function groupSponsorsByTier<T extends ConferenceSponsor>(
@@ -43,6 +56,11 @@ export function groupSponsorsByTier<T extends ConferenceSponsor>(
 ): Record<string, T[]> {
   return sponsors.reduce(
     (acc, sponsor) => {
+      // Sponsors without a tier are not shown publicly; skip them defensively
+      // so a missing tier can never crash the front page.
+      if (!sponsor.tier) {
+        return acc
+      }
       const tierTitle =
         sponsor.tier.tierType === 'special' ? 'SPECIAL' : sponsor.tier.title
       if (!acc[tierTitle]) {

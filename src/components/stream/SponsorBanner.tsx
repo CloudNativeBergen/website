@@ -1,6 +1,7 @@
 'use client'
 
 import { ConferenceSponsor } from '@/lib/sponsor/types'
+import { filterPublicSponsors } from '@/lib/sponsor/utils'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import clsx from 'clsx'
 import type { CSSProperties } from 'react'
@@ -30,16 +31,21 @@ export function SponsorBanner({
     }
   }, [sponsors])
 
-  if (!sponsors || sponsors.length === 0) {
+  // Only sponsors with a resolved tier are shown publicly; this banner doesn't
+  // group by tier, so apply the public-tier filter here (excludes unset and
+  // dangling tier references alike).
+  const visibleSponsors = filterPublicSponsors(sponsors ?? [])
+
+  if (visibleSponsors.length === 0) {
     return null
   }
 
   // Duplicate sponsors multiple times to ensure smooth scrolling
   const duplicatedSponsors = [
-    ...sponsors,
-    ...sponsors,
-    ...sponsors,
-    ...sponsors,
+    ...visibleSponsors,
+    ...visibleSponsors,
+    ...visibleSponsors,
+    ...visibleSponsors,
   ]
 
   return (
