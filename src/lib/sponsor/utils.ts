@@ -43,6 +43,11 @@ export function groupSponsorsByTier<T extends ConferenceSponsor>(
 ): Record<string, T[]> {
   return sponsors.reduce(
     (acc, sponsor) => {
+      // Sponsors without a tier are not shown publicly; skip them defensively
+      // so a missing tier can never crash the front page.
+      if (!sponsor.tier) {
+        return acc
+      }
       const tierTitle =
         sponsor.tier.tierType === 'special' ? 'SPECIAL' : sponsor.tier.title
       if (!acc[tierTitle]) {

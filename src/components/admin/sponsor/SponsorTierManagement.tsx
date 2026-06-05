@@ -76,7 +76,7 @@ export function SponsorTierManagement({
     )
 
     setSponsorsByTier((prev) => {
-      const tierName = newSponsor.tier.title
+      const tierName = newSponsor.tier?.title ?? 'No Tier'
       const currentTierSponsors = prev[tierName] || []
       const updatedTierSponsors = [...currentTierSponsors, newSponsor].sort(
         (a, b) => a.sponsor.name.localeCompare(b.sponsor.name),
@@ -88,7 +88,7 @@ export function SponsorTierManagement({
     })
 
     setSortedTierNames((prev) => {
-      const tierName = newSponsor.tier.title
+      const tierName = newSponsor.tier?.title ?? 'No Tier'
       if (!prev.includes(tierName)) {
         return [...prev, tierName]
       }
@@ -98,7 +98,7 @@ export function SponsorTierManagement({
     showNotification({
       type: 'success',
       title: 'Sponsor added successfully',
-      message: `${newSponsor.sponsor.name} has been added to the ${newSponsor.tier.title} tier.`,
+      message: `${newSponsor.sponsor.name} has been added to the ${newSponsor.tier?.title ?? 'No Tier'} tier.`,
     })
   }
 
@@ -146,7 +146,7 @@ export function SponsorTierManagement({
         )
       })
 
-      const tierName = updatedSponsor.tier.title
+      const tierName = updatedSponsor.tier?.title ?? 'No Tier'
       if (!newSponsorsByTier[tierName]) {
         newSponsorsByTier[tierName] = []
       }

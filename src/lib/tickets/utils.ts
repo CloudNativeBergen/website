@@ -115,7 +115,7 @@ export function calculateCategoryStats(
 
 export function calculateSponsorTickets(
   conference: {
-    sponsors?: Array<{ tier?: { title?: string } }>
+    sponsors?: Array<{ tier?: { title?: string } | null }>
   },
   tierAllocation: Record<string, number>,
 ): Record<string, SponsorTicketData> {
