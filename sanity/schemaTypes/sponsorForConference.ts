@@ -47,6 +47,18 @@ export default defineType({
           }
         },
       },
+      // Non-blocking warning: a closed-won sponsor without a tier is hidden from
+      // the public site until one is set. Mirrors the tRPC moveStage guard for
+      // edits made directly in the Studio (which bypass the API).
+      validation: (Rule) =>
+        Rule.custom((tier, context) => {
+          const status = (context.document as { status?: string } | undefined)
+            ?.status
+          if (status === 'closed-won' && !tier) {
+            return 'Closed-won sponsors should have a tier — they stay hidden from the public site until one is set.'
+          }
+          return true
+        }).warning(),
     }),
     defineField({
       name: 'addons',

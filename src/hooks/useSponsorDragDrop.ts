@@ -3,6 +3,7 @@ import { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
 
 interface DragItem {
@@ -50,6 +51,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const utils = api.useUtils()
   const queryClient = useQueryClient()
+  const { showNotification } = useNotification()
   const previousDataRef = useRef<CachedQueryEntry[]>([])
 
   const moveStage = api.sponsor.crm.moveStage.useMutation()
@@ -145,6 +147,16 @@ export function useSponsorDragDrop(currentView: BoardView) {
         for (const [key, data] of previousDataRef.current) {
           queryClient.setQueryData(key, data)
         }
+        // Surface why the move was rejected (e.g. a required field is missing)
+        // instead of silently snapping the card back.
+        showNotification({
+          type: 'error',
+          title: 'Could not move sponsor',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Failed to update sponsor status.',
+        })
       } finally {
         previousDataRef.current = []
       }
@@ -159,6 +171,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
       updateContractStatus,
       utils,
       queryClient,
+      showNotification,
     ],
   )
 

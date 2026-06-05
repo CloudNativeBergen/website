@@ -113,6 +113,7 @@ import {
   ORGANIZER_DATE_MARKER,
 } from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
+import { canTransition } from '@/lib/sponsor-crm/state-machine'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 import {
   getSigningProvider,
@@ -900,6 +901,19 @@ export const sponsorRouter = router({
         }
 
         const oldStatus = existing.status
+
+        const transition = canTransition(
+          'pipeline',
+          existing.status,
+          input.newStatus,
+          existing,
+        )
+        if (!transition.ok) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: transition.missing.map((m) => m.message).join(' '),
+          })
+        }
 
         const { sponsorForConference, error } =
           await updateSponsorForConference(input.id, {
