@@ -1,4 +1,7 @@
-import { canTransition } from '@/lib/sponsor-crm/state-machine'
+import {
+  canTransition,
+  checkPipelineState,
+} from '@/lib/sponsor-crm/state-machine'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 function makeSfc(
@@ -78,5 +81,37 @@ describe('canTransition — pipeline axis', () => {
     expect(
       canTransition('pipeline', 'contacted', 'negotiating', makeSfc()).ok,
     ).toBe(true)
+  })
+
+  it('treats a same-status move as an allowed no-op even when guards are unmet', () => {
+    const result = canTransition(
+      'pipeline',
+      'closed-won',
+      'closed-won',
+      makeSfc({ tier: undefined, status: 'closed-won' }),
+    )
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('checkPipelineState — direct state invariant', () => {
+  it('blocks a closed-won record without a tier', () => {
+    const result = checkPipelineState('closed-won', { tier: undefined })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing[0].field).toBe('tier')
+    }
+  })
+
+  it('allows a closed-won record with a tier reference id', () => {
+    expect(checkPipelineState('closed-won', { tier: 'tier-gold' }).ok).toBe(true)
+  })
+
+  it('allows non-won states without a tier', () => {
+    expect(checkPipelineState('negotiating', { tier: undefined }).ok).toBe(true)
+  })
+
+  it('treats an empty-string tier as no tier', () => {
+    expect(checkPipelineState('closed-won', { tier: '' }).ok).toBe(false)
   })
 })
