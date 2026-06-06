@@ -45,7 +45,12 @@ function makeSfc(
     _id: 'sfc-1',
     _createdAt: '',
     _updatedAt: '',
-    sponsor: { _id: 's1', name: 'Acme', website: 'https://acme.test', logo: '' },
+    sponsor: {
+      _id: 's1',
+      name: 'Acme',
+      website: 'https://acme.test',
+      logo: '',
+    },
     conference: { _id: 'conf-1', title: 'Test Conf' },
     contractStatus: 'none',
     status: 'negotiating',
@@ -123,7 +128,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
   describe('update', () => {
     it('rejects moving an untiered sponsor to closed-won', async () => {
       vi.mocked(getSponsorForConference).mockResolvedValue({
-        sponsorForConference: makeSfc({ tier: undefined, status: 'negotiating' }),
+        sponsorForConference: makeSfc({
+          tier: undefined,
+          status: 'negotiating',
+        }),
         error: undefined,
       })
       await expect(
@@ -151,7 +159,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
 
     it('allows unrelated edits to a legacy tierless closed-won record (does not trap existing data)', async () => {
       vi.mocked(getSponsorForConference).mockResolvedValue({
-        sponsorForConference: makeSfc({ tier: undefined, status: 'closed-won' }),
+        sponsorForConference: makeSfc({
+          tier: undefined,
+          status: 'closed-won',
+        }),
         error: undefined,
       })
       await createCaller(mockOrganizer).sponsor.crm.update({
@@ -163,7 +174,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
 
     it('allows moving to closed-won when a tier is provided in the same update', async () => {
       vi.mocked(getSponsorForConference).mockResolvedValue({
-        sponsorForConference: makeSfc({ tier: undefined, status: 'negotiating' }),
+        sponsorForConference: makeSfc({
+          tier: undefined,
+          status: 'negotiating',
+        }),
         error: undefined,
       })
       await createCaller(mockOrganizer).sponsor.crm.update({
@@ -176,7 +190,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
 
     it('allows repairing a legacy tierless closed-won record by setting a tier', async () => {
       vi.mocked(getSponsorForConference).mockResolvedValue({
-        sponsorForConference: makeSfc({ tier: undefined, status: 'closed-won' }),
+        sponsorForConference: makeSfc({
+          tier: undefined,
+          status: 'closed-won',
+        }),
         error: undefined,
       })
       await createCaller(mockOrganizer).sponsor.crm.update({

@@ -22,7 +22,9 @@ describe('closedWonTierWarning', () => {
   })
 
   it('passes when the closed-won tier reference resolves to an existing doc', async () => {
-    expect(await closedWonTierWarning('closed-won', 'tier-x', exists)).toBe(true)
+    expect(await closedWonTierWarning('closed-won', 'tier-x', exists)).toBe(
+      true,
+    )
   })
 
   it('skips the existence check when there is no tier reference', async () => {

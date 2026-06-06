@@ -11,7 +11,12 @@ function makeSfc(
     _id: 'sfc-1',
     _createdAt: '',
     _updatedAt: '',
-    sponsor: { _id: 's1', name: 'Acme', website: 'https://acme.test', logo: '' },
+    sponsor: {
+      _id: 's1',
+      name: 'Acme',
+      website: 'https://acme.test',
+      logo: '',
+    },
     conference: { _id: 'c1', title: 'Test Conf' },
     contractStatus: 'none',
     status: 'negotiating',
@@ -117,7 +122,9 @@ describe('checkPipelineState — direct state invariant', () => {
   })
 
   it('allows a closed-won record with a tier reference id', () => {
-    expect(checkPipelineState('closed-won', { tier: 'tier-gold' }).ok).toBe(true)
+    expect(checkPipelineState('closed-won', { tier: 'tier-gold' }).ok).toBe(
+      true,
+    )
   })
 
   it('allows non-won states without a tier', () => {

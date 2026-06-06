@@ -45,10 +45,12 @@ const PIPELINE_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
   ],
 }
 
-const GUARDS: Record<TransitionAxis, Record<string, FieldDef<SponsorState>[]>> =
-  {
-    pipeline: PIPELINE_GUARDS,
-  }
+const GUARDS: Record<
+  TransitionAxis,
+  Record<string, FieldDef<SponsorState>[]>
+> = {
+  pipeline: PIPELINE_GUARDS,
+}
 
 function evaluate(
   axis: TransitionAxis,

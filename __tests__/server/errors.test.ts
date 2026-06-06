@@ -37,7 +37,10 @@ describe('extractMissingFields', () => {
 describe('structuredErrorData', () => {
   it('exposes code and missingFields when the cause carries them', () => {
     const data = structuredErrorData(preconditionFailed(missing))
-    expect(data).toEqual({ code: 'PRECONDITION_FAILED', missingFields: missing })
+    expect(data).toEqual({
+      code: 'PRECONDITION_FAILED',
+      missingFields: missing,
+    })
   })
 
   it('exposes only the code for ordinary errors', () => {

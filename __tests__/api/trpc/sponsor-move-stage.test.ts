@@ -39,7 +39,12 @@ function makeSfc(
     _id: 'sfc-1',
     _createdAt: '',
     _updatedAt: '',
-    sponsor: { _id: 's1', name: 'Acme', website: 'https://acme.test', logo: '' },
+    sponsor: {
+      _id: 's1',
+      name: 'Acme',
+      website: 'https://acme.test',
+      logo: '',
+    },
     conference: { _id: 'conf-1', title: 'Test Conf' },
     contractStatus: 'none',
     status: 'negotiating',
