@@ -89,7 +89,11 @@ export const NoSelectableTiers: Story = {
     tiers: [addonTier],
   },
   play: async () => {
-    await expect(screen.getByText(/no tiers are configured/i)).toBeVisible()
+    // Assert presence rather than visibility: headlessui's enter transition
+    // starts the panel at opacity-0, which `toBeVisible()` would reject mid-anim.
+    await expect(
+      screen.getByText(/no tiers are configured/i),
+    ).toBeInTheDocument()
     await expect(
       screen.queryByRole('button', { name: 'Booth upgrade' }),
     ).not.toBeInTheDocument()
