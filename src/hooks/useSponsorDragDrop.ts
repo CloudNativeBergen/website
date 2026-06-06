@@ -106,9 +106,9 @@ export function useSponsorDragDrop(currentView: BoardView) {
       // Cancel in-flight refetches so they can't clobber the optimistic write,
       // then snapshot the cache for rollback before applying the move.
       await utils.sponsor.crm.list.cancel()
-      const previous = queryClient.getQueriesData<SponsorForConferenceExpanded[]>(
-        LIST_QUERY_KEY_FILTER,
-      )
+      const previous = queryClient.getQueriesData<
+        SponsorForConferenceExpanded[]
+      >(LIST_QUERY_KEY_FILTER)
       queryClient.setQueriesData<SponsorForConferenceExpanded[]>(
         LIST_QUERY_KEY_FILTER,
         (old) =>
@@ -177,7 +177,9 @@ export function useSponsorDragDrop(currentView: BoardView) {
       // Guided completion: a tierless move to closed-won would be rejected by
       // the server guard. Instead of letting it fail and bounce back, hold the
       // move and ask for a tier — confirmTierMove finishes it in one step.
-      if (dropNeedsTier(currentView, sourceColumnKey, targetColumnKey, sponsor)) {
+      if (
+        dropNeedsTier(currentView, sourceColumnKey, targetColumnKey, sponsor)
+      ) {
         setPendingTierMove({ sponsor, targetColumnKey })
         setActiveItem(null)
         return

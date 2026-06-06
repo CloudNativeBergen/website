@@ -119,7 +119,9 @@ describe('dropNeedsTier', () => {
     ).toBe(false)
     // a same-state move is a no-op the guard permits
     expect(
-      dropNeedsTier('pipeline', 'closed-won', 'closed-won', { tier: undefined }),
+      dropNeedsTier('pipeline', 'closed-won', 'closed-won', {
+        tier: undefined,
+      }),
     ).toBe(false)
   })
 
