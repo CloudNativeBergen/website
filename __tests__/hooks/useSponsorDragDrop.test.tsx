@@ -188,6 +188,15 @@ describe('useSponsorDragDrop — guided completion', () => {
     expect(mockSetQueriesData).toHaveBeenCalledTimes(1)
     expect(mockListInvalidate).toHaveBeenCalledTimes(1)
     expect(result.current.pendingTierMove).toBeNull()
+
+    // The optimistic updater sets BOTH status and the chosen tier, so the card
+    // never shows as tierless in closed-won before the refetch lands.
+    const updater = mockSetQueriesData.mock.calls[0][1] as (
+      old: SponsorForConferenceExpanded[],
+    ) => SponsorForConferenceExpanded[]
+    const next = updater([sponsor])
+    expect(next[0].status).toBe('closed-won')
+    expect(next[0].tier).toEqual({ _id: 'tier-gold' })
   })
 
   it('rolls back and surfaces the guard message when the completion fails', async () => {

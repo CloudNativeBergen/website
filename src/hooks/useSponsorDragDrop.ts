@@ -41,25 +41,30 @@ function applyOptimisticMove(
   sponsorId: string,
   currentView: BoardView,
   targetColumnKey: string,
+  patch?: Partial<SponsorForConferenceExpanded>,
 ): SponsorForConferenceExpanded[] | undefined {
   if (!sponsors) return sponsors
   return sponsors.map((s) => {
     if (s._id !== sponsorId) return s
+    // `patch` carries fields the move also sets (e.g. the tier chosen in the
+    // guided closed-won completion) so the optimistic cache matches what the
+    // mutation persists, not just the column change.
+    const base = { ...s, ...patch }
     switch (currentView) {
       case 'pipeline':
         return {
-          ...s,
+          ...base,
           status: targetColumnKey as SponsorForConferenceExpanded['status'],
         }
       case 'contract':
         return {
-          ...s,
+          ...base,
           contractStatus:
             targetColumnKey as SponsorForConferenceExpanded['contractStatus'],
         }
       case 'invoice':
         return {
-          ...s,
+          ...base,
           invoiceStatus:
             targetColumnKey as SponsorForConferenceExpanded['invoiceStatus'],
         }
@@ -102,6 +107,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
       sponsorId: string,
       targetColumnKey: string,
       mutate: () => Promise<unknown>,
+      patch?: Partial<SponsorForConferenceExpanded>,
     ) => {
       // Cancel in-flight refetches so they can't clobber the optimistic write,
       // then snapshot the cache for rollback before applying the move.
@@ -112,7 +118,13 @@ export function useSponsorDragDrop(currentView: BoardView) {
       queryClient.setQueriesData<SponsorForConferenceExpanded[]>(
         LIST_QUERY_KEY_FILTER,
         (old) =>
-          applyOptimisticMove(old, sponsorId, currentView, targetColumnKey),
+          applyOptimisticMove(
+            old,
+            sponsorId,
+            currentView,
+            targetColumnKey,
+            patch,
+          ),
       )
       // Tear down the drag overlay only once the optimistic move is in the cache,
       // so the card never flashes back in its source column.
@@ -240,12 +252,18 @@ export function useSponsorDragDrop(currentView: BoardView) {
       const { sponsor, targetColumnKey } = pendingTierMove
       setPendingTierMove(null)
 
-      await runOptimisticMove(sponsor._id, targetColumnKey, () =>
-        update.mutateAsync({
-          id: sponsor._id,
-          tier: tierId,
-          status: targetColumnKey as SponsorForConferenceExpanded['status'],
-        }),
+      await runOptimisticMove(
+        sponsor._id,
+        targetColumnKey,
+        () =>
+          update.mutateAsync({
+            id: sponsor._id,
+            tier: tierId,
+            status: targetColumnKey as SponsorForConferenceExpanded['status'],
+          }),
+        // Reflect the chosen tier optimistically so the card isn't briefly shown
+        // as tierless in closed-won; the refetch fills in the full tier object.
+        { tier: { _id: tierId } as SponsorForConferenceExpanded['tier'] },
       )
     },
     [pendingTierMove, update, runOptimisticMove],
