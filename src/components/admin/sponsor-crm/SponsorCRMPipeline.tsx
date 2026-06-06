@@ -39,6 +39,7 @@ import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
 import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
+import { TierPickerPrompt } from '@/components/admin/sponsor-crm/TierPickerPrompt'
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
@@ -89,8 +90,15 @@ export function SponsorCRMPipeline({
 
   const utils = api.useUtils()
 
-  const { activeItem, isDragging, handleDragStart, handleDragEnd } =
-    useSponsorDragDrop(currentView)
+  const {
+    activeItem,
+    isDragging,
+    handleDragStart,
+    handleDragEnd,
+    pendingTierMove,
+    confirmTierMove,
+    cancelTierMove,
+  } = useSponsorDragDrop(currentView)
 
   const deleteMutation = api.sponsor.crm.delete.useMutation({
     onSuccess: () => {
@@ -116,7 +124,11 @@ export function SponsorCRMPipeline({
 
   // Pause background refresh when user is actively interacting
   const isUserBusy =
-    isFormOpen || isEmailModalOpen || isDragging || selectedIds.length > 0
+    isFormOpen ||
+    isEmailModalOpen ||
+    isDragging ||
+    pendingTierMove !== null ||
+    selectedIds.length > 0
 
   // Fetch with filters
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery(
@@ -447,6 +459,12 @@ export function SponsorCRMPipeline({
   return (
     <div className="flex h-full flex-col gap-2 lg:gap-4">
       {/* Modals */}
+      <TierPickerPrompt
+        sponsor={pendingTierMove?.sponsor ?? null}
+        tiers={tiers}
+        onSelect={confirmTierMove}
+        onCancel={cancelTierMove}
+      />
       <SponsorDeleteModal
         isOpen={deleteConfirmSponsor !== null}
         onClose={() => setDeleteConfirmSponsor(null)}
