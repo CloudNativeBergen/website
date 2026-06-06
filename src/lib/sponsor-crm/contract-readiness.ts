@@ -1,4 +1,27 @@
 import type { SponsorForConferenceExpanded } from './types'
+import type { ContactPerson } from '@/lib/sponsor/types'
+
+/**
+ * Shared field predicates — the single definition of what counts as a valid
+ * primary contact and a valid contract value, reused by both the readiness
+ * check here and the transition state machine so the UI and the guards never
+ * disagree.
+ */
+export function hasPrimaryContact(
+  contactPersons: ContactPerson[] | null | undefined,
+): boolean {
+  if (!contactPersons) return false
+  return contactPersons.some(
+    (c) =>
+      !!c.name && !!c.email && (c.isPrimary || contactPersons.length === 1),
+  )
+}
+
+export function hasPositiveContractValue(
+  value: number | null | undefined,
+): boolean {
+  return value != null && value > 0
+}
 
 export type ReadinessSource = 'organizer' | 'sponsor' | 'pipeline'
 export type ReadinessSeverity = 'required' | 'recommended'
@@ -117,13 +140,7 @@ const SPONSOR_FIELDS: FieldDef[] = [
     label: 'Primary contact person',
     source: 'sponsor',
     severity: 'required',
-    check: (sfc) =>
-      !!sfc.contactPersons?.some(
-        (c) =>
-          c.name &&
-          c.email &&
-          (c.isPrimary || sfc.contactPersons?.length === 1),
-      ),
+    check: (sfc) => hasPrimaryContact(sfc.contactPersons),
   },
 ]
 
@@ -140,7 +157,7 @@ const PIPELINE_FIELDS: FieldDef[] = [
     label: 'Contract value',
     source: 'pipeline',
     severity: 'required',
-    check: (sfc) => sfc.contractValue != null && sfc.contractValue > 0,
+    check: (sfc) => hasPositiveContractValue(sfc.contractValue),
   },
 ]
 

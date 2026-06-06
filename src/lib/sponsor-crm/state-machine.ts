@@ -1,5 +1,7 @@
 import {
   collectMissing,
+  hasPrimaryContact,
+  hasPositiveContractValue,
   type FieldDef,
   type MissingField,
 } from './contract-readiness'
@@ -71,8 +73,7 @@ const CONTRACT_VALUE_GUARD: FieldDef<SponsorState> = {
   source: 'pipeline',
   severity: 'required',
   message: 'Set a contract value before sending or signing the contract.',
-  check: (sponsor) =>
-    sponsor.contractValue != null && sponsor.contractValue > 0,
+  check: (sponsor) => hasPositiveContractValue(sponsor.contractValue),
 }
 
 /** No contracts on dead deals — applies to sending and to marking signed. */
@@ -97,13 +98,7 @@ const PRIMARY_CONTACT_GUARD: FieldDef<SponsorState> = {
   severity: 'required',
   message:
     'Add a primary contact (name + email) before marking the contract signed.',
-  check: (sponsor) =>
-    !!sponsor.contactPersons?.some(
-      (c) =>
-        c.name &&
-        c.email &&
-        (c.isPrimary || sponsor.contactPersons?.length === 1),
-    ),
+  check: (sponsor) => hasPrimaryContact(sponsor.contactPersons),
 }
 
 const CONTRACT_GUARDS: Record<string, FieldDef<SponsorState>[]> = {

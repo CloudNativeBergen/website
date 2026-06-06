@@ -278,6 +278,26 @@ describe('updateSignatureStatus — signature axis guards', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
+  it('allows re-confirming an already-signed record even if contract data has since drifted (idempotent no-op)', async () => {
+    const { commit } = mockPatch()
+    vi.mocked(getSponsorForConference).mockResolvedValue({
+      // Already signed; contact later removed. Re-marking signed is a no-op and
+      // must not be rejected (matches updateContractStatus's same-state behavior).
+      sponsorForConference: makeSfc({
+        contractStatus: 'contract-signed',
+        signatureStatus: 'signed',
+        tier: undefined,
+        contractValue: 0,
+      }),
+      error: undefined,
+    })
+    await createCaller(mockOrganizer).sponsor.crm.updateSignatureStatus({
+      id: 'sfc-1',
+      newStatus: 'signed',
+    })
+    expect(commit).toHaveBeenCalled()
+  })
+
   it('rejects marking the signature signed on a closed-lost deal', async () => {
     const { commit } = mockPatch()
     vi.mocked(getSponsorForConference).mockResolvedValue({

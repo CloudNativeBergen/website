@@ -118,6 +118,7 @@ import {
   canTransition,
   checkPipelineState,
   checkState,
+  type TransitionResult,
 } from '@/lib/sponsor-crm/state-machine'
 import { preconditionFailed } from '@/server/errors'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
@@ -238,6 +239,26 @@ const DANGLING_TIER_MISSING = [
       'The selected sponsor tier no longer exists. Choose a valid tier before marking as Won.',
   },
 ]
+
+/** Throws a PRECONDITION_FAILED with the blocking fields when a guard rejects. */
+function assertGuard(result: TransitionResult): void {
+  if (!result.ok) throw preconditionFailed(result.missing)
+}
+
+/**
+ * Rejects a Won record whose tier reference doesn't resolve. The synchronous
+ * state-machine guard only checks truthiness, so a non-empty id pointing at a
+ * deleted tier needs this existence round-trip. No-op for non-Won states or a
+ * cleared tier (those are handled by the truthiness guard).
+ */
+async function assertTierResolvable(
+  status: string,
+  tierRef: string | undefined,
+): Promise<void> {
+  if (status === 'closed-won' && tierRef && !(await tierExists(tierRef))) {
+    throw preconditionFailed(DANGLING_TIER_MISSING)
+  }
+}
 
 export const sponsorRouter = router({
   list: adminProcedure
@@ -761,21 +782,9 @@ export const sponsorRouter = router({
         }
 
         // Enforce the pipeline invariant however the record is created, not
-        // just on drag-drop moves (closed-won requires a tier).
-        const createCheck = checkPipelineState(data.status, { tier: data.tier })
-        if (!createCheck.ok) {
-          throw preconditionFailed(createCheck.missing)
-        }
-        // The guard above only checks tier truthiness; a non-empty id can still
-        // point at a deleted tier. Verify it resolves before persisting a Won
-        // record (matches moveStage/bulk, which read the dereferenced tier).
-        if (
-          data.status === 'closed-won' &&
-          data.tier &&
-          !(await tierExists(data.tier))
-        ) {
-          throw preconditionFailed(DANGLING_TIER_MISSING)
-        }
+        // just on drag-drop moves (closed-won requires a tier that resolves).
+        assertGuard(checkPipelineState(data.status, { tier: data.tier }))
+        await assertTierResolvable(data.status, data.tier)
 
         // Auto-assign to current user if not provided (undefined)
         if (data.assignedTo === undefined && userId) {
@@ -849,22 +858,13 @@ export const sponsorRouter = router({
           const resultingStatus = updateData.status ?? existing.status
           const resultingTier =
             updateData.tier !== undefined ? updateData.tier : existing.tier
-          const updateCheck = checkPipelineState(resultingStatus, {
-            tier: resultingTier,
-          })
-          if (!updateCheck.ok) {
-            throw preconditionFailed(updateCheck.missing)
-          }
+          assertGuard(
+            checkPipelineState(resultingStatus, { tier: resultingTier }),
+          )
           // A freshly-supplied tier id is an unresolved string here (unlike the
-          // dereferenced existing.tier), so verify it points at a real tier when
-          // the result is Won — otherwise a dangling ref slips past the guard.
-          if (
-            resultingStatus === 'closed-won' &&
-            tierChanging &&
-            updateData.tier &&
-            !(await tierExists(updateData.tier))
-          ) {
-            throw preconditionFailed(DANGLING_TIER_MISSING)
+          // dereferenced existing.tier), so verify it points at a real tier.
+          if (tierChanging) {
+            await assertTierResolvable(resultingStatus, updateData.tier)
           }
         }
 
@@ -975,15 +975,9 @@ export const sponsorRouter = router({
 
         const oldStatus = existing.status
 
-        const transition = canTransition(
-          'pipeline',
-          existing.status,
-          input.newStatus,
-          existing,
+        assertGuard(
+          canTransition('pipeline', existing.status, input.newStatus, existing),
         )
-        if (!transition.ok) {
-          throw preconditionFailed(transition.missing)
-        }
 
         const { sponsorForConference, error } =
           await updateSponsorForConference(input.id, {
@@ -1091,15 +1085,14 @@ export const sponsorRouter = router({
         // field invariants (tier + value, plus a primary contact to sign, and
         // no contracts on dead deals). Enforced here so a manual/offline status
         // change is held to the same standard as the in-app send flow.
-        const contractTransition = canTransition(
-          'contract',
-          existing.contractStatus,
-          input.newStatus,
-          existing,
+        assertGuard(
+          canTransition(
+            'contract',
+            existing.contractStatus,
+            input.newStatus,
+            existing,
+          ),
         )
-        if (!contractTransition.ok) {
-          throw preconditionFailed(contractTransition.missing)
-        }
 
         const oldStatus = existing.contractStatus
         const updateData: Partial<{
@@ -1555,29 +1548,24 @@ export const sponsorRouter = router({
         // Signature-axis guard: a signature can only be tracked once the
         // contract has been sent. Blocks manually marking pending/signed on a
         // record whose contract never went out.
-        const signatureTransition = canTransition(
-          'signature',
-          oldStatus,
-          input.newStatus,
-          existing,
+        assertGuard(
+          canTransition('signature', oldStatus, input.newStatus, existing),
         )
-        if (!signatureTransition.ok) {
-          throw preconditionFailed(signatureTransition.missing)
-        }
 
         // Marking the signature signed also drives the contract to
         // contract-signed (below), so it must satisfy that state's invariants
-        // (tier + value + primary contact, not a dead deal). Enforced
-        // path-independently so this side-door matches updateContractStatus.
+        // (tier + value + primary contact, not a dead deal). Routed through
+        // canTransition (not checkState) so re-confirming an already-signed
+        // record stays a no-op, matching updateContractStatus.
         if (input.newStatus === 'signed') {
-          const contractSigned = checkState(
-            'contract',
-            'contract-signed',
-            existing,
+          assertGuard(
+            canTransition(
+              'contract',
+              existing.contractStatus,
+              'contract-signed',
+              existing,
+            ),
           )
-          if (!contractSigned.ok) {
-            throw preconditionFailed(contractSigned.missing)
-          }
         }
 
         try {
@@ -1660,10 +1648,7 @@ export const sponsorRouter = router({
         // Checked path-independently (re-sends included) before any costly work
         // (template fetch, PDF generation, asset upload). The contact / title /
         // template / signing-provider runtime guards below remain in force.
-        const sendReadiness = checkState('contract', 'contract-sent', sfc)
-        if (!sendReadiness.ok) {
-          throw preconditionFailed(sendReadiness.missing)
-        }
+        assertGuard(checkState('contract', 'contract-sent', sfc))
 
         const { template, error: templateError } = await getContractTemplate(
           input.templateId,
