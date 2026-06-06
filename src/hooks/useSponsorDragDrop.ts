@@ -6,6 +6,10 @@ import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import { mutationRejectionMessage } from '@/lib/trpc/errors'
+import {
+  canTransition,
+  type SponsorState,
+} from '@/lib/sponsor-crm/state-machine'
 
 interface DragItem {
   type: 'sponsor'
@@ -14,16 +18,22 @@ interface DragItem {
 }
 
 /**
- * A drop needs a guided tier prompt when it would move a sponsor to the
- * pipeline's `closed-won` column without a tier set — the one transition the
- * server guard blocks for lack of a tier. Every other drop proceeds directly.
+ * A drop needs a guided tier prompt when the pipeline transition the user is
+ * attempting is blocked specifically by a missing tier. The decision is
+ * delegated to the shared {@link canTransition} guard — the same source of truth
+ * the server enforces in `moveStage` — so the UX layer can never drift from the
+ * rule. The picker only resolves a tier, so it appears only when tier is the
+ * blocking field; every other drop (and every other axis) proceeds directly.
  */
 export function dropNeedsTier(
   view: BoardView,
-  targetColumnKey: string,
-  sponsor: { tier?: unknown },
+  from: string,
+  to: string,
+  sponsor: SponsorState,
 ): boolean {
-  return view === 'pipeline' && targetColumnKey === 'closed-won' && !sponsor.tier
+  if (view !== 'pipeline') return false
+  const result = canTransition('pipeline', from, to, sponsor)
+  return !result.ok && result.missing.some((field) => field.field === 'tier')
 }
 
 function applyOptimisticMove(
@@ -167,7 +177,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
       // Guided completion: a tierless move to closed-won would be rejected by
       // the server guard. Instead of letting it fail and bounce back, hold the
       // move and ask for a tier — confirmTierMove finishes it in one step.
-      if (dropNeedsTier(currentView, targetColumnKey, sponsor)) {
+      if (dropNeedsTier(currentView, sourceColumnKey, targetColumnKey, sponsor)) {
         setPendingTierMove({ sponsor, targetColumnKey })
         setActiveItem(null)
         return

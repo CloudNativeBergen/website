@@ -89,34 +89,49 @@ beforeEach(() => {
 
 describe('dropNeedsTier', () => {
   it('flags a tierless pipeline drop onto closed-won', () => {
-    expect(dropNeedsTier('pipeline', 'closed-won', { tier: undefined })).toBe(
-      true,
-    )
+    expect(
+      dropNeedsTier('pipeline', 'negotiating', 'closed-won', {
+        tier: undefined,
+      }),
+    ).toBe(true)
   })
 
   it('does not prompt when a tier is already set', () => {
     expect(
-      dropNeedsTier('pipeline', 'closed-won', { tier: { _id: 'tier-1' } }),
+      dropNeedsTier('pipeline', 'negotiating', 'closed-won', {
+        tier: { _id: 'tier-1' },
+      }),
     ).toBe(false)
     // a tier supplied as a bare id string also counts as set
-    expect(dropNeedsTier('pipeline', 'closed-won', { tier: 'tier-1' })).toBe(
-      false,
-    )
+    expect(
+      dropNeedsTier('pipeline', 'negotiating', 'closed-won', {
+        tier: 'tier-1',
+      }),
+    ).toBe(false)
   })
 
-  it('does not prompt for other pipeline columns', () => {
-    expect(dropNeedsTier('pipeline', 'negotiating', { tier: undefined })).toBe(
-      false,
-    )
+  it('does not prompt for transitions the shared guard allows', () => {
+    // moving to an unguarded column never needs a tier
+    expect(
+      dropNeedsTier('pipeline', 'contacted', 'negotiating', {
+        tier: undefined,
+      }),
+    ).toBe(false)
+    // a same-state move is a no-op the guard permits
+    expect(
+      dropNeedsTier('pipeline', 'closed-won', 'closed-won', { tier: undefined }),
+    ).toBe(false)
   })
 
   it('does not prompt on the contract or invoice boards', () => {
-    expect(dropNeedsTier('contract', 'closed-won', { tier: undefined })).toBe(
-      false,
-    )
-    expect(dropNeedsTier('invoice', 'closed-won', { tier: undefined })).toBe(
-      false,
-    )
+    expect(
+      dropNeedsTier('contract', 'verbal-agreement', 'contract-sent', {
+        tier: undefined,
+      }),
+    ).toBe(false)
+    expect(
+      dropNeedsTier('invoice', 'not-sent', 'sent', { tier: undefined }),
+    ).toBe(false)
   })
 })
 
