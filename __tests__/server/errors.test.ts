@@ -25,6 +25,25 @@ describe('preconditionFailed', () => {
     expect(err.message).toMatch(/tier/i)
     expect(extractMissingFields(err)).toEqual(missing)
   })
+
+  it('never produces an empty message, even for an empty field list', () => {
+    const err = preconditionFailed([])
+    expect(err.message.trim().length).toBeGreaterThan(0)
+  })
+
+  it('falls back to a sentence when a field carries no explicit message', () => {
+    const err = preconditionFailed([
+      {
+        field: 'tier',
+        label: 'Sponsor tier',
+        source: 'pipeline',
+        severity: 'required',
+      },
+    ])
+    // Not just the bare label — a readable sentence.
+    expect(err.message).toMatch(/Sponsor tier/)
+    expect(err.message).toMatch(/required/i)
+  })
 })
 
 describe('extractMissingFields', () => {

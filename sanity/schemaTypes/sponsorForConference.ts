@@ -1,6 +1,9 @@
 import { defineField, defineType } from 'sanity'
 import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
-import { closedWonTierWarning } from '../../src/lib/sponsor-crm/tier-validation'
+import {
+  closedWonTierWarning,
+  tierExistenceQuery,
+} from '../../src/lib/sponsor-crm/tier-validation'
 import { contractSentWarning } from '../../src/lib/sponsor-crm/contract-validation'
 import { CURRENCY_OPTIONS } from './constants'
 import { apiVersion } from '../env'
@@ -62,11 +65,8 @@ export default defineType({
           const tierRef = (tier as { _ref?: string } | undefined)?._ref
           const client = context.getClient({ apiVersion })
           return closedWonTierWarning(status, tierRef, async (ref) => {
-            const baseId = ref.replace(/^drafts\./, '')
-            return client.fetch<boolean>(
-              'count(*[_id == $id || _id == $draftId]) > 0',
-              { id: baseId, draftId: `drafts.${baseId}` },
-            )
+            const { query, params } = tierExistenceQuery(ref)
+            return client.fetch<boolean>(query, params)
           })
         }).warning(),
     }),

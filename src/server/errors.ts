@@ -1,7 +1,13 @@
 import { TRPCError } from '@trpc/server'
 import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
 
-const describe = (field: MissingField) => field.message ?? field.label
+const FALLBACK_MESSAGE = 'This action is not allowed in the current state.'
+
+const describe = (field: MissingField) =>
+  field.message ?? `${field.label} is required.`
+
+const summarize = (missing: MissingField[]) =>
+  missing.map(describe).join(' ') || FALLBACK_MESSAGE
 
 /**
  * Error carrying structured missing-field requirements. Attached as the `cause`
@@ -10,7 +16,7 @@ const describe = (field: MissingField) => field.message ?? field.label
  */
 export class MissingFieldsError extends Error {
   constructor(public readonly missingFields: MissingField[]) {
-    super(missingFields.map(describe).join(' '))
+    super(summarize(missingFields))
     this.name = 'MissingFieldsError'
   }
 }
@@ -23,18 +29,28 @@ export class MissingFieldsError extends Error {
 export function preconditionFailed(missing: MissingField[]): TRPCError {
   return new TRPCError({
     code: 'PRECONDITION_FAILED',
-    message: missing.map(describe).join(' '),
+    message: summarize(missing),
     cause: new MissingFieldsError(missing),
   })
 }
 
-/** Returns the structured missing fields carried by an error, if any. */
+/**
+ * Returns the structured missing fields carried by an error, if any.
+ * SERVER-ONLY: reads `error.cause`, which is a live `MissingFieldsError` only
+ * in-process. On the client the payload is serialized to `error.data`; use
+ * `clientMissingFields` from `@/lib/trpc/errors` there.
+ */
 export function extractMissingFields(error: {
   cause?: unknown
 }): MissingField[] | undefined {
   return error.cause instanceof MissingFieldsError
     ? error.cause.missingFields
     : undefined
+}
+
+export interface StructuredErrorData {
+  code: string
+  missingFields?: MissingField[]
 }
 
 /**
@@ -45,7 +61,7 @@ export function extractMissingFields(error: {
 export function structuredErrorData(error: {
   code: string
   cause?: unknown
-}): Record<string, unknown> {
+}): StructuredErrorData {
   const missingFields = extractMissingFields(error)
   return {
     code: error.code,

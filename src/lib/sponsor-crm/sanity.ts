@@ -3,6 +3,7 @@ import {
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
+import { tierExistenceQuery } from './tier-validation'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
   SponsorForConference,
@@ -383,6 +384,19 @@ export async function getSponsorForConference(id: string): Promise<{
   } catch (error) {
     return { error: error as Error }
   }
+}
+
+/**
+ * Whether a tier reference id resolves to a real (published) sponsor tier.
+ * Used by the create/update guards to reject a dangling tier on a closed-won
+ * record — the truthiness check in the state machine can't see that a non-empty
+ * id points at a deleted tier, which would leave the sponsor silently hidden
+ * from the public site. Matches how moveStage (expanded record) and bulkUpdate
+ * (`!defined(tier->_id)`) already enforce resolvability.
+ */
+export async function tierExists(tierId: string): Promise<boolean> {
+  const { query, params } = tierExistenceQuery(tierId)
+  return clientRead.fetch<boolean>(query, params)
 }
 
 export async function listSponsorsForConference(

@@ -57,6 +57,7 @@ import {
   listSponsorsForConference,
   copySponsorsFromPreviousYear,
   importAllHistoricSponsors,
+  tierExists,
 } from '@/lib/sponsor-crm/sanity'
 import {
   logStageChange,
@@ -219,6 +220,24 @@ async function sendContractSignedSlackNotification(
     )
   }
 }
+
+/**
+ * Reported when a closed-won record carries a tier id that no longer resolves
+ * to a real tier (a dangling reference). The state-machine truthiness check
+ * accepts any non-empty id, so create/update verify existence separately and
+ * raise this so the organizer fixes the ref rather than silently hiding the
+ * sponsor from the public site.
+ */
+const DANGLING_TIER_MISSING = [
+  {
+    field: 'tier',
+    label: 'Sponsor tier',
+    source: 'pipeline' as const,
+    severity: 'required' as const,
+    message:
+      'The selected sponsor tier no longer exists. Choose a valid tier before marking as Won.',
+  },
+]
 
 export const sponsorRouter = router({
   list: adminProcedure
@@ -747,6 +766,16 @@ export const sponsorRouter = router({
         if (!createCheck.ok) {
           throw preconditionFailed(createCheck.missing)
         }
+        // The guard above only checks tier truthiness; a non-empty id can still
+        // point at a deleted tier. Verify it resolves before persisting a Won
+        // record (matches moveStage/bulk, which read the dereferenced tier).
+        if (
+          data.status === 'closed-won' &&
+          data.tier &&
+          !(await tierExists(data.tier))
+        ) {
+          throw preconditionFailed(DANGLING_TIER_MISSING)
+        }
 
         // Auto-assign to current user if not provided (undefined)
         if (data.assignedTo === undefined && userId) {
@@ -825,6 +854,17 @@ export const sponsorRouter = router({
           })
           if (!updateCheck.ok) {
             throw preconditionFailed(updateCheck.missing)
+          }
+          // A freshly-supplied tier id is an unresolved string here (unlike the
+          // dereferenced existing.tier), so verify it points at a real tier when
+          // the result is Won — otherwise a dangling ref slips past the guard.
+          if (
+            resultingStatus === 'closed-won' &&
+            tierChanging &&
+            updateData.tier &&
+            !(await tierExists(updateData.tier))
+          ) {
+            throw preconditionFailed(DANGLING_TIER_MISSING)
           }
         }
 

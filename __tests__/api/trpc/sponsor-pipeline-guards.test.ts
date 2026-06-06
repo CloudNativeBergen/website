@@ -6,6 +6,7 @@ import {
   getSponsorForConference,
   createSponsorForConference,
   updateSponsorForConference,
+  tierExists,
 } from '@/lib/sponsor-crm/sanity'
 import { bulkUpdateSponsors } from '@/lib/sponsor-crm/bulk'
 import { clientReadUncached } from '@/lib/sanity/client'
@@ -92,6 +93,8 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
       updatedCount: 2,
       totalCount: 2,
     })
+    // Tiers resolve by default; reject-path tests override to false.
+    vi.mocked(tierExists).mockResolvedValue(true)
   })
 
   afterEach(() => {
@@ -121,7 +124,24 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
         contractStatus: 'none',
         invoiceStatus: 'not-sent',
       } as any)
-      expect(createSponsorForConference).toHaveBeenCalled()
+      expect(createSponsorForConference).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'closed-won', tier: 'tier-gold' }),
+      )
+    })
+
+    it('rejects creating a closed-won sponsor whose tier reference does not resolve', async () => {
+      vi.mocked(tierExists).mockResolvedValue(false)
+      await expect(
+        createCaller(mockOrganizer).sponsor.crm.create({
+          sponsor: 's1',
+          conference: 'conf-1',
+          tier: 'deleted-tier',
+          status: 'closed-won',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
+        } as any),
+      ).rejects.toThrow(/tier/i)
+      expect(createSponsorForConference).not.toHaveBeenCalled()
     })
   })
 
@@ -170,6 +190,25 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
         notes: 'just a note',
       } as any)
       expect(updateSponsorForConference).toHaveBeenCalled()
+    })
+
+    it('rejects moving to closed-won with a tier reference that does not resolve', async () => {
+      vi.mocked(tierExists).mockResolvedValue(false)
+      vi.mocked(getSponsorForConference).mockResolvedValue({
+        sponsorForConference: makeSfc({
+          tier: undefined,
+          status: 'negotiating',
+        }),
+        error: undefined,
+      })
+      await expect(
+        createCaller(mockOrganizer).sponsor.crm.update({
+          id: 'sfc-1',
+          status: 'closed-won',
+          tier: 'deleted-tier',
+        } as any),
+      ).rejects.toThrow(/tier/i)
+      expect(updateSponsorForConference).not.toHaveBeenCalled()
     })
 
     it('allows moving to closed-won when a tier is provided in the same update', async () => {
@@ -222,7 +261,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
         ids: ['a', 'b'],
         status: 'closed-won',
       } as any)
-      expect(bulkUpdateSponsors).toHaveBeenCalled()
+      expect(bulkUpdateSponsors).toHaveBeenCalledWith(
+        expect.objectContaining({ ids: ['a', 'b'], status: 'closed-won' }),
+        mockOrganizer._id,
+      )
     })
   })
 })
