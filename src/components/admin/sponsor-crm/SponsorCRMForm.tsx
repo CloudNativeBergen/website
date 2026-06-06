@@ -386,6 +386,7 @@ export function SponsorCRMForm({
                           sponsorForConference={sponsor}
                           onSuccess={() => {
                             utils.sponsor.crm.list.invalidate()
+                            utils.sponsor.crm.healthViolations.invalidate()
                           }}
                           onCancel={handleClose}
                         />
@@ -416,6 +417,7 @@ export function SponsorCRMForm({
                           sponsor={sponsor}
                           onSuccess={() => {
                             utils.sponsor.crm.list.invalidate()
+                            utils.sponsor.crm.healthViolations.invalidate()
                           }}
                         />
                       ) : (

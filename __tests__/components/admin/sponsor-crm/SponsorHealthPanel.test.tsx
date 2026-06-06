@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { SponsorHealthPanel } from '@/components/admin/sponsor-crm/SponsorHealthPanel'
 import type { SponsorHealthViolation } from '@/lib/sponsor-crm/health'
 
@@ -43,7 +43,7 @@ describe('SponsorHealthPanel', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('distinguishes a public-site-hiding violation with a prominent badge', () => {
+  it('attaches the public-site-hide badge to the hiding row only, not the others', () => {
     render(
       <SponsorHealthPanel
         violations={[
@@ -63,7 +63,40 @@ describe('SponsorHealthPanel', () => {
       />,
     )
 
-    // The hide badge appears exactly once — only for the hiding violation.
-    expect(screen.getAllByText(/hidden from the public site/i)).toHaveLength(1)
+    const hiddenRow = screen.getByText('Hidden Co').closest('li')!
+    const otherRow = screen.getByText('Other Co').closest('li')!
+
+    expect(
+      within(hiddenRow).getByText(/hidden from the public site/i),
+    ).toBeInTheDocument()
+    expect(
+      within(otherRow).queryByText(/hidden from the public site/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('labels each violation with its axis and a human-readable state', () => {
+    render(
+      <SponsorHealthPanel
+        violations={[
+          violation({ axis: 'pipeline', state: 'closed-won' }),
+          violation({
+            sponsorId: 'sfc-2',
+            axis: 'contract',
+            state: 'contract-sent',
+          }),
+          // An unmapped/future state falls through to its raw value rather than
+          // rendering blank.
+          violation({
+            sponsorId: 'sfc-3',
+            axis: 'signature',
+            state: 'mystery-state',
+          }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('Pipeline · Closed - Won')).toBeInTheDocument()
+    expect(screen.getByText('Contract · Contract Sent')).toBeInTheDocument()
+    expect(screen.getByText('Signature · mystery-state')).toBeInTheDocument()
   })
 })

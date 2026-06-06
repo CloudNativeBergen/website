@@ -112,6 +112,53 @@ describe('auditSponsorHealth', () => {
     expect(violations).toHaveLength(2)
   })
 
+  it('does not flag a dead deal (closed-lost) for its leftover signed contract', () => {
+    // A won deal with a signed contract that later falls through is dragged to
+    // Lost without resetting the contract (backward moves never auto-reset).
+    // The not-closed-lost guard is a *transition* guard ("can't send/sign on a
+    // dead deal"), not a resting invariant — so this is historical data, not a
+    // fixable health problem, and must not appear in the panel.
+    const violations = auditSponsorHealth([
+      makeSfc({
+        status: 'closed-lost',
+        contractStatus: 'contract-signed',
+        tier: undefined,
+        contractValue: 0,
+      }),
+    ])
+
+    expect(violations).toEqual([])
+  })
+
+  it('reuses the real pipeline guard message (closed-won hide explains the public-site impact)', () => {
+    const violations = auditSponsorHealth([
+      makeSfc({ status: 'closed-won', tier: undefined }),
+    ])
+
+    const tierMissing = violations[0].missing.find((m) => m.field === 'tier')
+    expect(tierMissing?.message).toMatch(/hidden from the public site/i)
+  })
+
+  it('flags a contract-signed sponsor lacking a primary contact (a rule that lives only in the state machine)', () => {
+    const violations = auditSponsorHealth([
+      makeSfc({
+        status: 'negotiating',
+        contractStatus: 'contract-signed',
+        tier,
+        contractValue: 50000,
+        contactPersons: [],
+      }),
+    ])
+
+    expect(violations).toHaveLength(1)
+    expect(violations[0].axis).toBe('contract')
+    const contactMissing = violations[0].missing.find(
+      (m) => m.field === 'contactPersons',
+    )
+    expect(contactMissing).toBeDefined()
+    expect(contactMissing?.source).toBe('sponsor')
+  })
+
   it('orders public-site-hiding violations first, regardless of input order', () => {
     const violations = auditSponsorHealth([
       makeSfc({

@@ -103,6 +103,33 @@ describe('sponsor.crm.healthViolations', () => {
     expect(listSponsorsForConference).toHaveBeenCalledWith('conf-1')
   })
 
+  it('audits sponsors of every pipeline status, not just the board default view', async () => {
+    // A prospect with a contract-sent record and a closed-won without a tier
+    // sit in different board columns; both must surface in the panel.
+    vi.mocked(listSponsorsForConference).mockResolvedValue({
+      sponsors: [
+        makeSfc({
+          _id: 'sfc-prospect',
+          status: 'prospect',
+          contractStatus: 'contract-sent',
+          tier: undefined,
+          contractValue: 0,
+        }),
+        makeSfc({
+          _id: 'sfc-won',
+          status: 'closed-won',
+          tier: undefined,
+        }),
+      ],
+    })
+
+    const result =
+      await createCaller(mockOrganizer).sponsor.crm.healthViolations()
+
+    const ids = result.map((v) => v.sponsorId)
+    expect(ids).toEqual(expect.arrayContaining(['sfc-prospect', 'sfc-won']))
+  })
+
   it('returns an empty list when every sponsor is healthy', async () => {
     vi.mocked(listSponsorsForConference).mockResolvedValue({
       sponsors: [makeSfc({ status: 'negotiating' })],

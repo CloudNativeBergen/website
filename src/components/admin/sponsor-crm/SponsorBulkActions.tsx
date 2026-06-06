@@ -84,6 +84,7 @@ export function SponsorBulkActions({
         message: `Updated ${result.updatedCount} of ${result.totalCount} selected sponsors.`,
       })
       utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
       onSuccess()
       onClearSelection()
       setIsProcessing(false)
@@ -106,6 +107,7 @@ export function SponsorBulkActions({
         message: `Deleted ${result.deletedCount} of ${result.totalCount} selected sponsors.`,
       })
       utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
       onSuccess()
       onClearSelection()
       setIsProcessing(false)

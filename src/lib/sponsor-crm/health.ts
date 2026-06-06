@@ -44,6 +44,12 @@ export function auditSponsorHealth(
 
   for (const sponsor of sponsors) {
     for (const axis of AXES) {
+      // A dead deal (closed-lost) carries no live contract/signature
+      // obligations — leftover contract/signature status is historical, not a
+      // fixable health problem. (The not-closed-lost guard is a *transition*
+      // guard — "can't send or sign on a dead deal" — not a resting invariant.)
+      if (sponsor.status === 'closed-lost' && axis !== 'pipeline') continue
+
       const state = AXIS_STATE[axis](sponsor)
       const result = checkState(axis, state, sponsor)
       if (result.ok) continue
