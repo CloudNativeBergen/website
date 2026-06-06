@@ -75,13 +75,13 @@ const CONTRACT_VALUE_GUARD: FieldDef<SponsorState> = {
     sponsor.contractValue != null && sponsor.contractValue > 0,
 }
 
-/** No contracts on dead deals. */
+/** No contracts on dead deals — applies to sending and to marking signed. */
 const NOT_CLOSED_LOST_GUARD: FieldDef<SponsorState> = {
   field: 'status',
   label: 'Pipeline status',
   source: 'pipeline',
   severity: 'required',
-  message: "Can't send a contract on a closed-lost deal.",
+  message: "Can't send or sign a contract on a closed-lost deal.",
   check: (sponsor) => sponsor.status !== 'closed-lost',
 }
 
@@ -116,6 +116,7 @@ const CONTRACT_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
     CONTRACT_TIER_GUARD,
     CONTRACT_VALUE_GUARD,
     PRIMARY_CONTACT_GUARD,
+    NOT_CLOSED_LOST_GUARD,
   ],
 }
 

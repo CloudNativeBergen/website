@@ -204,6 +204,27 @@ describe('canTransition — contract axis: contract-signed (path-independent)', 
     )
     expect(result.ok).toBe(true)
   })
+
+  it('blocks marking contract-signed on a closed-lost deal, even with tier, value and contact', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-signed',
+      makeSfc({
+        tier,
+        contractValue: 50000,
+        contactPersons: primaryContact,
+        status: 'closed-lost',
+      }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'status')).toBe(true)
+      expect(result.missing.find((m) => m.field === 'status')?.message).toMatch(
+        /closed-lost|lost|dead/i,
+      )
+    }
+  })
 })
 
 describe('canTransition — signature axis', () => {

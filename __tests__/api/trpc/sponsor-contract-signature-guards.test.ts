@@ -129,6 +129,26 @@ describe('updateContractStatus — contract axis guards', () => {
     expect(updateSponsorForConference).not.toHaveBeenCalled()
   })
 
+  it('rejects marking contract-signed on a closed-lost deal', async () => {
+    vi.mocked(getSponsorForConference).mockResolvedValue({
+      sponsorForConference: makeSfc({
+        tier,
+        contractValue: 50000,
+        contactPersons: primaryContact,
+        contractStatus: 'contract-sent',
+        status: 'closed-lost',
+      }),
+      error: undefined,
+    })
+    await expect(
+      createCaller(mockOrganizer).sponsor.crm.updateContractStatus({
+        id: 'sfc-1',
+        newStatus: 'contract-signed',
+      }),
+    ).rejects.toThrow(/closed-lost|lost/i)
+    expect(updateSponsorForConference).not.toHaveBeenCalled()
+  })
+
   it('rejects marking contract-signed without a primary contact', async () => {
     vi.mocked(getSponsorForConference).mockResolvedValue({
       sponsorForConference: makeSfc({
