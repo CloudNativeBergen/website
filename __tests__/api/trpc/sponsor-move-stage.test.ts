@@ -7,6 +7,8 @@ import {
   updateSponsorForConference,
 } from '@/lib/sponsor-crm/sanity'
 import { logStageChange } from '@/lib/sponsor-crm/activity'
+import { extractMissingFields } from '@/server/errors'
+import { TRPCError } from '@trpc/server'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 vi.mock('@/lib/conference/sanity')
@@ -87,6 +89,28 @@ describe('sponsor.crm.moveStage — tier guard', () => {
     ).rejects.toThrow(/tier/i)
 
     expect(updateSponsorForConference).not.toHaveBeenCalled()
+  })
+
+  it('rejects with a structured missingFields payload (not just a string message)', async () => {
+    vi.mocked(getSponsorForConference).mockResolvedValue({
+      sponsorForConference: makeSfc({ tier: undefined, status: 'negotiating' }),
+      error: undefined,
+    })
+
+    try {
+      await createCaller(mockOrganizer).sponsor.crm.moveStage({
+        id: 'sfc-1',
+        newStatus: 'closed-won',
+      })
+      expect.unreachable('moveStage should have rejected')
+    } catch (error) {
+      expect(error).toBeInstanceOf(TRPCError)
+      expect((error as TRPCError).code).toBe('PRECONDITION_FAILED')
+      const missing = extractMissingFields(error as TRPCError)
+      expect(missing).toBeDefined()
+      expect(missing?.[0]?.field).toBe('tier')
+      expect(missing?.[0]?.message).toMatch(/tier/i)
+    }
   })
 
   it('allows moving to closed-won when a tier is set', async () => {

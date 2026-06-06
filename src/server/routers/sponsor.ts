@@ -117,6 +117,7 @@ import {
   canTransition,
   checkPipelineState,
 } from '@/lib/sponsor-crm/state-machine'
+import { preconditionFailed } from '@/server/errors'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 import {
   getSigningProvider,
@@ -743,10 +744,7 @@ export const sponsorRouter = router({
         // just on drag-drop moves (closed-won requires a tier).
         const createCheck = checkPipelineState(data.status, { tier: data.tier })
         if (!createCheck.ok) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: createCheck.missing.map((m) => m.message).join(' '),
-          })
+          throw preconditionFailed(createCheck.missing)
         }
 
         // Auto-assign to current user if not provided (undefined)
@@ -825,10 +823,7 @@ export const sponsorRouter = router({
             tier: resultingTier,
           })
           if (!updateCheck.ok) {
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message: updateCheck.missing.map((m) => m.message).join(' '),
-            })
+            throw preconditionFailed(updateCheck.missing)
           }
         }
 
@@ -946,10 +941,7 @@ export const sponsorRouter = router({
           existing,
         )
         if (!transition.ok) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: transition.missing.map((m) => m.message).join(' '),
-          })
+          throw preconditionFailed(transition.missing)
         }
 
         const { sponsorForConference, error } =
@@ -1140,10 +1132,12 @@ export const sponsorRouter = router({
               { ids: input.ids },
             )
             if (tierlessIds.length > 0) {
-              throw new TRPCError({
-                code: 'PRECONDITION_FAILED',
-                message: `${tierlessIds.length} selected sponsor(s) have no tier and can't be marked Won. Set a tier first.`,
-              })
+              throw preconditionFailed([
+                {
+                  field: 'tier',
+                  message: `${tierlessIds.length} selected sponsor(s) have no tier and can't be marked Won. Set a tier first.`,
+                },
+              ])
             }
           }
 
