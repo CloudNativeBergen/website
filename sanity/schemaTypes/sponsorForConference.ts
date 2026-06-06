@@ -1,6 +1,8 @@
 import { defineField, defineType } from 'sanity'
 import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
+import { closedWonTierWarning } from '../../src/lib/sponsor-crm/tier-validation'
 import { CURRENCY_OPTIONS } from './constants'
+import { apiVersion } from '../env'
 
 const SPONSOR_TAGS = [
   'warm-lead',
@@ -47,6 +49,25 @@ export default defineType({
           }
         },
       },
+      // Non-blocking warning: a closed-won sponsor that is effectively untiered
+      // is hidden from the public site. "Effectively untiered" covers a missing
+      // tier reference AND a dangling one (the tier doc was deleted) — a dangling
+      // ref is still a truthy { _ref }, so existence must be checked. Mirrors the
+      // tRPC guards for edits made directly in the Studio (which bypass the API).
+      validation: (Rule) =>
+        Rule.custom((tier, context) => {
+          const status = (context.document as { status?: string } | undefined)
+            ?.status
+          const tierRef = (tier as { _ref?: string } | undefined)?._ref
+          const client = context.getClient({ apiVersion })
+          return closedWonTierWarning(status, tierRef, async (ref) => {
+            const baseId = ref.replace(/^drafts\./, '')
+            return client.fetch<boolean>(
+              'count(*[_id == $id || _id == $draftId]) > 0',
+              { id: baseId, draftId: `drafts.${baseId}` },
+            )
+          })
+        }).warning(),
     }),
     defineField({
       name: 'addons',

@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { structuredErrorData } from './errors'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({
@@ -37,7 +38,7 @@ const t = initTRPC.context<Context>().create({
       ...shape,
       data: {
         ...shape.data,
-        code: error.code,
+        ...structuredErrorData(error),
       },
     }
   },

@@ -113,6 +113,11 @@ import {
   ORGANIZER_DATE_MARKER,
 } from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
+import {
+  canTransition,
+  checkPipelineState,
+} from '@/lib/sponsor-crm/state-machine'
+import { preconditionFailed } from '@/server/errors'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 import {
   getSigningProvider,
@@ -735,6 +740,13 @@ export const sponsorRouter = router({
           tags: input.tags as SponsorTag[] | undefined,
         }
 
+        // Enforce the pipeline invariant however the record is created, not
+        // just on drag-drop moves (closed-won requires a tier).
+        const createCheck = checkPipelineState(data.status, { tier: data.tier })
+        if (!createCheck.ok) {
+          throw preconditionFailed(createCheck.missing)
+        }
+
         // Auto-assign to current user if not provided (undefined)
         if (data.assignedTo === undefined && userId) {
           data.assignedTo = userId
@@ -792,6 +804,27 @@ export const sponsorRouter = router({
             code: 'NOT_FOUND',
             message: 'Sponsor relationship not found',
           })
+        }
+
+        // Enforce the pipeline invariant when an edit changes status or tier (a
+        // field edit can reach closed-won, or clear the tier of a closed-won
+        // sponsor, without going through moveStage). Only guard when one of
+        // those actually changes, so unrelated edits to a pre-existing invalid
+        // record aren't trapped — that back-catalog is cleaned in #379.
+        const statusChanging =
+          updateData.status !== undefined &&
+          updateData.status !== existing.status
+        const tierChanging = updateData.tier !== undefined
+        if (statusChanging || tierChanging) {
+          const resultingStatus = updateData.status ?? existing.status
+          const resultingTier =
+            updateData.tier !== undefined ? updateData.tier : existing.tier
+          const updateCheck = checkPipelineState(resultingStatus, {
+            tier: resultingTier,
+          })
+          if (!updateCheck.ok) {
+            throw preconditionFailed(updateCheck.missing)
+          }
         }
 
         // Ensure assigned person is an organizer of this conference
@@ -900,6 +933,16 @@ export const sponsorRouter = router({
         }
 
         const oldStatus = existing.status
+
+        const transition = canTransition(
+          'pipeline',
+          existing.status,
+          input.newStatus,
+          existing,
+        )
+        if (!transition.ok) {
+          throw preconditionFailed(transition.missing)
+        }
 
         const { sponsorForConference, error } =
           await updateSponsorForConference(input.id, {
@@ -1077,6 +1120,27 @@ export const sponsorRouter = router({
                 message:
                   'Assigned person must be an organizer of this conference',
               })
+            }
+          }
+
+          // Enforce the pipeline invariant: a record can only be bulk-marked
+          // Won if it has a resolvable tier. Reject the whole batch (rather
+          // than silently skipping) so the organizer knows which ones to fix.
+          if (input.status === 'closed-won') {
+            const tierlessIds = await clientReadUncached.fetch<string[]>(
+              `*[_type == "sponsorForConference" && _id in $ids && !defined(tier->_id)]._id`,
+              { ids: input.ids },
+            )
+            if (tierlessIds.length > 0) {
+              throw preconditionFailed([
+                {
+                  field: 'tier',
+                  label: 'Sponsor tier',
+                  source: 'pipeline',
+                  severity: 'required',
+                  message: `${tierlessIds.length} selected sponsor(s) have no tier and can't be marked Won. Set a tier first.`,
+                },
+              ])
             }
           }
 
