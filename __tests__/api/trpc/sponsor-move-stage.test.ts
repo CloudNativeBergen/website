@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { appRouter } from '@/server/_app'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
@@ -73,6 +73,10 @@ describe('sponsor.crm.moveStage — tier guard', () => {
       error: undefined,
     })
     vi.mocked(logStageChange).mockResolvedValue(undefined as any)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('rejects moving to closed-won without a tier', async () => {

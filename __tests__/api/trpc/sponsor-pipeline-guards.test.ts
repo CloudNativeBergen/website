@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { appRouter } from '@/server/_app'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
@@ -87,6 +87,10 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
       updatedCount: 2,
       totalCount: 2,
     })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   describe('create', () => {
