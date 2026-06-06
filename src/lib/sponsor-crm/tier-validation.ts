@@ -13,6 +13,25 @@ export const DANGLING_TIER_WARNING =
  * `{ _ref }` object, so a plain falsiness check would miss it. Existence is
  * injected so this stays pure and testable without the Studio client.
  */
+/**
+ * GROQ to test whether a sponsor tier reference resolves to a real tier the
+ * public site can see. Published-only: a draft-only tier is invisible to the
+ * front-end (which reads the published perspective), so it must NOT count as
+ * existing — otherwise a closed-won sponsor pointing at it stays silently
+ * hidden. The drafts prefix on the incoming ref is normalised away. Shared by
+ * the Studio warning and the tRPC create/update guards so all paths agree on
+ * one definition of "resolvable tier".
+ */
+export function tierExistenceQuery(ref: string): {
+  query: string
+  params: { id: string }
+} {
+  return {
+    query: 'count(*[_type == "sponsorTier" && _id == $id]) > 0',
+    params: { id: ref.replace(/^drafts\./, '') },
+  }
+}
+
 export async function closedWonTierWarning(
   status: string | undefined,
   tierRef: string | undefined,

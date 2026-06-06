@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { structuredErrorData } from './errors'
+import { structuredErrorData, type StructuredErrorData } from './errors'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({
@@ -32,16 +32,29 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>
 
+/**
+ * Merges the structured-error payload (`code` + `missingFields`) into the tRPC
+ * error shape's `data`, so guard rejections survive serialization to the
+ * client. Extracted from the formatter config so the wiring is unit-testable.
+ */
+export function formatTRPCError<
+  S extends { data: Record<string, unknown> },
+>(opts: {
+  shape: S
+  error: { code: string; cause?: unknown }
+}): Omit<S, 'data'> & { data: S['data'] & StructuredErrorData } {
+  const { shape, error } = opts
+  return {
+    ...shape,
+    data: {
+      ...shape.data,
+      ...structuredErrorData(error),
+    },
+  }
+}
+
 const t = initTRPC.context<Context>().create({
-  errorFormatter({ shape, error }) {
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        ...structuredErrorData(error),
-      },
-    }
-  },
+  errorFormatter: formatTRPCError,
 })
 
 const requireAuth = t.middleware(({ ctx, next }) => {

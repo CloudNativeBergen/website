@@ -5,6 +5,7 @@ import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import { mutationRejectionMessage } from '@/lib/trpc/errors'
 
 interface DragItem {
   type: 'sponsor'
@@ -147,18 +148,15 @@ export function useSponsorDragDrop(currentView: BoardView) {
         for (const [key, data] of previousDataRef.current) {
           queryClient.setQueryData(key, data)
         }
-        // Surface why the move was rejected. For a guard rejection
-        // (PRECONDITION_FAILED) the server message is user-facing and actionable;
-        // for transient/internal errors show a generic message instead of
-        // leaking a raw client error string.
-        const code = (error as { data?: { code?: string } } | null)?.data?.code
+        // Surface why the move was rejected: the server's actionable message for
+        // a guard rejection, a generic fallback for transient/internal errors.
         showNotification({
           type: 'error',
           title: 'Could not move sponsor',
-          message:
-            code === 'PRECONDITION_FAILED' && error instanceof Error
-              ? error.message
-              : 'Failed to update sponsor status. Please try again.',
+          message: mutationRejectionMessage(
+            error,
+            'Failed to update sponsor status. Please try again.',
+          ),
         })
       } finally {
         previousDataRef.current = []

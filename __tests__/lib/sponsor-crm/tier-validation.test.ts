@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { closedWonTierWarning } from '@/lib/sponsor-crm/tier-validation'
+import {
+  closedWonTierWarning,
+  tierExistenceQuery,
+} from '@/lib/sponsor-crm/tier-validation'
 
 const exists = () => Promise.resolve(true)
 const absent = () => Promise.resolve(false)
@@ -31,5 +34,24 @@ describe('closedWonTierWarning', () => {
     const check = vi.fn().mockResolvedValue(true)
     await closedWonTierWarning('closed-won', undefined, check)
     expect(check).not.toHaveBeenCalled()
+  })
+})
+
+describe('tierExistenceQuery', () => {
+  it('checks for a published sponsorTier with the given id', () => {
+    const { query, params } = tierExistenceQuery('tier-x')
+    expect(query).toContain('_type == "sponsorTier"')
+    expect(query).toContain('_id == $id')
+    expect(params).toEqual({ id: 'tier-x' })
+  })
+
+  it('does not count draft-only tiers (no drafts arm — the public site reads published)', () => {
+    const { query } = tierExistenceQuery('tier-x')
+    expect(query).not.toContain('drafts')
+    expect(query).not.toContain('$draftId')
+  })
+
+  it('normalises a drafts-prefixed ref to its published id', () => {
+    expect(tierExistenceQuery('drafts.tier-x').params).toEqual({ id: 'tier-x' })
   })
 })
