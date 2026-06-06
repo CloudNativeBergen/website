@@ -239,10 +239,15 @@ describe('updateSignatureStatus — signature axis guards', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
-  it('allows a manual signature signed once the contract was sent', async () => {
+  it('allows a manual signature signed once the contract was sent and contract invariants are met', async () => {
     const { commit } = mockPatch()
     vi.mocked(getSponsorForConference).mockResolvedValue({
-      sponsorForConference: makeSfc({ contractStatus: 'contract-sent' }),
+      sponsorForConference: makeSfc({
+        contractStatus: 'contract-sent',
+        tier,
+        contractValue: 50000,
+        contactPersons: primaryContact,
+      }),
       error: undefined,
     })
     await createCaller(mockOrganizer).sponsor.crm.updateSignatureStatus({
@@ -250,6 +255,48 @@ describe('updateSignatureStatus — signature axis guards', () => {
       newStatus: 'signed',
     })
     expect(commit).toHaveBeenCalled()
+  })
+
+  it('rejects a manual signature signed when contract-signed invariants are unmet (it would write contract-signed)', async () => {
+    const { commit } = mockPatch()
+    vi.mocked(getSponsorForConference).mockResolvedValue({
+      // Contract was sent (passes the signature guard) but tier/value/contact
+      // are missing — marking signed here would write an invalid contract-signed.
+      sponsorForConference: makeSfc({
+        contractStatus: 'contract-sent',
+        tier: undefined,
+        contractValue: 0,
+      }),
+      error: undefined,
+    })
+    await expect(
+      createCaller(mockOrganizer).sponsor.crm.updateSignatureStatus({
+        id: 'sfc-1',
+        newStatus: 'signed',
+      }),
+    ).rejects.toThrow(/tier|value|contact/i)
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('rejects marking the signature signed on a closed-lost deal', async () => {
+    const { commit } = mockPatch()
+    vi.mocked(getSponsorForConference).mockResolvedValue({
+      sponsorForConference: makeSfc({
+        contractStatus: 'contract-sent',
+        tier,
+        contractValue: 50000,
+        contactPersons: primaryContact,
+        status: 'closed-lost',
+      }),
+      error: undefined,
+    })
+    await expect(
+      createCaller(mockOrganizer).sponsor.crm.updateSignatureStatus({
+        id: 'sfc-1',
+        newStatus: 'signed',
+      }),
+    ).rejects.toThrow(/closed-lost|lost/i)
+    expect(commit).not.toHaveBeenCalled()
   })
 })
 

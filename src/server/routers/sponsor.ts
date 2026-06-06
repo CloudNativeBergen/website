@@ -1565,6 +1565,21 @@ export const sponsorRouter = router({
           throw preconditionFailed(signatureTransition.missing)
         }
 
+        // Marking the signature signed also drives the contract to
+        // contract-signed (below), so it must satisfy that state's invariants
+        // (tier + value + primary contact, not a dead deal). Enforced
+        // path-independently so this side-door matches updateContractStatus.
+        if (input.newStatus === 'signed') {
+          const contractSigned = checkState(
+            'contract',
+            'contract-signed',
+            existing,
+          )
+          if (!contractSigned.ok) {
+            throw preconditionFailed(contractSigned.missing)
+          }
+        }
+
         try {
           await clientWrite
             .patch(input.id)
