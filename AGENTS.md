@@ -40,6 +40,12 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 ## Development Guidelines
 
 - Follow Next.js best practices (App Router, Server Components, Server Actions where applicable).
+- Before implementation work begins, create a branch and open a draft PR whose title summarizes the intended work and whose description contains the plan. Make this the first action for all non-trivial tasks unless explicitly told not to.
+- When creating or editing PR descriptions with gh, pass multiline Markdown with real newlines, never escaped \n sequences, and verify the rendered body with gh pr view before moving on.
+- Divide work up, use sub-agents and role specific agents to achieve our task.
+- After you are finished, use multiple adverserial personas subagents to review our changes; repeat until they find no real and actionable issues.
+- Always update the PR title and desc to desc the complete work done, with the plan; and remove draft status
+- Our job doesn't stop after we push, we always monitor CI and fix it until all checks are green
 - Utilize TypeScript for type safety.
 - Adhere to Tailwind CSS utility-first principles for styling.
 - Refer to the Storybook documentation (run `pnpm storybook`) for comprehensive design system guidelines, brand colors, typography, and component examples. All UI/UX design decisions should align with the documented design system.
