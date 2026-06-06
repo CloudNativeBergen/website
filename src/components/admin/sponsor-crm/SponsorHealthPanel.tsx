@@ -121,16 +121,20 @@ export function SponsorHealthPanel({
         </p>
       )}
       {violations.length > 0 && (
-        <ul
+        // A focusable region so keyboard users can scroll the clipped list;
+        // the inner <ul> keeps its list semantics for screen readers.
+        <div
           role="region"
           aria-label="Data-health issues"
           tabIndex={0}
-          className="mt-2 max-h-48 space-y-2 overflow-y-auto"
+          className="mt-2 max-h-48 overflow-y-auto"
         >
-          {violations.map((v) => (
-            <ViolationRow key={`${v.sponsorId}-${v.axis}`} violation={v} />
-          ))}
-        </ul>
+          <ul className="space-y-2">
+            {violations.map((v) => (
+              <ViolationRow key={`${v.sponsorId}-${v.axis}`} violation={v} />
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )
