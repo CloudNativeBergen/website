@@ -1039,6 +1039,16 @@ export const sponsorRouter = router({
         }
 
         const oldStatus = existing.invoiceStatus
+
+        const transition = canTransition(
+          'invoice',
+          oldStatus,
+          input.newStatus,
+          existing,
+        )
+        if (!transition.ok) {
+          throw preconditionFailed(transition.missing)
+        }
         const updateData: Partial<{
           invoiceStatus: string
           invoiceSentAt: string | null

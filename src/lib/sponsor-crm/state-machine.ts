@@ -13,7 +13,7 @@ import type { ContactPerson } from '@/lib/sponsor/types'
  * Only the pipeline axis is implemented today; contract/signature/invoice
  * axes are added in later slices.
  */
-export type TransitionAxis = 'pipeline' | 'contract' | 'signature'
+export type TransitionAxis = 'pipeline' | 'contract' | 'signature' | 'invoice'
 
 /**
  * The slice of a sponsor record the guards read. A tier may arrive as the
@@ -23,8 +23,11 @@ export type TransitionAxis = 'pipeline' | 'contract' | 'signature'
 export interface SponsorState {
   tier?: { _id?: string } | string | null
   contractValue?: number | null
+  contractCurrency?: string
   status?: string
+  billing?: { email?: string }
   contractStatus?: string
+  invoiceStatus?: string
   contactPersons?: ContactPerson[] | null
 }
 
@@ -139,6 +142,46 @@ const SIGNATURE_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
   signed: [CONTRACT_SENT_GUARD],
 }
 
+const INVOICE_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
+  sent: [
+    {
+      field: 'contractValue',
+      label: 'Contract value',
+      source: 'pipeline',
+      severity: 'required',
+      message: 'Set a contract value before marking the invoice as sent.',
+      check: (sponsor) =>
+        sponsor.contractValue != null && sponsor.contractValue > 0,
+    },
+    {
+      field: 'contractCurrency',
+      label: 'Contract currency',
+      source: 'pipeline',
+      severity: 'required',
+      message: 'Set a contract currency before marking the invoice as sent.',
+      check: (sponsor) => Boolean(sponsor.contractCurrency),
+    },
+    {
+      field: 'billing.email',
+      label: 'Billing email',
+      source: 'sponsor',
+      severity: 'required',
+      message:
+        'Add a billing email address before marking the invoice as sent.',
+      check: (sponsor) => Boolean(sponsor.billing?.email),
+    },
+    {
+      field: 'contractStatus',
+      label: 'Contract status',
+      source: 'pipeline',
+      severity: 'required',
+      message:
+        'A contract must be signed before the invoice can be marked as sent.',
+      check: (sponsor) => sponsor.contractStatus === 'contract-signed',
+    },
+  ],
+}
+
 const GUARDS: Record<
   TransitionAxis,
   Record<string, FieldDef<SponsorState>[]>
@@ -146,6 +189,7 @@ const GUARDS: Record<
   pipeline: PIPELINE_GUARDS,
   contract: CONTRACT_GUARDS,
   signature: SIGNATURE_GUARDS,
+  invoice: INVOICE_GUARDS,
 }
 
 function evaluate(
@@ -171,6 +215,24 @@ export function canTransition(
   sponsor: SponsorState,
 ): TransitionResult {
   if (from === to) return { ok: true }
+
+  if (axis === 'invoice') {
+    if ((to === 'paid' || to === 'overdue') && from !== 'sent') {
+      return {
+        ok: false,
+        missing: [
+          {
+            field: 'invoiceStatus',
+            label: 'Invoice status',
+            source: 'pipeline',
+            severity: 'required',
+            message: `Invoice must be sent before it can be marked as ${to}.`,
+          },
+        ],
+      }
+    }
+  }
+
   return evaluate(axis, to, sponsor)
 }
 

@@ -364,3 +364,72 @@ describe('checkPipelineState — direct state invariant', () => {
     expect(checkPipelineState('closed-won', { tier: '' }).ok).toBe(false)
   })
 })
+
+describe('canTransition — invoice axis', () => {
+  it('blocks moving to sent if missing contractValue', () => {
+    const result = canTransition('invoice', 'not-sent', 'sent', {
+      contractCurrency: 'NOK',
+      billing: { email: 'bill@test.com' },
+      contractStatus: 'contract-signed',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok)
+      expect(result.missing.some((m) => m.field === 'contractValue')).toBe(true)
+  })
+
+  it('blocks moving to sent if missing billing email', () => {
+    const result = canTransition('invoice', 'not-sent', 'sent', {
+      contractValue: 100,
+      contractCurrency: 'NOK',
+      contractStatus: 'contract-signed',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok)
+      expect(result.missing.some((m) => m.field === 'billing.email')).toBe(true)
+  })
+
+  it('blocks moving to sent if contract is not signed', () => {
+    const result = canTransition('invoice', 'not-sent', 'sent', {
+      contractValue: 100,
+      contractCurrency: 'NOK',
+      billing: { email: 'bill@test.com' },
+      contractStatus: 'contract-sent',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok)
+      expect(result.missing.some((m) => m.field === 'contractStatus')).toBe(
+        true,
+      )
+  })
+
+  it('allows moving to sent if all conditions are met', () => {
+    const result = canTransition('invoice', 'not-sent', 'sent', {
+      contractValue: 100,
+      contractCurrency: 'NOK',
+      billing: { email: 'bill@test.com' },
+      contractStatus: 'contract-signed',
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('blocks moving to paid from not-sent (must be sent first)', () => {
+    const result = canTransition('invoice', 'not-sent', 'paid', {})
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.missing[0].field).toBe('invoiceStatus')
+  })
+
+  it('blocks moving to overdue from not-sent', () => {
+    const result = canTransition('invoice', 'not-sent', 'overdue', {})
+    expect(result.ok).toBe(false)
+  })
+
+  it('allows moving to paid from sent', () => {
+    const result = canTransition('invoice', 'sent', 'paid', {})
+    expect(result.ok).toBe(true)
+  })
+
+  it('allows moving to cancelled from anywhere without requirements', () => {
+    const result = canTransition('invoice', 'not-sent', 'cancelled', {})
+    expect(result.ok).toBe(true)
+  })
+})

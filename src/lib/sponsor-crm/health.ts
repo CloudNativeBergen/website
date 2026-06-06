@@ -27,6 +27,7 @@ const AXIS_STATE: Record<
   pipeline: (s) => s.status,
   contract: (s) => s.contractStatus,
   signature: (s) => s.signatureStatus ?? 'not-started',
+  invoice: (s) => s.invoiceStatus,
 }
 
 const AXES = Object.keys(AXIS_STATE) as TransitionAxis[]
