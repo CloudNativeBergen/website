@@ -154,10 +154,12 @@ export function SponsorCRMPipeline({
 
   // Data-health: every sponsor breaking a state-machine invariant, audited
   // across the FULL conference roster (the query ignores the board filters) so
-  // a hidden problem can't be filtered out of view.
-  const { data: healthViolations = [] } =
+  // a hidden problem can't be filtered out of view. Local writes invalidate
+  // this query for instant feedback, so the poll is only a backstop for changes
+  // made by other admins and can run slowly.
+  const { data: healthViolations = [], isError: healthCheckFailed } =
     api.sponsor.crm.healthViolations.useQuery(undefined, {
-      refetchInterval: isUserBusy ? false : 30_000,
+      refetchInterval: isUserBusy ? false : 120_000,
       refetchOnWindowFocus: !isUserBusy,
     })
 
@@ -229,7 +231,11 @@ export function SponsorCRMPipeline({
     updateUrlParams({ sponsor: null, view: null })
     utils.sponsor.crm.list.invalidate()
     utils.sponsor.crm.healthViolations.invalidate()
-  }, [updateUrlParams, utils.sponsor.crm.list, utils.sponsor.crm.healthViolations])
+  }, [
+    updateUrlParams,
+    utils.sponsor.crm.list,
+    utils.sponsor.crm.healthViolations,
+  ])
 
   const handleFormViewChange = useCallback(
     (formView: string) => {
@@ -831,12 +837,18 @@ export function SponsorCRMPipeline({
           selectedIds={selectedIds}
           sponsors={sponsors}
           onClearSelection={handleClearSelection}
-          onSuccess={() => utils.sponsor.crm.list.invalidate()}
+          onSuccess={() => {
+            utils.sponsor.crm.list.invalidate()
+            utils.sponsor.crm.healthViolations.invalidate()
+          }}
         />
       )}
 
       {/* Data-health panel (renders nothing when every sponsor is healthy) */}
-      <SponsorHealthPanel violations={healthViolations} />
+      <SponsorHealthPanel
+        violations={healthViolations}
+        isError={healthCheckFailed}
+      />
 
       {/* Board Columns */}
       <DndContext

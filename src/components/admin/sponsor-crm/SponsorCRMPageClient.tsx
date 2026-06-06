@@ -41,7 +41,10 @@ export function SponsorCRMPageClient({
             render: () => (
               <ImportHistoricSponsorsButton
                 conferenceId={conference._id}
-                onSuccess={() => utils.sponsor.crm.list.invalidate()}
+                onSuccess={() => {
+                  utils.sponsor.crm.list.invalidate()
+                  utils.sponsor.crm.healthViolations.invalidate()
+                }}
               />
             ),
           },

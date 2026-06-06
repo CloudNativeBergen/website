@@ -43,6 +43,13 @@ describe('SponsorHealthPanel', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('shows a distinct error notice when the audit failed, instead of silently looking healthy', () => {
+    const { container } = render(<SponsorHealthPanel violations={[]} isError />)
+
+    expect(container).not.toBeEmptyDOMElement()
+    expect(screen.getByText(/couldn.t check data health/i)).toBeInTheDocument()
+  })
+
   it('attaches the public-site-hide badge to the hiding row only, not the others', () => {
     render(
       <SponsorHealthPanel

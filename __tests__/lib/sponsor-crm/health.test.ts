@@ -92,9 +92,9 @@ describe('auditSponsorHealth', () => {
     expect(violations[0].state).toBe('pending')
     expect(violations[0].sponsorId).toBe('sfc-acme')
     expect(violations[0].sponsorName).toBe('Acme Corp')
-    expect(violations[0].missing.some((m) => m.field === 'contractStatus')).toBe(
-      true,
-    )
+    expect(
+      violations[0].missing.some((m) => m.field === 'contractStatus'),
+    ).toBe(true)
   })
 
   it('reports one violation per axis when a sponsor breaks several at once', () => {

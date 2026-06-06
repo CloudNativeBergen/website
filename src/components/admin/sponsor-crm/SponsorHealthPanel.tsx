@@ -86,10 +86,15 @@ function ViolationRow({ violation }: { violation: SponsorHealthViolation }) {
  */
 export function SponsorHealthPanel({
   violations,
+  isError = false,
 }: {
   violations: SponsorHealthViolation[]
+  /** The audit query failed — surface it rather than masquerading as healthy. */
+  isError?: boolean
 }) {
-  if (violations.length === 0) return null
+  // Nothing to show only when the audit ran cleanly and found no problems. An
+  // errored audit must stay visible so an empty panel never reads as "healthy".
+  if (!isError && violations.length === 0) return null
 
   return (
     <section
@@ -101,15 +106,32 @@ export function SponsorHealthPanel({
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Data health
         </h2>
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-          {violations.length}
-        </span>
+        {violations.length > 0 && (
+          <span
+            aria-label={`${violations.length} data-health issues`}
+            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            {violations.length}
+          </span>
+        )}
       </div>
-      <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-        {violations.map((v) => (
-          <ViolationRow key={`${v.sponsorId}-${v.axis}`} violation={v} />
-        ))}
-      </ul>
+      {isError && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+          Couldn&apos;t check data health right now — it will retry shortly.
+        </p>
+      )}
+      {violations.length > 0 && (
+        <ul
+          role="region"
+          aria-label="Data-health issues"
+          tabIndex={0}
+          className="mt-2 max-h-48 space-y-2 overflow-y-auto"
+        >
+          {violations.map((v) => (
+            <ViolationRow key={`${v.sponsorId}-${v.axis}`} violation={v} />
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
