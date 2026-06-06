@@ -1,6 +1,7 @@
 import {
   canTransition,
   checkPipelineState,
+  checkState,
 } from '@/lib/sponsor-crm/state-machine'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
@@ -96,6 +97,213 @@ describe('canTransition — pipeline axis', () => {
       makeSfc({ tier: undefined, status: 'closed-won' }),
     )
     expect(result.ok).toBe(true)
+  })
+})
+
+describe('canTransition — contract axis', () => {
+  it('blocks moving to contract-sent without a tier', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-sent',
+      makeSfc({ tier: undefined, contractValue: 50000 }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'tier')).toBe(true)
+    }
+  })
+
+  it('blocks moving to contract-sent without a positive contract value', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-sent',
+      makeSfc({ tier, contractValue: 0 }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'contractValue')).toBe(true)
+    }
+  })
+
+  it('allows moving to contract-sent with tier and contract value set', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-sent',
+      makeSfc({ tier, contractValue: 50000 }),
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  it('blocks moving to contract-sent on a closed-lost deal even with tier and value', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-sent',
+      makeSfc({ tier, contractValue: 50000, status: 'closed-lost' }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'status')).toBe(true)
+      expect(result.missing.find((m) => m.field === 'status')?.message).toMatch(
+        /closed-lost|lost|dead/i,
+      )
+    }
+  })
+})
+
+const primaryContact = [
+  {
+    _key: 'c1',
+    name: 'Jane Doe',
+    email: 'jane@acme.test',
+    isPrimary: true,
+  },
+]
+
+describe('canTransition — contract axis: contract-signed (path-independent)', () => {
+  it('blocks marking contract-signed without a primary contact', () => {
+    const result = canTransition(
+      'contract',
+      'contract-sent',
+      'contract-signed',
+      makeSfc({ tier, contractValue: 50000 }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'contactPersons')).toBe(
+        true,
+      )
+    }
+  })
+
+  it('blocks marking contract-signed on an empty record (tier, value, contact all missing)', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-signed',
+      makeSfc({ tier: undefined, contractValue: undefined }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      const fields = result.missing.map((m) => m.field)
+      expect(fields).toEqual(
+        expect.arrayContaining(['tier', 'contractValue', 'contactPersons']),
+      )
+    }
+  })
+
+  it('allows marking contract-signed with tier, value, and a primary contact (offline/manual path)', () => {
+    const result = canTransition(
+      'contract',
+      'none',
+      'contract-signed',
+      makeSfc({ tier, contractValue: 50000, contactPersons: primaryContact }),
+    )
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('canTransition — signature axis', () => {
+  it('blocks moving signature to pending when the contract has not been sent', () => {
+    const result = canTransition(
+      'signature',
+      'not-started',
+      'pending',
+      makeSfc({ contractStatus: 'none' }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'contractStatus')).toBe(
+        true,
+      )
+    }
+  })
+
+  it('allows signature pending once the contract has been sent', () => {
+    const result = canTransition(
+      'signature',
+      'not-started',
+      'pending',
+      makeSfc({ contractStatus: 'contract-sent' }),
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  it('blocks a manual signature signed when the contract has not been sent', () => {
+    const result = canTransition(
+      'signature',
+      'not-started',
+      'signed',
+      makeSfc({ contractStatus: 'none' }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.some((m) => m.field === 'contractStatus')).toBe(
+        true,
+      )
+    }
+  })
+
+  it('allows a manual signature signed once the contract has been sent', () => {
+    const result = canTransition(
+      'signature',
+      'pending',
+      'signed',
+      makeSfc({ contractStatus: 'contract-sent' }),
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  it('never blocks resetting a signature backward (rejected, expired, not-started)', () => {
+    expect(
+      canTransition(
+        'signature',
+        'pending',
+        'rejected',
+        makeSfc({ contractStatus: 'contract-sent' }),
+      ).ok,
+    ).toBe(true)
+    expect(
+      canTransition(
+        'signature',
+        'pending',
+        'not-started',
+        makeSfc({ contractStatus: 'none' }),
+      ).ok,
+    ).toBe(true)
+  })
+})
+
+describe('checkState — direct axis state invariant', () => {
+  it('enforces contract-sent guards regardless of the current state (re-send path)', () => {
+    const result = checkState(
+      'contract',
+      'contract-sent',
+      makeSfc({
+        tier: undefined,
+        contractValue: 0,
+        contractStatus: 'contract-sent',
+      }),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing.map((m) => m.field)).toEqual(
+        expect.arrayContaining(['tier', 'contractValue']),
+      )
+    }
+  })
+
+  it('passes when the contract-sent invariants are met', () => {
+    expect(
+      checkState(
+        'contract',
+        'contract-sent',
+        makeSfc({ tier, contractValue: 50000 }),
+      ).ok,
+    ).toBe(true)
   })
 })
 

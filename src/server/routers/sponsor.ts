@@ -116,6 +116,7 @@ import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import {
   canTransition,
   checkPipelineState,
+  checkState,
 } from '@/lib/sponsor-crm/state-machine'
 import { preconditionFailed } from '@/server/errors'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
@@ -1046,6 +1047,20 @@ export const sponsorRouter = router({
           })
         }
 
+        // Contract-axis guards: contract-sent / contract-signed carry required
+        // field invariants (tier + value, plus a primary contact to sign, and
+        // no contracts on dead deals). Enforced here so a manual/offline status
+        // change is held to the same standard as the in-app send flow.
+        const contractTransition = canTransition(
+          'contract',
+          existing.contractStatus,
+          input.newStatus,
+          existing,
+        )
+        if (!contractTransition.ok) {
+          throw preconditionFailed(contractTransition.missing)
+        }
+
         const oldStatus = existing.contractStatus
         const updateData: Partial<{
           contractStatus: string
@@ -1497,6 +1512,19 @@ export const sponsorRouter = router({
 
         const oldStatus = existing.signatureStatus || 'not-started'
 
+        // Signature-axis guard: a signature can only be tracked once the
+        // contract has been sent. Blocks manually marking pending/signed on a
+        // record whose contract never went out.
+        const signatureTransition = canTransition(
+          'signature',
+          oldStatus,
+          input.newStatus,
+          existing,
+        )
+        if (!signatureTransition.ok) {
+          throw preconditionFailed(signatureTransition.missing)
+        }
+
         try {
           await clientWrite
             .patch(input.id)
@@ -1571,6 +1599,15 @@ export const sponsorRouter = router({
             message:
               'Sponsor information is missing. Please ensure the sponsor is linked before sending a contract.',
           })
+        }
+
+        // Contract-sent invariants: tier + positive value, and not a dead deal.
+        // Checked path-independently (re-sends included) before any costly work
+        // (template fetch, PDF generation, asset upload). The contact / title /
+        // template / signing-provider runtime guards below remain in force.
+        const sendReadiness = checkState('contract', 'contract-sent', sfc)
+        if (!sendReadiness.ok) {
+          throw preconditionFailed(sendReadiness.missing)
         }
 
         const { template, error: templateError } = await getContractTemplate(

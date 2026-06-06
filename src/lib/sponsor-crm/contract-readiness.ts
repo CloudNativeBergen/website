@@ -132,14 +132,14 @@ const PIPELINE_FIELDS: FieldDef[] = [
     field: 'tier',
     label: 'Sponsor tier',
     source: 'pipeline',
-    severity: 'recommended',
+    severity: 'required',
     check: (sfc) => !!sfc.tier,
   },
   {
     field: 'contractValue',
     label: 'Contract value',
     source: 'pipeline',
-    severity: 'recommended',
+    severity: 'required',
     check: (sfc) => sfc.contractValue != null && sfc.contractValue > 0,
   },
 ]

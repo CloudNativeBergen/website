@@ -199,7 +199,7 @@ describe('contract-readiness', () => {
       )
     })
 
-    it('should detect missing pipeline fields as recommended', () => {
+    it('should detect missing pipeline fields as required and block canSend', () => {
       const sponsor = createMockSponsor({
         tier: undefined,
         contractValue: 0,
@@ -208,26 +208,26 @@ describe('contract-readiness', () => {
       const result = checkContractReadiness(sponsor)
 
       expect(result.ready).toBe(false)
-      expect(result.canSend).toBe(true)
+      expect(result.canSend).toBe(false)
       expect(result.missing).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             field: 'tier',
             label: 'Sponsor tier',
             source: 'pipeline',
-            severity: 'recommended',
+            severity: 'required',
           }),
           expect.objectContaining({
             field: 'contractValue',
             label: 'Contract value',
             source: 'pipeline',
-            severity: 'recommended',
+            severity: 'required',
           }),
         ]),
       )
     })
 
-    it('should allow sending with only contact person and conference title', () => {
+    it('should block sending when tier and contract value are missing, even with a contact person', () => {
       const sponsor = createMockSponsor({
         sponsor: {
           _id: 'sponsor-1',
@@ -254,10 +254,10 @@ describe('contract-readiness', () => {
       const result = checkContractReadiness(sponsor)
 
       expect(result.ready).toBe(false)
-      expect(result.canSend).toBe(true)
-      expect(result.missing.length).toBeGreaterThan(0)
-      expect(result.missing.every((m) => m.severity === 'recommended')).toBe(
-        true,
+      expect(result.canSend).toBe(false)
+      const blocking = result.missing.filter((m) => m.severity === 'required')
+      expect(blocking.map((m) => m.field)).toEqual(
+        expect.arrayContaining(['tier', 'contractValue']),
       )
     })
 
