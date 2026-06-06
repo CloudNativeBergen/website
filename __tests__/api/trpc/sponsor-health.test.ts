@@ -99,13 +99,18 @@ describe('sponsor.crm.healthViolations', () => {
 
     await createCaller(mockOrganizer).sponsor.crm.healthViolations()
 
-    // No status/tier/etc. filters — the panel must see every sponsor.
-    expect(listSponsorsForConference).toHaveBeenCalledWith('conf-1')
+    // Exactly one argument — the conference id, with NO filter object — so the
+    // data layer can't drop any sponsor by status/tier/etc. before the audit
+    // sees it (unlike crm.list, which forwards board filters to GROQ).
+    const calls = vi.mocked(listSponsorsForConference).mock.calls
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual(['conf-1'])
   })
 
-  it('audits sponsors of every pipeline status, not just the board default view', async () => {
-    // A prospect with a contract-sent record and a closed-won without a tier
-    // sit in different board columns; both must surface in the panel.
+  it('does not post-filter the roster by status the way the board list does', async () => {
+    // crm.list re-filters fetched sponsors (status, staleness, contact info…);
+    // the audit must NOT — a prospect with a bad contract and a tierless won
+    // deal sit in different board columns yet both must surface.
     vi.mocked(listSponsorsForConference).mockResolvedValue({
       sponsors: [
         makeSfc({
@@ -126,8 +131,22 @@ describe('sponsor.crm.healthViolations', () => {
     const result =
       await createCaller(mockOrganizer).sponsor.crm.healthViolations()
 
-    const ids = result.map((v) => v.sponsorId)
-    expect(ids).toEqual(expect.arrayContaining(['sfc-prospect', 'sfc-won']))
+    // Both surface, none dropped by status.
+    expect(result.map((v) => v.sponsorId).sort()).toEqual([
+      'sfc-prospect',
+      'sfc-won',
+    ])
+  })
+
+  it('throws when the sponsor list fails, so a failed audit is never mistaken for a clean one', async () => {
+    vi.mocked(listSponsorsForConference).mockResolvedValue({
+      sponsors: undefined,
+      error: new Error('sanity unavailable'),
+    })
+
+    await expect(
+      createCaller(mockOrganizer).sponsor.crm.healthViolations(),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
   })
 
   it('returns an empty list when every sponsor is healthy', async () => {

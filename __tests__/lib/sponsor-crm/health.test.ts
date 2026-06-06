@@ -112,18 +112,27 @@ describe('auditSponsorHealth', () => {
     expect(violations).toHaveLength(2)
   })
 
-  it('does not flag a dead deal (closed-lost) for its leftover signed contract', () => {
-    // A won deal with a signed contract that later falls through is dragged to
-    // Lost without resetting the contract (backward moves never auto-reset).
-    // The not-closed-lost guard is a *transition* guard ("can't send/sign on a
-    // dead deal"), not a resting invariant — so this is historical data, not a
-    // fixable health problem, and must not appear in the panel.
+  it('does not flag a dead deal (closed-lost) whose signed contract is otherwise valid', () => {
+    // A won deal with a fully-valid signed contract that later falls through is
+    // dragged to Lost without resetting the contract (backward moves never
+    // auto-reset). Tier, value, and a primary contact are all present, so the
+    // ONLY guard that fails is not-closed-lost — a *transition* guard, not a
+    // resting invariant. Without the dead-deal exclusion this record would be
+    // flagged (missing `status`); with it, the panel correctly stays quiet.
     const violations = auditSponsorHealth([
       makeSfc({
         status: 'closed-lost',
         contractStatus: 'contract-signed',
-        tier: undefined,
-        contractValue: 0,
+        tier,
+        contractValue: 50000,
+        contactPersons: [
+          {
+            _key: 'c1',
+            name: 'Jane Doe',
+            email: 'jane@acme.test',
+            isPrimary: true,
+          },
+        ],
       }),
     ])
 
