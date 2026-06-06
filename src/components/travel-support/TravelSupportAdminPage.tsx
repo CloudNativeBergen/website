@@ -403,10 +403,10 @@ function RequestCard({
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <h3 className="font-medium text-gray-900 dark:text-white">
-            {request.speaker.name}
+            {request.speaker?.name ?? 'Unknown Speaker'}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {request.speaker.email}
+            {request.speaker?.email ?? 'Unknown Email'}
           </p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
             {request.conference.name}
@@ -486,6 +486,7 @@ function RequestDetails({
   const canApprove =
     request.status === TravelSupportStatus.SUBMITTED &&
     currentUserId &&
+    request.speaker?._id &&
     TravelSupportService.canUserApprove(
       true,
       request.speaker._id,
@@ -495,6 +496,7 @@ function RequestDetails({
   const canMarkAsPaid =
     request.status === TravelSupportStatus.APPROVED &&
     currentUserId &&
+    request.speaker?._id &&
     TravelSupportService.canUserApprove(
       true,
       request.speaker._id,
@@ -505,10 +507,10 @@ function RequestDetails({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {request.speaker.name}
+          {request.speaker?.name ?? 'Unknown Speaker'}
         </h3>
         <p className="text-gray-600 dark:text-gray-400">
-          {request.speaker.email}
+          {request.speaker?.email ?? 'Unknown Email'}
         </p>
         <StatusBadge status={request.status} />
       </div>

@@ -246,6 +246,7 @@ export function BadgeManagementClient({
     if (!badges) return false
     return badges.some(
       (badge) =>
+        badge.speaker &&
         typeof badge.speaker === 'object' &&
         '_id' in badge.speaker &&
         badge.speaker._id === speakerId &&
@@ -258,6 +259,7 @@ export function BadgeManagementClient({
     return (
       badges.find(
         (badge) =>
+          badge.speaker &&
           typeof badge.speaker === 'object' &&
           '_id' in badge.speaker &&
           badge.speaker._id === speakerId &&
@@ -295,6 +297,7 @@ export function BadgeManagementClient({
         if (!badges) return true
         return !badges.some(
           (badge) =>
+            badge.speaker &&
             typeof badge.speaker === 'object' &&
             '_id' in badge.speaker &&
             badge.speaker._id === speaker._id &&

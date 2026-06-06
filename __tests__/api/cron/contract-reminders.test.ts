@@ -50,6 +50,13 @@ vi.mock('next/cache', () => ({
 }))
 
 describe('api/cron/contract-reminders', () => {
+  beforeAll(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterAll(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = 'test-cron-secret'

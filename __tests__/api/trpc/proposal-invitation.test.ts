@@ -92,6 +92,7 @@ describe('proposal.invitation router', () => {
         ...mockInvitation,
         _id: 'inv-1',
       } as any)
+      vi.mocked(sendInvitationEmail).mockResolvedValue(true)
 
       const caller = createCaller(regularSpeaker)
       const result = await caller.proposal.invitation.send({

@@ -239,7 +239,9 @@ function selectFeaturedSpeakers(
   const sorted = scoredSpeakers.sort((a, b) => {
     const scoreDiff = b.score - a.score
     if (scoreDiff !== 0) return scoreDiff
-    return a.speaker.name.localeCompare(b.speaker.name)
+    const aName = a.speaker?.name || ''
+    const bName = b.speaker?.name || ''
+    return aName.localeCompare(bName)
   })
 
   const regular = sorted.slice(0, maxRegular).map((s) => s.speaker)
