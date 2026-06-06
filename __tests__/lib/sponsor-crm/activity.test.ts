@@ -1,19 +1,24 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { mockCreate, mockTransaction, mockCommit } = vi.hoisted(() => {
-  const mockCreate = vi.fn()
-  const mockCommit = vi.fn()
-  const mockTransaction = vi.fn(() => ({
-    create: mockCreate,
-    commit: mockCommit,
-  }))
-  return { mockCreate, mockTransaction, mockCommit }
-})
+const { mockCreate, mockTransaction, mockCommit, mockFetch, mockDelete } =
+  vi.hoisted(() => {
+    const mockCreate = vi.fn()
+    const mockCommit = vi.fn()
+    const mockTransaction = vi.fn(() => ({
+      create: mockCreate,
+      commit: mockCommit,
+    }))
+    const mockFetch = vi.fn()
+    const mockDelete = vi.fn()
+    return { mockCreate, mockTransaction, mockCommit, mockFetch, mockDelete }
+  })
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     create: mockCreate.mockResolvedValue({ _id: 'activity-1' }),
     transaction: mockTransaction,
+    fetch: mockFetch,
+    delete: mockDelete,
   },
 }))
 
@@ -26,22 +31,6 @@ import {
   logBulkEmailSent,
   deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
-
-const { mockFetch, mockDelete } = vi.hoisted(() => {
-  return {
-    mockFetch: vi.fn(),
-    mockDelete: vi.fn(),
-  }
-})
-
-vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: {
-    create: mockCreate.mockResolvedValue({ _id: 'activity-1' }),
-    transaction: mockTransaction,
-    fetch: mockFetch,
-    delete: mockDelete,
-  },
-}))
 
 describe('sponsor-crm activity', () => {
   beforeEach(() => {
