@@ -41,7 +41,9 @@ export async function GET(
     const svgContent = await svgResponse.text()
 
     const speakerName =
-      typeof badge.speaker === 'object' && 'name' in badge.speaker
+      badge.speaker &&
+      typeof badge.speaker === 'object' &&
+      'name' in badge.speaker
         ? badge.speaker.name.replace(/\s+/g, '-').toLowerCase()
         : 'speaker'
 

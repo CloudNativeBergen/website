@@ -27,6 +27,13 @@ vi.mock('@/lib/time', () => ({
 vi.mock('@/lib/adobe-sign', () => ({}))
 
 describe('api/webhooks/adobe-sign', () => {
+  beforeAll(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterAll(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.ADOBE_SIGN_CLIENT_ID = 'test-client-id'

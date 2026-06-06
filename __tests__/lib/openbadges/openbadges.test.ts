@@ -255,8 +255,8 @@ describe('Key Management - Edge Cases', () => {
     expect(() => publicKeyToMultibase('abc')).toThrow(KeyFormatError)
   })
 
-  it('should reject invalid private key format', () => {
-    expect(() =>
+  it('should reject invalid private key format', async () => {
+    await expect(
       signCredential({} as any, {
         ...VALID_SIGNING_CONFIG,
         privateKey: 'invalid',
