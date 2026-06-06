@@ -1,5 +1,7 @@
 import { TRPCError } from '@trpc/server'
-import type { MissingRequirement } from '@/lib/sponsor-crm/state-machine'
+import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
+
+const describe = (field: MissingField) => field.message ?? field.label
 
 /**
  * Error carrying structured missing-field requirements. Attached as the `cause`
@@ -7,21 +9,21 @@ import type { MissingRequirement } from '@/lib/sponsor-crm/state-machine'
  * client via the tRPC error formatter, rather than being flattened to a string.
  */
 export class MissingFieldsError extends Error {
-  constructor(public readonly missingFields: MissingRequirement[]) {
-    super(missingFields.map((field) => field.message).join(' '))
+  constructor(public readonly missingFields: MissingField[]) {
+    super(missingFields.map(describe).join(' '))
     this.name = 'MissingFieldsError'
   }
 }
 
 /**
- * Builds a PRECONDITION_FAILED error from a list of missing requirements. The
+ * Builds a PRECONDITION_FAILED error from a list of missing fields. The
  * human-readable `message` is preserved for callers that only read it, while
  * the structured `missingFields` ride along on the cause.
  */
-export function preconditionFailed(missing: MissingRequirement[]): TRPCError {
+export function preconditionFailed(missing: MissingField[]): TRPCError {
   return new TRPCError({
     code: 'PRECONDITION_FAILED',
-    message: missing.map((field) => field.message).join(' '),
+    message: missing.map(describe).join(' '),
     cause: new MissingFieldsError(missing),
   })
 }
@@ -29,7 +31,7 @@ export function preconditionFailed(missing: MissingRequirement[]): TRPCError {
 /** Returns the structured missing fields carried by an error, if any. */
 export function extractMissingFields(error: {
   cause?: unknown
-}): MissingRequirement[] | undefined {
+}): MissingField[] | undefined {
   return error.cause instanceof MissingFieldsError
     ? error.cause.missingFields
     : undefined

@@ -8,6 +8,8 @@ export interface MissingField {
   label: string
   source: ReadinessSource
   severity: ReadinessSeverity
+  /** Actionable, user-facing sentence. Falls back to `label` where absent. */
+  message?: string
 }
 
 export interface ContractReadiness {
@@ -16,12 +18,38 @@ export interface ContractReadiness {
   missing: MissingField[]
 }
 
-interface FieldDef {
+/**
+ * A required/recommended field and how to check it. Generic over the subject so
+ * the same model serves both contract readiness (the expanded record) and the
+ * transition state machine (a narrower state view).
+ */
+export interface FieldDef<T = SponsorForConferenceExpanded> {
   field: string
   label: string
   source: ReadinessSource
   severity: ReadinessSeverity
-  check: (sfc: SponsorForConferenceExpanded) => boolean
+  message?: string
+  check: (subject: T) => boolean
+}
+
+/**
+ * Evaluates field definitions against a subject and returns the structured
+ * MissingField records for those whose check fails. Shared by the contract
+ * readiness check and the transition state machine so both speak one model.
+ */
+export function collectMissing<T>(
+  defs: FieldDef<T>[],
+  subject: T,
+): MissingField[] {
+  return defs
+    .filter((def) => !def.check(subject))
+    .map(({ field, label, source, severity, message }) => ({
+      field,
+      label,
+      source,
+      severity,
+      ...(message ? { message } : {}),
+    }))
 }
 
 const ORGANIZER_FIELDS: FieldDef[] = [
@@ -119,19 +147,10 @@ const PIPELINE_FIELDS: FieldDef[] = [
 export function checkContractReadiness(
   sfc: SponsorForConferenceExpanded,
 ): ContractReadiness {
-  const missing: MissingField[] = []
-
-  const ALL_FIELDS = [
-    ...ORGANIZER_FIELDS,
-    ...SPONSOR_FIELDS,
-    ...PIPELINE_FIELDS,
-  ]
-
-  for (const { field, label, source, severity, check } of ALL_FIELDS) {
-    if (!check(sfc)) {
-      missing.push({ field, label, source, severity })
-    }
-  }
+  const missing = collectMissing(
+    [...ORGANIZER_FIELDS, ...SPONSOR_FIELDS, ...PIPELINE_FIELDS],
+    sfc,
+  )
 
   const allRequiredPresent = !missing.some((m) => m.severity === 'required')
 

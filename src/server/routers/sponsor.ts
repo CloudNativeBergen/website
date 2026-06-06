@@ -1135,6 +1135,9 @@ export const sponsorRouter = router({
               throw preconditionFailed([
                 {
                   field: 'tier',
+                  label: 'Sponsor tier',
+                  source: 'pipeline',
+                  severity: 'required',
                   message: `${tierlessIds.length} selected sponsor(s) have no tier and can't be marked Won. Set a tier first.`,
                 },
               ])

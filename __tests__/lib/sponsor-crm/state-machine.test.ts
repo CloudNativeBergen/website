@@ -103,6 +103,19 @@ describe('checkPipelineState — direct state invariant', () => {
     }
   })
 
+  it('emits the shared MissingField shape (reuses the readiness pattern)', () => {
+    const result = checkPipelineState('closed-won', { tier: undefined })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.missing[0]).toMatchObject({
+        field: 'tier',
+        source: 'pipeline',
+        severity: 'required',
+      })
+      expect(result.missing[0].message).toMatch(/tier/i)
+    }
+  })
+
   it('allows a closed-won record with a tier reference id', () => {
     expect(checkPipelineState('closed-won', { tier: 'tier-gold' }).ok).toBe(true)
   })

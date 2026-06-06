@@ -5,8 +5,17 @@ import {
   extractMissingFields,
   structuredErrorData,
 } from '@/server/errors'
+import type { MissingField } from '@/lib/sponsor-crm/contract-readiness'
 
-const missing = [{ field: 'tier', message: 'Set a sponsor tier first.' }]
+const missing: MissingField[] = [
+  {
+    field: 'tier',
+    label: 'Sponsor tier',
+    source: 'pipeline',
+    severity: 'required',
+    message: 'Set a sponsor tier first.',
+  },
+]
 
 describe('preconditionFailed', () => {
   it('builds a PRECONDITION_FAILED TRPCError carrying structured missing fields', () => {
