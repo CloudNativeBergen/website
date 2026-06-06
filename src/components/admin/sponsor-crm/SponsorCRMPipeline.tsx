@@ -40,6 +40,7 @@ import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
 import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import type { DeleteCleanupOptions } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
 import { TierPickerPrompt } from '@/components/admin/sponsor-crm/TierPickerPrompt'
+import { SponsorHealthPanel } from '@/components/admin/sponsor-crm/SponsorHealthPanel'
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
@@ -103,6 +104,7 @@ export function SponsorCRMPipeline({
   const deleteMutation = api.sponsor.crm.delete.useMutation({
     onSuccess: () => {
       utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
     },
   })
 
@@ -149,6 +151,15 @@ export function SponsorCRMPipeline({
       refetchOnWindowFocus: !isUserBusy,
     },
   )
+
+  // Data-health: every sponsor breaking a state-machine invariant, audited
+  // across the FULL conference roster (the query ignores the board filters) so
+  // a hidden problem can't be filtered out of view.
+  const { data: healthViolations = [] } =
+    api.sponsor.crm.healthViolations.useQuery(undefined, {
+      refetchInterval: isUserBusy ? false : 30_000,
+      refetchOnWindowFocus: !isUserBusy,
+    })
 
   // Keep selectedSponsor in sync with fresh query data
   useEffect(() => {
@@ -217,7 +228,8 @@ export function SponsorCRMPipeline({
     setIsFormOpen(false)
     updateUrlParams({ sponsor: null, view: null })
     utils.sponsor.crm.list.invalidate()
-  }, [updateUrlParams, utils.sponsor.crm.list])
+    utils.sponsor.crm.healthViolations.invalidate()
+  }, [updateUrlParams, utils.sponsor.crm.list, utils.sponsor.crm.healthViolations])
 
   const handleFormViewChange = useCallback(
     (formView: string) => {
@@ -822,6 +834,9 @@ export function SponsorCRMPipeline({
           onSuccess={() => utils.sponsor.crm.list.invalidate()}
         />
       )}
+
+      {/* Data-health panel (renders nothing when every sponsor is healthy) */}
+      <SponsorHealthPanel violations={healthViolations} />
 
       {/* Board Columns */}
       <DndContext

@@ -114,6 +114,7 @@ import {
   ORGANIZER_DATE_MARKER,
 } from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
+import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
 import {
   canTransition,
   checkPipelineState,
@@ -753,6 +754,26 @@ export const sponsorRouter = router({
 
         return filtered
       }),
+
+    // Data-health surface: every sponsor currently breaking a state-machine
+    // invariant, across all axes. Audits the FULL conference roster (no
+    // filters) so the panel can never hide a violation, and reuses the shared
+    // guard predicates so it stays in sync as new guards land.
+    healthViolations: adminProcedure.query(async () => {
+      const conferenceId = await resolveConferenceId()
+
+      const { sponsors, error } = await listSponsorsForConference(conferenceId)
+
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list sponsors for conference',
+          cause: error,
+        })
+      }
+
+      return auditSponsorHealth(sponsors || [])
+    }),
 
     getById: adminProcedure.input(SponsorIdSchema).query(async ({ input }) => {
       const { sponsorForConference, error } = await getSponsorForConference(
