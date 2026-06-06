@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
-import { useQueryClient, type QueryKey } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -12,8 +12,6 @@ interface DragItem {
   sponsor: SponsorForConferenceExpanded
   sourceColumnKey: string
 }
-
-type CachedQueryEntry = [QueryKey, SponsorForConferenceExpanded[] | undefined]
 
 /**
  * A drop needs a guided tier prompt when it would move a sponsor to the
@@ -73,7 +71,6 @@ export function useSponsorDragDrop(currentView: BoardView) {
   const utils = api.useUtils()
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
-  const previousDataRef = useRef<CachedQueryEntry[]>([])
 
   const moveStage = api.sponsor.crm.moveStage.useMutation()
   const update = api.sponsor.crm.update.useMutation()
@@ -96,22 +93,29 @@ export function useSponsorDragDrop(currentView: BoardView) {
       targetColumnKey: string,
       mutate: () => Promise<unknown>,
     ) => {
+      // Cancel in-flight refetches so they can't clobber the optimistic write,
+      // then snapshot the cache for rollback before applying the move.
       await utils.sponsor.crm.list.cancel()
-      previousDataRef.current = queryClient.getQueriesData<
-        SponsorForConferenceExpanded[]
-      >(LIST_QUERY_KEY_FILTER)
+      const previous = queryClient.getQueriesData<SponsorForConferenceExpanded[]>(
+        LIST_QUERY_KEY_FILTER,
+      )
       queryClient.setQueriesData<SponsorForConferenceExpanded[]>(
         LIST_QUERY_KEY_FILTER,
         (old) =>
           applyOptimisticMove(old, sponsorId, currentView, targetColumnKey),
       )
+      // Tear down the drag overlay only once the optimistic move is in the cache,
+      // so the card never flashes back in its source column.
+      setActiveItem(null)
 
       try {
         await mutate()
       } catch (error) {
         console.error('Failed to update sponsor status:', error)
-        // Rollback to previous data on failure
-        for (const [key, data] of previousDataRef.current) {
+        // Roll back to the snapshot captured for THIS move. Keeping it local (not
+        // a shared ref) means overlapping moves can't clobber each other's
+        // rollback — a fast second drag while this mutation is still in flight.
+        for (const [key, data] of previous) {
           queryClient.setQueryData(key, data)
         }
         // Surface why the move was rejected: the server's actionable message for
@@ -124,8 +128,6 @@ export function useSponsorDragDrop(currentView: BoardView) {
             'Failed to update sponsor status. Please try again.',
           ),
         })
-      } finally {
-        previousDataRef.current = []
       }
 
       // Always refetch from server to ensure consistency
@@ -171,8 +173,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
         return
       }
 
-      setActiveItem(null)
-
+      // runOptimisticMove clears the drag overlay once the optimistic move lands.
       await runOptimisticMove(sponsor._id, targetColumnKey, () => {
         switch (currentView) {
           case 'pipeline':

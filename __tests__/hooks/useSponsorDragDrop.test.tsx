@@ -98,6 +98,10 @@ describe('dropNeedsTier', () => {
     expect(
       dropNeedsTier('pipeline', 'closed-won', { tier: { _id: 'tier-1' } }),
     ).toBe(false)
+    // a tier supplied as a bare id string also counts as set
+    expect(dropNeedsTier('pipeline', 'closed-won', { tier: 'tier-1' })).toBe(
+      false,
+    )
   })
 
   it('does not prompt for other pipeline columns', () => {
@@ -129,6 +133,10 @@ describe('useSponsorDragDrop — guided completion', () => {
 
     expect(mockMoveStage).not.toHaveBeenCalled()
     expect(mockShowNotification).not.toHaveBeenCalled()
+    // The move is held: nothing is optimistically applied, so the card stays in
+    // its source column until a tier is chosen.
+    expect(mockListCancel).not.toHaveBeenCalled()
+    expect(mockSetQueriesData).not.toHaveBeenCalled()
     expect(result.current.pendingTierMove).toEqual({
       sponsor,
       targetColumnKey: 'closed-won',
@@ -157,6 +165,11 @@ describe('useSponsorDragDrop — guided completion', () => {
     })
     expect(mockMoveStage).not.toHaveBeenCalled()
     expect(mockShowNotification).not.toHaveBeenCalled()
+    // The guided path runs through the shared optimistic machinery: cancel
+    // in-flight refetches, apply the optimistic move, then reconcile.
+    expect(mockListCancel).toHaveBeenCalled()
+    expect(mockSetQueriesData).toHaveBeenCalledTimes(1)
+    expect(mockListInvalidate).toHaveBeenCalledTimes(1)
     expect(result.current.pendingTierMove).toBeNull()
   })
 
@@ -180,6 +193,8 @@ describe('useSponsorDragDrop — guided completion', () => {
       await result.current.confirmTierMove('tier-gold')
     })
 
+    // Optimistic move applied, then rolled back to the snapshot on failure.
+    expect(mockSetQueriesData).toHaveBeenCalledTimes(1)
     expect(mockSetQueryData).toHaveBeenCalledWith(['k1'], [sponsor])
     expect(mockShowNotification).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -187,6 +202,8 @@ describe('useSponsorDragDrop — guided completion', () => {
         message: 'Set a sponsor tier before marking as Won.',
       }),
     )
+    // Still reconciles with the server even after a failed move.
+    expect(mockListInvalidate).toHaveBeenCalledTimes(1)
     expect(result.current.pendingTierMove).toBeNull()
   })
 
@@ -229,6 +246,89 @@ describe('useSponsorDragDrop — guided completion', () => {
       newStatus: 'closed-won',
     })
     expect(mockUpdate).not.toHaveBeenCalled()
+    expect(result.current.pendingTierMove).toBeNull()
+
+    // The optimistic updater flips status (and only status) for the pipeline
+    // board — guards applyOptimisticMove's pipeline arm against a field misroute.
+    const updater = mockSetQueriesData.mock.calls[0][1] as (
+      old: SponsorForConferenceExpanded[],
+    ) => SponsorForConferenceExpanded[]
+    const next = updater([sponsor])
+    expect(next[0].status).toBe('closed-won')
+    expect(next[0].invoiceStatus).toBe(sponsor.invoiceStatus)
+  })
+
+  it('confirmTierMove is a no-op when nothing is pending', async () => {
+    const { result } = renderHook(() => useSponsorDragDrop('pipeline'))
+
+    await act(async () => {
+      await result.current.confirmTierMove('tier-gold')
+    })
+
+    expect(mockUpdate).not.toHaveBeenCalled()
+    expect(mockSetQueriesData).not.toHaveBeenCalled()
+  })
+})
+
+describe('useSponsorDragDrop — direct moves (non-guided)', () => {
+  it('routes an invoice-board drag through the invoice mutation', async () => {
+    const sponsor = makeSponsor({ invoiceStatus: 'not-sent' })
+    const { result } = renderHook(() => useSponsorDragDrop('invoice'))
+
+    await act(async () => {
+      await result.current.handleDragEnd(dragEvent(sponsor, 'not-sent', 'sent'))
+    })
+
+    expect(mockUpdateInvoice).toHaveBeenCalledWith({
+      id: 'spc-1',
+      newStatus: 'sent',
+    })
+    expect(mockMoveStage).not.toHaveBeenCalled()
+    expect(mockUpdateContract).not.toHaveBeenCalled()
+    expect(mockListInvalidate).toHaveBeenCalledTimes(1)
+
+    // The optimistic updater flips invoiceStatus and only that — proving the
+    // refactored switch routes the invoice board to the invoice field.
+    const updater = mockSetQueriesData.mock.calls[0][1] as (
+      old: SponsorForConferenceExpanded[],
+    ) => SponsorForConferenceExpanded[]
+    const next = updater([sponsor])
+    expect(next[0].invoiceStatus).toBe('sent')
+    expect(next[0].status).toBe(sponsor.status)
+  })
+
+  it('routes a contract-board drag through the contract mutation', async () => {
+    const sponsor = makeSponsor({ contractStatus: 'none' })
+    const { result } = renderHook(() => useSponsorDragDrop('contract'))
+
+    await act(async () => {
+      await result.current.handleDragEnd(
+        dragEvent(sponsor, 'none', 'contract-sent'),
+      )
+    })
+
+    expect(mockUpdateContract).toHaveBeenCalledWith({
+      id: 'spc-1',
+      newStatus: 'contract-sent',
+    })
+    expect(mockMoveStage).not.toHaveBeenCalled()
+    expect(mockUpdateInvoice).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when a card is dropped back on its own column', async () => {
+    const sponsor = makeSponsor({ status: 'negotiating' })
+    const { result } = renderHook(() => useSponsorDragDrop('pipeline'))
+
+    await act(async () => {
+      await result.current.handleDragEnd(
+        dragEvent(sponsor, 'negotiating', 'negotiating'),
+      )
+    })
+
+    // No wasted mutation or optimistic write for an in-place drop.
+    expect(mockMoveStage).not.toHaveBeenCalled()
+    expect(mockSetQueriesData).not.toHaveBeenCalled()
+    expect(mockListCancel).not.toHaveBeenCalled()
     expect(result.current.pendingTierMove).toBeNull()
   })
 })
