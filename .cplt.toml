@@ -10,6 +10,7 @@ allow_env_files = true
 
 [propose.allow]
 localhost = [3000, 6006]
+read = ["~/Library/Application Support/cnctl/config.toml"]
 
 # The following are machine-specific — add to ~/.config/cplt/config.toml:
 # sandbox.allow_cache_exec += ["ms-playwright"]  # in personal config

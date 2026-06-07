@@ -1,10 +1,10 @@
 import { defineField, defineType } from 'sanity'
 import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
 import {
-  closedWonTierWarning,
+  closedWonTierError,
   tierExistenceQuery,
 } from '../../src/lib/sponsor-crm/tier-validation'
-import { contractSentWarning } from '../../src/lib/sponsor-crm/contract-validation'
+import { contractSentError } from '../../src/lib/sponsor-crm/contract-validation'
 import { CURRENCY_OPTIONS } from './constants'
 import { apiVersion } from '../env'
 
@@ -53,7 +53,7 @@ export default defineType({
           }
         },
       },
-      // Non-blocking warning: a closed-won sponsor that is effectively untiered
+      // Blocking error: a closed-won sponsor that is effectively untiered
       // is hidden from the public site. "Effectively untiered" covers a missing
       // tier reference AND a dangling one (the tier doc was deleted) — a dangling
       // ref is still a truthy { _ref }, so existence must be checked. Mirrors the
@@ -64,11 +64,11 @@ export default defineType({
             ?.status
           const tierRef = (tier as { _ref?: string } | undefined)?._ref
           const client = context.getClient({ apiVersion })
-          return closedWonTierWarning(status, tierRef, async (ref) => {
+          return closedWonTierError(status, tierRef, async (ref) => {
             const { query, params } = tierExistenceQuery(ref)
             return client.fetch<boolean>(query, params)
           })
-        }).warning(),
+        }),
     }),
     defineField({
       name: 'addons',
@@ -108,7 +108,7 @@ export default defineType({
         layout: 'dropdown',
       },
       initialValue: 'none',
-      // Non-blocking warning: a sent/signed contract should carry a tier and a
+      // Blocking error: a sent/signed contract should carry a tier and a
       // value (the data a valid contract requires). Mirrors the tRPC contract
       // axis guards for Studio edits that bypass the API. Promoted to a blocking
       // error later (#379), after the back-catalog audit.
@@ -118,12 +118,12 @@ export default defineType({
           const doc = context.document as
             | { tier?: { _ref?: string }; contractValue?: number }
             | undefined
-          return contractSentWarning(
+          return contractSentError(
             status as string | undefined,
             doc?.tier?._ref,
             doc?.contractValue,
           )
-        }).warning(),
+        }),
       ],
     }),
     defineField({
@@ -311,7 +311,7 @@ export default defineType({
             return 'Invoice is marked as active (sent/paid/overdue), but the contract is not signed.'
           }
           return true
-        }).warning(),
+        }),
       ],
     }),
     defineField({

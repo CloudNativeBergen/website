@@ -10,7 +10,7 @@
  */
 const CONTRACT_SENT_STATES = new Set(['contract-sent', 'contract-signed'])
 
-export function contractSentWarning(
+export function contractSentError(
   contractStatus: string | undefined,
   tierRef: string | undefined,
   contractValue: number | undefined,

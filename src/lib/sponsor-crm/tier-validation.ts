@@ -32,7 +32,7 @@ export function tierExistenceQuery(ref: string): {
   }
 }
 
-export async function closedWonTierWarning(
+export async function closedWonTierError(
   status: string | undefined,
   tierRef: string | undefined,
   tierExists: (ref: string) => Promise<boolean>,
