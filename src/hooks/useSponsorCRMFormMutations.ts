@@ -48,6 +48,7 @@ export function useSponsorCRMFormMutations({
   const createMutation = api.sponsor.crm.create.useMutation({
     onSuccess: async (data) => {
       await utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
       showNotification({
         title: 'Success',
         message: 'Sponsor added to pipeline',
@@ -67,6 +68,7 @@ export function useSponsorCRMFormMutations({
   const updateMutation = api.sponsor.crm.update.useMutation({
     onSuccess: async () => {
       await utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
       showNotification({
         title: 'Success',
         message: 'Sponsor updated successfully',

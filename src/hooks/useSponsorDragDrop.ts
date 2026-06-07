@@ -152,8 +152,11 @@ export function useSponsorDragDrop(currentView: BoardView) {
         })
       }
 
-      // Always refetch from server to ensure consistency
+      // Always refetch from server to ensure consistency. A board move changes
+      // status/contract/invoice — the exact fields the data-health audit reads —
+      // so refresh the health panel too (covers drag-to-Won and the tier picker).
       utils.sponsor.crm.list.invalidate()
+      utils.sponsor.crm.healthViolations.invalidate()
     },
     [currentView, utils, queryClient, showNotification],
   )

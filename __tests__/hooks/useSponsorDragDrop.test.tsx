@@ -13,6 +13,7 @@ const mockUpdateContract = vi.fn(() => Promise.resolve())
 const mockShowNotification = vi.fn()
 const mockListCancel = vi.fn(() => Promise.resolve())
 const mockListInvalidate = vi.fn()
+const mockHealthInvalidate = vi.fn()
 const mockGetQueriesData = vi.fn(() => [] as unknown[])
 const mockSetQueriesData = vi.fn()
 const mockSetQueryData = vi.fn()
@@ -23,6 +24,7 @@ vi.mock('@/lib/trpc/client', () => ({
       sponsor: {
         crm: {
           list: { cancel: mockListCancel, invalidate: mockListInvalidate },
+          healthViolations: { invalidate: mockHealthInvalidate },
         },
       },
     }),
