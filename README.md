@@ -4,16 +4,30 @@ Official website for Cloud Native Days in Norway.
 
 ## Getting started
 
-To get started with this template, first install the pnpm dependencies:
+To get started with this template, first install the dependencies using [mise](https://mise.jdx.sh/):
 
 ```bash
-pnpm install
+mise run install
 ```
+
+### Secrets Management
+
+This project uses `mise` along with `fnox` to manage environment variables securely in your local keychain.
+
+1. Create a `.env.local` file with your specific secrets.
+2. Run the migration script to ingest them into fnox:
+
+```bash
+./scripts/migrate-fnox.sh
+```
+
+3. Once ingested, you can safely delete your `.env.local` file.
+   _Note: We still maintain default `.env` files for runners that don't have mise configured._
 
 Next, run the development server:
 
 ```bash
-pnpm run dev
+mise run dev
 ```
 
 Finally, open [http://localhost:3000](http://localhost:3000) in your browser to view the website.

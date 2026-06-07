@@ -1,0 +1,8 @@
+default_provider = "keychain"
+
+[providers.keychain]
+type = "keychain"
+service = "cndn-website"
+
+[secrets]
+SANITY_API_TOKEN_READ= { provider = "keychain", value = "SANITY_API_TOKEN_READ" }
