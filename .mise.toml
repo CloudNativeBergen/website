@@ -51,6 +51,38 @@ run = "fnox exec -- pnpm run storybook"
 description = "Run sanity commands"
 run = "fnox exec -- pnpm sanity {{args}}"
 
+[tasks.migrate]
+description = "Run a Sanity content migration (usage: mise run migrate -- <migration-name>)"
+run = "fnox exec -- npx sanity@latest migration run {{args}}"
+
+[tasks.migrate-create]
+description = "Create a new Sanity migration (usage: mise run migrate-create -- \"description\")"
+run = "fnox exec -- npx sanity@latest migration create {{args}}"
+
+[tasks.migrate-validate]
+description = "Validate documents against current schema"
+run = "fnox exec -- npx sanity@latest documents validate -y"
+
+[tasks.lint-fix]
+description = "Run ESLint with auto-fix"
+run = "fnox exec -- pnpm run -s lint:fix"
+
+[tasks.test-watch]
+description = "Run tests in watch mode"
+run = "mise -E test exec -- fnox exec -- pnpm run test:watch"
+
+[tasks.test-badges]
+description = "Run badge-specific tests"
+run = "mise -E test exec -- fnox exec -- pnpm run test:badges"
+
+[tasks.storybook-test]
+description = "Build and test Storybook stories (CI mode)"
+run = "fnox exec -- pnpm run storybook:test-ci"
+
+[tasks.manage-files]
+description = "Manage orphaned uploaded files"
+run = "fnox exec -- pnpm run manage-orphaned-files"
+
 [tasks.install]
 description = "Install dependencies"
 run = "pnpm install"

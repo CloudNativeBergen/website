@@ -63,15 +63,27 @@ Finally, open [http://localhost:3000](http://localhost:3000) in your browser to 
 
 ### Available mise tasks
 
-| Task                 | Description                                     |
-| -------------------- | ----------------------------------------------- |
-| `mise run dev`       | Start the development server                    |
-| `mise run test`      | Run the test suite (uses test keychain secrets) |
-| `mise run check`     | Run all checks: lint, typecheck, format, knip   |
-| `mise run build`     | Build the production bundle                     |
-| `mise run all`       | Run checks, tests, and build sequentially       |
-| `mise run storybook` | Start Storybook                                 |
-| `mise run install`   | Install pnpm dependencies                       |
+| Task                                  | Description                                          |
+| ------------------------------------- | ---------------------------------------------------- |
+| `mise run dev`                        | Start the development server                         |
+| `mise run build`                      | Build the production bundle                          |
+| `mise run test`                       | Run the full test suite (uses test keychain secrets) |
+| `mise run test-watch`                 | Run tests in watch mode                              |
+| `mise run test-badges`                | Run badge-specific tests                             |
+| `mise run check`                      | Run all checks: lint, typecheck, format, knip        |
+| `mise run lint-fix`                   | Run ESLint with auto-fix                             |
+| `mise run format`                     | Auto-format all files with Prettier                  |
+| `mise run typecheck`                  | Run TypeScript type checking                         |
+| `mise run all`                        | Run checks, tests, and build sequentially            |
+| `mise run storybook`                  | Start Storybook dev server                           |
+| `mise run storybook-test`             | Build and test Storybook stories (CI mode)           |
+| `mise run sanity -- <cmd>`            | Run any Sanity CLI command                           |
+| `mise run migrate -- <name>`          | Run a Sanity content migration                       |
+| `mise run migrate-create -- "<desc>"` | Create a new Sanity migration                        |
+| `mise run migrate-validate`           | Validate documents against current schema            |
+| `mise run manage-files`               | Manage orphaned uploaded files                       |
+| `mise run clean`                      | Remove build artefacts (`.next`, `storybook-static`) |
+| `mise run install`                    | Install pnpm dependencies                            |
 
 ## Development Setup
 
