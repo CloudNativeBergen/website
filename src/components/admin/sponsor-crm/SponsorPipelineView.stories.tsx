@@ -238,8 +238,8 @@ export const InvoiceGuardsValidation: Story = {
 
       // The title should contain the reasons
       const title = sentOption?.getAttribute('title')
-      expect(title).toContain('Contract must be signed')
-      expect(title).toContain('Contract value must be greater than 0')
+      expect(title).toContain('A contract must be signed before')
+      expect(title).toContain('Set a contract value before')
     }
   },
 }
