@@ -21,7 +21,7 @@ export interface ProposalFilters {
   reviewStatus?: ReviewStatus
   hideMultipleTalks?: boolean
   searchQuery?: string
-  sortBy?: 'title' | 'status' | 'created' | 'speaker' | 'rating'
+  sortBy?: 'title' | 'status' | 'created' | 'speaker' | 'rating' | 'reviews'
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -207,6 +207,10 @@ export function filterProposals(
       case 'rating':
         aValue = calculateAverageRating(a)
         bValue = calculateAverageRating(b)
+        break
+      case 'reviews':
+        aValue = a.reviews?.length ?? 0
+        bValue = b.reviews?.length ?? 0
         break
       case 'created':
       default:

@@ -194,7 +194,7 @@ export const ProposalFilterSchema = z.object({
   hideMultipleTalks: z.boolean().optional().default(false),
   searchQuery: z.string().optional(),
   sortBy: z
-    .enum(['title', 'status', 'created', 'speaker', 'rating'])
+    .enum(['title', 'status', 'created', 'speaker', 'rating', 'reviews'])
     .optional()
     .default('created'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
