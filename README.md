@@ -29,7 +29,7 @@ mise run install
 
 ### Set up secrets
 
-Secrets are stored securely in your OS keychain via `fnox` — no `.env` files needed.
+Secrets are stored securely in your OS keychain via `fnox` — no plaintext `.env.local` needed after setup.
 
 All secrets are declared in `fnox.toml`. To populate the keychain for the first time, create a temporary `.env.local` with your secrets and run:
 
@@ -49,6 +49,8 @@ To verify what is stored in the keychain:
 ```bash
 fnox list
 ```
+
+> **Note:** We also maintain committed default `.env`, `.env.test`, and `.env.production` files containing safe non-sensitive defaults (public URLs, feature flags). These exist for CI runners and contributors who don't use `mise`.
 
 ### Run the development server
 

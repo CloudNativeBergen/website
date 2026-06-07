@@ -1,3 +1,11 @@
-1 matches in 1 files:
-
-.prettierignore:3:.prettierignore:11:.env*
+pnpm-lock.yaml
+.next
+dist
+out
+build
+coverage
+.turbo
+node_modules
+.vercel
+cli
+.env*
