@@ -252,9 +252,12 @@ export function checkSponsorNeedsFollowUp(
 
   for (const threshold of thresholds) {
     if (
-      (threshold.stateType === 'status' && sponsor.status === threshold.stateValue) ||
-      (threshold.stateType === 'contractStatus' && sponsor.contractStatus === threshold.stateValue) ||
-      (threshold.stateType === 'invoiceStatus' && sponsor.invoiceStatus === threshold.stateValue)
+      (threshold.stateType === 'status' &&
+        sponsor.status === threshold.stateValue) ||
+      (threshold.stateType === 'contractStatus' &&
+        sponsor.contractStatus === threshold.stateValue) ||
+      (threshold.stateType === 'invoiceStatus' &&
+        sponsor.invoiceStatus === threshold.stateValue)
     ) {
       if (daysSinceActivity > threshold.days) return true
     }
