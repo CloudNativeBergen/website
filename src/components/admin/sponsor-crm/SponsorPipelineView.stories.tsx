@@ -233,11 +233,13 @@ export const InvoiceGuardsValidation: Story = {
     if (invoiceStatusButton) {
       await userEvent.click(invoiceStatusButton)
 
-      const sentOption = canvas.getByText('Sent').closest('li')
+      // Wait for the option to appear in the DOM (Headless UI animation)
+      // findByRole will retry until it finds it or times out
+      const sentOption = await canvas.findByRole('option', { name: /Sent/i })
       expect(sentOption).toHaveAttribute('aria-disabled', 'true')
 
       // The title should contain the reasons
-      const title = sentOption?.getAttribute('title')
+      const title = sentOption.getAttribute('title')
       expect(title).toContain('A contract must be signed before')
       expect(title).toContain('Set a contract value before')
     }
