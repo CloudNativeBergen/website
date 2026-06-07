@@ -140,6 +140,18 @@ import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
+async function getSponsorForCurrentConference(id: string) {
+  const conferenceId = await resolveConferenceId()
+  const result = await getSponsorForConference(id)
+  if (
+    result.sponsorForConference &&
+    result.sponsorForConference.conference?._id !== conferenceId
+  ) {
+    return { error: new Error('Not authorized for this conference') }
+  }
+  return result
+}
+
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
   error?: Error
@@ -776,9 +788,8 @@ export const sponsorRouter = router({
     }),
 
     getById: adminProcedure.input(SponsorIdSchema).query(async ({ input }) => {
-      const { sponsorForConference, error } = await getSponsorForConference(
-        input.id,
-      )
+      const { sponsorForConference, error } =
+        await getSponsorForCurrentConference(input.id)
 
       if (error) {
         throw new TRPCError({
@@ -857,7 +868,7 @@ export const sponsorRouter = router({
 
         // Fetch existing data for change detection
         const { sponsorForConference: existing } =
-          await getSponsorForConference(id)
+          await getSponsorForCurrentConference(id)
 
         if (!existing) {
           throw new TRPCError({
@@ -985,7 +996,7 @@ export const sponsorRouter = router({
       .input(MoveStageSchema)
       .mutation(async ({ input, ctx }) => {
         const { sponsorForConference: existing } =
-          await getSponsorForConference(input.id)
+          await getSponsorForCurrentConference(input.id)
 
         if (!existing) {
           throw new TRPCError({
@@ -1029,7 +1040,7 @@ export const sponsorRouter = router({
       .input(UpdateInvoiceStatusSchema)
       .mutation(async ({ input, ctx }) => {
         const { sponsorForConference: existing } =
-          await getSponsorForConference(input.id)
+          await getSponsorForCurrentConference(input.id)
 
         if (!existing) {
           throw new TRPCError({
@@ -1060,9 +1071,15 @@ export const sponsorRouter = router({
         if (input.newStatus === 'sent' && !existing.invoiceSentAt) {
           updateData.invoiceSentAt = getCurrentDateTime()
         }
-
         if (input.newStatus === 'paid' && !existing.invoicePaidAt) {
           updateData.invoicePaidAt = getCurrentDateTime()
+        }
+
+        if (input.newStatus !== 'paid') {
+          updateData.invoicePaidAt = null
+        }
+        if (input.newStatus === 'not-sent' || input.newStatus === 'cancelled') {
+          updateData.invoiceSentAt = null
         }
 
         const { sponsorForConference, error } =
@@ -1103,7 +1120,7 @@ export const sponsorRouter = router({
       .input(UpdateContractStatusSchema)
       .mutation(async ({ input, ctx }) => {
         const { sponsorForConference: existing } =
-          await getSponsorForConference(input.id)
+          await getSponsorForCurrentConference(input.id)
 
         if (!existing) {
           throw new TRPCError({
@@ -1468,7 +1485,7 @@ export const sponsorRouter = router({
         const logCtx = `[checkSignatureStatus] sfc=${input.id}`
 
         const { sponsorForConference: sfc, error: sfcError } =
-          await getSponsorForConference(input.id)
+          await getSponsorForCurrentConference(input.id)
         if (!sfc) {
           console.error(`${logCtx} Sponsor lookup failed:`, sfcError)
           throw new TRPCError({
@@ -1564,7 +1581,7 @@ export const sponsorRouter = router({
         const logCtx = `[updateSignatureStatus] sfc=${input.id}`
 
         const { sponsorForConference: existing, error: existingError } =
-          await getSponsorForConference(input.id)
+          await getSponsorForCurrentConference(input.id)
 
         if (!existing) {
           console.error(`${logCtx} Sponsor lookup failed:`, existingError)
@@ -1643,7 +1660,9 @@ export const sponsorRouter = router({
           await sendContractSignedSlackNotification(input.id, existing)
         }
 
-        const { sponsorForConference } = await getSponsorForConference(input.id)
+        const { sponsorForConference } = await getSponsorForCurrentConference(
+          input.id,
+        )
         return sponsorForConference
       }),
 
@@ -1653,7 +1672,7 @@ export const sponsorRouter = router({
         const logCtx = `[sendContract] sfc=${input.sponsorForConferenceId}`
 
         const { sponsorForConference: sfc, error: sfcError } =
-          await getSponsorForConference(input.sponsorForConferenceId)
+          await getSponsorForCurrentConference(input.sponsorForConferenceId)
         if (sfcError || !sfc) {
           console.error(`${logCtx} Sponsor lookup failed:`, sfcError)
           throw new TRPCError({
@@ -2961,9 +2980,8 @@ export const sponsorRouter = router({
     contractReadiness: adminProcedure
       .input(SponsorForConferenceIdSchema)
       .query(async ({ input }) => {
-        const { sponsorForConference, error } = await getSponsorForConference(
-          input.id,
-        )
+        const { sponsorForConference, error } =
+          await getSponsorForCurrentConference(input.id)
         if (error || !sponsorForConference) {
           throw new TRPCError({
             code: 'NOT_FOUND',
@@ -2989,7 +3007,7 @@ export const sponsorRouter = router({
         }
 
         const { sponsorForConference, error: sfcError } =
-          await getSponsorForConference(input.sponsorForConferenceId)
+          await getSponsorForCurrentConference(input.sponsorForConferenceId)
         if (sfcError || !sponsorForConference) {
           throw new TRPCError({
             code: 'NOT_FOUND',

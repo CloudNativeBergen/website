@@ -1,0 +1,405 @@
+__tests__/api/trpc/sponsor-invoice-status.test.ts  | 179 +++++++++++++++++++++
+ __tests__/lib/sponsor-crm/state-machine.test.ts    |  74 +++++++++
+ sanity/schemaTypes/sponsorForConference.ts         |  16 +-
+ .../admin/sponsor-crm/SponsorPipelineView.tsx      |  35 ++--
+ .../admin/sponsor-crm/form/StatusListbox.tsx       |   6 +-
+ src/lib/sponsor-crm/state-machine.ts               |  80 ++++++++-
+ src/server/routers/sponsor.ts                      |  10 ++
+ 7 files changed, 386 insertions(+), 14 deletions(-)
+
+--- Changes ---
+
+__tests__/api/trpc/sponsor-invoice-status.test.ts
+  @@ -0,0 +1,179 @@
+  +import { describe, it, expect, vi, beforeEach } from 'vitest'
+  +import { appRouter } from '@/server/_app'
+  +import {
+  +  getSponsorForConference,
+  +  updateSponsorForConference,
+  +} from '@/lib/sponsor-crm/sanity'
+  +import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+  +
+  +vi.mock('@/lib/conference/sanity')
+  +vi.mock('@/lib/speaker/sanity')
+  +vi.mock('@/lib/sponsor-crm/sanity')
+  +vi.mock('@/lib/sponsor-crm/activity')
+  +vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
+  +vi.mock('@/lib/sanity/client', () => ({
+  +  clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
+  +  clientReadUncached: { fetch: vi.fn() },
+  +  clientRead: { fetch: vi.fn() },
+  +}))
+  +
+  +const mockOrganizer = {
+  +  _id: 'org-1',
+  +  name: 'Org',
+  +  email: 'org@test.com',
+  +  isOrganizer: true,
+  +}
+  +
+  +function makeSfc(
+  +  overrides: Partial<SponsorForConferenceExpanded> = {},
+  +): SponsorForConferenceExpanded {
+  +  return {
+  +    _id: 'sfc-1',
+  +    _createdAt: '',
+  +    _updatedAt: '',
+  +    sponsor: {
+  +      _id: 's1',
+  +      name: 'Acme',
+  +      website: 'https://acme.test',
+  +      logo: '',
+  +    },
+  +    conference: { _id: 'conf-1', title: 'Test Conf' },
+  +    contractStatus: 'none',
+  +    status: 'negotiating',
+  +    contractCurrency: 'NOK',
+  +    invoiceStatus: 'not-sent',
+  +    ...overrides,
+  +  }
+  +}
+  +
+  +describe('updateInvoiceStatus mutation', () => {
+  +  let caller: ReturnType<typeof appRouter.createCaller>
+  +
+  +  beforeEach(() => {
+  +    vi.resetAllMocks()
+  +    caller = appRouter.createCaller({
+  +      session: {
+  +        user: { id: 'u1', email: 'org@test.com', name: 'Org' } as any,
+  +        speaker: mockOrganizer as any,
+  +        expires: '1',
+  +      },
+  +      speaker: mockOrganizer as any,
+  +      user: { id: 'u1', email: 'org@test.com', name: 'Org' } as any,
+  +    } as any)
+  +    vi.mocked(updateSponsorForConference).mockResolvedValue({
+  +      sponsorForConference: makeSfc(),
+  +    })
+  +  })
+  +
+  +  it('rejects moving to sent if contract value is missing', async () => {
+  +    vi.mocked(getSponsorForConference).mockResolvedValue({
+  +      sponsorForConference: makeSfc({
+  +        invoiceStatus: 'not-sent',
+  +        contractValue: undefined,
+  +        contractCurrency: 'NOK',
+  +        billing: { invoiceFormat: 'ehf', email: 'bill@test.com' },
+  +        contractStatus: 'contract-signed',
+  +      }),
+  +    })
+  +
+  +    const promise = caller.sponsor.crm.updateInvoiceStatus({
+  +      id: 'sfc-1',
+  +      newStatus: 'sent',
+  +    })
+  +    await expect(promise).rejects.toThrow(/contract value/i)
+  +  })
+  +
+  +  it('rejects moving to sent if contract is not signed', async () => {
+  +    vi.mocked(getSponsorForConference).mockResolvedValue({
+  +      sponsorForConference: makeSfc({
+  +        invoiceStatus: 'not-sent',
+  +        contractValue: 100,
+  +        contractCurrency: 'NOK',
+  +        billing: { invoiceFormat: 'ehf', email: 'bill@test.com' },
+  +        contractStatus: 'contract-sent', // not signed
+  +      }),
+  +    })
+  +
+  +    const promise = caller.sponsor.crm.updateInvoiceStatus({
+  +      id: 'sfc-1',
+  +      newStatus: 'sent',
+  +    })
+  ... (79 lines truncated)
+  +179 -0
+
+__tests__/lib/sponsor-crm/state-machine.test.ts
+  @@ -135,3 +135,77 @@ describe('checkPipelineState — direct state invariant', () => {
+  +
+  +describe('canTransition — invoice axis', () => {
+  +  it('blocks moving to sent if missing contractValue', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'sent', {
+  +      contractCurrency: 'NOK',
+  +      billing: { email: 'bill@test.com' },
+  +      contractStatus: 'contract-signed',
+  +    })
+  +    expect(result.ok).toBe(false)
+  +    if (!result.ok)
+  +      expect(result.missing.some((m) => m.field === 'contractValue')).toBe(true)
+  +  })
+  +
+  +  it('blocks moving to sent if missing billing email', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'sent', {
+  +      contractValue: 100,
+  +      contractCurrency: 'NOK',
+  +      contractStatus: 'contract-signed',
+  +    })
+  +    expect(result.ok).toBe(false)
+  +    if (!result.ok)
+  +      expect(result.missing.some((m) => m.field === 'billing.email')).toBe(true)
+  +  })
+  +
+  +  it('blocks moving to sent if contract is not signed', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'sent', {
+  +      contractValue: 100,
+  +      contractCurrency: 'NOK',
+  +      billing: { email: 'bill@test.com' },
+  +      contractStatus: 'contract-sent',
+  +    })
+  +    expect(result.ok).toBe(false)
+  +    if (!result.ok)
+  +      expect(result.missing.some((m) => m.field === 'contractStatus')).toBe(
+  +        true,
+  +      )
+  +  })
+  +
+  +  it('allows moving to sent if all conditions are met', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'sent', {
+  +      contractValue: 100,
+  +      contractCurrency: 'NOK',
+  +      billing: { email: 'bill@test.com' },
+  +      contractStatus: 'contract-signed',
+  +    })
+  +    expect(result.ok).toBe(true)
+  +  })
+  +
+  +  it('blocks moving to paid from not-sent (must be sent first)', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'paid', {})
+  +    expect(result.ok).toBe(false)
+  +    if (!result.ok) expect(result.missing[0].field).toBe('invoiceStatus')
+  +  })
+  +
+  +  it('blocks moving to overdue from not-sent', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'overdue', {})
+  +    expect(result.ok).toBe(false)
+  +  })
+  +
+  +  it('allows moving to paid from sent', () => {
+  +    const result = canTransition('invoice', 'sent', 'paid', {})
+  +    expect(result.ok).toBe(true)
+  +  })
+  +
+  +  it('allows moving to paid from overdue', () => {
+  +    const result = canTransition('invoice', 'overdue', 'paid', {})
+  +    expect(result.ok).toBe(true)
+  +  })
+  +
+  +  it('allows moving to cancelled from anywhere without requirements', () => {
+  +    const result = canTransition('invoice', 'not-sent', 'cancelled', {})
+  +    expect(result.ok).toBe(true)
+  +  })
+  +})
+  +74 -0
+
+sanity/schemaTypes/sponsorForConference.ts
+  @@ -281,7 +281,21 @@ export default defineType({
+  -      validation: (Rule) => Rule.required(),
+  +      validation: (Rule) => [
+  +        Rule.required(),
+  +        Rule.custom((status, context) => {
+  +          const doc = context.document as any
+  +          if (
+  +            status &&
+  +            status !== 'not-sent' &&
+  +            status !== 'cancelled' &&
+  +            doc?.contractStatus !== 'contract-signed'
+  +          ) {
+  +            return 'Invoice is marked as active (sent/paid/overdue), but the contract is not signed.'
+  +          }
+  +          return true
+  +        }).warning(),
+  +      ],
+       }),
+       defineField({
+         name: 'invoiceSentAt',
+  +15 -1
+
+src/components/admin/sponsor-crm/SponsorPipelineView.tsx
+  @@ -7,6 +7,7 @@ import type {
+  +import { canTransition } from '@/lib/sponsor-crm/state-machine'
+   import type { SponsorTier } from '@/lib/sponsor/types'
+   import {
+     StatusListbox,
+  @@ -89,6 +90,28 @@ export function SponsorPipelineView({
+  +
+  +  const invoiceOptions = INVOICE_STATUSES.map((opt) => {
+  +    const fromStatus = sponsor?.invoiceStatus || 'not-sent'
+  +    const transition = canTransition('invoice', fromStatus, opt.value, {
+  +      tier: formData.tierId,
+  +      contractValue: formData.contractValue
+  +        ? parseFloat(formData.contractValue)
+  +        : undefined,
+  +      contractCurrency: formData.contractCurrency,
+  +      billing: sponsor?.billing,
+  +      contractStatus: formData.contractStatus,
+  +      invoiceStatus: fromStatus,
+  +    })
+  +    return {
+  +      ...opt,
+  +      disabled: !transition.ok,
+  +      disabledReason: !transition.ok
+  +        ? transition.missing[0]?.message
+  +        : undefined,
+  +    }
+  +  })
+  +
+     return (
+       <form onSubmit={onSubmit}>
+         <div className="space-y-3">
+  @@ -198,17 +221,7 @@ export function SponsorPipelineView({
+  -              options={INVOICE_STATUSES}
+  -              disabled={
+  -                !formData.contractValue ||
+  -                parseFloat(formData.contractValue) === 0
+  -              }
+  -              helperText={
+  -                !formData.contractValue ||
+  -                parseFloat(formData.contractValue) === 0
+  -                  ? '(No cost)'
+  -                  : undefined
+  -              }
+  +              options={invoiceOptions}
+               />
+             </div>
+           </div>
+  +24 -11
+
+src/components/admin/sponsor-crm/form/StatusListbox.tsx
+  @@ -12,6 +12,8 @@ interface StatusOption<T extends string> {
+  +  disabled?: boolean
+  +  disabledReason?: string
+   }
+   
+   interface StatusListboxProps<T extends string> {
+  @@ -63,7 +65,9 @@ export function StatusListbox<T extends string>({
+  -              className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white dark:text-white"
+  +              disabled={option.disabled}
+  +              title={option.disabledReason}
+  +              className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focus:not-data-disabled:bg-indigo-600 data-focus:not-data-disabled:text-white dark:text-white"
+               >
+                 <div className="flex items-center gap-3">
+                   <option.icon className="h-5 w-5 text-gray-400 group-data-focus:text-white" />
+  +5 -1
+
+src/lib/sponsor-crm/state-machine.ts
+  @@ -10,7 +10,7 @@ import {
+  -export type TransitionAxis = 'pipeline'
+  +export type TransitionAxis = 'pipeline' | 'invoice'
+   
+   /**
+    * The slice of a sponsor record the guards read. A tier may arrive as the
+  @@ -19,6 +19,11 @@ export type TransitionAxis = 'pipeline'
+  +  contractValue?: number
+  +  contractCurrency?: string
+  +  billing?: { email?: string }
+  +  contractStatus?: string
+  +  invoiceStatus?: string
+   }
+   
+   export type TransitionResult =
+  @@ -45,11 +50,52 @@ const PIPELINE_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
+  +const INVOICE_GUARDS: Record<string, FieldDef<SponsorState>[]> = {
+  +  sent: [
+  +    {
+  +      field: 'contractValue',
+  +      label: 'Contract value',
+  +      source: 'pipeline',
+  +      severity: 'required',
+  +      message: 'Set a contract value before marking the invoice as sent.',
+  +      check: (sponsor) =>
+  +        sponsor.contractValue != null && sponsor.contractValue > 0,
+  +    },
+  +    {
+  +      field: 'contractCurrency',
+  +      label: 'Contract currency',
+  +      source: 'pipeline',
+  +      severity: 'required',
+  +      message: 'Set a contract currency before marking the invoice as sent.',
+  +      check: (sponsor) => Boolean(sponsor.contractCurrency),
+  +    },
+  +    {
+  +      field: 'billing.email',
+  +      label: 'Billing email',
+  +      source: 'sponsor',
+  +      severity: 'required',
+  +      message:
+  +        'Add a billing email address before marking the invoice as sent.',
+  +      check: (sponsor) => Boolean(sponsor.billing?.email),
+  +    },
+  +    {
+  +      field: 'contractStatus',
+  +      label: 'Contract status',
+  +      source: 'pipeline',
+  +      severity: 'required',
+  +      message:
+  +        'A contract must be signed before the invoice can be marked as sent.',
+  +      check: (sponsor) => sponsor.contractStatus === 'contract-signed',
+  +    },
+  +  ],
+  +}
+  +
+   const GUARDS: Record<
+     TransitionAxis,
+     Record<string, FieldDef<SponsorState>[]>
+   > = {
+     pipeline: PIPELINE_GUARDS,
+  +  invoice: INVOICE_GUARDS,
+   }
+   
+   function evaluate(
+  @@ -75,6 +121,38 @@ export function canTransition(
+  +
+  +  if (axis === 'invoice') {
+  +    if (to === 'paid' && from !== 'sent' && from !== 'overdue') {
+  +      return {
+  +        ok: false,
+  +        missing: [
+  +          {
+  +            field: 'invoiceStatus',
+  +            label: 'Invoice status',
+  +            source: 'pipeline',
+  +            severity: 'required',
+  +            message: `Invoice must be sent or overdue before it can be marked as paid.`,
+  +          },
+  +        ],
+  +      }
+  +    }
+  +    if (to === 'overdue' && from !== 'sent') {
+  +      return {
+  +        ok: false,
+  +        missing: [
+  +          {
+  +            field: 'invoiceStatus',
+  +            label: 'Invoice status',
+  +            source: 'pipeline',
+  +            severity: 'required',
+  +            message: `Invoice must be sent before it can be marked as overdue.`,
+  +          },
+  +        ],
+  +      }
+  +    }
+  +  }
+  +
+     return evaluate(axis, to, sponsor)
+   }
+   
+  +79 -1
+
+src/server/routers/sponsor.ts
+  @@ -983,6 +983,16 @@ export const sponsorRouter = router({
+  +
+  +        const transition = canTransition(
+  +          'invoice',
+  +          oldStatus,
+  +          input.newStatus,
+  +          existing,
+  +        )
+  +        if (!transition.ok) {
+  +          throw preconditionFailed(transition.missing)
+  +        }
+           const updateData: Partial<{
+             invoiceStatus: string
+             invoiceSentAt: string | null
+  +10 -0
+[full diff: rtk git diff --no-compact]

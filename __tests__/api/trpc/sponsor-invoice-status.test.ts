@@ -6,6 +6,7 @@ import {
 } from '@/lib/sponsor-crm/sanity'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 vi.mock('@/lib/conference/sanity')
 vi.mock('@/lib/speaker/sanity')
 vi.mock('@/lib/sponsor-crm/sanity')
@@ -51,6 +52,11 @@ describe('updateInvoiceStatus mutation', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
+      conference: { _id: 'conf-1' } as any,
+      domain: 'test.com',
+      error: null,
+    })
     caller = appRouter.createCaller({
       session: {
         user: { id: 'u1', email: 'org@test.com', name: 'Org' } as any,
@@ -142,7 +148,7 @@ describe('updateInvoiceStatus mutation', () => {
       id: 'sfc-1',
       newStatus: 'paid',
     })
-    await expect(promise).rejects.toThrow(/must be sent before/i)
+    await expect(promise).rejects.toThrow(/must be sent or overdue before/i)
   })
 
   it('allows moving to paid if invoice is sent', async () => {

@@ -428,6 +428,11 @@ describe('canTransition — invoice axis', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('allows moving to paid from overdue', () => {
+    const result = canTransition('invoice', 'overdue', 'paid', {})
+    expect(result.ok).toBe(true)
+  })
+
   it('allows moving to cancelled from anywhere without requirements', () => {
     const result = canTransition('invoice', 'not-sent', 'cancelled', {})
     expect(result.ok).toBe(true)

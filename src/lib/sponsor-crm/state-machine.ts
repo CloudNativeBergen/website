@@ -217,7 +217,7 @@ export function canTransition(
   if (from === to) return { ok: true }
 
   if (axis === 'invoice') {
-    if ((to === 'paid' || to === 'overdue') && from !== 'sent') {
+    if (to === 'paid' && from !== 'sent' && from !== 'overdue') {
       return {
         ok: false,
         missing: [
@@ -226,7 +226,21 @@ export function canTransition(
             label: 'Invoice status',
             source: 'pipeline',
             severity: 'required',
-            message: `Invoice must be sent before it can be marked as ${to}.`,
+            message: `Invoice must be sent or overdue before it can be marked as paid.`,
+          },
+        ],
+      }
+    }
+    if (to === 'overdue' && from !== 'sent') {
+      return {
+        ok: false,
+        missing: [
+          {
+            field: 'invoiceStatus',
+            label: 'Invoice status',
+            source: 'pipeline',
+            severity: 'required',
+            message: `Invoice must be sent before it can be marked as overdue.`,
           },
         ],
       }
