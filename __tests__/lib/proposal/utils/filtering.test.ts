@@ -95,6 +95,28 @@ describe('filterProposals', () => {
     expect(result[2].title).toBe('Alpha')
   })
 
+  it('should sort by reviews asc', () => {
+    const proposalsWithReviews = [
+      mockProposal({ _id: 'two', reviews: [{} as any, {} as any] }),
+      mockProposal({ _id: 'zero', reviews: [] }),
+      mockProposal({ _id: 'one', reviews: [{} as any] }),
+    ]
+    const filters: ProposalFilters = { sortBy: 'reviews', sortOrder: 'asc' }
+    const result = filterProposals(proposalsWithReviews, filters)
+    expect(result.map((p) => p._id)).toEqual(['zero', 'one', 'two'])
+  })
+
+  it('should sort by reviews desc', () => {
+    const proposalsWithReviews = [
+      mockProposal({ _id: 'one', reviews: [{} as any] }),
+      mockProposal({ _id: 'zero', reviews: [] }),
+      mockProposal({ _id: 'two', reviews: [{} as any, {} as any] }),
+    ]
+    const filters: ProposalFilters = { sortBy: 'reviews', sortOrder: 'desc' }
+    const result = filterProposals(proposalsWithReviews, filters)
+    expect(result.map((p) => p._id)).toEqual(['two', 'one', 'zero'])
+  })
+
   it('should filter by review status (reviewed)', () => {
     const proposalsWithReviews = [
       mockProposal({ _id: '1', reviews: [{ reviewer: { _id: 'u1' } } as any] }),

@@ -241,7 +241,9 @@ function parseFiltersFromURL(
   const sortByParam = searchParams.get('sortBy')
   if (
     sortByParam &&
-    ['title', 'status', 'created', 'speaker', 'rating'].includes(sortByParam)
+    ['title', 'status', 'created', 'speaker', 'rating', 'reviews'].includes(
+      sortByParam,
+    )
   ) {
     filters.sortBy = sortByParam as FilterState['sortBy']
   }

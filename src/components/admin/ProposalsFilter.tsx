@@ -31,7 +31,7 @@ export interface FilterState {
   reviewStatus: ReviewStatus
   hideMultipleTalks: boolean
   searchQuery: string
-  sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
+  sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating' | 'reviews'
   sortOrder: 'asc' | 'desc'
 }
 
@@ -258,7 +258,7 @@ export function ProposalsFilter({
           )}
 
           <FilterDropdown
-            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
+            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'reviews' ? 'Reviews' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
             activeCount={0}
             position="right"
           >
@@ -268,6 +268,7 @@ export function ProposalsFilter({
               { key: 'speaker', label: 'Speaker' },
               { key: 'status', label: 'Status' },
               { key: 'rating', label: 'Rating' },
+              { key: 'reviews', label: 'Review Count' },
             ].map((option) => (
               <FilterOption
                 key={option.key}
