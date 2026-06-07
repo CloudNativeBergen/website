@@ -5,6 +5,7 @@ import type {
   ActivityType,
 } from '@/lib/sponsor-crm/types'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
+import { getCurrentDateTime } from '@/lib/time'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import type { BadgeColor } from '@/components/StatusBadge'
 import {
@@ -230,7 +231,7 @@ export function getSignatureStatusBadgeProps(status: SignatureStatus): {
 export function getDaysPending(contractSentAt?: string): number | null {
   if (!contractSentAt) return null
   const sent = new Date(contractSentAt)
-  const now = new Date()
+  const now = new Date(getCurrentDateTime())
   const days = Math.floor(
     (now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24),
   )

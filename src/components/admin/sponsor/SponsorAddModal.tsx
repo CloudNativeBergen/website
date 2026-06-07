@@ -232,7 +232,6 @@ export function SponsorAddModal({
 
         const sfcResult = await crmCreateMutation.mutateAsync({
           sponsor: finalSponsorId,
-          conference: conferenceId,
           tier: formData.tierId,
           status: 'closed-won',
           contractStatus: 'none',

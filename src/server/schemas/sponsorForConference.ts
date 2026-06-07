@@ -48,7 +48,6 @@ export const CurrencySchema = z.enum(['NOK', 'USD', 'EUR', 'GBP'])
 
 export const SponsorForConferenceInputSchema = z.object({
   sponsor: z.string().min(1, 'Sponsor ID is required'),
-  conference: z.string().min(1, 'Conference ID is required'),
   tier: z.string().optional(),
   addons: z
     .array(z.string().min(1, 'Addon ID cannot be empty'))

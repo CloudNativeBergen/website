@@ -142,7 +142,6 @@ export function useSponsorCRMFormMutations({
     } else {
       await createMutation.mutateAsync({
         sponsor: formData.sponsorId,
-        conference: conferenceId,
         tier: formData.tierId || undefined,
         addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
         contractStatus: formData.contractStatus,

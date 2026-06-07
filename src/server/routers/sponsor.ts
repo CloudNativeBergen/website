@@ -2611,7 +2611,9 @@ export const sponsorRouter = router({
           primaryRecipient: ccEmails[0],
           ccRecipients: ccEmails.slice(1),
           additionalContent: discountInfo,
-          fromEmail: conference.sponsorEmail,
+          fromEmail: conference.sponsorEmail
+            ? `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`
+            : undefined,
         })
 
         if (!emailResponse.ok) {
