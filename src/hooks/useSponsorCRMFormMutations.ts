@@ -36,7 +36,8 @@ interface UseSponsorCRMFormMutationsOptions {
 }
 
 export function useSponsorCRMFormMutations({
-  conferenceId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  conferenceId: _conferenceId,
   sponsor,
   isOpen,
   onSuccess,

@@ -20,7 +20,6 @@ import {
   SponsorGlobalInfoFields,
 } from './form'
 import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
-import { Textarea } from '@/components/Form'
 import clsx from 'clsx'
 
 export interface SponsorPipelineFormData {
@@ -274,7 +273,6 @@ export function SponsorPipelineView({
             />
           </div>
         </div>
-
       </div>
 
       <div className="mt-4 flex flex-row-reverse gap-3">

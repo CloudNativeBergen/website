@@ -444,7 +444,10 @@ export function SponsorCRMPipeline({
   }, [router])
 
   const activeFilterCount =
-    tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length + (needsFollowUpFilter ? 1 : 0)
+    tiersFilter.length +
+    (assignedToFilter ? 1 : 0) +
+    tagsFilter.length +
+    (needsFollowUpFilter ? 1 : 0)
 
   const groupedSponsors = useMemo(() => {
     return filteredSponsors.reduce(

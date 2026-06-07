@@ -230,7 +230,7 @@ export function SponsorCard({
           {needsFollowUp && (
             <span
               title="Needs Follow-up (Inactive)"
-              className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-inset ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20"
+              className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20"
             >
               <ExclamationTriangleIcon className="mr-0.5 h-3 w-3" />
               INACTIVE

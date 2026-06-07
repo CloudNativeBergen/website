@@ -817,13 +817,14 @@ export const sponsorRouter = router({
 
         const existingSponsorForConference = await clientReadUncached.fetch(
           `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conference][0]`,
-          { sponsor: data.sponsor, conference: data.conference }
+          { sponsor: data.sponsor, conference: data.conference },
         )
 
         if (existingSponsorForConference) {
           throw new TRPCError({
             code: 'CONFLICT',
-            message: 'This sponsor is already in the pipeline for this conference.',
+            message:
+              'This sponsor is already in the pipeline for this conference.',
           })
         }
 
