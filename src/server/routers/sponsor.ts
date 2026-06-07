@@ -815,6 +815,11 @@ export const sponsorRouter = router({
           tags: input.tags as SponsorTag[] | undefined,
         }
 
+        // Note: This is a check-then-act pattern. Sanity does not support
+        // atomic transactions, so two concurrent requests could both pass this
+        // check before either creates the record. In practice this is
+        // acceptable: the UI disables the button after first click, and a
+        // duplicate would be immediately visible to the organizer to delete.
         const existingSponsorForConference = await clientReadUncached.fetch(
           `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conference][0]`,
           { sponsor: data.sponsor, conference: data.conference },
