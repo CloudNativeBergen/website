@@ -12,6 +12,8 @@ interface StatusOption<T extends string> {
   value: T
   label: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  disabled?: boolean
+  disabledReason?: string
 }
 
 interface StatusListboxProps<T extends string> {
@@ -63,7 +65,9 @@ export function StatusListbox<T extends string>({
             <ListboxOption
               key={option.value}
               value={option.value}
-              className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white dark:text-white"
+              disabled={option.disabled}
+              title={option.disabledReason}
+              className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-focus:not-data-disabled:bg-indigo-600 data-focus:not-data-disabled:text-white dark:text-white"
             >
               <div className="flex items-center gap-3">
                 <option.icon className="h-5 w-5 text-gray-400 group-data-focus:text-white" />

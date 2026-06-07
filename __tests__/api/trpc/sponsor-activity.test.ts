@@ -165,7 +165,11 @@ describe('Sponsor CRM Activities & Assignments', () => {
       it('should allow updating assignment to an organizer', async () => {
         const caller = createCaller(mockOrganizer)
         vi.mocked(getSponsorForConference).mockResolvedValue({
-          sponsorForConference: { _id: 'sfc-1', status: 'prospect' } as any,
+          sponsorForConference: {
+            _id: 'sfc-1',
+            status: 'prospect',
+            conference: { _id: 'conf-1' },
+          } as any,
         })
         vi.mocked(updateSponsorForConference).mockResolvedValue({
           sponsorForConference: { _id: 'sfc-1' } as any,
@@ -183,7 +187,11 @@ describe('Sponsor CRM Activities & Assignments', () => {
       it('should allow updating assignment to null (unassign)', async () => {
         const caller = createCaller(mockOrganizer)
         vi.mocked(getSponsorForConference).mockResolvedValue({
-          sponsorForConference: { _id: 'sfc-1', status: 'prospect' } as any,
+          sponsorForConference: {
+            _id: 'sfc-1',
+            status: 'prospect',
+            conference: { _id: 'conf-1' },
+          } as any,
         })
         vi.mocked(updateSponsorForConference).mockResolvedValue({
           sponsorForConference: { _id: 'sfc-1' } as any,
@@ -203,7 +211,11 @@ describe('Sponsor CRM Activities & Assignments', () => {
       it('should reject updating assignment to a non-organizer', async () => {
         const caller = createCaller(mockOrganizer)
         vi.mocked(getSponsorForConference).mockResolvedValue({
-          sponsorForConference: { _id: 'sfc-1', status: 'prospect' } as any,
+          sponsorForConference: {
+            _id: 'sfc-1',
+            status: 'prospect',
+            conference: { _id: 'conf-1' },
+          } as any,
         })
 
         await expect(

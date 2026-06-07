@@ -298,7 +298,21 @@ export default defineType({
         layout: 'dropdown',
       },
       initialValue: 'not-sent',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) => [
+        Rule.required(),
+        Rule.custom((status, context) => {
+          const doc = context.document as any
+          if (
+            status &&
+            status !== 'not-sent' &&
+            status !== 'cancelled' &&
+            doc?.contractStatus !== 'contract-signed'
+          ) {
+            return 'Invoice is marked as active (sent/paid/overdue), but the contract is not signed.'
+          }
+          return true
+        }).warning(),
+      ],
     }),
     defineField({
       name: 'invoiceSentAt',

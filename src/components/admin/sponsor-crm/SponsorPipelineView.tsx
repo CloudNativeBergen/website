@@ -7,6 +7,7 @@ import type {
   ContractStatus,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
+import { canTransition } from '@/lib/sponsor-crm/state-machine'
 import type { SponsorTier } from '@/lib/sponsor/types'
 import {
   StatusListbox,
@@ -89,6 +90,28 @@ export function SponsorPipelineView({
     sponsor?.contractStatus === 'registration-sent' ||
     sponsor?.contractStatus === 'contract-sent' ||
     sponsor?.contractStatus === 'contract-signed'
+
+  const invoiceOptions = INVOICE_STATUSES.map((opt) => {
+    const fromStatus = sponsor?.invoiceStatus || 'not-sent'
+    const transition = canTransition('invoice', fromStatus, opt.value, {
+      tier: formData.tierId,
+      contractValue: formData.contractValue
+        ? parseFloat(formData.contractValue)
+        : undefined,
+      contractCurrency: formData.contractCurrency,
+      billing: sponsor?.billing,
+      contractStatus: formData.contractStatus,
+      invoiceStatus: fromStatus,
+    })
+    return {
+      ...opt,
+      disabled: !transition.ok,
+      disabledReason: !transition.ok
+        ? transition.missing.map((m) => m.message).join('\n')
+        : undefined,
+    }
+  })
+
   return (
     <form onSubmit={onSubmit}>
       <div className="space-y-3">
@@ -198,17 +221,7 @@ export function SponsorPipelineView({
                   invoiceStatus: value,
                 }))
               }
-              options={INVOICE_STATUSES}
-              disabled={
-                !formData.contractValue ||
-                parseFloat(formData.contractValue) === 0
-              }
-              helperText={
-                !formData.contractValue ||
-                parseFloat(formData.contractValue) === 0
-                  ? '(No cost)'
-                  : undefined
-              }
+              options={invoiceOptions}
             />
           </div>
         </div>

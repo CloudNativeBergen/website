@@ -7,12 +7,13 @@ import {
 import clsx from 'clsx'
 import type { SponsorHealthViolation } from '@/lib/sponsor-crm/health'
 import type { TransitionAxis } from '@/lib/sponsor-crm/state-machine'
-import { STATUSES, CONTRACT_STATUSES } from './form/constants'
+import { STATUSES, CONTRACT_STATUSES, INVOICE_STATUSES } from './form/constants'
 
 const AXIS_LABELS: Record<TransitionAxis, string> = {
   pipeline: 'Pipeline',
   contract: 'Contract',
   signature: 'Signature',
+  invoice: 'Invoice',
 }
 
 const SIGNATURE_STATE_LABELS: Record<string, string> = {
@@ -34,6 +35,9 @@ function axisStateLabel(axis: TransitionAxis, state: string): string {
     stateLabel = s?.columnLabel ?? s?.label ?? state
   } else if (axis === 'signature') {
     stateLabel = SIGNATURE_STATE_LABELS[state] ?? state
+  } else if (axis === 'invoice') {
+    const s = INVOICE_STATUSES.find((x) => x.value === state)
+    stateLabel = s?.label ?? state
   }
   return `${AXIS_LABELS[axis]} · ${stateLabel}`
 }
