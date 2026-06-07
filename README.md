@@ -4,33 +4,74 @@ Official website for Cloud Native Days in Norway.
 
 ## Getting started
 
-To get started with this template, first install the dependencies using [mise](https://mise.jdx.sh/):
+### Prerequisites
+
+This project uses [mise](https://mise.jdx.sh/) for tool management and task running, and [fnox](https://fnox.dev/) for secure secret storage in your local keychain.
+
+Install `mise` (if not already installed):
+
+```bash
+curl https://mise.run | sh
+```
+
+Install `fnox`:
+
+```bash
+brew install fnox
+```
+
+### Install dependencies
 
 ```bash
 mise run install
+# equivalent to: pnpm install
 ```
 
-### Secrets Management
+### Set up secrets
 
-This project uses `mise` along with `fnox` to manage environment variables securely in your local keychain.
+Secrets are stored securely in your OS keychain via `fnox` — no plaintext `.env.local` needed after setup.
 
-1. Create a `.env.local` file with your specific secrets.
-2. Run the migration script to ingest them into fnox:
+All secrets are declared in `fnox.toml`. To populate the keychain for the first time, create a temporary `.env.local` with your secrets and run:
 
 ```bash
 ./scripts/migrate-fnox.sh
+rm .env.local  # safe to delete once imported
 ```
 
-3. Once ingested, you can safely delete your `.env.local` file.
-   _Note: We still maintain default `.env` files for runners that don't have mise configured._
+To add or update an individual secret later:
 
-Next, run the development server:
+```bash
+fnox set MY_SECRET_KEY -- "the value here"
+```
+
+To verify what is stored in the keychain:
+
+```bash
+fnox list
+```
+
+> **Note:** We also maintain committed default `.env`, `.env.test`, and `.env.production` files containing safe non-sensitive defaults (public URLs, feature flags). These exist for CI runners and contributors who don't use `mise`.
+
+### Run the development server
 
 ```bash
 mise run dev
+# equivalent to: fnox exec -- pnpm run dev
 ```
 
 Finally, open [http://localhost:3000](http://localhost:3000) in your browser to view the website.
+
+### Available mise tasks
+
+| Task                 | Description                                     |
+| -------------------- | ----------------------------------------------- |
+| `mise run dev`       | Start the development server                    |
+| `mise run test`      | Run the test suite (uses test keychain secrets) |
+| `mise run check`     | Run all checks: lint, typecheck, format, knip   |
+| `mise run build`     | Build the production bundle                     |
+| `mise run all`       | Run checks, tests, and build sequentially       |
+| `mise run storybook` | Start Storybook                                 |
+| `mise run install`   | Install pnpm dependencies                       |
 
 ## Development Setup
 
@@ -188,45 +229,50 @@ To learn more about Sanity migrations, check out these resources:
 
 ## Authentication
 
-Authentication is handled by [next-auth](https://next-auth.js.org/). To enable authentication, you need to create a `.env.local` file in the root of the project and add the following environment variables:
+Authentication is handled by [next-auth](https://next-auth.js.org/). The required secrets are managed via `fnox` in your local keychain (see [Set up secrets](#set-up-secrets) above).
+
+To generate a new `AUTH_SECRET`:
 
 ```bash
-NEXTAUTH_SECRET=YOUR_SECRET
-```
-
-To generate a secret, you can run the following command:
-
-```bash
-openssl rand -base64 32
+openssl rand -base64 32 | fnox set AUTH_SECRET --
 ```
 
 ### New providers
 
-To add a new provider, you need to add a new provider in the `lib/auth.ts` file and add the corresponding environment variables to the `.env.local` file.
+To add a new provider, add it to `lib/auth.ts` and store the credentials in the keychain:
 
-You also need to update the `app/profile/email/route.ts` file to handle the new provider.
+```bash
+fnox set AUTH_MY_PROVIDER_ID -- "your-id"
+fnox set AUTH_MY_PROVIDER_SECRET -- "your-secret"
+```
+
+Also declare the new keys in `fnox.toml` under `[secrets]` so other developers know to populate them.
 
 ### GitHub provider
 
 ```bash
-AUTH_GITHUB_ID=YOUR_GITHUB_ID
-AUTH_GITHUB_SECRET=YOUR_GITHUB_SECRET
+fnox set AUTH_GITHUB_ID -- "your-github-id"
+fnox set AUTH_GITHUB_SECRET -- "your-github-secret"
 ```
 
 ## Environment Variables
 
-### Exchange Rate API (Optional)
+All environment variables are declared in `fnox.toml` and stored in your OS keychain. The table below lists the key variables and where to get them:
 
-The travel support system uses real-time exchange rates for currency conversion. To enable this feature:
+| Variable                                    | Description                     | Where to get it                                                                        |
+| ------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`                               | NextAuth session secret         | `openssl rand -base64 32`                                                              |
+| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET`     | GitHub OAuth                    | [GitHub Developer Settings](https://github.com/settings/developers)                    |
+| `AUTH_LINKEDIN_ID` / `AUTH_LINKEDIN_SECRET` | LinkedIn OAuth                  | [LinkedIn Developer Portal](https://www.linkedin.com/developers/)                      |
+| `SANITY_API_TOKEN_READ`                     | Sanity read token               | Sanity project settings                                                                |
+| `SANITY_API_TOKEN_WRITE`                    | Sanity write token              | Sanity project settings                                                                |
+| `RESEND_API_KEY`                            | Email sending (Resend)          | [Resend dashboard](https://resend.com)                                                 |
+| `BLOB_READ_WRITE_TOKEN`                     | Vercel Blob storage             | Vercel dashboard → Storage → Blob                                                      |
+| `BADGE_ISSUER_RSA_PRIVATE_KEY`              | OpenBadges JWT signing key      | Generate with `openssl genrsa 2048`                                                    |
+| `BADGE_ISSUER_RSA_PUBLIC_KEY`               | OpenBadges JWT verification key | Extract from the private key                                                           |
+| `NEXT_PUBLIC_EXCHANGE_RATE_API_KEY`         | Exchange rates (optional)       | [ExchangeRate-API.com](https://www.exchangerate-api.com/) (free tier: 1,500 req/month) |
 
-1. Get a free API key from [ExchangeRate-API.com](https://www.exchangerate-api.com/) (1,500 requests/month free)
-2. Add to your `.env.local` file:
-
-   ```bash
-   NEXT_PUBLIC_EXCHANGE_RATE_API_KEY=your_api_key_here
-   ```
-
-If not configured, the system will use fallback exchange rates. See [docs/EXCHANGE_RATE_API.md](docs/EXCHANGE_RATE_API.md) for detailed configuration.
+If `NEXT_PUBLIC_EXCHANGE_RATE_API_KEY` is not set, the system uses fallback exchange rates. See [docs/EXCHANGE_RATE_API.md](docs/EXCHANGE_RATE_API.md) for details.
 
 ## File Attachments
 
