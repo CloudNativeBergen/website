@@ -1,10 +1,10 @@
 /**
- * Non-blocking Studio warning for the contract-sent invariant: a contract that
- * has been sent (or signed) should carry the data a valid contract requires — a
- * tier and a positive value. Mirrors the tRPC `contract` axis guards for edits
- * made directly in the Studio, which bypass the API.
+ * Blocking Studio error for the contract-sent invariant: a contract that has
+ * been sent (or signed) must carry the data a valid contract requires — a tier
+ * and a positive value. Mirrors the tRPC `contract` axis guards for edits made
+ * directly in the Studio, which bypass the API.
  *
- * Shipped as a WARNING first; promoted to a blocking error after the
+ * Shipped as a warning first, then promoted to a blocking error after the
  * back-catalog audit (#379). Pure and synchronous — presence is all the
  * invariant needs, so no client fetch (unlike the dangling-tier check).
  */

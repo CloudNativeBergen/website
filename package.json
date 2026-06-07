@@ -30,7 +30,8 @@
     "qodo:review": "qodo merge",
     "sanity": "sanity",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts",
-    "analyze-code": "tsx scripts/analyze-code-lines.ts"
+    "analyze-code": "tsx scripts/analyze-code-lines.ts",
+    "audit-sponsor-health": "tsx scripts/audit-sponsor-health.ts"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

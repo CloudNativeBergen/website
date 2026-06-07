@@ -108,10 +108,10 @@ export default defineType({
         layout: 'dropdown',
       },
       initialValue: 'none',
-      // Blocking error: a sent/signed contract should carry a tier and a
-      // value (the data a valid contract requires). Mirrors the tRPC contract
-      // axis guards for Studio edits that bypass the API. Promoted to a blocking
-      // error later (#379), after the back-catalog audit.
+      // Blocking error: a sent/signed contract must carry a tier and a value
+      // (the data a valid contract requires). Mirrors the tRPC contract axis
+      // guards for Studio edits that bypass the API. Promoted from a warning to
+      // a blocking error in #379, after the back-catalog audit.
       validation: (Rule) => [
         Rule.required(),
         Rule.custom((status, context) => {
