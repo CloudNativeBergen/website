@@ -235,7 +235,7 @@ export const InvoiceGuardsValidation: Story = {
 
       // Wait for the option to appear in the DOM (Headless UI animation)
       // findByRole will retry until it finds it or times out
-      const sentOption = await canvas.findByRole('option', { name: /Sent/i })
+      const sentOption = await canvas.findByRole('option', { name: /^Sent$/i })
       expect(sentOption).toHaveAttribute('aria-disabled', 'true')
 
       // The title should contain the reasons
