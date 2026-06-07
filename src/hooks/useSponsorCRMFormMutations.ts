@@ -24,7 +24,6 @@ export interface SponsorCRMFormData {
   invoiceStatus: InvoiceStatus
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  notes: string
   tags: SponsorTag[]
   assignedTo: string
 }
@@ -137,7 +136,6 @@ export function useSponsorCRMFormMutations({
           ? parseFloat(formData.contractValue)
           : undefined,
         contractCurrency: formData.contractCurrency,
-        notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         assignedTo: formData.assignedTo || null,
       })
@@ -154,7 +152,6 @@ export function useSponsorCRMFormMutations({
           ? parseFloat(formData.contractValue)
           : undefined,
         contractCurrency: formData.contractCurrency,
-        notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         assignedTo: formData.assignedTo || undefined,
       })

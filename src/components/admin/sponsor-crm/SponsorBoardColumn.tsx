@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { SponsorCard } from './SponsorCard'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
@@ -18,6 +19,7 @@ interface SponsorBoardColumnProps {
   currentView: BoardView
   selectedIds?: string[]
   isSelectionMode?: boolean
+  thresholds?: CrmActivityThreshold[]
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorDelete: (sponsorId: string) => void
   onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
@@ -34,6 +36,7 @@ export function SponsorBoardColumn({
   currentView,
   selectedIds = [],
   isSelectionMode = false,
+  thresholds,
   onSponsorClick,
   onSponsorDelete,
   onSponsorEmail,
@@ -120,6 +123,7 @@ export function SponsorBoardColumn({
               columnKey={columnKey}
               isSelected={selectedIds.includes(sponsor._id)}
               isSelectionMode={isSelectionMode}
+              thresholds={thresholds}
               onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
               onEdit={() => onSponsorClick(sponsor)}
               onDelete={() => onSponsorDelete(sponsor._id)}

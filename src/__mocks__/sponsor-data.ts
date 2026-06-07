@@ -112,7 +112,6 @@ export function mockSponsor(
     contactPersons: [mockContactPerson({ isPrimary: true })],
     billing: mockBillingInfo(),
     tags: ['warm-lead', 'returning-sponsor'] as SponsorTag[],
-    notes: 'Very interested in premium package',
     registrationComplete: false,
     ...overrides,
   }
@@ -197,6 +196,5 @@ export const mockSponsors = {
     status: 'closed-lost',
     contractStatus: 'none',
     tags: ['previously-declined'],
-    notes: 'Budget constraints for 2026',
   }),
 }

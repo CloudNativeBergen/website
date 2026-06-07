@@ -76,7 +76,6 @@ export const SponsorForConferenceInputSchema = z.object({
   invoiceStatus: InvoiceStatusSchema,
   invoiceSentAt: z.string().optional(),
   invoicePaidAt: z.string().optional(),
-  notes: z.string().optional(),
   tags: z.array(SponsorTagSchema).optional(),
   contactPersons: z
     .array(
@@ -122,7 +121,6 @@ export const SponsorForConferenceUpdateSchema = z.object({
   invoiceStatus: InvoiceStatusSchema.optional(),
   invoiceSentAt: z.string().nullable().optional(),
   invoicePaidAt: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
   tags: z.array(SponsorTagSchema).optional(),
   contactPersons: z
     .array(

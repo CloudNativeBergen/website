@@ -813,6 +813,18 @@ export const sponsorRouter = router({
           tags: input.tags as SponsorTag[] | undefined,
         }
 
+        const existingSponsorForConference = await clientReadUncached.fetch(
+          `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conference][0]`,
+          { sponsor: data.sponsor, conference: data.conference }
+        )
+
+        if (existingSponsorForConference) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'This sponsor is already in the pipeline for this conference.',
+          })
+        }
+
         // Enforce the pipeline invariant however the record is created, not
         // just on drag-drop moves (closed-won requires a tier that resolves).
         assertGuard(checkPipelineState(data.status, { tier: data.tier }))
@@ -2598,6 +2610,7 @@ export const sponsorRouter = router({
           primaryRecipient: ccEmails[0],
           ccRecipients: ccEmails.slice(1),
           additionalContent: discountInfo,
+          fromEmail: conference.sponsorEmail,
         })
 
         if (!emailResponse.ok) {

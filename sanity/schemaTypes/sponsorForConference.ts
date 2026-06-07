@@ -329,13 +329,6 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
-      name: 'notes',
-      title: 'Notes',
-      type: 'text',
-      description: 'Freeform notes about this sponsor relationship',
-      rows: 5,
-    }),
-    defineField({
       name: 'tags',
       title: 'Tags',
       type: 'array',

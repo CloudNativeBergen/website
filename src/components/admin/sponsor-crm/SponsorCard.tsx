@@ -14,6 +14,7 @@ import {
   TrashIcon,
   EnvelopeIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -21,7 +22,9 @@ import {
   calculateSponsorValue,
   getSignatureStatusBadgeProps,
   getDaysPending,
+  checkSponsorNeedsFollowUp,
 } from './utils'
+import type { CrmActivityThreshold } from '@/lib/conference/types'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
 import { useDraggable } from '@dnd-kit/core'
@@ -32,6 +35,7 @@ interface SponsorCardProps {
   columnKey?: string
   isSelected?: boolean
   isSelectionMode?: boolean
+  thresholds?: CrmActivityThreshold[]
   onToggleSelect?: (e: React.MouseEvent) => void
   onEdit: () => void
   onDelete: () => void
@@ -76,6 +80,7 @@ export function SponsorCard({
   columnKey,
   isSelected = false,
   isSelectionMode = false,
+  thresholds,
   onToggleSelect,
   onEdit,
   onDelete,
@@ -83,6 +88,7 @@ export function SponsorCard({
   onContract,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
+  const needsFollowUp = checkSponsorNeedsFollowUp(sponsor, thresholds)
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: sponsor._id,
@@ -221,6 +227,15 @@ export function SponsorCard({
 
         {/* Tags + Invoice status */}
         <div className="flex items-center gap-1">
+          {needsFollowUp && (
+            <span
+              title="Needs Follow-up (Inactive)"
+              className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-inset ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20"
+            >
+              <ExclamationTriangleIcon className="mr-0.5 h-3 w-3" />
+              INACTIVE
+            </span>
+          )}
           {activeTags.map((t) => (
             <span
               key={t.tag}

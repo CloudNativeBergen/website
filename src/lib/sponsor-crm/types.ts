@@ -93,7 +93,6 @@ export interface SponsorForConference {
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
   invoicePaidAt?: string
-  notes?: string
   tags?: SponsorTag[]
   registrationToken?: string
   registrationComplete?: boolean
@@ -188,7 +187,6 @@ export interface SponsorForConferenceExpanded {
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string
   invoicePaidAt?: string
-  notes?: string
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
   billing?: BillingInfo
@@ -258,7 +256,6 @@ export interface SponsorForConferenceInput {
   invoiceStatus: InvoiceStatus
   invoiceSentAt?: string | null
   invoicePaidAt?: string | null
-  notes?: string | null
   tags?: SponsorTag[]
   nextFollowUpAt?: string | null
   outreachCount?: number | null

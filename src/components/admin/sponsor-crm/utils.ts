@@ -4,6 +4,7 @@ import type {
   SponsorForConferenceExpanded,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
+import type { CrmActivityThreshold } from '@/lib/conference/types'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import type { BadgeColor } from '@/components/StatusBadge'
 import {
@@ -234,4 +235,29 @@ export function getDaysPending(contractSentAt?: string): number | null {
     (now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24),
   )
   return Math.max(0, days)
+}
+
+export function checkSponsorNeedsFollowUp(
+  sponsor: SponsorForConferenceExpanded,
+  thresholds?: CrmActivityThreshold[],
+): boolean {
+  if (!thresholds || thresholds.length === 0) return false
+
+  const lastActivityDate = sponsor.lastActivity?.createdAt ?? sponsor._updatedAt
+  if (!lastActivityDate) return false
+
+  const daysSinceActivity = getDaysPending(lastActivityDate)
+  if (daysSinceActivity === null) return false
+
+  for (const threshold of thresholds) {
+    if (
+      (threshold.stateType === 'status' && sponsor.status === threshold.stateValue) ||
+      (threshold.stateType === 'contractStatus' && sponsor.contractStatus === threshold.stateValue) ||
+      (threshold.stateType === 'invoiceStatus' && sponsor.invoiceStatus === threshold.stateValue)
+    ) {
+      if (daysSinceActivity > threshold.days) return true
+    }
+  }
+
+  return false
 }

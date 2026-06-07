@@ -275,3 +275,19 @@ export async function deleteSponsorActivity(
     return { success: false, error: error as Error }
   }
 }
+
+export async function logNote(
+  sponsorForConferenceId: string,
+  note: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'note',
+    note,
+    createdBy,
+    {
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}

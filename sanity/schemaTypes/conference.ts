@@ -798,6 +798,45 @@ export default defineType({
         }),
       ],
     }),
+    defineField({
+      name: 'crmInactivityThresholds',
+      title: 'CRM Inactivity Thresholds',
+      type: 'array',
+      fieldset: 'sponsorship',
+      description: 'Thresholds for marking sponsors as needing follow-up',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'stateType',
+              title: 'State Type',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'Status', value: 'status' },
+                  { title: 'Contract Status', value: 'contractStatus' },
+                  { title: 'Invoice Status', value: 'invoiceStatus' },
+                ],
+              },
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'stateValue',
+              title: 'State Value',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'days',
+              title: 'Days',
+              type: 'number',
+              validation: (Rule) => Rule.required().min(1),
+            }),
+          ],
+        },
+      ],
+    }),
 
     // === People & Sponsors ===
     defineField({

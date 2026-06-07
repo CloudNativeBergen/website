@@ -103,7 +103,6 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   invoiceStatus,
   invoiceSentAt,
   invoicePaidAt,
-  notes,
   tags,
   contactPersons[]{
     _key,
@@ -200,7 +199,6 @@ export async function createSponsorForConference(
       invoiceStatus: data.invoiceStatus,
       invoiceSentAt: data.invoiceSentAt,
       invoicePaidAt: data.invoicePaidAt,
-      notes: data.notes,
       tags: data.tags,
       contactPersons: data.contactPersons
         ? prepareArrayWithKeys(data.contactPersons, 'contact')
@@ -281,7 +279,6 @@ export async function updateSponsorForConference(
       updates.invoiceSentAt = data.invoiceSentAt
     if (data.invoicePaidAt !== undefined)
       updates.invoicePaidAt = data.invoicePaidAt
-    if (data.notes !== undefined) updates.notes = data.notes
     if (data.tags !== undefined) updates.tags = data.tags
     if (data.contactPersons !== undefined) {
       updates.contactPersons = data.contactPersons

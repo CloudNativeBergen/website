@@ -38,7 +38,6 @@ export interface SponsorPipelineFormData {
   invoiceStatus: InvoiceStatus
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  notes: string
   tags: SponsorTag[]
   assignedTo: string
 }
@@ -276,21 +275,6 @@ export function SponsorPipelineView({
           </div>
         </div>
 
-        {/* Notes */}
-        <div>
-          <Textarea
-            name="notes"
-            label="Notes"
-            rows={2}
-            value={formData.notes}
-            setValue={(val) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                notes: val,
-              }))
-            }
-          />
-        </div>
       </div>
 
       <div className="mt-4 flex flex-row-reverse gap-3">
