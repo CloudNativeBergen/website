@@ -1,18 +1,9 @@
-export const MISSING_TIER_WARNING =
-  'Closed-won sponsors should have a tier — they stay hidden from the public site until one is set.'
+export const MISSING_TIER_ERROR =
+  'Closed-won sponsors must have a tier — they stay hidden from the public site until one is set.'
 
-export const DANGLING_TIER_WARNING =
+export const DANGLING_TIER_ERROR =
   'Selected tier no longer exists — choose a valid tier, or the sponsor stays hidden from the public site.'
 
-/**
- * Decides the non-blocking Studio warning for a closed-won sponsor's tier.
- *
- * A closed-won sponsor is hidden from the public site unless it has a tier that
- * actually resolves. That means both a *missing* reference and a *dangling* one
- * (the tier document was deleted) must warn — a dangling ref is still a truthy
- * `{ _ref }` object, so a plain falsiness check would miss it. Existence is
- * injected so this stays pure and testable without the Studio client.
- */
 /**
  * GROQ to test whether a sponsor tier reference resolves to a real tier the
  * public site can see. Published-only: a draft-only tier is invisible to the
@@ -32,12 +23,21 @@ export function tierExistenceQuery(ref: string): {
   }
 }
 
+/**
+ * Decides the blocking Studio error for a closed-won sponsor's tier.
+ *
+ * A closed-won sponsor is hidden from the public site unless it has a tier that
+ * actually resolves. That means both a *missing* reference and a *dangling* one
+ * (the tier document was deleted) must error — a dangling ref is still a truthy
+ * `{ _ref }` object, so a plain falsiness check would miss it. Existence is
+ * injected so this stays pure and testable without the Studio client.
+ */
 export async function closedWonTierError(
   status: string | undefined,
   tierRef: string | undefined,
   tierExists: (ref: string) => Promise<boolean>,
 ): Promise<true | string> {
   if (status !== 'closed-won') return true
-  if (!tierRef) return MISSING_TIER_WARNING
-  return (await tierExists(tierRef)) ? true : DANGLING_TIER_WARNING
+  if (!tierRef) return MISSING_TIER_ERROR
+  return (await tierExists(tierRef)) ? true : DANGLING_TIER_ERROR
 }
