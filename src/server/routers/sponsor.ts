@@ -808,8 +808,10 @@ export const sponsorRouter = router({
       .input(SponsorForConferenceInputSchema)
       .mutation(async ({ input, ctx }) => {
         const userId = ctx.speaker._id
+        const resolvedConferenceId = await resolveConferenceId()
         const data = {
           ...input,
+          conference: resolvedConferenceId,
           tags: input.tags as SponsorTag[] | undefined,
         }
 
@@ -851,11 +853,10 @@ export const sponsorRouter = router({
 
         // Ensure assigned person is an organizer of this conference
         if (data.assignedTo) {
-          const conferenceId = await resolveConferenceId()
           const { getOrganizersByConference } =
             await import('@/lib/speaker/sanity')
           const { speakers: organizers } =
-            await getOrganizersByConference(conferenceId)
+            await getOrganizersByConference(resolvedConferenceId)
           if (!organizers?.some((o) => o._id === data.assignedTo)) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
