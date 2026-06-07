@@ -818,6 +818,20 @@ export const sponsorRouter = router({
         assertGuard(checkPipelineState(data.status, { tier: data.tier }))
         await assertTierResolvable(data.status, data.tier)
 
+        // Enforce invoice guards
+        if (data.invoiceStatus && data.invoiceStatus !== 'not-sent') {
+          const transition = canTransition(
+            'invoice',
+            'not-sent',
+            data.invoiceStatus,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data as any,
+          )
+          if (!transition.ok) {
+            throw preconditionFailed(transition.missing)
+          }
+        }
+
         // Auto-assign to current user if not provided (undefined)
         if (data.assignedTo === undefined && userId) {
           data.assignedTo = userId
@@ -897,6 +911,41 @@ export const sponsorRouter = router({
           // dereferenced existing.tier), so verify it points at a real tier.
           if (tierChanging) {
             await assertTierResolvable(resultingStatus, updateData.tier)
+          }
+        }
+
+        const invoiceStatusChanging =
+          updateData.invoiceStatus !== undefined &&
+          updateData.invoiceStatus !== existing.invoiceStatus
+
+        if (invoiceStatusChanging) {
+          const resultingState = { ...existing, ...updateData }
+          const transition = canTransition(
+            'invoice',
+            existing.invoiceStatus || 'not-sent',
+            updateData.invoiceStatus!,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            resultingState as any,
+          )
+          if (!transition.ok) {
+            throw preconditionFailed(transition.missing)
+          }
+
+          // Handle timestamp side-effects
+          if (updateData.invoiceStatus === 'sent' && !existing.invoiceSentAt) {
+            updateData.invoiceSentAt = getCurrentDateTime()
+          }
+          if (updateData.invoiceStatus === 'paid' && !existing.invoicePaidAt) {
+            updateData.invoicePaidAt = getCurrentDateTime()
+          }
+          if (updateData.invoiceStatus !== 'paid') {
+            updateData.invoicePaidAt = null
+          }
+          if (
+            updateData.invoiceStatus === 'not-sent' ||
+            updateData.invoiceStatus === 'cancelled'
+          ) {
+            updateData.invoiceSentAt = null
           }
         }
 
@@ -1222,6 +1271,14 @@ export const sponsorRouter = router({
           // Enforce the pipeline invariant: a record can only be bulk-marked
           // Won if it has a resolvable tier. Reject the whole batch (rather
           // than silently skipping) so the organizer knows which ones to fix.
+          if (input.invoiceStatus) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'Invoice status cannot be updated in bulk. Please update each sponsor individually to ensure requirements are met.',
+            })
+          }
+
           if (input.status === 'closed-won') {
             const tierlessIds = await clientReadUncached.fetch<string[]>(
               `*[_type == "sponsorForConference" && _id in $ids && !defined(tier->_id)]._id`,

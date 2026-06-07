@@ -107,7 +107,7 @@ export function SponsorPipelineView({
       ...opt,
       disabled: !transition.ok,
       disabledReason: !transition.ok
-        ? transition.missing[0]?.message
+        ? transition.missing.map((m) => m.message).join('\n')
         : undefined,
     }
   })

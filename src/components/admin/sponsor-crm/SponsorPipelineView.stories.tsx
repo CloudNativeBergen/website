@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { fn, expect, userEvent, within } from 'storybook/test'
 import { SponsorPipelineView } from './SponsorPipelineView'
 import type { SponsorPipelineFormData } from './SponsorPipelineView'
 import { mockSponsor, mockSponsorTier } from '@/__mocks__/sponsor-data'
@@ -203,5 +203,43 @@ export const ClosedWon: Story = {
     addonTiers: mockAddonTiers,
     organizers: mockOrganizers,
     isPending: false,
+  },
+}
+
+export const InvoiceGuardsValidation: Story = {
+  args: {
+    formData: {
+      ...defaultFormData,
+      contractStatus: 'none',
+      invoiceStatus: 'not-sent',
+      contractValue: '',
+      contractCurrency: 'NOK',
+      status: 'negotiating',
+    },
+    sponsor: mockSponsor(),
+    availableSponsors: [],
+    regularTiers: mockTiers,
+    addonTiers: mockAddonTiers,
+    organizers: mockOrganizers,
+    isPending: false,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    // In headless UI, we can find the listbox button and click it to open the options.
+    const invoiceStatusButton = canvas
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('Not Sent'))
+    if (invoiceStatusButton) {
+      await userEvent.click(invoiceStatusButton)
+
+      const sentOption = canvas.getByText('Sent').closest('li')
+      expect(sentOption).toHaveAttribute('aria-disabled', 'true')
+
+      // The title should contain the reasons
+      const title = sentOption?.getAttribute('title')
+      expect(title).toContain('Contract must be signed')
+      expect(title).toContain('Contract value must be greater than 0')
+    }
   },
 }
