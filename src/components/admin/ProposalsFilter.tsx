@@ -258,7 +258,7 @@ export function ProposalsFilter({
           )}
 
           <FilterDropdown
-            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'reviews' ? 'Reviews' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
+            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'reviews' ? 'Review Count' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
             activeCount={0}
             position="right"
           >
