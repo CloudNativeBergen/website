@@ -86,7 +86,6 @@ export function SponsorCRMForm({
       | 'USD'
       | 'EUR'
       | 'GBP',
-    notes: sponsor?.notes || '',
     tags: sponsor?.tags || ([] as SponsorTag[]),
     assignedTo: sponsor?.assignedTo?._id || '',
   })

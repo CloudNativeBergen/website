@@ -808,9 +808,29 @@ export const sponsorRouter = router({
       .input(SponsorForConferenceInputSchema)
       .mutation(async ({ input, ctx }) => {
         const userId = ctx.speaker._id
+        const resolvedConferenceId = await resolveConferenceId()
         const data = {
           ...input,
+          conference: resolvedConferenceId,
           tags: input.tags as SponsorTag[] | undefined,
+        }
+
+        // Note: This is a check-then-act pattern. Sanity does not support
+        // atomic transactions, so two concurrent requests could both pass this
+        // check before either creates the record. In practice this is
+        // acceptable: the UI disables the button after first click, and a
+        // duplicate would be immediately visible to the organizer to delete.
+        const existingSponsorForConference = await clientReadUncached.fetch(
+          `*[_type == "sponsorForConference" && sponsor._ref == $sponsor && conference._ref == $conference][0]`,
+          { sponsor: data.sponsor, conference: data.conference },
+        )
+
+        if (existingSponsorForConference) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'This sponsor is already in the pipeline for this conference.',
+          })
         }
 
         // Enforce the pipeline invariant however the record is created, not
@@ -839,11 +859,10 @@ export const sponsorRouter = router({
 
         // Ensure assigned person is an organizer of this conference
         if (data.assignedTo) {
-          const conferenceId = await resolveConferenceId()
           const { getOrganizersByConference } =
             await import('@/lib/speaker/sanity')
           const { speakers: organizers } =
-            await getOrganizersByConference(conferenceId)
+            await getOrganizersByConference(resolvedConferenceId)
           if (!organizers?.some((o) => o._id === data.assignedTo)) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -2598,6 +2617,9 @@ export const sponsorRouter = router({
           primaryRecipient: ccEmails[0],
           ccRecipients: ccEmails.slice(1),
           additionalContent: discountInfo,
+          fromEmail: conference.sponsorEmail
+            ? `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`
+            : undefined,
         })
 
         if (!emailResponse.ok) {

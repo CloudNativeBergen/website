@@ -44,7 +44,8 @@ interface SponsorFormData extends SponsorInput {
 export function SponsorAddModal({
   isOpen,
   onClose,
-  conferenceId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  conferenceId: _conferenceId,
   sponsorTiers,
   preselectedTierId,
   editingSponsor,
@@ -232,7 +233,6 @@ export function SponsorAddModal({
 
         const sfcResult = await crmCreateMutation.mutateAsync({
           sponsor: finalSponsorId,
-          conference: conferenceId,
           tier: formData.tierId,
           status: 'closed-won',
           contractStatus: 'none',

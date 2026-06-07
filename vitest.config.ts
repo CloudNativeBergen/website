@@ -2,6 +2,11 @@ import { defineConfig } from 'vitest/config'
 import path from 'path'
 
 export default defineConfig({
+  // Redirect Vite's .env loading to a directory without .env files.
+  // This prevents EPERM crashes in sandboxed/CI environments that can't
+  // read root .env files. Secrets are injected via `fnox exec --` before
+  // the process starts, so Vite's own env loading is not needed.
+  envDir: './__tests__',
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, 'src') },

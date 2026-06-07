@@ -24,7 +24,6 @@ export interface SponsorCRMFormData {
   invoiceStatus: InvoiceStatus
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  notes: string
   tags: SponsorTag[]
   assignedTo: string
 }
@@ -37,7 +36,8 @@ interface UseSponsorCRMFormMutationsOptions {
 }
 
 export function useSponsorCRMFormMutations({
-  conferenceId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  conferenceId: _conferenceId,
   sponsor,
   isOpen,
   onSuccess,
@@ -137,14 +137,12 @@ export function useSponsorCRMFormMutations({
           ? parseFloat(formData.contractValue)
           : undefined,
         contractCurrency: formData.contractCurrency,
-        notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         assignedTo: formData.assignedTo || null,
       })
     } else {
       await createMutation.mutateAsync({
         sponsor: formData.sponsorId,
-        conference: conferenceId,
         tier: formData.tierId || undefined,
         addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
         contractStatus: formData.contractStatus,
@@ -154,7 +152,6 @@ export function useSponsorCRMFormMutations({
           ? parseFloat(formData.contractValue)
           : undefined,
         contractCurrency: formData.contractCurrency,
-        notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         assignedTo: formData.assignedTo || undefined,
       })

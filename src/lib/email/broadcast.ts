@@ -61,6 +61,10 @@ export async function sendBroadcastEmail({
     const determineFromEmail = (): string => {
       if (fromEmail) return fromEmail
 
+      if (audienceType === 'sponsors' && conference.sponsorEmail) {
+        return `${conference.organizer} <${conference.sponsorEmail}>`
+      }
+
       if (audienceType === 'speakers' && conference.cfpEmail) {
         return `${conference.organizer} <${conference.cfpEmail}>`
       }

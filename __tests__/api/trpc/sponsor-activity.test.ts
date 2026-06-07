@@ -113,7 +113,6 @@ describe('Sponsor CRM Activities & Assignments', () => {
 
         const result = await caller.sponsor.crm.create({
           sponsor: 'sponsor-1',
-          conference: 'conf-1',
           status: 'prospect',
           contractStatus: 'none',
           invoiceStatus: 'not-sent',
@@ -132,7 +131,6 @@ describe('Sponsor CRM Activities & Assignments', () => {
 
         await caller.sponsor.crm.create({
           sponsor: 'sponsor-1',
-          conference: 'conf-1',
           status: 'prospect',
           contractStatus: 'none',
           invoiceStatus: 'not-sent',
@@ -151,7 +149,6 @@ describe('Sponsor CRM Activities & Assignments', () => {
         await expect(
           caller.sponsor.crm.create({
             sponsor: 'sponsor-1',
-            conference: 'conf-1',
             status: 'prospect',
             contractStatus: 'none',
             invoiceStatus: 'not-sent',

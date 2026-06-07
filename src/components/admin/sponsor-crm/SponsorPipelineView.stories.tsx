@@ -20,7 +20,6 @@ const defaultFormData: SponsorPipelineFormData = {
   invoiceStatus: 'not-sent',
   contractValue: '100000',
   contractCurrency: 'NOK',
-  notes: 'Very interested in premium package',
   tags: ['warm-lead', 'returning-sponsor'],
   assignedTo: 'org-1',
 }
@@ -133,7 +132,6 @@ export const AddNew: Story = {
       status: 'prospect',
       invoiceStatus: 'not-sent',
       contractValue: '',
-      notes: '',
       tags: [],
       assignedTo: '',
     },

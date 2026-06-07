@@ -15,7 +15,6 @@ import {
 describe('SponsorForConferenceInputSchema', () => {
   const validInput = {
     sponsor: 'sponsor-123',
-    conference: 'conf-456',
     contractStatus: 'none',
     status: 'prospect',
     invoiceStatus: 'not-sent',
@@ -47,12 +46,6 @@ describe('SponsorForConferenceInputSchema', () => {
 
   it('fails without sponsor', () => {
     const { sponsor: _, ...input } = validInput
-    const result = SponsorForConferenceInputSchema.safeParse(input)
-    expect(result.success).toBe(false)
-  })
-
-  it('fails without conference', () => {
-    const { conference: _, ...input } = validInput
     const result = SponsorForConferenceInputSchema.safeParse(input)
     expect(result.success).toBe(false)
   })

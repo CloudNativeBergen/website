@@ -6,6 +6,13 @@ import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
+export interface CrmActivityThreshold {
+  _key?: string
+  stateType: string
+  stateValue: string
+  days: number
+}
+
 export interface TrackTalk {
   talk?: ProposalExisting
   placeholder?: string
@@ -137,4 +144,5 @@ export interface Conference {
   agentConfig?: AgentConfiguration
   featuredGalleryImages?: GalleryImageWithSpeakers[]
   galleryImages?: GalleryImageWithSpeakers[]
+  crmInactivityThresholds?: CrmActivityThreshold[]
 }

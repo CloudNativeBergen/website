@@ -6,6 +6,7 @@ import {
   getSignatureStatusBadgeProps,
   getDaysPending,
   getActivityColor,
+  checkSponsorNeedsFollowUp,
 } from '@/components/admin/sponsor-crm/utils'
 import type {
   InvoiceStatus,
@@ -282,6 +283,152 @@ describe('CRM Utils', () => {
     it('returns specific color for contract_reminder_sent', () => {
       const color = getActivityColor('contract_reminder_sent')
       expect(color).toContain('amber')
+    })
+  })
+
+  describe('checkSponsorNeedsFollowUp', () => {
+    const baseSponsor: SponsorForConferenceExpanded = {
+      _id: 'sfc-1',
+      _createdAt: '2026-01-01T00:00:00Z',
+      _updatedAt: '2026-01-01T00:00:00Z',
+      sponsor: {
+        _id: 's1',
+        name: 'Acme Corp',
+        website: 'https://acme.com',
+        logo: '<svg></svg>',
+      },
+      conference: { _id: 'c1', title: 'CNDN 2026' },
+      contractStatus: 'none',
+      status: 'prospect',
+      invoiceStatus: 'not-sent',
+      contractCurrency: 'NOK',
+    }
+
+    const daysAgoISO = (days: number) =>
+      new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+    it('returns false when no thresholds provided', () => {
+      const sponsor = { ...baseSponsor, _updatedAt: daysAgoISO(30) }
+      expect(checkSponsorNeedsFollowUp(sponsor, [])).toBe(false)
+      expect(checkSponsorNeedsFollowUp(sponsor, undefined)).toBe(false)
+    })
+
+    it('returns false when sponsor has no lastActivity and no _updatedAt', () => {
+      const sponsor = {
+        ...baseSponsor,
+        _updatedAt: undefined as unknown as string,
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 7 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(false)
+    })
+
+    it('returns true when status matches and days exceeded', () => {
+      const sponsor = {
+        ...baseSponsor,
+        status: 'prospect' as const,
+        _updatedAt: daysAgoISO(15),
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 14 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(true)
+    })
+
+    it('returns false when status matches but days not exceeded', () => {
+      const sponsor = {
+        ...baseSponsor,
+        status: 'prospect' as const,
+        _updatedAt: daysAgoISO(5),
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 14 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(false)
+    })
+
+    it('returns false when status does not match threshold stateValue', () => {
+      const sponsor = {
+        ...baseSponsor,
+        status: 'contacted' as const,
+        _updatedAt: daysAgoISO(30),
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 7 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(false)
+    })
+
+    it('matches on contractStatus when stateType is contractStatus', () => {
+      const sponsor = {
+        ...baseSponsor,
+        contractStatus: 'contract-sent' as const,
+        _updatedAt: daysAgoISO(20),
+      }
+      const thresholds = [
+        { stateType: 'contractStatus', stateValue: 'contract-sent', days: 10 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(true)
+    })
+
+    it('matches on invoiceStatus when stateType is invoiceStatus', () => {
+      const sponsor = {
+        ...baseSponsor,
+        invoiceStatus: 'sent' as const,
+        _updatedAt: daysAgoISO(20),
+      }
+      const thresholds = [
+        { stateType: 'invoiceStatus', stateValue: 'sent', days: 10 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(true)
+    })
+
+    it('prefers lastActivity.createdAt over _updatedAt', () => {
+      const sponsor = {
+        ...baseSponsor,
+        status: 'prospect' as const,
+        _updatedAt: daysAgoISO(30), // stale, would trigger
+        lastActivity: {
+          _id: 'act-1',
+          _type: 'sponsorActivity' as const,
+          activityType: 'note' as const,
+          description: 'recent note',
+          createdAt: daysAgoISO(2), // recent, should not trigger
+          sponsorForConference: { _type: 'reference' as const, _ref: 'sfc-1' },
+        },
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 14 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(false)
+    })
+
+    it('returns false on exact boundary (days === threshold.days)', () => {
+      // strictly greater than, not >=
+      const sponsor = {
+        ...baseSponsor,
+        status: 'prospect' as const,
+        _updatedAt: daysAgoISO(14),
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 14 },
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(false)
+    })
+
+    it('evaluates multiple thresholds and returns true on first match', () => {
+      const sponsor = {
+        ...baseSponsor,
+        status: 'contacted' as const,
+        contractStatus: 'contract-sent' as const,
+        _updatedAt: daysAgoISO(20),
+      }
+      const thresholds = [
+        { stateType: 'status', stateValue: 'prospect', days: 7 }, // no match
+        { stateType: 'contractStatus', stateValue: 'contract-sent', days: 14 }, // match
+      ]
+      expect(checkSponsorNeedsFollowUp(sponsor, thresholds)).toBe(true)
     })
   })
 })

@@ -20,7 +20,6 @@ import {
   SponsorGlobalInfoFields,
 } from './form'
 import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
-import { Textarea } from '@/components/Form'
 import clsx from 'clsx'
 
 export interface SponsorPipelineFormData {
@@ -38,7 +37,6 @@ export interface SponsorPipelineFormData {
   invoiceStatus: InvoiceStatus
   contractValue: string
   contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  notes: string
   tags: SponsorTag[]
   assignedTo: string
 }
@@ -274,22 +272,6 @@ export function SponsorPipelineView({
               }
             />
           </div>
-        </div>
-
-        {/* Notes */}
-        <div>
-          <Textarea
-            name="notes"
-            label="Notes"
-            rows={2}
-            value={formData.notes}
-            setValue={(val) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                notes: val,
-              }))
-            }
-          />
         </div>
       </div>
 

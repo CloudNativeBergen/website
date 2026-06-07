@@ -23,22 +23,14 @@
     "!**/__tests__/**"
   ],
   "ignore": [
-    "__tests__/**",
-    "**/*.test.{ts,tsx}",
     "src/components/examples/**",
     "sanity/**",
     "migrations/**",
     "src/lib/empty-module.ts",
-    "scripts/strip-comments.ts",
     "src/components/email/CoSpeakerResponseTemplate.tsx",
     "src/lib/sponsor-crm/contract-send.ts"
   ],
-  "ignoreDependencies": [
-    "eslint-config-next",
-    "postcss",
-    "ts-node",
-    "chromatic"
-  ],
+  "ignoreDependencies": ["eslint-config-next", "ts-node", "chromatic"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": true
 }

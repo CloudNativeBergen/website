@@ -1,0 +1,29 @@
+default_provider = "keychain"
+
+[providers.keychain]
+type = "keychain"
+service = "cndn-website"
+
+[secrets]
+SANITY_API_TOKEN_READ= { provider = "keychain", value = "SANITY_API_TOKEN_READ" }
+NEXT_PUBLIC_URL= { provider = "keychain", value = "NEXT_PUBLIC_URL" }
+SANITY_API_TOKEN_WRITE= { provider = "keychain", value = "SANITY_API_TOKEN_WRITE" }
+AUTH_SECRET= { provider = "keychain", value = "AUTH_SECRET" }
+AUTH_GITHUB_ID= { provider = "keychain", value = "AUTH_GITHUB_ID" }
+AUTH_GITHUB_SECRET= { provider = "keychain", value = "AUTH_GITHUB_SECRET" }
+AUTH_LINKEDIN_ID= { provider = "keychain", value = "AUTH_LINKEDIN_ID" }
+AUTH_LINKEDIN_SECRET= { provider = "keychain", value = "AUTH_LINKEDIN_SECRET" }
+RESEND_API_KEY= { provider = "keychain", value = "RESEND_API_KEY" }
+SLACK_BOT_TOKEN= { provider = "keychain", value = "SLACK_BOT_TOKEN" }
+CRON_SECRET= { provider = "keychain", value = "CRON_SECRET" }
+CHECKIN_API_KEY= { provider = "keychain", value = "CHECKIN_API_KEY" }
+CHECKIN_API_SECRET= { provider = "keychain", value = "CHECKIN_API_SECRET" }
+INVITATION_TOKEN_SECRET= { provider = "keychain", value = "INVITATION_TOKEN_SECRET" }
+NEXT_PUBLIC_EXCHANGE_RATE_API_KEY= { provider = "keychain", value = "NEXT_PUBLIC_EXCHANGE_RATE_API_KEY" }
+BLOB_READ_WRITE_TOKEN= { provider = "keychain", value = "BLOB_READ_WRITE_TOKEN" }
+ADOBE_SIGN_BASE_URL= { provider = "keychain", value = "ADOBE_SIGN_BASE_URL" }
+ADOBE_SIGN_CLIENT_ID= { provider = "keychain", value = "ADOBE_SIGN_CLIENT_ID" }
+ADOBE_SIGN_APPLICATION_ID= { provider = "keychain", value = "ADOBE_SIGN_APPLICATION_ID" }
+ADOBE_SIGN_APPLICATION_SECRET= { provider = "keychain", value = "ADOBE_SIGN_APPLICATION_SECRET" }
+BADGE_ISSUER_RSA_PRIVATE_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PRIVATE_KEY" }
+BADGE_ISSUER_RSA_PUBLIC_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PUBLIC_KEY" }

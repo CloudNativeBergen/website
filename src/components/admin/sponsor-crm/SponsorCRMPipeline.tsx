@@ -20,6 +20,7 @@ import { SponsorCard } from '@/components/admin/sponsor-crm/SponsorCard'
 import {
   sortSponsorTiers,
   formatTierLabel,
+  checkSponsorNeedsFollowUp,
 } from '@/components/admin/sponsor-crm/utils'
 import {
   TAGS,
@@ -123,6 +124,10 @@ export function SponsorCRMPipeline({
         []) as SponsorTag[],
     [searchParams],
   )
+  const needsFollowUpFilter = useMemo(
+    () => searchParams.get('needsFollowUp') === 'true',
+    [searchParams],
+  )
 
   // Pause background refresh when user is actively interacting
   const isUserBusy =
@@ -174,7 +179,12 @@ export function SponsorCRMPipeline({
   }, [sponsors, selectedSponsor])
 
   // All filtering now happens on the server
-  const filteredSponsors = sponsors
+  const filteredSponsors = useMemo(() => {
+    if (!needsFollowUpFilter) return sponsors
+    return sponsors.filter((s) =>
+      checkSponsorNeedsFollowUp(s, conference.crmInactivityThresholds),
+    )
+  }, [sponsors, needsFollowUpFilter, conference.crmInactivityThresholds])
 
   // Helper to update URL params without triggering navigation
   const updateUrlParams = useCallback(
@@ -425,12 +435,19 @@ export function SponsorCRMPipeline({
     [tagsFilter, updateFilters],
   )
 
+  const toggleNeedsFollowUpFilter = useCallback(() => {
+    updateFilters('needsFollowUp', needsFollowUpFilter ? null : 'true')
+  }, [needsFollowUpFilter, updateFilters])
+
   const clearAllFilters = useCallback(() => {
     router.push(window.location.pathname, { scroll: false })
   }, [router])
 
   const activeFilterCount =
-    tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
+    tiersFilter.length +
+    (assignedToFilter ? 1 : 0) +
+    tagsFilter.length +
+    (needsFollowUpFilter ? 1 : 0)
 
   const groupedSponsors = useMemo(() => {
     return filteredSponsors.reduce(
@@ -680,6 +697,21 @@ export function SponsorCRMPipeline({
                 </FilterOption>
               ))}
             </FilterDropdown>
+
+            <FilterDropdown
+              label="Follow-up"
+              activeCount={needsFollowUpFilter ? 1 : 0}
+              position="left"
+              size="sm"
+            >
+              <FilterOption
+                onClick={toggleNeedsFollowUpFilter}
+                checked={needsFollowUpFilter}
+                keepOpen
+              >
+                Needs Follow-up (Inactive)
+              </FilterOption>
+            </FilterDropdown>
           </div>
 
           {/* Mobile: Filter button with badge */}
@@ -789,6 +821,15 @@ export function SponsorCRMPipeline({
               )
             })}
 
+            {/* Follow-up pill */}
+            {needsFollowUpFilter && (
+              <FilterPill
+                label="Inactive"
+                category="Follow-up"
+                onRemove={toggleNeedsFollowUpFilter}
+              />
+            )}
+
             {/* Search pill */}
             {searchQuery && (
               <FilterPill
@@ -874,6 +915,7 @@ export function SponsorCRMPipeline({
                 currentView={currentView}
                 selectedIds={selectedIds}
                 isSelectionMode={selectedIds.length > 0}
+                thresholds={conference.crmInactivityThresholds}
                 onSponsorClick={handleOpenForm}
                 onSponsorDelete={handleDelete}
                 onSponsorEmail={
@@ -895,6 +937,7 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
+                thresholds={conference.crmInactivityThresholds}
                 onEdit={() => {}}
                 onDelete={() => {}}
               />
