@@ -25,6 +25,11 @@ interface SponsorBoardColumnProps {
   onSponsorDelete: (sponsorId: string) => void
   onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorContract?: (sponsor: SponsorForConferenceExpanded) => void
+  onSponsorOpenHistory?: (sponsor: SponsorForConferenceExpanded) => void
+  onSponsorAdvanceStage?: (
+    sponsor: SponsorForConferenceExpanded,
+    targetStage: string,
+  ) => void
   onSponsorToggleSelect?: (id: string) => void
   onAddClick: () => void
 }
@@ -42,6 +47,8 @@ export function SponsorBoardColumn({
   onSponsorDelete,
   onSponsorEmail,
   onSponsorContract,
+  onSponsorOpenHistory,
+  onSponsorAdvanceStage,
   onSponsorToggleSelect,
   onAddClick,
 }: SponsorBoardColumnProps) {
@@ -169,6 +176,16 @@ export function SponsorBoardColumn({
               }
               onContract={
                 onSponsorContract ? () => onSponsorContract(sponsor) : undefined
+              }
+              onOpenHistory={
+                onSponsorOpenHistory
+                  ? () => onSponsorOpenHistory(sponsor)
+                  : undefined
+              }
+              onAdvanceStage={
+                onSponsorAdvanceStage
+                  ? (targetStage) => onSponsorAdvanceStage(sponsor, targetStage)
+                  : undefined
               }
             />
           ))}

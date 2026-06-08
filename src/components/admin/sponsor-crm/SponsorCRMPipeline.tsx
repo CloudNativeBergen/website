@@ -97,6 +97,7 @@ export function SponsorCRMPipeline({
     isDragging,
     handleDragStart,
     handleDragEnd,
+    handleAdvanceStage,
     pendingTierMove,
     confirmTierMove,
     cancelTierMove,
@@ -954,6 +955,10 @@ export function SponsorCRMPipeline({
                 }
                 onSponsorToggleSelect={handleToggleSelect}
                 onAddClick={() => handleOpenForm()}
+                onSponsorOpenHistory={(sponsor) =>
+                  handleOpenForm(sponsor, 'history')
+                }
+                onSponsorAdvanceStage={handleAdvanceStage}
               />
             )
           })}

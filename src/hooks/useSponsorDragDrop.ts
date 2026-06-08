@@ -246,6 +246,60 @@ export function useSponsorDragDrop(currentView: BoardView) {
     ],
   )
 
+  const handleAdvanceStage = useCallback(
+    async (sponsor: SponsorForConferenceExpanded, targetColumnKey: string) => {
+      if (
+        dropNeedsTier(currentView, sponsor.status, targetColumnKey, sponsor)
+      ) {
+        setPendingTierMove({ sponsor, targetColumnKey })
+        return
+      }
+
+      await runOptimisticMove(sponsor._id, targetColumnKey, () => {
+        switch (currentView) {
+          case 'pipeline':
+            return moveStage.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'prospect'
+                | 'contacted'
+                | 'negotiating'
+                | 'closed-won'
+                | 'closed-lost',
+            })
+          case 'invoice':
+            return updateInvoiceStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'not-sent'
+                | 'sent'
+                | 'paid'
+                | 'overdue'
+                | 'cancelled',
+            })
+          case 'contract':
+            return updateContractStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'none'
+                | 'verbal-agreement'
+                | 'contract-sent'
+                | 'contract-signed',
+            })
+          default:
+            return Promise.resolve()
+        }
+      })
+    },
+    [
+      currentView,
+      runOptimisticMove,
+      moveStage,
+      updateInvoiceStatus,
+      updateContractStatus,
+    ],
+  )
+
   // Finish a held closed-won move with the chosen tier. Sets tier + status in a
   // single atomic update so the server guard is satisfied and there is no
   // half-done state (tier set but still not won).
@@ -283,6 +337,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
     isDragging: activeItem !== null,
     handleDragStart,
     handleDragEnd,
+    handleAdvanceStage,
     pendingTierMove,
     confirmTierMove,
     cancelTierMove,

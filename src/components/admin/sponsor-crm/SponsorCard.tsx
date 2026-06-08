@@ -16,7 +16,9 @@ import {
   DocumentTextIcon,
   ExclamationTriangleIcon,
   Bars2Icon,
+  EllipsisHorizontalIcon,
 } from '@heroicons/react/24/outline'
+import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react'
 import {
   getInvoiceStatusColor,
   formatInvoiceStatusLabel,
@@ -43,6 +45,8 @@ interface SponsorCardProps {
   onDelete: () => void
   onEmail?: () => void
   onContract?: () => void
+  onOpenHistory?: () => void
+  onAdvanceStage?: (targetStage: string) => void
 }
 
 const TAG_BADGES: {
@@ -88,6 +92,8 @@ export function SponsorCard({
   onDelete,
   onEmail,
   onContract,
+  onOpenHistory,
+  onAdvanceStage,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
   const needsFollowUp = checkSponsorNeedsFollowUp(sponsor, thresholds)
@@ -145,11 +151,40 @@ export function SponsorCard({
         ? `${(v / 1000).toFixed(0)}K`
         : formatNumber(v)
 
+  let nextStage: { key: string; label: string } | null = null
+  if (currentView === 'pipeline') {
+    if (sponsor.status === 'prospect')
+      nextStage = { key: 'contacted', label: 'Contacted' }
+    else if (sponsor.status === 'contacted')
+      nextStage = { key: 'negotiating', label: 'Negotiating' }
+    else if (sponsor.status === 'negotiating')
+      nextStage = { key: 'closed-won', label: 'Closed Won' }
+  } else if (currentView === 'contract') {
+    if (!sponsor.contractStatus || sponsor.contractStatus === 'none')
+      nextStage = { key: 'verbal-agreement', label: 'Verbal Agreement' }
+    else if (sponsor.contractStatus === 'verbal-agreement')
+      nextStage = { key: 'contract-sent', label: 'Contract Sent' }
+    else if (sponsor.contractStatus === 'contract-sent')
+      nextStage = { key: 'contract-signed', label: 'Contract Signed' }
+  } else if (currentView === 'invoice') {
+    if (!sponsor.invoiceStatus || sponsor.invoiceStatus === 'not-sent')
+      nextStage = { key: 'sent', label: 'Sent' }
+    else if (sponsor.invoiceStatus === 'sent')
+      nextStage = { key: 'paid', label: 'Paid' }
+  }
+
+  const handleAdvanceStage = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (nextStage) {
+      onAdvanceStage?.(nextStage.key)
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
       className={clsx(
-        'group relative flex gap-2 overflow-hidden rounded-lg border py-3 pr-3 pl-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
+        'group relative flex flex-col gap-2 overflow-hidden rounded-lg border py-3 pr-3 pl-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
         isSelected
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
@@ -160,176 +195,217 @@ export function SponsorCard({
       )}
       onClick={handleCardClick}
     >
-      {/* Drag Handle */}
-      <div
-        className={clsx(
-          'flex shrink-0 cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing dark:text-gray-500 dark:hover:text-gray-300',
-          (isSelectionMode || !columnKey) && 'invisible pointer-events-none'
-        )}
-        {...attributes}
-        {...listeners}
-      >
-        <Bars2Icon className="h-5 w-5" />
-      </div>
-
-      {/* Selection Checkbox */}
-      <div
-        className={clsx(
-          'absolute top-1 left-1 z-10 transition-opacity',
-          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
-        )}
-        onClick={handleSelectClick}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => {}}
-          className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-        />
-      </div>
-
-      {/* Left: Logo + Assignee */}
-      <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1.5">
-        {/* Logo */}
-        <div className="flex h-9 w-14 items-center justify-center overflow-hidden">
-          {sponsor.sponsor.logo ? (
-            <SponsorLogo
-              logo={sponsor.sponsor.logo}
-              logoBright={sponsor.sponsor.logoBright}
-              name={sponsor.sponsor.name}
-              className="max-h-full w-auto max-w-14 object-contain"
-            />
-          ) : (
-            <span className="truncate text-center text-[10px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
-              {sponsor.sponsor.name}
-            </span>
-          )}
-        </div>
-        {/* Assignee */}
-        {sponsor.assignedTo && (
-          <div className="scale-[0.8] transform">
-            <SpeakerAvatars
-              speakers={[
-                {
-                  _id: sponsor.assignedTo._id,
-                  name: sponsor.assignedTo.name,
-                  image: sponsor.assignedTo.image,
-                } as Speaker,
-              ]}
-              size="sm"
-              maxVisible={1}
-              showTooltip={true}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Right: Name + Value + Tags */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-        {/* Name */}
-        <p className="truncate text-base leading-snug font-semibold text-gray-900 dark:text-white">
-          {sponsor.sponsor.name}
-        </p>
-
-        {/* Value */}
-        {value > 0 && (
-          <div className="flex items-center text-base leading-snug">
-            <span className="shrink-0 font-bold text-brand-cloud-blue dark:text-blue-400">
-              {formatValue(value)} {currency}
-            </span>
-          </div>
-        )}
-
-        {/* Tags + Invoice status */}
-        <div className="flex items-center gap-1">
-          {activeTags.map((t) => (
-            <span
-              key={t.tag}
-              title={TAG_TOOLTIPS[t.label]}
-              className={clsx(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold uppercase ring-1 ring-inset',
-                t.classes,
-              )}
-            >
-              {t.label}
-            </span>
-          ))}
-          {value > 0 && currentView !== 'pipeline' && (
-            <span
-              className={clsx(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap',
-                getInvoiceStatusColor(sponsor.invoiceStatus),
-              )}
-            >
-              {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
-            </span>
-          )}
-          {currentView === 'contract' &&
-            sponsor.signatureStatus &&
-            sponsor.signatureStatus !== 'not-started' && (
-              <SignatureBadge
-                status={sponsor.signatureStatus}
-                contractSentAt={sponsor.contractSentAt}
-              />
-            )}
-          {currentView === 'contract' &&
-            sponsor.registrationComplete &&
-            sponsor.contractStatus !== 'contract-sent' &&
-            sponsor.contractStatus !== 'contract-signed' && (
-              <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
-                READY
-              </span>
-            )}
-        </div>
-      </div>
-
-      {/* Action Buttons - Top Right */}
-      <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
-        {needsFollowUp && inactiveDays !== null && (
-          <span className="mr-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400">
-            <ExclamationTriangleIcon className="mr-1 h-3.5 w-3.5" />
-            ⚠ {inactiveDays}d inactive
-          </span>
-        )}
+      <div className="flex w-full gap-2">
+        {/* Drag Handle */}
         <div
-          className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          className={clsx(
+            'flex shrink-0 cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing dark:text-gray-500 dark:hover:text-gray-300',
+            (isSelectionMode || !columnKey) && 'pointer-events-none invisible',
+          )}
+          {...attributes}
+          {...listeners}
+        >
+          <Bars2Icon className="h-5 w-5" />
+        </div>
+
+        {/* Selection Checkbox */}
+        <div
+          className={clsx(
+            'absolute top-1 left-1 z-10 transition-opacity',
+            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+          )}
+          onClick={handleSelectClick}
           onPointerDown={(e) => e.stopPropagation()}
         >
-        {onContract && (
-          <button
-            onClick={handleContractClick}
-            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
-            title="Contract"
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => {}}
+            className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+          />
+        </div>
+
+        {/* Left: Logo + Assignee */}
+        <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1.5">
+          {/* Logo */}
+          <div className="flex h-9 w-14 items-center justify-center overflow-hidden">
+            {sponsor.sponsor.logo ? (
+              <SponsorLogo
+                logo={sponsor.sponsor.logo}
+                logoBright={sponsor.sponsor.logoBright}
+                name={sponsor.sponsor.name}
+                className="max-h-full w-auto max-w-14 object-contain"
+              />
+            ) : (
+              <span className="truncate text-center text-[10px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
+                {sponsor.sponsor.name}
+              </span>
+            )}
+          </div>
+          {/* Assignee */}
+          {sponsor.assignedTo && (
+            <div className="scale-[0.8] transform">
+              <SpeakerAvatars
+                speakers={[
+                  {
+                    _id: sponsor.assignedTo._id,
+                    name: sponsor.assignedTo.name,
+                    image: sponsor.assignedTo.image,
+                  } as Speaker,
+                ]}
+                size="sm"
+                maxVisible={1}
+                showTooltip={true}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right: Name + Value + Tags */}
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+          {/* Name */}
+          <p className="truncate text-base leading-snug font-semibold text-gray-900 dark:text-white">
+            {sponsor.sponsor.name}
+          </p>
+
+          {/* Value */}
+          {value > 0 && (
+            <div className="flex items-center text-base leading-snug">
+              <span className="shrink-0 font-bold text-brand-cloud-blue dark:text-blue-400">
+                {formatValue(value)} {currency}
+              </span>
+            </div>
+          )}
+
+          {/* Tags + Invoice status */}
+          <div className="flex items-center gap-1">
+            {activeTags.map((t) => (
+              <span
+                key={t.tag}
+                title={TAG_TOOLTIPS[t.label]}
+                className={clsx(
+                  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold uppercase ring-1 ring-inset',
+                  t.classes,
+                )}
+              >
+                {t.label}
+              </span>
+            ))}
+            {value > 0 && currentView !== 'pipeline' && (
+              <span
+                className={clsx(
+                  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap',
+                  getInvoiceStatusColor(sponsor.invoiceStatus),
+                )}
+              >
+                {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
+              </span>
+            )}
+            {currentView === 'contract' &&
+              sponsor.signatureStatus &&
+              sponsor.signatureStatus !== 'not-started' && (
+                <SignatureBadge
+                  status={sponsor.signatureStatus}
+                  contractSentAt={sponsor.contractSentAt}
+                />
+              )}
+            {currentView === 'contract' &&
+              sponsor.registrationComplete &&
+              sponsor.contractStatus !== 'contract-sent' &&
+              sponsor.contractStatus !== 'contract-signed' && (
+                <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
+                  READY
+                </span>
+              )}
+          </div>
+        </div>
+
+        {/* Action Buttons - Top Right */}
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+          {needsFollowUp && inactiveDays !== null && (
+            <span className="mr-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400">
+              <ExclamationTriangleIcon className="mr-1 h-3.5 w-3.5" />⚠{' '}
+              {inactiveDays}d inactive
+            </span>
+          )}
+          <div
+            className="flex opacity-40 transition-opacity group-hover:opacity-100 hover:opacity-100"
+            onPointerDown={(e) => e.stopPropagation()}
           >
-            <DocumentTextIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
-          </button>
-        )}
-        {onEmail && (
-          <button
-            onClick={handleEmailClick}
-            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
-            title="Email Sponsor"
-          >
-            <EnvelopeIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
-          </button>
-        )}
-        <button
-          onClick={handleEditClick}
-          className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-gray-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
-          title="Edit"
-        >
-          <PencilIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
-        </button>
-        <button
-          onClick={handleDeleteClick}
-          className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-red-50 dark:bg-gray-700/90 dark:hover:bg-red-900"
-          title="Delete"
-        >
-          <TrashIcon className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-        </button>
+            <Menu as="div" className="relative inline-block text-left">
+              <MenuButton className="flex items-center rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <span className="sr-only">Open options</span>
+                <EllipsisHorizontalIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              </MenuButton>
+              <MenuItems className="absolute right-0 z-10 mt-2 w-40 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10">
+                <div className="py-1">
+                  {onEmail && (
+                    <MenuItem>
+                      <button
+                        onClick={handleEmailClick}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
+                      >
+                        Send Email
+                      </button>
+                    </MenuItem>
+                  )}
+                  {onOpenHistory && (
+                    <MenuItem>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onOpenHistory()
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
+                      >
+                        Log Note
+                      </button>
+                    </MenuItem>
+                  )}
+                  {onContract && (
+                    <MenuItem>
+                      <button
+                        onClick={handleContractClick}
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
+                      >
+                        Send Contract
+                      </button>
+                    </MenuItem>
+                  )}
+                  <MenuItem>
+                    <button
+                      onClick={handleEditClick}
+                      className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 data-[focus]:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 dark:data-[focus]:bg-gray-700"
+                    >
+                      Edit Details
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={handleDeleteClick}
+                      className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 data-[focus]:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/50 dark:data-[focus]:bg-red-900/50"
+                    >
+                      Delete
+                    </button>
+                  </MenuItem>
+                </div>
+              </MenuItems>
+            </Menu>
+          </div>
         </div>
       </div>
+
+      {/* Bottom Row - CTA */}
+      {nextStage && (
+        <div className="mt-2 flex w-full border-t border-gray-100 pt-2 dark:border-gray-700">
+          <button
+            onClick={handleAdvanceStage}
+            className="flex w-full cursor-pointer items-center justify-center rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+          >
+            &rarr; {nextStage.label}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
