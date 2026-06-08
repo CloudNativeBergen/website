@@ -4,11 +4,12 @@ import { useMemo } from 'react'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { SponsorCard } from './SponsorCard'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
-import { calculateSponsorValue } from './utils'
+import { calculateSponsorValue, checkSponsorNeedsFollowUp } from './utils'
 import { BoardView } from './BoardViewSwitcher'
 import { useDroppable } from '@dnd-kit/core'
+import { formatNumber } from '@/lib/format'
 import clsx from 'clsx'
 
 interface SponsorBoardColumnProps {
@@ -54,8 +55,11 @@ export function SponsorBoardColumn({
     },
   })
 
-  const sortedSponsors = useMemo(() => {
-    return [...sponsors].sort((a, b) => {
+  const { sortedSponsors, totalValueNOK, inactiveCount } = useMemo(() => {
+    let totalNOK = 0
+    let inactive = 0
+
+    const sorted = [...sponsors].sort((a, b) => {
       const aVal = calculateSponsorValue(a)
       const bVal = calculateSponsorValue(b)
       const aNOK = convertCurrency(
@@ -70,7 +74,27 @@ export function SponsorBoardColumn({
       )
       return bNOK - aNOK
     })
-  }, [sponsors, convertCurrency])
+
+    for (const sponsor of sponsors) {
+      const val = calculateSponsorValue(sponsor)
+      const nok = convertCurrency(
+        val.value,
+        val.currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
+        'NOK',
+      )
+      totalNOK += nok
+
+      if (checkSponsorNeedsFollowUp(sponsor, thresholds)) {
+        inactive++
+      }
+    }
+
+    return {
+      sortedSponsors: sorted,
+      totalValueNOK: totalNOK,
+      inactiveCount: inactive,
+    }
+  }, [sponsors, convertCurrency, thresholds])
 
   return (
     <div
@@ -83,16 +107,29 @@ export function SponsorBoardColumn({
       )}
     >
       <div className="mb-3 flex shrink-0 items-center justify-between px-2">
-        <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
-          {title}
-        </h3>
-        <span className="min-w-6 rounded-full bg-brand-cloud-blue px-2 py-1 text-center text-xs text-white dark:bg-blue-600">
-          {isLoading ? (
-            <span className="inline-block h-4 w-4 animate-pulse rounded-full bg-white/30" />
-          ) : (
-            sponsors.length
+        <div className="flex flex-col">
+          <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
+            {title}
+          </h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {formatNumber(totalValueNOK)} NOK
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {inactiveCount > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              <ExclamationTriangleIcon className="h-3 w-3" />
+              {inactiveCount}
+            </span>
           )}
-        </span>
+          <span className="min-w-6 rounded-full bg-brand-cloud-blue px-2 py-1 text-center text-xs text-white dark:bg-blue-600">
+            {isLoading ? (
+              <span className="inline-block h-4 w-4 animate-pulse rounded-full bg-white/30" />
+            ) : (
+              sponsors.length
+            )}
+          </span>
+        </div>
       </div>
 
       {isLoading ? (

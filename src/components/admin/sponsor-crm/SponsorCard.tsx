@@ -15,6 +15,7 @@ import {
   EnvelopeIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  Bars2Icon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -23,6 +24,7 @@ import {
   getSignatureStatusBadgeProps,
   getDaysPending,
   checkSponsorNeedsFollowUp,
+  getDaysInactive,
 } from './utils'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import clsx from 'clsx'
@@ -89,6 +91,7 @@ export function SponsorCard({
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
   const needsFollowUp = checkSponsorNeedsFollowUp(sponsor, thresholds)
+  const inactiveDays = getDaysInactive(sponsor)
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: sponsor._id,
@@ -146,16 +149,29 @@ export function SponsorCard({
     <div
       ref={setNodeRef}
       className={clsx(
-        'group relative flex cursor-grab gap-3 overflow-hidden rounded-lg border p-3 transition-all hover:border-brand-cloud-blue hover:shadow-md active:cursor-grabbing dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
+        'group relative flex gap-2 overflow-hidden rounded-lg border py-3 pr-3 pl-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
         isSelected
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
+        needsFollowUp
+          ? 'border-l-4 border-l-amber-500'
+          : 'border-l-[3px] border-l-gray-400',
         isDragging && 'opacity-30',
       )}
       onClick={handleCardClick}
-      {...attributes}
-      {...listeners}
     >
+      {/* Drag Handle */}
+      <div
+        className={clsx(
+          'flex shrink-0 cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing dark:text-gray-500 dark:hover:text-gray-300',
+          (isSelectionMode || !columnKey) && 'invisible pointer-events-none'
+        )}
+        {...attributes}
+        {...listeners}
+      >
+        <Bars2Icon className="h-5 w-5" />
+      </div>
+
       {/* Selection Checkbox */}
       <div
         className={clsx(
@@ -227,15 +243,6 @@ export function SponsorCard({
 
         {/* Tags + Invoice status */}
         <div className="flex items-center gap-1">
-          {needsFollowUp && (
-            <span
-              title="Needs Follow-up (Inactive)"
-              className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] leading-none font-bold whitespace-nowrap text-amber-700 ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20"
-            >
-              <ExclamationTriangleIcon className="mr-0.5 h-3 w-3" />
-              INACTIVE
-            </span>
-          )}
           {activeTags.map((t) => (
             <span
               key={t.tag}
@@ -278,10 +285,17 @@ export function SponsorCard({
       </div>
 
       {/* Action Buttons - Top Right */}
-      <div
-        className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
+      <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+        {needsFollowUp && inactiveDays !== null && (
+          <span className="mr-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400">
+            <ExclamationTriangleIcon className="mr-1 h-3.5 w-3.5" />
+            ⚠ {inactiveDays}d inactive
+          </span>
+        )}
+        <div
+          className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
         {onContract && (
           <button
             onClick={handleContractClick}
@@ -314,6 +328,7 @@ export function SponsorCard({
         >
           <TrashIcon className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
         </button>
+        </div>
       </div>
     </div>
   )
