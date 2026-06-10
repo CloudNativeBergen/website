@@ -43,6 +43,8 @@ import {
   TableToolbar,
   TableEmptyState,
 } from '@/components/DataTable'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 
 const extractLinkedInLink = (links: string[] | undefined): string | null => {
   if (!links) return null
@@ -476,15 +478,15 @@ export function SpeakerTable({
                     <div className="flex min-w-0 items-center">
                       <div className="h-8 w-8 shrink-0">
                         {speaker.image ? (
-                          <img
-                            className="h-8 w-8 rounded-full object-cover"
-                            src={speaker.image}
-                            alt={speaker.name}
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
-                            <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                            <SpeakerAvatarImage
+                              src={speaker.image}
+                              name={speaker.name}
+                              size={32}
+                            />
                           </div>
+                        ) : (
+                          <MissingAvatar name={speaker.name} size={32} />
                         )}
                       </div>
                       <div className="ml-3 min-w-0 flex-1">

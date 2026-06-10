@@ -2,14 +2,11 @@
 
 import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
-import {
-  UserIcon,
-  PlusIcon,
-  XMarkIcon,
-  StarIcon,
-} from '@heroicons/react/24/outline'
+import { PlusIcon, XMarkIcon, StarIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { SearchInput } from '@/components/SearchInput'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 
 interface FeaturedSpeakersManagerProps {
   className?: string
@@ -155,15 +152,15 @@ export function FeaturedSpeakersManager({
                   >
                     <div className="flex items-center space-x-3">
                       {speaker.image ? (
-                        <img
-                          src={speaker.image}
-                          alt={speaker.name}
-                          className="h-10 w-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                          <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full">
+                          <SpeakerAvatarImage
+                            src={speaker.image}
+                            name={speaker.name}
+                            size={40}
+                          />
                         </div>
+                      ) : (
+                        <MissingAvatar name={speaker.name} size={40} />
                       )}
                       <div>
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -219,15 +216,15 @@ export function FeaturedSpeakersManager({
               >
                 <div className="flex items-center space-x-4">
                   {speaker.image ? (
-                    <img
-                      src={speaker.image}
-                      alt={speaker.name}
-                      className="h-12 w-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                      <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full">
+                      <SpeakerAvatarImage
+                        src={speaker.image}
+                        name={speaker.name}
+                        size={48}
+                      />
                     </div>
+                  ) : (
+                    <MissingAvatar name={speaker.name} size={48} />
                   )}
                   <div>
                     <h4 className="text-sm font-medium text-gray-900 dark:text-white">

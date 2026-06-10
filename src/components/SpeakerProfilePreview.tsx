@@ -18,6 +18,7 @@ import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { ShowMore } from '@/components/ShowMore'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
@@ -68,11 +69,13 @@ export default function SpeakerProfilePreview({
           <div className="lg:col-span-1">
             <div className="sticky top-8 space-y-6">
               {speaker.image && typeof speaker.image === 'string' ? (
-                <img
-                  src={speakerImageUrl(speaker.image)}
-                  alt={speaker.name}
-                  className="mx-auto h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:mx-0 lg:h-64 lg:w-64 dark:ring-gray-700"
-                />
+                <div className="mx-auto h-48 w-48 overflow-hidden rounded-full shadow-lg ring-4 ring-white lg:mx-0 lg:h-64 lg:w-64 dark:ring-gray-700">
+                  <SpeakerAvatarImage
+                    src={speakerImageUrl(speaker.image)}
+                    name={speaker.name}
+                    size={256}
+                  />
+                </div>
               ) : (
                 <MissingAvatar
                   name={speaker.name}

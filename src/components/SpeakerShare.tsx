@@ -6,6 +6,7 @@ import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 
 const qrCodeCache = new Map<string, string>()
 
@@ -101,17 +102,17 @@ const SpeakerImage = ({
 }: SpeakerImageProps) => {
   if (image) {
     return (
-      <img
-        src={speakerImageUrl(image, {
-          width: size * 2,
-          height: size * 2,
-          fit: 'crop',
-        })}
-        alt={name}
-        width={size}
-        height={size}
-        className={`object-cover ${className}`}
-      />
+      <div className={`overflow-hidden ${className}`}>
+        <SpeakerAvatarImage
+          src={speakerImageUrl(image, {
+            width: size * 2,
+            height: size * 2,
+            fit: 'crop',
+          })}
+          name={name}
+          size={size}
+        />
+      </div>
     )
   }
 

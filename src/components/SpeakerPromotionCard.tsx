@@ -16,6 +16,7 @@ import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { Flags } from '@/lib/speaker/types'
 import Link from 'next/link'
 import { memo, useMemo } from 'react'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 
 interface SpeakerPromotionCardProps {
   speaker: SpeakerWithTalks
@@ -163,17 +164,20 @@ const SpeakerImage = ({
 }: SpeakerImageProps) => {
   if (image) {
     return (
-      <img
-        src={speakerImageUrl(image, {
-          width: size * 2,
-          height: size * 2,
-          fit: 'crop',
-        })}
-        alt={name}
-        width={size}
-        height={size}
-        className={`object-cover ${className}`}
-      />
+      <div
+        style={{ width: size, height: size }}
+        className={`overflow-hidden ${className}`}
+      >
+        <SpeakerAvatarImage
+          src={speakerImageUrl(image, {
+            width: size * 2,
+            height: size * 2,
+            fit: 'crop',
+          })}
+          name={name}
+          size={size}
+        />
+      </div>
     )
   }
 
