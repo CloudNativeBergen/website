@@ -202,19 +202,27 @@ export const ProposalStatistics = memo(function ProposalStatistics({
     setIsExpanded((prev) => !prev)
   }, [])
 
-  const statistics = useMemo(() => {
+  const { statistics, totalMinutes } = useMemo(() => {
     if (proposals.length === 0) {
-      return null
+      return { statistics: null, totalMinutes: 0 }
     }
 
+    const minutes = proposals.reduce((acc, p) => {
+      const match = p.format?.match(/_(\d+)$/)
+      return acc + (match ? parseInt(match[1], 10) : 0)
+    }, 0)
+
     return {
-      levelStats: calculateStats(proposals, (p) => p.level, levels),
-      topicStats: calculateTopicStats(proposals),
-      audienceStats: calculateStats(
-        proposals,
-        (p) => p.audiences || [],
-        audiences,
-      ),
+      totalMinutes: minutes,
+      statistics: {
+        levelStats: calculateStats(proposals, (p) => p.level, levels),
+        topicStats: calculateTopicStats(proposals),
+        audienceStats: calculateStats(
+          proposals,
+          (p) => p.audiences || [],
+          audiences,
+        ),
+      },
     }
   }, [proposals])
 
@@ -239,7 +247,8 @@ export const ProposalStatistics = memo(function ProposalStatistics({
             Proposal Statistics
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            ({proposals.length} proposal{proposals.length !== 1 ? 's' : ''})
+            ({proposals.length} proposal{proposals.length !== 1 ? 's' : ''} •{' '}
+            {totalMinutes} total minutes)
           </span>
         </div>
         {isExpanded ? (
