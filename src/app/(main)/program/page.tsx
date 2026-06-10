@@ -1,6 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isProgramPublished } from '@/lib/conference/state'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '@/components/Sponsors'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
@@ -47,7 +48,11 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     )
   }
 
-  if (!conference.schedules || conference.schedules.length === 0) {
+  if (
+    !isProgramPublished(conference) ||
+    !conference.schedules ||
+    conference.schedules.length === 0
+  ) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-40 -bottom-32" />

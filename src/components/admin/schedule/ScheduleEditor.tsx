@@ -425,8 +425,23 @@ export function ScheduleEditor({
         scheduleEditor.schedule,
       )
 
-      if (schedule) {
-        scheduleEditor.setSchedule(schedule)
+      if (schedule && scheduleEditor.schedule) {
+        const updatedSchedule = {
+          ...scheduleEditor.schedule,
+          _id: schedule._id,
+        }
+        scheduleEditor.setSchedule(updatedSchedule)
+
+        if (
+          currentDayIndex >= 0 &&
+          currentDayIndex < modifiedSchedules.length
+        ) {
+          setModifiedSchedules((prev) => {
+            const updated = [...prev]
+            updated[currentDayIndex] = updatedSchedule
+            return updated
+          })
+        }
       }
 
       setSaveSuccess(true)

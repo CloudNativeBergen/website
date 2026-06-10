@@ -4,6 +4,7 @@ import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { isProgramPublished } from '@/lib/conference/state'
 import { Container } from '@/components/Container'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
@@ -34,7 +35,10 @@ async function CachedHomeContent({ domain }: { domain: string }) {
     return <div>Error loading conference data</div>
   }
 
-  const hasSchedule = conference.schedules && conference.schedules.length > 0
+  const hasSchedule =
+    isProgramPublished(conference) &&
+    conference.schedules &&
+    conference.schedules.length > 0
   const hasFeaturedSpeakers =
     conference.featuredSpeakers && conference.featuredSpeakers.length > 0
   const sortedOrganizers =

@@ -33,9 +33,11 @@ export async function saveScheduleToSanity(
           }
 
           if (talk.talk) {
+            const talkId =
+              talk.talk._id || (talk.talk as Record<string, string>)._ref
             return {
-              _key: generateKey(`${baseKey}-${talk.talk._id}`),
-              talk: createReference(talk.talk._id),
+              _key: generateKey(`${baseKey}-${talkId}`),
+              talk: createReference(talkId),
               startTime: talk.startTime,
               endTime: talk.endTime,
             }

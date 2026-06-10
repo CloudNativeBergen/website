@@ -372,13 +372,16 @@ export function DraggableProposal({
         style={{
           ...transformStyle,
           ...topicStyling.styles,
-          ...backgroundStyle,
           height: `${durationMinutes * MINUTES_TO_PIXELS}px`,
         }}
         title={tooltipContent}
         {...attributes}
       >
-        <div className="flex min-h-4 items-center gap-1">
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={backgroundStyle}
+        />
+        <div className="relative z-10 flex min-h-4 items-center gap-1">
           <div
             className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}
@@ -410,14 +413,14 @@ export function DraggableProposal({
         </div>
 
         {(talkSize === 'short' || talkSize === 'very-short') && (
-          <div className="mt-0.5 flex items-center gap-2 text-xs">
+          <div className="relative z-10 mt-0.5 flex items-center gap-2 text-xs">
             {AudienceIndicator}
             {TopicsIndicator}
           </div>
         )}
 
         {(talkSize === 'medium' || talkSize === 'long') && (
-          <div className="mt-1 space-y-1">
+          <div className="relative z-10 mt-1 space-y-1">
             <div className="flex items-center gap-2 text-xs">
               {AudienceIndicator}
               {TopicsIndicator}
