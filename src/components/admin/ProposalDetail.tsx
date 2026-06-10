@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import {
   ClockIcon,
   CalendarIcon,
@@ -252,9 +253,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                         )
 
                         return (
-                          <div
+                          <Link
                             key={talk._id}
-                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
+                            href={`/admin/proposals/${talk._id}`}
+                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
@@ -302,7 +304,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </Link>
                         )
                       })}
                   </div>
@@ -329,9 +331,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                         )
 
                         return (
-                          <div
+                          <Link
                             key={talk._id}
-                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
+                            href={`/admin/proposals/${talk._id}`}
+                            className="flex items-start justify-between rounded-lg bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
@@ -397,7 +400,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </Link>
                         )
                       })}
                   </div>
