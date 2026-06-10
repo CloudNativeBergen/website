@@ -25,6 +25,7 @@ import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 import { RatingDisplay } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
@@ -88,18 +89,17 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
       <div>
         <div className="float-left mr-4 mb-2">
           {speaker.image && typeof speaker.image === 'string' ? (
-            <img
-              src={speakerImageUrl(speaker.image, {
-                width: 128,
-                height: 128,
-                fit: 'crop',
-              })}
-              alt={speaker.name}
-              width={64}
-              height={64}
-              className="h-16 w-16 rounded-full object-cover"
-              loading="lazy"
-            />
+            <div className="h-16 w-16 overflow-hidden rounded-full">
+              <SpeakerAvatarImage
+                src={speakerImageUrl(speaker.image, {
+                  width: 128,
+                  height: 128,
+                  fit: 'crop',
+                })}
+                name={speaker.name}
+                size={64}
+              />
+            </div>
           ) : (
             <MissingAvatar
               name={speaker.name}
