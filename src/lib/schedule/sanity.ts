@@ -34,7 +34,9 @@ export async function saveScheduleToSanity(
 
           if (talk.talk) {
             const talkId =
-              talk.talk._id || (talk.talk as Record<string, string>)._ref
+              talk.talk._id ||
+              (talk.talk as unknown as { _ref?: string })._ref ||
+              ''
             return {
               _key: generateKey(`${baseKey}-${talkId}`),
               talk: createReference(talkId),
