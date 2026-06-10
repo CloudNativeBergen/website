@@ -2,6 +2,7 @@
 
 import { SpeakerSharingActions } from '@/components/speaker/SpeakerSharingActions'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
 import { speakerImageUrl } from '@/lib/sanity/client'
@@ -94,17 +95,17 @@ export function SpeakerShareWrapper({
             <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
               <div className="shrink-0">
                 {image ? (
-                  <img
-                    src={speakerImageUrl(image, {
-                      width: 800,
-                      height: 800,
-                      fit: 'crop',
-                    })}
-                    alt={name}
-                    width={400}
-                    height={400}
-                    className="h-[25cqw] w-[25cqw] rounded-[2cqw] object-cover shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]"
-                  />
+                  <div className="h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw] shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]">
+                    <SpeakerAvatarImage
+                      src={speakerImageUrl(image, {
+                        width: 800,
+                        height: 800,
+                        fit: 'crop',
+                      })}
+                      name={name}
+                      size={400}
+                    />
+                  </div>
                 ) : (
                   <div className="relative h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw] @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]">
                     <MissingAvatar
