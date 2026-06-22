@@ -25,7 +25,8 @@ export default async function SpeakerDashboard() {
 
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
-  const { domain } = await getConferenceForCurrentDomain({})
+  const { conference: currentConference, domain } =
+    await getConferenceForCurrentDomain({})
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
@@ -152,7 +153,7 @@ export default async function SpeakerDashboard() {
   const conferencesWithData = await Promise.all(conferenceDataPromises)
 
   // Filter out conferences with no activity
-  const activeConferences = conferencesWithData.filter(
+  const activeConferencesRaw = conferencesWithData.filter(
     (c) =>
       c.proposals.length > 0 ||
       c.galleryImages.length > 0 ||
@@ -160,6 +161,18 @@ export default async function SpeakerDashboard() {
       c.travelSupport !== null ||
       c.badges.length > 0,
   )
+
+  // Prioritize the current conference by moving it to the top of the list
+  const activeConferences = currentConference?._id
+    ? [
+        ...activeConferencesRaw.filter(
+          (c) => c.conference._id === currentConference._id,
+        ),
+        ...activeConferencesRaw.filter(
+          (c) => c.conference._id !== currentConference._id,
+        ),
+      ]
+    : activeConferencesRaw
 
   // Get confirmed talks for speaker share
   const confirmedTalks = activeConferences
@@ -170,12 +183,26 @@ export default async function SpeakerDashboard() {
     )
     .slice(0, 1) // Show only the first confirmed talk
 
-  // Get all badges sorted by issue date (newest first)
+  // Get all badges sorted by issue date (newest first), prioritizing the current conference
   const allBadges = activeConferences
-    .flatMap((c) => c.badges)
-    .sort(
-      (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
+    .flatMap((c) =>
+      c.badges.map((b) => ({ ...b, conferenceId: c.conference._id })),
     )
+    .sort((a, b) => {
+      if (currentConference?._id) {
+        if (
+          a.conferenceId === currentConference._id &&
+          b.conferenceId !== currentConference._id
+        )
+          return -1
+        if (
+          b.conferenceId === currentConference._id &&
+          a.conferenceId !== currentConference._id
+        )
+          return 1
+      }
+      return new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime()
+    })
 
   const latestBadge = allBadges[0]
 
@@ -265,22 +292,27 @@ export default async function SpeakerDashboard() {
 
         {/* Sidebar */}
         <div className="w-full shrink-0 space-y-4 lg:w-80">
-          {showBadgeInSidebar && latestBadge ? (
-            <BadgeShare
-              badge={latestBadge}
-              eventName={badgeEventName || 'Cloud Native Days Norway'}
-              domain={domain}
-              className="w-full"
-            />
-          ) : (
-            <SpeakerShareSidebar
-              speaker={speakerWithTalks}
-              talkTitle={talkTitle}
-              eventName={eventName}
-              baseDomain={domain}
-            />
-          )}
-          <DashboardSidebar />
+          <div className="space-y-4 lg:sticky lg:top-4">
+            {latestBadge && (
+              <BadgeShare
+                badge={latestBadge}
+                eventName={badgeEventName || 'Cloud Native Days Norway'}
+                domain={domain}
+                className="w-full"
+              />
+            )}
+
+            {(confirmedTalks.length > 0 || !latestBadge) && (
+              <SpeakerShareSidebar
+                speaker={speakerWithTalks}
+                talkTitle={talkTitle}
+                eventName={eventName}
+                baseDomain={domain}
+              />
+            )}
+
+            <DashboardSidebar />
+          </div>
         </div>
       </div>
     </div>
