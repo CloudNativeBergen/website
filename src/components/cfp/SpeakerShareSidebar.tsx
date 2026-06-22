@@ -1,4 +1,3 @@
-import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import { SpeakerShareWrapper } from '@/components/cfp/SpeakerShareWrapper'
 import { generateQRCode } from '@/components/SpeakerShare'
 import type { SpeakerWithTalks } from '@/lib/speaker/types'
@@ -23,18 +22,14 @@ export async function SpeakerShareSidebar({
   const qrCodeUrl = await generateQRCode(speakerUrl, 512, baseDomain)
 
   return (
-    <div className="space-y-4 lg:sticky lg:top-4">
-      <SpeakerShareWrapper
-        speakerUrl={fullSpeakerUrl}
-        talkTitle={talkTitle}
-        eventName={eventName}
-        speakerName={speaker.name}
-        qrCodeUrl={qrCodeUrl}
-        speaker={speaker}
-        className="w-full"
-      />
-
-      <DashboardSidebar />
-    </div>
+    <SpeakerShareWrapper
+      speakerUrl={fullSpeakerUrl}
+      talkTitle={talkTitle}
+      eventName={eventName}
+      speakerName={speaker.name}
+      qrCodeUrl={qrCodeUrl}
+      speaker={speaker}
+      className="w-full"
+    />
   )
 }

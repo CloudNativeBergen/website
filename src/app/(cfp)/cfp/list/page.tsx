@@ -265,22 +265,27 @@ export default async function SpeakerDashboard() {
 
         {/* Sidebar */}
         <div className="w-full shrink-0 space-y-4 lg:w-80">
-          {showBadgeInSidebar && latestBadge ? (
-            <BadgeShare
-              badge={latestBadge}
-              eventName={badgeEventName || 'Cloud Native Days Norway'}
-              domain={domain}
-              className="w-full"
-            />
-          ) : (
-            <SpeakerShareSidebar
-              speaker={speakerWithTalks}
-              talkTitle={talkTitle}
-              eventName={eventName}
-              baseDomain={domain}
-            />
-          )}
-          <DashboardSidebar />
+          <div className="space-y-4 lg:sticky lg:top-4">
+            {latestBadge && (
+              <BadgeShare
+                badge={latestBadge}
+                eventName={badgeEventName || 'Cloud Native Days Norway'}
+                domain={domain}
+                className="w-full"
+              />
+            )}
+
+            {(confirmedTalks.length > 0 || !latestBadge) && (
+              <SpeakerShareSidebar
+                speaker={speakerWithTalks}
+                talkTitle={talkTitle}
+                eventName={eventName}
+                baseDomain={domain}
+              />
+            )}
+
+            <DashboardSidebar />
+          </div>
         </div>
       </div>
     </div>
