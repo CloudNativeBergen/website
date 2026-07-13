@@ -83,6 +83,19 @@ describe('CreateProposalSchema', () => {
   })
 })
 
+describe('CreateProposalSchema speakers stripping', () => {
+  it('strips a speakers key from the draft data', () => {
+    const result = CreateProposalSchema.safeParse({
+      data: {
+        ...fullProposal,
+        speakers: [{ _type: 'reference', _ref: 'attacker-speaker' }],
+      },
+    })
+    expect(result.success).toBe(true)
+    expect(result.data?.data).not.toHaveProperty('speakers')
+  })
+})
+
 describe('ProposalInputSchema (strict)', () => {
   it('accepts a complete valid proposal', () => {
     const result = ProposalInputSchema.safeParse(fullProposal)
@@ -314,6 +327,15 @@ describe('ProposalUpdateSchema', () => {
       level: 'expert',
     })
     expect(result.success).toBe(false)
+  })
+
+  it('strips a speakers key so speaker-facing updates cannot rewrite the speakers array', () => {
+    const result = ProposalUpdateSchema.safeParse({
+      title: 'Updated',
+      speakers: [{ _type: 'reference', _ref: 'attacker-speaker' }],
+    })
+    expect(result.success).toBe(true)
+    expect(result.data).not.toHaveProperty('speakers')
   })
 })
 

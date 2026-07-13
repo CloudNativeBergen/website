@@ -3,13 +3,14 @@ import React from 'react'
 import crypto from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
-import type { Reference } from '@sanity/types'
 import {
   InvitationTokenPayload,
   CoSpeakerInvitationFull,
   InvitationStatus,
 } from './types'
+import { INVITATION_VALID_DAYS } from './constants'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
+import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
@@ -90,33 +91,36 @@ export function createInvitationToken(payload: InvitationTokenPayload): string {
   return `${encodedPayload}.${signature}`
 }
 
-interface InvitationUpdateData {
-  status: 'accepted' | 'declined'
-  respondedAt: string
-  acceptedSpeaker?: Reference
-}
-
-export async function updateInvitationStatus(
-  invitationId: string,
-  status: 'accepted' | 'declined',
-  acceptedSpeakerId?: string,
-): Promise<unknown> {
-  try {
-    const update: InvitationUpdateData = {
-      status,
-      respondedAt: new Date().toISOString(),
-    }
-
-    if (acceptedSpeakerId) {
-      update.acceptedSpeaker = createReference(acceptedSpeakerId)
-    }
-
-    const result = await clientWrite.patch(invitationId).set(update).commit()
-
-    return result
-  } catch (error) {
-    console.error('Error updating invitation status:', error)
-    throw error
+/**
+ * Builds the shared event-related email template context (protocol,
+ * event name/location/date/url) from the current conference and domain.
+ */
+function buildEmailEventContext(
+  conference: {
+    title?: string
+    city?: string
+    country?: string
+    startDate?: string
+    domains?: string[]
+  },
+  domain: string,
+): {
+  protocol: string
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+} {
+  return {
+    protocol: domain.includes('localhost') ? 'http://' : 'https://',
+    eventName: conference.title || 'Cloud Native Days',
+    eventLocation: conference.city
+      ? `${conference.city}, ${conference.country || 'Norway'}`
+      : 'Location TBA',
+    eventDate: conference.startDate ? formatDate(conference.startDate) : 'TBD',
+    eventUrl: conference.domains?.[0]
+      ? `https://${conference.domains[0]}`
+      : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
   }
 }
 
@@ -132,7 +136,7 @@ export async function createCoSpeakerInvitation(params: {
 }): Promise<CoSpeakerInvitationFull | null> {
   try {
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 14)
+    expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
 
     const tokenPayload: InvitationTokenPayload = {
       invitationId: '',
@@ -206,29 +210,22 @@ export async function sendInvitationEmail(
       domain,
       error: conferenceError,
     } = await getConferenceForCurrentDomain()
-    if (conferenceError || !conference) {
-      console.error('Error fetching conference data:', conferenceError)
+    if (conferenceError || !conference || !domain) {
+      console.error(
+        'Cannot send invitation email: failed to resolve conference or domain for current request',
+        conferenceError,
+      )
+      return false
     }
 
-    const protocol = domain.includes('localhost') ? 'http://' : 'https://'
+    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference, domain)
     const invitationUrl = `${protocol}${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     // TODO: Fetch proposal details when we can do so without speakerId
 
     const proposalAbstract =
       'Please view the full proposal details for more information.'
-
-    const eventName = conference?.title || 'Cloud Native Days'
-    const eventLocation = conference?.city
-      ? `${conference.city}, ${conference.country || 'Norway'}`
-      : 'Location TBA'
-    const eventDate = conference?.startDate
-      ? formatDate(conference.startDate)
-      : 'TBD'
-    const eventUrl =
-      conference && conference.domains?.[0]
-        ? `https://${conference.domains[0]}`
-        : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
     const proposalTitle =
       typeof invitation.proposal === 'object' && 'title' in invitation.proposal
@@ -282,6 +279,111 @@ export async function sendInvitationEmail(
     return result.success
   } catch (error) {
     console.error('Error sending invitation email:', error)
+    return false
+  }
+}
+
+export async function sendResponseNotificationEmail(params: {
+  invitation: CoSpeakerInvitationFull
+  respondentName: string
+  respondentEmail: string
+  accepted: boolean
+  declineReason?: string
+}): Promise<boolean> {
+  const { invitation, respondentName, respondentEmail, accepted } = params
+
+  try {
+    const inviterName =
+      typeof invitation.invitedBy === 'object' &&
+      invitation.invitedBy !== null &&
+      'name' in invitation.invitedBy
+        ? invitation.invitedBy.name
+        : undefined
+
+    const inviterEmail =
+      typeof invitation.invitedBy === 'object' &&
+      invitation.invitedBy !== null &&
+      'email' in invitation.invitedBy
+        ? invitation.invitedBy.email
+        : undefined
+
+    if (!inviterEmail) {
+      console.error(
+        'Cannot send co-speaker response notification: inviter email missing on invitation',
+        invitation._id,
+      )
+      return false
+    }
+
+    const {
+      conference,
+      domain,
+      error: conferenceError,
+    } = await getConferenceForCurrentDomain()
+    if (conferenceError || !conference || !domain) {
+      console.error(
+        'Cannot send co-speaker response notification: failed to resolve conference or domain for current request',
+        conferenceError,
+      )
+      return false
+    }
+
+    const proposalId =
+      typeof invitation.proposal === 'object' &&
+      invitation.proposal !== null &&
+      '_id' in invitation.proposal
+        ? invitation.proposal._id
+        : undefined
+
+    const proposalTitle =
+      typeof invitation.proposal === 'object' &&
+      invitation.proposal !== null &&
+      'title' in invitation.proposal &&
+      invitation.proposal.title
+        ? invitation.proposal.title
+        : 'your proposal'
+
+    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference, domain)
+    const proposalUrl = proposalId
+      ? `${protocol}${domain}/cfp/proposal/${proposalId}`
+      : `${protocol}${domain}/cfp/list`
+
+    const subject = accepted
+      ? `${respondentName} accepted your co-speaker invitation for "${proposalTitle}"`
+      : `${respondentName} declined your co-speaker invitation for "${proposalTitle}"`
+
+    if (AppEnvironment.isTestMode) {
+      console.log('[TEST MODE] Would send co-speaker response notification:')
+      console.log('To:', inviterEmail)
+      console.log('Subject:', subject)
+      return true
+    }
+
+    const result = await sendEmail({
+      to: inviterEmail,
+      subject,
+      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      component: CoSpeakerResponseTemplate,
+      props: {
+        inviterName: inviterName || 'there',
+        respondentName,
+        respondentEmail,
+        proposalTitle,
+        proposalUrl,
+        eventName,
+        eventLocation,
+        eventDate,
+        eventUrl,
+        accepted,
+        declineReason: params.declineReason,
+        socialLinks: conference.socialLinks || [],
+      },
+    })
+
+    return result.success
+  } catch (error) {
+    console.error('Error sending co-speaker response notification:', error)
     return false
   }
 }

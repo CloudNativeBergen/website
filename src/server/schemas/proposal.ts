@@ -104,7 +104,11 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
 // Draft proposal schema — derived from base with relaxed validation for drafts.
 // Fields that have strict validators in the base (description, audiences, topics,
 // tos) are overridden with permissive defaults so drafts can be saved early.
-const ProposalDraftSchema = ProposalInputBaseSchema.partial()
+// `speakers` is deliberately omitted: speaker-facing create/update must never
+// accept a speaker reference array (co-speakers are managed exclusively via
+// the invitation flow and the dedicated removeCoSpeaker mutation).
+const ProposalDraftSchema = ProposalInputBaseSchema.omit({ speakers: true })
+  .partial()
   .extend({
     description: z
       .array(z.any())
@@ -164,6 +168,11 @@ export const InvitationResponseSchema = z.object({
 
 export const InvitationCancelSchema = z.object({
   invitationId: z.string().min(1, 'Invitation ID is required'),
+})
+
+export const RemoveCoSpeakerSchema = z.object({
+  proposalId: z.string().min(1, 'Proposal ID is required'),
+  speakerId: z.string().min(1, 'Speaker ID is required'),
 })
 
 export const AudienceFeedbackSchema = z.object({

@@ -53,6 +53,20 @@ export enum Status {
   deleted = 'deleted',
 }
 
+/**
+ * Statuses in which a proposal is no longer active: co-speaker
+ * invitations cannot be sent to or accepted for such proposals.
+ */
+export const INACTIVE_PROPOSAL_STATUSES = [
+  Status.rejected,
+  Status.withdrawn,
+  Status.deleted,
+] as const
+
+export function isInactiveProposal(status: Status): boolean {
+  return (INACTIVE_PROPOSAL_STATUSES as readonly Status[]).includes(status)
+}
+
 export enum ReviewStatus {
   all = 'all',
   reviewed = 'reviewed',

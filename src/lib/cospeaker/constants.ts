@@ -27,6 +27,23 @@ export function allowsCoSpeakers(format: Format): boolean {
   return getCoSpeakerLimit(format) > 0
 }
 
+/** Number of days a co-speaker invitation stays valid after creation */
+export const INVITATION_VALID_DAYS = 14
+
+/**
+ * Whether an invitation can no longer be responded to: either it was
+ * already marked expired, or it is still pending but past its expiry date.
+ */
+export function isInvitationExpired(inv: {
+  status: string
+  expiresAt: string
+}): boolean {
+  return (
+    inv.status === 'expired' ||
+    (inv.status === 'pending' && new Date(inv.expiresAt) < new Date())
+  )
+}
+
 export function getSpeakerLimitDescription(format: Format): string {
   const coSpeakerLimit = getCoSpeakerLimit(format)
 

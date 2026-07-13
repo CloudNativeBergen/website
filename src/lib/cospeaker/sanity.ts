@@ -18,7 +18,7 @@ export async function getInvitationByToken(
     createdAt,
     _createdAt,
     _updatedAt,
-    proposal-> { _id, title },
+    proposal-> { _id, title, format, status },
     invitedBy-> { _id, name, email }
   }`
 
