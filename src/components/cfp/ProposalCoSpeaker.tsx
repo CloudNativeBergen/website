@@ -19,6 +19,7 @@ import {
   getSpeakerLimitDescription,
 } from '@/lib/cospeaker/constants'
 import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useState } from 'react'
 
 function getFormatDisplayName(format: Format): string {
@@ -40,22 +41,46 @@ function getFormatDisplayName(format: Format): string {
 
 interface ProposalCoSpeakerProps {
   selectedSpeakers: Speaker[]
-  onSpeakersChange: (speakers: Speaker[]) => void
+  /**
+   * Local-state fallback for removal: called with the filtered speaker
+   * list when no onRemoveSpeaker handler is provided (e.g. the admin
+   * modal, where speaker changes are persisted on form submit).
+   */
+  onSpeakersChange?: (speakers: Speaker[]) => void
+  /**
+   * Persist the removal of a single co-speaker (e.g. via the
+   * proposal.removeCoSpeaker mutation). Takes precedence over
+   * onSpeakersChange. May throw; the error message is shown inline.
+   */
+  onRemoveSpeaker?: (speakerId: string) => Promise<void> | void
   format: Format
   proposalId?: string
   pendingInvitations?: CoSpeakerInvitationMinimal[]
   onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
   onInvitationCanceled?: (invitationId: string) => void
+  /**
+   * Whether speakers can be removed from the list. Set to false in
+   * read-only contexts where removal is not available.
+   */
+  allowRemove?: boolean
+  /**
+   * Speaker id of the user viewing the page. The remove button is
+   * hidden on their own row — self-removal is blocked server-side.
+   */
+  currentUserSpeakerId?: string
 }
 
 export function ProposalCoSpeaker({
   selectedSpeakers,
   onSpeakersChange,
+  onRemoveSpeaker,
   format,
   proposalId,
   pendingInvitations = [],
   onInvitationSent,
   onInvitationCanceled,
+  allowRemove = true,
+  currentUserSpeakerId,
 }: ProposalCoSpeakerProps) {
   const maxCoSpeakers = getCoSpeakerLimit(format)
   const formatName = getFormatDisplayName(format)
@@ -80,6 +105,10 @@ export function ProposalCoSpeaker({
   } = useInvitations(onInvitationSent, onInvitationCanceled)
 
   const [missingProposalError, setMissingProposalError] = useState('')
+  const [speakerPendingRemoval, setSpeakerPendingRemoval] =
+    useState<Speaker | null>(null)
+  const [isRemovingSpeaker, setIsRemovingSpeaker] = useState(false)
+  const [removeError, setRemoveError] = useState('')
 
   const coSpeakers = selectedSpeakers
 
@@ -87,9 +116,37 @@ export function ProposalCoSpeaker({
     coSpeakers.length +
     pendingInvitations.filter((inv) => inv.status === 'pending').length
 
-  const handleRemoveSpeaker = (speakerId: string) => {
-    const newSpeakers = selectedSpeakers.filter((s) => s._id !== speakerId)
-    onSpeakersChange(newSpeakers)
+  const handleRemoveSpeaker = (speaker: Speaker) => {
+    setRemoveError('')
+    setSpeakerPendingRemoval(speaker)
+  }
+
+  const handleConfirmRemoveSpeaker = async () => {
+    if (!speakerPendingRemoval) return
+
+    if (onRemoveSpeaker) {
+      setIsRemovingSpeaker(true)
+      try {
+        await onRemoveSpeaker(speakerPendingRemoval._id)
+        setSpeakerPendingRemoval(null)
+      } catch (error) {
+        setRemoveError(
+          error instanceof Error
+            ? error.message
+            : 'Failed to remove co-speaker. Please try again.',
+        )
+        setSpeakerPendingRemoval(null)
+      } finally {
+        setIsRemovingSpeaker(false)
+      }
+    } else if (onSpeakersChange) {
+      onSpeakersChange(
+        selectedSpeakers.filter((s) => s._id !== speakerPendingRemoval._id),
+      )
+      setSpeakerPendingRemoval(null)
+    } else {
+      setSpeakerPendingRemoval(null)
+    }
   }
 
   const handleCancelInvitation = async (invitationId: string) => {
@@ -234,7 +291,7 @@ export function ProposalCoSpeaker({
           {pendingInvitations.length > 0 && (
             <div>
               <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium dark:text-blue-400">
-                Pending Invitations
+                Invitations
               </h4>
               <div className="space-y-2">
                 {pendingInvitations.map((invitation) => (
@@ -300,18 +357,28 @@ export function ProposalCoSpeaker({
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSpeaker(speaker._id)}
-                        className="text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        title="Remove co-speaker"
-                        aria-label={`Remove ${speaker.name} as co-speaker`}
-                      >
-                        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                      </button>
+                      {allowRemove && speaker._id !== currentUserSpeakerId && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSpeaker(speaker)}
+                          className="text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          title="Remove co-speaker"
+                          aria-label={`Remove ${speaker.name} as co-speaker`}
+                        >
+                          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {removeError && (
+              <div
+                className="text-sm text-red-600 dark:text-red-400"
+                role="alert"
+              >
+                {removeError}
               </div>
             )}
           </div>
@@ -480,6 +547,19 @@ export function ProposalCoSpeaker({
             </div>
           )}
         </>
+      )}
+
+      {speakerPendingRemoval && (
+        <ConfirmationModal
+          isOpen={true}
+          onClose={() => setSpeakerPendingRemoval(null)}
+          onConfirm={handleConfirmRemoveSpeaker}
+          title="Remove co-speaker?"
+          message={`This will remove ${speakerPendingRemoval.name} as a co-speaker from this proposal. They will need a new invitation to rejoin.`}
+          confirmButtonText="Remove"
+          variant="danger"
+          isLoading={isRemovingSpeaker}
+        />
       )}
     </div>
   )

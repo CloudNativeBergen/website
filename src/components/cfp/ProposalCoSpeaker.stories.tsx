@@ -199,6 +199,51 @@ export const MaxCoSpeakersReached: Story = {
   },
 }
 
+export const CoSpeakerViewingOwnRow: Story = {
+  args: {
+    selectedSpeakers: [
+      createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
+      createMockSpeaker('speaker-3', 'Sofia Berg', 'sofia@devops.io'),
+    ],
+    currentUserSpeakerId: 'speaker-2',
+    onSpeakersChange: fn(),
+    format: Format.workshop_120,
+    proposalId: 'proposal-123',
+    pendingInvitations: [],
+    onInvitationSent: fn(),
+    onInvitationCanceled: fn(),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'When the viewing user is one of the listed co-speakers (currentUserSpeakerId matches a row), the remove button is hidden on their own row — self-removal is blocked server-side — while other rows remain removable.',
+      },
+    },
+  },
+}
+
+export const ReadOnlySpeakerList: Story = {
+  args: {
+    selectedSpeakers: mockCoSpeakers,
+    onSpeakersChange: fn(),
+    format: Format.presentation_45,
+    proposalId: 'proposal-123',
+    pendingInvitations: mockPendingInvitations,
+    onInvitationSent: fn(),
+    onInvitationCanceled: fn(),
+    allowRemove: false,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'With allowRemove disabled (for read-only contexts), the remove buttons for existing co-speakers are hidden while invitations can still be sent and canceled.',
+      },
+    },
+  },
+}
+
 export const NoProposalId: Story = {
   args: {
     selectedSpeakers: [],

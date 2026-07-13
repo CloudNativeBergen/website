@@ -187,7 +187,10 @@ export default async function ProposalViewPage({
 
           {(proposal.status === 'confirmed' ||
             proposal.status === 'accepted') && (
-            <CoSpeakerManager proposal={proposal} />
+            <CoSpeakerManager
+              proposal={proposal}
+              currentUserSpeakerId={currentUserSpeaker._id}
+            />
           )}
         </div>
 
