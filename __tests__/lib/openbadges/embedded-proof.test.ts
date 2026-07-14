@@ -288,4 +288,41 @@ describe('Embedded proof - baked SVG round trip', () => {
       true,
     )
   })
+
+  it('round-trips and still verifies when a speaker-controlled field contains a CDATA terminator', async () => {
+    // A malicious/careless speaker name embeds the literal `]]>` (and markup).
+    // Naively baked into <![CDATA[...]]> it would close the section early,
+    // breaking extraction and injecting <script> into the downloaded SVG.
+    const hostileName = 'Foo]]><script>alert(1)</script>'
+    const credential = createCredential({
+      ...CREDENTIAL_CONFIG,
+      name: hostileName,
+    })
+    const signed = await signCredential(credential, {
+      privateKey: TEST_SEED,
+      verificationMethod: VERIFICATION_METHOD,
+    })
+
+    const baked = bakeBadge(SVG, signed)
+
+    // The escape must produce adjacent CDATA sections, and the raw `]]>` must
+    // never appear followed by injected markup outside a CDATA section.
+    expect(baked).toContain(']]]]><![CDATA[>')
+    expect(baked).not.toContain('Foo]]><script>')
+
+    const extracted = extractBadge(baked)
+    if (typeof extracted === 'string') {
+      throw new Error('Expected embedded-proof credential, got JWT')
+    }
+
+    // Byte-identical recovery of the signed credential (object equality).
+    expect(extracted).toEqual(signed)
+    expect(extracted.name).toBe(hostileName)
+
+    // Signature is intact after the transport-only escape round trip.
+    const { publicKeyMultibase } = await seedToMultikey(TEST_SEED)
+    await expect(verifyCredential(extracted, publicKeyMultibase)).resolves.toBe(
+      true,
+    )
+  })
 })

@@ -57,33 +57,44 @@ export async function GET(request: Request) {
     }
 
     // Ed25519 Multikey for embedded Data Integrity Proofs (optional; the
-    // profile still serves the RSA JWT key when the seed is not configured)
+    // profile still serves the RSA JWT key when no Ed25519 key is configured).
+    //
+    // External verifiers (Credly, verifybadge.org) dereference this profile to
+    // resolve the proof key, so verify-only / preview deployments that hold
+    // only the PUBLIC key must still publish it. Prefer the published public
+    // key directly (it IS the publicKeyMultibase); fall back to deriving the
+    // key from the secret seed when only the seed is present.
     const issuerId = `${baseUrl}/api/badge/issuer`
+    const ed25519PublicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
     const ed25519Seed = process.env.BADGE_ISSUER_ED25519_SEED
-    let ed25519VerificationMethod:
-      | {
-          id: string
-          type: 'Multikey'
-          controller: string
-          publicKeyMultibase: string
-        }
-      | undefined
-    if (ed25519Seed) {
+    let publicKeyMultibase: string | undefined
+    if (ed25519PublicKey && ed25519PublicKey.startsWith('z')) {
+      // The published public key is already a multibase Ed25519 Multikey.
+      publicKeyMultibase = ed25519PublicKey
+    } else if (ed25519Seed) {
       try {
-        const { publicKeyMultibase } = await seedToMultikey(ed25519Seed)
-        ed25519VerificationMethod = {
-          id: `${issuerId}#key-ed25519`,
-          type: 'Multikey',
-          controller: issuerId,
-          publicKeyMultibase,
-        }
+        publicKeyMultibase = (await seedToMultikey(ed25519Seed))
+          .publicKeyMultibase
       } catch (seedError) {
         console.error(
           'Invalid BADGE_ISSUER_ED25519_SEED; omitting Ed25519 verification method:',
           seedError,
         )
       }
+    } else if (ed25519PublicKey) {
+      console.error(
+        'BADGE_ISSUER_ED25519_PUBLIC_KEY is not a multibase Ed25519 key (expected "z" prefix); omitting Ed25519 verification method',
+      )
     }
+
+    const ed25519VerificationMethod = publicKeyMultibase
+      ? {
+          id: `${issuerId}#key-ed25519`,
+          type: 'Multikey' as const,
+          controller: issuerId,
+          publicKeyMultibase,
+        }
+      : undefined
 
     // Return issuer profile
     // The profile doubles as the controller document for embedded proofs:

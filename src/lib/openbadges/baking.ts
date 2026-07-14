@@ -96,10 +96,18 @@ function bakeDataIntegrityProof(
       svgTag = svgTag.replace('>', ` xmlns:openbadges="${OB_NAMESPACE}">`)
     }
 
+    // Speaker-controlled fields (name, talk title, evidence narrative) can
+    // contain the literal `]]>`, which would close the CDATA section early —
+    // breaking extraction and injecting markup into the downloaded SVG. Use
+    // the standard CDATA-split escape: `]]>` becomes two adjacent CDATA
+    // sections (`]]]]><![CDATA[>`) that a compliant parser concatenates back to
+    // the exact original bytes. This is transport-only: the extracted JSON is
+    // byte-identical, so the eddsa-rdfc-2022 signature stays intact.
     const credentialJson = JSON.stringify(credential, null, 2)
       .split('\n')
       .map((line) => `      ${line}`)
       .join('\n')
+      .replaceAll(']]>', ']]]]><![CDATA[>')
 
     const credentialTag = `  <openbadges:credential>
     <![CDATA[
@@ -144,10 +152,20 @@ export function extractBadge(svg: string): SignedCredential | string {
       return verifyMatch[1]
     }
 
-    // Otherwise extract from CDATA (Data Integrity Proof format)
+    // Otherwise extract from CDATA (Data Integrity Proof format). The baked
+    // credential may contain MULTIPLE adjacent CDATA sections when a
+    // speaker-controlled field held the literal `]]>` (see bake escape). A
+    // compliant XML parser concatenates adjacent sections, so we join the
+    // contents of ALL sections to recover the exact original signed JSON.
     const content = credentialMatch[1]
-    const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/)
-    const credentialString = cdataMatch ? cdataMatch[1].trim() : content.trim()
+    const cdataSections = [...content.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)]
+    const credentialString =
+      cdataSections.length > 0
+        ? cdataSections
+            .map((section) => section[1])
+            .join('')
+            .trim()
+        : content.trim()
 
     // Check if it's a JWT (starts with "eyJ")
     if (credentialString.startsWith('eyJ')) {
