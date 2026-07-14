@@ -236,6 +236,32 @@ export const ManySpeakers: Story = {
   },
 }
 
+export const Mobile: Story = {
+  args: {
+    speakers: mockSpeakers,
+    currentConferenceId: 'conf-2025',
+    onEditSpeaker: fn(),
+    onPreviewSpeaker: fn(),
+  },
+  parameters: {
+    viewport: {
+      viewports: {
+        mobile360: {
+          name: 'Mobile 360px',
+          styles: { width: '360px', height: '740px' },
+        },
+      },
+      defaultViewport: 'mobile360',
+    },
+    docs: {
+      description: {
+        story:
+          'Below `md`, the wide speaker table collapses into a stacked card layout — no horizontal scroll on a phone. Each card shows the speaker name, title, indicators, email, and talks with status badges, plus the action menu.',
+      },
+    },
+  },
+}
+
 export const WithoutConferenceFilter: Story = {
   args: {
     speakers: mockSpeakers,

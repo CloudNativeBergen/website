@@ -3,6 +3,7 @@
 import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
+import { DataTable, type Column } from '@/components/DataTable'
 import type {
   WorkshopSignupExisting,
   WorkshopSignupStatus,
@@ -35,6 +36,62 @@ export function SignupDetailsModal({
     ? status.charAt(0).toUpperCase() + status.slice(1)
     : ''
 
+  const columns: Column<WorkshopSignupExisting>[] = [
+    {
+      key: 'userName',
+      header: 'Name',
+      primary: true,
+      render: (signup) => (
+        <div className="text-sm font-medium text-gray-900 dark:text-white">
+          {signup.userName}
+        </div>
+      ),
+    },
+    {
+      key: 'userEmail',
+      header: 'Email',
+      render: (signup) => (
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          {signup.userEmail}
+        </div>
+      ),
+    },
+    {
+      key: 'signedUpAt',
+      header: 'Signup Date',
+      render: (signup) => {
+        const dateStr = signup.signedUpAt || signup._createdAt
+        if (!dateStr || typeof dateStr !== 'string') return 'N/A'
+        return new Date(dateStr).toLocaleDateString()
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (signup) => (
+        <div className="flex items-center gap-2">
+          {signup.status === 'waitlist' && (
+            <button
+              onClick={() => onConfirmSignup(signup._id, signup.userName)}
+              disabled={isConfirming || isDeleting}
+              className="text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
+            >
+              Move to Confirmed
+            </button>
+          )}
+          <button
+            onClick={() => onDeleteSignup(signup._id, signup.userName)}
+            disabled={isConfirming || isDeleting}
+            className="text-gray-600 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-red-400"
+            title="Delete participant"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <ModalShell
       isOpen={isOpen}
@@ -63,87 +120,14 @@ export function SignupDetailsModal({
           </DialogTitle>
 
           <div className="mt-4">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Signup Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                  {signups.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="py-8 text-center text-gray-500 dark:text-gray-400"
-                      >
-                        No {status} signups for this workshop
-                      </td>
-                    </tr>
-                  ) : (
-                    signups.map((signup) => (
-                      <tr key={signup._id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {signup.userName}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {signup.userEmail}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                          {(() => {
-                            const dateStr =
-                              signup.signedUpAt || signup._createdAt
-                            if (!dateStr || typeof dateStr !== 'string')
-                              return 'N/A'
-                            return new Date(dateStr).toLocaleDateString()
-                          })()}
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {signup.status === 'waitlist' && (
-                              <button
-                                onClick={() =>
-                                  onConfirmSignup(signup._id, signup.userName)
-                                }
-                                disabled={isConfirming || isDeleting}
-                                className="text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
-                              >
-                                Move to Confirmed
-                              </button>
-                            )}
-                            <button
-                              onClick={() =>
-                                onDeleteSignup(signup._id, signup.userName)
-                              }
-                              disabled={isConfirming || isDeleting}
-                              className="text-gray-600 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-red-400"
-                              title="Delete participant"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<WorkshopSignupExisting>
+              data={signups}
+              columns={columns}
+              keyExtractor={(signup) => signup._id}
+              emptyState={{
+                title: `No ${status ?? ''} signups for this workshop`,
+              }}
+            />
           </div>
         </div>
       </div>

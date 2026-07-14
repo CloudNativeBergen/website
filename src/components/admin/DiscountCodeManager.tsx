@@ -21,6 +21,7 @@ import {
   ActionMenuItem,
   ActionMenuDivider,
 } from '@/components/ActionMenu'
+import { DataTable, type Column } from '@/components/DataTable'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 
@@ -402,6 +403,306 @@ export function DiscountCodeManager({
     })
   }
 
+  const statusColorClasses = {
+    scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    expired: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+    permanent: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+  }
+
+  const customDiscountColumns: Column<EventDiscountWithUsage>[] = [
+    {
+      key: 'code',
+      header: 'Discount Code',
+      primary: true,
+      render: (discount) => (
+        <div className="flex items-center space-x-2">
+          <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {discount.triggerValue || 'N/A'}
+          </span>
+          {discount.triggerValue && (
+            <button
+              onClick={() => copyToClipboard(discount.triggerValue || '')}
+              className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="Copy discount code"
+            >
+              <ClipboardIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (discount) => (
+        <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs leading-5 font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          {discount.type} {discount.value}%
+        </span>
+      ),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      render: (discount) => (
+        <span className="text-sm text-gray-900 dark:text-white">
+          {discount.affects === 'total' ? 'Total Order' : discount.affects}
+          {discount.affectsValue && ` (${discount.affectsValue})`}
+        </span>
+      ),
+    },
+    {
+      key: 'usage',
+      header: 'Usage',
+      render: (discount) => (
+        <div>
+          <div className="text-sm text-gray-900 dark:text-white">
+            {discountData?.hasUsageData
+              ? `${discount.actualUsage?.usageCount || 0} / ${discount.timesTotal || '∞'}`
+              : `${discount.times || 0} / ${discount.timesTotal || '∞'}`}
+          </div>
+          <div className="text-xs text-gray-500">
+            {discount.timesTotal
+              ? discountData?.hasUsageData
+                ? `${Math.round(((discount.actualUsage?.usageCount || 0) / discount.timesTotal) * 100)}% used`
+                : `${Math.round(((discount.times || 0) / discount.timesTotal) * 100)}% used (estimated)`
+              : 'No limit'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (discount) => {
+        const statusInfo = getDiscountStatus(discount)
+        return (
+          <span
+            className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${statusColorClasses[statusInfo.status as keyof typeof statusColorClasses]}`}
+          >
+            {statusInfo.label}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'affects',
+      header: 'Affects',
+      cardHidden: true,
+      render: (discount) => (
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          {discount.ticketsOnly ? 'Tickets Only' : 'All Items'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (discount) => (
+        <button
+          onClick={() => deleteDiscountCode(discount.triggerValue)}
+          disabled={loading === discount.triggerValue}
+          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+          title="Delete Code"
+        >
+          {loading === discount.triggerValue ? (
+            <ArrowPathIcon className="h-4 w-4 animate-spin" />
+          ) : (
+            <TrashIcon className="h-4 w-4" />
+          )}
+        </button>
+      ),
+    },
+  ]
+
+  const sponsorColumns: Column<SponsorWithTierInfo>[] = [
+    {
+      key: 'sponsor',
+      header: 'Sponsor',
+      primary: true,
+      render: (sponsor) => (
+        <div>
+          <div className="text-sm font-medium text-gray-900 dark:text-white">
+            {sponsor.name}
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {sponsor.website}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'tierUsage',
+      header: 'Tier & Usage',
+      render: (sponsor) => {
+        const { used, total } = getSponsorUsageStats(sponsor)
+        const pillClass =
+          used === 0
+            ? 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
+            : used > total
+              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+              : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+        return (
+          <div className="space-y-1">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${pillClass}`}
+            >
+              {sponsor.tier.title}
+            </span>
+            <div className="text-sm text-gray-900 dark:text-white">
+              <span>
+                <span className="font-medium">{used}</span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {' '}
+                  / {total}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  {' '}
+                  tickets
+                </span>
+              </span>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'eligible',
+      header: 'Eligible Ticket Types',
+      render: (sponsor) =>
+        sponsor.ticketEntitlement > 0 &&
+        getSponsorDiscounts(sponsor).length === 0 ? (
+          <FilterDropdown
+            label={
+              discountsLoading
+                ? 'Loading...'
+                : getSelectedTicketTypesDisplay(sponsor.id)
+            }
+            activeCount={selectedTicketTypes[sponsor.id]?.length || 0}
+            width="wider"
+            position="left"
+            fixedWidth={true}
+          >
+            {availableTicketTypes.map((ticketType) => (
+              <FilterOption
+                key={ticketType.id}
+                onClick={() =>
+                  toggleTicketType(sponsor.id, String(ticketType.id))
+                }
+                checked={
+                  selectedTicketTypes[sponsor.id]?.includes(
+                    String(ticketType.id),
+                  ) || false
+                }
+                type="checkbox"
+                keepOpen={true}
+              >
+                {ticketType.name}
+              </FilterOption>
+            ))}
+          </FilterDropdown>
+        ) : getSponsorDiscounts(sponsor).length > 0 ? (
+          <div className="text-sm text-gray-900 dark:text-white">
+            <div className="font-medium">
+              {getExistingDiscountTicketTypes(sponsor)}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Discount code created
+            </div>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            No ticket entitlement
+          </span>
+        ),
+    },
+    {
+      key: 'codes',
+      header: 'Discount Codes',
+      render: (sponsor) =>
+        getSponsorDiscounts(sponsor).length > 0 ? (
+          <div className="space-y-1">
+            {getSponsorDiscounts(sponsor).map((discount, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                  {discount.triggerValue || 'N/A'}
+                </span>
+                <button
+                  onClick={() => copyToClipboard(discount.triggerValue || '')}
+                  className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                  title="Copy discount code"
+                >
+                  <ClipboardIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            No codes created
+          </span>
+        ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (sponsor) =>
+        getSponsorDiscounts(sponsor).length > 0 ? (
+          <ActionMenu ariaLabel={`Actions for ${sponsor.name}`}>
+            <ActionMenuItem
+              onClick={() => {
+                const sponsorDiscounts = getSponsorDiscounts(sponsor)
+                if (sponsorDiscounts.length > 0) {
+                  openEmailModal(
+                    sponsor,
+                    sponsorDiscounts[0].triggerValue || '',
+                  )
+                }
+              }}
+              icon={EnvelopeIcon}
+              disabled={loading !== null}
+            >
+              Send Email
+            </ActionMenuItem>
+            <ActionMenuDivider />
+            <ActionMenuItem
+              onClick={() => {
+                const sponsorDiscounts = getSponsorDiscounts(sponsor)
+                if (sponsorDiscounts.length > 0) {
+                  deleteDiscountCode(sponsorDiscounts[0].triggerValue)
+                }
+              }}
+              icon={TrashIcon}
+              variant="danger"
+              disabled={
+                getSponsorDiscounts(sponsor).length > 0 &&
+                loading === getSponsorDiscounts(sponsor)[0]?.triggerValue
+              }
+            >
+              {getSponsorDiscounts(sponsor).length > 0 &&
+              loading === getSponsorDiscounts(sponsor)[0]?.triggerValue
+                ? 'Deleting...'
+                : 'Delete Code'}
+            </ActionMenuItem>
+          </ActionMenu>
+        ) : (
+          <button
+            onClick={() => createDiscountCode(sponsor)}
+            disabled={loading === sponsor.id || sponsor.ticketEntitlement === 0}
+            className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
+            title="Create Code"
+          >
+            {loading === sponsor.id ? (
+              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+            ) : (
+              <PlusIcon className="h-4 w-4" />
+            )}
+          </button>
+        ),
+    },
+  ]
+
   return (
     <div className="space-y-6">
       {discountsLoading && (
@@ -430,134 +731,16 @@ export function DiscountCodeManager({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Discount Code
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Value
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Usage
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Affects
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              {customDiscounts.map((discount, index) => (
-                <tr
-                  key={index}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                        {discount.triggerValue || 'N/A'}
-                      </span>
-                      {discount.triggerValue && (
-                        <button
-                          onClick={() =>
-                            copyToClipboard(discount.triggerValue || '')
-                          }
-                          className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                          title="Copy discount code"
-                        >
-                          <ClipboardIcon className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs leading-5 font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                      {discount.type} {discount.value}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                    {discount.affects === 'total'
-                      ? 'Total Order'
-                      : discount.affects}
-                    {discount.affectsValue && ` (${discount.affectsValue})`}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">
-                      {discountData?.hasUsageData
-                        ? `${discount.actualUsage?.usageCount || 0} / ${discount.timesTotal || '∞'}`
-                        : `${discount.times || 0} / ${discount.timesTotal || '∞'}`}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {discount.timesTotal
-                        ? discountData?.hasUsageData
-                          ? `${Math.round(((discount.actualUsage?.usageCount || 0) / discount.timesTotal) * 100)}% used`
-                          : `${Math.round(((discount.times || 0) / discount.timesTotal) * 100)}% used (estimated)`
-                        : 'No limit'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {(() => {
-                      const statusInfo = getDiscountStatus(discount)
-                      const colorClasses = {
-                        scheduled:
-                          'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                        active:
-                          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                        expired:
-                          'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                        permanent:
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-                      }
-                      return (
-                        <span
-                          className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${colorClasses[statusInfo.status as keyof typeof colorClasses]}`}
-                        >
-                          {statusInfo.label}
-                        </span>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                    {discount.ticketsOnly ? 'Tickets Only' : 'All Items'}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
-                    <button
-                      onClick={() => deleteDiscountCode(discount.triggerValue)}
-                      disabled={loading === discount.triggerValue}
-                      className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
-                      title="Delete Code"
-                    >
-                      {loading === discount.triggerValue ? (
-                        <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <TrashIcon className="h-4 w-4" />
-                      )}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-4">
+          <DataTable<EventDiscountWithUsage>
+            data={customDiscounts}
+            columns={customDiscountColumns}
+            keyExtractor={(discount, index) =>
+              discount.triggerValue || String(index)
+            }
+            emptyState={{ title: 'No custom discount codes found' }}
+          />
         </div>
-
-        {customDiscounts.length === 0 && (
-          <div className="py-12 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              No custom discount codes found
-            </p>
-          </div>
-        )}
       </div>
 
       <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
@@ -570,254 +753,19 @@ export function DiscountCodeManager({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Sponsor
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Tier & Usage
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Eligible Ticket Types
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Discount Codes
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              {sponsors.map((sponsor) => {
-                const { used, total } = getSponsorUsageStats(sponsor)
-                const isOverLimit = used > total
-                return (
-                  <tr
-                    key={sponsor.id}
-                    className={
-                      isOverLimit
-                        ? 'bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/40'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-                    }
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {sponsor.name}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {sponsor.website}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(() => {
-                            const { used, total } =
-                              getSponsorUsageStats(sponsor)
-                            if (used === 0) {
-                              return 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
-                            } else if (used > total) {
-                              return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                            } else {
-                              return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                            }
-                          })()}`}
-                        >
-                          {sponsor.tier.title}
-                        </span>
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {(() => {
-                            const { used, total } =
-                              getSponsorUsageStats(sponsor)
-                            return (
-                              <span>
-                                <span className="font-medium">{used}</span>
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {' '}
-                                  / {total}
-                                </span>
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {' '}
-                                  tickets
-                                </span>
-                              </span>
-                            )
-                          })()}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {sponsor.ticketEntitlement > 0 &&
-                      getSponsorDiscounts(sponsor).length === 0 ? (
-                        <FilterDropdown
-                          label={
-                            discountsLoading
-                              ? 'Loading...'
-                              : getSelectedTicketTypesDisplay(sponsor.id)
-                          }
-                          activeCount={
-                            selectedTicketTypes[sponsor.id]?.length || 0
-                          }
-                          width="wider"
-                          position="left"
-                          fixedWidth={true}
-                        >
-                          {availableTicketTypes.map((ticketType) => (
-                            <FilterOption
-                              key={ticketType.id}
-                              onClick={() =>
-                                toggleTicketType(
-                                  sponsor.id,
-                                  String(ticketType.id),
-                                )
-                              }
-                              checked={
-                                selectedTicketTypes[sponsor.id]?.includes(
-                                  String(ticketType.id),
-                                ) || false
-                              }
-                              type="checkbox"
-                              keepOpen={true}
-                            >
-                              {ticketType.name}
-                            </FilterOption>
-                          ))}
-                        </FilterDropdown>
-                      ) : getSponsorDiscounts(sponsor).length > 0 ? (
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          <div className="font-medium">
-                            {getExistingDiscountTicketTypes(sponsor)}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Discount code created
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          No ticket entitlement
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {getSponsorDiscounts(sponsor).length > 0 ? (
-                        <div className="space-y-1">
-                          {getSponsorDiscounts(sponsor).map(
-                            (discount, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center space-x-2"
-                              >
-                                <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                                  {discount.triggerValue || 'N/A'}
-                                </span>
-                                <button
-                                  onClick={() =>
-                                    copyToClipboard(discount.triggerValue || '')
-                                  }
-                                  className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                                  title="Copy discount code"
-                                >
-                                  <ClipboardIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          No codes created
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm whitespace-nowrap">
-                      {getSponsorDiscounts(sponsor).length > 0 ? (
-                        <ActionMenu ariaLabel={`Actions for ${sponsor.name}`}>
-                          <ActionMenuItem
-                            onClick={() => {
-                              const sponsorDiscounts =
-                                getSponsorDiscounts(sponsor)
-                              if (sponsorDiscounts.length > 0) {
-                                openEmailModal(
-                                  sponsor,
-                                  sponsorDiscounts[0].triggerValue || '',
-                                )
-                              }
-                            }}
-                            icon={EnvelopeIcon}
-                            disabled={loading !== null}
-                          >
-                            Send Email
-                          </ActionMenuItem>
-                          <ActionMenuDivider />
-                          <ActionMenuItem
-                            onClick={() => {
-                              const sponsorDiscounts =
-                                getSponsorDiscounts(sponsor)
-                              if (sponsorDiscounts.length > 0) {
-                                deleteDiscountCode(
-                                  sponsorDiscounts[0].triggerValue,
-                                )
-                              }
-                            }}
-                            icon={TrashIcon}
-                            variant="danger"
-                            disabled={
-                              getSponsorDiscounts(sponsor).length > 0 &&
-                              loading ===
-                                getSponsorDiscounts(sponsor)[0]?.triggerValue
-                            }
-                          >
-                            {getSponsorDiscounts(sponsor).length > 0 &&
-                            loading ===
-                              getSponsorDiscounts(sponsor)[0]?.triggerValue
-                              ? 'Deleting...'
-                              : 'Delete Code'}
-                          </ActionMenuItem>
-                        </ActionMenu>
-                      ) : (
-                        <button
-                          onClick={() => createDiscountCode(sponsor)}
-                          disabled={
-                            loading === sponsor.id ||
-                            sponsor.ticketEntitlement === 0
-                          }
-                          className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
-                          title="Create Code"
-                        >
-                          {loading === sponsor.id ? (
-                            <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <PlusIcon className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="p-4">
+          <DataTable<SponsorWithTierInfo>
+            data={sponsors}
+            columns={sponsorColumns}
+            keyExtractor={(sponsor) => sponsor.id}
+            emptyState={{
+              icon: ExclamationTriangleIcon,
+              title: 'No sponsors found',
+              description:
+                'Add sponsors to the conference to manage their discount codes.',
+            }}
+          />
         </div>
-
-        {sponsors.length === 0 && (
-          <div className="py-12 text-center">
-            <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No sponsors found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Add sponsors to the conference to manage their discount codes.
-            </p>
-          </div>
-        )}
       </div>
 
       {emailModal.sponsor && (

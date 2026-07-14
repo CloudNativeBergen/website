@@ -6,6 +6,7 @@ import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin'
+import { DataTable, type Column } from '@/components/DataTable'
 import { AdobeSignConfigPanel } from './AdobeSignConfigPanel'
 import { ConferenceOrgInfoPanel } from './ConferenceOrgInfoPanel'
 import { SigningProviderPanel } from './SigningProviderPanel'
@@ -37,6 +38,83 @@ export function ContractTemplateListPage({
     isLoading,
     refetch,
   } = api.sponsor.contractTemplates.list.useQuery({})
+
+  type ContractTemplate = NonNullable<typeof templates>[number]
+
+  const columns: Column<ContractTemplate>[] = [
+    {
+      key: 'title',
+      header: 'Template',
+      primary: true,
+      render: (template) => (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {template.title}
+          </span>
+          {template.isDefault && (
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              Default
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'language',
+      header: 'Language',
+      render: (template) =>
+        template.language === 'nb' ? '🇳🇴 Norwegian' : '🇬🇧 English',
+    },
+    {
+      key: 'tier',
+      header: 'Tier',
+      render: (template) => template.tier?.title || '—',
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (template) =>
+        template.isActive ? (
+          <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+            <CheckCircleIcon className="h-4 w-4" />
+            Active
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-sm text-gray-400 dark:text-gray-500">
+            <XCircleIcon className="h-4 w-4" />
+            Inactive
+          </span>
+        ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (template) => (
+        <div className="flex items-center justify-end gap-2">
+          <Link
+            href={`/admin/sponsors/contracts/${template._id}`}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+            title="Edit"
+          >
+            <PencilSquareIcon className="h-4 w-4" />
+          </Link>
+          <button
+            onClick={() =>
+              setDeleteTarget({
+                _id: template._id,
+                title: template.title,
+              })
+            }
+            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            title="Delete"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </div>
+      ),
+    },
+  ]
 
   const deleteMutation = api.sponsor.contractTemplates.delete.useMutation({
     onSuccess: () => {
@@ -85,113 +163,27 @@ export function ContractTemplateListPage({
         <div className="py-12 text-center text-gray-500 dark:text-gray-400">
           Loading templates...
         </div>
-      ) : !templates || templates.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center dark:border-gray-700">
-          <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-            No contract templates
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Create your first contract template to start generating sponsor
-            agreements.
-          </p>
-          <div className="mt-6">
-            <Link
-              href="/admin/sponsors/contracts/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <PlusIcon className="h-4 w-4" />
-              New Template
-            </Link>
-          </div>
-        </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Template
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Language
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Tier
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              {templates.map((template) => (
-                <tr
-                  key={template._id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {template.title}
-                      </span>
-                      {template.isDefault && (
-                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                          Default
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                    {template.language === 'nb' ? '🇳🇴 Norwegian' : '🇬🇧 English'}
-                  </td>
-                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                    {template.tier?.title || '—'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {template.isActive ? (
-                      <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                        <CheckCircleIcon className="h-4 w-4" />
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-sm text-gray-400 dark:text-gray-500">
-                        <XCircleIcon className="h-4 w-4" />
-                        Inactive
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/admin/sponsors/contracts/${template._id}`}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-                        title="Edit"
-                      >
-                        <PencilSquareIcon className="h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() =>
-                          setDeleteTarget({
-                            _id: template._id,
-                            title: template.title,
-                          })
-                        }
-                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                        title="Delete"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<ContractTemplate>
+          data={templates ?? []}
+          columns={columns}
+          keyExtractor={(template) => template._id}
+          emptyState={{
+            icon: DocumentTextIcon,
+            title: 'No contract templates',
+            description:
+              'Create your first contract template to start generating sponsor agreements.',
+            action: (
+              <Link
+                href="/admin/sponsors/contracts/new"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <PlusIcon className="h-4 w-4" />
+                New Template
+              </Link>
+            ),
+          }}
+        />
       )}
 
       <ConfirmationModal

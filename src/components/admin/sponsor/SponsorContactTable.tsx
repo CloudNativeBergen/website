@@ -141,7 +141,7 @@ export function SponsorContactTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div>
       {/* Editor Modal */}
       <Transition appear show={!!editingSponsor} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={handleCloseEdit}>
@@ -200,7 +200,136 @@ export function SponsorContactTable({
         </Dialog>
       </Transition>
 
-      <TableContainer>
+      <div className="space-y-3 md:hidden">
+        {contactRows.map((row, index) => (
+          <div
+            key={`${row.sfc._id}-${row.contact._key}-${index}`}
+            className="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
+                  <BuildingOffice2Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                  <span className="truncate">{row.sfc.sponsor.name}</span>
+                </div>
+                {row.sfc.sponsor.orgNumber && (
+                  <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    Org: {row.sfc.sponsor.orgNumber}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => handleStartEdit(row.sfc)}
+                className="inline-flex shrink-0 cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                title="Manage contacts"
+              >
+                <PencilIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            <dl className="mt-3 space-y-2">
+              <div className="flex justify-between gap-3">
+                <dt className="shrink-0 text-gray-500 dark:text-gray-400">
+                  Contact
+                </dt>
+                <dd className="text-right text-gray-900 dark:text-gray-200">
+                  {row.contact.name || (
+                    <span className="text-gray-500 italic dark:text-gray-400">
+                      No contact person
+                    </span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="shrink-0 text-gray-500 dark:text-gray-400">
+                  Email
+                </dt>
+                <dd className="flex min-w-0 items-center justify-end text-right text-gray-900 dark:text-gray-200">
+                  {row.contact.email ? (
+                    <>
+                      <a
+                        href={`mailto:${row.contact.email}`}
+                        className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                        title={row.contact.email}
+                      >
+                        {row.contact.email}
+                      </a>
+                      <CopyEmailButton email={row.contact.email} />
+                    </>
+                  ) : (
+                    <span className="text-gray-500 italic dark:text-gray-400">
+                      No email
+                    </span>
+                  )}
+                </dd>
+              </div>
+              {row.contact.phone && (
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-gray-500 dark:text-gray-400">
+                    Phone
+                  </dt>
+                  <dd className="text-right text-gray-900 dark:text-gray-200">
+                    <a
+                      href={`tel:${row.contact.phone}`}
+                      className="hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      {row.contact.phone}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {row.contact.role && (
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-gray-500 dark:text-gray-400">
+                    Role
+                  </dt>
+                  <dd className="text-right text-gray-900 dark:text-gray-200">
+                    {row.contact.role}
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            {row.isFirstContactForSponsor &&
+              row.sfc.billing &&
+              row.sfc.billing.email && (
+                <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+                  <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Billing
+                  </div>
+                  <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                    <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                    <a
+                      href={`mailto:${row.sfc.billing.email}`}
+                      className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                      title={row.sfc.billing.email}
+                    >
+                      {row.sfc.billing.email}
+                    </a>
+                    <CopyEmailButton email={row.sfc.billing.email} />
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {row.sfc.billing.invoiceFormat === 'ehf'
+                      ? 'EHF (Digital)'
+                      : 'PDF via Email'}
+                  </div>
+                  {row.sfc.billing.reference && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Ref: {row.sfc.billing.reference}
+                    </div>
+                  )}
+                  {row.sfc.billing.comments && (
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {row.sfc.billing.comments}
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>
+        ))}
+      </div>
+
+      <TableContainer className="hidden md:block">
         <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
           <TableHeader>
             <tr>
