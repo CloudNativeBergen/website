@@ -1,29 +1,32 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactElement } from 'react'
 import { sendAcceptRejectNotification } from '@/lib/proposal/email/notification'
 import type { NotificationParams } from '@/lib/proposal/email/types'
 import { Action } from '@/lib/proposal/types'
 import { resend } from '@/lib/email/config'
-import {
-  ProposalAcceptTemplate,
-  ProposalRejectTemplate,
-  ProposalWaitlistTemplate,
-} from '@/components/email'
 
-vi.mock('@/lib/email/config', () => ({
-  resend: {
-    emails: {
-      send: vi.fn(),
+// Only the external boundary (the Resend client) is mocked; templates and
+// the retry helper run for real so their integration is covered
+vi.mock('@/lib/email/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/email/config')>()
+  return {
+    ...actual,
+    resend: {
+      emails: {
+        send: vi.fn(),
+      },
     },
-  },
-}))
-
-vi.mock('@/components/email', () => ({
-  ProposalAcceptTemplate: vi.fn(() => 'accept-template'),
-  ProposalRejectTemplate: vi.fn(() => 'reject-template'),
-  ProposalWaitlistTemplate: vi.fn(() => 'waitlist-template'),
-}))
+  }
+})
 
 const mockSendEmail = vi.mocked(resend.emails.send)
+
+function lastSentMarkup(): string {
+  const lastCall = mockSendEmail.mock.calls.at(-1)
+  if (!lastCall) throw new Error('resend.emails.send was not called')
+  return renderToStaticMarkup((lastCall[0] as { react: ReactElement }).react)
+}
 
 function createParams(
   overrides: Partial<NotificationParams> = {},
@@ -61,6 +64,10 @@ describe('sendAcceptRejectNotification', () => {
     } as never)
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('throws for invalid actions', async () => {
     await expect(
       sendAcceptRejectNotification(createParams({ action: Action.submit })),
@@ -78,23 +85,18 @@ describe('sendAcceptRejectNotification', () => {
         subject: '🎉 Your proposal has been accepted for Cloud Native Day',
       }),
     )
-    expect(ProposalAcceptTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        speakerName: 'Test Speaker',
-        proposalTitle: 'Test Proposal',
-        confirmUrl: 'https://example.com/cfp/list?confirm=proposal-1',
-      }),
-    )
+    const markup = lastSentMarkup()
+    expect(markup).toContain('Test Speaker')
+    expect(markup).toContain('Test Proposal')
+    expect(markup).toContain('https://example.com/cfp/list?confirm=proposal-1')
     expect(result).toEqual({ id: 'email-id' })
   })
 
   it('uses the accept template with confirm URL for remind action', async () => {
     await sendAcceptRejectNotification(createParams({ action: Action.remind }))
 
-    expect(ProposalAcceptTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        confirmUrl: 'https://example.com/cfp/list?confirm=proposal-1',
-      }),
+    expect(lastSentMarkup()).toContain(
+      'https://example.com/cfp/list?confirm=proposal-1',
     )
   })
 
@@ -109,9 +111,7 @@ describe('sendAcceptRejectNotification', () => {
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: ['co@example.com'] }),
     )
-    expect(ProposalRejectTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({ speakerName: 'Co Speaker' }),
-    )
+    expect(lastSentMarkup()).toContain('Co Speaker')
   })
 
   it('uses the waitlist template for waitlist action', async () => {
@@ -119,19 +119,42 @@ describe('sendAcceptRejectNotification', () => {
       createParams({ action: Action.waitlist }),
     )
 
-    expect(ProposalWaitlistTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({ speakerName: 'Test Speaker' }),
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: 'Your proposal has been waitlisted for Cloud Native Day',
+      }),
     )
+    expect(lastSentMarkup()).toContain('Test Speaker')
   })
 
-  it('throws when resend returns an error', async () => {
+  it('throws when resend returns a non-retryable error', async () => {
     mockSendEmail.mockResolvedValue({
       data: null,
-      error: { message: 'rate limited', name: 'rate_limit_exceeded' },
+      error: { message: 'invalid recipient', name: 'validation_error' },
     } as never)
 
     await expect(sendAcceptRejectNotification(createParams())).rejects.toThrow(
-      'Failed to send email: rate limited',
+      'Failed to send email: invalid recipient',
     )
+    expect(mockSendEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries rate-limited sends with backoff and succeeds', async () => {
+    vi.useFakeTimers()
+    mockSendEmail
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Too many requests', name: 'rate_limit_exceeded' },
+      } as never)
+      .mockResolvedValueOnce({
+        data: { id: 'email-retry' },
+        error: null,
+      } as never)
+
+    const promise = sendAcceptRejectNotification(createParams())
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(promise).resolves.toEqual({ id: 'email-retry' })
+    expect(mockSendEmail).toHaveBeenCalledTimes(2)
   })
 })

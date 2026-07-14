@@ -4,7 +4,7 @@ import {
   ProposalRejectTemplate,
   ProposalWaitlistTemplate,
 } from '@/components/email'
-import { resend } from '@/lib/email/config'
+import { resend, retryWithBackoff } from '@/lib/email/config'
 import {
   NotificationParams,
   createTemplateProps,
@@ -68,16 +68,20 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
   const subject = getEmailSubject(action, params.event.name)
   const template = getEmailTemplate(action, templateProps)
 
-  const { data, error } = await resend.emails.send({
-    from: `${params.event.organizer} <${params.event.contactEmail}>`,
-    to: [params.speaker.email],
-    subject: subject,
-    react: template,
+  // Retry transient provider failures (e.g. rate limits) with backoff,
+  // consistent with the other email flows in the codebase
+  return retryWithBackoff(async () => {
+    const { data, error } = await resend.emails.send({
+      from: `${params.event.organizer} <${params.event.contactEmail}>`,
+      to: [params.speaker.email],
+      subject: subject,
+      react: template,
+    })
+
+    if (error) {
+      throw new Error(`Failed to send email: ${error.message}`)
+    }
+
+    return data
   })
-
-  if (error) {
-    throw new Error(`Failed to send email: ${error.message}`)
-  }
-
-  return data
 }

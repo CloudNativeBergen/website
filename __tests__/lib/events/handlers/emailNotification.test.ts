@@ -129,6 +129,18 @@ describe('handleEmailNotification', () => {
     }
   })
 
+  it('sends to the trimmed email address, matching the dedup key', async () => {
+    const speakers = [
+      createSpeaker({ email: ' padded@example.com ' }),
+      createSpeaker({ _id: 'speaker-dup', email: 'padded@example.com' }),
+    ]
+
+    await handleEmailNotification(createEvent(speakers))
+
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(mockSend.mock.calls[0][0].speaker.email).toBe('padded@example.com')
+  })
+
   it('de-duplicates recipients by email address (case-insensitive)', async () => {
     const speakers = [
       createSpeaker(),
@@ -166,7 +178,10 @@ describe('handleEmailNotification', () => {
   it('warns and returns when no speaker has an email address', async () => {
     const speakers = [
       createSpeaker({ email: '' }),
-      createSpeaker({ _id: 'speaker-2', email: undefined as unknown as string }),
+      createSpeaker({
+        _id: 'speaker-2',
+        email: undefined as unknown as string,
+      }),
     ]
 
     await handleEmailNotification(createEvent(speakers))

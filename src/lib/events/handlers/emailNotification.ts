@@ -1,5 +1,4 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
-import { Speaker } from '@/lib/speaker/types'
 import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
@@ -22,19 +21,23 @@ export async function handleEmailNotification(
   }
 
   // Notify every speaker on the proposal (primary speaker and co-speakers),
-  // de-duplicated by email address (case-insensitive) to guard against dirty data.
+  // de-duplicated by email address (case-insensitive) to guard against dirty
+  // data. The trimmed address is also what gets sent to, so the dedup key
+  // and the recipient can never diverge.
   const seenEmails = new Set<string>()
-  const recipients = event.speakers.filter((speaker) => {
-    if (!speaker.email) {
-      return false
+  const recipients: Array<{ name: string; email: string }> = []
+  for (const speaker of event.speakers) {
+    const email = speaker.email?.trim()
+    if (!email) {
+      continue
     }
-    const normalizedEmail = speaker.email.trim().toLowerCase()
-    if (!normalizedEmail || seenEmails.has(normalizedEmail)) {
-      return false
+    const key = email.toLowerCase()
+    if (seenEmails.has(key)) {
+      continue
     }
-    seenEmails.add(normalizedEmail)
-    return true
-  })
+    seenEmails.add(key)
+    recipients.push({ name: speaker.name, email })
+  }
 
   if (recipients.length === 0) {
     console.warn(
@@ -72,8 +75,12 @@ export async function handleEmailNotification(
   const failures = results
     .map((result, index) => ({ result, speaker: recipients[index] }))
     .filter(
-      (entry): entry is { result: PromiseRejectedResult; speaker: Speaker } =>
-        entry.result.status === 'rejected',
+      (
+        entry,
+      ): entry is {
+        result: PromiseRejectedResult
+        speaker: { name: string; email: string }
+      } => entry.result.status === 'rejected',
     )
 
   if (failures.length > 0) {
