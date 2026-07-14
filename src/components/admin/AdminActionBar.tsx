@@ -208,8 +208,14 @@ export function AdminActionBar({
           {speakers.length > 0 && (
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Speaker:
+                {speakers.length > 1 ? 'Speakers:' : 'Speaker:'}
               </span>
+              {speakers.length > 1 && (
+                <span className="text-xs whitespace-nowrap text-gray-500 dark:text-gray-400">
+                  +{speakers.length - 1} co-speaker
+                  {speakers.length > 2 ? 's' : ''}
+                </span>
+              )}
               <div className="flex items-center gap-1">
                 {isSeasonedSpeaker && (
                   <div
@@ -271,7 +277,11 @@ export function AdminActionBar({
               color="purple"
               size="xs"
               onClick={handlePreviewSpeaker}
-              title="Preview speaker profile (⌘P)"
+              title={
+                speakers.length > 1
+                  ? `Preview first speaker profile of ${speakers.length} speakers (⌘P)`
+                  : 'Preview speaker profile (⌘P)'
+              }
             >
               <EyeIcon className="h-3 w-3" />
               Preview

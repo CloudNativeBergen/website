@@ -34,10 +34,10 @@ export async function getWorkshopSignups(
         title,
         format,
         description,
-        "speaker": speaker->{
+        "speakers": speakers[]->{
           name,
           "slug": slug.current,
-          organization
+          title
         }
       }
     }
@@ -213,13 +213,13 @@ export async function getWorkshopById(
         120
       ),
       "capacity": coalesce(capacity, 30),
-      "speaker": speakers[0]->{
+      "speakers": speakers[]->{
         _id,
         name,
         "slug": slug.current,
+        title,
         bio,
-        "avatar": coalesce(image.asset->url, imageURL),
-        company
+        "image": coalesce(image.asset->url, imageURL)
       },
       "signupCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])
     }

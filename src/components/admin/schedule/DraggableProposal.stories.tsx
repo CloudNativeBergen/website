@@ -143,6 +143,43 @@ export const Workshop: Story = {
   },
 }
 
+export const MultipleSpeakers: Story = {
+  args: {
+    proposal: createMockProposal({
+      _id: 'proposal-multi-speaker',
+      title: 'Panel: Platform Engineering in Practice',
+      speakers: [
+        {
+          _id: 'speaker-1',
+          _rev: '1',
+          _createdAt: '2024-01-01T00:00:00Z',
+          _updatedAt: '2024-01-01T00:00:00Z',
+          name: 'Alice Johnson',
+          email: 'alice@example.com',
+          slug: 'alice-johnson',
+        },
+        {
+          _id: 'speaker-2',
+          _rev: '1',
+          _createdAt: '2024-01-01T00:00:00Z',
+          _updatedAt: '2024-01-01T00:00:00Z',
+          name: 'Bob Hansen',
+          email: 'bob@example.com',
+          slug: 'bob-hansen',
+        },
+      ],
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Shows all speaker names for talks with multiple speakers, formatted with formatSpeakerNames.',
+      },
+    },
+  },
+}
+
 export const AcceptedNotConfirmed: Story = {
   args: {
     proposal: createMockProposal({
