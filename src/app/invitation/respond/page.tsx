@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
+import {
+  isInvitationExpired,
+  INVITATION_VALID_DAYS,
+} from '@/lib/cospeaker/constants'
 import InvitationResponseClient from '@/components/InvitationResponseClient'
 import { AppEnvironment } from '@/lib/environment'
 import { DevBanner } from '@/components/DevBanner'
@@ -64,7 +68,7 @@ export default async function InvitationResponsePage({
             </h2>
             <p className="text-red-600">
               This invitation link is either invalid or has expired. Co-speaker
-              invitations are valid for 14 days.
+              invitations are valid for {INVITATION_VALID_DAYS} days.
             </p>
           </div>
         </div>
@@ -72,13 +76,16 @@ export default async function InvitationResponsePage({
     )
   }
 
-  if (invitation.status !== 'pending') {
-    const statusMessage =
-      invitation.status === 'accepted'
+  const isExpired = isInvitationExpired(invitation)
+
+  if (invitation.status !== 'pending' || isExpired) {
+    const statusMessage = isExpired
+      ? `This invitation has expired. Co-speaker invitations are valid for ${INVITATION_VALID_DAYS} days.`
+      : invitation.status === 'accepted'
         ? 'You have already accepted this invitation.'
         : invitation.status === 'declined'
           ? 'You have already declined this invitation.'
-          : 'This invitation has expired.'
+          : 'This invitation is no longer available.'
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -114,12 +121,12 @@ export default async function InvitationResponsePage({
         ? {
             _id: invitation.proposal._id,
             title: invitation.proposal.title || 'Unknown Proposal',
-            format: 'talk' as const,
+            format: invitation.proposal.format || 'talk',
           }
         : {
             _id: 'unknown',
             title: 'Unknown Proposal',
-            format: 'talk' as const,
+            format: 'talk',
           },
     expiresAt: invitation.expiresAt,
   }

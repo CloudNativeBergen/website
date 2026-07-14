@@ -33,7 +33,6 @@ export function ProposalForm({
   allowedFormats,
   currentUserSpeaker,
   mode = 'user',
-  externalSpeakerIds,
   initialStatus,
 }: {
   initialProposal: ProposalInput
@@ -44,20 +43,21 @@ export function ProposalForm({
   allowedFormats: Format[]
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
-  externalSpeakerIds?: string[]
   initialStatus?: Status
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
+  // Co-speakers are all proposal speakers except the primary speaker
+  // (speakers[0]) — viewer-independent, so the list is also correct when
+  // a co-speaker (or impersonating organizer) is viewing the form
   const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(() => {
     if (initialProposal.speakers && Array.isArray(initialProposal.speakers)) {
-      return initialProposal.speakers.filter(
-        (s): s is Speaker =>
-          typeof s === 'object' &&
-          s &&
-          '_id' in s &&
-          s._id !== currentUserSpeaker._id,
-      )
+      return initialProposal.speakers
+        .filter(
+          (s): s is Speaker =>
+            typeof s === 'object' && s !== null && '_id' in s,
+        )
+        .slice(1)
     }
     return []
   })
@@ -117,6 +117,20 @@ export function ProposalForm({
 
   const updateSpeakerMutation = api.speaker.update.useMutation()
 
+  const removeCoSpeakerMutation = api.proposal.removeCoSpeaker.useMutation()
+
+  const handleRemoveCoSpeaker = async (speakerId: string) => {
+    if (!currentProposalId) return
+    await removeCoSpeakerMutation.mutateAsync({
+      proposalId: currentProposalId,
+      speakerId,
+    })
+    setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
+    // The server also cancels the speaker's accepted invitation; refresh so
+    // the invitations list doesn't keep showing a stale "accepted" badge
+    router.refresh()
+  }
+
   const [confirmAction, setConfirmAction] = useState<Action | null>(null)
 
   const isDraft = initialStatus === Status.draft || !currentProposalId
@@ -156,13 +170,12 @@ export function ProposalForm({
       .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
       .map((t) => ({ _type: 'reference' as const, _ref: t._id }))
 
+  // Note: speakers are deliberately not part of the payload. The server
+  // manages the speakers array via the invitation flow and the dedicated
+  // removeCoSpeaker mutation, so saving the form can never clobber
+  // co-speakers who joined while the form was open.
   const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()
-
-    const allSpeakers =
-      mode === 'admin' && externalSpeakerIds
-        ? externalSpeakerIds
-        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
 
     return {
       title: proposal.title,
@@ -176,10 +189,6 @@ export function ProposalForm({
       capacity: proposal.capacity,
       prerequisites: proposal.prerequisites,
       topics: topicRefs,
-      speakers: allSpeakers.map((id) => ({
-        _type: 'reference' as const,
-        _ref: id,
-      })),
     }
   }
 
@@ -380,7 +389,8 @@ export function ProposalForm({
             <div className="border-b border-brand-frosted-steel pb-12">
               <ProposalCoSpeaker
                 selectedSpeakers={coSpeakers}
-                onSpeakersChange={setCoSpeakers}
+                currentUserSpeakerId={currentUserSpeaker._id}
+                onRemoveSpeaker={handleRemoveCoSpeaker}
                 format={proposal.format}
                 proposalId={currentProposalId}
                 pendingInvitations={coSpeakerInvitations}

@@ -276,12 +276,74 @@ export async function updateProposal(
   return { proposal: updatedProposal, err }
 }
 
+/**
+ * Document types that only exist in service of a proposal and are safe to
+ * cascade-delete together with it.
+ */
+const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
+
+/**
+ * Human readable descriptions for document types that block deletion of a
+ * proposal. Any other unexpected referencing type falls back to its raw
+ * `_type` name.
+ */
+const BLOCKING_TYPE_DESCRIPTIONS: Record<string, string> = {
+  schedule: 'a published schedule',
+  conference: 'a conference (featured talks)',
+  workshopSignup: 'workshop signups',
+}
+
+/**
+ * Returned by deleteProposal when the proposal cannot be deleted because
+ * other documents (schedules, featured talks, workshop signups, ...) still
+ * reference it. Callers can distinguish this precondition failure from
+ * unexpected internal errors.
+ */
+export class ProposalDeletionBlockedError extends Error {}
+
 export async function deleteProposal(
   proposalId: string,
 ): Promise<{ err: Error | null }> {
   let err = null
   try {
-    await clientWrite.delete(proposalId)
+    // Find every document that references this proposal. Sanity refuses to
+    // delete a document with inbound strong references, so we must handle
+    // them up front instead of surfacing a raw 409 to the user.
+    const referencingDocs = await clientRead.fetch<
+      Array<{ _id: string; _type: string }>
+    >(groq`*[references($proposalId) && _id != $proposalId]{ _id, _type }`, {
+      proposalId,
+    })
+
+    const docs = referencingDocs ?? []
+
+    const blocking = docs.filter(
+      (doc) => !CASCADE_DELETE_TYPES.includes(doc._type),
+    )
+
+    if (blocking.length > 0) {
+      const descriptions = Array.from(
+        new Set(
+          blocking.map(
+            (doc) => BLOCKING_TYPE_DESCRIPTIONS[doc._type] ?? doc._type,
+          ),
+        ),
+      )
+      return {
+        err: new ProposalDeletionBlockedError(
+          `Cannot delete proposal: it is referenced by ${descriptions.join(' and ')}. Remove those references first.`,
+        ),
+      }
+    }
+
+    // Delete dependent documents (co-speaker invitations and reviews) and
+    // the proposal itself in a single atomic transaction.
+    const transaction = clientWrite.transaction()
+    for (const doc of docs) {
+      transaction.delete(doc._id)
+    }
+    transaction.delete(proposalId)
+    await transaction.commit()
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error

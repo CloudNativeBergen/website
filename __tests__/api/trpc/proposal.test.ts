@@ -23,14 +23,18 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(),
 }))
 
-vi.mock('@/lib/proposal/data/sanity', () => ({
-  getProposal: vi.fn(),
-  getProposals: vi.fn(),
-  createProposal: vi.fn(),
-  updateProposal: vi.fn(),
-  deleteProposal: vi.fn(),
-  updateProposalStatus: vi.fn(),
-}))
+vi.mock('@/lib/proposal/data/sanity', () => {
+  class ProposalDeletionBlockedError extends Error {}
+  return {
+    getProposal: vi.fn(),
+    getProposals: vi.fn(),
+    createProposal: vi.fn(),
+    updateProposal: vi.fn(),
+    deleteProposal: vi.fn(),
+    updateProposalStatus: vi.fn(),
+    ProposalDeletionBlockedError,
+  }
+})
 
 vi.mock('@/lib/proposal/server', () => ({
   updateProposalStatus: vi.fn(),
@@ -55,6 +59,8 @@ import {
   getProposal,
   getProposals,
   createProposal,
+  deleteProposal,
+  ProposalDeletionBlockedError,
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { isCfpOpen } from '@/lib/conference/state'
@@ -523,6 +529,86 @@ describe('proposal router', () => {
       await expect(
         caller.proposal.action({ id: 'nonexistent', action: Action.withdraw }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    })
+
+    it('should surface PRECONDITION_FAILED when deleting a draft is blocked by references', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new ProposalDeletionBlockedError(
+          'Cannot delete proposal: it is referenced by a published schedule. Remove those references first.',
+        ),
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.delete }),
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: expect.stringContaining('referenced by a published schedule'),
+      })
+    })
+
+    it('should keep INTERNAL_SERVER_ERROR for unexpected deletion failures', async () => {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new Error('network exploded'),
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.delete }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete proposal',
+      })
+    })
+  })
+
+  describe('admin.delete', () => {
+    it('should delete the proposal for an organizer', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({ err: null })
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.admin.delete({ id: 'proposal-1' })
+      expect(result).toEqual({ success: true })
+      expect(deleteProposal).toHaveBeenCalledWith('proposal-1')
+    })
+
+    it('should surface PRECONDITION_FAILED with the descriptive message when blocked', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new ProposalDeletionBlockedError(
+          'Cannot delete proposal: it is referenced by workshop signups. Remove those references first.',
+        ),
+      })
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.admin.delete({ id: 'proposal-1' }),
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Cannot delete proposal: it is referenced by workshop signups. Remove those references first.',
+      })
+    })
+
+    it('should keep INTERNAL_SERVER_ERROR for unexpected deletion failures', async () => {
+      vi.mocked(deleteProposal).mockResolvedValue({
+        err: new Error('network exploded'),
+      })
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.admin.delete({ id: 'proposal-1' }),
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete proposal',
+      })
     })
   })
 })

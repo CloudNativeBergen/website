@@ -7,6 +7,7 @@ import {
   InvitationCreateSchema,
   InvitationResponseSchema,
   InvitationCancelSchema,
+  RemoveCoSpeakerSchema,
   AudienceFeedbackSchema,
 } from '@/server/schemas/proposal'
 import { Language, Format, Level, Audience, Action } from '@/lib/proposal/types'
@@ -80,6 +81,19 @@ describe('CreateProposalSchema', () => {
       status: 'accepted',
     })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('CreateProposalSchema speakers stripping', () => {
+  it('strips a speakers key from the draft data', () => {
+    const result = CreateProposalSchema.safeParse({
+      data: {
+        ...fullProposal,
+        speakers: [{ _type: 'reference', _ref: 'attacker-speaker' }],
+      },
+    })
+    expect(result.success).toBe(true)
+    expect(result.data?.data).not.toHaveProperty('speakers')
   })
 })
 
@@ -315,6 +329,15 @@ describe('ProposalUpdateSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('strips a speakers key so speaker-facing updates cannot rewrite the speakers array', () => {
+    const result = ProposalUpdateSchema.safeParse({
+      title: 'Updated',
+      speakers: [{ _type: 'reference', _ref: 'attacker-speaker' }],
+    })
+    expect(result.success).toBe(true)
+    expect(result.data).not.toHaveProperty('speakers')
+  })
 })
 
 describe('InvitationCreateSchema', () => {
@@ -407,6 +430,32 @@ describe('InvitationCancelSchema', () => {
 
   it('rejects empty invitationId', () => {
     const result = InvitationCancelSchema.safeParse({ invitationId: '' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('RemoveCoSpeakerSchema', () => {
+  it('accepts well-formed Sanity ids', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: 'drafts.talk-1_a',
+      speakerId: 'speaker-2',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects ids with JSONMatch metacharacters', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: 'talk-1',
+      speakerId: 'x"] || _ref match "*',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty ids', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: '',
+      speakerId: 'speaker-2',
+    })
     expect(result.success).toBe(false)
   })
 })

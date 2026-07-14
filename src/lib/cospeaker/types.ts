@@ -1,3 +1,5 @@
+import type { Format, Status } from '@/lib/proposal/types'
+
 export const INVITATION_STATUSES = [
   'pending',
   'accepted',
@@ -40,6 +42,8 @@ export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
     | {
         _id: string
         title?: string
+        format?: Format
+        status?: Status
       }
   invitedBy?:
     | {
@@ -73,6 +77,13 @@ export interface InvitationTokenPayload {
 
 export function formatProposalFormat(format: string): string {
   const formats: Record<string, string> = {
+    lightning_10: 'Lightning Talk (10 min)',
+    presentation_20: 'Presentation (20 min)',
+    presentation_25: 'Presentation (25 min)',
+    presentation_40: 'Presentation (40 min)',
+    presentation_45: 'Presentation (45 min)',
+    workshop_120: 'Workshop (2 hours)',
+    workshop_240: 'Workshop (4 hours)',
     'lightning-talk': 'Lightning Talk (10 min)',
     'standard-talk': 'Standard Talk (40 min)',
     workshop: 'Workshop (2 hours)',

@@ -17,6 +17,7 @@ import {
   InvitationCreateSchema,
   InvitationResponseSchema,
   InvitationCancelSchema,
+  RemoveCoSpeakerSchema,
   IdParamSchema,
   ProposalActionSchema,
   AudienceFeedbackSchema,
@@ -30,21 +31,30 @@ import {
   createProposal,
   updateProposal,
   deleteProposal,
+  ProposalDeletionBlockedError,
 } from '@/lib/proposal/data/sanity'
 import { Attachment } from '@/lib/attachment/types'
 import {
   createCoSpeakerInvitation,
-  updateInvitationStatus,
   sendInvitationEmail,
+  sendResponseNotificationEmail,
 } from '@/lib/cospeaker/server'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
+import {
+  getCoSpeakerLimit,
+  isInvitationExpired,
+} from '@/lib/cospeaker/constants'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
-import { Action, Status } from '@/lib/proposal/types'
+import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
-import { countActiveProposals } from '@/lib/proposal/utils'
+import {
+  countActiveProposals,
+  extractSpeakerIds,
+  extractSpeakersFromProposal,
+} from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
 import { eventBus } from '@/lib/events/bus'
@@ -375,9 +385,12 @@ export const proposalRouter = router({
           return existing
         }
 
-        // Enforce strict validation for non-draft proposals
+        // Enforce strict validation for non-draft proposals. The existing
+        // proposal has dereferenced speaker objects (not references) and
+        // the update payload never contains speakers, so exclude them from
+        // the merged document before validating.
         if (existing.status !== Status.draft) {
-          const merged = { ...existing, ...input.data }
+          const merged = { ...existing, ...input.data, speakers: undefined }
           const strict = ProposalInputSchema.safeParse(merged)
           if (!strict.success) {
             const fieldErrors = strict.error.issues.map((i) => i.message)
@@ -412,6 +425,112 @@ export const proposalRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update proposal',
+          cause: error,
+        })
+      }
+    }),
+
+  // Remove a co-speaker from a proposal. Speakers on the proposal can
+  // remove other speakers (not themselves); organizers can remove anyone.
+  removeCoSpeaker: protectedProcedure
+    .input(RemoveCoSpeakerSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const isOrganizer = ctx.speaker.isOrganizer === true
+
+        // getProposal scopes the query to the caller's speaker id unless
+        // they are an organizer, so this doubles as the ownership check
+        const { proposal, proposalError } = await getProposal({
+          id: input.proposalId,
+          speakerId: ctx.speaker._id,
+          isOrganizer,
+        })
+
+        if (proposalError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch proposal',
+            cause: proposalError,
+          })
+        }
+
+        if (!proposal || !proposal._id) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message:
+              'Proposal not found or you do not have permission to manage its speakers',
+          })
+        }
+
+        if (!isOrganizer && input.speakerId === ctx.speaker._id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'You cannot remove yourself from a proposal. Ask a co-speaker to remove you, or contact the organizers.',
+          })
+        }
+
+        const speakerIds = extractSpeakerIds(proposal.speakers)
+
+        if (!speakerIds.includes(input.speakerId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This person is not currently a speaker on this proposal.',
+          })
+        }
+
+        // speakers[0] is the proposal's primary speaker (its author).
+        // Only organizers may remove them.
+        if (!isOrganizer && input.speakerId === speakerIds[0]) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'The primary speaker cannot be removed from the proposal. Contact the organizers if this is needed.',
+          })
+        }
+
+        if (speakerIds.length <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'Cannot remove the only speaker on this proposal. A proposal must always have at least one speaker.',
+          })
+        }
+
+        // Find accepted invitations tied to this speaker so they can be
+        // canceled together with the removal (otherwise the invitation
+        // list would keep showing a stale "accepted" entry)
+        const invitationIds = await clientWrite.fetch<string[]>(
+          `*[_type == "coSpeakerInvitation"
+            && proposal._ref == $proposalId
+            && status == "accepted"
+            && acceptedSpeaker._ref == $speakerId]._id`,
+          { proposalId: input.proposalId, speakerId: input.speakerId },
+        )
+
+        // Remove the speaker reference and cancel their accepted
+        // invitation(s) in a single atomic transaction
+        const transaction = clientWrite.transaction()
+
+        transaction.patch(input.proposalId, (patch) =>
+          patch.unset([`speakers[_ref=="${input.speakerId}"]`]),
+        )
+
+        for (const invitationId of invitationIds || []) {
+          transaction.patch(invitationId, (patch) =>
+            patch.set({ status: 'canceled' as InvitationStatus }),
+          )
+        }
+
+        await transaction.commit()
+
+        return { success: true }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to remove co-speaker',
           cause: error,
         })
       }
@@ -504,6 +623,12 @@ export const proposalRouter = router({
         if (status === Status.deleted) {
           const { err: deleteError } = await deleteProposal(id)
           if (deleteError) {
+            if (deleteError instanceof ProposalDeletionBlockedError) {
+              throw new TRPCError({
+                code: 'PRECONDITION_FAILED',
+                message: deleteError.message,
+              })
+            }
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to delete proposal',
@@ -738,6 +863,12 @@ export const proposalRouter = router({
         const { err } = await deleteProposal(input.id)
 
         if (err) {
+          if (err instanceof ProposalDeletionBlockedError) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: err.message,
+            })
+          }
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete proposal',
@@ -1313,6 +1444,71 @@ export const proposalRouter = router({
             })
           }
 
+          // Reject invitations on proposals that are no longer active
+          if (isInactiveProposal(proposal.status)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Cannot invite co-speakers to a proposal that has been ${proposal.status}.`,
+            })
+          }
+
+          const invitedEmail = input.invitedEmail.toLowerCase()
+
+          // Reject self-invitations
+          if (invitedEmail === ctx.speaker.email?.toLowerCase()) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'You cannot invite yourself as a co-speaker.',
+            })
+          }
+
+          // Reject if the invitee is already a speaker on the proposal
+          // (dangling speaker refs dereference to null and are filtered out)
+          const existingSpeakers = extractSpeakersFromProposal(proposal)
+          if (
+            existingSpeakers.some(
+              (s) => s.email?.toLowerCase() === invitedEmail,
+            )
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'This person is already a speaker on this proposal and does not need an invitation.',
+            })
+          }
+
+          // Reject duplicate pending invitations for the same email
+          const pendingInvitations = (
+            proposal.coSpeakerInvitations || []
+          ).filter((inv) => inv.status === 'pending')
+          if (
+            pendingInvitations.some(
+              (inv) => inv.invitedEmail?.toLowerCase() === invitedEmail,
+            )
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'A pending invitation already exists for this email address. Cancel it before sending a new one.',
+            })
+          }
+
+          // Enforce the co-speaker limit for the proposal format,
+          // counting both current co-speakers and pending invitations
+          const coSpeakerLimit = getCoSpeakerLimit(proposal.format)
+          const speakerCount = extractSpeakerIds(proposal.speakers).length
+          const currentCoSpeakers =
+            Math.max(speakerCount - 1, 0) + pendingInvitations.length
+          if (currentCoSpeakers >= coSpeakerLimit) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                coSpeakerLimit === 0
+                  ? 'This talk format does not allow co-speakers.'
+                  : `This talk format allows at most ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}, and that limit is already reached by current speakers and pending invitations.`,
+            })
+          }
+
           // Create invitation
           const conferenceId =
             '_id' in proposal.conference
@@ -1392,6 +1588,9 @@ export const proposalRouter = router({
             })
           }
 
+          // Verify ownership before revealing or mutating expiry state:
+          // a non-invitee holding a leaked token must not trigger the
+          // expired write or learn whether the invitation has expired
           if (
             invitation.invitedEmail.toLowerCase() !==
             ctx.speaker.email.toLowerCase()
@@ -1403,21 +1602,46 @@ export const proposalRouter = router({
             })
           }
 
-          // Update invitation status
-          const status = input.accept ? 'accepted' : 'declined'
-          await updateInvitationStatus(
-            invitation._id,
-            status,
-            input.accept ? ctx.speaker._id : undefined,
-          )
+          // Enforce expiry server-side
+          if (isInvitationExpired(invitation)) {
+            try {
+              await clientWrite
+                .patch(invitation._id)
+                .set({ status: 'expired' as InvitationStatus })
+                .commit()
+            } catch (expireError) {
+              console.error(
+                'Failed to mark invitation as expired:',
+                expireError,
+              )
+            }
 
-          // If accepted, add speaker to proposal
-          if (
-            input.accept &&
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'This invitation has expired and can no longer be accepted or declined.',
+            })
+          }
+
+          const status = input.accept ? 'accepted' : 'declined'
+
+          // The invitation query dereferences the proposal, so a resolvable
+          // proposal always carries an _id (dangling refs come back null)
+          const proposalId =
             typeof invitation.proposal === 'object' &&
-            '_ref' in invitation.proposal
-          ) {
-            const proposalId = invitation.proposal._ref
+            invitation.proposal !== null &&
+            '_id' in invitation.proposal
+              ? invitation.proposal._id
+              : undefined
+
+          if (input.accept) {
+            if (!proposalId) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'The proposal for this invitation no longer exists, so the invitation cannot be accepted.',
+              })
+            }
 
             const { proposal } = await getProposal({
               id: proposalId,
@@ -1425,29 +1649,76 @@ export const proposalRouter = router({
               isOrganizer: true,
             })
 
-            if (proposal) {
-              const currentSpeakers = proposal.speakers || []
-              const speakerIds = currentSpeakers
-                .filter((s) => typeof s === 'object' && '_id' in s)
-                .map((s) => (s as { _id: string })._id)
-
-              if (!speakerIds.includes(ctx.speaker._id)) {
-                await clientWrite
-                  .patch(proposalId)
-                  .setIfMissing({ speakers: [] })
-                  .append('speakers', [createReferenceWithKey(ctx.speaker._id)])
-                  .commit()
-              }
+            if (!proposal || !proposal._id) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message:
+                  'The proposal for this invitation no longer exists, so the invitation cannot be accepted.',
+              })
             }
-          }
 
-          // If declined, save decline reason
-          if (!input.accept && input.declineReason) {
+            if (isInactiveProposal(proposal.status)) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `This invitation can no longer be accepted because the proposal has been ${proposal.status}.`,
+              })
+            }
+
+            const speakerIds = extractSpeakerIds(proposal.speakers)
+
+            // Add the speaker to the proposal and mark the invitation
+            // accepted in a single atomic transaction so a failed append
+            // can never leave an accepted invitation without a speaker
+            const transaction = clientWrite.transaction()
+
+            if (!speakerIds.includes(ctx.speaker._id)) {
+              transaction.patch(proposalId, (patch) =>
+                patch
+                  .setIfMissing({ speakers: [] })
+                  .append('speakers', [
+                    createReferenceWithKey(ctx.speaker._id),
+                  ]),
+              )
+            }
+
+            transaction.patch(invitation._id, (patch) =>
+              patch.set({
+                status: 'accepted' as InvitationStatus,
+                respondedAt: new Date().toISOString(),
+                acceptedSpeaker: createReference(ctx.speaker._id),
+              }),
+            )
+
+            await transaction.commit()
+          } else {
+            // Mark declined (including the optional reason) in one patch
             await clientWrite
               .patch(invitation._id)
-              .set({ declineReason: input.declineReason })
+              .set({
+                status: 'declined' as InvitationStatus,
+                respondedAt: new Date().toISOString(),
+                ...(input.declineReason
+                  ? { declineReason: input.declineReason }
+                  : {}),
+              })
               .commit()
           }
+
+          // Notify the inviter of the response; fire-and-forget so email
+          // retries never delay the response and failures never fail the
+          // mutation
+          sendResponseNotificationEmail({
+            invitation,
+            respondentName: ctx.speaker.name || ctx.speaker.email,
+            respondentEmail: ctx.speaker.email,
+            accepted: input.accept,
+            declineReason: input.declineReason,
+          }).catch((emailError) => {
+            console.error(
+              'Failed to send co-speaker response notification email:',
+              emailError,
+            )
+          })
 
           return { success: true, status }
         } catch (error) {
