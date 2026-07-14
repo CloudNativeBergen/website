@@ -1,0 +1,88 @@
+name: Run Sanity Migration
+
+# Manually triggered content-migration runner. Exports a dataset backup
+# (kept as a workflow artifact) before applying the migration, mirroring
+# the manual procedure documented in README.md.
+#
+# Required repository configuration:
+#   secrets.SANITY_AUTH_TOKEN        - token with write access to the dataset
+#   vars.SANITY_STUDIO_PROJECT_ID    - the Sanity project id
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration:
+        description: 'Migration id (directory name under migrations/, e.g. 038-backfill-accepted-cospeakers)'
+        required: true
+        type: string
+      dataset:
+        description: 'Target dataset'
+        required: true
+        type: string
+        default: 'production'
+
+# Never run two migrations against the same dataset concurrently
+concurrency:
+  group: sanity-migration-${{ inputs.dataset }}
+  cancel-in-progress: false
+
+jobs:
+  run-migration:
+    name: 'Migrate ${{ inputs.dataset }}: ${{ inputs.migration }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
+      SANITY_STUDIO_PROJECT_ID: ${{ vars.SANITY_STUDIO_PROJECT_ID }}
+      SANITY_STUDIO_DATASET: ${{ inputs.dataset }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+
+      - name: Verify migration exists
+        run: test -d "migrations/${{ inputs.migration }}" || { echo "::error::migrations/${{ inputs.migration }} not found"; exit 1; }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # ratchet:pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Export dataset backup
+        run: pnpm sanity dataset export "${{ inputs.dataset }}" "backup-${{ inputs.dataset }}.tar.gz"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: 'sanity-backup-${{ inputs.dataset }}-${{ github.run_id }}'
+          path: 'backup-${{ inputs.dataset }}.tar.gz'
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Dry run
+        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}"
+
+      - name: Run migration
+        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}" --no-dry-run
