@@ -90,7 +90,6 @@ export async function getProposal({
         invitedEmail,
         invitedName,
         status,
-        token,
         expiresAt,
         createdAt,
         respondedAt,
@@ -198,7 +197,6 @@ export async function getProposals({
       invitedEmail,
       invitedName,
       status,
-      token,
       expiresAt,
       createdAt,
       respondedAt,
@@ -422,7 +420,7 @@ export async function fetchNextUnreviewedProposal({
     _id: string
     title: string
     status: string
-    speaker?: { _id: string; name: string }
+    speakers?: Array<{ _id: string; name: string }>
   } | null
   error: Error | null
 }> {
@@ -552,7 +550,6 @@ export async function searchProposals({
         invitedEmail,
         invitedName,
         status,
-        token,
         expiresAt,
         createdAt,
         respondedAt,

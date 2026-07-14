@@ -10,19 +10,26 @@ export const INVITATION_STATUSES = [
 
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 
+/**
+ * Client-safe invitation shape. Deliberately excludes the bearer `token`:
+ * queries and mutations that reach the browser must never include it. The
+ * invitee receives the token exclusively via the emailed invitation link.
+ */
 export interface CoSpeakerInvitationMinimal {
   _id: string
   invitedEmail: string
   invitedName?: string
   status: InvitationStatus
-  token: string
   expiresAt: string
   createdAt?: string
   respondedAt?: string
   declineReason?: string
 }
 
+/** Server-side invitation shape; includes the bearer token. Never send to clients. */
 export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
+  token: string
+
   _createdAt?: string
   _updatedAt?: string
 
@@ -92,14 +99,13 @@ export function formatProposalFormat(format: string): string {
 }
 
 export function toMinimalInvitation(
-  invitation: CoSpeakerInvitationFull,
+  invitation: Omit<CoSpeakerInvitationFull, 'token'>,
 ): CoSpeakerInvitationMinimal {
   return {
     _id: invitation._id,
     invitedEmail: invitation.invitedEmail,
     invitedName: invitation.invitedName,
     status: invitation.status,
-    token: invitation.token,
     expiresAt: invitation.expiresAt,
     createdAt: invitation.createdAt,
     respondedAt: invitation.respondedAt,
