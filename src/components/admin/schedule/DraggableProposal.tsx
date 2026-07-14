@@ -75,7 +75,11 @@ export function DraggableProposal({
 
       const populatedSpeakers = Array.isArray(proposal.speakers)
         ? (proposal.speakers.filter(
-            (s) => s && typeof s === 'object' && 'name' in s,
+            (s) =>
+              s &&
+              typeof s === 'object' &&
+              'name' in s &&
+              typeof s.name === 'string',
           ) as Speaker[])
         : []
       const speaker =

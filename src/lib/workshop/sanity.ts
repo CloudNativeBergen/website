@@ -35,6 +35,7 @@ export async function getWorkshopSignups(
         format,
         description,
         "speakers": speakers[]->{
+          _id,
           name,
           "slug": slug.current,
           title
