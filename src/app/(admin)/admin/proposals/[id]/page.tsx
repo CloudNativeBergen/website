@@ -86,26 +86,35 @@ export default async function ProposalDetailPage({
         </div>
 
         <div className="w-full lg:w-96 lg:shrink-0">
-          <div className="space-y-4 p-4">
-            <ProposalPublishedContent
-              proposalId={proposal._id}
-              currentVideoUrl={getProposalVideoUrl(proposal)}
-              currentAttachments={proposal.attachments}
-              status={proposal.status}
-              conferenceEndDate={conference.endDate}
-            />
-            <AudienceFeedbackPanel
-              proposalId={proposal._id}
-              currentFeedback={proposal.audienceFeedback}
-              status={proposal.status}
-              conferenceStartDate={conference.startDate}
-            />
-            <ProposalReviewPanel
-              proposalId={proposal._id}
-              initialReviews={proposal.reviews || []}
-              currentUser={session?.speaker}
-              domain={domain}
-            />
+          {/* On mobile this column stacks below the proposal content, so the
+              review scoring form is ordered first (post-conference published
+              content and audience feedback follow); desktop keeps source order. */}
+          <div className="flex flex-col gap-4 p-4">
+            <div className="order-2 lg:order-1">
+              <ProposalPublishedContent
+                proposalId={proposal._id}
+                currentVideoUrl={getProposalVideoUrl(proposal)}
+                currentAttachments={proposal.attachments}
+                status={proposal.status}
+                conferenceEndDate={conference.endDate}
+              />
+            </div>
+            <div className="order-3 lg:order-2">
+              <AudienceFeedbackPanel
+                proposalId={proposal._id}
+                currentFeedback={proposal.audienceFeedback}
+                status={proposal.status}
+                conferenceStartDate={conference.startDate}
+              />
+            </div>
+            <div className="order-1 lg:order-3">
+              <ProposalReviewPanel
+                proposalId={proposal._id}
+                initialReviews={proposal.reviews || []}
+                currentUser={session?.speaker}
+                domain={domain}
+              />
+            </div>
           </div>
         </div>
       </div>
