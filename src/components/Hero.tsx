@@ -9,6 +9,7 @@ import {
   UserGroupIcon,
   MicrophoneIcon,
   CalendarDaysIcon,
+  MapPinIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
@@ -18,6 +19,7 @@ import {
   isRegistrationAvailable,
   isSeekingSponsors,
 } from '@/lib/conference/state'
+import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { PortableText } from '@portabletext/react'
 import { TypedObject } from 'sanity'
 
@@ -50,7 +52,13 @@ function isPortableTextEmpty(content?: TypedObject[]): boolean {
   })
 }
 
-function ActionButtons({ conference }: { conference: Conference }) {
+function ActionButtons({
+  conference,
+  ticketsFromPrice,
+}: {
+  conference: Conference
+  ticketsFromPrice?: string | null
+}) {
   const buttons: Array<{
     label: string
     href: string
@@ -62,12 +70,14 @@ function ActionButtons({ conference }: { conference: Conference }) {
       | 'info'
       | 'outline'
     icon: React.ComponentType<{ className?: string }>
+    event: string
   }> = [
     {
       label: 'Practical Info',
       href: '/info',
       variant: 'outline',
       icon: InformationCircleIcon,
+      event: PIRSCH_EVENTS.infoHero,
     },
   ]
 
@@ -77,6 +87,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
       href: '/sponsor',
       variant: 'success',
       icon: UserGroupIcon,
+      event: PIRSCH_EVENTS.sponsorHero,
     })
   }
 
@@ -86,6 +97,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
       href: '/cfp',
       variant: 'warning',
       icon: MicrophoneIcon,
+      event: PIRSCH_EVENTS.cfpHero,
     })
   }
 
@@ -95,15 +107,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
       href: '/program',
       variant: 'primary',
       icon: CalendarDaysIcon,
+      event: PIRSCH_EVENTS.programHero,
     })
   }
 
   if (isRegistrationAvailable(conference)) {
     buttons.push({
-      label: 'Tickets',
+      // Checkin.no prices are excl. VAT — disclosed in the caption rendered
+      // under the button row, consistent with the note on /tickets
+      label: ticketsFromPrice
+        ? `Get tickets — from ${ticketsFromPrice} kr`
+        : 'Tickets',
       href: '/tickets',
       variant: 'primary',
       icon: TicketIcon,
+      event: PIRSCH_EVENTS.ticketsHero,
     })
   }
 
@@ -125,27 +143,45 @@ function ActionButtons({ conference }: { conference: Conference }) {
     displayButtons = reversedButtons.slice(0, 3)
   }
 
+  const showsPrice =
+    ticketsFromPrice && displayButtons.some((b) => b.href === '/tickets')
+
   return (
-    <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
-      {displayButtons.map((button) => {
-        const Icon = button.icon
-        return (
-          <Button
-            key={button.label}
-            href={button.href}
-            variant={button.variant}
-            className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-          >
-            <Icon className="h-5 w-5" aria-hidden="true" />
-            <span>{button.label}</span>
-          </Button>
-        )
-      })}
-    </div>
+    <>
+      <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
+        {displayButtons.map((button) => {
+          const Icon = button.icon
+          return (
+            <Button
+              key={button.label}
+              href={button.href}
+              variant={button.variant}
+              className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
+              data-pirsch-event={button.event}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span>{button.label}</span>
+            </Button>
+          )
+        })}
+      </div>
+      {showsPrice && (
+        <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
+          Ticket prices excl. VAT
+        </p>
+      )}
+    </>
   )
 }
 
-export function Hero({ conference }: { conference: Conference }) {
+export function Hero({
+  conference,
+  ticketsFromPrice,
+}: {
+  conference: Conference
+  /** Lowest ticket price formatted for display (e.g. "1 234"), excl. VAT */
+  ticketsFromPrice?: string | null
+}) {
   return (
     <div className="relative py-10 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
@@ -229,27 +265,45 @@ export function Hero({ conference }: { conference: Conference }) {
               />
             )}
 
-          <ActionButtons conference={conference} />
+          <ActionButtons
+            conference={conference}
+            ticketsFromPrice={ticketsFromPrice}
+          />
 
-          {conference.vanityMetrics &&
-            conference.vanityMetrics.length > 0 &&
-            !isProgramPublished(conference) && (
-              <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-6 sm:mt-16 sm:grid-cols-3 lg:grid-cols-6 lg:justify-start lg:text-left">
-                {conference.vanityMetrics.slice(0, 6).map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="text-center sm:text-center lg:text-left"
-                  >
-                    <dt className="font-jetbrains text-sm text-brand-cloud-blue">
-                      {metric.label}
-                    </dt>
-                    <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray sm:text-3xl dark:text-gray-200">
-                      {metric.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+          {conference.venueName && (
+            <p className="font-jetbrains mt-6 flex items-start justify-center gap-x-2 text-sm text-brand-cloud-blue sm:mt-8 dark:text-blue-400">
+              <MapPinIcon
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
+              <span>
+                {conference.venueName}
+                {conference.venueAddress
+                  ? `, ${conference.venueAddress}`
+                  : conference.city
+                    ? `, ${conference.city}`
+                    : ''}
+              </span>
+            </p>
+          )}
+
+          {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
+            <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-6 sm:mt-16 sm:grid-cols-3 lg:grid-cols-6 lg:justify-start lg:text-left">
+              {conference.vanityMetrics.slice(0, 6).map((metric) => (
+                <div
+                  key={metric.label}
+                  className="text-center sm:text-center lg:text-left"
+                >
+                  <dt className="font-jetbrains text-sm text-brand-cloud-blue">
+                    {metric.label}
+                  </dt>
+                  <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray sm:text-3xl dark:text-gray-200">
+                    {metric.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
           {conference.socialLinks && conference.socialLinks.length > 0 && (
             <div className="mt-10 flex justify-center space-x-4 sm:hidden">
               {conference.socialLinks.map((link) => (

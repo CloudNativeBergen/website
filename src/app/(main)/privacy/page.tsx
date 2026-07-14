@@ -636,7 +636,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </h3>
                       <p className="text-sm text-pink-700 dark:text-pink-300">
                         Privacy-friendly, cookie-less analytics to understand
-                        site usage (no advertising)
+                        site usage, including anonymous, aggregated counts of
+                        interactions such as button clicks (no advertising, no
+                        personal identifiers)
                       </p>
                     </div>
 

@@ -34,6 +34,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { headers } from 'next/headers'
+import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
 import type { ElementType } from 'react'
 
@@ -180,6 +181,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   rel="noopener noreferrer"
                   variant="primary"
                   size="lg"
+                  data-pirsch-event={PIRSCH_EVENTS.outboundCheckinTicketsPage}
                 >
                   {ctaText}
                 </Button>
