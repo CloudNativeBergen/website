@@ -169,6 +169,53 @@ export function formatTicketPrice(
   }).format(Math.round(displayPrice))
 }
 
+export interface LowestTicketPrice {
+  /** Numeric price in NOK, excl. VAT (matching the primary price on /tickets) */
+  amount: number
+  /** Numeric price in NOK incl. VAT (what a consumer actually pays) */
+  amountInclVat: number
+  /** Price formatted with formatTicketPrice, e.g. "1 234" */
+  formatted: string
+}
+
+/**
+ * Finds the lowest price (excl. VAT, matching the primary price shown on the
+ * tickets page) among tickets that are currently on sale. Returns null when
+ * no ticket with a positive price is active.
+ */
+export function getLowestTicketPrice(
+  tickets: PublicTicketType[],
+): LowestTicketPrice | null {
+  let lowest: TicketPrice | null = null
+  let lowestAmount = Infinity
+
+  for (const ticket of tickets) {
+    if (getTicketSaleStatus(ticket) !== 'active') continue
+
+    for (const price of ticket.price) {
+      const amount = parseFloat(price.price)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+      if (amount < lowestAmount) {
+        lowestAmount = amount
+        lowest = price
+      }
+    }
+  }
+
+  if (!lowest) return null
+
+  const vatPercent = parseFloat(lowest.vat)
+  const amountInclVat = Number.isFinite(vatPercent)
+    ? Math.round(lowestAmount * (1 + vatPercent / 100))
+    : lowestAmount
+
+  return {
+    amount: lowestAmount,
+    amountInclVat,
+    formatted: formatTicketPrice(lowest.price, lowest.vat),
+  }
+}
+
 export interface TicketCategory {
   label: string
   key: string

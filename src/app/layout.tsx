@@ -136,6 +136,11 @@ export default function RootLayout({
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
+        {/*
+          Pirsch analytics. The pa.js snippet also tracks custom click events
+          declaratively via `data-pirsch-event` attributes — see the event
+          naming scheme in src/lib/analytics.ts.
+        */}
         <Script
           defer
           src="https://api.pirsch.io/pa.js"

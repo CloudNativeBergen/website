@@ -15,6 +15,7 @@ import {
   isConferenceOver,
 } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
+import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 
 export function Header({ c }: { c: Conference }) {
@@ -73,9 +74,10 @@ export function Header({ c }: { c: Conference }) {
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
           {isRegistrationAvailable(c) && (
             <Button
-              href={c.registrationLink ?? '#'}
+              href="/tickets"
               variant="primary"
               className="flex h-12 items-center px-6 py-0"
+              data-pirsch-event={PIRSCH_EVENTS.ticketsHeader}
             >
               Get your ticket
             </Button>

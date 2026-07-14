@@ -8,6 +8,7 @@ import {
   buildPricingMatrix,
   getTicketSaleStatus,
   formatTicketPrice,
+  getLowestTicketPrice,
   extractComplimentaryTickets,
   stripHtml,
   type PublicTicketType,
@@ -314,6 +315,70 @@ describe('formatTicketPrice', () => {
 
   it('should handle large prices', () => {
     expect(formatTicketPrice('50000', '25')).toBe(`50${nbsp}000`)
+  })
+})
+
+describe('getLowestTicketPrice', () => {
+  // nb-NO locale uses non-breaking space (U+00A0) as group separator
+  const nbsp = '\u00A0'
+
+  it('returns the lowest positive price among active tickets', () => {
+    const tickets = [
+      createTicket({
+        id: 1,
+        price: [{ price: '4990', vat: '25', description: null, key: null }],
+      }),
+      createTicket({
+        id: 2,
+        price: [{ price: '3490', vat: '25', description: null, key: null }],
+      }),
+    ]
+
+    const lowest = getLowestTicketPrice(tickets)
+
+    expect(lowest).not.toBeNull()
+    expect(lowest!.amount).toBe(3490)
+    expect(lowest!.amountInclVat).toBe(4363) // 3490 * 1.25, rounded
+    expect(lowest!.formatted).toBe(`3${nbsp}490`)
+  })
+
+  it('ignores expired and upcoming tickets', () => {
+    const tickets = [
+      createTicket({
+        id: 1,
+        price: [{ price: '1000', vat: '25', description: null, key: null }],
+        visibleEndsAt: '2020-01-01T00:00:00Z',
+      }),
+      createTicket({
+        id: 2,
+        price: [{ price: '1500', vat: '25', description: null, key: null }],
+        visibleStartsAt: '2099-01-01T00:00:00Z',
+      }),
+      createTicket({
+        id: 3,
+        price: [{ price: '2000', vat: '25', description: null, key: null }],
+      }),
+    ]
+
+    expect(getLowestTicketPrice(tickets)?.amount).toBe(2000)
+  })
+
+  it('ignores zero and invalid prices', () => {
+    const tickets = [
+      createTicket({
+        id: 1,
+        price: [
+          { price: '0', vat: '25', description: null, key: null },
+          { price: 'not-a-number', vat: '25', description: null, key: null },
+        ],
+      }),
+    ]
+
+    expect(getLowestTicketPrice(tickets)).toBeNull()
+  })
+
+  it('returns null for an empty ticket list', () => {
+    expect(getLowestTicketPrice([])).toBeNull()
   })
 })
 
