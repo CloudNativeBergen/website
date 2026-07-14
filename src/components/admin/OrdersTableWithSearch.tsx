@@ -20,6 +20,10 @@ import {
   TableBody,
   TableEmptyState,
 } from '@/components/DataTable'
+import {
+  OrderPaymentStatusBadge,
+  type OrderPaymentStatus,
+} from '@/components/admin/badges'
 
 interface OrdersTableWithSearchProps {
   orders: GroupedOrder[]
@@ -30,18 +34,11 @@ interface OrdersTableWithSearchProps {
 type PaymentFilter = 'all' | 'paid' | 'unpaid' | 'overdue'
 
 interface PaymentStatus {
-  status: string
+  status: OrderPaymentStatus
   label: string
-  colorClass: string
 }
 
 const PAYMENT_TERM_DAYS = 30
-
-const STATUS_STYLES = {
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  due: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-} as const
 
 export function OrdersTableWithSearch({
   orders,
@@ -84,7 +81,6 @@ export function OrdersTableWithSearch({
         return {
           status: 'paid',
           label: 'Paid',
-          colorClass: STATUS_STYLES.paid,
         }
       }
 
@@ -92,14 +88,12 @@ export function OrdersTableWithSearch({
         return {
           status: 'overdue',
           label: 'Overdue',
-          colorClass: STATUS_STYLES.overdue,
         }
       }
 
       return {
         status: 'due',
         label: 'Due',
-        colorClass: STATUS_STYLES.due,
       }
     },
     [isOrderOverdue],
@@ -410,16 +404,9 @@ export function OrdersTableWithSearch({
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        {(() => {
-                          const { label, colorClass } = getPaymentStatus(order)
-                          return (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colorClass}`}
-                            >
-                              {label}
-                            </span>
-                          )
-                        })()}
+                        <OrderPaymentStatusBadge
+                          status={getPaymentStatus(order).status}
+                        />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <button
@@ -529,16 +516,9 @@ export function OrdersTableWithSearch({
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
-                  {(() => {
-                    const { label, colorClass } = getPaymentStatus(order)
-                    return (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${colorClass}`}
-                      >
-                        {label}
-                      </span>
-                    )
-                  })()}
+                  <OrderPaymentStatusBadge
+                    status={getPaymentStatus(order).status}
+                  />
                   <button
                     onClick={() => handleViewPaymentDetails(order.order_id)}
                     className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"

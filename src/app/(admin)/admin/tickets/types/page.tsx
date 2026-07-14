@@ -9,25 +9,26 @@ import {
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import { EmptyState } from '@/components/EmptyState'
+import {
+  StatusBadge as SharedStatusBadge,
+  type BadgeColor,
+} from '@/components/StatusBadge'
 
 function StatusBadge({
   status,
 }: {
   status: 'expired' | 'active' | 'upcoming'
 }) {
-  const styles = {
-    active: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-    expired: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    upcoming:
-      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+  const config: Record<
+    'expired' | 'active' | 'upcoming',
+    { label: string; color: BadgeColor }
+  > = {
+    active: { label: 'Active', color: 'green' },
+    expired: { label: 'Expired', color: 'gray' },
+    upcoming: { label: 'Upcoming', color: 'yellow' },
   }
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status}
-    </span>
-  )
+  const { label, color } = config[status]
+  return <SharedStatusBadge label={label} color={color} />
 }
 
 function formatDate(dateStr: string | null): string {
@@ -115,9 +116,7 @@ export default async function TicketTypesAdminPage() {
                   </h3>
                   <StatusBadge status={status} />
                   {ticket.requiresInvitation && (
-                    <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-                      Invite-only
-                    </span>
+                    <SharedStatusBadge label="Invite-only" color="purple" />
                   )}
                 </div>
                 <div className="text-right text-sm text-gray-500 dark:text-gray-400">

@@ -1,5 +1,7 @@
 export {
   StatusBadge,
+  ProposalStatusBadge,
+  getProposalStatusBadgeColor,
   LevelBadge,
   FormatBadge,
   AudienceBadge,

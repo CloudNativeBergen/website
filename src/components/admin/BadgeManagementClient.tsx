@@ -28,6 +28,7 @@ import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
 import { SearchInput } from '@/components/SearchInput'
+import { StatusBadge } from '@/components/StatusBadge'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
@@ -649,25 +650,19 @@ export function BadgeManagementClient({
                             {hasBadge && badge ? (
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                      hasEmailError
-                                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                        : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                    }`}
-                                  >
-                                    {hasEmailError ? (
-                                      <>
-                                        <ExclamationTriangleIcon className="h-3 w-3" />
-                                        Email Failed
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckIcon className="h-3 w-3" />
-                                        Issued
-                                      </>
-                                    )}
-                                  </span>
+                                  {hasEmailError ? (
+                                    <StatusBadge
+                                      label="Email Failed"
+                                      color="red"
+                                      icon={ExclamationTriangleIcon}
+                                    />
+                                  ) : (
+                                    <StatusBadge
+                                      label="Issued"
+                                      color="green"
+                                      icon={CheckIcon}
+                                    />
+                                  )}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                   {new Date(
@@ -681,9 +676,7 @@ export function BadgeManagementClient({
                                 )}
                               </div>
                             ) : (
-                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                Not Issued
-                              </span>
+                              <StatusBadge label="Not Issued" color="gray" />
                             )}
                           </td>
                           <td className="px-4 py-4 text-right">
