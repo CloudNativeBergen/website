@@ -129,6 +129,39 @@ export const Default: StoryObj = {
   ),
 }
 
+export const MobileCards: StoryObj = {
+  parameters: {
+    viewport: { defaultViewport: 'mobile1' },
+    docs: {
+      description: {
+        story:
+          'Below `md`, rows collapse into stacked label/value cards (the default `mobileVariant="cards"`). The `primary` column becomes the card title; `cardHidden` columns are omitted. View at a phone width to see the cards; at `md+` the same data renders as the table.',
+      },
+    },
+  },
+  render: () => (
+    <DataTable<SampleItem>
+      data={sampleData}
+      columns={[
+        { key: 'name', header: 'Name', primary: true },
+        { key: 'email', header: 'Email' },
+        { key: 'role', header: 'Role' },
+        {
+          key: 'status',
+          header: 'Status',
+          render: (item: SampleItem) => (
+            <StatusBadge
+              label={item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              color={getStatusColor(item.status)}
+            />
+          ),
+        },
+      ]}
+      keyExtractor={(item: SampleItem) => item.id}
+    />
+  ),
+}
+
 export const WithEmptyState: StoryObj = {
   render: () => (
     <DataTable<SampleItem>
