@@ -28,7 +28,6 @@ const mockPendingInvitations: CoSpeakerInvitationMinimal[] = [
     invitedEmail: 'sofia@example.com',
     invitedName: 'Sofia Berg',
     status: 'pending',
-    token: 'token123',
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
 ]
@@ -39,7 +38,6 @@ const mixedInvitations: CoSpeakerInvitationMinimal[] = [
     invitedEmail: 'sofia@example.com',
     invitedName: 'Sofia Berg',
     status: 'pending',
-    token: 'token123',
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -47,7 +45,6 @@ const mixedInvitations: CoSpeakerInvitationMinimal[] = [
     invitedEmail: 'magnus@example.com',
     invitedName: 'Magnus Olsen',
     status: 'declined',
-    token: 'token456',
     expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     declineReason: 'Schedule conflict',
   },
@@ -56,7 +53,6 @@ const mixedInvitations: CoSpeakerInvitationMinimal[] = [
     invitedEmail: 'ingrid@example.com',
     invitedName: 'Ingrid Nilsen',
     status: 'expired',
-    token: 'token789',
     expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
   },
 ]
@@ -70,7 +66,6 @@ const handlers = [
           invitedEmail: 'newco@example.com',
           invitedName: 'New Co-Speaker',
           status: 'pending',
-          token: 'newtoken',
           expiresAt: new Date(
             Date.now() + 7 * 24 * 60 * 60 * 1000,
           ).toISOString(),

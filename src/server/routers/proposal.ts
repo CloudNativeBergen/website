@@ -1555,7 +1555,11 @@ export const proposalRouter = router({
             })
           }
 
-          return invitation
+          // Never expose the invitation bearer token to the inviter's
+          // browser; the invitee receives it via the emailed link.
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { token: _token, ...safeInvitation } = invitation
+          return safeInvitation
         } catch (error) {
           if (error instanceof TRPCError) throw error
 

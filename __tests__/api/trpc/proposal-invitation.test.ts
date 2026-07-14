@@ -138,6 +138,35 @@ describe('proposal.invitation router', () => {
       expect(sendInvitationEmail).toHaveBeenCalled()
     })
 
+    it('should not leak the invitation bearer token to the inviter (regression)', async () => {
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(createCoSpeakerInvitation).mockResolvedValue({
+        ...mockInvitation,
+        token: 'super-secret-token',
+      } as any)
+      vi.mocked(sendInvitationEmail).mockResolvedValue(true)
+
+      const caller = createCaller(regularSpeaker)
+      const result = await caller.proposal.invitation.send({
+        proposalId: 'proposal-1',
+        invitedEmail: 'invited@test.com',
+        invitedName: 'Invited Co-Speaker',
+      })
+
+      // The mutation response must never contain the bearer token; only
+      // the invitee receives it, via the emailed invitation link
+      expect(result).not.toHaveProperty('token')
+      expect(JSON.stringify(result)).not.toContain('super-secret-token')
+
+      // The email flow still receives the full invitation with the token
+      expect(sendInvitationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'super-secret-token' }),
+      )
+    })
+
     it('should reject if user does not own the proposal', async () => {
       vi.mocked(getProposal).mockResolvedValue({
         proposal: null as any,

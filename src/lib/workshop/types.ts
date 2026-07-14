@@ -57,6 +57,11 @@ export interface WorkshopSignup {
     date?: string
     startTime?: string
     endTime?: string
+    speakers?: {
+      name: string
+      slug?: string
+      title?: string
+    }[]
   }
   conference: {
     _type: 'reference'

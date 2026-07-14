@@ -9,6 +9,7 @@ import {
   InvitationStatus,
 } from './types'
 import { INVITATION_VALID_DAYS } from './constants'
+import { getProposalAbstract } from './sanity'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
@@ -195,6 +196,34 @@ export async function createCoSpeakerInvitation(params: {
   }
 }
 
+const FALLBACK_PROPOSAL_ABSTRACT =
+  'Please view the full proposal details for more information.'
+
+export const ABSTRACT_MAX_LENGTH = 500
+
+/**
+ * Truncates a plain-text abstract for inclusion in an email. Abstracts
+ * longer than maxLength are cut at the last word boundary before the
+ * limit, trailing punctuation is stripped, and an ellipsis is appended.
+ *
+ * Exported for testing.
+ */
+export function truncateAbstract(
+  abstract: string,
+  maxLength: number = ABSTRACT_MAX_LENGTH,
+): string {
+  const normalized = abstract.trim()
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+
+  const slice = normalized.slice(0, maxLength)
+  const lastSpace = slice.lastIndexOf(' ')
+  const truncated = lastSpace > 0 ? slice.slice(0, lastSpace) : slice
+
+  return `${truncated.replace(/[\s.,;:!?-]+$/, '')}…`
+}
+
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitationFull,
 ): Promise<boolean> {
@@ -222,10 +251,29 @@ export async function sendInvitationEmail(
       buildEmailEventContext(conference, domain)
     const invitationUrl = `${protocol}${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
-    // TODO: Fetch proposal details when we can do so without speakerId
+    const proposalId =
+      typeof invitation.proposal === 'object' && invitation.proposal !== null
+        ? '_id' in invitation.proposal
+          ? invitation.proposal._id
+          : invitation.proposal._ref
+        : undefined
 
-    const proposalAbstract =
-      'Please view the full proposal details for more information.'
+    let abstract: string | null = null
+    if (proposalId) {
+      try {
+        abstract = await getProposalAbstract(proposalId)
+      } catch (error) {
+        // The email must never fail to send because of the abstract fetch.
+        console.error(
+          'Failed to fetch proposal abstract for invitation email:',
+          error,
+        )
+      }
+    }
+
+    const proposalAbstract = abstract
+      ? truncateAbstract(abstract)
+      : FALLBACK_PROPOSAL_ABSTRACT
 
     const proposalTitle =
       typeof invitation.proposal === 'object' && 'title' in invitation.proposal
