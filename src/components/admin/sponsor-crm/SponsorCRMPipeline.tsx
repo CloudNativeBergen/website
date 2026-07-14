@@ -857,14 +857,42 @@ export function SponsorCRMPipeline({
       <MobileFilterSheet
         isOpen={isMobileFilterOpen}
         onClose={() => setIsMobileFilterOpen(false)}
-        tiers={tiers}
-        tiersFilter={tiersFilter}
-        onToggleTier={toggleTierFilter}
-        organizers={organizers}
-        assignedToFilter={assignedToFilter}
-        onSetOrganizer={setOrganizerFilter}
-        tagsFilter={tagsFilter}
-        onToggleTag={toggleTagFilter}
+        groups={[
+          {
+            key: 'tier',
+            label: 'Tier',
+            options: sortSponsorTiers(tiers).map((tier) => ({
+              value: tier._id,
+              label: formatTierLabel(tier),
+            })),
+            selected: tiersFilter,
+            onChange: toggleTierFilter,
+            emptyText: 'No tiers available',
+          },
+          {
+            key: 'owner',
+            label: 'Owner',
+            options: [
+              { value: '', label: 'All' },
+              { value: 'unassigned', label: 'Unassigned' },
+              ...organizers.map((org) => ({ value: org._id, label: org.name })),
+            ],
+            selected: [assignedToFilter ?? ''],
+            onChange: (value) =>
+              setOrganizerFilter(value === '' ? null : value),
+            multi: false,
+          },
+          {
+            key: 'tags',
+            label: 'Tags',
+            options: TAGS.map((tag) => ({
+              value: tag.value,
+              label: tag.label,
+            })),
+            selected: tagsFilter,
+            onChange: (value) => toggleTagFilter(value as SponsorTag),
+          },
+        ]}
         onClearAll={() => {
           clearAllFilters()
           setSearchQuery('')
