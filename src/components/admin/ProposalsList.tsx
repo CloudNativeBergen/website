@@ -89,7 +89,7 @@ export function ProposalsList({
   const displayProposals = filteredProposals || initialProposals
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <AdminPageHeader
         icon={<DocumentTextIcon />}
         title="Proposal Management"
@@ -131,7 +131,7 @@ export function ProposalsList({
         ) : (
           <>
             <ProposalStatistics proposals={displayProposals} />
-            <div className="mt-8">
+            <div className="mt-4 sm:mt-8">
               {displayProposals.length === 0 ? (
                 <EmptyState
                   hasProposals={initialProposals.length > 0}

@@ -238,18 +238,22 @@ export const ProposalStatistics = memo(function ProposalStatistics({
         aria-expanded={isExpanded}
         aria-controls="proposal-statistics-content"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <ChartBarIcon
-            className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
+            className="h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400"
             aria-hidden="true"
           />
-          <span className="text-sm font-medium text-gray-900 dark:text-white">
-            Proposal Statistics
-          </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            ({proposals.length} proposal{proposals.length !== 1 ? 's' : ''} •{' '}
-            {totalMinutes} total minutes)
-          </span>
+          {/* Stack title and count on mobile so the count doesn't force the
+              collapsed header to wrap into a tall block; inline from sm up. */}
+          <div className="flex min-w-0 flex-col items-start text-left sm:flex-row sm:items-center sm:gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-white">
+              Proposal Statistics
+            </span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              ({proposals.length} proposal{proposals.length !== 1 ? 's' : ''} •{' '}
+              {totalMinutes} total minutes)
+            </span>
+          </div>
         </div>
         {isExpanded ? (
           <ChevronDownIcon

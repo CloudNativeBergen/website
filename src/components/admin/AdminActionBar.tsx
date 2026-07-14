@@ -158,7 +158,7 @@ export function AdminActionBar({
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -248,7 +248,7 @@ export function AdminActionBar({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
           <AdminButton
             size="xs"
             onClick={handleEditProposal}
