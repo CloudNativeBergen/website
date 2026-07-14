@@ -1496,9 +1496,9 @@ export const proposalRouter = router({
           // Enforce the co-speaker limit for the proposal format,
           // counting both current co-speakers and pending invitations
           const coSpeakerLimit = getCoSpeakerLimit(proposal.format)
+          const speakerCount = extractSpeakerIds(proposal.speakers).length
           const currentCoSpeakers =
-            Math.max((proposal.speakers?.length ?? 1) - 1, 0) +
-            pendingInvitations.length
+            Math.max(speakerCount - 1, 0) + pendingInvitations.length
           if (currentCoSpeakers >= coSpeakerLimit) {
             throw new TRPCError({
               code: 'BAD_REQUEST',

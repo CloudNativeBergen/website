@@ -126,6 +126,9 @@ export function ProposalForm({
       speakerId,
     })
     setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
+    // The server also cancels the speaker's accepted invitation; refresh so
+    // the invitations list doesn't keep showing a stale "accepted" badge
+    router.refresh()
   }
 
   const [confirmAction, setConfirmAction] = useState<Action | null>(null)

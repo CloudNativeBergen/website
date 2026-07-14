@@ -7,6 +7,7 @@ import {
   InvitationCreateSchema,
   InvitationResponseSchema,
   InvitationCancelSchema,
+  RemoveCoSpeakerSchema,
   AudienceFeedbackSchema,
 } from '@/server/schemas/proposal'
 import { Language, Format, Level, Audience, Action } from '@/lib/proposal/types'
@@ -429,6 +430,32 @@ describe('InvitationCancelSchema', () => {
 
   it('rejects empty invitationId', () => {
     const result = InvitationCancelSchema.safeParse({ invitationId: '' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('RemoveCoSpeakerSchema', () => {
+  it('accepts well-formed Sanity ids', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: 'drafts.talk-1_a',
+      speakerId: 'speaker-2',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects ids with JSONMatch metacharacters', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: 'talk-1',
+      speakerId: 'x"] || _ref match "*',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty ids', () => {
+    const result = RemoveCoSpeakerSchema.safeParse({
+      proposalId: '',
+      speakerId: 'speaker-2',
+    })
     expect(result.success).toBe(false)
   })
 })

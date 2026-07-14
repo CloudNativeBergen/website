@@ -3,7 +3,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
-import { isInvitationExpired } from '@/lib/cospeaker/constants'
+import {
+  isInvitationExpired,
+  INVITATION_VALID_DAYS,
+} from '@/lib/cospeaker/constants'
 import InvitationResponseClient from '@/components/InvitationResponseClient'
 import { AppEnvironment } from '@/lib/environment'
 import { DevBanner } from '@/components/DevBanner'
@@ -65,7 +68,7 @@ export default async function InvitationResponsePage({
             </h2>
             <p className="text-red-600">
               This invitation link is either invalid or has expired. Co-speaker
-              invitations are valid for 14 days.
+              invitations are valid for {INVITATION_VALID_DAYS} days.
             </p>
           </div>
         </div>
@@ -77,7 +80,7 @@ export default async function InvitationResponsePage({
 
   if (invitation.status !== 'pending' || isExpired) {
     const statusMessage = isExpired
-      ? 'This invitation has expired. Co-speaker invitations are valid for 14 days.'
+      ? `This invitation has expired. Co-speaker invitations are valid for ${INVITATION_VALID_DAYS} days.`
       : invitation.status === 'accepted'
         ? 'You have already accepted this invitation.'
         : invitation.status === 'declined'

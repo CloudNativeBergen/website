@@ -170,9 +170,20 @@ export const InvitationCancelSchema = z.object({
   invitationId: z.string().min(1, 'Invitation ID is required'),
 })
 
+// Sanity document ids are restricted to this character set; enforcing it
+// here keeps interpolated JSONMatch selectors (speakers[_ref=="<id>"])
+// well-formed by construction
+const SANITY_ID_PATTERN = /^[A-Za-z0-9._-]+$/
+
 export const RemoveCoSpeakerSchema = z.object({
-  proposalId: z.string().min(1, 'Proposal ID is required'),
-  speakerId: z.string().min(1, 'Speaker ID is required'),
+  proposalId: z
+    .string()
+    .min(1, 'Proposal ID is required')
+    .regex(SANITY_ID_PATTERN, 'Invalid proposal ID'),
+  speakerId: z
+    .string()
+    .min(1, 'Speaker ID is required')
+    .regex(SANITY_ID_PATTERN, 'Invalid speaker ID'),
 })
 
 export const AudienceFeedbackSchema = z.object({
