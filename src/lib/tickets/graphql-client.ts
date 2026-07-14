@@ -52,6 +52,10 @@ export class CheckinGraphQLClient {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(request),
+        // A stalled Checkin.no upstream must never hang server rendering
+        // indefinitely (e.g. the homepage price fetch); callers handle the
+        // resulting rejection via their existing error paths
+        signal: AbortSignal.timeout(10_000),
       })
 
       if (!response.ok) {

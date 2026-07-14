@@ -7,7 +7,6 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import {
   isCfpOpen,
-  isConferenceOver,
   isProgramPublished,
   isRegistrationAvailable,
 } from '@/lib/conference/state'
@@ -125,19 +124,20 @@ function buildEventJsonLd(
     }
   }
 
-  if (conference.registrationLink && !isConferenceOver(conference)) {
+  // Offers only while registration is genuinely available (registrationEnabled
+  // + link + conference not over) — structured data must never claim tickets
+  // are purchasable while the site itself hides every ticket CTA
+  if (isRegistrationAvailable(conference) && conference.registrationLink) {
     const offers: Record<string, unknown> = {
       '@type': 'Offer',
       url: conference.registrationLink,
       priceCurrency: 'NOK',
+      availability: 'https://schema.org/InStock',
     }
     if (lowestTicketPrice) {
       // Google's Event spec wants the lowest price including all mandatory
       // charges, so the structured-data price is incl. VAT
       offers.price = lowestTicketPrice.amountInclVat
-    }
-    if (isRegistrationAvailable(conference)) {
-      offers.availability = 'https://schema.org/InStock'
     }
     jsonLd.offers = offers
   }
@@ -175,57 +175,66 @@ function PhaseCtaRow({
   const registrationAvailable = isRegistrationAvailable(conference)
   const buttonClassName =
     'inline-flex items-center space-x-2 px-8 py-4 font-semibold'
+  // Checkin.no prices are excl. VAT — disclosed in the caption below the row
   const ticketsLabel = ticketsFromPrice
-    ? `Get tickets — from ${ticketsFromPrice} kr excl. VAT`
+    ? `Get tickets — from ${ticketsFromPrice} kr`
     : 'Get tickets'
+  const showsPrice = Boolean(ticketsFromPrice) && registrationAvailable
 
   return (
-    <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
-      {cfpOpen ? (
-        <>
+    <>
+      <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
+        {cfpOpen ? (
+          <>
+            <Button
+              href="/cfp"
+              variant="primary"
+              className={buttonClassName}
+              data-pirsch-event={events.cfp}
+            >
+              <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+              <span>Submit a talk</span>
+            </Button>
+            {registrationAvailable && (
+              <Button
+                href="/tickets"
+                variant="outline"
+                className={buttonClassName}
+                data-pirsch-event={events.tickets}
+              >
+                <TicketIcon className="h-5 w-5" aria-hidden="true" />
+                <span>{ticketsLabel}</span>
+              </Button>
+            )}
+          </>
+        ) : registrationAvailable ? (
           <Button
-            href="/cfp"
+            href="/tickets"
             variant="primary"
             className={buttonClassName}
-            data-pirsch-event={events.cfp}
+            data-pirsch-event={events.tickets}
           >
-            <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-            <span>Submit a talk</span>
+            <TicketIcon className="h-5 w-5" aria-hidden="true" />
+            <span>{ticketsLabel}</span>
           </Button>
-          {registrationAvailable && (
-            <Button
-              href="/tickets"
-              variant="outline"
-              className={buttonClassName}
-              data-pirsch-event={events.tickets}
-            >
-              <TicketIcon className="h-5 w-5" aria-hidden="true" />
-              <span>{ticketsLabel}</span>
-            </Button>
-          )}
-        </>
-      ) : registrationAvailable ? (
-        <Button
-          href="/tickets"
-          variant="primary"
-          className={buttonClassName}
-          data-pirsch-event={events.tickets}
-        >
-          <TicketIcon className="h-5 w-5" aria-hidden="true" />
-          <span>{ticketsLabel}</span>
-        </Button>
-      ) : (
-        <Button
-          href="/info"
-          variant="primary"
-          className={buttonClassName}
-          data-pirsch-event={events.info}
-        >
-          <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
-          <span>Practical information</span>
-        </Button>
+        ) : (
+          <Button
+            href="/info"
+            variant="primary"
+            className={buttonClassName}
+            data-pirsch-event={events.info}
+          >
+            <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
+            <span>Practical information</span>
+          </Button>
+        )}
+      </div>
+      {showsPrice && (
+        <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
+          Ticket prices excl. VAT
+        </p>
       )}
-    </div>
+    </>
   )
 }
 

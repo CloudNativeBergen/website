@@ -380,6 +380,40 @@ describe('getLowestTicketPrice', () => {
   it('returns null for an empty ticket list', () => {
     expect(getLowestTicketPrice([])).toBeNull()
   })
+
+  it('only considers each ticket&apos;s primary price entry, matching the /tickets UI', () => {
+    const tickets = [
+      createTicket({
+        id: 1,
+        price: [
+          // primary (displayed) price
+          { price: '4000', vat: '25', description: null, key: null },
+          // cheaper secondary entry that the pricing UI never shows
+          { price: '100', vat: '25', description: null, key: null },
+        ],
+      }),
+      createTicket({
+        id: 2,
+        price: [{ price: '3500', vat: '25', description: null, key: null }],
+      }),
+    ]
+
+    const lowest = getLowestTicketPrice(tickets)
+    expect(lowest?.amount).toBe(3500)
+  })
+
+  it('rounds decimal prices to whole kroner', () => {
+    const tickets = [
+      createTicket({
+        id: 1,
+        price: [{ price: '999.60', vat: '25', description: null, key: null }],
+      }),
+    ]
+
+    const lowest = getLowestTicketPrice(tickets)
+    expect(lowest?.amount).toBe(1000)
+    expect(lowest?.amountInclVat).toBe(1250) // 999.6 * 1.25 = 1249.5 → 1250
+  })
 })
 
 describe('extractComplimentaryTickets', () => {

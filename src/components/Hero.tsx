@@ -113,10 +113,10 @@ function ActionButtons({
 
   if (isRegistrationAvailable(conference)) {
     buttons.push({
-      // Checkin.no prices are excl. VAT; the qualifier keeps the advertised
-      // price honest and consistent with the disclosure on /tickets
+      // Checkin.no prices are excl. VAT — disclosed in the caption rendered
+      // under the button row, consistent with the note on /tickets
       label: ticketsFromPrice
-        ? `Get tickets — from ${ticketsFromPrice} kr excl. VAT`
+        ? `Get tickets — from ${ticketsFromPrice} kr`
         : 'Tickets',
       href: '/tickets',
       variant: 'primary',
@@ -143,24 +143,34 @@ function ActionButtons({
     displayButtons = reversedButtons.slice(0, 3)
   }
 
+  const showsPrice =
+    ticketsFromPrice && displayButtons.some((b) => b.href === '/tickets')
+
   return (
-    <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
-      {displayButtons.map((button) => {
-        const Icon = button.icon
-        return (
-          <Button
-            key={button.label}
-            href={button.href}
-            variant={button.variant}
-            className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-            data-pirsch-event={button.event}
-          >
-            <Icon className="h-5 w-5" aria-hidden="true" />
-            <span>{button.label}</span>
-          </Button>
-        )
-      })}
-    </div>
+    <>
+      <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
+        {displayButtons.map((button) => {
+          const Icon = button.icon
+          return (
+            <Button
+              key={button.label}
+              href={button.href}
+              variant={button.variant}
+              className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
+              data-pirsch-event={button.event}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span>{button.label}</span>
+            </Button>
+          )
+        })}
+      </div>
+      {showsPrice && (
+        <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
+          Ticket prices excl. VAT
+        </p>
+      )}
+    </>
   )
 }
 
@@ -261,8 +271,11 @@ export function Hero({
           />
 
           {conference.venueName && (
-            <p className="font-jetbrains mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-brand-cloud-blue sm:mt-8 dark:text-blue-400">
-              <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <p className="font-jetbrains mt-6 flex items-start justify-center gap-x-2 text-sm text-brand-cloud-blue sm:mt-8 dark:text-blue-400">
+              <MapPinIcon
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>
                 {conference.venueName}
                 {conference.venueAddress

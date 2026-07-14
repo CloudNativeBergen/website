@@ -180,8 +180,10 @@ export interface LowestTicketPrice {
 
 /**
  * Finds the lowest price (excl. VAT, matching the primary price shown on the
- * tickets page) among tickets that are currently on sale. Returns null when
- * no ticket with a positive price is active.
+ * tickets page) among tickets that are currently on sale. Only each ticket's
+ * primary price entry (price[0]) is considered, mirroring what the /tickets
+ * pricing UI displays. Returns null when no ticket with a positive price is
+ * active. Amounts are rounded to whole kroner like formatTicketPrice.
  */
 export function getLowestTicketPrice(
   tickets: PublicTicketType[],
@@ -192,25 +194,26 @@ export function getLowestTicketPrice(
   for (const ticket of tickets) {
     if (getTicketSaleStatus(ticket) !== 'active') continue
 
-    for (const price of ticket.price) {
-      const amount = parseFloat(price.price)
-      if (!Number.isFinite(amount) || amount <= 0) continue
-      if (amount < lowestAmount) {
-        lowestAmount = amount
-        lowest = price
-      }
+    const price = ticket.price[0]
+    if (!price) continue
+    const amount = parseFloat(price.price)
+    if (!Number.isFinite(amount) || amount <= 0) continue
+    if (amount < lowestAmount) {
+      lowestAmount = amount
+      lowest = price
     }
   }
 
   if (!lowest) return null
 
+  const roundedAmount = Math.round(lowestAmount)
   const vatPercent = parseFloat(lowest.vat)
   const amountInclVat = Number.isFinite(vatPercent)
     ? Math.round(lowestAmount * (1 + vatPercent / 100))
-    : lowestAmount
+    : roundedAmount
 
   return {
-    amount: lowestAmount,
+    amount: roundedAmount,
     amountInclVat,
     formatted: formatTicketPrice(lowest.price, lowest.vat),
   }
