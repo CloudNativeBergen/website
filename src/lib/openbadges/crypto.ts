@@ -2,14 +2,20 @@
  * Cryptographic Operations
  *
  * OpenBadges 3.0 supports two proof formats:
- * 1. Data Integrity Proofs (eddsa-rdfc-2022 cryptosuite) - JSON-LD based
- * 2. JWT Proofs (RFC7519/RFC7515) - Better cross-implementation compatibility
- *
- * JWT format is recommended for maximum validator compatibility.
+ * 1. Data Integrity Proofs (eddsa-rdfc-2022 cryptosuite) - JSON-LD embedded
+ *    proofs, implemented with the Digital Bazaar reference stack
+ *    (@digitalbazaar/vc + data-integrity + eddsa-rdfc-2022-cryptosuite).
+ *    This is the format certified OB 3.0 displayers (e.g. Credly) verify.
+ * 2. JWT Proofs (RFC7519/RFC7515) - RS256 Compact JWS for the 1EdTech
+ *    OB30Inspector validator.
  */
 
-import * as ed25519 from '@noble/ed25519'
-import * as jsonld from 'jsonld'
+import * as vc from '@digitalbazaar/vc'
+import { DataIntegrityProof as DataIntegrityProofSuite } from '@digitalbazaar/data-integrity'
+import { cryptosuite as eddsaRdfc2022CryptoSuite } from '@digitalbazaar/eddsa-rdfc-2022-cryptosuite'
+import * as Ed25519Multikey from '@digitalbazaar/ed25519-multikey'
+import { securityLoader } from '@digitalbazaar/security-document-loader'
+import jsigs from 'jsonld-signatures'
 import {
   SignJWT,
   jwtVerify,
@@ -20,150 +26,117 @@ import {
   type JWTPayload,
 } from 'jose'
 import { createPublicKey } from 'crypto'
-import {
-  hexToBytes,
-  bytesToHex,
-  encodeMultibase,
-  decodeMultibase,
-  stringToBytes,
-} from './encoding'
+import { hexToBytes, bytesToHex } from './encoding'
+import { publicKeyToMultibase, didKeyToPublicKeyHex } from './keys'
 import { SigningError, VerificationError, ConfigurationError } from './errors'
+import obContext from './data/ob-v3p0-context-3.0.3.json'
 import type {
   Credential,
   SignedCredential,
   SigningConfig,
+  EmbeddedProofSigningConfig,
   DataIntegrityProof,
 } from './types'
 
-type JsonLdContext = Record<string, unknown>
+const OB_CONTEXT_URL =
+  'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'
 
 /**
- * Custom document loader for JSON-LD contexts
- * Provides local contexts to avoid network fetches during canonicalization
+ * Build a fully offline JSON-LD document loader.
  *
- * NOTE: Cross-implementation verification limitations
- * Different OpenBadges implementations may use different JSON-LD processors,
- * which can produce slightly different canonical N-Quads even with identical
- * contexts. This is a known challenge in JSON-LD signature verification.
- * Our implementation follows W3C Data Integrity and OpenBadges 3.0 specs,
- * and badges verify correctly with our own verifier. However, external
- * validators may produce different results due to library differences.
+ * Digital Bazaar's securityLoader ships the W3C credentials v1/v2, DID and
+ * security contexts and resolves did:key URIs locally. The official
+ * OpenBadges 3.0 context is vendored (see ./data) so signing and verifying
+ * our own credentials NEVER fetches documents over the network.
+ *
+ * @param staticDocuments - Additional documents (e.g. verification method
+ *   documents) to serve statically by URL.
  */
-const customDocumentLoader = async (url: string) => {
-  const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
-    'https://www.w3.org/ns/credentials/v2': {
-      '@context': {
-        id: '@id',
-        type: '@type',
-        VerifiableCredential:
-          'https://www.w3.org/2018/credentials#VerifiableCredential',
-        credentialSubject:
-          'https://www.w3.org/2018/credentials#credentialSubject',
-        issuer: 'https://www.w3.org/2018/credentials#issuer',
-        validFrom: 'https://www.w3.org/2018/credentials#validFrom',
-        DataIntegrityProof: 'https://w3id.org/security#DataIntegrityProof',
-        verificationMethod: 'https://w3id.org/security#verificationMethod',
-        proofPurpose: 'https://w3id.org/security#proofPurpose',
-        assertionMethod: 'https://w3id.org/security#assertionMethod',
-        cryptosuite: 'https://w3id.org/security#cryptosuite',
-        created: 'http://purl.org/dc/terms/created',
-      },
-    },
-    'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json': {
-      '@context': {
-        Profile: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
-        Achievement:
-          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement',
-        AchievementSubject:
-          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#AchievementSubject',
-        Criteria: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Criteria',
-        Evidence: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Evidence',
-        Image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Image',
-        OpenBadgeCredential:
-          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#OpenBadgeCredential',
-        achievement:
-          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievement',
-        narrative: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#narrative',
-        image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#image',
-        name: 'https://schema.org/name',
-        description: 'https://schema.org/description',
-        url: 'https://schema.org/url',
-        email: 'https://schema.org/email',
-        caption: 'https://schema.org/caption',
-      },
-    },
-  }
-
-  if (LOCAL_CONTEXTS[url]) {
-    return {
-      contextUrl: undefined,
-      documentUrl: url,
-      document: LOCAL_CONTEXTS[url],
+function createDocumentLoader(
+  staticDocuments?: Map<string, Record<string, unknown>>,
+): (url: string) => Promise<unknown> {
+  const loader = securityLoader()
+  loader.addStatic(OB_CONTEXT_URL, obContext)
+  if (staticDocuments) {
+    for (const [url, document] of staticDocuments) {
+      loader.addStatic(url, document)
     }
   }
+  return loader.build()
+}
 
-  // Fallback: return empty context for unknown URLs
-  return {
-    contextUrl: undefined,
-    documentUrl: url,
-    document: { '@context': {} },
-  }
+function cleanHex(hex: string): string {
+  return hex.replace(/^0x/, '').replace(/\s/g, '')
 }
 
 /**
- * Canonicalize JSON-LD data using RDF Dataset Canonicalization (URDNA2015)
- * This is required for eddsa-rdfc-2022 cryptosuite compliance
+ * Derive an Ed25519Multikey key pair from a 32-byte seed (64 hex characters).
  */
-async function canonicalizeData(data: unknown): Promise<string> {
-  if (typeof data !== 'object' || data === null) {
-    throw new SigningError('Data must be an object', { data })
-  }
-  try {
-    // Use jsonld.canonize (URDNA2015) returning N-Quads with custom document loader
-    // Disable safe mode to allow custom document loader (safe option not in types)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (jsonld.canonize as any)(
-      data as Record<string, unknown>,
-      {
-        algorithm: 'URDNA2015',
-        format: 'application/n-quads',
-        documentLoader: customDocumentLoader,
-        safe: false,
-      },
+async function keyPairFromSeed(seedHex: string) {
+  const seed = hexToBytes(cleanHex(seedHex))
+  if (seed.length !== 32) {
+    throw new ConfigurationError(
+      'Ed25519 seed must be 32 bytes (64 hex characters)',
+      { length: seed.length, expected: 32 },
     )
-    return result as string
-  } catch (error) {
-    throw new SigningError('Failed to canonicalize JSON-LD data', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+  }
+  return Ed25519Multikey.generate({ seed })
+}
+
+/**
+ * Derive the Multikey material (publicKeyMultibase, hex, did:key) from a
+ * 32-byte Ed25519 seed. Used by the issuer profile endpoint and the key
+ * generation script.
+ */
+export async function seedToMultikey(seedHex: string): Promise<{
+  publicKeyMultibase: string
+  publicKeyHex: string
+  did: string
+}> {
+  const keyPair = await keyPairFromSeed(seedHex)
+  const { publicKey } = await keyPair.export({ publicKey: true, raw: true })
+  return {
+    publicKeyMultibase: keyPair.publicKeyMultibase,
+    publicKeyHex: bytesToHex(publicKey),
+    did: `did:key:${keyPair.publicKeyMultibase}`,
+  }
+}
+
+function validateEmbeddedSigningConfig(
+  config: EmbeddedProofSigningConfig,
+): void {
+  if (!config.privateKey || typeof config.privateKey !== 'string') {
+    throw new ConfigurationError(
+      'Private key (Ed25519 seed) is required and must be a hex string',
+      { hasPrivateKey: !!config.privateKey },
+    )
+  }
+
+  if (cleanHex(config.privateKey).length !== 64) {
+    throw new ConfigurationError(
+      'Private key must be 32 bytes (64 hex characters)',
+      { length: cleanHex(config.privateKey).length, expected: 64 },
+    )
+  }
+
+  if (
+    !config.verificationMethod ||
+    typeof config.verificationMethod !== 'string'
+  ) {
+    throw new ConfigurationError('Verification method URL is required', {
+      hasVerificationMethod: !!config.verificationMethod,
     })
   }
-}
 
-/**
- * Canonicalize credential and proof separately per eddsa-rdfc-2022
- * Returns canonical N-Quads for both document (without proof) and proof (without proofValue)
- */
-async function canonicalizeForProof(
-  credential: Credential,
-  proof: Omit<DataIntegrityProof, 'proofValue'>,
-) {
-  const unsigned: Record<string, unknown> = { ...credential }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { proof: _ignore, ...withoutProof } = unsigned
-
-  const canonicalDoc = await canonicalizeData(withoutProof)
-
-  // Per W3C Data Integrity spec, proof must be canonicalized with proper @context
-  // Wrap the proof in a document with the credentials v2 context so JSON-LD
-  // processor can properly interpret the proof terms during canonicalization
-  const proofWithContext = {
-    '@context': 'https://www.w3.org/ns/credentials/v2',
-    ...proof,
+  if (!config.verificationMethod.startsWith('did:')) {
+    try {
+      new URL(config.verificationMethod)
+    } catch {
+      throw new ConfigurationError('Verification method must be a valid URL', {
+        verificationMethod: config.verificationMethod,
+      })
+    }
   }
-  const canonicalProof = await canonicalizeData(proofWithContext)
-
-  return { canonicalDoc, canonicalProof }
 }
 
 function validateSigningConfig(config: SigningConfig): void {
@@ -221,47 +194,62 @@ function validateSigningConfig(config: SigningConfig): void {
 }
 
 /**
- * Sign a credential using Ed25519 with eddsa-rdfc-2022 cryptosuite
+ * Sign a credential with an embedded Data Integrity Proof
+ * (eddsa-rdfc-2022 cryptosuite) using the Digital Bazaar reference stack.
+ *
+ * The proof is normalized to a single-element array to match the repo's
+ * SignedCredential type and the OB 3.0 JSON schema.
+ *
+ * @param credential - The unsigned credential (evidence at the TOP level;
+ *   the OB 3.0 context rejects evidence nested under achievement)
+ * @param config - privateKey is the 32-byte Ed25519 seed as 64 hex chars;
+ *   verificationMethod must dereference to a Multikey document whose
+ *   controller equals the credential's issuer.id
  */
 export async function signCredential(
   credential: Credential,
-  config: SigningConfig,
+  config: EmbeddedProofSigningConfig,
 ): Promise<SignedCredential> {
-  validateSigningConfig(config)
+  validateEmbeddedSigningConfig(config)
 
   try {
-    const privateKey = hexToBytes(config.privateKey)
-    const publicKey = hexToBytes(config.publicKey)
+    const keyPair = await keyPairFromSeed(config.privateKey)
 
-    const derivedPublicKey = await ed25519.getPublicKeyAsync(privateKey)
-    if (bytesToHex(derivedPublicKey) !== bytesToHex(publicKey)) {
-      throw new SigningError('Public key does not match private key', {
-        providedPublicKey: bytesToHex(publicKey),
-        derivedPublicKey: bytesToHex(derivedPublicKey),
+    if (config.publicKey) {
+      const { publicKey } = await keyPair.export({
+        publicKey: true,
+        raw: true,
       })
+      const derivedPublicKey = bytesToHex(publicKey)
+      const providedPublicKey = cleanHex(config.publicKey).toLowerCase()
+      if (derivedPublicKey !== providedPublicKey) {
+        throw new SigningError('Public key does not match private key', {
+          providedPublicKey,
+          derivedPublicKey,
+        })
+      }
     }
 
-    const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
-      type: 'DataIntegrityProof',
-      created: new Date().toISOString(),
-      verificationMethod: config.verificationMethod,
-      cryptosuite: 'eddsa-rdfc-2022',
-      proofPurpose: 'assertionMethod',
-    }
+    // The signer's id becomes the proof's verificationMethod
+    keyPair.id = config.verificationMethod
 
-    const { canonicalDoc, canonicalProof } = await canonicalizeForProof(
-      credential,
-      baseProof,
-    )
+    const suite = new DataIntegrityProofSuite({
+      signer: keyPair.signer(),
+      cryptosuite: eddsaRdfc2022CryptoSuite,
+    })
 
-    const message = stringToBytes(canonicalDoc + canonicalProof)
+    const signed = await vc.issue({
+      credential: JSON.parse(JSON.stringify(credential)),
+      suite,
+      documentLoader: createDocumentLoader(),
+    })
 
-    const signature = await ed25519.signAsync(message, privateKey)
-    const proofValue = encodeMultibase(signature)
+    // vc.issue emits a single proof object; normalize to an array
+    const proof: DataIntegrityProof[] = Array.isArray(signed.proof)
+      ? signed.proof
+      : [signed.proof]
 
-    const fullProof: DataIntegrityProof = { ...baseProof, proofValue }
-
-    return { ...credential, proof: [fullProof] }
+    return { ...signed, proof } as SignedCredential
   } catch (error) {
     if (error instanceof SigningError || error instanceof ConfigurationError) {
       throw error
@@ -274,7 +262,18 @@ export async function signCredential(
 }
 
 /**
- * Verify a credential's cryptographic signature using eddsa-rdfc-2022
+ * Verify a credential's embedded Data Integrity Proof (eddsa-rdfc-2022)
+ * using the Digital Bazaar reference stack with a fully offline loader.
+ *
+ * For HTTP(S) verification methods the Multikey document is constructed
+ * locally from the supplied public key (hex or multibase) with
+ * controller = issuer.id, so no network fetch is performed. did:key
+ * verification methods are resolved locally by the loader (the supplied
+ * public key is implied by the DID itself).
+ *
+ * @param credential - Signed credential with a proof array
+ * @param publicKey - Ed25519 public key as 64 hex chars or multibase (z...)
+ * @returns true when the proof verifies, false otherwise
  */
 export async function verifyCredential(
   credential: SignedCredential,
@@ -297,46 +296,104 @@ export async function verifyCredential(
     })
   }
 
-  try {
-    const proof = credential.proof[0]
+  // We only ever issue a single proof. Reject proof sets: the type /
+  // cryptosuite guards below only inspect proof[0], but vc.verifyCredential
+  // would select whichever proof matches the suite, so a second proof could
+  // slip past the gate. Binding to exactly one proof keeps the gate honest.
+  if (credential.proof.length !== 1) {
+    throw new VerificationError('Credential must have exactly one proof', {
+      proofCount: credential.proof.length,
+    })
+  }
 
-    if (proof.type !== 'DataIntegrityProof') {
-      throw new VerificationError('Unsupported proof type', {
-        proofType: proof.type,
-        expected: 'DataIntegrityProof',
-      })
-    }
+  const proof = credential.proof[0]
 
-    if (proof.cryptosuite !== 'eddsa-rdfc-2022') {
-      throw new VerificationError('Unsupported cryptosuite', {
-        cryptosuite: proof.cryptosuite,
-        expected: 'eddsa-rdfc-2022',
-      })
-    }
+  if (proof.type !== 'DataIntegrityProof') {
+    throw new VerificationError('Unsupported proof type', {
+      proofType: proof.type,
+      expected: 'DataIntegrityProof',
+    })
+  }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { proof: _proofArr, ...unsigned } = credential
-    const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
-      type: 'DataIntegrityProof',
-      created: proof.created,
-      verificationMethod: proof.verificationMethod,
+  if (proof.cryptosuite !== 'eddsa-rdfc-2022') {
+    throw new VerificationError('Unsupported cryptosuite', {
       cryptosuite: proof.cryptosuite,
-      proofPurpose: proof.proofPurpose,
-    }
-    const { canonicalDoc, canonicalProof } = await canonicalizeForProof(
-      unsigned as Credential,
-      baseProof,
-    )
-    const message = stringToBytes(canonicalDoc + canonicalProof)
-    const signature = decodeMultibase(proof.proofValue)
-    const publicKeyBytes = hexToBytes(publicKey)
-    return await ed25519.verifyAsync(signature, message, publicKeyBytes)
-  } catch (error) {
-    if (error instanceof VerificationError) {
-      throw error
+      expected: 'eddsa-rdfc-2022',
+    })
+  }
+
+  try {
+    const issuerId =
+      typeof credential.issuer === 'object'
+        ? credential.issuer.id
+        : (credential.issuer as string)
+    const verificationMethodId = proof.verificationMethod
+
+    const staticDocuments = new Map<string, Record<string, unknown>>()
+    let purpose
+    if (verificationMethodId.startsWith('did:')) {
+      // A did: verification method resolves its key locally from the DID
+      // itself. That key must NOT be allowed to substitute for the trust
+      // anchor: the `publicKey` argument is the sole root of trust. Decode
+      // the did:key to its Ed25519 key and require it to equal the passed
+      // key before allowing the DID-based resolution — otherwise an attacker
+      // could self-sign with their own key under a did:key VM and have it
+      // accepted against our key.
+      const didKeyOnly = verificationMethodId.split('#')[0]
+      let vmPublicKeyMultibase: string
+      try {
+        // Validates that this is an Ed25519 did:key and normalizes the key.
+        vmPublicKeyMultibase = publicKeyToMultibase(
+          didKeyToPublicKeyHex(didKeyOnly),
+        )
+      } catch {
+        // Unsupported / malformed did: method — cannot bind to the trust
+        // anchor, so refuse to trust it.
+        return false
+      }
+      const trustedMultibase = publicKey.startsWith('z')
+        ? publicKey
+        : publicKeyToMultibase(publicKey)
+      if (vmPublicKeyMultibase !== trustedMultibase) {
+        // The DID's embedded key differs from the trusted public key: do NOT
+        // let the DID resolve its own (untrusted) key.
+        return false
+      }
+      purpose = new jsigs.purposes.AssertionProofPurpose()
+    } else {
+      const publicKeyMultibase = publicKey.startsWith('z')
+        ? publicKey
+        : publicKeyToMultibase(publicKey)
+      staticDocuments.set(verificationMethodId, {
+        '@context': 'https://w3id.org/security/multikey/v1',
+        id: verificationMethodId,
+        type: 'Multikey',
+        controller: issuerId,
+        publicKeyMultibase,
+      })
+      // Provide the controller document directly: the issuer authorizes the
+      // verification method for assertions (mirrors the public issuer
+      // profile served at /api/badge/issuer).
+      purpose = new jsigs.purposes.AssertionProofPurpose({
+        controller: {
+          id: issuerId,
+          assertionMethod: [verificationMethodId],
+        },
+      })
     }
 
-    // Return false for invalid signatures
+    const result = await vc.verifyCredential({
+      credential: JSON.parse(JSON.stringify(credential)),
+      suite: new DataIntegrityProofSuite({
+        cryptosuite: eddsaRdfc2022CryptoSuite,
+      }),
+      documentLoader: createDocumentLoader(staticDocuments),
+      purpose,
+    })
+
+    return result.verified === true
+  } catch {
+    // Return false for invalid signatures or unresolvable documents
     return false
   }
 }

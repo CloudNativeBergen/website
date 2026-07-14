@@ -101,17 +101,35 @@ const extractedCredential = extractBadge(bakedSvg)
 - **DID:key**: Decentralized identifier format with multibase encoding
 - **JWK**: JSON Web Key format for JWKS endpoints
 
+## Proof Formats
+
+Badges are issued in **two** formats simultaneously:
+
+1. **Data Integrity Proof (`eddsa-rdfc-2022`)** — a JSON-LD embedded proof
+   signed with the Digital Bazaar reference stack. This is the primary format
+   (verified by Credly and other certified OB 3.0 displayers). Signed with the
+   Ed25519 seed; verified with the derived Ed25519 public key.
+2. **JWT Proof (RS256)** — a Compact JWS for the 1EdTech OB30Inspector
+   validator. Signed with the RSA private key; verified with the RSA public
+   key.
+
 ## Environment Variables
 
-```bash
-# RSA Keys (Recommended - OpenBadges 3.0 compliant)
-BADGE_ISSUER_RSA_PRIVATE_KEY=<PEM format>
-BADGE_ISSUER_RSA_PUBLIC_KEY=<PEM format>
+Issuance needs the secret keys; verification needs only the public keys (a
+verify-only environment never needs the Ed25519 seed).
 
-# Ed25519 Keys (Legacy support)
-BADGE_ISSUER_PRIVATE_KEY=<64-char hex>
-BADGE_ISSUER_PUBLIC_KEY=<64-char hex>
+```bash
+# Issuance (secret — never commit)
+BADGE_ISSUER_RSA_PRIVATE_KEY=<PEM format>          # RS256 JWT signing
+BADGE_ISSUER_ED25519_SEED=<64-char hex>            # eddsa-rdfc-2022 signing
+
+# Verification (safe to expose)
+BADGE_ISSUER_RSA_PUBLIC_KEY=<PEM format>           # RS256 JWT verification
+BADGE_ISSUER_ED25519_PUBLIC_KEY=<multibase z...>   # embedded-proof verification
 ```
+
+Generate the Ed25519 pair with `pnpm generate-badge-ed25519-key` (prints both
+the seed and the multibase public key).
 
 ## API Routes
 
