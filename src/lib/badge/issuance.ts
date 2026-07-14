@@ -122,23 +122,24 @@ export async function issueBadgeForSpeaker(
     }
   }
 
-  const { assertion, badgeId } = await generateBadgeCredential(
-    {
-      speakerId: speaker._id,
-      speakerName: speaker.name,
-      speakerEmail: speaker.email,
-      speakerSlug: speaker.slug,
-      conferenceId: conference._id,
-      conferenceTitle: conference.title,
-      conferenceYear,
-      conferenceDate,
-      badgeType,
-      centerGraphicSvg,
-      talkId,
-      talkTitle,
-    },
-    config,
-  )
+  const { credentialJson, credentialJwt, badgeId } =
+    await generateBadgeCredential(
+      {
+        speakerId: speaker._id,
+        speakerName: speaker.name,
+        speakerEmail: speaker.email,
+        speakerSlug: speaker.slug,
+        conferenceId: conference._id,
+        conferenceTitle: conference.title,
+        conferenceYear,
+        conferenceDate,
+        badgeType,
+        centerGraphicSvg,
+        talkId,
+        talkTitle,
+      },
+      config,
+    )
 
   const svgContent = generateBadgeSVG({
     conferenceTitle: conference.title,
@@ -149,7 +150,9 @@ export async function issueBadgeForSpeaker(
   })
 
   const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
-  const bakedSvg = bakeBadge(svgContent, assertion)
+  // Bake the embedded-proof credential into the SVG — this is the artifact
+  // recipients download and upload to OB 3.0 displayers such as Credly
+  const bakedSvg = bakeBadge(svgContent, credentialJson)
 
   const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
     bakedSvg,
@@ -166,7 +169,8 @@ export async function issueBadgeForSpeaker(
     conferenceId: conference._id,
     badgeType,
     issuedAt: getCurrentDateTime(),
-    badgeJson: assertion,
+    badgeJson: JSON.stringify(credentialJson),
+    badgeJwt: credentialJwt,
     bakedSvgAssetId: assetId,
     verificationUrl,
   })

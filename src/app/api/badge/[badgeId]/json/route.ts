@@ -6,7 +6,12 @@ import { generateErrorResponse, isJWTFormat } from '@/lib/openbadges'
  * GET /api/badge/[badgeId]/json
  *
  * Returns the OpenBadges 3.0 credential.
- * Returns JWT string for new badges or JSON object for legacy badges.
+ *
+ * New badges: JSON-LD credential with embedded Data Integrity Proof — this
+ * is the .json file recipients can upload directly to Credly and other
+ * certified OB 3.0 displayers.
+ * Legacy badges (badgeJson holds a JWT string): the JWT as text/plain.
+ * The JWT for new badges is served from /api/badge/[badgeId]/jwt.
  */
 export async function GET(
   request: NextRequest,
@@ -42,13 +47,13 @@ export async function GET(
       })
     }
 
-    // Legacy: Parse and return JSON (Data Integrity Proof format)
+    // Embedded Data Integrity Proof format (primary for new badges)
     try {
       const assertion = JSON.parse(badge.badgeJson)
       return new NextResponse(JSON.stringify(assertion, null, 2), {
         status: 200,
         headers: {
-          'Content-Type': 'application/ld+json',
+          'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
           'Cache-Control': 'public, max-age=31536000, immutable',
@@ -61,13 +66,12 @@ export async function GET(
       )
     }
   } catch (error) {
+    // Log detail server-side; return a generic message to the client.
     console.error('Error fetching badge JSON:', error)
 
-    const message =
-      error instanceof Error ? error.message : 'Internal server error'
-
-    return NextResponse.json(generateErrorResponse(message, 500), {
-      status: 500,
-    })
+    return NextResponse.json(
+      generateErrorResponse('Internal server error', 500),
+      { status: 500 },
+    )
   }
 }

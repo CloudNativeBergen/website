@@ -4,7 +4,12 @@
  * Returns the issuer profile with verification methods (public keys)
  * as required by the OpenBadges 3.0 specification.
  *
- * Uses RSA keys (RS256) and exposes JWK at #key-1 fragment for JWT verification.
+ * Exposes two keys:
+ * - RSA JWK (publicKey, #key-1 fragment) for RS256 JWT verification
+ * - Ed25519 Multikey (verificationMethod/assertionMethod, #key-ed25519
+ *   fragment) for embedded Data Integrity Proof verification — verifiers
+ *   strip the fragment from proof.verificationMethod and dereference this
+ *   profile, whose controller must equal the credential's issuer.id
  *
  * Reference: https://www.imsglobal.org/spec/ob/v3p0/impl/
  */
@@ -12,7 +17,7 @@
 import { NextResponse } from 'next/server'
 import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { generateErrorResponse } from '@/lib/openbadges'
+import { generateErrorResponse, seedToMultikey } from '@/lib/openbadges'
 
 export async function GET(request: Request) {
   try {
@@ -51,14 +56,47 @@ export async function GET(request: Request) {
       })
     }
 
-    // Return issuer profile
+    // Ed25519 Multikey for embedded Data Integrity Proofs (optional; the
+    // profile still serves the RSA JWT key when the seed is not configured)
+    const issuerId = `${baseUrl}/api/badge/issuer`
+    const ed25519Seed = process.env.BADGE_ISSUER_ED25519_SEED
+    let ed25519VerificationMethod:
+      | {
+          id: string
+          type: 'Multikey'
+          controller: string
+          publicKeyMultibase: string
+        }
+      | undefined
+    if (ed25519Seed) {
+      try {
+        const { publicKeyMultibase } = await seedToMultikey(ed25519Seed)
+        ed25519VerificationMethod = {
+          id: `${issuerId}#key-ed25519`,
+          type: 'Multikey',
+          controller: issuerId,
+          publicKeyMultibase,
+        }
+      } catch (seedError) {
+        console.error(
+          'Invalid BADGE_ISSUER_ED25519_SEED; omitting Ed25519 verification method:',
+          seedError,
+        )
+      }
+    }
 
+    // Return issuer profile
+    // The profile doubles as the controller document for embedded proofs:
+    // the DID context is listed first so JSON-LD verifiers can read the
+    // verificationMethod/assertionMethod relationships directly.
     const issuerProfile = {
       '@context': [
+        'https://www.w3.org/ns/did/v1',
         'https://www.w3.org/ns/credentials/v2',
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
+        'https://w3id.org/security/multikey/v1',
       ],
-      id: `${baseUrl}/api/badge/issuer`,
+      id: issuerId,
       type: ['Profile'],
       name: conference.organizer,
       url: baseUrl,
@@ -74,11 +112,15 @@ export async function GET(request: Request) {
       },
       publicKey: [
         {
-          id: `${baseUrl}/api/badge/issuer#key-1`,
+          id: `${issuerId}#key-1`,
           type: 'JsonWebKey',
           publicKeyJwk: jwk,
         },
       ],
+      ...(ed25519VerificationMethod && {
+        verificationMethod: [ed25519VerificationMethod],
+        assertionMethod: [ed25519VerificationMethod.id],
+      }),
     }
 
     return NextResponse.json(issuerProfile, {
@@ -91,14 +133,12 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
+    // Log detail server-side; return a generic message to the client.
     console.error('Error generating issuer profile:', error)
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to generate issuer profile'
-    return NextResponse.json(generateErrorResponse(message, 500), {
-      status: 500,
-    })
+    return NextResponse.json(
+      generateErrorResponse('Failed to generate issuer profile', 500),
+      { status: 500 },
+    )
   }
 }
 

@@ -31,7 +31,7 @@ export async function validateBadge(svg: string): Promise<ValidationResult> {
 
     if (typeof credentialData === 'string') {
       isJWT = true
-      const publicKey = process.env.BADGE_ISSUER_PUBLIC_KEY
+      const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
 
       if (!publicKey) {
         checks.push({
@@ -196,16 +196,23 @@ async function validateIssuerAndProof(
           const isValid = await verifyCredential(credential, publicKeyHex)
 
           if (isValid) {
+            // The signature is cryptographically valid, but the trust anchor
+            // is the credential's OWN did:key — i.e. it is self-asserted, not
+            // verified against the conference's published issuer key. Surface
+            // this as a warning with a distinct trust level so the UI never
+            // presents a self-signed foreign credential the same way as one
+            // verified against our published key.
             checks.push({
               name: 'proof',
-              status: 'success',
-              message: `Cryptographic proof verified successfully (${proof.cryptosuite})`,
+              status: 'warning',
+              message: `Self-asserted signature is cryptographically valid (${proof.cryptosuite}), but the issuer is a did:key — the credential signs itself and is NOT verified against a published issuer key`,
               details: {
                 cryptosuite: proof.cryptosuite,
                 created: proof.created,
                 verificationMethod: proof.verificationMethod,
                 didBased: true,
                 signatureValid: true,
+                trust: 'self-asserted',
               },
             })
           } else {
@@ -217,6 +224,7 @@ async function validateIssuerAndProof(
                 cryptosuite: proof.cryptosuite,
                 verificationMethod: proof.verificationMethod,
                 signatureValid: false,
+                trust: 'self-asserted',
               },
             })
           }
@@ -307,13 +315,17 @@ async function validateIssuerAndProof(
                   name: 'proof',
                   status: isValid ? 'success' : 'error',
                   message: isValid
-                    ? `Proof signature verified (${proof.cryptosuite})`
+                    ? `Proof signature verified against the issuer's published key (${proof.cryptosuite})`
                     : `Proof signature invalid (${proof.cryptosuite})`,
                   details: {
                     cryptosuite: proof.cryptosuite,
                     created: proof.created,
                     verificationMethod: proof.verificationMethod,
                     signatureValid: isValid,
+                    // Trust anchor is the issuer's published key document,
+                    // fetched from the HTTP(S) issuer profile — not the
+                    // credential itself.
+                    trust: isValid ? 'issuer-key-verified' : 'unverified',
                   },
                 })
               } catch (error) {
@@ -359,7 +371,7 @@ async function validateIssuerAndProof(
 
 async function validateController(
   proof: { verificationMethod: string },
-  verificationMethod: { controller?: string },
+  verificationMethod: { controller?: string; publicKeyMultibase?: string },
   issuerId: string,
   checks: ValidationCheck[],
 ): Promise<string | null> {
@@ -383,38 +395,52 @@ async function validateController(
     }
   }
 
-  try {
-    const keyDocResp = await fetch(proof.verificationMethod, {
-      headers: {
-        Accept: 'application/ld+json',
-        'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
-      },
-      signal: AbortSignal.timeout(4000),
-    })
-    if (keyDocResp.ok) {
-      const keyDoc = await keyDocResp.json()
-      if (keyDoc.controller && keyDoc.controller !== issuerId) {
-        controllerIssues.push('Key document controller mismatch issuer.id')
-      }
-      if (!keyDoc.publicKeyMultibase) {
-        controllerIssues.push('Missing publicKeyMultibase in key document')
-      } else {
-        try {
-          const publicKeyBytes = decodeMultibase(keyDoc.publicKeyMultibase)
-          publicKeyHex = bytesToHex(publicKeyBytes)
-        } catch {
-          controllerIssues.push('Failed to decode publicKeyMultibase')
+  if (verificationMethod.publicKeyMultibase) {
+    // Embedded Multikey in the issuer profile (new format): the profile
+    // entry IS the key document, no separate fetch required
+    try {
+      const publicKeyBytes = decodeMultibase(
+        verificationMethod.publicKeyMultibase,
+      )
+      publicKeyHex = bytesToHex(publicKeyBytes)
+    } catch {
+      controllerIssues.push('Failed to decode publicKeyMultibase')
+    }
+  } else {
+    // Legacy format: dereference the verification method as a key document
+    try {
+      const keyDocResp = await fetch(proof.verificationMethod, {
+        headers: {
+          Accept: 'application/ld+json',
+          'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+        },
+        signal: AbortSignal.timeout(4000),
+      })
+      if (keyDocResp.ok) {
+        const keyDoc = await keyDocResp.json()
+        if (keyDoc.controller && keyDoc.controller !== issuerId) {
+          controllerIssues.push('Key document controller mismatch issuer.id')
         }
+        if (!keyDoc.publicKeyMultibase) {
+          controllerIssues.push('Missing publicKeyMultibase in key document')
+        } else {
+          try {
+            const publicKeyBytes = decodeMultibase(keyDoc.publicKeyMultibase)
+            publicKeyHex = bytesToHex(publicKeyBytes)
+          } catch {
+            controllerIssues.push('Failed to decode publicKeyMultibase')
+          }
+        }
+      } else {
+        controllerIssues.push(
+          `Failed to fetch key document (${keyDocResp.status})`,
+        )
       }
-    } else {
+    } catch (e) {
       controllerIssues.push(
-        `Failed to fetch key document (${keyDocResp.status})`,
+        `Key document fetch error: ${e instanceof Error ? e.message : 'Unknown error'}`,
       )
     }
-  } catch (e) {
-    controllerIssues.push(
-      `Key document fetch error: ${e instanceof Error ? e.message : 'Unknown error'}`,
-    )
   }
 
   if (controllerIssues.length > 0) {
@@ -495,16 +521,20 @@ function validateURLFormat(
   if (achievement && typeof achievement === 'object') {
     const urlIssues: string[] = []
 
-    if (achievement.evidence && Array.isArray(achievement.evidence)) {
-      achievement.evidence.forEach(
-        (evidence: { id?: string }, index: number) => {
-          if (evidence.id?.includes('/api/badge/issuer')) {
-            urlIssues.push(
-              `Evidence[${index}] URL incorrectly contains /api/badge/issuer`,
-            )
-          }
-        },
-      )
+    // Evidence lives at the credential top level per VC 2.0 / OB 3.0;
+    // legacy badges nested it under achievement
+    const evidence =
+      credential.evidence ??
+      (achievement as { evidence?: Array<{ id?: string }> }).evidence
+
+    if (evidence && Array.isArray(evidence)) {
+      evidence.forEach((item: { id?: string }, index: number) => {
+        if (item.id?.includes('/api/badge/issuer')) {
+          urlIssues.push(
+            `Evidence[${index}] URL incorrectly contains /api/badge/issuer`,
+          )
+        }
+      })
     }
 
     const issuerUrl =
@@ -522,7 +552,7 @@ function validateURLFormat(
         message: 'URL format issues detected',
         details: { issues: urlIssues },
       })
-    } else if (achievement.evidence || issuerUrl) {
+    } else if (evidence || issuerUrl) {
       checks.push({
         name: 'url-format',
         status: 'success',

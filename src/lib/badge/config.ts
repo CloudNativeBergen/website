@@ -21,6 +21,20 @@ export interface SigningConfiguration {
    * @see https://www.imsglobal.org/spec/ob/v3p0/impl/#external-proof-jwt-proof
    */
   verificationMethod: string
+  /**
+   * Ed25519 seed (32 bytes as 64 hex characters) for embedded Data Integrity
+   * Proofs (eddsa-rdfc-2022). Generate with:
+   * `pnpm tsx scripts/generate-badge-ed25519-key.ts`
+   */
+  ed25519Seed: string
+  /**
+   * Verification method id for embedded Data Integrity Proofs. Verifiers
+   * strip the fragment and fetch the issuer profile, which lists this id
+   * in its verificationMethod/assertionMethod arrays.
+   *
+   * @example "https://cloudnativedays.no/api/badge/issuer#key-ed25519"
+   */
+  embeddedVerificationMethod: string
 }
 
 /**
@@ -95,6 +109,18 @@ export async function createBadgeConfiguration(
     )
   }
 
+  // Load Ed25519 seed for embedded Data Integrity Proofs
+  const ed25519Seed = process.env.BADGE_ISSUER_ED25519_SEED
+  if (!ed25519Seed || !/^[0-9a-fA-F]{64}$/.test(ed25519Seed.trim())) {
+    throw new Error(
+      'BADGE_ISSUER_ED25519_SEED must be set to a 32-byte hex seed ' +
+        '(64 hex characters) for embedded Data Integrity Proof signing. ' +
+        'Generate one with: pnpm tsx scripts/generate-badge-ed25519-key.ts ' +
+        '(or pnpm generate-badge-ed25519-key). ' +
+        'See: https://github.com/cloudnativebergen/website/blob/main/docs/OPENBADGES_IMPLEMENTATION.md#key-management',
+    )
+  }
+
   // Validate that keys are RSA format (PEM with BEGIN/END markers)
   const isRSA =
     privateKey.includes('BEGIN') &&
@@ -153,6 +179,10 @@ export async function createBadgeConfiguration(
       // Fragments don't work in HTTP requests (stripped by clients)
       // See: https://github.com/1EdTech/digital-credentials-public-validator/blob/main/inspector-vc/src/main/java/org/oneedtech/inspect/vc/probe/ExternalProofProbe.java#L63
       verificationMethod: `${baseUrl}/api/badge/keys/key-1`,
+      ed25519Seed: ed25519Seed.trim(),
+      // For embedded proofs, verifiers strip the fragment and dereference
+      // the issuer profile, which lists this verification method
+      embeddedVerificationMethod: `${baseUrl}/api/badge/issuer#key-ed25519`,
     },
   }
 }
@@ -171,7 +201,7 @@ export async function createBadgeConfiguration(
  * // In tests
  * const config = createTestConfiguration()
  * const badge = await generateBadgeCredential(params, config)
- * expect(badge.assertion).toBeDefined()
+ * expect(badge.credentialJson).toBeDefined()
  * ```
  */
 export function createTestConfiguration(
@@ -186,6 +216,16 @@ export function createTestConfiguration(
     throw new Error(
       'Test keys not found. Ensure .env.test defines TEST_RSA_PRIVATE_KEY and TEST_RSA_PUBLIC_KEY, ' +
         'or run tests with BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY set.',
+    )
+  }
+
+  const ed25519Seed =
+    process.env.BADGE_ISSUER_ED25519_SEED || process.env.TEST_ED25519_SEED
+
+  if (!ed25519Seed) {
+    throw new Error(
+      'Test Ed25519 seed not found. Ensure .env.test defines BADGE_ISSUER_ED25519_SEED, ' +
+        'or generate one with: pnpm tsx scripts/generate-badge-ed25519-key.ts',
     )
   }
 
@@ -206,6 +246,8 @@ export function createTestConfiguration(
       publicKey,
       algorithm: 'RS256',
       verificationMethod: `${baseUrl}/api/badge/keys/key-1`,
+      ed25519Seed,
+      embeddedVerificationMethod: `${baseUrl}/api/badge/issuer#key-ed25519`,
     },
   }
 

@@ -47,10 +47,10 @@ export const badgeRouter = router({
 
       let badgeAssertion
       if (isJWTFormat(badge.badgeJson)) {
-        // Decode JWT to get credential
+        // Legacy badge: badgeJson holds the RS256 JWT credential
         const { verifyCredentialJWT } = await import('@/lib/openbadges')
-        const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-        if (!publicKeyHex) {
+        const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+        if (!publicKey) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'Public key not configured',
@@ -58,10 +58,7 @@ export const badgeRouter = router({
         }
 
         try {
-          badgeAssertion = await verifyCredentialJWT(
-            badge.badgeJson,
-            publicKeyHex,
-          )
+          badgeAssertion = await verifyCredentialJWT(badge.badgeJson, publicKey)
           // JWT verification succeeded
           return {
             valid: true,
@@ -78,19 +75,35 @@ export const badgeRouter = router({
           }
         }
       } else {
-        // Legacy: Parse JSON (Data Integrity Proof format)
+        // Embedded Data Integrity Proof format (eddsa-rdfc-2022)
         badgeAssertion = JSON.parse(badge.badgeJson)
 
         const { verifyCredential } = await import('@/lib/openbadges')
+
+        // Verify with OUR published Ed25519 public key; the secret seed is
+        // never needed to verify. Fail loudly (like the RSA path) rather than
+        // silently returning signatureValid: false when it is unconfigured.
+        const publicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
+        if (!publicKey) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Ed25519 issuer public key not configured',
+          })
+        }
+
         let signatureValid = false
         if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
-          // Get public key from environment
-          const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-          if (publicKeyHex) {
-            signatureValid = await verifyCredential(
-              badgeAssertion,
-              publicKeyHex,
-            )
+          // Pin the verification method to OUR issuer's embedded VM: a badge
+          // with a foreign / did:key VM must not report as signature-valid.
+          const issuerId =
+            typeof badgeAssertion.issuer === 'object'
+              ? badgeAssertion.issuer?.id
+              : badgeAssertion.issuer
+          const expectedVm = `${issuerId}#key-ed25519`
+          const proofVm = badgeAssertion.proof[0]?.verificationMethod
+
+          if (proofVm === expectedVm) {
+            signatureValid = await verifyCredential(badgeAssertion, publicKey)
           }
         }
 
