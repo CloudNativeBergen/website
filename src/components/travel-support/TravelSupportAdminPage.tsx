@@ -14,6 +14,7 @@ import { ExpenseSummary } from './ExpenseSummary'
 import { ErrorBoundary } from './ErrorBoundary'
 import { CurrencyDollarIcon, PaperClipIcon } from '@heroicons/react/24/outline'
 import { SkeletonCard } from '@/components/admin/LoadingSkeleton'
+import { AdminPageHeader } from '@/components/admin'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { ReceiptViewer } from './ReceiptViewer'
 
@@ -127,25 +128,17 @@ export function TravelSupportAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="pb-6">
-        <div className="flex items-center gap-3">
-          <CurrencyDollarIcon className="h-8 w-8 text-brand-cloud-blue" />
-          <div>
-            <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-              Travel Support Administration
-            </h1>
-            <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
-              Review and approve travel support requests from speakers
-            </p>
-          </div>
-        </div>
-
+      <AdminPageHeader
+        icon={<CurrencyDollarIcon />}
+        title="Travel Support Administration"
+        description="Review and approve travel support requests from speakers"
+      >
         {requests && (
           <div className="font-inter mt-4">
             <SummaryStats requests={requests} />
           </div>
         )}
-      </div>
+      </AdminPageHeader>
 
       <SpeakersRequiringSupport />
 
