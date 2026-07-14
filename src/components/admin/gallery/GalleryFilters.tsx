@@ -13,6 +13,8 @@ import {
 import { api } from '@/lib/trpc/client'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { AdminFilterBar } from '@/components/admin/AdminFilterBar'
+import clsx from 'clsx'
 
 interface GalleryFiltersProps {
   filters: {
@@ -202,14 +204,24 @@ export function GalleryFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- filters and callbacks are stable
   }, [debouncedLocation])
 
-  return (
-    <div className="rounded-lg bg-white p-3 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">
-      <div className="flex flex-wrap items-center gap-2">
+  const activeFilterCount = [
+    filters.featured,
+    filters.speakerId,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.photographerSearch,
+    filters.locationSearch,
+  ].filter((value) => value !== undefined && value !== '').length
+
+  const renderControls = (idPrefix: string, stacked: boolean) => {
+    const fieldWidth = (inline: string) => (stacked ? 'w-full' : inline)
+    return (
+      <>
         {/* Featured Filter */}
-        <div className="relative">
+        <div className={clsx('relative', stacked && 'w-full')}>
           <StarIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <select
-            id="featured-filter"
+            id={`${idPrefix}-featured`}
             value={
               filters.featured === undefined
                 ? 'all'
@@ -218,7 +230,10 @@ export function GalleryFilters({
                   : 'non-featured'
             }
             onChange={(e) => handleFeaturedChange(e.target.value)}
-            className="h-9 w-32 appearance-none rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className={clsx(
+              'h-11 appearance-none rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white',
+              fieldWidth('w-32'),
+            )}
             aria-label="Featured filter"
           >
             <option value="all">All</option>
@@ -230,7 +245,12 @@ export function GalleryFilters({
 
         {/* Speaker Filter */}
         {selectedSpeaker ? (
-          <div className="flex h-9 items-center gap-1 rounded-md border border-gray-300 bg-gray-50 px-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+          <div
+            className={clsx(
+              'flex h-11 items-center gap-1 rounded-md border border-gray-300 bg-gray-50 px-2 text-sm lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white',
+              stacked && 'w-full',
+            )}
+          >
             <UserIcon className="h-4 w-4 text-gray-400" />
             <span className="max-w-32 truncate">{selectedSpeaker.name}</span>
             <button
@@ -243,10 +263,14 @@ export function GalleryFilters({
           </div>
         ) : (
           <Combobox value={selectedSpeaker} onChange={handleSpeakerSelect}>
-            <div className="relative">
+            <div className={clsx('relative', stacked && 'w-full')}>
               <UserIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Combobox.Input
-                className="h-9 w-40 rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                id={`${idPrefix}-speaker`}
+                className={clsx(
+                  'h-11 rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+                  fieldWidth('w-40'),
+                )}
                 displayValue={(speaker: { _id: string; name: string } | null) =>
                   speaker?.name || ''
                 }
@@ -281,39 +305,45 @@ export function GalleryFilters({
         )}
 
         {/* Photographer Filter */}
-        <div className="relative">
+        <div className={clsx('relative', stacked && 'w-full')}>
           <CameraIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            id="photographer"
+            id={`${idPrefix}-photographer`}
             value={localPhotographer}
             onChange={(e) => setLocalPhotographer(e.target.value)}
             placeholder="Photographer"
-            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+            className={clsx(
+              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+              fieldWidth('w-36'),
+            )}
             aria-label="Filter by photographer"
           />
         </div>
 
         {/* Location Filter */}
-        <div className="relative">
+        <div className={clsx('relative', stacked && 'w-full')}>
           <MapPinIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            id="location"
+            id={`${idPrefix}-location`}
             value={localLocation}
             onChange={(e) => setLocalLocation(e.target.value)}
             placeholder="Location"
-            className="h-9 w-32 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+            className={clsx(
+              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+              fieldWidth('w-32'),
+            )}
             aria-label="Filter by location"
           />
         </div>
 
         {/* Date From Filter */}
-        <div className="relative">
+        <div className={clsx('relative', stacked && 'w-full')}>
           <CalendarIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="date"
-            id="date-from"
+            id={`${idPrefix}-date-from`}
             value={localDateFrom}
             onChange={(e) => {
               setLocalDateFrom(e.target.value)
@@ -324,17 +354,20 @@ export function GalleryFilters({
               onFiltersChange(newFilters)
               updateURL(newFilters)
             }}
-            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark"
+            className={clsx(
+              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
+              fieldWidth('w-36'),
+            )}
             aria-label="Filter from date"
           />
         </div>
 
         {/* Date To Filter */}
-        <div className="relative">
+        <div className={clsx('relative', stacked && 'w-full')}>
           <CalendarIcon className="pointer-events-none absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="date"
-            id="date-to"
+            id={`${idPrefix}-date-to`}
             value={localDateTo}
             onChange={(e) => {
               setLocalDateTo(e.target.value)
@@ -345,22 +378,46 @@ export function GalleryFilters({
               onFiltersChange(newFilters)
               updateURL(newFilters)
             }}
-            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark"
+            className={clsx(
+              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
+              fieldWidth('w-36'),
+            )}
             aria-label="Filter to date"
           />
         </div>
 
-        {/* Clear All Button */}
-        {hasActiveFilters && (
+        {/* Clear All Button (desktop only; the sheet footer provides its own) */}
+        {hasActiveFilters && !stacked && (
           <button
             onClick={clearAllFilters}
-            className="h-9 rounded-md bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            className="h-11 rounded-md bg-gray-100 px-3 text-sm font-medium text-gray-700 hover:bg-gray-200 lg:h-9 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             aria-label="Clear all filters"
           >
             Clear
           </button>
         )}
-      </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="rounded-lg bg-white p-3 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">
+      <AdminFilterBar
+        variant="bare"
+        filters={[]}
+        activeFilterCount={activeFilterCount}
+        onClearAll={hasActiveFilters ? clearAllFilters : undefined}
+        desktopExtra={
+          <div className="flex flex-wrap items-center gap-2">
+            {renderControls('gallery', false)}
+          </div>
+        }
+        sheetExtra={
+          <div className="flex flex-col gap-3">
+            {renderControls('gallery-sheet', true)}
+          </div>
+        }
+      />
     </div>
   )
 }

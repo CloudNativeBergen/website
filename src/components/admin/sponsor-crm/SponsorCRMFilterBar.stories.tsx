@@ -77,7 +77,6 @@ const meta = {
     onClearSelection: fn(),
     isMobileSearchOpen: false,
     onToggleMobileSearch: fn(),
-    onOpenMobileFilter: fn(),
   },
   decorators: [
     (Story) => (

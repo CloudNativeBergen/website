@@ -1,6 +1,5 @@
 'use client'
 
-import { FunnelIcon } from '@heroicons/react/20/solid'
 import {
   Status,
   Format,
@@ -14,6 +13,12 @@ import {
 import { Flags } from '@/lib/speaker/types'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import {
+  AdminFilterBar,
+  type FilterGroup,
+} from '@/components/admin/AdminFilterBar'
+import { FilterSection } from '@/components/admin/sponsor-crm/MobileFilterSheet'
+import clsx from 'clsx'
 
 export enum ReviewStatus {
   unreviewed = 'unreviewed',
@@ -52,7 +57,27 @@ interface ProposalsFilterProps {
   allowedFormats?: Format[]
 }
 
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
+const SORT_OPTIONS: { key: FilterState['sortBy']; label: string }[] = [
+  { key: 'created', label: 'Date Created' },
+  { key: 'title', label: 'Title' },
+  { key: 'speaker', label: 'Speaker' },
+  { key: 'status', label: 'Status' },
+  { key: 'rating', label: 'Rating' },
+  { key: 'reviews', label: 'Review Count' },
+]
+
+const SORT_LABELS: Record<FilterState['sortBy'], string> = {
+  created: 'Date',
+  title: 'Title',
+  speaker: 'Speaker',
+  status: 'Status',
+  rating: 'Rating',
+  reviews: 'Review Count',
+}
+
+// Sentinel value used to model the "hide speakers with accepted talks" toggle
+// as a regular option inside the declarative Speakers filter group.
+const HIDE_MULTIPLE_TALKS = 'hideMultipleTalks'
 
 export function ProposalsFilter({
   filters,
@@ -67,240 +92,169 @@ export function ProposalsFilter({
   currentUserId,
   allowedFormats,
 }: ProposalsFilterProps) {
-  return (
-    <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center space-x-2">
-            <FunnelIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Filters:
-            </span>
-          </div>
+  const filterGroups: FilterGroup[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      options: Object.values(Status).map((status) => ({
+        value: status,
+        label: (
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeConfig(status).bgColor} ${getStatusBadgeConfig(status).textColor}`}
+          >
+            {statuses.get(status)}
+          </span>
+        ),
+      })),
+      selected: filters.status,
+      onChange: (value) => onFilterChange('status', value as Status),
+    },
+    {
+      key: 'format',
+      label: 'Format',
+      options: (allowedFormats || Object.values(Format)).map((format) => ({
+        value: format,
+        label: formats.get(format) ?? format,
+      })),
+      selected: filters.format,
+      onChange: (value) => onFilterChange('format', value as Format),
+    },
+    {
+      key: 'level',
+      label: 'Level',
+      options: Object.values(Level).map((level) => ({
+        value: level,
+        label: levels.get(level) ?? level,
+      })),
+      selected: filters.level,
+      onChange: (value) => onFilterChange('level', value as Level),
+    },
+    {
+      key: 'speakers',
+      label: 'Speakers',
+      width: 'wider',
+      options: [
+        {
+          value: HIDE_MULTIPLE_TALKS,
+          label: (
+            <div className="flex flex-col space-y-1 text-left">
+              <span className="font-medium text-gray-900 dark:text-white">
+                Hide speakers with accepted talks
+              </span>
+              <span className="max-w-xs text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                Only show submitted proposals from speakers who don&apos;t
+                already have accepted or confirmed talks
+              </span>
+            </div>
+          ),
+        },
+        {
+          value: Flags.diverseSpeaker,
+          label: 'Underrepresented speakers',
+          dividerBefore: true,
+        },
+        { value: Flags.firstTimeSpeaker, label: 'New speakers' },
+        { value: Flags.localSpeaker, label: 'Local speakers' },
+        {
+          value: Flags.requiresTravelFunding,
+          label: 'Requires travel funding',
+        },
+      ],
+      selected: [
+        ...(filters.hideMultipleTalks ? [HIDE_MULTIPLE_TALKS] : []),
+        ...filters.speakerFlags,
+      ],
+      onChange: (value) => {
+        if (value === HIDE_MULTIPLE_TALKS) {
+          onMultipleTalksFilterChange(!filters.hideMultipleTalks)
+        } else {
+          onFilterChange('speakerFlags', value as Flags)
+        }
+      },
+    },
+  ]
 
-          <div className="relative min-w-[240px]">
-            <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={filters.searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search proposals or speakers..."
-              className="block w-full rounded-md border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
-            />
-            {filters.searchQuery && (
-              <button
-                onClick={() => onSearchChange('')}
-                className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              >
-                <XMarkIcon className="h-4 w-4" />
-              </button>
+  if (currentUserId) {
+    filterGroups.push({
+      key: 'reviews',
+      label: 'Reviews',
+      width: 'wide',
+      position: 'right',
+      multi: false,
+      selected: [filters.reviewStatus],
+      onChange: (value) => onReviewStatusChange(value as ReviewStatus),
+      options: [
+        { value: ReviewStatus.unreviewed, label: 'Todo (not reviewed by me)' },
+        { value: ReviewStatus.reviewed, label: 'Done (reviewed by me)' },
+        { value: ReviewStatus.all, label: 'All proposals' },
+      ],
+    })
+  }
+
+  const sortDropdown = (
+    <FilterDropdown
+      label={`Sort: ${SORT_LABELS[filters.sortBy]}`}
+      activeCount={0}
+      position="right"
+      size="sm"
+    >
+      {SORT_OPTIONS.map((option) => (
+        <FilterOption
+          key={option.key}
+          onClick={() => onSortChange(option.key)}
+          checked={filters.sortBy === option.key}
+          type="radio"
+        >
+          {option.label}
+        </FilterOption>
+      ))}
+      <hr className="my-1" />
+      <FilterOption onClick={onSortOrderToggle} checked={false} type="checkbox">
+        {filters.sortOrder === 'asc' ? '↑ Ascending' : '↓ Descending'}
+      </FilterOption>
+    </FilterDropdown>
+  )
+
+  const sortSheet = (
+    <FilterSection title={`Sort: ${SORT_LABELS[filters.sortBy]}`}>
+      <div className="flex flex-wrap gap-2">
+        {SORT_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            onClick={() => onSortChange(option.key)}
+            className={clsx(
+              'flex min-h-11 items-center rounded-full px-3.5 text-sm font-medium transition-colors',
+              filters.sortBy === option.key
+                ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 ring-inset dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
             )}
-          </div>
-
-          <FilterDropdown
-            label="Status"
-            activeCount={filters.status.length}
-            keepOpen
           >
-            {Object.values(Status).map((status) => (
-              <FilterOption
-                key={status}
-                onClick={() => onFilterChange('status', status)}
-                checked={filters.status.includes(status)}
-                type="checkbox"
-                keepOpen
-              >
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeConfig(status).bgColor} ${getStatusBadgeConfig(status).textColor}`}
-                >
-                  {statuses.get(status)}
-                </span>
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Format"
-            activeCount={filters.format.length}
-            keepOpen
-          >
-            {(allowedFormats || Object.values(Format)).map((format) => (
-              <FilterOption
-                key={format}
-                onClick={() => onFilterChange('format', format)}
-                checked={filters.format.includes(format)}
-                type="checkbox"
-                keepOpen
-              >
-                {formats.get(format)}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Level"
-            activeCount={filters.level.length}
-            keepOpen
-          >
-            {Object.values(Level).map((level) => (
-              <FilterOption
-                key={level}
-                onClick={() => onFilterChange('level', level)}
-                checked={filters.level.includes(level)}
-                type="checkbox"
-                keepOpen
-              >
-                {levels.get(level)}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Speakers"
-            activeCount={
-              (filters.hideMultipleTalks ? 1 : 0) + filters.speakerFlags.length
-            }
-            keepOpen
-            width="wider"
-          >
-            <FilterOption
-              onClick={() =>
-                onMultipleTalksFilterChange(!filters.hideMultipleTalks)
-              }
-              checked={filters.hideMultipleTalks}
-              type="checkbox"
-              keepOpen
-              className="text-left"
-            >
-              <div className="flex flex-col space-y-1 text-left">
-                <span className="font-medium text-gray-900 dark:text-white">
-                  Hide speakers with accepted talks
-                </span>
-                <span className="max-w-xs text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                  Only show submitted proposals from speakers who don&apos;t
-                  already have accepted or confirmed talks
-                </span>
-              </div>
-            </FilterOption>
-
-            <hr className="my-2" />
-
-            <FilterOption
-              onClick={() =>
-                onFilterChange('speakerFlags', Flags.diverseSpeaker)
-              }
-              checked={filters.speakerFlags.includes(Flags.diverseSpeaker)}
-              type="checkbox"
-              keepOpen
-              className="text-left"
-            >
-              Underrepresented speakers
-            </FilterOption>
-            <FilterOption
-              onClick={() =>
-                onFilterChange('speakerFlags', Flags.firstTimeSpeaker)
-              }
-              checked={filters.speakerFlags.includes(Flags.firstTimeSpeaker)}
-              type="checkbox"
-              keepOpen
-              className="text-left"
-            >
-              New speakers
-            </FilterOption>
-            <FilterOption
-              onClick={() => onFilterChange('speakerFlags', Flags.localSpeaker)}
-              checked={filters.speakerFlags.includes(Flags.localSpeaker)}
-              type="checkbox"
-              keepOpen
-              className="text-left"
-            >
-              Local speakers
-            </FilterOption>
-            <FilterOption
-              onClick={() =>
-                onFilterChange('speakerFlags', Flags.requiresTravelFunding)
-              }
-              checked={filters.speakerFlags.includes(
-                Flags.requiresTravelFunding,
-              )}
-              type="checkbox"
-              keepOpen
-              className="text-left"
-            >
-              Requires travel funding
-            </FilterOption>
-          </FilterDropdown>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {currentUserId && (
-            <FilterDropdown
-              label="Reviews"
-              activeCount={filters.reviewStatus !== ReviewStatus.all ? 1 : 0}
-              position="right"
-              width="wide"
-            >
-              {Object.values(ReviewStatus).map((status) => (
-                <FilterOption
-                  key={status}
-                  onClick={() => onReviewStatusChange(status)}
-                  checked={filters.reviewStatus === status}
-                  type="radio"
-                >
-                  {status === ReviewStatus.unreviewed
-                    ? 'Todo (not reviewed by me)'
-                    : status === ReviewStatus.reviewed
-                      ? 'Done (reviewed by me)'
-                      : 'All proposals'}
-                </FilterOption>
-              ))}
-            </FilterDropdown>
-          )}
-
-          <FilterDropdown
-            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'reviews' ? 'Review Count' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
-            activeCount={0}
-            position="right"
-          >
-            {[
-              { key: 'created', label: 'Date Created' },
-              { key: 'title', label: 'Title' },
-              { key: 'speaker', label: 'Speaker' },
-              { key: 'status', label: 'Status' },
-              { key: 'rating', label: 'Rating' },
-              { key: 'reviews', label: 'Review Count' },
-            ].map((option) => (
-              <FilterOption
-                key={option.key}
-                onClick={() =>
-                  onSortChange(option.key as FilterState['sortBy'])
-                }
-                checked={filters.sortBy === option.key}
-                type="radio"
-              >
-                {option.label}
-              </FilterOption>
-            ))}
-            <hr className="my-1" />
-            <FilterOption
-              onClick={onSortOrderToggle}
-              checked={false}
-              type="checkbox"
-            >
-              {filters.sortOrder === 'asc' ? '↑ Ascending' : '↓ Descending'}
-            </FilterOption>
-          </FilterDropdown>
-
-          {activeFilterCount > 0 && (
-            <button
-              onClick={onClearAll}
-              className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-            >
-              Clear all ({activeFilterCount})
-            </button>
-          )}
-        </div>
+            {option.label}
+          </button>
+        ))}
+        <button
+          onClick={onSortOrderToggle}
+          className="flex min-h-11 items-center rounded-full bg-gray-100 px-3.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          {filters.sortOrder === 'asc' ? '↑ Ascending' : '↓ Descending'}
+        </button>
       </div>
-    </div>
+    </FilterSection>
+  )
+
+  return (
+    <AdminFilterBar
+      filters={filterGroups}
+      search={{
+        value: filters.searchQuery,
+        onChange: onSearchChange,
+        placeholder: 'Search proposals or speakers...',
+      }}
+      onClearAll={onClearAll}
+      activeFilterCount={activeFilterCount}
+      desktopExtra={sortDropdown}
+      sheetExtra={sortSheet}
+      mobileFilterLabel="Filters"
+    />
   )
 }
