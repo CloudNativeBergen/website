@@ -4,14 +4,28 @@ This document provides a high-level architectural overview of the OpenBadges 3.0
 
 ## Overview
 
-The badge system issues **OpenBadges 3.0 compliant** digital credentials to speakers and organizers. These badges are:
+The badge system issues **OpenBadges 3.0 compliant** digital credentials to speakers and organizers. Every badge is signed in **two formats**:
 
-- **Cryptographically signed** using RS256 (RSA) or EdDSA (Ed25519) algorithms
-- **JWT-based** with dereferenceable public keys for external validator compatibility
+1. **Embedded Data Integrity Proof (primary)** — JSON-LD credential with an
+   `eddsa-rdfc-2022` proof, signed with the Digital Bazaar reference stack
+   (`@digitalbazaar/vc`). This is what certified OB 3.0 displayers such as
+   **Credly** verify, and it is the format baked into the SVG and stored in
+   the `badgeJson` field.
+2. **RS256 JWT (secondary)** — Compact JWS for the 1EdTech OB30Inspector
+   validator, stored in the `badgeJwt` field and served from
+   `/api/badge/[id]/jwt`.
+
+The badges are:
+
+- **Cryptographically signed** using Ed25519 (embedded proof) and RS256 (JWT)
 - **Verifiable** using W3C Verifiable Credentials Data Model 2.0
 - **Portable** across digital wallet platforms (Credly, Badgr, LinkedIn)
 - **Embeddable** in SVG images with "baked" credentials
 - **Multi-tenant** supporting multiple conferences with independent configurations
+
+**What to give Credly:** either the baked SVG (downloaded from
+`/api/badge/[id]/download`) or the JSON credential from
+`/api/badge/[id]/json` — both contain the embedded Data Integrity Proof.
 
 ## Architecture
 
@@ -57,10 +71,14 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Key Modules:**
 
-- **`credential.ts`** - Create unsigned credentials with validation
-- **`crypto.ts`** - JWT signing and verification (RS256/EdDSA), JWK conversion
+- **`credential.ts`** - Create unsigned credentials with validation (evidence
+  at the credential top level, mailto: recipients lowercased)
+- **`crypto.ts`** - Embedded Data Integrity Proof signing/verification
+  (eddsa-rdfc-2022 via the Digital Bazaar stack with an offline document
+  loader) plus JWT signing and verification (RS256/EdDSA), JWK conversion
 - **`keys.ts`** - DID key management (generation, conversion, extraction)
-- **`baking.ts`** - Embed/extract credentials in SVG files (supports JWT format)
+- **`baking.ts`** - Embed/extract credentials in SVG files (JSON-LD CDATA for
+  embedded proofs, `verify` attribute for JWT)
 - **`validator.ts`** - JSON schema validation against OB 3.0 spec
 - **`errors.ts`** - Typed error handling
 
@@ -116,15 +134,16 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Key Routes:**
 
-| Endpoint                          | Purpose                            | Content Type          |
-| --------------------------------- | ---------------------------------- | --------------------- |
-| `GET /api/badge/issuer`           | Issuer profile with JWK public key | `application/ld+json` |
-| `GET /api/badge/[id]/json`        | Raw credential JSON-LD             | `application/ld+json` |
-| `GET /api/badge/[id]/verify`      | Credential + verification status   | `application/json`    |
-| `GET /api/badge/[id]/image`       | Badge SVG visual                   | `image/svg+xml`       |
-| `GET /api/badge/[id]/download`    | Baked SVG download                 | `image/svg+xml`       |
-| `GET /api/badge/[id]/achievement` | Achievement definition             | `application/ld+json` |
-| `badge.validate` (tRPC)           | Admin validation tool              | `application/json`    |
+| Endpoint                          | Purpose                                                        | Content Type          |
+| --------------------------------- | -------------------------------------------------------------- | --------------------- |
+| `GET /api/badge/issuer`           | Issuer profile with RSA JWK + Ed25519 Multikey                 | `application/ld+json` |
+| `GET /api/badge/[id]/json`        | Embedded-proof credential JSON (legacy badges: JWT text/plain) | `application/json`    |
+| `GET /api/badge/[id]/jwt`         | RS256 JWT credential (404 when absent)                         | `text/plain`          |
+| `GET /api/badge/[id]/verify`      | Credential + verification status                               | `application/json`    |
+| `GET /api/badge/[id]/image`       | Badge SVG visual                                               | `image/svg+xml`       |
+| `GET /api/badge/[id]/download`    | Baked SVG download                                             | `image/svg+xml`       |
+| `GET /api/badge/[id]/achievement` | Achievement definition                                         | `application/ld+json` |
+| `badge.validate` (tRPC)           | Admin validation tool                                          | `application/json`    |
 
 ---
 
@@ -179,9 +198,12 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Identity Management:**
 
-- **Issuer ID:** `https://domain.com` (HTTP issuer for RS256) or `did:key:z6Mkg51...` (DID for EdDSA)
-- **Subject ID:** `mailto:speaker@example.com` (email-based recipient identity)
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-1` (RS256) or `did:key:...#...` (EdDSA)
+- **Issuer ID:** `{baseUrl}/api/badge/issuer` (dereferenceable issuer profile)
+- **Subject ID:** `mailto:speaker@example.com` (email-based recipient
+  identity, always lowercased — Credly matches recipients by a
+  case-sensitive email hash)
+- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`
+  (embedded proof) and `{baseUrl}/api/badge/keys/key-1` (JWT `kid`)
 
 **URLs:**
 
@@ -190,21 +212,37 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 - **Image ID:** `https://domain.com/api/badge/{uuid}/image`
 - **Issuer URL:** `https://domain.com` (organization homepage)
 - **Evidence:** `https://domain.com/speaker/{slug}`, `https://domain.com/program#talk-{id}`
+  — evidence is placed at the **credential top level** per VC 2.0 / OB 3.0
+  (the OB context rejects evidence nested under achievement)
 
-**JWT Proof (RS256):**
-
-- **Type:** JWT Compact Serialization
-- **Algorithm:** RS256 (RSA with SHA-256)
-- **Header:** `alg: "RS256"`, `typ: "JWT"`, `kid: "{baseUrl}/api/badge/issuer#key-1"`
-- **Claims:** `iss`, `jti`, `sub`, `nbf`, `exp`, `vc` (full credential)
-
-**Data Integrity Proof (EdDSA - Legacy):**
+**Data Integrity Proof (Ed25519 - Primary):**
 
 - **Type:** `DataIntegrityProof`
 - **Cryptosuite:** `eddsa-rdfc-2022` (Ed25519 signatures)
 - **Proof Purpose:** `assertionMethod`
+- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519` —
+  verifiers strip the fragment and fetch the issuer profile, which lists the
+  key in its `verificationMethod` array with `controller` = issuer id
+
+**JWT Proof (RS256 - Secondary):**
+
+- **Type:** JWT Compact Serialization
+- **Algorithm:** RS256 (RSA with SHA-256)
+- **Header:** `alg: "RS256"`, `typ: "JWT"`, `kid: "{baseUrl}/api/badge/keys/key-1"`
+- **Claims:** `iss`, `jti`, `sub`, `nbf`, `exp` + credential at top level
 
 See example credential in `/lib/openbadges/README.md`
+
+**Historical note (pre-2026 embedded proofs):** the original hand-rolled
+`signCredential` implementation was broken four ways — it signed the
+unhashed, reversed concatenation of the canonical documents instead of
+`sha256(proofOptions) || sha256(document)`, canonicalized against fake stub
+contexts that silently dropped most RDF quads, canonicalized the proof
+options with the wrong context, and masked all of this by canonicalizing
+with `safe: false`. Those proofs never verified outside this codebase. The
+implementation was replaced with the Digital Bazaar reference stack; all
+production badges issued before the switch store a JWT in `badgeJson`
+(handled by the legacy code paths), so no data migration is required.
 
 ---
 
@@ -212,59 +250,79 @@ See example credential in `/lib/openbadges/README.md`
 
 ### Key Generation
 
-**RSA Keys (Recommended - OpenBadges 3.0 Compliant):**
+**Ed25519 seed (embedded Data Integrity Proofs — required):**
+
+```bash
+pnpm tsx scripts/generate-badge-ed25519-key.ts
+# or: pnpm generate-badge-ed25519-key
+```
+
+Prints a random 32-byte seed (64 hex characters) plus the derived
+`publicKeyMultibase` (as `BADGE_ISSUER_ED25519_PUBLIC_KEY`) and `did:key`.
+The seed IS the private key and is used for issuance/signing; the multibase
+public key is used for verification and is also served from the issuer
+profile. Configure both variables.
+
+**RSA Keys (JWT format — required):**
 
 ```bash
 npx tsx scripts/generate-rsa-keys.ts
 ```
 
-**Ed25519 Keys (Legacy Support):**
-
-```bash
-npx tsx scripts/generate-badge-keys.ts
-```
-
 ### Environment Variables
 
-**RSA Keys (Recommended):**
+Issuance and verification use different keys. A verify-only / preview
+environment needs only the public (verification) variables — never the secret
+Ed25519 seed.
+
+**Issuance (signing) — secret:**
 
 - `BADGE_ISSUER_RSA_PRIVATE_KEY` - PEM-encoded RSA private key (keep secret!)
-- `BADGE_ISSUER_RSA_PUBLIC_KEY` - PEM-encoded RSA public key
+- `BADGE_ISSUER_ED25519_SEED` - 32-byte Ed25519 seed as 64 hex characters
+  (keep secret! — generate with `pnpm generate-badge-ed25519-key`)
 
-**Ed25519 Keys (Fallback):**
+**Verification — safe to expose:**
 
-- `BADGE_ISSUER_PRIVATE_KEY` - Hex-encoded Ed25519 private key
-- `BADGE_ISSUER_PUBLIC_KEY` - Hex-encoded Ed25519 public key
+- `BADGE_ISSUER_RSA_PUBLIC_KEY` - PEM-encoded RSA public key (also required at
+  issuance to embed the JWK)
+- `BADGE_ISSUER_ED25519_PUBLIC_KEY` - Ed25519 public key as multibase (`z...`),
+  derived from the seed. Used by the verify routes; the seed is NOT needed to
+  verify.
 
 **Key Storage:**
 
 - Store in `.env.local` for development
 - Use Vercel environment variables for production
 - Never commit private keys to version control
-- System prefers RSA keys when both types are present
 
 ### Cryptographic Signing
 
-The system supports two signing methods:
+Every badge is signed with both methods:
 
-#### JWT Proof Format (RS256 - Default)
+#### Data Integrity Proof (eddsa-rdfc-2022 - Primary)
+
+- **Stack:** `@digitalbazaar/vc` + `@digitalbazaar/data-integrity` +
+  `@digitalbazaar/eddsa-rdfc-2022-cryptosuite` (the reference implementation)
+- **Document loader:** fully offline — Digital Bazaar's `securityLoader`
+  extended with the vendored OB 3.0 context (`/lib/openbadges/data/`); our
+  own signing/verification never fetches contexts over the network
+- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`, listed
+  as a Multikey in the issuer profile with `controller` = issuer id
+- **Baking:** Credential embedded in SVG as
+  `<openbadges:credential><![CDATA[{json}]]></openbadges:credential>`
+  (no `verify` attribute)
+- **Consumers:** Credly and other certified OB 3.0 displayers
+
+#### JWT Proof Format (RS256 - Secondary)
 
 - **Algorithm:** RS256 (RSA with SHA-256) per OpenBadges 3.0 spec section 8.2.3
-- **Key Reference:** `kid` header points to `{baseUrl}/api/badge/issuer#key-1`
-- **Public Key:** Exposed as JWK at issuer endpoint
+- **Key Reference:** `kid` header points to `{baseUrl}/api/badge/keys/key-1`
+- **Public Key:** Exposed as JWK at the keys endpoint and issuer profile
 - **Format:** Compact JWS (header.payload.signature)
 - **Verification:** External validators can dereference public key from issuer endpoint
-- **Baking:** JWT embedded in SVG using `<openbadges:credential verify="{jwt}">`
-
-#### Data Integrity Proof (EdDSA - Legacy)
-
-- **Cryptosuite:** `eddsa-rdfc-2022` with Ed25519 signatures
-- **Identity:** `did:key` for self-sovereign, portable verification
-- **Process:** RDF Dataset Canonicalization (URDNA2015) + Ed25519 signature
-- **Verification:** Offline verification, no HTTP endpoint required
-- **Baking:** Credential embedded in SVG with CDATA wrapper
-
-The JWT format with RS256 is recommended for maximum compatibility with external OpenBadges 3.0 validators and digital wallet platforms.
+- **Consumers:** 1EdTech OB30Inspector validator
+- **Baking (legacy badges only):** JWT embedded in SVG using
+  `<openbadges:credential verify="{jwt}">`
 
 ---
 

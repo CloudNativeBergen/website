@@ -4,9 +4,8 @@
  * Tests one complete happy path and extensive edge cases for all modules.
  */
 
-// Unmock jose and noble-ed25519 for this test - we need real crypto operations
+// Unmock jose for this test - we need real crypto operations
 vi.unmock('jose')
-vi.unmock('@noble/ed25519')
 
 import {
   createCredential,

@@ -88,7 +88,7 @@ describe('Badge System E2E', () => {
 
       const result = await generateBadgeCredential(testBadgeParams, config)
 
-      badgeCredential = result.assertion
+      badgeCredential = result.credentialJwt
       badgeId = result.badgeId
 
       // Badge is now JWT format
@@ -140,7 +140,7 @@ describe('Badge System E2E', () => {
       console.log('✓ Badge generated as valid JWT with verified signature')
     })
 
-    it('should include achievement with evidence', async () => {
+    it('should include achievement and top-level evidence', async () => {
       if (!decodedCredential) {
         throw new Error('Credential not decoded yet')
       }
@@ -152,13 +152,15 @@ describe('Badge System E2E', () => {
       expect(achievement.criteria).toBeDefined()
       expect(achievement.criteria.narrative).toBeTruthy()
 
-      // Verify evidence
-      expect(achievement.evidence).toBeDefined()
-      expect(Array.isArray(achievement.evidence)).toBe(true)
-      expect(achievement.evidence!.length).toBeGreaterThan(0)
+      // Verify evidence lives at the credential TOP level (per VC 2.0 /
+      // OB 3.0 — the OB context rejects evidence nested under achievement)
+      const evidence = decodedCredential.evidence
+      expect(evidence).toBeDefined()
+      expect(Array.isArray(evidence)).toBe(true)
+      expect(evidence!.length).toBeGreaterThan(0)
 
       // Check that evidence items have expected structure
-      const firstEvidence = achievement.evidence![0]
+      const firstEvidence = evidence![0]
       expect(firstEvidence.id).toBeTruthy()
       expect(firstEvidence.type).toBeDefined()
       expect(Array.isArray(firstEvidence.type)).toBe(true)
@@ -169,7 +171,7 @@ describe('Badge System E2E', () => {
       expect(firstEvidence.id).toBe(`https://${TEST_HOST}/speaker/jane-doe`)
 
       console.log(
-        '✓ Achievement includes valid evidence with correct URL format',
+        '✓ Credential includes valid top-level evidence with correct URL format',
       )
     })
 
@@ -403,7 +405,7 @@ describe('Badge System E2E', () => {
       })
 
       // 1. Generate badge (JWT format)
-      const { assertion } = await generateBadgeCredential(
+      const { credentialJwt: assertion } = await generateBadgeCredential(
         testBadgeParams,
         config,
       )
@@ -468,7 +470,7 @@ describe('Badge System E2E', () => {
         badgeType: testBadgeParams.badgeType,
       })
 
-      const { assertion } = await generateBadgeCredential(
+      const { credentialJwt: assertion } = await generateBadgeCredential(
         testBadgeParams,
         config,
       )

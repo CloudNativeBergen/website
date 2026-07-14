@@ -15,13 +15,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '__tests__/mocks/jose.ts'),
       },
       {
-        find: '@noble/ed25519',
-        replacement: path.resolve(
-          __dirname,
-          '__tests__/mocks/noble-ed25519.ts',
-        ),
-      },
-      {
         find: /^next-auth$/,
         replacement: path.resolve(__dirname, '__tests__/mocks/next-auth.ts'),
       },
