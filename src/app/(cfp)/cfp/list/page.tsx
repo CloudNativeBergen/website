@@ -16,6 +16,8 @@ import { SpeakerShare } from '@/components/SpeakerShare'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
 import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmationHandler'
+import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
+import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
@@ -36,6 +38,21 @@ export default async function SpeakerDashboard() {
 
   const speaker = session.speaker
   const speakerId = speaker._id
+
+  // Identity guidance ("not seeing your talks?"): the session speaker doesn't
+  // carry `providers[]`, so read just that field (cached, not the whole doc) to
+  // know which OAuth account is still unlinked. Non-fatal — the prompt degrades
+  // to offering both providers.
+  const speakerProviders =
+    (await clientReadCached.fetch<string[] | null>(
+      `*[_type == "speaker" && _id == $id][0].providers`,
+      { id: speakerId },
+    )) ??
+    speaker.providers ??
+    []
+  const currentProvider = session.account?.provider
+  const organizerContactEmail =
+    currentConference?.cfpEmail || currentConference?.contactEmail
 
   // Fetch all conferences where speaker has activity (server-side)
   const conferencesQuery = groq`
@@ -212,6 +229,10 @@ export default async function SpeakerDashboard() {
     talks: confirmedTalks,
   }
 
+  // Whether the speaker has any proposals at all. Drives the prominent vs.
+  // subtle "not seeing your talks?" identity guidance below.
+  const hasAnyProposals = activeConferences.some((c) => c.proposals.length > 0)
+
   // Prepare data for speaker share wrapper
   const primaryTalk = confirmedTalks[0]
   const talkTitle = primaryTalk?.title || 'Cloud Native Days Norway'
@@ -257,6 +278,16 @@ export default async function SpeakerDashboard() {
           </p>
         </div>
 
+        <div className="mt-6">
+          <NotSeeingTalksPrompt
+            hasProposals={false}
+            providers={speakerProviders}
+            currentProvider={currentProvider}
+            contactEmail={organizerContactEmail}
+            onLinkAction={startProviderLink}
+          />
+        </div>
+
         <div className="mt-6 max-w-md">
           <SpeakerShare speaker={speakerWithTalks} />
         </div>
@@ -289,6 +320,14 @@ export default async function SpeakerDashboard() {
               defaultExpanded={true}
             />
           ))}
+
+          <NotSeeingTalksPrompt
+            hasProposals={hasAnyProposals}
+            providers={speakerProviders}
+            currentProvider={currentProvider}
+            contactEmail={organizerContactEmail}
+            onLinkAction={startProviderLink}
+          />
         </div>
 
         {/* Sidebar */}
