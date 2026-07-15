@@ -30,15 +30,20 @@ export async function startProviderLink(formData: FormData): Promise<void> {
   }
 
   const session = await auth()
-  if (!session?.speaker?._id) {
+  if (!session?.speaker?._id || !session.user?.sub) {
     // Not signed in — cannot link. Send them through the normal sign-in flow.
     await signIn(provider, { redirectTo: '/cfp/profile' })
     return
   }
 
+  // Bind the intent to THIS session: `speakerId` is the target document and
+  // `initiatorSub` is the initiating session's stable id. Consumption requires
+  // the browser's pre-existing session to still match both, so a lingering
+  // intent cannot be consumed by a different person's sign-in.
   const token = signLinkIntent({
     speakerId: session.speaker._id,
     provider,
+    initiatorSub: session.user.sub,
   })
 
   const jar = await cookies()

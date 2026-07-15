@@ -18,13 +18,18 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
  *    `AUTH_SECRET`. A client cannot forge or tamper with it (no valid MAC).
  *  - It is delivered as an httpOnly, Secure, SameSite=Lax cookie, so hostile
  *    JavaScript cannot read it and it is not attachable cross-site.
- *  - It carries a short expiry (5 min) and a random nonce. Because it is bound
+ *  - It carries a short expiry (120s) and a random nonce. Because it is bound
  *    to X and only ever present in X's own httpOnly cookie, it cannot be
  *    replayed to attach a provider to a *different* speaker: an attacker can
  *    neither forge it (no key) nor exfiltrate X's cookie (httpOnly). Replay in
  *    X's own browser only re-links the same provider to X, which is idempotent.
  *  - The token is bound to a specific target provider; the OAuth callback only
  *    honours it when the provider just authenticated matches the bound one.
+ *  - It is bound to the INITIATING session: the payload carries the initiating
+ *    session's stable `sub`. At consumption the callback requires the browser's
+ *    pre-existing session to still be speaker X (see `@/lib/auth.ts`). Combined
+ *    with single-use deletion and the short TTL this closes the account-takeover
+ *    where a lingering intent is consumed by a *different* person's sign-in.
  *
  * The ownership proof for the link itself is the second OAuth round-trip: to
  * attach `linkedin:<id>` to X you must actually authenticate with that LinkedIn
@@ -33,7 +38,9 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 export const LINK_INTENT_COOKIE = 'cndn.link-intent'
 export const LINK_RESULT_PARAM = 'linkResult'
-export const LINK_INTENT_TTL_SECONDS = 5 * 60 // 5 minutes
+// Deliberately short: the intent only needs to survive one OAuth round-trip.
+// A tighter window shrinks the residual shared-browser race (see auth.ts).
+export const LINK_INTENT_TTL_SECONDS = 120 // 2 minutes
 
 export const LINKABLE_PROVIDERS = ['github', 'linkedin'] as const
 export type LinkableProvider = (typeof LINKABLE_PROVIDERS)[number]
@@ -67,6 +74,10 @@ export const linkResultStore = new AsyncLocalStorage<{ result?: LinkResult }>()
 interface LinkIntentPayload {
   speakerId: string
   provider: LinkableProvider
+  // Stable identifier of the session that initiated the link (its JWT `sub`).
+  // Consumption requires the browser's pre-existing session to still match this
+  // AND `speakerId`, binding the intent to the initiating session.
+  initiatorSub: string
   exp: number // epoch seconds
   nonce: string
 }
@@ -84,7 +95,11 @@ function hmac(payloadB64: string, secret: string): string {
  * a target provider. Throws if `AUTH_SECRET` is not configured (fail closed).
  */
 export function signLinkIntent(
-  input: { speakerId: string; provider: LinkableProvider },
+  input: {
+    speakerId: string
+    provider: LinkableProvider
+    initiatorSub: string
+  },
   secret: string | undefined = process.env.AUTH_SECRET,
   now: number = Date.now(),
 ): string {
@@ -94,9 +109,13 @@ export function signLinkIntent(
   if (!input.speakerId) {
     throw new Error('Cannot mint link intent without a speaker id')
   }
+  if (!input.initiatorSub) {
+    throw new Error('Cannot mint link intent without an initiating session')
+  }
   const payload: LinkIntentPayload = {
     speakerId: input.speakerId,
     provider: input.provider,
+    initiatorSub: input.initiatorSub,
     exp: Math.floor(now / 1000) + LINK_INTENT_TTL_SECONDS,
     nonce: base64url(randomBytes(12)),
   }
@@ -115,7 +134,11 @@ export function verifyLinkIntent(
   expectedProvider: string,
   secret: string | undefined = process.env.AUTH_SECRET,
   now: number = Date.now(),
-): { speakerId: string; provider: LinkableProvider } | null {
+): {
+  speakerId: string
+  provider: LinkableProvider
+  initiatorSub: string
+} | null {
   if (!token || !secret) return null
 
   const dot = token.indexOf('.')
@@ -147,8 +170,15 @@ export function verifyLinkIntent(
   ) {
     return null
   }
+  if (typeof payload.initiatorSub !== 'string' || !payload.initiatorSub) {
+    return null
+  }
   if (payload.provider !== expectedProvider) return null
   if (typeof payload.exp !== 'number' || payload.exp * 1000 < now) return null
 
-  return { speakerId: payload.speakerId, provider: payload.provider }
+  return {
+    speakerId: payload.speakerId,
+    provider: payload.provider,
+    initiatorSub: payload.initiatorSub,
+  }
 }

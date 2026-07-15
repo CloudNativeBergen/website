@@ -44,8 +44,11 @@ describe('startProviderLink — self-service link (security gate)', () => {
     })
   })
 
-  it('mints an httpOnly link cookie bound to the signed-in speaker', async () => {
-    authMock.mockResolvedValue({ speaker: { _id: 'spk-x' } })
+  it('mints an httpOnly link cookie bound to the signed-in speaker + session', async () => {
+    authMock.mockResolvedValue({
+      speaker: { _id: 'spk-x' },
+      user: { sub: 'sess-x' },
+    })
 
     await startProviderLink(form('linkedin'))
 
@@ -54,15 +57,30 @@ describe('startProviderLink — self-service link (security gate)', () => {
     expect(name).toBe(LINK_INTENT_COOKIE)
     expect(options).toMatchObject({ httpOnly: true, sameSite: 'lax' })
 
-    // The token binds THIS speaker + provider and verifies authentically.
+    // The token binds THIS speaker + provider + initiating session and verifies
+    // authentically.
     expect(verifyLinkIntent(token as string, 'linkedin')).toEqual({
       speakerId: 'spk-x',
       provider: 'linkedin',
+      initiatorSub: 'sess-x',
     })
     // A different provider must not accept the same cookie.
     expect(verifyLinkIntent(token as string, 'github')).toBeNull()
 
     expect(signInMock).toHaveBeenCalledWith('linkedin', {
+      redirectTo: '/cfp/profile',
+    })
+  })
+
+  it('does not mint a link cookie when the session lacks a stable id', async () => {
+    // Without an initiating session `sub` we cannot bind the intent, so we must
+    // NOT mint one; fall back to a normal sign-in instead.
+    authMock.mockResolvedValue({ speaker: { _id: 'spk-x' } })
+
+    await startProviderLink(form('github'))
+
+    expect(cookieSetMock).not.toHaveBeenCalled()
+    expect(signInMock).toHaveBeenCalledWith('github', {
       redirectTo: '/cfp/profile',
     })
   })
