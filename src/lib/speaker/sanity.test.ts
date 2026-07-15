@@ -234,10 +234,56 @@ describe('getOrCreateSpeaker — verified-only security invariant', () => {
     expect(createMock).toHaveBeenCalledTimes(1)
     expect(speaker._id).not.toBe('spk-existing')
   })
+
+  // H2 — LinkedIn email_verified must be affirmatively true. Absent / string
+  // 'false' must NOT be treated as verified (previously fail-open).
+  it.each([
+    ['absent', undefined],
+    ['string "false"', 'false'],
+    ['boolean false', false],
+  ])(
+    'does NOT treat the LinkedIn primary as verified when email_verified is %s',
+    async (_label, claim) => {
+      fetchMock.mockImplementation(
+        routeFetch({ provider: {}, emailMatches: [existingSpeaker()] }),
+      )
+
+      const { speaker, err } = await getOrCreateSpeaker(
+        user({ email: 'jane@example.com' }),
+        linkedinAccount(),
+        { email_verified: claim } as unknown as Profile,
+      )
+
+      expect(err).toBeNull()
+      // Unverified -> no link, fresh speaker.
+      expect(patchMock).not.toHaveBeenCalled()
+      expect(createMock).toHaveBeenCalledTimes(1)
+      expect(speaker._id).not.toBe('spk-existing')
+    },
+  )
+
+  // H2 — the stringified OIDC claim 'true' is honored as verified.
+  it('treats the LinkedIn primary as verified when email_verified is the string "true"', async () => {
+    fetchMock.mockImplementation(
+      routeFetch({ provider: {}, emailMatches: [existingSpeaker()] }),
+    )
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      user({ email: 'jane@example.com' }),
+      linkedinAccount(),
+      { email_verified: 'true' } as unknown as Profile,
+    )
+
+    expect(err).toBeNull()
+    // Verified -> links into the existing speaker.
+    expect(createMock).not.toHaveBeenCalled()
+    expect(patchMock).toHaveBeenCalledWith('spk-existing')
+    expect(speaker._id).toBe('spk-existing')
+  })
 })
 
 describe('getOrCreateSpeaker — multiple existing matches', () => {
-  it('warns and links to the oldest speaker without merging', async () => {
+  it('does NOT link into an ambiguous match; creates a new speaker and warns', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     verifiedEmailsMock.mockResolvedValue({
       error: null,
@@ -254,11 +300,17 @@ describe('getOrCreateSpeaker — multiple existing matches', () => {
 
     const { speaker } = await getOrCreateSpeaker(user(), githubAccount())
 
+    // H1: ambiguous multi-match must NOT auto-link into any existing doc.
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('possible existing duplicate speakers'),
+      expect.stringContaining('ambiguous verified-email match'),
     )
-    expect(patchMock).toHaveBeenCalledWith('spk-old')
-    expect(speaker._id).toBe('spk-old')
+    // Neither existing speaker is patched...
+    expect(patchMock).not.toHaveBeenCalledWith('spk-old')
+    expect(patchMock).not.toHaveBeenCalledWith('spk-new')
+    // ...instead a brand-new speaker is created for this login.
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(speaker._id).not.toBe('spk-old')
+    expect(speaker._id).not.toBe('spk-new')
     warnSpy.mockRestore()
   })
 })

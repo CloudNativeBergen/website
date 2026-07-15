@@ -1,27 +1,26 @@
-import { clientWrite, clientReadUncached } from '../sanity/client'
-import { groq } from 'next-sanity'
-import { uniqueEmails } from '../speaker/email'
+import { clientWrite } from '../sanity/client'
 
+/**
+ * Set a speaker's display `email`.
+ *
+ * SECURITY: this only ever writes the display `email` field. It MUST NOT touch
+ * `knownEmails` — that is the verified match-set used to auto-link logins across
+ * providers, and it is owned exclusively by the login path
+ * (`computeVerifiedEmails` in `@/lib/speaker/sanity`). Unioning an arbitrary
+ * caller-supplied email into `knownEmails` here previously enabled cross-provider
+ * account takeover (an attacker could poison a victim's address into the set and
+ * absorb the victim's next verified login).
+ *
+ * Callers are responsible for proving the caller owns `email` before invoking
+ * this (see `isEmailVerifiedForSession`, used by `speaker.updateEmail`). Because
+ * the display email is itself a login match key, it must always be verified-owned.
+ */
 export async function updateProfileEmail(
   email: string,
   speakerId: string,
 ): Promise<{ error: Error | null }> {
   try {
-    // Preserve the match-set: adding/changing the display email must never drop
-    // previously-known emails, otherwise a speaker could be split into a
-    // duplicate on their next login via another provider.
-    const existing = (await clientReadUncached.fetch(
-      groq`*[_type == "speaker" && _id == $id][0]{ email, knownEmails }`,
-      { id: speakerId },
-    )) as { email?: string; knownEmails?: string[] } | null
-
-    const knownEmails = uniqueEmails([
-      ...(existing?.knownEmails || []),
-      existing?.email,
-      email,
-    ])
-
-    await clientWrite.patch(speakerId).set({ email, knownEmails }).commit()
+    await clientWrite.patch(speakerId).set({ email }).commit()
 
     return { error: null }
   } catch (error) {

@@ -21,8 +21,10 @@ import {
   getSpeakers,
 } from '@/lib/speaker/sanity'
 import { clientWrite } from '@/lib/sanity/client'
-import { verifiedEmails } from '@/lib/profile/github'
-import { defaultEmails } from '@/lib/profile/server'
+import {
+  getVerifiedProfileEmails,
+  isEmailVerifiedForSession,
+} from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
 import { encode } from 'next-auth/jwt'
 
@@ -112,26 +114,9 @@ export const speakerRouter = router({
       })
     }
 
-    try {
-      switch (session.account.provider) {
-        case 'github': {
-          const result = await verifiedEmails(session.account)
-          if (result.error) {
-            console.error('Failed to fetch GitHub emails:', result.error)
-            return defaultEmails(session)
-          }
-          return result.emails.length > 0
-            ? result.emails
-            : defaultEmails(session)
-        }
-
-        default:
-          return defaultEmails(session)
-      }
-    } catch (error) {
-      console.error('Error fetching emails:', error)
-      return defaultEmails(session)
-    }
+    // Single source of truth for the caller's verified emails; the same helper
+    // authorizes `updateEmail` so the picker and the guard can never diverge.
+    return getVerifiedProfileEmails(session)
   }),
 
   // Generate a CLI authentication token
@@ -172,6 +157,19 @@ export const speakerRouter = router({
     .input(EmailUpdateSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        // SECURITY (C1): the display `email` is a login match key in
+        // getOrCreateSpeaker, so the caller must PROVE they own the new address.
+        // Only accept emails in the caller's provider-verified set — recomputed
+        // server-side from the session, never trusting a client-supplied list.
+        const owns = await isEmailVerifiedForSession(ctx.session!, input.email)
+        if (!owns) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'You can only set an email address that is verified by your login provider.',
+          })
+        }
+
         const { error } = await updateProfileEmail(input.email, ctx.speaker._id)
 
         if (error) {
@@ -486,6 +484,11 @@ export const speakerRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // Organizer action: set the speaker's display `email` only. Post-C1,
+          // updateProfileEmail no longer writes `knownEmails`, so an admin edit
+          // can never inject an address into the verified match-set. (The admin
+          // is not required to prove ownership — this is a trusted organizer
+          // correcting contact details, not the self-service path.)
           const { error } = await updateProfileEmail(input.email, input.id)
 
           if (error) {

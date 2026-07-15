@@ -162,10 +162,8 @@ async function findSpeakersByEmails(
  *   userinfo only exposes a verified primary email, so `user.email` is treated
  *   as provider-verified and included as a fallback (e.g. if the API call
  *   fails).
- * - LinkedIn (OIDC): the `email_verified` claim on the profile. LinkedIn OIDC
- *   only issues an email when it is verified, so a missing/undefined claim is
- *   treated as verified per LinkedIn semantics; an explicit `false` is honored
- *   as unverified. (Assumption flagged for maintainer review.)
+ * - LinkedIn (OIDC): the primary is trusted ONLY when the `email_verified` claim
+ *   is affirmatively true (default-deny). See H2 note below.
  * - Unknown providers: no email is treated as verified (no auto-link).
  */
 async function computeVerifiedEmails(
@@ -188,14 +186,24 @@ async function computeVerifiedEmails(
       for (const entry of emails) {
         verified.push(entry.email)
       }
-      // GitHub OAuth only surfaces a verified primary email.
+      // GitHub guarantees the primary email is verified before it is exposed via
+      // OAuth, so the session primary is trusted as verified (used as a fallback
+      // when the /user/emails API call fails or returns nothing).
       if (primary) verified.push(primary)
       break
     }
     case 'linkedin': {
-      const claim = (profile as { email_verified?: boolean } | undefined)
-        ?.email_verified
-      if (primary && claim !== false) {
+      // H2 — affirmative default-deny. Previously `claim !== false` fail-open:
+      // it accepted absent/undefined AND the STRING "false" as verified, which
+      // let an unverified LinkedIn email link into (take over) an account. Now
+      // the primary counts as verified ONLY when the claim is explicitly true.
+      // OIDC claims can be stringified, so accept the string 'true' as well;
+      // everything else (absent, false, 'false', anything else) is unverified.
+      const claim = (
+        profile as { email_verified?: boolean | string } | undefined
+      )?.email_verified
+      const isVerified = claim === true || claim === 'true'
+      if (primary && isVerified) {
         verified.push(primary)
       }
       break
@@ -232,8 +240,9 @@ async function backfillSlugIfMissing(speaker: Speaker): Promise<Speaker> {
 
 /**
  * Link an incoming provider account into an existing speaker: dedup the
- * provider id into `providers[]`, union the verified emails into `knownEmails`,
- * backfill a missing slug, and set the display `email` only when it was empty.
+ * provider id into `providers[]`, union the freshly VERIFIED incoming emails
+ * into `knownEmails`, backfill a missing slug, and set the display `email` only
+ * when it was empty.
  */
 async function linkProviderToSpeaker(
   speaker: Speaker,
@@ -244,11 +253,15 @@ async function linkProviderToSpeaker(
   const providers = Array.from(
     new Set([...(speaker.providers || []), providerAccountId]),
   )
+  // SECURITY: `knownEmails` is the verified match-set. Seed it ONLY from the
+  // speaker's existing (already-verified) entries plus this login's
+  // `computeVerifiedEmails` output. Never fold in the raw display `email` or an
+  // unverified `primaryEmail` — that would let an unverified address become a
+  // future cross-provider match key. (`primaryEmail` is still used below purely
+  // to backfill a missing display email.)
   const knownEmails = uniqueEmails([
     ...(speaker.knownEmails || []),
-    speaker.email,
     ...verifiedIncoming,
-    primaryEmail,
   ])
 
   const patch: Record<string, unknown> = { providers, knownEmails }
@@ -318,6 +331,15 @@ export async function getOrCreateSpeaker(
   const verifiedIncoming = await computeVerifiedEmails(user, account, profile)
 
   // 3. Attempt to match an existing speaker by verified email intersection.
+  //
+  //    SECURITY — stored-side-verified invariant: matching here is safe because
+  //    every stored match key is verified-owned. `knownEmails` is written only
+  //    by this login path from `computeVerifiedEmails` output (never from
+  //    `updateEmail`/admin edits). The legacy display `email` is also safe: it
+  //    is either a pre-existing value seeded from the provider primary at
+  //    creation (verified), or set post-hardening only after ownership was
+  //    proven (login primary, or `speaker.updateEmail` which now requires the
+  //    caller's provider-verified set). So both keys are kept.
   if (verifiedIncoming.length > 0) {
     const { speakers, err } = await findSpeakersByEmails(verifiedIncoming)
     if (err) {
@@ -325,17 +347,8 @@ export async function getOrCreateSpeaker(
       return { speaker: {} as Speaker, err }
     }
 
-    if (speakers.length > 1) {
-      // Pre-existing duplicate data. Do NOT silently merge; link to the oldest
-      // and surface the duplicates for Phase 3/4 reconciliation.
-      console.warn(
-        `possible existing duplicate speakers for ${verifiedIncoming.join(
-          ', ',
-        )}: ${speakers.map((s) => s._id).join(', ')}`,
-      )
-    }
-
-    if (speakers.length > 0) {
+    if (speakers.length === 1) {
+      // Exactly one verified-email match: unambiguously the same person.
       return linkProviderToSpeaker(
         speakers[0],
         providerAccountId,
@@ -343,11 +356,32 @@ export async function getOrCreateSpeaker(
         primaryEmail,
       )
     }
+
+    if (speakers.length > 1) {
+      // H1 — genuinely ambiguous: the verified email matches multiple speakers
+      // (the provider-id short-circuit in step 1 already handled the "same
+      // account" case, so this is not that). Do NOT auto-link into any of them:
+      // silently picking the oldest is attacker-influenceable and could merge a
+      // login into the wrong account. Fall through to create a fresh speaker so
+      // the user still gets a working session, and surface the ambiguous ids for
+      // admin / Phase-4 reconciliation.
+      console.warn(
+        `ambiguous verified-email match for ${verifiedIncoming.join(
+          ', ',
+        )}: ${speakers
+          .map((s) => s._id)
+          .join(
+            ', ',
+          )} — creating a new speaker instead of linking into an ambiguous account`,
+      )
+    }
   }
 
-  // 4. No verified match: create a brand-new speaker with a unique slug.
+  // 4. No (unambiguous) verified match: create a brand-new speaker with a unique
+  //    slug. Seed `knownEmails` ONLY from verified emails so a new doc never
+  //    starts life with an unverified match key.
   const _id = randomUUID()
-  const knownEmails = uniqueEmails([...verifiedIncoming, primaryEmail])
+  const knownEmails = uniqueEmails(verifiedIncoming)
   const slugValue = await generateUniqueSlug(user.name, _id)
 
   const speaker = {
