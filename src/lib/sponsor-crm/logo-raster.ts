@@ -1,4 +1,16 @@
-import { Resvg } from '@resvg/resvg-js'
+import type { Resvg as ResvgType } from '@resvg/resvg-js'
+
+/**
+ * Lazily load the native `@resvg/resvg-js` binding. A static top-level import
+ * would throw at module-load time if the platform-specific `.node` binary
+ * can't be resolved (e.g. a serverless bundling issue) — and because this
+ * module is imported by the contract-PDF pipeline, that would take down ALL
+ * contract generation, not just the logo. Loading it inside the try/catch
+ * below keeps any load failure contained to "generate the PDF without a logo".
+ */
+function loadResvg(): typeof ResvgType {
+  return (require('@resvg/resvg-js') as typeof import('@resvg/resvg-js')).Resvg
+}
 
 /**
  * Default rasterization width in pixels. The contract PDF header displays the
@@ -10,8 +22,15 @@ const DEFAULT_RASTER_WIDTH = 600
 /** Raster data URLs that `@react-pdf/renderer`'s <Image> already supports. */
 const RASTER_DATA_URL_RE = /^data:image\/(png|jpe?g|jpg)/i
 
-/** Heuristic for detecting inline SVG markup. */
-const SVG_MARKUP_RE = /^(<\?xml[\s\S]*?\?>\s*)?<svg[\s>]/i
+/**
+ * Heuristic for detecting inline SVG markup. Allows any combination of a
+ * leading XML declaration, DOCTYPE, and/or comments before the `<svg` tag —
+ * SVGs exported by common tools frequently begin with `<?xml …?>`,
+ * `<!DOCTYPE svg …>`, or a `<!-- … -->` comment, all of which resvg renders
+ * fine and which must not be misclassified as "not an SVG".
+ */
+const SVG_MARKUP_RE =
+  /^\s*(<\?xml[\s\S]*?\?>|<!DOCTYPE[\s\S]*?>|<!--[\s\S]*?-->|\s)*<svg[\s>]/i
 
 /**
  * Convert a conference/organizer logo into a PNG data URL that
@@ -51,6 +70,7 @@ export function rasterizeLogoToPngDataUrl(
   }
 
   try {
+    const Resvg = loadResvg()
     const resvg = new Resvg(trimmed, {
       fitTo: { mode: 'width', value: options?.width ?? DEFAULT_RASTER_WIDTH },
     })
