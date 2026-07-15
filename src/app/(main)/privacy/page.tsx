@@ -176,6 +176,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Social media links and professional profiles
                             </li>
                             <li>• Profile photos and presentation history</li>
+                            <li>• Country of residence (optional)</li>
                           </ul>
                         </div>
                         <div>
@@ -188,9 +189,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               signing in)
                             </li>
                             <li>
-                              • Optional diversity and inclusion details
-                              (special category data, collected only with your
-                              explicit consent)
+                              • Optional diversity and inclusion details,
+                              including self-reported gender (special category
+                              data, collected only with your explicit consent
+                              and used only for aggregate diversity reporting)
                             </li>
                             <li>• Local speaker status (optional)</li>
                           </ul>

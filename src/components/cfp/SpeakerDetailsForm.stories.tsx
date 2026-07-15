@@ -35,6 +35,8 @@ const filledSpeaker: SpeakerInput = {
   title: 'Senior Platform Engineer at Google Cloud',
   bio: 'Alice is a passionate advocate for cloud native technologies with over 10 years of experience in distributed systems and Kubernetes.',
   flags: [Flags.localSpeaker],
+  gender: 'Woman',
+  country: 'Norway',
   links: [
     'https://linkedin.com/in/alicejohnson',
     'https://github.com/alicejohnson',
@@ -235,6 +237,36 @@ export const DiverseSpeaker: Story = {
     docs: {
       description: {
         story: 'Speaker from an underrepresented group who is also local.',
+      },
+    },
+  },
+}
+
+export const SelfDescribedGender: Story = {
+  args: {
+    speaker: {
+      name: 'Dana Lee',
+      title: 'Principal Engineer',
+      gender: 'Prefer to self-describe',
+      genderSelfDescribe: 'Genderfluid',
+      country: 'Sweden',
+    },
+    setSpeaker: fn(),
+    email: 'dana@example.com',
+    emails: [
+      {
+        email: 'dana@example.com',
+        primary: true,
+        verified: true,
+        visibility: 'public',
+      },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Speaker who chose "Prefer to self-describe", revealing the optional free-text gender input, plus an optional country of residence.',
       },
     },
   },

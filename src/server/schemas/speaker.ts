@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Flags } from '@/lib/speaker/types'
+import { Flags, genderOptions } from '@/lib/speaker/types'
 import { nullToUndefined, IdParamSchema as CommonIdParamSchema } from './common'
 
 // Consent record schema
@@ -29,6 +29,17 @@ export const SpeakerInputSchema = z
     image: z.string().nullable().optional().transform(nullToUndefined),
     links: z.array(z.string()).optional(),
     flags: z.array(z.nativeEnum(Flags)).optional(),
+    gender: z
+      .enum(genderOptions)
+      .nullable()
+      .optional()
+      .transform(nullToUndefined),
+    genderSelfDescribe: z
+      .string()
+      .nullable()
+      .optional()
+      .transform(nullToUndefined),
+    country: z.string().nullable().optional().transform(nullToUndefined),
     consent: SpeakerConsentSchema.optional(),
     company: z.string().nullable().optional().transform(nullToUndefined),
   })
@@ -60,6 +71,17 @@ const SpeakerInputBaseSchema = z.object({
   image: z.string().nullable().optional().transform(nullToUndefined),
   links: z.array(z.string()).optional(),
   flags: z.array(z.nativeEnum(Flags)).optional(),
+  gender: z
+    .enum(genderOptions)
+    .nullable()
+    .optional()
+    .transform(nullToUndefined),
+  genderSelfDescribe: z
+    .string()
+    .nullable()
+    .optional()
+    .transform(nullToUndefined),
+  country: z.string().nullable().optional().transform(nullToUndefined),
   consent: SpeakerConsentSchema.optional(),
   company: z.string().nullable().optional().transform(nullToUndefined),
 })

@@ -15,6 +15,21 @@ export const flags = new Map([
   [Flags.requiresTravelFunding, 'Requires Travel Funding'],
 ])
 
+// Optional self-reported gender presets. Diversity data collected only for
+// aggregate reporting. When `preferToSelfDescribe` is chosen, an optional
+// free-text value is stored separately in `genderSelfDescribe`.
+export const genderOptions = [
+  'Woman',
+  'Man',
+  'Non-binary',
+  'Prefer to self-describe',
+  'Prefer not to say',
+] as const
+
+export type Gender = (typeof genderOptions)[number]
+
+export const genderPreferToSelfDescribe: Gender = 'Prefer to self-describe'
+
 export interface ConsentRecord {
   granted: boolean
   grantedAt?: string
@@ -38,6 +53,9 @@ interface SpeakerBase {
   image?: string
   links?: string[]
   flags?: Flags[]
+  gender?: Gender
+  genderSelfDescribe?: string
+  country?: string
   consent?: SpeakerConsent
   galleryImages?: GalleryImageWithSpeakers[]
 }
