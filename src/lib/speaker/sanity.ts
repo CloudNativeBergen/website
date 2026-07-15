@@ -94,36 +94,6 @@ async function findSpeakerByProvider(
 }
 
 /**
- * Find a speaker whose primary `email` matches (case-insensitively). Kept for
- * backward compatibility; matching is normalized (was previously exact/case
- * sensitive).
- */
-async function findSpeakerByEmail(
-  email: string,
-): Promise<{ speaker: Speaker; err: Error | null }> {
-  let speaker = {} as Speaker
-  let err = null
-
-  try {
-    speaker = await clientRead.fetch(
-      `*[ _type == "speaker" && lower(email) == $email][0]{
-      ...,
-      "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
-      ${IS_ORGANIZER_FIELD}
-    }`,
-      { email: normalizeEmail(email) },
-    )
-  } catch (error) {
-    err = error as Error
-  }
-
-  return { speaker, err }
-}
-
-export { findSpeakerByEmail }
-
-/**
  * Find all speakers whose display `email` or `knownEmails` match-set intersects
  * any of the given (already normalized) emails. Ordered oldest-first so the
  * caller can deterministically pick a link target and detect duplicates.
