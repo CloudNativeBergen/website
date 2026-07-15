@@ -1,6 +1,5 @@
 import { at, defineMigration, patch, set } from 'sanity/migrate'
 import {
-  generateSpeakerSlug,
   isCanonicalSpeakerSlug,
   resolveSpeakerSlugs,
   type SpeakerSlugInput,
@@ -120,17 +119,17 @@ export default defineMigration({
 
       const finalSlug = planBySlug.get(speaker._id)
       if (!finalSlug) {
-        // Not in the pre-pass (e.g. created after it ran). Repair defensively
-        // from the name without dataset-wide uniqueness knowledge.
+        // Not in the pre-pass (created after it ran). We have no dataset-wide
+        // uniqueness knowledge for it, so writing a name-derived slug here could
+        // collide with a slug the plan just assigned. Skip it instead — a
+        // subsequent run's pre-pass will include it and assign a unique slug.
+        // (Skipping is safe: an unrepaired slug is no worse than before.)
         const { current } = readCurrentSlug(speaker.slug)
-        if (isCanonicalSpeakerSlug(current)) continue
-        console.warn(
-          `  ⚠ Speaker ${speaker._id} was not in the pre-pass; repairing slug from name in isolation`,
-        )
-        const fallback = generateSpeakerSlug(speaker.name ?? '')
-        yield patch(speaker._id, [
-          at('slug', set({ _type: 'slug', current: fallback })),
-        ])
+        if (!isCanonicalSpeakerSlug(current)) {
+          console.warn(
+            `  ⚠ Speaker ${speaker._id} was created after the pre-pass; skipping — re-run the migration to repair it with a unique slug`,
+          )
+        }
         continue
       }
 

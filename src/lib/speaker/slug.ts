@@ -206,7 +206,19 @@ export function resolveSpeakerSlugs(
   const losers: SpeakerSlugInput[] = []
 
   for (const [base, members] of groups) {
-    const sorted = [...members].sort(compareEstablished)
+    // A doc that CURRENTLY HOLDS this exact canonical slug outranks any doc that
+    // merely derives it from its name — otherwise a more-referenced doc with a
+    // bad/empty slug would steal a live, canonical URL from the doc that owns it
+    // (breaking that profile's public URL/SEO). Only a genuine stored collision
+    // (≥2 docs literally holding the same slug) falls back to establishment.
+    const holdsBase = (s: SpeakerSlugInput): boolean =>
+      isCanonicalSpeakerSlug(s.currentSlug ?? '') && s.currentSlug === base
+    const sorted = [...members].sort((a, b) => {
+      const aHolds = holdsBase(a)
+      const bHolds = holdsBase(b)
+      if (aHolds !== bHolds) return aHolds ? -1 : 1
+      return compareEstablished(a, b)
+    })
     const [winner, ...rest] = sorted
     finalById.set(winner.id, base)
     used.add(base)

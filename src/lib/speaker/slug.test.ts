@@ -165,6 +165,30 @@ describe('resolveSpeakerSlugs', () => {
     expect(byId.new).toEqual({ id: 'new', slug: 'jane-doe-2', changed: true })
   })
 
+  it('does not steal a live canonical slug from its holder for a more-referenced name-derived contender', () => {
+    // `ghost` has an empty slug but its name derives `jane-doe` and it has more
+    // references; `real` currently HOLDS the canonical `jane-doe`. The holder
+    // must keep its live URL; the contender gets the suffix.
+    const inputs: SpeakerSlugInput[] = [
+      { id: 'ghost', name: 'Jane Doe', currentSlug: '', referenceCount: 5 },
+      {
+        id: 'real',
+        name: 'Jane Q',
+        currentSlug: 'jane-doe',
+        referenceCount: 1,
+      },
+    ]
+    const byId = Object.fromEntries(
+      resolveSpeakerSlugs(inputs).map((r) => [r.id, r]),
+    )
+    expect(byId.real).toEqual({ id: 'real', slug: 'jane-doe', changed: false })
+    expect(byId.ghost).toEqual({
+      id: 'ghost',
+      slug: 'jane-doe-2',
+      changed: true,
+    })
+  })
+
   it('breaks reference ties by oldest _createdAt', () => {
     const inputs: SpeakerSlugInput[] = [
       {
