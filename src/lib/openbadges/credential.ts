@@ -145,36 +145,34 @@ function validateAchievementConfig(config: AchievementConfig): void {
       value: config.image.id,
     })
   }
+}
 
-  if (config.evidence) {
-    config.evidence.forEach((evidence, index) => {
-      if (!evidence.id || typeof evidence.id !== 'string') {
-        throw new ConfigurationError(`Evidence[${index}] ID is required`, {
-          field: `achievement.evidence[${index}].id`,
-          value: evidence.id,
-        })
-      }
-      if (
-        !evidence.type ||
-        !Array.isArray(evidence.type) ||
-        evidence.type.length === 0
-      ) {
-        throw new ConfigurationError(
-          `Evidence[${index}] type array is required`,
-          {
-            field: `achievement.evidence[${index}].type`,
-            value: evidence.type,
-          },
-        )
-      }
-      if (!evidence.name || typeof evidence.name !== 'string') {
-        throw new ConfigurationError(`Evidence[${index}] name is required`, {
-          field: `achievement.evidence[${index}].name`,
-          value: evidence.name,
-        })
-      }
-    })
-  }
+function validateEvidence(evidence: CredentialConfig['evidence']): void {
+  if (!evidence) return
+
+  evidence.forEach((item, index) => {
+    if (!item.id || typeof item.id !== 'string') {
+      throw new ConfigurationError(`Evidence[${index}] ID is required`, {
+        field: `evidence[${index}].id`,
+        value: item.id,
+      })
+    }
+    if (!item.type || !Array.isArray(item.type) || item.type.length === 0) {
+      throw new ConfigurationError(
+        `Evidence[${index}] type array is required`,
+        {
+          field: `evidence[${index}].type`,
+          value: item.type,
+        },
+      )
+    }
+    if (!item.name || typeof item.name !== 'string') {
+      throw new ConfigurationError(`Evidence[${index}] name is required`, {
+        field: `evidence[${index}].name`,
+        value: item.name,
+      })
+    }
+  })
 }
 
 function validateSubjectProfile(config: SubjectProfile): void {
@@ -253,6 +251,7 @@ function validateCredentialConfig(config: CredentialConfig): void {
   validateIssuerProfile(config.issuer)
   validateSubjectProfile(config.subject)
   validateAchievementConfig(config.achievement)
+  validateEvidence(config.evidence)
 }
 
 function buildIssuerProfile(config: IssuerProfileConfig): IssuerProfile {
@@ -305,11 +304,19 @@ function buildAchievement(
     achievement.criteria.id = config.criteria.id
   }
 
-  if (config.evidence && config.evidence.length > 0) {
-    achievement.evidence = config.evidence
-  }
-
   return achievement
+}
+
+/**
+ * Normalize the credential subject id.
+ * mailto: recipients are lowercased because verifiers that match recipients
+ * by hashed email (e.g. Credly) compare case-sensitively.
+ */
+function normalizeSubjectId(id: string): string {
+  if (id.toLowerCase().startsWith('mailto:')) {
+    return `mailto:${id.slice('mailto:'.length).toLowerCase()}`
+  }
+  return id
 }
 
 export function createCredential(config: CredentialConfig): Credential {
@@ -319,7 +326,7 @@ export function createCredential(config: CredentialConfig): Credential {
   const achievement = buildAchievement(config.achievement, issuer)
 
   const credentialSubject: AchievementSubject = {
-    id: config.subject.id,
+    id: normalizeSubjectId(config.subject.id),
     type: config.subject.type,
     achievement,
   }
@@ -332,6 +339,11 @@ export function createCredential(config: CredentialConfig): Credential {
     credentialSubject,
     issuer,
     validFrom: config.validFrom,
+  }
+
+  // Per VC 2.0 / OB 3.0, evidence lives at the credential top level
+  if (config.evidence && config.evidence.length > 0) {
+    credential.evidence = config.evidence
   }
 
   if (config.validUntil) {

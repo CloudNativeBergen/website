@@ -48,7 +48,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('JWT Header Structure', () => {
     it('should generate JWT with RS256 algorithm', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       // Decode header (first part of JWT)
       const [headerB64] = assertion.split('.')
@@ -60,7 +63,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should include typ: JWT in header', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -71,7 +77,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should include kid (key ID) in header', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -90,7 +99,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should include inline jwk (JSON Web Key) in header', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -106,7 +118,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('JWK Format Validation', () => {
     it('should match official OpenBadges 3.0 JWK structure', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -129,7 +144,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have RSA key type', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -140,7 +158,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have RSA public exponent (e)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -154,7 +175,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have RSA modulus (n)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -167,7 +191,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should NOT include private key parameter (d)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -179,7 +206,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should NOT include other private parameters (p, q, dp, dq, qi)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -197,7 +227,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('JWT Payload Claims', () => {
     it('should include all required JWT claims', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -213,7 +246,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have iss (issuer) matching credential issuer', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -225,10 +261,8 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have jti (JWT ID) matching credential ID', async () => {
-      const { assertion, badgeId } = await generateBadgeCredential(
-        testParams,
-        config,
-      )
+      const { credentialJwt: assertion, badgeId } =
+        await generateBadgeCredential(testParams, config)
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -241,7 +275,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have sub (subject) as mailto: URI', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -253,7 +290,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have nbf (not before) as NumericDate', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -267,7 +307,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should include credential properties at top level (not wrapped)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [, payloadB64] = assertion.split('.')
       const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8')
@@ -289,7 +332,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('Credential Structure Validation', () => {
     it('should validate against OpenBadges 3.0 JSON schema', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       // Verify and decode JWT
       const credential = (await verifyCredentialJWT(
@@ -309,7 +355,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have correct @context', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const credential = (await verifyCredentialJWT(
         assertion,
@@ -326,7 +375,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should have correct type array', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const credential = (await verifyCredentialJWT(
         assertion,
@@ -341,7 +393,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('Signature Verification', () => {
     it('should produce valid JWT signature', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       // Verify signature with public key
       const credential = await verifyCredentialJWT(
@@ -354,7 +409,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should fail verification with tampered JWT', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       // Tamper with the JWT by modifying the payload
       const [header, payload, signature] = assertion.split('.')
@@ -382,7 +440,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('kid URL Dereferencing Simulation', () => {
     it('should generate kid URL that points to /api/badge/keys/key-1', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -396,7 +457,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('kid URL should be HTTP(S) dereferenceable (no fragment)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -417,7 +481,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should verify that inline JWK matches expected structure', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -444,7 +511,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('1EdTech Validator Requirements', () => {
     it('should use only RS256 or ES256 algorithm', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -458,7 +528,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should NOT use EdDSA algorithm (not supported by 1EdTech)', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -469,7 +542,10 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
     })
 
     it('should include both kid AND jwk for maximum compatibility', async () => {
-      const { assertion } = await generateBadgeCredential(testParams, config)
+      const { credentialJwt: assertion } = await generateBadgeCredential(
+        testParams,
+        config,
+      )
 
       const [headerB64] = assertion.split('.')
       const headerJson = Buffer.from(headerB64, 'base64url').toString('utf-8')
@@ -485,10 +561,8 @@ describe('OpenBadges 3.0 Validator Compliance', () => {
 
   describe('Complete Validation Flow', () => {
     it('should pass all validation steps in sequence', async () => {
-      const { assertion, badgeId } = await generateBadgeCredential(
-        testParams,
-        config,
-      )
+      const { credentialJwt: assertion, badgeId } =
+        await generateBadgeCredential(testParams, config)
 
       // Step 1: Verify JWT format
       expect(assertion).toMatch(

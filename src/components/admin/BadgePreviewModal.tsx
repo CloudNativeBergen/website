@@ -16,6 +16,34 @@ interface BadgePreviewModalProps {
   badge: BadgeRecord
 }
 
+/**
+ * Decode the payload of a Compact JWS (JWT) credential without verifying it,
+ * so legacy JWT-string badges can still render their credential details.
+ * Returns null when the input is not a decodable JWT.
+ */
+function decodeJwtCredential(
+  jwt: string | undefined,
+): Record<string, unknown> | null {
+  if (!jwt || !jwt.startsWith('eyJ')) return null
+  const payload = jwt.split('.')[1]
+  if (!payload) return null
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const json =
+      typeof atob === 'function'
+        ? decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+              .join(''),
+          )
+        : Buffer.from(base64, 'base64').toString('utf-8')
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 export function BadgePreviewModal({
   isOpen,
   onClose,
@@ -24,8 +52,14 @@ export function BadgePreviewModal({
   let badgeData: Record<string, unknown> | null = null
   try {
     badgeData = JSON.parse(badge.badgeJson)
-  } catch (error) {
-    console.error('Failed to parse badge JSON:', error)
+  } catch {
+    // Legacy badges store a raw JWT string in badgeJson (and JSON.parse
+    // throws on it). Fall back to decoding the JWT payload so the modal can
+    // still show the credential details.
+    badgeData = decodeJwtCredential(badge.badgeJwt ?? badge.badgeJson)
+    if (!badgeData) {
+      console.error('Failed to parse badge JSON and no decodable JWT payload')
+    }
   }
 
   const speaker =

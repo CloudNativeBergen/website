@@ -43,7 +43,6 @@ export interface Achievement {
   criteria: Criteria
   image: ImageObject
   creator: IssuerProfile // Per OpenBadges 3.0 spec: Achievement uses "creator" property
-  evidence?: Evidence[]
 }
 
 export interface AchievementSubject {
@@ -70,6 +69,9 @@ export interface Credential {
   issuer: IssuerProfile
   validFrom: string
   validUntil?: string
+  // Per VC 2.0 / OB 3.0: evidence belongs at the credential top level,
+  // NOT nested under achievement (the OB context rejects that placement)
+  evidence?: Evidence[]
 }
 
 export interface SignedCredential extends Credential {
@@ -89,12 +91,6 @@ export interface AchievementConfig {
     type: 'Image'
     caption?: string
   }
-  evidence?: Array<{
-    id: string
-    type: string[]
-    name: string
-    description?: string
-  }>
 }
 
 export interface SubjectProfile {
@@ -121,6 +117,12 @@ export interface CredentialConfig {
   issuer: IssuerProfileConfig
   subject: SubjectProfile
   achievement: AchievementConfig
+  evidence?: Array<{
+    id: string
+    type: string[]
+    name: string
+    description?: string
+  }>
   validFrom: string
   validUntil?: string
 }
@@ -128,6 +130,17 @@ export interface CredentialConfig {
 export interface SigningConfig {
   privateKey: string
   publicKey: string
+  verificationMethod: string
+}
+
+/**
+ * Signing configuration for embedded Data Integrity Proofs.
+ * privateKey is the 32-byte Ed25519 seed as 64 hex characters; the public
+ * key is derived from the seed (and checked against publicKey if provided).
+ */
+export interface EmbeddedProofSigningConfig {
+  privateKey: string
+  publicKey?: string
   verificationMethod: string
 }
 

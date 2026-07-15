@@ -47,10 +47,10 @@ export const badgeRouter = router({
 
       let badgeAssertion
       if (isJWTFormat(badge.badgeJson)) {
-        // Decode JWT to get credential
+        // Legacy badge: badgeJson holds the RS256 JWT credential
         const { verifyCredentialJWT } = await import('@/lib/openbadges')
-        const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-        if (!publicKeyHex) {
+        const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+        if (!publicKey) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'Public key not configured',
@@ -58,10 +58,7 @@ export const badgeRouter = router({
         }
 
         try {
-          badgeAssertion = await verifyCredentialJWT(
-            badge.badgeJson,
-            publicKeyHex,
-          )
+          badgeAssertion = await verifyCredentialJWT(badge.badgeJson, publicKey)
           // JWT verification succeeded
           return {
             valid: true,
@@ -78,27 +75,61 @@ export const badgeRouter = router({
           }
         }
       } else {
-        // Legacy: Parse JSON (Data Integrity Proof format)
-        badgeAssertion = JSON.parse(badge.badgeJson)
-
-        const { verifyCredential } = await import('@/lib/openbadges')
-        let signatureValid = false
-        if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
-          // Get public key from environment
-          const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-          if (publicKeyHex) {
-            signatureValid = await verifyCredential(
-              badgeAssertion,
-              publicKeyHex,
-            )
-          }
+        // Embedded Data Integrity Proof format (eddsa-rdfc-2022)
+        //
+        // Verify with OUR published Ed25519 public key; the secret seed is
+        // never needed to verify. A missing key is config (not badge data), so
+        // fail loudly (like the RSA path) rather than reporting the badge as
+        // invalid.
+        const publicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
+        if (!publicKey) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Ed25519 issuer public key not configured',
+          })
         }
 
-        return {
-          valid: true,
-          signatureValid,
-          credential: badgeAssertion,
-          verifiedAt: new Date().toISOString(),
+        const verifiedAt = new Date().toISOString()
+        try {
+          const { verifyCredential, validateCredential } =
+            await import('@/lib/openbadges')
+
+          badgeAssertion = JSON.parse(badge.badgeJson)
+
+          // Structural validity mirrors the REST verify route.
+          const structurallyValid = validateCredential(badgeAssertion).valid
+
+          let signatureValid = false
+          if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
+            // Pin the verification method to OUR issuer's embedded VM: a badge
+            // with a foreign / did:key VM must not report as signature-valid.
+            const issuerId =
+              typeof badgeAssertion.issuer === 'object'
+                ? badgeAssertion.issuer?.id
+                : badgeAssertion.issuer
+            const expectedVm = `${issuerId}#key-ed25519`
+            const proofVm = badgeAssertion.proof[0]?.verificationMethod
+
+            if (proofVm === expectedVm) {
+              signatureValid = await verifyCredential(badgeAssertion, publicKey)
+            }
+          }
+
+          return {
+            valid: structurallyValid && signatureValid,
+            signatureValid,
+            credential: badgeAssertion,
+            verifiedAt,
+          }
+        } catch {
+          // Malformed badgeJson or a throwing verifyCredential (e.g. multiple
+          // proofs, wrong type/cryptosuite) is a not-valid badge, not a 500.
+          return {
+            valid: false,
+            signatureValid: false,
+            credential: null,
+            verifiedAt,
+          }
         }
       }
     } catch (error) {

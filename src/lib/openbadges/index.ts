@@ -4,6 +4,7 @@ export {
   verifyCredential,
   signCredentialJWT,
   verifyCredentialJWT,
+  seedToMultikey,
 } from './crypto'
 
 export { validateCredential, assertValidCredential } from './validator'
@@ -28,7 +29,6 @@ export {
   decodeBase58,
   encodeMultibase,
   decodeMultibase,
-  stringToBytes,
 } from './encoding'
 
 export {
@@ -59,6 +59,7 @@ export type {
   AchievementConfig,
   CredentialConfig,
   SigningConfig,
+  EmbeddedProofSigningConfig,
   ValidationResult,
   DataIntegrityProof,
   MultikeyDocument,

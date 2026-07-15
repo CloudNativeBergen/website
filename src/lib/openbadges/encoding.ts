@@ -148,23 +148,3 @@ export function decodeMultibase(encoded: string): Uint8Array {
 
   return decodeBase58(base58Part)
 }
-
-export function stringToBytes(str: string): Uint8Array {
-  if (typeof str !== 'string') {
-    throw new EncodingError(
-      ERROR_CODES.ENCODING_FAILED,
-      'Input must be a string',
-      { received: typeof str },
-    )
-  }
-
-  try {
-    return new TextEncoder().encode(str)
-  } catch (error) {
-    throw new EncodingError(
-      ERROR_CODES.ENCODING_FAILED,
-      'Failed to encode string to UTF-8',
-      { error: error instanceof Error ? error.message : String(error) },
-    )
-  }
-}

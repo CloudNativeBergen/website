@@ -51,8 +51,17 @@ export default defineType({
       name: 'badgeJson',
       title: 'Badge JSON',
       type: 'text',
-      description: 'OpenBadges v3.0 JSON-LD credential',
+      description:
+        'OpenBadges v3.0 JSON-LD credential with embedded Data Integrity Proof (legacy badges store a JWT string here instead)',
       validation: (Rule) => Rule.required(),
+      readOnly: true,
+    }),
+    defineField({
+      name: 'badgeJwt',
+      title: 'Badge JWT',
+      type: 'text',
+      description:
+        'OpenBadges v3.0 credential as RS256 JWT (Compact JWS) for external validator compatibility',
       readOnly: true,
     }),
     defineField({

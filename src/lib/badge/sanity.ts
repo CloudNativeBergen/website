@@ -34,6 +34,7 @@ const BADGE_FIELDS = `
   badgeType,
   issuedAt,
   badgeJson,
+  badgeJwt,
   bakedSvg{
     _type,
     asset->{
@@ -75,7 +76,10 @@ export async function createBadge(params: {
   conferenceId: string
   badgeType: BadgeType
   issuedAt: string
+  /** Embedded-proof credential as stringified JSON-LD (legacy docs hold a JWT string) */
   badgeJson: string
+  /** RS256 JWT credential (absent on legacy docs, which store the JWT in badgeJson) */
+  badgeJwt?: string
   bakedSvgAssetId: string
   verificationUrl: string
 }): Promise<{ badge?: BadgeRecord; error?: Error }> {
@@ -94,6 +98,7 @@ export async function createBadge(params: {
       badgeType: params.badgeType,
       issuedAt: params.issuedAt,
       badgeJson: params.badgeJson,
+      ...(params.badgeJwt && { badgeJwt: params.badgeJwt }),
       bakedSvg: {
         _type: 'file',
         asset: {

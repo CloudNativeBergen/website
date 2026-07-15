@@ -35,12 +35,6 @@ export interface BadgeCredential {
       type: string
     }
   }
-  evidence?: Array<{
-    id: string
-    type: string[]
-    name: string
-    description?: string
-  }>
 }
 
 export interface BadgeAssertion {
@@ -65,6 +59,13 @@ export interface BadgeAssertion {
     }
   }
   validFrom: string
+  // Per VC 2.0 / OB 3.0: evidence lives at the credential top level
+  evidence?: Array<{
+    id: string
+    type: string[]
+    name: string
+    description?: string
+  }>
   proof?: Array<{
     type: string
     created: string
@@ -84,7 +85,14 @@ export interface BadgeRecord {
   conference: Conference | { _ref: string; _type: 'reference' }
   badgeType: BadgeType
   issuedAt: string
+  /**
+   * OpenBadges 3.0 credential. New badges store the embedded-proof JSON-LD
+   * credential (stringified). Legacy badges store the raw JWT string —
+   * use isJWTFormat() to distinguish.
+   */
   badgeJson: string
+  /** RS256 JWT credential (only present on badges issued with dual formats) */
+  badgeJwt?: string
   bakedSvg?: {
     _type: 'file'
     asset: {

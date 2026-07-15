@@ -27,3 +27,5 @@ ADOBE_SIGN_APPLICATION_ID= { provider = "keychain", value = "ADOBE_SIGN_APPLICAT
 ADOBE_SIGN_APPLICATION_SECRET= { provider = "keychain", value = "ADOBE_SIGN_APPLICATION_SECRET" }
 BADGE_ISSUER_RSA_PRIVATE_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PRIVATE_KEY" }
 BADGE_ISSUER_RSA_PUBLIC_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PUBLIC_KEY" }
+BADGE_ISSUER_ED25519_SEED= { provider = "keychain", value = "BADGE_ISSUER_ED25519_SEED" }
+BADGE_ISSUER_ED25519_PUBLIC_KEY= { provider = "keychain", value = "BADGE_ISSUER_ED25519_PUBLIC_KEY" }
