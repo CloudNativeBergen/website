@@ -43,7 +43,7 @@ export const portableTextComponents: PortableTextComponents = {
       return (
         <a
           href={href}
-          className="font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="font-medium break-words text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           target="_blank"
           rel="noopener noreferrer"
         >

@@ -192,7 +192,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               <h2 className="mb-3 text-lg font-medium text-gray-900 dark:text-white">
                 Description
               </h2>
-              <div className="text-gray-600 dark:text-gray-300">
+              <div className="break-words text-gray-600 dark:text-gray-300">
                 {proposal.description && proposal.description.length > 0 ? (
                   <PortableText
                     value={proposal.description}
@@ -210,7 +210,9 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   Outline
                 </h2>
                 <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
-                  <p className="whitespace-pre-wrap">{proposal.outline}</p>
+                  <p className="break-words whitespace-pre-wrap">
+                    {proposal.outline}
+                  </p>
                 </div>
               </div>
             )}
