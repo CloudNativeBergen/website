@@ -16,7 +16,10 @@ export const CO_SPEAKER_LIMITS = {
 } as const
 
 export function getCoSpeakerLimit(format: Format): number {
-  return CO_SPEAKER_LIMITS[format] ?? 1
+  // Fail closed: an unmapped/legacy format allows no co-speakers rather than
+  // silently bypassing the per-format limit. New formats must be added to
+  // CO_SPEAKER_LIMITS to opt in.
+  return CO_SPEAKER_LIMITS[format] ?? 0
 }
 
 export function getTotalSpeakerLimit(format: Format): number {
