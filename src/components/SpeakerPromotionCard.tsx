@@ -10,10 +10,12 @@ import {
 } from '@heroicons/react/24/outline'
 import { UserIcon, MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
 import { speakerImageUrl } from '@/lib/sanity/client'
-import { Format } from '@/lib/proposal/types'
-import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { Flags } from '@/lib/speaker/types'
+import {
+  computeSpeakerData,
+  stripCompanyFromTitle,
+} from '@/lib/speaker/promotion'
 import Link from 'next/link'
 import { memo, useMemo } from 'react'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
@@ -30,14 +32,6 @@ interface SpeakerPromotionCardProps {
   ctaText?: string
 
   ctaUrl?: string
-}
-
-interface ComputedSpeakerData {
-  talks: SpeakerWithTalks['talks']
-  expertise: string[]
-  company: string | undefined
-  talkCount: number
-  hasWorkshop: boolean
 }
 
 const variantConfig = {
@@ -74,80 +68,6 @@ const variantConfig = {
     showCloudNativePattern: false,
   },
 } as const
-
-const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
-  if (!talks?.length) return []
-
-  const expertise = new Set<string>()
-  talks.forEach((talk) => {
-    if (talk.format) {
-      const formatLabel = formatConfig[talk.format as Format]?.label
-      if (formatLabel) {
-        expertise.add(formatLabel)
-      }
-    }
-  })
-  return Array.from(expertise)
-}
-
-const deriveCompany = (title: string | undefined): string | undefined => {
-  if (!title) return undefined
-
-  let company: string | undefined
-
-  if (title.includes(' at ')) {
-    company = title.split(' at ')[1].trim()
-  } else if (title.includes('@')) {
-    company = title.split('@')[1].trim()
-  }
-
-  if (!company) return undefined
-
-  const separators = ['|', ',', '•', '·', '-', '–', '—', '/', '\\']
-  for (const separator of separators) {
-    if (company.includes(separator)) {
-      company = company.split(separator)[0].trim()
-      break
-    }
-  }
-
-  return company
-}
-
-const escapeRegex = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-const stripCompanyFromTitle = (
-  title: string | undefined,
-  company: string | undefined,
-): string | undefined => {
-  if (!title || !company) return title
-
-  const pattern = new RegExp(`\\s+(at|@)\\s+${escapeRegex(company)}\\s*$`, 'i')
-  if (!pattern.test(title)) return title
-
-  return title.replace(pattern, '').trim()
-}
-
-function computeSpeakerData(speaker: SpeakerWithTalks): ComputedSpeakerData {
-  const talks = speaker.talks || []
-  const expertise = deriveExpertise(talks)
-  const company = deriveCompany(speaker.title)
-  const talkCount = talks.length
-  const hasWorkshop = talks.some(
-    (talk) =>
-      talk.format === Format.workshop_120 ||
-      talk.format === Format.workshop_240,
-  )
-
-  return {
-    talks,
-    expertise,
-    company,
-    talkCount,
-    hasWorkshop,
-  }
-}
 
 interface SpeakerImageProps {
   image?: SpeakerWithTalks['image']

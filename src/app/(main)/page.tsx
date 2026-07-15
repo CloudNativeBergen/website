@@ -5,6 +5,7 @@ import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import {
   isCfpOpen,
   isProgramPublished,
@@ -249,15 +250,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
               </p>
             </div>
 
-            <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
-              {conference.featuredSpeakers!.map((speaker) => (
-                <SpeakerPromotionCard
-                  key={speaker._id}
-                  speaker={speaker}
-                  variant="featured"
-                />
-              ))}
-            </div>
+            <FeaturedSpeakersShelf speakers={conference.featuredSpeakers!} />
 
             <PhaseCtaRow
               conference={conference}
