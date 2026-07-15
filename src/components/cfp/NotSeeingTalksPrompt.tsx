@@ -1,10 +1,21 @@
 import Link from 'next/link'
 import {
   EnvelopeIcon,
+  KeyIcon,
   LifebuoyIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline'
 import { LinkedProviders } from './LinkedProviders'
+
+/** Provider keys we offer to link (must match `LinkedProviders`). */
+const SUPPORTED_PROVIDER_KEYS = ['github', 'linkedin'] as const
+
+/** True when at least one supported provider is NOT yet linked (so the
+ * "link your other account" step is actually actionable). */
+function hasUnlinkedProvider(providers?: string[]): boolean {
+  const linked = new Set((providers ?? []).map((entry) => entry.split(':')[0]))
+  return SUPPORTED_PROVIDER_KEYS.some((key) => !linked.has(key))
+}
 
 export interface NotSeeingTalksPromptProps {
   /**
@@ -47,25 +58,36 @@ function Guidance({
   contactEmail,
   onLinkAction,
 }: Omit<NotSeeingTalksPromptProps, 'hasProposals'>) {
+  // Only offer the "link your other account" step when a supported provider is
+  // still unlinked — otherwise the copy ("link your other account below") is
+  // non-actionable and every row already reads "Linked".
+  const canLink = hasUnlinkedProvider(providers)
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm text-gray-600 dark:text-gray-300">
-          You may have submitted them while signed in with a different account.
-          If you used <strong>GitHub</strong> one time and{' '}
-          <strong>LinkedIn</strong> another, link your other account below to
-          bring your talks together.
-        </p>
-        <div className="mt-4">
-          <LinkedProviders
-            providers={providers}
-            currentProvider={currentProvider}
-            onLinkAction={onLinkAction}
-          />
+      {canLink && (
+        <div>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            You may have submitted them while signed in with a different
+            account. If you used <strong>GitHub</strong> one time and{' '}
+            <strong>LinkedIn</strong> another, link your other account below to
+            bring your talks together.
+          </p>
+          <div className="mt-4">
+            <LinkedProviders
+              providers={providers}
+              currentProvider={currentProvider}
+              onLinkAction={onLinkAction}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
+      <div
+        className={
+          canLink ? 'border-t border-gray-200 pt-4 dark:border-gray-700' : ''
+        }
+      >
         <h4 className="text-sm/6 font-medium text-gray-900 dark:text-white">
           Still not seeing your talks?
         </h4>
@@ -87,7 +109,7 @@ function Guidance({
             href="/cfp/profile#linked-providers-heading"
             className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700/50"
           >
-            <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
+            <KeyIcon className="h-4 w-4" aria-hidden="true" />
             Manage sign-in methods
           </Link>
         )}

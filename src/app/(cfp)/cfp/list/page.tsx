@@ -18,7 +18,6 @@ import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmationHandler'
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
-import { getSpeaker } from '@/lib/speaker/sanity'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
@@ -41,10 +40,16 @@ export default async function SpeakerDashboard() {
   const speakerId = speaker._id
 
   // Identity guidance ("not seeing your talks?"): the session speaker doesn't
-  // carry `providers[]`, so fetch it to know which OAuth account is still
-  // unlinked. Non-fatal — the prompt degrades to offering both providers.
-  const { speaker: fullSpeaker } = await getSpeaker(speakerId)
-  const speakerProviders = fullSpeaker?.providers ?? speaker.providers
+  // carry `providers[]`, so read just that field (cached, not the whole doc) to
+  // know which OAuth account is still unlinked. Non-fatal — the prompt degrades
+  // to offering both providers.
+  const speakerProviders =
+    (await clientReadCached.fetch<string[] | null>(
+      `*[_type == "speaker" && _id == $id][0].providers`,
+      { id: speakerId },
+    )) ??
+    speaker.providers ??
+    []
   const currentProvider = session.account?.provider
   const organizerContactEmail =
     currentConference?.cfpEmail || currentConference?.contactEmail
