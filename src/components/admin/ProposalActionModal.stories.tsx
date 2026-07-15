@@ -134,7 +134,27 @@ export const SpeakerWithdraw: Story = {
     docs: {
       description: {
         story:
-          'Non-admin view used by speakers to withdraw their own proposal.',
+          'Non-admin view used by speakers to withdraw their own proposal. A mandatory reason (#212) is required — the Withdraw button stays disabled until a reason is entered.',
+      },
+    },
+  },
+}
+
+export const AdminWithdraw: Story = {
+  args: {
+    open: true,
+    close: fn(),
+    proposal: mockProposal,
+    action: Action.withdraw,
+    adminUI: true,
+    onAction: fn(),
+    domain: 'cloudnativedays.no',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Admin withdrawal. The comment field becomes a mandatory "Reason for withdrawal" (#212); the reason is recorded on the proposal and the Withdraw button is disabled until it is provided.',
       },
     },
   },

@@ -1,5 +1,6 @@
 'use client'
 
+import { type ReactNode } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/Button'
@@ -15,6 +16,10 @@ interface ConfirmationModalProps {
   cancelButtonText?: string
   variant?: 'danger' | 'warning' | 'info'
   isLoading?: boolean
+  /** Optional extra content (e.g. a required reason input) rendered above the actions. */
+  children?: ReactNode
+  /** When true, the confirm button is disabled (e.g. a required input is empty). */
+  confirmDisabled?: boolean
 }
 
 export function ConfirmationModal({
@@ -27,6 +32,8 @@ export function ConfirmationModal({
   cancelButtonText = 'Cancel',
   variant = 'danger',
   isLoading = false,
+  children,
+  confirmDisabled = false,
 }: ConfirmationModalProps) {
   const getVariantStyles = () => {
     switch (variant) {
@@ -84,10 +91,11 @@ export function ConfirmationModal({
           </p>
         </div>
       </div>
+      {children && <div className="mt-4 text-left">{children}</div>}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:gap-4">
         <Button
           onClick={onConfirm}
-          disabled={isLoading}
+          disabled={isLoading || confirmDisabled}
           className={`font-space-grotesk w-full justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:flex-1`}
         >
           {isLoading ? (

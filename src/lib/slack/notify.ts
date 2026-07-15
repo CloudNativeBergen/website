@@ -155,6 +155,7 @@ export async function notifyProposalStatusChange(
   action: Action,
   conference: Conference,
   speakerNames?: string,
+  reason?: string,
 ) {
   const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
@@ -170,6 +171,16 @@ export async function notifyProposalStatusChange(
     },
     ...createProposalInfoBlocks(proposal, names),
   ]
+
+  if (reason?.trim()) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Reason:*\n${reason.trim()}`,
+      },
+    })
+  }
 
   if (domain) {
     blocks.push(

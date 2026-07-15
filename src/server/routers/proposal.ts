@@ -20,6 +20,7 @@ import {
   RemoveCoSpeakerSchema,
   IdParamSchema,
   ProposalActionSchema,
+  requireWithdrawalReason,
   AudienceFeedbackSchema,
   SubmitReviewSchema,
   ProposalFilterSchema,
@@ -538,10 +539,14 @@ export const proposalRouter = router({
 
   // Execute proposal action (submit, withdraw, etc.)
   action: protectedProcedure
-    .input(IdParamSchema.extend(ProposalActionSchema.shape))
+    .input(
+      IdParamSchema.extend(ProposalActionSchema.shape).superRefine(
+        requireWithdrawalReason,
+      ),
+    )
     .mutation(async ({ input, ctx }) => {
       try {
-        const { id, action, notify, comment } = input
+        const { id, action, notify, comment, reason } = input
 
         // Get conference context
         const {
@@ -598,6 +603,21 @@ export const proposalRouter = router({
           }
         }
 
+        // Block speaker self-withdrawal within the pre-conference cutoff window.
+        // Organizers keep the ability to act on behalf of speakers this close
+        // to the event; only self-service withdrawal is closed (#251).
+        if (action === Action.withdraw && !ctx.speaker.isOrganizer) {
+          const { isWithdrawalCutoffActive } =
+            await import('@/lib/conference/state')
+          if (isWithdrawalCutoffActive(conference)) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'Withdrawals are closed within 14 days of the event — please contact the organizers.',
+            })
+          }
+        }
+
         // Enforce cap when submitting a draft (draft → submitted transition)
         if (
           proposal.status === Status.draft &&
@@ -638,9 +658,14 @@ export const proposalRouter = router({
           return { proposalStatus: Status.deleted }
         }
 
-        // Update proposal status
+        // Update proposal status, persisting the withdrawal reason (#212) so it
+        // stays visible to organizers on the proposal itself.
         const { proposal: updatedProposal, err: updateErr } =
-          await updateProposalStatus(id, status)
+          await updateProposalStatus(
+            id,
+            status,
+            action === Action.withdraw ? reason : undefined,
+          )
 
         if (updateErr) {
           throw new TRPCError({
@@ -667,6 +692,7 @@ export const proposalRouter = router({
             },
             shouldNotify: notify,
             comment,
+            reason: action === Action.withdraw ? reason : undefined,
             domain,
           },
         }

@@ -19,6 +19,8 @@ export interface ProposalStatusChangeEvent {
     }
     shouldNotify?: boolean
     comment?: string
+    // Mandatory free-text reason captured on withdrawal (#212).
+    reason?: string
     domain: string
   }
 }

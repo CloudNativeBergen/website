@@ -370,15 +370,28 @@ export async function deleteProposal(
 export async function updateProposalStatus(
   proposalId: string,
   status: Status,
+  withdrawnReason?: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
+  const fields: { status: Status; withdrawnReason?: string } = { status }
+  // Persist the mandatory withdrawal reason (#212) alongside the status change
+  // so organizers can see why a proposal was withdrawn.
+  const trimmedReason = withdrawnReason?.trim()
+  if (trimmedReason) {
+    fields.withdrawnReason = trimmedReason
+  }
+
   try {
-    updatedProposal = await clientWrite
-      .patch(proposalId)
-      .set({ status })
-      .commit()
+    const patch = clientWrite.patch(proposalId).set(fields)
+    // Any status change that isn't a withdrawal-with-reason must clear a
+    // previous reason so it can't misrepresent a now-active proposal if a
+    // transition out of `withdrawn` is ever added.
+    if (!trimmedReason) {
+      patch.unset(['withdrawnReason'])
+    }
+    updatedProposal = await patch.commit()
   } catch (error) {
     err = error as Error
   }

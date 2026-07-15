@@ -2,6 +2,7 @@ import {
   CreateProposalSchema,
   ProposalInputSchema,
   ProposalActionSchema,
+  ProposalActionInputSchema,
   ProposalAdminCreateSchema,
   ProposalUpdateSchema,
   InvitationCreateSchema,
@@ -272,6 +273,44 @@ describe('ProposalActionSchema', () => {
   it('rejects missing action', () => {
     const result = ProposalActionSchema.safeParse({})
     expect(result.success).toBe(false)
+  })
+})
+
+describe('ProposalActionInputSchema (withdrawal reason)', () => {
+  it('requires a reason when withdrawing', () => {
+    const result = ProposalActionInputSchema.safeParse({
+      action: Action.withdraw,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain('reason')
+    }
+  })
+
+  it('rejects a whitespace-only reason when withdrawing', () => {
+    const result = ProposalActionInputSchema.safeParse({
+      action: Action.withdraw,
+      reason: '   ',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a withdrawal with a non-empty reason', () => {
+    const result = ProposalActionInputSchema.safeParse({
+      action: Action.withdraw,
+      reason: 'I can no longer attend.',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.reason).toBe('I can no longer attend.')
+    }
+  })
+
+  it('does not require a reason for non-withdraw actions', () => {
+    const result = ProposalActionInputSchema.safeParse({
+      action: Action.accept,
+    })
+    expect(result.success).toBe(true)
   })
 })
 
