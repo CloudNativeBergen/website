@@ -132,14 +132,34 @@ describe('ServiceWorkerRegistrar', () => {
     expect(reloadMock).not.toHaveBeenCalled()
   })
 
-  it('reloads the page exactly once on controllerchange (guard prevents a second)', async () => {
-    await renderAndRegister()
+  it('reloads exactly once on controllerchange AFTER the user accepts (guard prevents a second)', async () => {
+    const registration = await renderAndRegister()
+
+    // User accepts the update.
+    container.controller = {}
+    const worker = new FakeWorker()
+    registration.installing = worker
+    registration.dispatch('updatefound')
+    worker.setState('installed')
+    await screen.findByRole('dialog', { name: 'Update available' })
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
 
     container.dispatch('controllerchange')
     container.dispatch('controllerchange')
     container.dispatch('controllerchange')
 
     expect(reloadMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT reload on a first-install controllerchange (no user action)', async () => {
+    // On first install the new worker's clients.claim() fires controllerchange
+    // with no prior Reload click — this must NOT reload the page.
+    await renderAndRegister()
+
+    container.dispatch('controllerchange')
+    container.dispatch('controllerchange')
+
+    expect(reloadMock).not.toHaveBeenCalled()
   })
 
   it('dismissing the banner hides it without reloading', async () => {

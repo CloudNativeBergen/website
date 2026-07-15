@@ -27,6 +27,10 @@ export function ServiceWorkerRegistrar() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   // The worker that is installed and waiting to activate.
   const waitingWorkerRef = useRef<ServiceWorker | null>(null)
+  // Set only when the USER accepts the update (clicks Reload). Gates the
+  // controllerchange reload so a first-install `clients.claim()` — which also
+  // fires controllerchange — never triggers an unsolicited page reload.
+  const reloadRequestedRef = useRef(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -34,10 +38,13 @@ export function ServiceWorkerRegistrar() {
     // Registering the SW under Turbopack HMR fights dev reloads; prod only.
     if (process.env.NODE_ENV !== 'production') return
 
-    // Reload exactly once when the active worker changes (i.e. the new worker
-    // took control after SKIP_WAITING). The guard prevents an infinite loop.
+    // Reload exactly once when the active worker changes AFTER the user accepted
+    // the update. The `refreshing` guard prevents an infinite loop; the
+    // `reloadRequestedRef` guard prevents an unsolicited reload on first install
+    // (where `clients.claim()` also fires controllerchange).
     let refreshing = false
     const onControllerChange = () => {
+      if (!reloadRequestedRef.current) return
       if (refreshing) return
       refreshing = true
       window.location.reload()
@@ -111,6 +118,9 @@ export function ServiceWorkerRegistrar() {
   }, [])
 
   const handleReload = () => {
+    // Mark the reload as user-accepted so the controllerchange handler is
+    // allowed to reload (an unsolicited first-install controllerchange is not).
+    reloadRequestedRef.current = true
     const worker = waitingWorkerRef.current
     if (worker) {
       // Tell the waiting worker to activate; `controllerchange` then reloads.
@@ -122,8 +132,11 @@ export function ServiceWorkerRegistrar() {
   }
 
   const handleDismiss = () => {
-    // Keep the current version for now; the banner reappears on the next
-    // `update()` check (focus / visibility) while a worker is still waiting.
+    // Keep the current (waiting) version for now. The already-installed worker
+    // stays in `waiting`; the user gets it on their next manual reload / tab
+    // close, or when the NEXT deploy installs a newer worker (which re-fires the
+    // banner). `update()` alone will NOT re-surface the banner for this same
+    // waiting version, since an already-`installed` worker doesn't re-emit.
     setUpdateAvailable(false)
   }
 
