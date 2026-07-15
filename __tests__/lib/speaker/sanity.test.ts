@@ -30,6 +30,7 @@ import {
   getOrCreateSpeaker,
   getSpeaker,
 } from '@/lib/speaker/sanity'
+import { SpeakerInputSchema } from '@/server/schemas/speaker'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Account, User } from 'next-auth'
 
@@ -165,6 +166,31 @@ describe('updateSpeaker', () => {
       country: 'Norway',
     })
     expect(mockUnset).not.toHaveBeenCalled()
+  })
+
+  // Integration guard for the clear-field seam: the form emits `null` for a
+  // cleared field, the Zod schema transforms `null` -> `undefined` while
+  // KEEPING the key present, and updateSpeaker relies on that retained key to
+  // decide what to unset. This asserts the whole chain so a future Zod upgrade
+  // that drops undefined-valued keys can't silently break clearing.
+  it('unsets fields cleared through the SpeakerInputSchema transform', async () => {
+    const parsed = SpeakerInputSchema.parse({
+      name: 'Updated Name',
+      gender: null,
+      country: null,
+    })
+
+    // The transform yields undefined but the keys must survive for the unset.
+    expect('gender' in parsed).toBe(true)
+    expect('country' in parsed).toBe(true)
+    expect(parsed.gender).toBeUndefined()
+    expect(parsed.country).toBeUndefined()
+
+    await updateSpeaker('speaker-1', parsed)
+
+    expect(mockSet).toHaveBeenCalledWith({ name: 'Updated Name' })
+    expect(mockUnset).toHaveBeenCalledTimes(1)
+    expect(mockUnset).toHaveBeenCalledWith(['gender', 'country'])
   })
 
   it('should return error when patch fails', async () => {
