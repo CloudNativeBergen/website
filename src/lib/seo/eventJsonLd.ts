@@ -105,13 +105,15 @@ export function buildEventJsonLd({
     const offers: Record<string, unknown> = {
       '@type': 'Offer',
       url: conference.registrationLink,
-      priceCurrency: 'NOK',
       availability: 'https://schema.org/InStock',
     }
     if (lowestTicketPrice) {
       // Google's Event spec wants the lowest price including all mandatory
-      // charges, so the structured-data price is incl. VAT.
+      // charges, so the structured-data price is incl. VAT. Only emit
+      // `priceCurrency` alongside a real `price` — a currency without a price
+      // is an incomplete Offer that Rich Results flags as a warning.
       offers.price = lowestTicketPrice.amountInclVat
+      offers.priceCurrency = 'NOK'
     }
     jsonLd.offers = offers
   }

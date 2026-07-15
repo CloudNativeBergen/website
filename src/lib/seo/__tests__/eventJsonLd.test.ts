@@ -71,7 +71,6 @@ describe('buildEventJsonLd', () => {
       offers: {
         '@type': 'Offer',
         url: 'https://checkin.no/event/12345',
-        priceCurrency: 'NOK',
         availability: 'https://schema.org/InStock',
       },
     })
@@ -97,6 +96,20 @@ describe('buildEventJsonLd', () => {
       lowestTicketPrice: { amountInclVat: 1500, formatted: '1 500' } as never,
     })
     expect(jsonLd.offers).toMatchObject({ price: 1500, priceCurrency: 'NOK' })
+  })
+
+  it('omits priceCurrency when no price is provided (avoids incomplete Offer)', () => {
+    const jsonLd = buildEventJsonLd({
+      conference: makeConference(),
+      domain: 'cloudnativebergen.dev',
+    })
+    expect(jsonLd.offers).not.toHaveProperty('price')
+    expect(jsonLd.offers).not.toHaveProperty('priceCurrency')
+    // A bare Offer (url + availability) is still valid structured data.
+    expect(jsonLd.offers).toMatchObject({
+      '@type': 'Offer',
+      availability: 'https://schema.org/InStock',
+    })
   })
 
   it('omits location entirely when venue and city are unknown', () => {
