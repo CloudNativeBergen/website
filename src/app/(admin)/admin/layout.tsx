@@ -1,6 +1,11 @@
+import type { Metadata } from 'next'
 import { AdminLayout } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function AdminRootLayout({
   children,

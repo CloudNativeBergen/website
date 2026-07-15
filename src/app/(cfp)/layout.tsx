@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { CFPLayout } from '@/components/cfp/CFPLayout'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
@@ -5,6 +6,10 @@ import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function CFPGroupLayout({
   children,

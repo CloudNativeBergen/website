@@ -1,4 +1,9 @@
+import type { Metadata } from 'next'
 import { SponsorPortal } from '@/components/sponsor/SponsorPortal'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 interface PortalPageProps {
   params: Promise<{ token: string }>
