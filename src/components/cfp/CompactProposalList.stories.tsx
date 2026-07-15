@@ -10,6 +10,7 @@ import {
 } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { formatConferenceDateLong } from '@/lib/time'
 import { expect, within } from 'storybook/test'
 
 const mockSpeakers: Speaker[] = [
@@ -477,6 +478,9 @@ export const ScheduledConfirmedTalk: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
+    expect(
+      canvas.getByText(formatConferenceDateLong('2025-10-30')),
+    ).toBeInTheDocument()
     expect(canvas.getByText('10:00 - 10:45')).toBeInTheDocument()
     expect(canvas.getByText('Track 1 - Main Stage')).toBeInTheDocument()
   },
