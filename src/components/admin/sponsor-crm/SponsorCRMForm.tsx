@@ -296,23 +296,27 @@ export function SponsorCRMForm({
 
                       <div className="flex shrink-0 items-center gap-2">
                         {view === 'pipeline' && sponsor && primaryAction && (
-                          <button
-                            type="button"
-                            onClick={handlePrimaryAction}
-                            disabled={Boolean(primaryBlocked)}
-                            title={primaryBlocked}
-                            className={clsx(
-                              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors',
-                              primaryBlocked
-                                ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600'
-                                : 'cursor-pointer bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
-                            )}
-                          >
-                            {primaryAction.label}
-                            {primaryAction.kind === 'view' && (
-                              <ArrowRightIcon className="h-4 w-4" />
-                            )}
-                          </button>
+                          // Tooltip lives on the wrapper span: a disabled
+                          // <button> doesn't receive pointer events, so its own
+                          // `title` wouldn't show the blocked reason on hover.
+                          <span title={primaryBlocked}>
+                            <button
+                              type="button"
+                              onClick={handlePrimaryAction}
+                              disabled={Boolean(primaryBlocked)}
+                              className={clsx(
+                                'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors',
+                                primaryBlocked
+                                  ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600'
+                                  : 'cursor-pointer bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+                              )}
+                            >
+                              {primaryAction.label}
+                              {primaryAction.kind === 'view' && (
+                                <ArrowRightIcon className="h-4 w-4" />
+                              )}
+                            </button>
+                          </span>
                         )}
                         <button
                           onClick={handleClose}

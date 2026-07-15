@@ -51,6 +51,14 @@ export function DealStatusSection({
 }: DealStatusSectionProps) {
   const state = toSponsorState(formData, sponsor)
 
+  // Only surface a track's next-step hint once that track is the active
+  // frontier: contract work matters once the deal is Won, invoicing once the
+  // contract is signed. Otherwise a fresh prospect would see premature
+  // contract/invoice prerequisites styled as amber warnings. (Per-option
+  // gating in the dropdowns is always active — only the inline hint is gated.)
+  const showContractHint = formData.status === 'closed-won'
+  const showInvoiceHint = formData.contractStatus === 'contract-signed'
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
@@ -78,11 +86,11 @@ export function DealStatusSection({
           )}
         />
         <BlockerHint
-          messages={nextStepBlockers(
-            'contract',
-            formData.contractStatus,
-            state,
-          )}
+          messages={
+            showContractHint
+              ? nextStepBlockers('contract', formData.contractStatus, state)
+              : null
+          }
         />
       </div>
 
@@ -99,7 +107,11 @@ export function DealStatusSection({
           )}
         />
         <BlockerHint
-          messages={nextStepBlockers('invoice', formData.invoiceStatus, state)}
+          messages={
+            showInvoiceHint
+              ? nextStepBlockers('invoice', formData.invoiceStatus, state)
+              : null
+          }
         />
       </div>
     </div>

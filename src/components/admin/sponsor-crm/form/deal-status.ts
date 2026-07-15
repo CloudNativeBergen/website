@@ -80,7 +80,7 @@ export function gateOptions<T extends string>(
       disabled: !result.ok,
       disabledReason: result.ok
         ? undefined
-        : result.missing.map((m) => m.message).join('\n'),
+        : result.missing.map((m) => m.message ?? m.label).join('\n'),
     }
   })
 }
@@ -162,7 +162,7 @@ export function getPrimaryAction(
       target,
       blockedReason: result.ok
         ? undefined
-        : result.missing.map((m) => m.message).join('\n'),
+        : result.missing.map((m) => m.message ?? m.label).join('\n'),
     }
   }
 
@@ -206,7 +206,7 @@ export function getPrimaryAction(
       target: 'sent',
       blockedReason: result.ok
         ? undefined
-        : result.missing.map((m) => m.message).join('\n'),
+        : result.missing.map((m) => m.message ?? m.label).join('\n'),
     }
   }
   if (
