@@ -29,6 +29,7 @@ export { ProposalActionModal } from './ProposalActionModal'
 export { SpeakerTable } from './SpeakerTable'
 export { GeneralBroadcastModal } from './GeneralBroadcastModal'
 export { SpeakerEmailModal } from './SpeakerEmailModal'
+export { SpeakerImageModal } from './SpeakerImageModal'
 export { EmailModal } from './EmailModal'
 export { SpeakerActions } from './SpeakerActions'
 

@@ -31,6 +31,7 @@ import { RatingDisplay } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
+import { SpeakerImageModal } from '@/components/admin'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -71,8 +72,10 @@ interface SpeakerCardProps {
 
 function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
   const [isBioExpanded, setIsBioExpanded] = useState(false)
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
   const bioText = speaker.bio || ''
   const shouldShowExpand = bioText.length > 150
+  const hasImage = typeof speaker.image === 'string' && speaker.image.length > 0
 
   return (
     <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
@@ -88,10 +91,15 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
       </div>
       <div>
         <div className="float-left mr-4 mb-2">
-          {speaker.image && typeof speaker.image === 'string' ? (
-            <div className="h-16 w-16 overflow-hidden rounded-full">
+          {hasImage ? (
+            <button
+              type="button"
+              onClick={() => setIsImageModalOpen(true)}
+              aria-label={`View ${speaker.name}'s photo`}
+              className="block h-16 w-16 overflow-hidden rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+            >
               <SpeakerAvatarImage
-                src={speakerImageUrl(speaker.image, {
+                src={speakerImageUrl(speaker.image as string, {
                   width: 128,
                   height: 128,
                   fit: 'crop',
@@ -99,7 +107,7 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
                 name={speaker.name}
                 size={64}
               />
-            </div>
+            </button>
           ) : (
             <MissingAvatar
               name={speaker.name}
@@ -161,6 +169,17 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
         </div>
         <div className="clear-both" />
       </div>
+      {hasImage && (
+        <SpeakerImageModal
+          isOpen={isImageModalOpen}
+          onClose={() => setIsImageModalOpen(false)}
+          speaker={{
+            name: speaker.name,
+            title: speaker.title,
+            image: speaker.image as string,
+          }}
+        />
+      )}
     </div>
   )
 }
