@@ -230,6 +230,27 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'issuedSpeakerTickets',
+      title: 'Issued Speaker Tickets',
+      type: 'array',
+      description:
+        'System-managed record of complimentary speaker ticket emails that were successfully delivered. Used to avoid re-emailing a speaker while still allowing recovery when a coupon was created but the email failed. Not intended for manual editing.',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          fields: [
+            { name: 'speakerId', title: 'Speaker ID', type: 'string' },
+            { name: 'code', title: 'Coupon Code', type: 'string' },
+            { name: 'emailedAt', title: 'Emailed At', type: 'datetime' },
+          ],
+          preview: {
+            select: { title: 'code', subtitle: 'speakerId' },
+          },
+        },
+      ],
+    }),
+    defineField({
       name: 'audienceFeedback',
       title: 'Audience Feedback',
       type: 'object',

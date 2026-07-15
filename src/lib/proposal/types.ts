@@ -94,6 +94,21 @@ export interface AudienceFeedback {
   lastUpdatedAt?: string
 }
 
+/**
+ * Delivery marker for a confirmed speaker's complimentary ticket email.
+ *
+ * One entry is appended per speaker only after their ticket email has been
+ * sent successfully, decoupling "coupon exists in checkin.no" from "speaker
+ * was actually told". A coupon created without a matching marker (email send
+ * failed) can therefore be safely re-emailed without minting a duplicate code.
+ */
+export interface IssuedSpeakerTicket {
+  _key?: string
+  speakerId: string
+  code: string
+  emailedAt: string
+}
+
 interface Proposal {
   title: string
   description: PortableTextBlock[]
@@ -109,6 +124,7 @@ interface Proposal {
   prerequisites?: string
   audienceFeedback?: AudienceFeedback
   attachments?: Attachment[]
+  issuedSpeakerTickets?: IssuedSpeakerTicket[]
 }
 
 export interface ProposalInput extends Proposal {

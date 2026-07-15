@@ -1,5 +1,5 @@
 import { SpeakerTicketEmailTemplate } from '@/components/email'
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resend, retryWithBackoff, isTransientError } from '@/lib/email/config'
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
 
@@ -53,18 +53,37 @@ export async function sendSpeakerTicketEmail({
     socialLinks: conference.socialLinks,
   })
 
-  return retryWithBackoff(async () => {
-    const { data, error } = await resend.emails.send({
-      from,
-      to: [speaker.email],
-      subject,
-      react: template,
-    })
+  // Retry not just rate limits but any transient provider (5xx) or network
+  // failure: the coupon is created before this send, so a blip here must not
+  // permanently strand the speaker without their ticket email.
+  return retryWithBackoff(
+    async () => {
+      const { data, error } = await resend.emails.send({
+        from,
+        to: [speaker.email],
+        subject,
+        react: template,
+      })
 
-    if (error) {
-      throw new Error(`Failed to send speaker ticket email: ${error.message}`)
-    }
+      if (error) {
+        // Preserve the provider's error name/status on the thrown error so the
+        // retry predicate can tell a transient 5xx apart from a permanent 4xx.
+        const wrapped = new Error(
+          `Failed to send speaker ticket email: ${error.message}`,
+        ) as Error & { status?: number; resendErrorName?: string }
+        const status = (error as { statusCode?: number }).statusCode
+        if (typeof status === 'number') {
+          wrapped.status = status
+        }
+        if (typeof error.name === 'string') {
+          wrapped.resendErrorName = error.name
+        }
+        throw wrapped
+      }
 
-    return data
-  })
+      return data
+    },
+    undefined,
+    isTransientError,
+  )
 }

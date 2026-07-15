@@ -63,6 +63,7 @@ import {
   ProposalDeletionBlockedError,
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
+import { eventBus } from '@/lib/events/bus'
 import { isCfpOpen } from '@/lib/conference/state'
 import {
   Status,
@@ -517,6 +518,94 @@ describe('proposal router', () => {
         code: 'FORBIDDEN',
         message: expect.stringContaining('maximum of 3 proposals'),
       })
+    })
+
+    it('should confirm an accepted proposal and publish the status-change event with a revision guard', async () => {
+      const acceptedProposal = {
+        ...mockProposal,
+        _rev: 'rev-accepted',
+        status: Status.accepted,
+      }
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: acceptedProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...acceptedProposal, status: Status.confirmed } as any,
+        err: null,
+      })
+      vi.mocked(eventBus.publish).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.confirm,
+      })
+
+      expect(result.proposalStatus).toBe(Status.confirmed)
+      // Confirm must carry the read revision so a concurrent confirm can't
+      // double-write.
+      expect(updateProposalStatus).toHaveBeenCalledWith(
+        'proposal-1',
+        Status.confirmed,
+        'rev-accepted',
+      )
+      expect(eventBus.publish).toHaveBeenCalledTimes(1)
+    })
+
+    it('serializes two concurrent confirms so exactly one coupon/email handler runs', async () => {
+      const acceptedProposal = {
+        ...mockProposal,
+        _rev: 'rev-accepted',
+        status: Status.accepted,
+      }
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: acceptedProposal as any,
+        proposalError: null,
+      })
+
+      // Simulate Sanity optimistic concurrency: the first patch for a given
+      // revision wins; any later patch pinned to the same (now stale) revision
+      // is rejected with a 409-style error.
+      const consumedRevs = new Set<string>()
+      vi.mocked(updateProposalStatus).mockImplementation(
+        async (_id, status, ifRevisionId) => {
+          if (ifRevisionId && consumedRevs.has(ifRevisionId)) {
+            return {
+              proposal: {} as any,
+              err: new Error(
+                'The document was modified since read (revision mismatch, 409)',
+              ),
+            }
+          }
+          if (ifRevisionId) consumedRevs.add(ifRevisionId)
+          return {
+            proposal: { ...acceptedProposal, status } as any,
+            err: null,
+          }
+        },
+      )
+      vi.mocked(eventBus.publish).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const results = await Promise.allSettled([
+        caller.proposal.action({ id: 'proposal-1', action: Action.confirm }),
+        caller.proposal.action({ id: 'proposal-1', action: Action.confirm }),
+      ])
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled')
+      const rejected = results.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      )
+
+      // One confirm succeeds, the other loses the revision race.
+      expect(fulfilled).toHaveLength(1)
+      expect(rejected).toHaveLength(1)
+      expect(rejected[0].reason).toMatchObject({ code: 'CONFLICT' })
+
+      // The handler that issues the coupon and emails the speaker is driven by
+      // this event, so publishing exactly once => exactly one coupon + email.
+      expect(eventBus.publish).toHaveBeenCalledTimes(1)
     })
 
     it('should return NOT_FOUND for nonexistent proposal', async () => {

@@ -352,20 +352,51 @@ export async function deleteProposal(
 export async function updateProposalStatus(
   proposalId: string,
   status: Status,
+  ifRevisionId?: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
   try {
-    updatedProposal = await clientWrite
-      .patch(proposalId)
-      .set({ status })
-      .commit()
+    // When a revision is supplied, gate the write on it so two concurrent
+    // transitions can't both succeed (optimistic concurrency). Sanity rejects
+    // the patch with a 409 if the document moved on since it was read, which
+    // the caller surfaces as an error instead of a duplicate status change.
+    const patch = ifRevisionId
+      ? clientWrite.patch(proposalId, { ifRevisionID: ifRevisionId })
+      : clientWrite.patch(proposalId)
+
+    updatedProposal = await patch.set({ status }).commit()
   } catch (error) {
     err = error as Error
   }
 
   return { proposal: updatedProposal, err }
+}
+
+/**
+ * Records that a confirmed speaker's complimentary ticket email was
+ * successfully delivered. Appended additively so the marker survives alongside
+ * any existing entries; the caller writes this only after a successful send so
+ * that a coupon created without a delivered email remains re-emailable.
+ */
+export async function recordSpeakerTicketEmailed(
+  proposalId: string,
+  speakerId: string,
+  code: string,
+): Promise<void> {
+  await clientWrite
+    .patch(proposalId)
+    .setIfMissing({ issuedSpeakerTickets: [] })
+    .append('issuedSpeakerTickets', [
+      {
+        _key: `speaker-ticket-${speakerId}`,
+        speakerId,
+        code,
+        emailedAt: new Date().toISOString(),
+      },
+    ])
+    .commit()
 }
 
 export async function createProposal(

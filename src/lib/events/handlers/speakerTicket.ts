@@ -4,6 +4,7 @@ import { checkinGraphQLClient } from '@/lib/tickets/graphql-client'
 import { getEventDiscounts, createEventDiscount } from '@/lib/discounts/api'
 import { speakerTicketCode } from '@/lib/speaker/ticket-code'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
+import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
 
 /**
  * Issues each confirmed speaker a single-use 100%-off coupon in checkin.no as
@@ -15,14 +16,24 @@ import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
  * reserved for the accept/reject/waitlist speaker emails). A confirmed speaker
  * always earns their comp ticket.
  *
- * Idempotency: the coupon code is a deterministic hash of the speaker id, so a
- * re-confirm produces the same code. We list the event's existing discounts up
- * front and skip any speaker whose code is already present, so re-running never
- * mints a duplicate.
+ * Idempotency is split across two guards so a delivery failure stays
+ * recoverable:
+ *
+ * 1. Coupon creation is guarded by the event's existing discounts: the coupon
+ *    code is a deterministic hash of the speaker id, so we skip
+ *    `createEventDiscount` whenever that code already exists — a coupon is
+ *    never minted twice for the same speaker.
+ * 2. Email delivery is guarded by a per-speaker `issuedSpeakerTickets` marker
+ *    persisted on the proposal, written only after a successful send. A coupon
+ *    that exists without a matching marker means an earlier email failed, so a
+ *    re-trigger re-sends the email (reusing the existing coupon) instead of
+ *    treating the speaker as done.
  *
  * Fire-and-forget: every failure is caught and logged. The event bus already
  * isolates handlers from one another; per-speaker try/catch additionally keeps
- * one speaker's failure from blocking the others.
+ * one speaker's failure from blocking the others. A coupon created but not
+ * emailed logs an actionable error (speaker id + code) so an organizer can
+ * recover manually if needed.
  */
 export async function handleSpeakerTicket(
   event: ProposalStatusChangeEvent,
@@ -76,6 +87,14 @@ export async function handleSpeakerTicket(
     event.conference.registrationLink || `https://${event.metadata.domain}`
   const eventUrl = `https://${event.metadata.domain}`
 
+  // Speakers whose ticket email was already delivered on a previous run. These
+  // are skipped entirely; a coupon without a marker is intentionally retried.
+  const emailedSpeakerIds = new Set(
+    (event.proposal.issuedSpeakerTickets ?? [])
+      .map((entry) => entry.speakerId)
+      .filter((id): id is string => !!id),
+  )
+
   for (const speaker of event.speakers) {
     const email = speaker.email?.trim()
     if (!email) {
@@ -87,24 +106,40 @@ export async function handleSpeakerTicket(
 
     const code = speakerTicketCode(speaker._id)
 
-    if (existingCodes.has(code)) {
+    if (emailedSpeakerIds.has(speaker._id)) {
       console.log(
-        `[speakerTicket] Code ${code} already issued for speaker ${speaker._id}; skipping`,
+        `[speakerTicket] Ticket already issued and emailed for speaker ${speaker._id}; skipping`,
       )
       continue
     }
 
+    // Create the coupon (guarded so it is never minted twice), then email it.
+    // These are separate steps: an email failure must not roll back or hide the
+    // coupon, and must leave the speaker recoverable (no delivery marker).
+    if (!existingCodes.has(code)) {
+      try {
+        await createEventDiscount({
+          eventId,
+          discountCode: code,
+          numberOfTickets: 1,
+          ticketTypes: [],
+        })
+        // Guard against the same speaker appearing twice on one proposal.
+        existingCodes.add(code)
+      } catch (error) {
+        console.error(
+          `[speakerTicket] Failed to create checkin coupon for speaker ${speaker._id} on proposal ${event.proposal._id}; skipping`,
+          error,
+        )
+        continue
+      }
+    } else {
+      console.log(
+        `[speakerTicket] Coupon ${code} already exists for speaker ${speaker._id} but was not yet emailed; resending`,
+      )
+    }
+
     try {
-      await createEventDiscount({
-        eventId,
-        discountCode: code,
-        numberOfTickets: 1,
-        ticketTypes: [],
-      })
-
-      // Guard against the same speaker appearing twice on one proposal.
-      existingCodes.add(code)
-
       await sendSpeakerTicketEmail({
         speaker: { name: speaker.name, email },
         discountCode: code,
@@ -112,15 +147,32 @@ export async function handleSpeakerTicket(
         eventUrl,
         conference: event.conference,
       })
-
-      console.log(
-        `[speakerTicket] Issued and emailed speaker ticket code ${code} to ${email} for proposal ${event.proposal._id}`,
+    } catch (error) {
+      // The coupon exists but the speaker was not told. Do NOT record a
+      // delivery marker, so a later re-trigger re-sends. Log everything an
+      // organizer needs to recover manually in the meantime.
+      console.error(
+        `[speakerTicket] Coupon ${code} was created for speaker ${speaker._id} (${email}) on proposal ${event.proposal._id} but the ticket email FAILED to send. ` +
+          `The speaker has NOT received their code. Re-trigger issuance or send code ${code} to ${email} manually.`,
+        error,
       )
+      continue
+    }
+
+    // Email delivered — record the marker so we never re-email this speaker.
+    // A failure here only risks a duplicate email on a future re-trigger, which
+    // is far less harmful than the send failure above, so we just log it.
+    try {
+      await recordSpeakerTicketEmailed(event.proposal._id, speaker._id, code)
     } catch (error) {
       console.error(
-        `[speakerTicket] Failed to issue/email speaker ticket for speaker ${speaker._id} on proposal ${event.proposal._id}`,
+        `[speakerTicket] Emailed ticket code ${code} to ${email} but failed to record the delivery marker on proposal ${event.proposal._id}; a re-trigger may re-send`,
         error,
       )
     }
+
+    console.log(
+      `[speakerTicket] Issued and emailed speaker ticket code ${code} to ${email} for proposal ${event.proposal._id}`,
+    )
   }
 }

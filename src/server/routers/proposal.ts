@@ -638,14 +638,30 @@ export const proposalRouter = router({
           return { proposalStatus: Status.deleted }
         }
 
-        // Update proposal status
+        // Update proposal status. For confirm we gate the write on the exact
+        // revision we validated against, so two near-simultaneous confirms
+        // (double-click / client retry) can't both promote accepted→confirmed
+        // and fire the speaker-ticket handler twice (duplicate coupon + email).
+        // The loser's patch fails the revision check and never publishes.
         const { proposal: updatedProposal, err: updateErr } =
-          await updateProposalStatus(id, status)
+          await updateProposalStatus(
+            id,
+            status,
+            action === Action.confirm ? proposal._rev : undefined,
+          )
 
         if (updateErr) {
+          const isConcurrentConflict =
+            action === Action.confirm &&
+            /revision|conflict|mismatch|409/i.test(
+              updateErr.message ?? String(updateErr),
+            )
+
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update proposal status',
+            code: isConcurrentConflict ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
+            message: isConcurrentConflict
+              ? 'This proposal was just updated. Refresh and try again.'
+              : 'Failed to update proposal status',
             cause: updateErr,
           })
         }
