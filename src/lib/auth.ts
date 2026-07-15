@@ -296,6 +296,30 @@ const config = {
     strategy: 'jwt',
   },
 
+  // Share the session cookie across subdomains of the conference's registrable
+  // domain (e.g. `.cloudnativedays.no` → apex + www + per-year subdomains) so a
+  // signed-in user stays signed in when moving between them, instead of the
+  // default host-only cookie that is dropped on a different subdomain.
+  //
+  // Opt-in via AUTH_COOKIE_DOMAIN: when it is unset (localhost, preview deploys,
+  // tests) no override is applied and the cookie stays host-only. Only the
+  // `domain` option is set — @auth/core deep-merges it onto the defaults, so
+  // httpOnly / secure / sameSite=lax / path and the `__Secure-` name prefix are
+  // preserved (that prefix permits a Domain attribute, unlike `__Host-`). The
+  // CSRF cookie deliberately stays host-only (`__Host-`), which is fine as the
+  // sign-in POST happens on a single host.
+  ...(process.env.AUTH_COOKIE_DOMAIN
+    ? {
+        cookies: {
+          sessionToken: {
+            options: {
+              domain: process.env.AUTH_COOKIE_DOMAIN,
+            },
+          },
+        },
+      }
+    : {}),
+
   pages: {
     signIn: '/signin',
   },
