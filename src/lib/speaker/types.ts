@@ -85,6 +85,14 @@ export interface Speaker extends SpeakerBase {
   _createdAt: string
   _updatedAt: string
   email: string
+  /**
+   * Normalized (lowercased) match-set of every verified email known to belong
+   * to this speaker across their linked OAuth providers. Distinct from the
+   * single display {@link email}; used by `getOrCreateSpeaker` to link a second
+   * provider whose verified email matches, avoiding duplicate speaker records.
+   * Additive/optional — legacy documents without it remain valid.
+   */
+  knownEmails?: string[]
   providers?: string[]
   /**
    * Read-side image value: a fully-resolved display URL projected by GROQ as

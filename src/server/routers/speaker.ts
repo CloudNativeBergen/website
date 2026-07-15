@@ -41,7 +41,7 @@ import {
 } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
-import { generateSlug } from '@/lib/speaker/sanity'
+import { generateUniqueSlug } from '@/lib/speaker/sanity'
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -372,7 +372,7 @@ export const speakerRouter = router({
       .input(SpeakerCreateSchema)
       .mutation(async ({ input }) => {
         try {
-          const slug = generateSlug(input.name)
+          const slug = await generateUniqueSlug(input.name)
 
           const speaker = await clientWrite.create({
             _type: 'speaker',

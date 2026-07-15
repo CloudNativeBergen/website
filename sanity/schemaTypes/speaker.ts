@@ -65,6 +65,23 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'knownEmails',
+      title: 'Known Emails',
+      type: 'array',
+      description:
+        'Normalized (lowercased) verified emails used to match this speaker across OAuth providers. Managed automatically on login; distinct from the display email.',
+      of: [{ type: 'string' }],
+      readOnly: true,
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
+    defineField({
       name: 'imageURL',
       title: 'Image URL',
       type: 'string',

@@ -6,9 +6,12 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { v4 as randomUUID } from 'uuid'
-import { Account, User } from 'next-auth'
+import { Account, Profile, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
 import { cacheLife, cacheTag } from 'next/cache'
+import { generateUniqueSpeakerSlug } from './slug'
+import { normalizeEmail, uniqueEmails } from './email'
+import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -30,20 +33,41 @@ export function providerAccount(
   return `${provider}:${providerAccountId}`
 }
 
-export function generateSlug(name: string, suffix?: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-
-  if (suffix) {
-    const maxBaseLength = 96 - 1 - suffix.length
-    const truncatedBase = base.slice(0, maxBaseLength)
-    return `${truncatedBase}-${suffix}`
+/**
+ * Returns true when a speaker slug is already taken by a *different* document.
+ * `selfId` excludes the speaker being updated so backfilling its own slug does
+ * not count as a collision.
+ */
+async function speakerSlugExists(
+  slug: string,
+  selfId?: string,
+): Promise<boolean> {
+  try {
+    const existingId = await clientRead.fetch(
+      groq`*[_type == "speaker" && slug.current == $slug && _id != $selfId][0]._id`,
+      { slug, selfId: selfId ?? '' },
+    )
+    return Boolean(existingId)
+  } catch (error) {
+    // If the uniqueness probe fails we prefer to proceed rather than loop
+    // forever; a rare duplicate is recoverable, an infinite loop is not.
+    console.error('Error checking speaker slug uniqueness', error)
+    return false
   }
+}
 
-  return base.slice(0, 96)
+/**
+ * Canonical unique-slug generator for persisted speakers. Wraps the shared pure
+ * {@link generateUniqueSpeakerSlug} with the Sanity collision checker so the
+ * OAuth create/link path and the admin create path produce identical slugs.
+ */
+export async function generateUniqueSlug(
+  name: string,
+  selfId?: string,
+): Promise<string> {
+  return generateUniqueSpeakerSlug(name, (slug) =>
+    speakerSlugExists(slug, selfId),
+  )
 }
 
 async function findSpeakerByProvider(
@@ -69,6 +93,11 @@ async function findSpeakerByProvider(
   return { speaker, err }
 }
 
+/**
+ * Find a speaker whose primary `email` matches (case-insensitively). Kept for
+ * backward compatibility; matching is normalized (was previously exact/case
+ * sensitive).
+ */
 async function findSpeakerByEmail(
   email: string,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
@@ -77,13 +106,13 @@ async function findSpeakerByEmail(
 
   try {
     speaker = await clientRead.fetch(
-      `*[ _type == "speaker" && email == $email][0]{
+      `*[ _type == "speaker" && lower(email) == $email][0]{
       ...,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       ${IS_ORGANIZER_FIELD}
     }`,
-      { email },
+      { email: normalizeEmail(email) },
     )
   } catch (error) {
     err = error as Error
@@ -94,9 +123,168 @@ async function findSpeakerByEmail(
 
 export { findSpeakerByEmail }
 
+/**
+ * Find all speakers whose display `email` or `knownEmails` match-set intersects
+ * any of the given (already normalized) emails. Ordered oldest-first so the
+ * caller can deterministically pick a link target and detect duplicates.
+ */
+async function findSpeakersByEmails(
+  emails: string[],
+): Promise<{ speakers: Speaker[]; err: Error | null }> {
+  if (emails.length === 0) {
+    return { speakers: [], err: null }
+  }
+
+  try {
+    const speakers = (await clientRead.fetch(
+      groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] {
+        ...,
+        "slug": slug.current,
+        "image": coalesce(image.asset->url, imageURL),
+        ${IS_ORGANIZER_FIELD}
+      }`,
+      { emails },
+    )) as Speaker[]
+    return { speakers: speakers || [], err: null }
+  } catch (error) {
+    return { speakers: [], err: error as Error }
+  }
+}
+
+/**
+ * Compute the set of VERIFIED emails for an incoming login, normalized.
+ *
+ * SECURITY: only these emails may ever be used to auto-link an incoming account
+ * into an existing speaker. An unverified email must never link accounts, as
+ * that would enable account takeover.
+ *
+ * - GitHub: the verified set from the GitHub `/user/emails` API. GitHub's OAuth
+ *   userinfo only exposes a verified primary email, so `user.email` is treated
+ *   as provider-verified and included as a fallback (e.g. if the API call
+ *   fails).
+ * - LinkedIn (OIDC): the `email_verified` claim on the profile. LinkedIn OIDC
+ *   only issues an email when it is verified, so a missing/undefined claim is
+ *   treated as verified per LinkedIn semantics; an explicit `false` is honored
+ *   as unverified. (Assumption flagged for maintainer review.)
+ * - Unknown providers: no email is treated as verified (no auto-link).
+ */
+async function computeVerifiedEmails(
+  user: User,
+  account: Account,
+  profile?: Profile,
+): Promise<string[]> {
+  const primary = normalizeEmail(user.email)
+  const verified: string[] = []
+
+  switch (account.provider) {
+    case 'github': {
+      const { emails, error } = await fetchGithubVerifiedEmails(account)
+      if (error) {
+        console.error(
+          'Failed to fetch GitHub verified emails; falling back to OAuth primary',
+          error,
+        )
+      }
+      for (const entry of emails) {
+        verified.push(entry.email)
+      }
+      // GitHub OAuth only surfaces a verified primary email.
+      if (primary) verified.push(primary)
+      break
+    }
+    case 'linkedin': {
+      const claim = (profile as { email_verified?: boolean } | undefined)
+        ?.email_verified
+      if (primary && claim !== false) {
+        verified.push(primary)
+      }
+      break
+    }
+    default:
+      // Unknown provider: cannot establish verification -> do not auto-link.
+      break
+  }
+
+  return uniqueEmails(verified)
+}
+
+/** Patch a speaker's slug if it is currently missing/empty. Never overwrites a
+ * non-empty slug (that would break profile URLs / SEO). Mutates and returns the
+ * passed speaker for convenience. */
+async function backfillSlugIfMissing(speaker: Speaker): Promise<Speaker> {
+  if (speaker.slug && speaker.slug.trim().length > 0) {
+    return speaker
+  }
+
+  try {
+    const slug = await generateUniqueSlug(speaker.name, speaker._id)
+    await clientWrite
+      .patch(speaker._id)
+      .set({ slug: { _type: 'slug', current: slug } })
+      .commit()
+    speaker.slug = slug
+  } catch (error) {
+    console.error('Failed to backfill speaker slug', error)
+  }
+
+  return speaker
+}
+
+/**
+ * Link an incoming provider account into an existing speaker: dedup the
+ * provider id into `providers[]`, union the verified emails into `knownEmails`,
+ * backfill a missing slug, and set the display `email` only when it was empty.
+ */
+async function linkProviderToSpeaker(
+  speaker: Speaker,
+  providerAccountId: string,
+  verifiedIncoming: string[],
+  primaryEmail: string,
+): Promise<{ speaker: Speaker; err: Error | null }> {
+  const providers = Array.from(
+    new Set([...(speaker.providers || []), providerAccountId]),
+  )
+  const knownEmails = uniqueEmails([
+    ...(speaker.knownEmails || []),
+    speaker.email,
+    ...verifiedIncoming,
+    primaryEmail,
+  ])
+
+  const patch: Record<string, unknown> = { providers, knownEmails }
+
+  // Keep the existing non-empty display email; only set it when missing.
+  const nextEmail =
+    speaker.email && speaker.email.trim().length > 0
+      ? speaker.email
+      : primaryEmail
+  if (nextEmail !== speaker.email) {
+    patch.email = nextEmail
+  }
+
+  // Backfill slug only when missing; never change an existing non-empty slug.
+  let slug = speaker.slug
+  if (!slug || slug.trim().length === 0) {
+    slug = await generateUniqueSlug(speaker.name, speaker._id)
+    patch.slug = { _type: 'slug', current: slug }
+  }
+
+  try {
+    await clientWrite.patch(speaker._id).set(patch).commit()
+  } catch (error) {
+    return { speaker, err: error as Error }
+  }
+
+  return {
+    speaker: { ...speaker, providers, knownEmails, email: nextEmail, slug },
+    err: null,
+  }
+}
+
 export async function getOrCreateSpeaker(
   user: User,
   account: Account,
+  profile?: Profile,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   if (!user.email || !user.name) {
     const err = new Error('Missing user email or name')
@@ -108,45 +296,68 @@ export async function getOrCreateSpeaker(
     account.provider,
     account.providerAccountId,
   )
-  let result = await findSpeakerByProvider(providerAccountId)
-  if (result.err) {
-    console.error('Error fetching speaker profile by account id', result.err)
-    return { speaker: result.speaker, err: result.err }
+
+  // 1. Exact provider-account match: this account already belongs to a speaker.
+  const providerResult = await findSpeakerByProvider(providerAccountId)
+  if (providerResult.err) {
+    console.error(
+      'Error fetching speaker profile by account id',
+      providerResult.err,
+    )
+    return { speaker: providerResult.speaker, err: providerResult.err }
+  }
+  if (providerResult.speaker?._id) {
+    // Backfill a slug for pre-existing slugless speakers on login.
+    await backfillSlugIfMissing(providerResult.speaker)
+    return { speaker: providerResult.speaker, err: null }
   }
 
-  if (result.speaker?._id) {
-    return { speaker: result.speaker, err: result.err }
-  }
+  // 2. Gather the VERIFIED emails for this login. Only verified emails may
+  //    auto-link into an existing speaker (never link on an unverified email).
+  const primaryEmail = normalizeEmail(user.email)
+  const verifiedIncoming = await computeVerifiedEmails(user, account, profile)
 
-  result = await findSpeakerByEmail(user.email)
-  if (result.err) {
-    console.error('Error fetching speaker profile by email', result.err)
-    return { speaker: result.speaker, err: result.err }
-  }
-
-  if (result.speaker?._id) {
-    result.speaker.providers = result.speaker.providers || []
-    result.speaker.providers.push(providerAccountId)
-    try {
-      await clientWrite
-        .patch(result.speaker._id)
-        .set({ providers: result.speaker.providers })
-        .commit()
-    } catch (error) {
-      result.err = error as Error
+  // 3. Attempt to match an existing speaker by verified email intersection.
+  if (verifiedIncoming.length > 0) {
+    const { speakers, err } = await findSpeakersByEmails(verifiedIncoming)
+    if (err) {
+      console.error('Error fetching speaker profile by email', err)
+      return { speaker: {} as Speaker, err }
     }
-    return { speaker: result.speaker, err: result.err }
+
+    if (speakers.length > 1) {
+      // Pre-existing duplicate data. Do NOT silently merge; link to the oldest
+      // and surface the duplicates for Phase 3/4 reconciliation.
+      console.warn(
+        `possible existing duplicate speakers for ${verifiedIncoming.join(
+          ', ',
+        )}: ${speakers.map((s) => s._id).join(', ')}`,
+      )
+    }
+
+    if (speakers.length > 0) {
+      return linkProviderToSpeaker(
+        speakers[0],
+        providerAccountId,
+        verifiedIncoming,
+        primaryEmail,
+      )
+    }
   }
+
+  // 4. No verified match: create a brand-new speaker with a unique slug.
+  const _id = randomUUID()
+  const knownEmails = uniqueEmails([...verifiedIncoming, primaryEmail])
+  const slugValue = await generateUniqueSlug(user.name, _id)
 
   const speaker = {
-    _id: randomUUID(),
+    _id,
     email: user.email,
     name: user.name,
     imageURL: user.image || '',
     providers: [providerAccountId],
+    knownEmails,
   } as Speaker
-
-  const slugValue = generateSlug(user.name)
 
   try {
     const createdSpeaker = await clientWrite.create({

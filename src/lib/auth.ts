@@ -52,7 +52,7 @@ const config = {
       } as Session
     },
 
-    async jwt({ token, account, trigger }) {
+    async jwt({ token, account, profile, trigger }) {
       if (!trigger && !(token.account && token.speaker)) {
         console.error('Invalid auth token', token)
         return {}
@@ -74,7 +74,11 @@ const config = {
           name: token.name,
           image: token.picture,
         }
-        const { speaker, err } = await getOrCreateSpeaker(user, account)
+        const { speaker, err } = await getOrCreateSpeaker(
+          user,
+          account,
+          profile,
+        )
         if (err) {
           console.error('Error fetching or creating speaker profile', err)
           return {}
