@@ -375,10 +375,7 @@ export function SponsorCRMPipeline({
   useEffect(() => {
     const sponsorId = searchParams.get('sponsor')
     const viewParam = searchParams.get('view') as
-      | 'pipeline'
-      | 'history'
-      | 'contract'
-      | null
+      'pipeline' | 'history' | 'contract' | null
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {

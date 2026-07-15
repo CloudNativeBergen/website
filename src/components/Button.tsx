@@ -2,13 +2,7 @@ import Link from 'next/link'
 import clsx from 'clsx'
 
 type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'success'
-  | 'warning'
-  | 'info'
-  | 'outline'
-  | 'icon'
+  'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'outline' | 'icon'
 type ButtonSize = 'sm' | 'md' | 'lg' | 'icon'
 
 interface BaseButtonProps {

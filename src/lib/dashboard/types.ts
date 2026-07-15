@@ -116,10 +116,7 @@ export interface TextFieldConfig extends WidgetConfigFieldBase<string> {
  * Union of all field config types
  */
 export type WidgetConfigField =
-  | NumberFieldConfig
-  | BooleanFieldConfig
-  | SelectFieldConfig
-  | TextFieldConfig
+  NumberFieldConfig | BooleanFieldConfig | SelectFieldConfig | TextFieldConfig
 
 /**
  * Widget configuration schema definition

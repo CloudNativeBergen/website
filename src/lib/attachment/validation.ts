@@ -20,11 +20,7 @@ export function validateAttachmentFile(file: File): {
   }
 
   const extension = `.${parts.pop()?.toLowerCase()}` as
-    | '.pdf'
-    | '.pptx'
-    | '.ppt'
-    | '.odp'
-    | '.key'
+    '.pdf' | '.pptx' | '.ppt' | '.odp' | '.key'
   if (!AttachmentConfig.fileUpload.allowedExtensions.includes(extension)) {
     return {
       valid: false,

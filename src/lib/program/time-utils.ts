@@ -2,10 +2,7 @@ import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { getSimulatedTime } from './dev-time'
 
 export type TalkStatus =
-  | 'past'
-  | 'happening-now'
-  | 'happening-soon'
-  | 'upcoming'
+  'past' | 'happening-now' | 'happening-soon' | 'upcoming'
 
 export interface CurrentPosition {
   scheduleIndex: number

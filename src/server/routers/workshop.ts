@@ -113,8 +113,7 @@ export const workshopRouter = router({
     .query(async ({ input, ctx }) => {
       try {
         const sessionUser = ctx.session?.user as
-          | { id?: string; sub?: string }
-          | undefined
+          { id?: string; sub?: string } | undefined
         const userWorkOSId =
           input.userWorkOSId || sessionUser?.id || sessionUser?.sub
 

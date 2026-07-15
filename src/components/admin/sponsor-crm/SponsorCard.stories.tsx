@@ -17,10 +17,12 @@ const meta: Meta<typeof SponsorCard> = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MockDate: any = function (...args: any[]) {
       if (args.length === 0) return new OriginalDate(fixedTime)
-      return new (Function.prototype.bind.apply(OriginalDate, [
-        null,
-        ...args,
-      ]) as typeof OriginalDate)()
+      return new (
+        Function.prototype.bind.apply(OriginalDate, [
+          null,
+          ...args,
+        ]) as typeof OriginalDate
+      )()
     }
     Object.setPrototypeOf(MockDate, OriginalDate)
     MockDate.prototype = Object.create(OriginalDate.prototype)

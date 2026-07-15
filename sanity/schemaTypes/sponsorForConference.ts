@@ -116,8 +116,7 @@ export default defineType({
         Rule.required(),
         Rule.custom((status, context) => {
           const doc = context.document as
-            | { tier?: { _ref?: string }; contractValue?: number }
-            | undefined
+            { tier?: { _ref?: string }; contractValue?: number } | undefined
           return contractSentError(
             status as string | undefined,
             doc?.tier?._ref,

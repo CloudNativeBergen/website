@@ -32,8 +32,7 @@ export interface SponsorState {
 }
 
 export type TransitionResult =
-  | { ok: true }
-  | { ok: false; missing: MissingField[] }
+  { ok: true } | { ok: false; missing: MissingField[] }
 
 /**
  * Permissive-with-guards: every state is allowed unless it carries required

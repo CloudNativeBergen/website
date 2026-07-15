@@ -29,13 +29,7 @@ import { Action } from '@/lib/proposal/types'
 import { CheckIcon } from '@heroicons/react/20/solid'
 
 type BadgeColor =
-  | 'gray'
-  | 'red'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple'
-  | 'orange'
+  'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
 
 interface CompactProposalListProps {
   proposals: ProposalExisting[]

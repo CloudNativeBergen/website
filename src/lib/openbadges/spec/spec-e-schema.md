@@ -3115,24 +3115,24 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string",
-                "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        {
-          "type": "array",
-          "items": {
-            "description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
-            "$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
+}
+}
+]
+},
+{
+"type": "array",
+"items": {
+"description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
+"$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
 "oneOf": [
 {
 "type": "string",
@@ -9445,9 +9445,9 @@ A collection of information about the recipient of an achievement. Maps to Crede
 "additionalProperties": {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -14900,7 +14900,7 @@ A Profile is a collection of information that describes the entity or organizati
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9*-]+$"
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
 },
 {
 "type": "object",
@@ -20369,7 +20369,7 @@ A description of the individual, entity, or organization that issued the credent
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9*-]+$"
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
 },
 {
 "type": "object",
@@ -22795,24 +22795,24 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9\_-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "items": {
-                "description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
-                "$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
+}
+}
+]
+},
+{
+"type": "array",
+"items": {
+"description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
+"$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
 "oneOf": [
 {
 "type": "string",
@@ -22822,7 +22822,7 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "type": "object",
 "additionalProperties": {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
@@ -22938,7 +22938,7 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 {
 "type": "string",
-"pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)_\\.json$"
+"pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)*\\.json$"
 }
 ],
 "additionalItems": {
@@ -23116,24 +23116,24 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[a-zA-Z0-9*-]+\\.[a-zA-Z0-9\_-]_\\.[a-zA-Z0-9_-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "items": {
-                "description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
-                "$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
+}
+}
+]
+},
+{
+"type": "array",
+"items": {
+"description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
+"$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
 "oneOf": [
 {
 "type": "string",
@@ -27360,7 +27360,7 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9*-]+$"
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
 },
 {
 "type": "object",
@@ -27389,9 +27389,9 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "additionalProperties": {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27405,17 +27405,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "email": {
 "description": "An email address.",
 "$comment": "Origin: EmailAddress (DerivedType); A`NormalizedString`representing an email address.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27439,17 +27439,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "official": {
 "description": "If the entity is an organization,`official`is the name of an authorized official of the organization.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27460,17 +27460,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "familyName": {
 "description": "Family name. In the western world, often referred to as the 'last name' of a person.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27478,17 +27478,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "givenName": {
 "description": "Given name. In the western world, often referred to as the 'first name' of a person.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27496,17 +27496,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "additionalName": {
 "description": "Additional name. Includes what is often referred to as 'middle name' in the western world.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27514,17 +27514,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "patronymicName": {
 "description": "Patronymic name.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27532,17 +27532,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "honorificPrefix": {
 "description": "Honorific prefix(es) preceding a person's name (e.g. 'Dr', 'Mrs' or 'Mr').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27550,17 +27550,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "honorificSuffix": {
 "description": "Honorific suffix(es) following a person's name (e.g. 'M.D, PhD').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27568,17 +27568,17 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "familyNamePrefix": {
 "description": "Family name prefix. As used in some locales, this is the leading part of a family name (e.g. 'de' in the name 'de Boer').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -27586,25 +27586,25 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 "dateOfBirth": {
 "description": "Birthdate of the person.",
 "$comment": "Origin: Date (PrimitiveType); An [[ISO8601]] calendar date using the syntax YYYY-MM-DD.",
-          "type": "string",
-          "format": "date"
-        }
-      },
-      "required": [
-        "id",
-        "type"
-      ],
-      "additionalProperties": true
-    },
-    "Address": {
-      "description": "An address for the described entity.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "oneOf": [
-            {
-              "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
-              "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+"type": "string",
+"format": "date"
+}
+},
+"required": [
+"id",
+"type"
+],
+"additionalProperties": true
+},
+"Address": {
+"description": "An address for the described entity.",
+"type": "object",
+"properties": {
+"type": {
+"oneOf": [
+{
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -27616,21 +27616,21 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "minItems": 1,
-              "contains": {
-                "enum": [
-                  "Address"
-                ]
-              },
-              "items": {
-                "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
-                "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+{
+"type": "array",
+"minItems": 1,
+"contains": {
+"enum": [
+"Address"
+]
+},
+"items": {
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -27642,16 +27642,16 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "addressCountry": {
-          "description": "A country.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+}
+}
+]
+},
+"addressCountry": {
+"description": "A country.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27663,13 +27663,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "addressCountryCode": {
-          "description": "A country code. The value must be a ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
-          "$comment": "Origin: CountryCode (DerivedType); A two-digit ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
+}
+}
+]
+},
+"addressCountryCode": {
+"description": "A country code. The value must be a ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
+"$comment": "Origin: CountryCode (DerivedType); A two-digit ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
 "oneOf": [
 {
 "type": "string"
@@ -27681,13 +27681,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "addressRegion": {
-          "description": "A region within the country.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"addressRegion": {
+"description": "A region within the country.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27699,13 +27699,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "addressLocality": {
-          "description": "A locality within the region.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"addressLocality": {
+"description": "A locality within the region.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27717,13 +27717,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "streetAddress": {
-          "description": "A street address within the locality.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"streetAddress": {
+"description": "A street address within the locality.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27735,13 +27735,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "postOfficeBoxNumber": {
-          "description": "A post office box number for PO box addresses.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"postOfficeBoxNumber": {
+"description": "A post office box number for PO box addresses.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27753,13 +27753,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "postalCode": {
-          "description": "A postal code.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"postalCode": {
+"description": "A postal code.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -27771,26 +27771,26 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "geo": {
-          "$ref": "#/$defs/GeoCoordinates"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "additionalProperties": true
-    },
-    "GeoCoordinates": {
-      "description": "The geographic coordinates of a location.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "description": "MUST be the IRI 'GeoCoordinates'.",
-          "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"geo": {
+"$ref": "#/$defs/GeoCoordinates"
+}
+},
+"required": [
+"type"
+],
+"additionalProperties": true
+},
+"GeoCoordinates": {
+"description": "The geographic coordinates of a location.",
+"type": "object",
+"properties": {
+"type": {
+"description": "MUST be the IRI 'GeoCoordinates'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string",
@@ -27808,35 +27808,35 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "latitude": {
-          "description": "The latitude of the location [[WGS84]].",
-          "$comment": "Origin: Float (PrimitiveType)",
+}
+}
+]
+},
+"latitude": {
+"description": "The latitude of the location [[WGS84]].",
+"$comment": "Origin: Float (PrimitiveType)",
 "type": "number"
 },
 "longitude": {
 "description": "The longitude of the location [[WGS84]].",
 "$comment": "Origin: Float (PrimitiveType)",
-          "type": "number"
-        }
-      },
-      "required": [
-        "type",
-        "latitude",
-        "longitude"
-      ],
-      "additionalProperties": true
-    },
-    "CredentialSchema": {
-      "description": "Identify the type and location of a data schema.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "The value MUST be a URI identifying the schema file. One instance of`CredentialSchema`MUST have an`id`that is the URL of the JSON Schema for this credential defined by this specification.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+"type": "number"
+}
+},
+"required": [
+"type",
+"latitude",
+"longitude"
+],
+"additionalProperties": true
+},
+"CredentialSchema": {
+"description": "Identify the type and location of a data schema.",
+"type": "object",
+"properties": {
+"id": {
+"description": "The value MUST be a URI identifying the schema file. One instance of`CredentialSchema`MUST have an`id`that is the URL of the JSON Schema for this credential defined by this specification.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -27848,13 +27848,13 @@ AnyAchievementCredential represents an AchievementCredential that might be built
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "type": {
-          "description": "The value MUST identify the type of data schema validation. One instance of`CredentialSchema`MUST have a`type`of '1EdTechJsonSchemaValidator2019'.",
-          "$comment": "Origin: IRI (DerivedType); A`NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"type": {
+"description": "The value MUST identify the type of data schema validation. One instance of`CredentialSchema`MUST have a`type`of '1EdTechJsonSchemaValidator2019'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -28085,24 +28085,24 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string",
-                "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9\_-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        {
-          "type": "array",
-          "items": {
-            "description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
-            "$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
+}
+}
+]
+},
+{
+"type": "array",
+"items": {
+"description": "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
+"$comment": "Origin: CompactJws (DerivedType); A `String` in Compact JWS format [[RFC7515]].",
 "oneOf": [
 {
 "type": "string",
@@ -28112,7 +28112,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "type": "object",
 "additionalProperties": {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
@@ -28515,7 +28515,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 {
 "type": "string",
-"pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)_\\.json$"
+"pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)*\\.json$"
 }
 ],
 "additionalItems": {
@@ -29566,7 +29566,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 {
 "type": "string",
-"pattern": "(ext:)[a-z|A-Z|0-9|.|-|_]+"
+"pattern": "(ext:)[a-z|A-Z|0-9|.|-|*]+"
 }
 ]
 },
@@ -29620,7 +29620,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
                 },
                 {
                   "type": "object",
@@ -29642,16 +29642,16 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
 },
 {
 "type": "object",
 "additionalProperties": {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29662,17 +29662,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "fieldOfStudy": {
 "description": "Category, subject, area of study, discipline, or general branch of knowledge. Examples include Business, Education, Psychology, and Technology.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29680,17 +29680,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "humanCode": {
 "description": "The code, generally human readable, associated with an achievement.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29701,19 +29701,19 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "inLanguage": {
 "description": "The language of the achievement.",
 "$comment": "Origin: LanguageCode (DerivedType); A language code [[BCP47]].",
-          "oneOf": [
-            {
-              "type": "string",
-              "pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
+"oneOf": [
+{
+"type": "string",
+"pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
 },
 {
 "type": "object",
 "additionalProperties": {
 "type": "string",
 "pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29721,17 +29721,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "name": {
 "description": "The name of the achievement.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29778,17 +29778,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "specialization": {
 "description": "Name given to the focus, concentration, or specific area of study defined in the achievement. Examples include 'Entrepreneurship', 'Technical Communication', and 'Finance'.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29798,17 +29798,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "One or more short, human-friendly, searchable, keywords that describe the type of achievement.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29818,17 +29818,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "One or more short, human-friendly, searchable, keywords that describe the type of achievement.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29839,17 +29839,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "version": {
 "description": "The version property allows issuers to set a version string for an Achievement. This is particularly useful when replacing a previous version with an update.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29873,17 +29873,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Alignment'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29899,17 +29899,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Alignment'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29920,17 +29920,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "targetCode": {
 "description": "If applicable, a locally unique string identifier that identifies the alignment target within its framework and/or targetUrl.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29938,17 +29938,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "targetDescription": {
 "description": "Short description of the alignment target.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29956,17 +29956,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "targetName": {
 "description": "Name of the alignment.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29974,17 +29974,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "targetFramework": {
 "description": "Name of the framework the alignment target.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -29992,28 +29992,28 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "targetType": {
 "description": "The type of the alignment target node.",
 "$comment": "Origin: AlignmentTargetType (EnumExt); The type of the alignment target node in the target framework.",
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "ceasn:Competency",
-                "ceterms:Credential",
-                "CFItem",
-                "CFRubric",
-                "CFRubricCriterion",
-                "CFRubricCriterionLevel",
-                "CTDL"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "(ext:)[a-z|A-Z|0-9|.|-|_]+"
-            }
-          ]
-        },
-        "targetUrl": {
-          "description": "URL linking to the official description of the alignment target, for example an individual standard within an educational framework.",
-          "$comment": "Origin: URL (DerivedType); A`URI`that represents a Uniform Resource Locator (URL).",
+"oneOf": [
+{
+"type": "string",
+"enum": [
+"ceasn:Competency",
+"ceterms:Credential",
+"CFItem",
+"CFRubric",
+"CFRubricCriterion",
+"CFRubricCriterionLevel",
+"CTDL"
+]
+},
+{
+"type": "string",
+"pattern": "(ext:)[a-z|A-Z|0-9|.|-|*]+"
+}
+]
+},
+"targetUrl": {
+"description": "URL linking to the official description of the alignment target, for example an individual standard within an educational framework.",
+"$comment": "Origin: URL (DerivedType); A`URI`that represents a Uniform Resource Locator (URL).",
 "oneOf": [
 {
 "type": "string"
@@ -30025,25 +30025,25 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        }
-      },
-      "required": [
-        "type",
-        "targetName",
-        "targetUrl"
-      ],
-      "additionalProperties": true
-    },
-    "Criteria": {
-      "description": "Descriptive metadata about the achievements necessary to be recognized with an assertion of a particular achievement. This data is added to the Achievement class so that it may be rendered when the achievement assertion is displayed, instead of simply a link to human-readable criteria external to the achievement. Embedding criteria allows either enhancement of an external criteria page or increased portability and ease of use by allowing issuers to skip hosting the formerly-required external criteria page altogether. Criteria is used to allow would-be recipients to learn what is required of them to be recognized with an assertion of a particular achievement. It is also used after the assertion is awarded to a recipient to let those inspecting earned achievements know the general requirements that the recipients met in order to earn it.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "The URI of a webpage that describes in a human-readable format the criteria for the achievement.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+},
+"required": [
+"type",
+"targetName",
+"targetUrl"
+],
+"additionalProperties": true
+},
+"Criteria": {
+"description": "Descriptive metadata about the achievements necessary to be recognized with an assertion of a particular achievement. This data is added to the Achievement class so that it may be rendered when the achievement assertion is displayed, instead of simply a link to human-readable criteria external to the achievement. Embedding criteria allows either enhancement of an external criteria page or increased portability and ease of use by allowing issuers to skip hosting the formerly-required external criteria page altogether. Criteria is used to allow would-be recipients to learn what is required of them to be recognized with an assertion of a particular achievement. It is also used after the assertion is awarded to a recipient to let those inspecting earned achievements know the general requirements that the recipients met in order to earn it.",
+"type": "object",
+"properties": {
+"id": {
+"description": "The URI of a webpage that describes in a human-readable format the criteria for the achievement.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30055,13 +30055,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "narrative": {
-          "description": "A narrative of what is needed to earn the achievement. Markdown is allowed.",
-          "$comment": "Origin: Markdown (DerivedType); A`String`that may contain Markdown.",
+}
+}
+]
+},
+"narrative": {
+"description": "A narrative of what is needed to earn the achievement. Markdown is allowed.",
+"$comment": "Origin: Markdown (DerivedType); A`String`that may contain Markdown.",
 "oneOf": [
 {
 "type": "string"
@@ -30073,21 +30073,21 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        }
-      },
-      "required": [],
-      "additionalProperties": true
-    },
-    "IdentifierEntry": {
-      "description": "No description supplied.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "description": "MUST be the IRI 'IdentifierEntry'.",
-          "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+},
+"required": [],
+"additionalProperties": true
+},
+"IdentifierEntry": {
+"description": "No description supplied.",
+"type": "object",
+"properties": {
+"type": {
+"description": "MUST be the IRI 'IdentifierEntry'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string",
@@ -30105,13 +30105,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "identifier": {
-          "description": "An identifier.",
-          "$comment": "Origin: Identifier (DerivedType); A`NormalizedString`that functions as an identifier.",
+}
+}
+]
+},
+"identifier": {
+"description": "An identifier.",
+"$comment": "Origin: Identifier (DerivedType); A`NormalizedString`that functions as an identifier.",
 "oneOf": [
 {
 "type": "string"
@@ -30123,13 +30123,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "identifierType": {
-          "description": "The identifier type.",
-          "$comment": "Origin: IdentifierTypeEnum (EnumExt)",
+}
+}
+]
+},
+"identifierType": {
+"description": "The identifier type.",
+"$comment": "Origin: IdentifierTypeEnum (EnumExt)",
 "oneOf": [
 {
 "type": "string",
@@ -30176,17 +30176,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "id": {
 "description": "The unique URI for this result description. Required so a result can link to this result description.",
 "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30196,17 +30196,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'ResultDescription'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30222,17 +30222,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'ResultDescription'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30258,17 +30258,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "An ordered list of allowed values. The values should be ordered from low to high as determined by the achievement creator.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30278,17 +30278,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "An ordered list of allowed values. The values should be ordered from low to high as determined by the achievement creator.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30299,17 +30299,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "name": {
 "description": "The name of the result.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30317,17 +30317,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "requiredLevel": {
 "description": "The`id`of the rubric criterion level required to pass as determined by the achievement creator.",
 "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30335,17 +30335,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "requiredValue": {
 "description": "A value from`allowedValue`or within the range of`valueMin`to`valueMax`required to pass as determined by the achievement creator.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -30353,46 +30353,46 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "resultType": {
 "description": "The type of result this description represents. This is an extensible enumerated vocabulary.",
 "$comment": "Origin: ResultType (EnumExt); The type of result. This is an extensible enumerated vocabulary. Extending the vocabulary makes use of a naming convention.",
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "GradePointAverage",
-                "LetterGrade",
-                "Percent",
-                "PerformanceLevel",
-                "PredictedScore",
-                "RawScore",
-                "Result",
-                "RubricCriterion",
-                "RubricCriterionLevel",
-                "RubricScore",
-                "ScaledScore",
-                "Status"
-              ]
-            },
-            {
-              "type": "string",
-              "pattern": "(ext:)[a-z|A-Z|0-9|.|-|_]+"
-            }
-          ]
-        },
-        "rubricCriterionLevel": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/RubricCriterionLevel"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/RubricCriterionLevel"
-              }
-            }
-          ]
-        },
-        "valueMax": {
-          "description": "The maximum possible`value`that may be asserted in a linked result.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+"oneOf": [
+{
+"type": "string",
+"enum": [
+"GradePointAverage",
+"LetterGrade",
+"Percent",
+"PerformanceLevel",
+"PredictedScore",
+"RawScore",
+"Result",
+"RubricCriterion",
+"RubricCriterionLevel",
+"RubricScore",
+"ScaledScore",
+"Status"
+]
+},
+{
+"type": "string",
+"pattern": "(ext:)[a-z|A-Z|0-9|.|-|*]+"
+}
+]
+},
+"rubricCriterionLevel": {
+"oneOf": [
+{
+"$ref": "#/$defs/RubricCriterionLevel"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/RubricCriterionLevel"
+}
+}
+]
+},
+"valueMax": {
+"description": "The maximum possible`value`that may be asserted in a linked result.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30404,13 +30404,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "valueMin": {
-          "description": "The minimum possible`value`that may be asserted in a linked result.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"valueMin": {
+"description": "The minimum possible`value`that may be asserted in a linked result.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30422,26 +30422,26 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        }
-      },
-      "required": [
-        "id",
-        "type",
-        "name",
-        "resultType"
-      ],
-      "additionalProperties": true
-    },
-    "RubricCriterionLevel": {
-      "description": "Describes a rubric criterion level.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "The unique URI for this rubric criterion level. Required so a result can link to this rubric criterion level.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+},
+"required": [
+"id",
+"type",
+"name",
+"resultType"
+],
+"additionalProperties": true
+},
+"RubricCriterionLevel": {
+"description": "Describes a rubric criterion level.",
+"type": "object",
+"properties": {
+"id": {
+"description": "The unique URI for this rubric criterion level. Required so a result can link to this rubric criterion level.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30453,15 +30453,15 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "type": {
-          "oneOf": [
-            {
-              "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'.",
-              "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"type": {
+"oneOf": [
+{
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30473,21 +30473,21 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "minItems": 1,
-              "contains": {
-                "enum": [
-                  "RubricCriterionLevel"
-                ]
-              },
-              "items": {
-                "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'.",
-                "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+{
+"type": "array",
+"minItems": 1,
+"contains": {
+"enum": [
+"RubricCriterionLevel"
+]
+},
+"items": {
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30499,29 +30499,29 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "alignment": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Alignment"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Alignment"
-              }
-            }
-          ]
-        },
-        "description": {
-          "description": "Description of the rubric criterion level.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+}
+}
+]
+},
+"alignment": {
+"oneOf": [
+{
+"$ref": "#/$defs/Alignment"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/Alignment"
+}
+}
+]
+},
+"description": {
+"description": "Description of the rubric criterion level.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30533,13 +30533,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "level": {
-          "description": "The rubric performance level in terms of success.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"level": {
+"description": "The rubric performance level in terms of success.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30551,13 +30551,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "name": {
-          "description": "The name of the rubric criterion level.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"name": {
+"description": "The name of the rubric criterion level.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30569,13 +30569,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "points": {
-          "description": "The points associated with this rubric criterion level.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"points": {
+"description": "The points associated with this rubric criterion level.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30587,25 +30587,25 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        }
-      },
-      "required": [
-        "id",
-        "type",
-        "name"
-      ],
-      "additionalProperties": true
-    },
-    "Related": {
-      "description": "Identifies a related achievement.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "The related achievement.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+},
+"required": [
+"id",
+"type",
+"name"
+],
+"additionalProperties": true
+},
+"Related": {
+"description": "Identifies a related achievement.",
+"type": "object",
+"properties": {
+"id": {
+"description": "The related achievement.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30617,15 +30617,15 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "type": {
-          "oneOf": [
-            {
-              "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
-              "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"type": {
+"oneOf": [
+{
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30637,21 +30637,21 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "minItems": 1,
-              "contains": {
-                "enum": [
-                  "Related"
-                ]
-              },
-              "items": {
-                "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
-                "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+{
+"type": "array",
+"minItems": 1,
+"contains": {
+"enum": [
+"Related"
+]
+},
+"items": {
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30663,36 +30663,36 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "inLanguage": {
-          "description": "The language of the related achievement.",
-          "$comment": "Origin: LanguageCode (DerivedType); A language code [[BCP47]].",
+}
+}
+]
+}
+}
+]
+},
+"inLanguage": {
+"description": "The language of the related achievement.",
+"$comment": "Origin: LanguageCode (DerivedType); A language code [[BCP47]].",
 "oneOf": [
 {
 "type": "string",
 "pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string",
-                "pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "version": {
-          "description": "The version of the related achievement.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"version": {
+"description": "The version of the related achievement.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30704,24 +30704,24 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        }
-      },
-      "required": [
-        "id",
-        "type"
-      ],
-      "additionalProperties": true
-    },
-    "Profilev1p1": {
-      "description": "A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "Unique URI for the Issuer/Profile file.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+},
+"required": [
+"id",
+"type"
+],
+"additionalProperties": true
+},
+"Profilev1p1": {
+"description": "A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.",
+"type": "object",
+"properties": {
+"id": {
+"description": "Unique URI for the Issuer/Profile file.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30733,15 +30733,15 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "type": {
-          "oneOf": [
-            {
-              "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'.",
-              "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"type": {
+"oneOf": [
+{
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30753,21 +30753,21 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "minItems": 1,
-              "contains": {
-                "enum": [
-                  "Profile"
-                ]
-              },
-              "items": {
-                "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'.",
-                "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+{
+"type": "array",
+"minItems": 1,
+"contains": {
+"enum": [
+"Profile"
+]
+},
+"items": {
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30779,16 +30779,16 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "name": {
-          "description": "The name of the entity or organization.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+}
+}
+]
+},
+"name": {
+"description": "The name of the entity or organization.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30800,13 +30800,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "url": {
-          "description": "The homepage or social media profile of the entity, whether individual or institutional. Should be a URL/URI Accessible via HTTP.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"url": {
+"description": "The homepage or social media profile of the entity, whether individual or institutional. Should be a URL/URI Accessible via HTTP.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -30818,13 +30818,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "phone": {
-          "description": "A phone number.",
-          "$comment": "Origin: PhoneNumber (DerivedType); A`NormalizedString`representing a phone number.",
+}
+}
+]
+},
+"phone": {
+"description": "A phone number.",
+"$comment": "Origin: PhoneNumber (DerivedType); A`NormalizedString`representing a phone number.",
 "oneOf": [
 {
 "type": "string"
@@ -30836,13 +30836,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "description": {
-          "description": "A short description of the issuer entity or organization.",
-          "$comment": "Origin: String (PrimitiveType); Character strings.",
+}
+}
+]
+},
+"description": {
+"description": "A short description of the issuer entity or organization.",
+"$comment": "Origin: String (PrimitiveType); Character strings.",
 "oneOf": [
 {
 "type": "string"
@@ -30854,28 +30854,28 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "endorsement": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/EndorsementCredentialv1p1"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/EndorsementCredentialv1p1"
-              }
-            }
-          ]
-        },
-        "endorsementJwt": {
-          "oneOf": [
-            {
-              "description": "Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format.",
-              "$comment": "Origin: CompactJws (DerivedType); A`String`in Compact JWS format [[RFC7515]].",
+}
+}
+]
+},
+"endorsement": {
+"oneOf": [
+{
+"$ref": "#/$defs/EndorsementCredentialv1p1"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/EndorsementCredentialv1p1"
+}
+}
+]
+},
+"endorsementJwt": {
+"oneOf": [
+{
+"description": "Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format.",
+"$comment": "Origin: CompactJws (DerivedType); A`String`in Compact JWS format [[RFC7515]].",
 "oneOf": [
 {
 "type": "string",
@@ -30885,7 +30885,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "type": "object",
 "additionalProperties": {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
                   },
                   "propertyNames": {
                     "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
@@ -30907,7 +30907,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "type": "object",
 "additionalProperties": {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
                     },
                     "propertyNames": {
                       "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
@@ -31513,7 +31513,7 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
                 },
                 {
                   "type": "object",
@@ -31535,16 +31535,16 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "oneOf": [
 {
 "type": "string",
-"pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
+"pattern": "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9*-]+$"
 },
 {
 "type": "object",
 "additionalProperties": {
 "type": "string",
 "pattern": "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$"
-                    },
-                    "propertyNames": {
-                      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31558,17 +31558,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "email": {
 "description": "An email address.",
 "$comment": "Origin: EmailAddress (DerivedType); A`NormalizedString`representing an email address.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31592,17 +31592,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "official": {
 "description": "If the entity is an organization,`official`is the name of an authorized official of the organization.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31613,17 +31613,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "familyName": {
 "description": "Family name. In the western world, often referred to as the 'last name' of a person.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31631,17 +31631,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "givenName": {
 "description": "Given name. In the western world, often referred to as the 'first name' of a person.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31649,17 +31649,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "additionalName": {
 "description": "Additional name. Includes what is often referred to as 'middle name' in the western world.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31667,17 +31667,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "patronymicName": {
 "description": "Patronymic name.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31685,17 +31685,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "honorificPrefix": {
 "description": "Honorific prefix(es) preceding a person's name (e.g. 'Dr', 'Mrs' or 'Mr').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31703,17 +31703,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "honorificSuffix": {
 "description": "Honorific suffix(es) following a person's name (e.g. 'M.D, PhD').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31721,17 +31721,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "familyNamePrefix": {
 "description": "Family name prefix. As used in some locales, this is the leading part of a family name (e.g. 'de' in the name 'de Boer').",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31739,37 +31739,37 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "dateOfBirth": {
 "description": "Birthdate of the person.",
 "$comment": "Origin: Date (PrimitiveType); An [[ISO8601]] calendar date using the syntax YYYY-MM-DD.",
-          "type": "string",
-          "format": "date"
-        }
-      },
-      "required": [
-        "id",
-        "type"
-      ],
-      "additionalProperties": true
-    },
-    "EndorsementCredential": {
-      "description": "A verifiable credential that asserts a claim about an entity. As described in [[[#data-integrity]]], at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the`proof`property.",
-      "type": "object",
-      "properties": {
-        "@context": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Context"
-            },
-            {
-              "type": "array",
-              "minItems": 2,
-              "items": [
-                {
-                  "enum": [
-                    "https://www.w3.org/ns/credentials/v2"
-                  ]
-                },
-                {
-                  "type": "string",
-                  "pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)*\\.json$"
+"type": "string",
+"format": "date"
+}
+},
+"required": [
+"id",
+"type"
+],
+"additionalProperties": true
+},
+"EndorsementCredential": {
+"description": "A verifiable credential that asserts a claim about an entity. As described in [[[#data-integrity]]], at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the`proof`property.",
+"type": "object",
+"properties": {
+"@context": {
+"oneOf": [
+{
+"$ref": "#/$defs/Context"
+},
+{
+"type": "array",
+"minItems": 2,
+"items": [
+{
+"enum": [
+"https://www.w3.org/ns/credentials/v2"
+]
+},
+{
+"type": "string",
+"pattern": "^https:\\/\\/purl\\.imsglobal\\.org\\/spec\\/ob\\/v3p0\\/context(-3\\.\\d\\.\\d)_\\.json$"
 }
 ],
 "additionalItems": {
@@ -31783,17 +31783,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "propertyNames": {
-                    "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31811,17 +31811,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "propertyNames": {
-                          "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31838,17 +31838,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "items": {
 "description": "The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'.",
 "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
-                    "oneOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        },
-                        "propertyNames": {
-                          "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31861,17 +31861,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "id": {
 "description": "Unambiguous reference to the credential.",
 "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31879,17 +31879,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "name": {
 "description": "The name of the credential for display purposes in wallets. For example, in a list of credentials and in detail views.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31897,17 +31897,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "description": {
 "description": "The short description of the credential for display purposes in wallets.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -31918,103 +31918,103 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "awardedDate": {
 "description": "Timestamp of when the credential was awarded.`validFrom`is used to determine the most recent version of a Credential in conjunction with`issuer`and`id`. Consequently, the only way to update a Credental is to update the `validFrom`, losing the date when the Credential was originally awarded. `awardedDate`is meant to keep this original date.",
 "$comment": "Origin: DateTimeZ (DerivedType); A`DateTime`with the trailing timezone specifier included, e.g.`2021-09-07T02:09:59+02:00`",
-          "type": "string",
-          "format": "date-time"
-        },
-        "issuer": {
-          "$ref": "#/$defs/ProfileRef"
-        },
-        "validFrom": {
-          "description": "Timestamp of when the credential becomes valid.",
-          "$comment": "Origin: DateTimeZ (DerivedType); A `DateTime`with the trailing timezone specifier included, e.g.`2021-09-07T02:09:59+02:00`",
+"type": "string",
+"format": "date-time"
+},
+"issuer": {
+"$ref": "#/$defs/ProfileRef"
+},
+"validFrom": {
+"description": "Timestamp of when the credential becomes valid.",
+"$comment": "Origin: DateTimeZ (DerivedType); A `DateTime`with the trailing timezone specifier included, e.g.`2021-09-07T02:09:59+02:00`",
 "type": "string",
 "format": "date-time"
 },
 "validUntil": {
 "description": "If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid.",
 "$comment": "Origin: DateTimeZ (DerivedType); A `DateTime`with the trailing timezone specifier included, e.g.`2021-09-07T02:09:59+02:00`",
-          "type": "string",
-          "format": "date-time"
-        },
-        "proof": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Proof"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Proof"
-              }
-            }
-          ]
-        },
-        "credentialSchema": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/CredentialSchema"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/CredentialSchema"
-              }
-            }
-          ]
-        },
-        "credentialStatus": {
-          "$ref": "#/$defs/CredentialStatus"
-        },
-        "refreshService": {
-          "$ref": "#/$defs/RefreshService"
-        },
-        "termsOfUse": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/TermsOfUse"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/TermsOfUse"
-              }
-            }
-          ]
-        },
-        "evidence": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Evidence"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Evidence"
-              }
-            }
-          ]
-        }
-      },
-      "required": [
-        "@context",
-        "type",
-        "id",
-        "name",
-        "credentialSubject",
-        "issuer",
-        "validFrom"
-      ],
-      "additionalProperties": true
-    },
-    "Result": {
-      "description": "Describes a result that was achieved.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "oneOf": [
-            {
-              "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
-              "$comment": "Origin: IRI (DerivedType); A `NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+"type": "string",
+"format": "date-time"
+},
+"proof": {
+"oneOf": [
+{
+"$ref": "#/$defs/Proof"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/Proof"
+}
+}
+]
+},
+"credentialSchema": {
+"oneOf": [
+{
+"$ref": "#/$defs/CredentialSchema"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/CredentialSchema"
+}
+}
+]
+},
+"credentialStatus": {
+"$ref": "#/$defs/CredentialStatus"
+},
+"refreshService": {
+"$ref": "#/$defs/RefreshService"
+},
+"termsOfUse": {
+"oneOf": [
+{
+"$ref": "#/$defs/TermsOfUse"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/TermsOfUse"
+}
+}
+]
+},
+"evidence": {
+"oneOf": [
+{
+"$ref": "#/$defs/Evidence"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/Evidence"
+}
+}
+]
+}
+},
+"required": [
+"@context",
+"type",
+"id",
+"name",
+"credentialSubject",
+"issuer",
+"validFrom"
+],
+"additionalProperties": true
+},
+"Result": {
+"description": "Describes a result that was achieved.",
+"type": "object",
+"properties": {
+"type": {
+"oneOf": [
+{
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
+"$comment": "Origin: IRI (DerivedType); A `NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -32026,21 +32026,21 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "array",
-              "minItems": 1,
-              "contains": {
-                "enum": [
-                  "Result"
-                ]
-              },
-              "items": {
-                "description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
-                "$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+{
+"type": "array",
+"minItems": 1,
+"contains": {
+"enum": [
+"Result"
+]
+},
+"items": {
+"description": "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
+"$comment": "Origin: IRI (DerivedType); A`NormalizedString`that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -32052,16 +32052,16 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "achievedLevel": {
-          "description": "If the result represents an achieved rubric criterion level (e.g. Mastered), the value is the`id`of the RubricCriterionLevel in linked ResultDescription.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+}
+}
+]
+},
+"achievedLevel": {
+"description": "If the result represents an achieved rubric criterion level (e.g. Mastered), the value is the`id`of the RubricCriterionLevel in linked ResultDescription.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -32073,26 +32073,26 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "alignment": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Alignment"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Alignment"
-              }
-            }
-          ]
-        },
-        "resultDescription": {
-          "description": "An achievement can have many result descriptions describing possible results. The value of`resultDescription`is the`id`of the result description linked to this result. The linked result description must be in the achievement that is being asserted.",
-          "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
+}
+}
+]
+},
+"alignment": {
+"oneOf": [
+{
+"$ref": "#/$defs/Alignment"
+},
+{
+"type": "array",
+"items": {
+"$ref": "#/$defs/Alignment"
+}
+}
+]
+},
+"resultDescription": {
+"description": "An achievement can have many result descriptions describing possible results. The value of`resultDescription`is the`id`of the result description linked to this result. The linked result description must be in the achievement that is being asserted.",
+"$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "oneOf": [
 {
 "type": "string"
@@ -32104,13 +32104,13 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-              }
-            }
-          ]
-        },
-        "status": {
-          "description": "The status of the achievement. Required if`resultType`of the linked ResultDescription is Status.",
-          "$comment": "Origin: ResultStatusType (Enumeration); Defined vocabulary to convey the status of an achievement.",
+}
+}
+]
+},
+"status": {
+"description": "The status of the achievement. Required if`resultType`of the linked ResultDescription is Status.",
+"$comment": "Origin: ResultStatusType (Enumeration); Defined vocabulary to convey the status of an achievement.",
 "type": "string",
 "enum": [
 "Completed",
@@ -32125,17 +32125,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "value": {
 "description": "A string representing the result of the performance, or demonstration, of the achievement. For example, 'A' if the recipient received an A grade in class.",
 "$comment": "Origin: String (PrimitiveType); Character strings.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -32152,17 +32152,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 {
 "description": "A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
 "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -32179,17 +32179,17 @@ AchievementCredentials are representations of an awarded achievement, used to sh
 "id": {
 "description": "The value MUST be a URI identifying the schema file. One instance of`CredentialSchema`MUST have an`id`that is the URL of the JSON Schema for this credential defined by this specification.",
 "$comment": "Origin: URI (DerivedType); A`NormalizedString`that respresents a Uniform Resource Identifier (URI).",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              },
-              "propertyNames": {
-                "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+"oneOf": [
+{
+"type": "string"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string"
+},
+"propertyNames": {
+"pattern": "^[a-z]{2}(-[A-Z]{2})?$"
 }
 }
 ]
@@ -52639,7 +52639,7 @@ This is the set of ASCII error code strings that may be returned in response to 
 }
 ]
 },
-"unsupported*response_type": {
+"unsupported\*response_type": {
 "description": "The authorization server does not support obtaining an authorization code using this method.",
 "$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
 "oneOf": [
@@ -52666,22 +52666,22 @@ This is the set of ASCII error code strings that may be returned in response to 
 {
 "type": "string",
 "pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
-        },
-        {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string",
-            "pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-          }
-        }
-      ]
-    },
-    "server_error": {
-      "description": "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. (This error code is needed because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.)",
-      "$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
+}
+}
+]
+},
+"server_error": {
+"description": "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. (This error code is needed because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.)",
+"$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
 "oneOf": [
 {
 "type": "string",
@@ -52904,7 +52904,7 @@ This is the set of ASCII error code strings that may be returned in response to 
 }
 ]
 },
-"unauthorized*client": {
+"unauthorized\*client": {
 "description": "The authenticated client is not authorized to use this authorization grant type.",
 "$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
 "oneOf": [
@@ -52931,22 +52931,22 @@ This is the set of ASCII error code strings that may be returned in response to 
 {
 "type": "string",
 "pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
-        },
-        {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string",
-            "pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
+},
+{
+"type": "object",
+"additionalProperties": {
+"type": "string",
+"pattern": "^[\\x20-\\x21\\x23-\\x5b\\x5d-\\x7e]*$"
 },
 "propertyNames": {
 "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
-          }
-        }
-      ]
-    },
-    "unsupported_token_type": {
-      "description": "The authorization server does not support the revocation of the presented token type. That is, the client tried to revoke an access token on a server not supporting this feature.",
-      "$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
+}
+}
+]
+},
+"unsupported_token_type": {
+"description": "The authorization server does not support the revocation of the presented token type. That is, the client tried to revoke an access token on a server not supporting this feature.",
+"$comment": "Origin: ASCIIString (DerivedType); An ASCII [[RFC20]] string. The string MUST NOT include characters outside the set %x20-21 / %x23-5B / %x5D-7E.",
 "oneOf": [
 {
 "type": "string",
@@ -57022,54 +57022,54 @@ Open Badges Data Model 3.0
 "text/plain" : {
 "schema" : {
 "pattern" : "^[a-zA-Z0-9*-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$",
-                "type" : "string",
-                "description" : "A `String` in Compact JWS format [[RFC7515]]."
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "The AchievementCredential was successfully replaced on the [=resource server=]. The response body MUST be the AchievementCredential in the request.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/AchievementCredential"
+"type" : "string",
+"description" : "A `String` in Compact JWS format [[RFC7515]]."
+}
+}
+},
+"required" : true
+},
+"responses" : {
+"200" : {
+"description" : "The AchievementCredential was successfully replaced on the [=resource server=]. The response body MUST be the AchievementCredential in the request.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/AchievementCredential"
 }
 },
 "text/plain" : {
 "schema" : {
 "pattern" : "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$",
-                  "type" : "string",
-                  "description" : "A `String` in Compact JWS format [[RFC7515]]."
-                }
-              }
-            }
-          },
-          "201" : {
-            "description" : "The AchievementCredential was successfully created on the [=resource server=]. The response body MUST be the AchievementCredential in the request.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/AchievementCredential"
+"type" : "string",
+"description" : "A `String` in Compact JWS format [[RFC7515]]."
+}
+}
+}
+},
+"201" : {
+"description" : "The AchievementCredential was successfully created on the [=resource server=]. The response body MUST be the AchievementCredential in the request.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/AchievementCredential"
 }
 },
 "text/plain" : {
 "schema" : {
 "pattern" : "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$",
-                  "type" : "string",
-                  "description" : "A `String` in Compact JWS format [[RFC7515]]."
-                }
-              }
-            }
-          },
-          "304" : {
-            "description" : "As defined in [[rfc9110]], indicating that there is no need for the server to transfer a representation of the target resource because the request indicates that the client, which made the request conditional, already has a valid representation.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx*StatusInfo"
+"type" : "string",
+"description" : "A `String` in Compact JWS format [[RFC7515]]."
+}
+}
+}
+},
+"304" : {
+"description" : "As defined in [[rfc9110]], indicating that there is no need for the server to transfer a representation of the target resource because the request indicates that the client, which made the request conditional, already has a valid representation.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx*StatusInfo"
 }
 }
 }
@@ -57080,110 +57080,6 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "As defined in [[rfc9110]], indicating that the request has not been applied because it lacks valid authentication credentials for the target resource.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
-}
-}
-}
-},
-"403" : {
-"description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
-"content" : {
-"application/json" : {
-"schema" : {
-"$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "As defined in [[rfc9110]], indicating that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
-}
-}
-}
-},
-"405" : {
-"description" : "As defined in [[rfc9110]], indicating that the server does not allow the method.",
-"content" : {
-"application/json" : {
-"schema" : {
-"$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "As defined in [[rfc9110]]. Implementations SHOULD avoid using this error code - use only if there is catastrophic error and there is not a more appropriate code.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
-}
-}
-}
-},
-"default" : {
-"description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
-"content" : {
-"application/json" : {
-"schema" : {
-"$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "OAuth2ACG" : [ "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert" ]
-        } ],
-        "x-operation-pid" : "org.1edtech.ob.v3p0.rest.upsertcredential.operation"
-      }
-    },
-    "/profile" : {
-      "get" : {
-        "tags" : [ "OpenBadgeCredentials" ],
-        "summary" : "The REST GET operation for the getProfile() API call.",
-        "description" : "Fetch the profile from the [=resource server=] for the supplied access token. Profiles that are received MAY contain attributes that a Host SHOULD authenticate before using in practice.",
-        "operationId" : "getProfile",
-        "responses" : {
-          "200" : {
-            "description" : "The 200 (OK) response to the getProfile() API call.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Profile"
-}
-}
-}
-},
-"404" : {
-"description" : "As defined in [[rfc9110]], indicating that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.",
-"content" : {
-"application/json" : {
-"schema" : {
-"$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "As defined in [[rfc9110]], indicating that the server cannot or will not process the request due to something that is perceived to be a client error.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57194,16 +57090,26 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"403" : {
+"description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"404" : {
+"description" : "As defined in [[rfc9110]], indicating that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57214,16 +57120,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "As defined in [[rfc9110]]. Implementations SHOULD avoid using this error code - use only if there is catastrophic error and there is not a more appropriate code.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"500" : {
+"description" : "As defined in [[rfc9110]]. Implementations SHOULD avoid using this error code - use only if there is catastrophic error and there is not a more appropriate code.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57234,27 +57140,121 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          }
-        },
-        "security" : [ {
-          "OAuth2ACG" : [ "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly" ]
-        } ],
-        "x-operation-pid" : "org.1edtech.ob.v3p0.rest.getprofile.operation"
-      },
-      "put" : {
-        "tags" : [ "OpenBadgeCredentials" ],
-        "summary" : "The REST PUT operation for the putProfile() API call.",
-        "description" : "Update the profile for the authenticate entity.",
-        "operationId" : "putProfile",
-        "requestBody" : {
-          "description" : "The request body for the putProfile operation.",
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/Profile"
+}
+}
+}
+}
+},
+"security" : [ {
+"OAuth2ACG" : [ "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert" ]
+} ],
+"x-operation-pid" : "org.1edtech.ob.v3p0.rest.upsertcredential.operation"
+}
+},
+"/profile" : {
+"get" : {
+"tags" : [ "OpenBadgeCredentials" ],
+"summary" : "The REST GET operation for the getProfile() API call.",
+"description" : "Fetch the profile from the [=resource server=] for the supplied access token. Profiles that are received MAY contain attributes that a Host SHOULD authenticate before using in practice.",
+"operationId" : "getProfile",
+"responses" : {
+"200" : {
+"description" : "The 200 (OK) response to the getProfile() API call.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Profile"
+}
+}
+}
+},
+"404" : {
+"description" : "As defined in [[rfc9110]], indicating that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"400" : {
+"description" : "As defined in [[rfc9110]], indicating that the server cannot or will not process the request due to something that is perceived to be a client error.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"401" : {
+"description" : "As defined in [[rfc9110]], indicating that the request has not been applied because it lacks valid authentication credentials for the target resource.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"403" : {
+"description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"405" : {
+"description" : "As defined in [[rfc9110]], indicating that the server does not allow the method.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"500" : {
+"description" : "As defined in [[rfc9110]]. Implementations SHOULD avoid using this error code - use only if there is catastrophic error and there is not a more appropriate code.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"default" : {
+"description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+}
+},
+"security" : [ {
+"OAuth2ACG" : [ "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly" ]
+} ],
+"x-operation-pid" : "org.1edtech.ob.v3p0.rest.getprofile.operation"
+},
+"put" : {
+"tags" : [ "OpenBadgeCredentials" ],
+"summary" : "The REST PUT operation for the putProfile() API call.",
+"description" : "Update the profile for the authenticate entity.",
+"operationId" : "putProfile",
+"requestBody" : {
+"description" : "The request body for the putProfile operation.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Profile"
 }
 }
 },
@@ -57267,16 +57267,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Profile"
-                }
-              }
-            }
-          },
-          "202" : {
-            "description" : "As defined in [[rfc9110]], indicating that the request has been accepted for processing, but the processing has not been completed.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"202" : {
+"description" : "As defined in [[rfc9110]], indicating that the request has been accepted for processing, but the processing has not been completed.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57287,16 +57287,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "As defined in [[rfc9110]], indicating that the server cannot or will not process the request due to something that is perceived to be a client error.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"400" : {
+"description" : "As defined in [[rfc9110]], indicating that the server cannot or will not process the request due to something that is perceived to be a client error.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57307,16 +57307,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"403" : {
+"description" : "As defined in [[rfc9110]], indicating that the server understood the request but refuses to fulfill it. The exact reason SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57327,16 +57327,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "405" : {
-            "description" : "As defined in [[rfc9110]], indicating that the server does not allow the method.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"405" : {
+"description" : "As defined in [[rfc9110]], indicating that the server does not allow the method.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57347,16 +57347,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/Imsx_StatusInfo"
-                }
-              }
-            }
-          },
-          "default" : {
-            "description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"default" : {
+"description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57381,16 +57381,16 @@ Open Badges Data Model 3.0
 "application/json" : {
 "schema" : {
 "$ref" : "#/components/schemas/ServiceDescriptionDocument"
-                }
-              }
-            }
-          },
-          "default" : {
-            "description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Imsx_StatusInfo"
+}
+}
+}
+},
+"default" : {
+"description" : "The request was invalid or cannot be served. The exact error SHOULD be explained in the response payload.",
+"content" : {
+"application/json" : {
+"schema" : {
+"$ref" : "#/components/schemas/Imsx_StatusInfo"
 }
 }
 }
@@ -57413,76 +57413,76 @@ Open Badges Data Model 3.0
 },
 "geo" : {
 "$ref" : "#/components/schemas/GeoCoordinates"
-          },
-          "addressCountryCode" : {
-            "type" : "string",
-            "description" : "A country code. The value must be a ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.countrycode.class"
-          },
-          "streetAddress" : {
-            "type" : "string",
-            "description" : "A street address within the locality.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "postalCode" : {
-            "type" : "string",
-            "description" : "A postal code.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "addressLocality" : {
-            "type" : "string",
-            "description" : "A locality within the region.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "type" : {
-            "minItems" : 1,
-            "type" : "array",
-            "description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
-            "items" : {
-              "type" : "string",
-              "description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          },
-          "addressRegion" : {
-            "type" : "string",
-            "description" : "A region within the country.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "postOfficeBoxNumber" : {
-            "type" : "string",
-            "description" : "A post office box number for PO box addresses.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "An address for the described entity.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.address.class"
-      },
-      "CredentialSchema" : {
-        "required" : [ "id", "type" ],
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "string",
-            "description" : "The value MUST be a URI identifying the schema file. One instance of `CredentialSchema` MUST have an `id` that is the URL of the JSON Schema for this credential defined by this specification.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "type" : "string",
-            "description" : "The value MUST identify the type of data schema validation. One instance of `CredentialSchema` MUST have a `type` of '1EdTechJsonSchemaValidator2019'.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "Identify the type and location of a data schema.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.credentialschema.class"
-      },
-      "OpenApiSecuritySchemes" : {
-        "type" : "object",
-        "properties" : {
-          "OAuth2ACG" : {
-            "$ref" : "#/components/schemas/OpenApiOAuth2SecurityScheme"
+},
+"addressCountryCode" : {
+"type" : "string",
+"description" : "A country code. The value must be a ISO 3166-1 alpha-2 country code [[ISO3166-1]].",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.countrycode.class"
+},
+"streetAddress" : {
+"type" : "string",
+"description" : "A street address within the locality.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"postalCode" : {
+"type" : "string",
+"description" : "A postal code.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"addressLocality" : {
+"type" : "string",
+"description" : "A locality within the region.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"type" : {
+"minItems" : 1,
+"type" : "array",
+"description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Address'.",
+"items" : {
+"type" : "string",
+"description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+},
+"addressRegion" : {
+"type" : "string",
+"description" : "A region within the country.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"postOfficeBoxNumber" : {
+"type" : "string",
+"description" : "A post office box number for PO box addresses.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "An address for the described entity.",
+"x-class-pid" : "org.1edtech.ob.v3p0.address.class"
+},
+"CredentialSchema" : {
+"required" : [ "id", "type" ],
+"type" : "object",
+"properties" : {
+"id" : {
+"type" : "string",
+"description" : "The value MUST be a URI identifying the schema file. One instance of `CredentialSchema` MUST have an `id` that is the URL of the JSON Schema for this credential defined by this specification.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"type" : "string",
+"description" : "The value MUST identify the type of data schema validation. One instance of `CredentialSchema` MUST have a `type` of '1EdTechJsonSchemaValidator2019'.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+}
+},
+"additionalProperties" : true,
+"description" : "Identify the type and location of a data schema.",
+"x-class-pid" : "org.1edtech.ob.v3p0.credentialschema.class"
+},
+"OpenApiSecuritySchemes" : {
+"type" : "object",
+"properties" : {
+"OAuth2ACG" : {
+"$ref" : "#/components/schemas/OpenApiOAuth2SecurityScheme"
 }
 },
 "additionalProperties" : false,
@@ -57513,42 +57513,42 @@ Open Badges Data Model 3.0
 "properties" : {
 "securitySchemes" : {
 "$ref" : "#/components/schemas/OpenApiSecuritySchemes"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "Holds a set of reusable objects for different aspects of the OAS. All objects defined within the components object will have no effect on the API unless they are explicitly referenced from properties outside the components object.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.openapicomponents.class"
-      },
-      "Image" : {
-        "required" : [ "id", "type" ],
-        "type" : "object",
-        "properties" : {
-          "caption" : {
-            "type" : "string",
-            "description" : "The caption for the image.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "The URI or Data URI of the image.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "type" : "string",
-            "description" : "MUST be the IRI 'Image'.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          }
-        },
-        "additionalProperties" : false,
-        "description" : "Metadata about images that represent assertions, achieve or profiles. These properties can typically be represented as just the id string of the image, but using a fleshed-out document allows for including captions and other applicable metadata.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.image.class"
-      },
-      "Profile" : {
-        "required" : [ "id", "type" ],
-        "type" : "object",
-        "properties" : {
-          "image" : {
-            "$ref" : "#/components/schemas/Image"
+}
+},
+"additionalProperties" : true,
+"description" : "Holds a set of reusable objects for different aspects of the OAS. All objects defined within the components object will have no effect on the API unless they are explicitly referenced from properties outside the components object.",
+"x-class-pid" : "org.1edtech.ob.v3p0.openapicomponents.class"
+},
+"Image" : {
+"required" : [ "id", "type" ],
+"type" : "object",
+"properties" : {
+"caption" : {
+"type" : "string",
+"description" : "The caption for the image.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"id" : {
+"type" : "string",
+"description" : "The URI or Data URI of the image.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"type" : "string",
+"description" : "MUST be the IRI 'Image'.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+}
+},
+"additionalProperties" : false,
+"description" : "Metadata about images that represent assertions, achieve or profiles. These properties can typically be represented as just the id string of the image, but using a fleshed-out document allows for including captions and other applicable metadata.",
+"x-class-pid" : "org.1edtech.ob.v3p0.image.class"
+},
+"Profile" : {
+"required" : [ "id", "type" ],
+"type" : "object",
+"properties" : {
+"image" : {
+"$ref" : "#/components/schemas/Image"
 },
 "endorsement" : {
 "minItems" : 0,
@@ -57556,11 +57556,11 @@ Open Badges Data Model 3.0
 "description" : "Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with a Data Integrity proof format.",
 "items" : {
 "$ref" : "#/components/schemas/EndorsementCredential"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.endorsementcredential.class"
-          },
-          "address" : {
-            "$ref" : "#/components/schemas/Address"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.endorsementcredential.class"
+},
+"address" : {
+"$ref" : "#/components/schemas/Address"
 },
 "givenName" : {
 "type" : "string",
@@ -57609,103 +57609,103 @@ Open Badges Data Model 3.0
 "description" : "Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format.",
 "items" : {
 "pattern" : "^[a-zA-Z0-9*-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$",
-              "type" : "string",
-              "description" : "A `String` in Compact JWS format [[RFC7515]]."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.compactjws.class"
-          },
-          "honorificSuffix" : {
-            "type" : "string",
-            "description" : "Honorific suffix(es) following a person's name (e.g. 'M.D, PhD').",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "phone" : {
-            "type" : "string",
-            "description" : "A phone number.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.phonenumber.class"
-          },
-          "familyName" : {
-            "type" : "string",
-            "description" : "Family name. In the western world, often referred to as the 'last name' of a person.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "familyNamePrefix" : {
-            "type" : "string",
-            "description" : "Family name prefix. As used in some locales, this is the leading part of a family name (e.g. 'de' in the name 'de Boer').",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "name" : {
-            "type" : "string",
-            "description" : "The name of the entity or organization.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "patronymicName" : {
-            "type" : "string",
-            "description" : "Patronymic name.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "Unique URI for the Issuer/Profile file.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "otherIdentifier" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "A list of identifiers for the described entity.",
-            "items" : {
-              "$ref" : "#/components/schemas/IdentifierEntry"
+"type" : "string",
+"description" : "A `String` in Compact JWS format [[RFC7515]]."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.compactjws.class"
+},
+"honorificSuffix" : {
+"type" : "string",
+"description" : "Honorific suffix(es) following a person's name (e.g. 'M.D, PhD').",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"phone" : {
+"type" : "string",
+"description" : "A phone number.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.phonenumber.class"
+},
+"familyName" : {
+"type" : "string",
+"description" : "Family name. In the western world, often referred to as the 'last name' of a person.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"familyNamePrefix" : {
+"type" : "string",
+"description" : "Family name prefix. As used in some locales, this is the leading part of a family name (e.g. 'de' in the name 'de Boer').",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"name" : {
+"type" : "string",
+"description" : "The name of the entity or organization.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"patronymicName" : {
+"type" : "string",
+"description" : "Patronymic name.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"id" : {
+"type" : "string",
+"description" : "Unique URI for the Issuer/Profile file.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"otherIdentifier" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "A list of identifiers for the described entity.",
+"items" : {
+"$ref" : "#/components/schemas/IdentifierEntry"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.identifierentry.class"
 },
 "parentOrg" : {
 "$ref" : "#/components/schemas/Profile"
-          },
-          "additionalName" : {
-            "type" : "string",
-            "description" : "Additional name. Includes what is often referred to as 'middle name' in the western world.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "email" : {
-            "type" : "string",
-            "description" : "An email address.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.emailaddress.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.profile.class"
-      },
-      "Result" : {
-        "required" : [ "type" ],
-        "type" : "object",
-        "properties" : {
-          "achievedLevel" : {
-            "type" : "string",
-            "description" : "If the result represents an achieved rubric criterion level (e.g. Mastered), the value is the `id` of the RubricCriterionLevel in linked ResultDescription.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "resultDescription" : {
-            "type" : "string",
-            "description" : "An achievement can have many result descriptions describing possible results. The value of `resultDescription` is the `id` of the result description linked to this result. The linked result description must be in the achievement that is being asserted.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "minItems" : 1,
-            "type" : "array",
-            "description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
-            "items" : {
-              "type" : "string",
-              "description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          },
-          "alignment" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "The alignments between this result and nodes in external frameworks. This set of alignments are in addition to the set of alignments defined in the corresponding ResultDescription object.",
-            "items" : {
-              "$ref" : "#/components/schemas/Alignment"
+},
+"additionalName" : {
+"type" : "string",
+"description" : "Additional name. Includes what is often referred to as 'middle name' in the western world.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"email" : {
+"type" : "string",
+"description" : "An email address.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.emailaddress.class"
+}
+},
+"additionalProperties" : true,
+"description" : "A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.",
+"x-class-pid" : "org.1edtech.ob.v3p0.profile.class"
+},
+"Result" : {
+"required" : [ "type" ],
+"type" : "object",
+"properties" : {
+"achievedLevel" : {
+"type" : "string",
+"description" : "If the result represents an achieved rubric criterion level (e.g. Mastered), the value is the `id` of the RubricCriterionLevel in linked ResultDescription.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"resultDescription" : {
+"type" : "string",
+"description" : "An achievement can have many result descriptions describing possible results. The value of `resultDescription` is the `id` of the result description linked to this result. The linked result description must be in the achievement that is being asserted.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"minItems" : 1,
+"type" : "array",
+"description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'.",
+"items" : {
+"type" : "string",
+"description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+},
+"alignment" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "The alignments between this result and nodes in external frameworks. This set of alignments are in addition to the set of alignments defined in the corresponding ResultDescription object.",
+"items" : {
+"$ref" : "#/components/schemas/Alignment"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
 },
@@ -57836,14 +57836,14 @@ Open Badges Data Model 3.0
 "properties" : {
 "components" : {
 "$ref" : "#/components/schemas/OpenApiComponents"
-          },
-          "openapi" : {
-            "type" : "string",
-            "description" : "This string MUST be the semantic version number of the OpenAPI Specification version that the OpenAPI document uses. The openapi field SHOULD be used by tooling specifications and clients to interpret the OpenAPI document. This is not related to the API info.version string.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "info" : {
-            "$ref" : "#/components/schemas/OpenApiInfo"
+},
+"openapi" : {
+"type" : "string",
+"description" : "This string MUST be the semantic version number of the OpenAPI Specification version that the OpenAPI document uses. The openapi field SHOULD be used by tooling specifications and clients to interpret the OpenAPI document. This is not related to the API info.version string.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"info" : {
+"$ref" : "#/components/schemas/OpenApiInfo"
 }
 },
 "additionalProperties" : true,
@@ -57916,9 +57916,9 @@ Open Badges Data Model 3.0
 },
 "image" : {
 "$ref" : "#/components/schemas/Image"
-          },
-          "creator" : {
-            "$ref" : "#/components/schemas/Profile"
+},
+"creator" : {
+"$ref" : "#/components/schemas/Profile"
 },
 "endorsement" : {
 "minItems" : 0,
@@ -57926,11 +57926,11 @@ Open Badges Data Model 3.0
 "description" : "Allows endorsers to make specific claims about the Achievement. These endorsements are signed with a Data Integrity proof format.",
 "items" : {
 "$ref" : "#/components/schemas/EndorsementCredential"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.endorsementcredential.class"
-          },
-          "criteria" : {
-            "$ref" : "#/components/schemas/Criteria"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.endorsementcredential.class"
+},
+"criteria" : {
+"$ref" : "#/components/schemas/Criteria"
 },
 "humanCode" : {
 "type" : "string",
@@ -57944,31 +57944,31 @@ Open Badges Data Model 3.0
 },
 "inLanguage" : {
 "pattern" : "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$",
-            "type" : "string",
-            "description" : "The language of the achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.languagecode.class"
-          },
-          "type" : {
-            "minItems" : 1,
-            "type" : "array",
-            "description" : "The type MUST include the IRI 'Achievement'.",
-            "items" : {
-              "type" : "string",
-              "description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          },
-          "version" : {
-            "type" : "string",
-            "description" : "The version property allows issuers to set a version string for an Achievement. This is particularly useful when replacing a previous version with an update.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "endorsementJwt" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format.",
-            "items" : {
-              "pattern" : "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$",
+"type" : "string",
+"description" : "The language of the achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.languagecode.class"
+},
+"type" : {
+"minItems" : 1,
+"type" : "array",
+"description" : "The type MUST include the IRI 'Achievement'.",
+"items" : {
+"type" : "string",
+"description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+},
+"version" : {
+"type" : "string",
+"description" : "The version property allows issuers to set a version string for an Achievement. This is particularly useful when replacing a previous version with an update.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"endorsementJwt" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format.",
+"items" : {
+"pattern" : "^[a-zA-Z0-9\_-]+\\.[a-zA-Z0-9\_-]*\\.[a-zA-Z0-9_-]+$",
 "type" : "string",
 "description" : "A `String` in Compact JWS format [[RFC7515]]."
 },
@@ -57985,30 +57985,30 @@ Open Badges Data Model 3.0
 "description" : "The related property identifies another Achievement that should be considered the same for most purposes. It is primarily intended to identify alternate language editions or previous versions of Achievements.",
 "items" : {
 "$ref" : "#/components/schemas/Related"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.related.class"
-          },
-          "name" : {
-            "type" : "string",
-            "description" : "The name of the achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "specialization" : {
-            "type" : "string",
-            "description" : "Name given to the focus, concentration, or specific area of study defined in the achievement. Examples include 'Entrepreneurship', 'Technical Communication', and 'Finance'.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "Unique URI for the Achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "resultDescription" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "The set of result descriptions that may be asserted as results with this achievement.",
-            "items" : {
-              "$ref" : "#/components/schemas/ResultDescription"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.related.class"
+},
+"name" : {
+"type" : "string",
+"description" : "The name of the achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"specialization" : {
+"type" : "string",
+"description" : "Name given to the focus, concentration, or specific area of study defined in the achievement. Examples include 'Entrepreneurship', 'Technical Communication', and 'Finance'.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"id" : {
+"type" : "string",
+"description" : "Unique URI for the Achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"resultDescription" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "The set of result descriptions that may be asserted as results with this achievement.",
+"items" : {
+"$ref" : "#/components/schemas/ResultDescription"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.resultdescription.class"
 },
@@ -58028,15 +58028,15 @@ Open Badges Data Model 3.0
 "description" : "An object describing which objectives or educational standards this achievement aligns to, if any.",
 "items" : {
 "$ref" : "#/components/schemas/Alignment"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
-          },
-          "otherIdentifier" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "A list of identifiers for the described entity.",
-            "items" : {
-              "$ref" : "#/components/schemas/IdentifierEntry"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
+},
+"otherIdentifier" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "A list of identifiers for the described entity.",
+"items" : {
+"$ref" : "#/components/schemas/IdentifierEntry"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.identifierentry.class"
 },
@@ -58100,39 +58100,39 @@ Open Badges Data Model 3.0
 "description" : "Each reported code minor status code.",
 "items" : {
 "$ref" : "#/components/schemas/Imsx_CodeMinorField"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.imsx_codeminorfield.class"
-          }
-        },
-        "additionalProperties" : false,
-        "description" : "This is the container for the set of code minor status codes reported in the responses from the Service Provider.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.imsx_codeminor.class"
-      },
-      "CredentialStatus" : {
-        "required" : [ "type" ],
-        "type" : "object",
-        "properties" : {
-          "id" : {
-            "type" : "string",
-            "description" : "The value MUST be the URL of the issuer's credential status method.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "type" : "string",
-            "description" : "The name of the credential status method.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.credentialstatus.class"
-      },
-      "Imsx_StatusInfo" : {
-        "required" : [ "imsx_codeMajor", "imsx_severity" ],
-        "type" : "object",
-        "properties" : {
-          "imsx_codeMinor" : {
-            "$ref" : "#/components/schemas/Imsx_CodeMinor"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.imsx_codeminorfield.class"
+}
+},
+"additionalProperties" : false,
+"description" : "This is the container for the set of code minor status codes reported in the responses from the Service Provider.",
+"x-class-pid" : "org.1edtech.ob.v3p0.imsx_codeminor.class"
+},
+"CredentialStatus" : {
+"required" : [ "type" ],
+"type" : "object",
+"properties" : {
+"id" : {
+"type" : "string",
+"description" : "The value MUST be the URL of the issuer's credential status method.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"type" : "string",
+"description" : "The name of the credential status method.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+}
+},
+"additionalProperties" : true,
+"description" : "The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked.",
+"x-class-pid" : "org.1edtech.ob.v3p0.credentialstatus.class"
+},
+"Imsx_StatusInfo" : {
+"required" : [ "imsx_codeMajor", "imsx_severity" ],
+"type" : "object",
+"properties" : {
+"imsx_codeMinor" : {
+"$ref" : "#/components/schemas/Imsx_CodeMinor"
 },
 "imsx_codeMajor" : {
 "type" : "string",
@@ -58239,88 +58239,88 @@ Open Badges Data Model 3.0
 "description" : "Alignments between this rubric criterion level and a rubric criterion levels defined in external frameworks.",
 "items" : {
 "$ref" : "#/components/schemas/Alignment"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
-          },
-          "points" : {
-            "type" : "string",
-            "description" : "The points associated with this rubric criterion level.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "Describes a rubric criterion level.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.rubriccriterionlevel.class"
-      },
-      "OpenApiInfo" : {
-        "required" : [ "termsOfService", "title", "version", "x-imssf-privacyPolicyUrl" ],
-        "type" : "object",
-        "properties" : {
-          "x-imssf-image" : {
-            "type" : "string",
-            "description" : "An image representing the [=resource server=]. MAY be a Data URI or the URL where the image may be found.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "x-imssf-privacyPolicyUrl" : {
-            "type" : "string",
-            "description" : "A fully qualified URL to the [=resource server=]'s privacy policy.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.url.class"
-          },
-          "termsOfService" : {
-            "type" : "string",
-            "description" : "A fully qualified URL to the [=resource server=]'s terms of service.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.url.class"
-          },
-          "title" : {
-            "type" : "string",
-            "description" : "The name of the [=resource server=].",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "version" : {
-            "type" : "string",
-            "description" : "The version of the API.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "The object provides metadata about the API. The metadata MAY be used by the clients if needed, and MAY be presented in editing or documentation generation tools for convenience.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.openapiinfo.class"
-      },
-      "EndorsementSubject" : {
-        "required" : [ "id", "type" ],
-        "type" : "object",
-        "properties" : {
-          "endorsementComment" : {
-            "type" : "string",
-            "description" : "Allows endorsers to make a simple claim in writing about the entity.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.markdown.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "The identifier of the individual, entity, organization, assertion, or achievement that is endorsed.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "minItems" : 1,
-            "type" : "array",
-            "description" : "The value of the type property MUST be an unordered set. One of the items MUST be the URI 'EndorsementSubject'.",
-            "items" : {
-              "type" : "string",
-              "description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "A collection of information about the subject of the endorsement.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.endorsementsubject.class"
-      },
-      "AchievementCredential" : {
-        "required" : [ "@context", "id", "type", "credentialSubject", "issuer", "validFrom" ],
-        "type" : "object",
-        "properties" : {
-          "image" : {
-            "$ref" : "#/components/schemas/Image"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
+},
+"points" : {
+"type" : "string",
+"description" : "The points associated with this rubric criterion level.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "Describes a rubric criterion level.",
+"x-class-pid" : "org.1edtech.ob.v3p0.rubriccriterionlevel.class"
+},
+"OpenApiInfo" : {
+"required" : [ "termsOfService", "title", "version", "x-imssf-privacyPolicyUrl" ],
+"type" : "object",
+"properties" : {
+"x-imssf-image" : {
+"type" : "string",
+"description" : "An image representing the [=resource server=]. MAY be a Data URI or the URL where the image may be found.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"x-imssf-privacyPolicyUrl" : {
+"type" : "string",
+"description" : "A fully qualified URL to the [=resource server=]'s privacy policy.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.url.class"
+},
+"termsOfService" : {
+"type" : "string",
+"description" : "A fully qualified URL to the [=resource server=]'s terms of service.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.url.class"
+},
+"title" : {
+"type" : "string",
+"description" : "The name of the [=resource server=].",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"version" : {
+"type" : "string",
+"description" : "The version of the API.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "The object provides metadata about the API. The metadata MAY be used by the clients if needed, and MAY be presented in editing or documentation generation tools for convenience.",
+"x-class-pid" : "org.1edtech.ob.v3p0.openapiinfo.class"
+},
+"EndorsementSubject" : {
+"required" : [ "id", "type" ],
+"type" : "object",
+"properties" : {
+"endorsementComment" : {
+"type" : "string",
+"description" : "Allows endorsers to make a simple claim in writing about the entity.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.markdown.class"
+},
+"id" : {
+"type" : "string",
+"description" : "The identifier of the individual, entity, organization, assertion, or achievement that is endorsed.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"minItems" : 1,
+"type" : "array",
+"description" : "The value of the type property MUST be an unordered set. One of the items MUST be the URI 'EndorsementSubject'.",
+"items" : {
+"type" : "string",
+"description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+}
+},
+"additionalProperties" : true,
+"description" : "A collection of information about the subject of the endorsement.",
+"x-class-pid" : "org.1edtech.ob.v3p0.endorsementsubject.class"
+},
+"AchievementCredential" : {
+"required" : [ "@context", "id", "type", "credentialSubject", "issuer", "validFrom" ],
+"type" : "object",
+"properties" : {
+"image" : {
+"$ref" : "#/components/schemas/Image"
 },
 "credentialSchema" : {
 "minItems" : 0,
@@ -58328,21 +58328,21 @@ Open Badges Data Model 3.0
 "description" : "The value of the `credentialSchema` property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema.",
 "items" : {
 "$ref" : "#/components/schemas/CredentialSchema"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.credentialschema.class"
-          },
-          "awardedDate" : {
-            "type" : "string",
-            "description" : "Timestamp of when the credential was awarded. `validFrom` is used to determine the most recent version of a Credential in conjunction with `issuer` and `id`. Consequently, the only way to update a Credental is to update the `validFrom`, losing the date when the Credential was originally awarded. `awardedDate` is meant to keep this original date.",
-            "format" : "date-time",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.datetimez.class"
-          },
-          "endorsement" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format.",
-            "items" : {
-              "$ref" : "#/components/schemas/EndorsementCredential"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.credentialschema.class"
+},
+"awardedDate" : {
+"type" : "string",
+"description" : "Timestamp of when the credential was awarded. `validFrom` is used to determine the most recent version of a Credential in conjunction with `issuer` and `id`. Consequently, the only way to update a Credental is to update the `validFrom`, losing the date when the Credential was originally awarded. `awardedDate` is meant to keep this original date.",
+"format" : "date-time",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.datetimez.class"
+},
+"endorsement" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format.",
+"items" : {
+"$ref" : "#/components/schemas/EndorsementCredential"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.endorsementcredential.class"
 },
@@ -58352,11 +58352,11 @@ Open Badges Data Model 3.0
 "description" : "A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible.",
 "items" : {
 "$ref" : "#/components/schemas/Evidence"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.evidence.class"
-          },
-          "credentialSubject" : {
-            "$ref" : "#/components/schemas/AchievementSubject"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.evidence.class"
+},
+"credentialSubject" : {
+"$ref" : "#/components/schemas/AchievementSubject"
 },
 "description" : {
 "type" : "string",
@@ -58414,17 +58414,17 @@ Open Badges Data Model 3.0
 "description" : "Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format.",
 "items" : {
 "pattern" : "^[a-zA-Z0-9*-]+\\.[a-zA-Z0-9_-]_\\.[a-zA-Z0-9_-]+$",
-              "type" : "string",
-              "description" : "A `String` in Compact JWS format [[RFC7515]]."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.compactjws.class"
-          },
-          "termsOfUse" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "The value of the `termsOfUse` property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential.",
-            "items" : {
-              "$ref" : "#/components/schemas/TermsOfUse"
+"type" : "string",
+"description" : "A `String` in Compact JWS format [[RFC7515]]."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.compactjws.class"
+},
+"termsOfUse" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "The value of the `termsOfUse` property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential.",
+"items" : {
+"$ref" : "#/components/schemas/TermsOfUse"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.termsofuse.class"
 },
@@ -58435,24 +58435,24 @@ Open Badges Data Model 3.0
 },
 "refreshService" : {
 "$ref" : "#/components/schemas/RefreshService"
-          },
-          "validUntil" : {
-            "type" : "string",
-            "description" : "If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid.",
-            "format" : "date-time",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.datetimez.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "Unambiguous reference to the credential.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "proof" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential.",
-            "items" : {
-              "$ref" : "#/components/schemas/Proof"
+},
+"validUntil" : {
+"type" : "string",
+"description" : "If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid.",
+"format" : "date-time",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.datetimez.class"
+},
+"id" : {
+"type" : "string",
+"description" : "Unambiguous reference to the credential.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"proof" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential.",
+"items" : {
+"$ref" : "#/components/schemas/Proof"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.proof.class"
 }
@@ -58510,55 +58510,55 @@ Open Badges Data Model 3.0
 "properties" : {
 "inLanguage" : {
 "pattern" : "^[a-z]{2,4}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$",
-            "type" : "string",
-            "description" : "The language of the related achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.languagecode.class"
-          },
-          "id" : {
-            "type" : "string",
-            "description" : "The related achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "type" : {
-            "minItems" : 1,
-            "type" : "array",
-            "description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
-            "items" : {
-              "type" : "string",
-              "description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          },
-          "version" : {
-            "type" : "string",
-            "description" : "The version of the related achievement.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "Identifies a related achievement.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.related.class"
-      },
-      "ResultDescription" : {
-        "required" : [ "id", "type", "name", "resultType" ],
-        "type" : "object",
-        "properties" : {
-          "valueMax" : {
-            "type" : "string",
-            "description" : "The maximum possible `value` that may be asserted in a linked result.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "valueMin" : {
-            "type" : "string",
-            "description" : "The minimum possible `value` that may be asserted in a linked result.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "rubricCriterionLevel" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "An ordered array of rubric criterion levels that may be asserted in the linked result. The levels should be ordered from low to high as determined by the achievement creator.",
-            "items" : {
-              "$ref" : "#/components/schemas/RubricCriterionLevel"
+"type" : "string",
+"description" : "The language of the related achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.languagecode.class"
+},
+"id" : {
+"type" : "string",
+"description" : "The related achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"type" : {
+"minItems" : 1,
+"type" : "array",
+"description" : "The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Related'.",
+"items" : {
+"type" : "string",
+"description" : "A `NormalizedString` that represents an Internationalized Resource Identifier (IRI), which extends the ASCII characters subset of the Uniform Resource Identifier (URI)."
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+},
+"version" : {
+"type" : "string",
+"description" : "The version of the related achievement.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "Identifies a related achievement.",
+"x-class-pid" : "org.1edtech.ob.v3p0.related.class"
+},
+"ResultDescription" : {
+"required" : [ "id", "type", "name", "resultType" ],
+"type" : "object",
+"properties" : {
+"valueMax" : {
+"type" : "string",
+"description" : "The maximum possible `value` that may be asserted in a linked result.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"valueMin" : {
+"type" : "string",
+"description" : "The minimum possible `value` that may be asserted in a linked result.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"rubricCriterionLevel" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "An ordered array of rubric criterion levels that may be asserted in the linked result. The levels should be ordered from low to high as determined by the achievement creator.",
+"items" : {
+"$ref" : "#/components/schemas/RubricCriterionLevel"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.rubriccriterionlevel.class"
 },
@@ -58603,95 +58603,95 @@ Open Badges Data Model 3.0
 "description" : "Alignments between this result description and nodes in external frameworks.",
 "items" : {
 "$ref" : "#/components/schemas/Alignment"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
-          },
-          "resultType" : {
-            "description" : "The type of result this description represents. This is an extensible enumerated vocabulary.",
-            "anyOf" : [ {
-              "type" : "string",
-              "enum" : [ "GradePointAverage", "LetterGrade", "Percent", "PerformanceLevel", "PredictedScore", "RawScore", "Result", "RubricCriterion", "RubricCriterionLevel", "RubricScore", "ScaledScore", "Status" ]
-            }, {
-              "pattern" : "(ext:)[a-zA-Z0-9\\.\\-_]+",
-              "type" : "string"
-            } ],
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.resulttype.class"
-          },
-          "requiredValue" : {
-            "type" : "string",
-            "description" : "A value from `allowedValue` or within the range of `valueMin` to `valueMax` required to pass as determined by the achievement creator.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "Describes a possible achievement result.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.resultdescription.class"
-      },
-      "Proof" : {
-        "required" : [ "type" ],
-        "type" : "object",
-        "properties" : {
-          "proofValue" : {
-            "type" : "string",
-            "description" : "Value of the proof.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "created" : {
-            "type" : "string",
-            "description" : "Date the proof was created.",
-            "format" : "date-time",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.datetime.class"
-          },
-          "domain" : {
-            "type" : "string",
-            "description" : "The domain of the proof to restrict its use to a particular target.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "challenge" : {
-            "type" : "string",
-            "description" : "A value chosen by the verifier to mitigate authentication proof replay attacks.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "proofPurpose" : {
-            "type" : "string",
-            "description" : "The purpose of the proof to be used with `verificationMethod`. MUST be 'assertionMethod'.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "type" : {
-            "type" : "string",
-            "description" : "Signature suite used to produce proof.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
-          },
-          "verificationMethod" : {
-            "type" : "string",
-            "description" : "The URL of the public key that can verify the signature.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
-          },
-          "nonce" : {
-            "type" : "string",
-            "description" : "A value chosen by the creator of proof to randomize proof values for privacy purposes.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          },
-          "cryptosuite" : {
-            "type" : "string",
-            "description" : "The suite used to create the proof.",
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
-          }
-        },
-        "additionalProperties" : true,
-        "description" : "A JSON-LD Linked Data proof.",
-        "x-class-pid" : "org.1edtech.ob.v3p0.proof.class"
-      },
-      "EndorsementCredential" : {
-        "required" : [ "@context", "type", "id", "name", "credentialSubject", "issuer", "validFrom" ],
-        "type" : "object",
-        "properties" : {
-          "credentialSchema" : {
-            "minItems" : 0,
-            "type" : "array",
-            "description" : "The value of the `credentialSchema` property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema.",
-            "items" : {
-              "$ref" : "#/components/schemas/CredentialSchema"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.alignment.class"
+},
+"resultType" : {
+"description" : "The type of result this description represents. This is an extensible enumerated vocabulary.",
+"anyOf" : [ {
+"type" : "string",
+"enum" : [ "GradePointAverage", "LetterGrade", "Percent", "PerformanceLevel", "PredictedScore", "RawScore", "Result", "RubricCriterion", "RubricCriterionLevel", "RubricScore", "ScaledScore", "Status" ]
+}, {
+"pattern" : "(ext:)[a-zA-Z0-9\\.\\-_]+",
+"type" : "string"
+} ],
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.resulttype.class"
+},
+"requiredValue" : {
+"type" : "string",
+"description" : "A value from `allowedValue` or within the range of `valueMin` to `valueMax` required to pass as determined by the achievement creator.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "Describes a possible achievement result.",
+"x-class-pid" : "org.1edtech.ob.v3p0.resultdescription.class"
+},
+"Proof" : {
+"required" : [ "type" ],
+"type" : "object",
+"properties" : {
+"proofValue" : {
+"type" : "string",
+"description" : "Value of the proof.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"created" : {
+"type" : "string",
+"description" : "Date the proof was created.",
+"format" : "date-time",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.datetime.class"
+},
+"domain" : {
+"type" : "string",
+"description" : "The domain of the proof to restrict its use to a particular target.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"challenge" : {
+"type" : "string",
+"description" : "A value chosen by the verifier to mitigate authentication proof replay attacks.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"proofPurpose" : {
+"type" : "string",
+"description" : "The purpose of the proof to be used with `verificationMethod`. MUST be 'assertionMethod'.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"type" : {
+"type" : "string",
+"description" : "Signature suite used to produce proof.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.iri.class"
+},
+"verificationMethod" : {
+"type" : "string",
+"description" : "The URL of the public key that can verify the signature.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.derived.uri.class"
+},
+"nonce" : {
+"type" : "string",
+"description" : "A value chosen by the creator of proof to randomize proof values for privacy purposes.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+},
+"cryptosuite" : {
+"type" : "string",
+"description" : "The suite used to create the proof.",
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.primitive.string.class"
+}
+},
+"additionalProperties" : true,
+"description" : "A JSON-LD Linked Data proof.",
+"x-class-pid" : "org.1edtech.ob.v3p0.proof.class"
+},
+"EndorsementCredential" : {
+"required" : [ "@context", "type", "id", "name", "credentialSubject", "issuer", "validFrom" ],
+"type" : "object",
+"properties" : {
+"credentialSchema" : {
+"minItems" : 0,
+"type" : "array",
+"description" : "The value of the `credentialSchema` property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema.",
+"items" : {
+"$ref" : "#/components/schemas/CredentialSchema"
 },
 "x-srcprop-pid" : "org.1edtech.ob.v3p0.credentialschema.class"
 },
@@ -58707,11 +58707,11 @@ Open Badges Data Model 3.0
 "description" : "A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible.",
 "items" : {
 "$ref" : "#/components/schemas/Evidence"
-            },
-            "x-srcprop-pid" : "org.1edtech.ob.v3p0.evidence.class"
-          },
-          "credentialSubject" : {
-            "$ref" : "#/components/schemas/EndorsementSubject"
+},
+"x-srcprop-pid" : "org.1edtech.ob.v3p0.evidence.class"
+},
+"credentialSubject" : {
+"$ref" : "#/components/schemas/EndorsementSubject"
 },
 "description" : {
 "type" : "string",
@@ -59023,7 +59023,7 @@ servers:
   tags: - OpenBadgeCredentials
   summary: The REST GET operation for the getCredentials() API call.
   description: "Get issued OpenBadgeCredentials from the [=resource server=] for\
-   \ the supplied parameters and access token."
+  \ the supplied parameters and access token."
   operationId: getCredentials
   parameters: - name: limit
   in: query
@@ -59065,23 +59065,23 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetOpenBadgeCredentialsResponse"
-          links:
-            next:
-              $ref: "#/components/links/next"
+  links:
+  next:
+  $ref: "#/components/links/next"
             last:
               $ref: "#/components/links/last"
-            first:
-              $ref: "#/components/links/first"
+  first:
+  $ref: "#/components/links/first"
             prev:
               $ref: "#/components/links/prev"
-        "400":
-          description: "As defined in [[rfc9110]], indicating that the server cannot\
-            \ or will not process the request due to something that is perceived to\
-            \ be a client error."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "400":
+  description: "As defined in [[rfc9110]], indicating that the server cannot\
+  \ or will not process the request due to something that is perceived to\
+  \ be a client error."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "401":
           description: "As defined in [[rfc9110]], indicating that the request has\
             \ not been applied because it lacks valid authentication credentials for\
@@ -59090,14 +59090,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "403":
-          description: "As defined in [[rfc9110]], indicating that the server understood\
-            \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
-            \ in the response payload."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "403":
+  description: "As defined in [[rfc9110]], indicating that the server understood\
+  \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
+  \ in the response payload."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "405":
           description: "As defined in [[rfc9110]], indicating that the server does\
             \ not allow the method."
@@ -59105,14 +59105,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "500":
-          description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
-            \ this error code - use only if there is catastrophic error and there\
-            \ is not a more appropriate code."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "500":
+  description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
+  \ this error code - use only if there is catastrophic error and there\
+  \ is not a more appropriate code."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         default:
           description: The request was invalid or cannot be served. The exact error
             SHOULD be explained in the response payload.
@@ -59120,27 +59120,24 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-      security:
-      - OAuth2ACG:
-        - https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly
-      x-operation-pid: org.1edtech.ob.v3p0.rest.getcredentials.operation
-    post:
-      tags:
-      - OpenBadgeCredentials
-      summary: The REST POST operation for the upsertCredential() API call.
-      description: "Create or replace an AchievementCredential on the [=resource server=],\
-        \ appending it to the list of credentials for the subject, or replacing an\
-        \ existing entry in that list. The [=resource server=] SHOULD use the [=credential\
-        \ equality and comparison=] algorithm to compare and determine initial equality.\
-        \ The response code makes clear whether the operation resulted in a replacement\
-        \ or an insertion."
-      operationId: upsertCredential
-      requestBody:
-        description: The request body for the upsertCredential operation.
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AchievementCredential"
+  security: - OAuth2ACG: - https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly
+  x-operation-pid: org.1edtech.ob.v3p0.rest.getcredentials.operation
+  post:
+  tags: - OpenBadgeCredentials
+  summary: The REST POST operation for the upsertCredential() API call.
+  description: "Create or replace an AchievementCredential on the [=resource server=],\
+  \ appending it to the list of credentials for the subject, or replacing an\
+  \ existing entry in that list. The [=resource server=] SHOULD use the [=credential\
+  \ equality and comparison=] algorithm to compare and determine initial equality.\
+  \ The response code makes clear whether the operation resulted in a replacement\
+  \ or an insertion."
+  operationId: upsertCredential
+  requestBody:
+  description: The request body for the upsertCredential operation.
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/AchievementCredential"
           text/plain:
             schema:
               pattern: "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
@@ -59150,8 +59147,8 @@ servers:
   responses:
   "200":
   description: "The AchievementCredential was successfully replaced on the\
-   \ [=resource server=]. The response body MUST be the AchievementCredential\
-   \ in the request."
+  \ [=resource server=]. The response body MUST be the AchievementCredential\
+  \ in the request."
   content:
   application/json:
   schema:
@@ -59163,8 +59160,8 @@ servers:
   description: "A `String` in Compact JWS format [[RFC7515]]."
   "201":
   description: "The AchievementCredential was successfully created on the\
-   \ [=resource server=]. The response body MUST be the AchievementCredential\
-   \ in the request."
+  \ [=resource server=]. The response body MUST be the AchievementCredential\
+  \ in the request."
   content:
   application/json:
   schema:
@@ -59176,9 +59173,9 @@ servers:
   description: "A `String` in Compact JWS format [[RFC7515]]."
   "304":
   description: "As defined in [[rfc9110]], indicating that there is no need\
-   \ for the server to transfer a representation of the target resource because\
-   \ the request indicates that the client, which made the request conditional,\
-   \ already has a valid representation."
+  \ for the server to transfer a representation of the target resource because\
+  \ the request indicates that the client, which made the request conditional,\
+  \ already has a valid representation."
   content:
   application/json:
   schema:
@@ -59191,14 +59188,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "401":
-          description: "As defined in [[rfc9110]], indicating that the request has\
-            \ not been applied because it lacks valid authentication credentials for\
-            \ the target resource."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "401":
+  description: "As defined in [[rfc9110]], indicating that the request has\
+  \ not been applied because it lacks valid authentication credentials for\
+  \ the target resource."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "403":
           description: "As defined in [[rfc9110]], indicating that the server understood\
             \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
@@ -59207,14 +59204,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "404":
-          description: "As defined in [[rfc9110]], indicating that the origin server\
-            \ did not find a current representation for the target resource or is\
-            \ not willing to disclose that one exists."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "404":
+  description: "As defined in [[rfc9110]], indicating that the origin server\
+  \ did not find a current representation for the target resource or is\
+  \ not willing to disclose that one exists."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "405":
           description: "As defined in [[rfc9110]], indicating that the server does\
             \ not allow the method."
@@ -59222,14 +59219,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "500":
-          description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
-            \ this error code - use only if there is catastrophic error and there\
-            \ is not a more appropriate code."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "500":
+  description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
+  \ this error code - use only if there is catastrophic error and there\
+  \ is not a more appropriate code."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         default:
           description: The request was invalid or cannot be served. The exact error
             SHOULD be explained in the response payload.
@@ -59237,26 +59234,23 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-      security:
-      - OAuth2ACG:
-        - https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert
-      x-operation-pid: org.1edtech.ob.v3p0.rest.upsertcredential.operation
+  security: - OAuth2ACG: - https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert
+  x-operation-pid: org.1edtech.ob.v3p0.rest.upsertcredential.operation
   /profile:
-    get:
-      tags:
-      - OpenBadgeCredentials
-      summary: The REST GET operation for the getProfile() API call.
-      description: "Fetch the profile from the [=resource server=] for the supplied\
-        \ access token. Profiles that are received MAY contain attributes that a Host\
-        \ SHOULD authenticate before using in practice."
-      operationId: getProfile
-      responses:
-        "200":
-          description: The 200 (OK) response to the getProfile() API call.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Profile"
+  get:
+  tags: - OpenBadgeCredentials
+  summary: The REST GET operation for the getProfile() API call.
+  description: "Fetch the profile from the [=resource server=] for the supplied\
+  \ access token. Profiles that are received MAY contain attributes that a Host\
+  \ SHOULD authenticate before using in practice."
+  operationId: getProfile
+  responses:
+  "200":
+  description: The 200 (OK) response to the getProfile() API call.
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Profile"
         "404":
           description: "As defined in [[rfc9110]], indicating that the origin server\
             \ did not find a current representation for the target resource or is\
@@ -59265,14 +59259,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "400":
-          description: "As defined in [[rfc9110]], indicating that the server cannot\
-            \ or will not process the request due to something that is perceived to\
-            \ be a client error."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "400":
+  description: "As defined in [[rfc9110]], indicating that the server cannot\
+  \ or will not process the request due to something that is perceived to\
+  \ be a client error."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "401":
           description: "As defined in [[rfc9110]], indicating that the request has\
             \ not been applied because it lacks valid authentication credentials for\
@@ -59281,14 +59275,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "403":
-          description: "As defined in [[rfc9110]], indicating that the server understood\
-            \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
-            \ in the response payload."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "403":
+  description: "As defined in [[rfc9110]], indicating that the server understood\
+  \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
+  \ in the response payload."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "405":
           description: "As defined in [[rfc9110]], indicating that the server does\
             \ not allow the method."
@@ -59296,14 +59290,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "500":
-          description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
-            \ this error code - use only if there is catastrophic error and there\
-            \ is not a more appropriate code."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "500":
+  description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
+  \ this error code - use only if there is catastrophic error and there\
+  \ is not a more appropriate code."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         default:
           description: The request was invalid or cannot be served. The exact error
             SHOULD be explained in the response payload.
@@ -59311,22 +59305,19 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-      security:
-      - OAuth2ACG:
-        - https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly
-      x-operation-pid: org.1edtech.ob.v3p0.rest.getprofile.operation
-    put:
-      tags:
-      - OpenBadgeCredentials
-      summary: The REST PUT operation for the putProfile() API call.
-      description: Update the profile for the authenticate entity.
-      operationId: putProfile
-      requestBody:
-        description: The request body for the putProfile operation.
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Profile"
+  security: - OAuth2ACG: - https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly
+  x-operation-pid: org.1edtech.ob.v3p0.rest.getprofile.operation
+  put:
+  tags: - OpenBadgeCredentials
+  summary: The REST PUT operation for the putProfile() API call.
+  description: Update the profile for the authenticate entity.
+  operationId: putProfile
+  requestBody:
+  description: The request body for the putProfile operation.
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Profile"
         required: true
       responses:
         "200":
@@ -59335,13 +59326,13 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Profile"
-        "202":
-          description: "As defined in [[rfc9110]], indicating that the request has\
-            \ been accepted for processing, but the processing has not been completed."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "202":
+  description: "As defined in [[rfc9110]], indicating that the request has\
+  \ been accepted for processing, but the processing has not been completed."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "304":
           description: "As defined in [[rfc9110]], indicating that there is no need\
             \ for the server to transfer a representation of the target resource because\
@@ -59351,14 +59342,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "400":
-          description: "As defined in [[rfc9110]], indicating that the server cannot\
-            \ or will not process the request due to something that is perceived to\
-            \ be a client error."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "400":
+  description: "As defined in [[rfc9110]], indicating that the server cannot\
+  \ or will not process the request due to something that is perceived to\
+  \ be a client error."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "401":
           description: "As defined in [[rfc9110]], indicating that the request has\
             \ not been applied because it lacks valid authentication credentials for\
@@ -59367,14 +59358,14 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "403":
-          description: "As defined in [[rfc9110]], indicating that the server understood\
-            \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
-            \ in the response payload."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "403":
+  description: "As defined in [[rfc9110]], indicating that the server understood\
+  \ the request but refuses to fulfill it. The exact reason SHOULD be explained\
+  \ in the response payload."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "404":
           description: "As defined in [[rfc9110]], indicating that the origin server\
             \ did not find a current representation for the target resource or is\
@@ -59383,13 +59374,13 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        "405":
-          description: "As defined in [[rfc9110]], indicating that the server does\
-            \ not allow the method."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  "405":
+  description: "As defined in [[rfc9110]], indicating that the server does\
+  \ not allow the method."
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
         "500":
           description: "As defined in [[rfc9110]]. Implementations SHOULD avoid using\
             \ this error code - use only if there is catastrophic error and there\
@@ -59398,13 +59389,13 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/Imsx_StatusInfo"
-        default:
-          description: The request was invalid or cannot be served. The exact error
-            SHOULD be explained in the response payload.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  default:
+  description: The request was invalid or cannot be served. The exact error
+  SHOULD be explained in the response payload.
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
       security:
       - OAuth2ACG:
         - https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update
@@ -59423,13 +59414,13 @@ servers:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceDescriptionDocument"
-        default:
-          description: The request was invalid or cannot be served. The exact error
-            SHOULD be explained in the response payload.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Imsx_StatusInfo"
+  default:
+  description: The request was invalid or cannot be served. The exact error
+  SHOULD be explained in the response payload.
+  content:
+  application/json:
+  schema:
+  $ref: "#/components/schemas/Imsx_StatusInfo"
       x-operation-pid: org.1edtech.ob.v3p0.rest.getservicedescription.operation
 components:
   schemas:
@@ -59444,70 +59435,68 @@ components:
           x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
         geo:
           $ref: "#/components/schemas/GeoCoordinates"
-        addressCountryCode:
-          type: string
-          description: "A country code. The value must be a ISO 3166-1 alpha-2 country\
-            \ code [[ISO3166-1]]."
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.countrycode.class
-        streetAddress:
-          type: string
-          description: A street address within the locality.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        postalCode:
-          type: string
-          description: A postal code.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        addressLocality:
-          type: string
-          description: A locality within the region.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        type:
-          minItems: 1
-          type: array
-          description: The value of the type property MUST be an unordered set. One
-            of the items MUST be the IRI 'Address'.
-          items:
-            type: string
-            description: "A `NormalizedString` that represents an Internationalized\
-              \ Resource Identifier (IRI), which extends the ASCII characters subset\
-              \ of the Uniform Resource Identifier (URI)."
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-        addressRegion:
-          type: string
-          description: A region within the country.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        postOfficeBoxNumber:
-          type: string
-          description: A post office box number for PO box addresses.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-      additionalProperties: true
-      description: An address for the described entity.
-      x-class-pid: org.1edtech.ob.v3p0.address.class
-    CredentialSchema:
-      required:
-      - id
-      - type
-      type: object
-      properties:
-        id:
-          type: string
-          description: The value MUST be a URI identifying the schema file. One instance
-            of `CredentialSchema` MUST have an `id` that is the URL of the JSON Schema
-            for this credential defined by this specification.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        type:
-          type: string
-          description: The value MUST identify the type of data schema validation.
-            One instance of `CredentialSchema` MUST have a `type` of '1EdTechJsonSchemaValidator2019'.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-      additionalProperties: true
-      description: Identify the type and location of a data schema.
-      x-class-pid: org.1edtech.ob.v3p0.credentialschema.class
-    OpenApiSecuritySchemes:
-      type: object
-      properties:
-        OAuth2ACG:
-          $ref: "#/components/schemas/OpenApiOAuth2SecurityScheme"
+  addressCountryCode:
+  type: string
+  description: "A country code. The value must be a ISO 3166-1 alpha-2 country\
+  \ code [[ISO3166-1]]."
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.countrycode.class
+  streetAddress:
+  type: string
+  description: A street address within the locality.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  postalCode:
+  type: string
+  description: A postal code.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  addressLocality:
+  type: string
+  description: A locality within the region.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  type:
+  minItems: 1
+  type: array
+  description: The value of the type property MUST be an unordered set. One
+  of the items MUST be the IRI 'Address'.
+  items:
+  type: string
+  description: "A `NormalizedString` that represents an Internationalized\
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  addressRegion:
+  type: string
+  description: A region within the country.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  postOfficeBoxNumber:
+  type: string
+  description: A post office box number for PO box addresses.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  additionalProperties: true
+  description: An address for the described entity.
+  x-class-pid: org.1edtech.ob.v3p0.address.class
+  CredentialSchema:
+  required: - id - type
+  type: object
+  properties:
+  id:
+  type: string
+  description: The value MUST be a URI identifying the schema file. One instance
+  of `CredentialSchema` MUST have an `id` that is the URL of the JSON Schema
+  for this credential defined by this specification.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  type:
+  type: string
+  description: The value MUST identify the type of data schema validation.
+  One instance of `CredentialSchema` MUST have a `type` of '1EdTechJsonSchemaValidator2019'.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  additionalProperties: true
+  description: Identify the type and location of a data schema.
+  x-class-pid: org.1edtech.ob.v3p0.credentialschema.class
+  OpenApiSecuritySchemes:
+  type: object
+  properties:
+  OAuth2ACG:
+  $ref: "#/components/schemas/OpenApiOAuth2SecurityScheme"
       additionalProperties: false
       description: The Map of security scheme objects supported by this specification.
       x-class-pid: org.1edtech.ob.v3p0.openapisecurityschemes.class
@@ -59545,44 +59534,40 @@ components:
       properties:
         securitySchemes:
           $ref: "#/components/schemas/OpenApiSecuritySchemes"
-      additionalProperties: true
-      description: Holds a set of reusable objects for different aspects of the OAS.
-        All objects defined within the components object will have no effect on the
-        API unless they are explicitly referenced from properties outside the components
-        object.
-      x-class-pid: org.1edtech.ob.v3p0.openapicomponents.class
-    Image:
-      required:
-      - id
-      - type
-      type: object
-      properties:
-        caption:
-          type: string
-          description: The caption for the image.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        id:
-          type: string
-          description: The URI or Data URI of the image.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        type:
-          type: string
-          description: MUST be the IRI 'Image'.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-      additionalProperties: false
-      description: "Metadata about images that represent assertions, achieve or profiles.\
-        \ These properties can typically be represented as just the id string of the\
-        \ image, but using a fleshed-out document allows for including captions and\
-        \ other applicable metadata."
-      x-class-pid: org.1edtech.ob.v3p0.image.class
-    Profile:
-      required:
-      - id
-      - type
-      type: object
-      properties:
-        image:
-          $ref: "#/components/schemas/Image"
+  additionalProperties: true
+  description: Holds a set of reusable objects for different aspects of the OAS.
+  All objects defined within the components object will have no effect on the
+  API unless they are explicitly referenced from properties outside the components
+  object.
+  x-class-pid: org.1edtech.ob.v3p0.openapicomponents.class
+  Image:
+  required: - id - type
+  type: object
+  properties:
+  caption:
+  type: string
+  description: The caption for the image.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  id:
+  type: string
+  description: The URI or Data URI of the image.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  type:
+  type: string
+  description: MUST be the IRI 'Image'.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  additionalProperties: false
+  description: "Metadata about images that represent assertions, achieve or profiles.\
+  \ These properties can typically be represented as just the id string of the\
+  \ image, but using a fleshed-out document allows for including captions and\
+  \ other applicable metadata."
+  x-class-pid: org.1edtech.ob.v3p0.image.class
+  Profile:
+  required: - id - type
+  type: object
+  properties:
+  image:
+  $ref: "#/components/schemas/Image"
         endorsement:
           minItems: 0
           type: array
@@ -59591,9 +59576,9 @@ components:
             with a Data Integrity proof format.
           items:
             $ref: "#/components/schemas/EndorsementCredential"
-          x-srcprop-pid: org.1edtech.ob.v3p0.endorsementcredential.class
-        address:
-          $ref: "#/components/schemas/Address"
+  x-srcprop-pid: org.1edtech.ob.v3p0.endorsementcredential.class
+  address:
+  $ref: "#/components/schemas/Address"
         givenName:
           type: string
           description: "Given name. In the western world, often referred to as the\
@@ -59648,7 +59633,7 @@ components:
   honorificSuffix:
   type: string
   description: "Honorific suffix(es) following a person's name (e.g. 'M.D,\
-   \ PhD')."
+  \ PhD')."
   x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
   phone:
   type: string
@@ -59657,12 +59642,12 @@ components:
   familyName:
   type: string
   description: "Family name. In the western world, often referred to as the\
-   \ 'last name' of a person."
+  \ 'last name' of a person."
   x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
   familyNamePrefix:
   type: string
   description: "Family name prefix. As used in some locales, this is the leading\
-   \ part of a family name (e.g. 'de' in the name 'de Boer')."
+  \ part of a family name (e.g. 'de' in the name 'de Boer')."
   x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
   name:
   type: string
@@ -59685,62 +59670,61 @@ components:
           x-srcprop-pid: org.1edtech.ob.v3p0.identifierentry.class
         parentOrg:
           $ref: "#/components/schemas/Profile"
-        additionalName:
-          type: string
-          description: Additional name. Includes what is often referred to as 'middle
-            name' in the western world.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        email:
-          type: string
-          description: An email address.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.emailaddress.class
-      additionalProperties: true
-      description: "A Profile is a collection of information that describes the entity\
-        \ or organization using Open Badges. Issuers must be represented as Profiles,\
-        \ and endorsers, or other entities may also be represented using this vocabulary.\
-        \ Each Profile that represents an Issuer may be referenced in many BadgeClasses\
-        \ that it has defined. Anyone can create and host an Issuer file to start\
-        \ issuing Open Badges. Issuers may also serve as recipients of Open Badges,\
-        \ often identified within an Assertion by specific properties, like their\
-        \ url or contact email address."
-      x-class-pid: org.1edtech.ob.v3p0.profile.class
-    Result:
-      required:
-      - type
-      type: object
-      properties:
-        achievedLevel:
-          type: string
-          description: "If the result represents an achieved rubric criterion level\
-            \ (e.g. Mastered), the value is the `id` of the RubricCriterionLevel in\
-            \ linked ResultDescription."
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        resultDescription:
-          type: string
-          description: An achievement can have many result descriptions describing
-            possible results. The value of `resultDescription` is the `id` of the
-            result description linked to this result. The linked result description
-            must be in the achievement that is being asserted.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        type:
-          minItems: 1
-          type: array
-          description: The value of the type property MUST be an unordered set. One
-            of the items MUST be the IRI 'Result'.
-          items:
-            type: string
-            description: "A `NormalizedString` that represents an Internationalized\
-              \ Resource Identifier (IRI), which extends the ASCII characters subset\
-              \ of the Uniform Resource Identifier (URI)."
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-        alignment:
-          minItems: 0
-          type: array
-          description: The alignments between this result and nodes in external frameworks.
-            This set of alignments are in addition to the set of alignments defined
-            in the corresponding ResultDescription object.
-          items:
-            $ref: "#/components/schemas/Alignment"
+  additionalName:
+  type: string
+  description: Additional name. Includes what is often referred to as 'middle
+  name' in the western world.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  email:
+  type: string
+  description: An email address.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.emailaddress.class
+  additionalProperties: true
+  description: "A Profile is a collection of information that describes the entity\
+  \ or organization using Open Badges. Issuers must be represented as Profiles,\
+  \ and endorsers, or other entities may also be represented using this vocabulary.\
+  \ Each Profile that represents an Issuer may be referenced in many BadgeClasses\
+  \ that it has defined. Anyone can create and host an Issuer file to start\
+  \ issuing Open Badges. Issuers may also serve as recipients of Open Badges,\
+  \ often identified within an Assertion by specific properties, like their\
+  \ url or contact email address."
+  x-class-pid: org.1edtech.ob.v3p0.profile.class
+  Result:
+  required: - type
+  type: object
+  properties:
+  achievedLevel:
+  type: string
+  description: "If the result represents an achieved rubric criterion level\
+  \ (e.g. Mastered), the value is the `id` of the RubricCriterionLevel in\
+  \ linked ResultDescription."
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  resultDescription:
+  type: string
+  description: An achievement can have many result descriptions describing
+  possible results. The value of `resultDescription` is the `id` of the
+  result description linked to this result. The linked result description
+  must be in the achievement that is being asserted.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  type:
+  minItems: 1
+  type: array
+  description: The value of the type property MUST be an unordered set. One
+  of the items MUST be the IRI 'Result'.
+  items:
+  type: string
+  description: "A `NormalizedString` that represents an Internationalized\
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  alignment:
+  minItems: 0
+  type: array
+  description: The alignments between this result and nodes in external frameworks.
+  This set of alignments are in addition to the set of alignments defined
+  in the corresponding ResultDescription object.
+  items:
+  $ref: "#/components/schemas/Alignment"
           x-srcprop-pid: org.1edtech.ob.v3p0.alignment.class
         value:
           type: string
@@ -59910,15 +59894,15 @@ components:
       properties:
         components:
           $ref: "#/components/schemas/OpenApiComponents"
-        openapi:
-          type: string
-          description: This string MUST be the semantic version number of the OpenAPI
-            Specification version that the OpenAPI document uses. The openapi field
-            SHOULD be used by tooling specifications and clients to interpret the
-            OpenAPI document. This is not related to the API info.version string.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        info:
-          $ref: "#/components/schemas/OpenApiInfo"
+  openapi:
+  type: string
+  description: This string MUST be the semantic version number of the OpenAPI
+  Specification version that the OpenAPI document uses. The openapi field
+  SHOULD be used by tooling specifications and clients to interpret the
+  OpenAPI document. This is not related to the API info.version string.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  info:
+  $ref: "#/components/schemas/OpenApiInfo"
       additionalProperties: true
       description: "The Service Description Document (SDD) is a machine readable document\
         \ that contains the description of the service features supported by the Provider/Platform.\
@@ -60035,8 +60019,8 @@ components:
           x-srcprop-pid: org.1edtech.ob.v3p0.achievementtype.class
         image:
           $ref: "#/components/schemas/Image"
-        creator:
-          $ref: "#/components/schemas/Profile"
+  creator:
+  $ref: "#/components/schemas/Profile"
         endorsement:
           minItems: 0
           type: array
@@ -60044,9 +60028,9 @@ components:
             These endorsements are signed with a Data Integrity proof format.
           items:
             $ref: "#/components/schemas/EndorsementCredential"
-          x-srcprop-pid: org.1edtech.ob.v3p0.endorsementcredential.class
-        criteria:
-          $ref: "#/components/schemas/Criteria"
+  x-srcprop-pid: org.1edtech.ob.v3p0.endorsementcredential.class
+  criteria:
+  $ref: "#/components/schemas/Criteria"
         humanCode:
           type: string
           description: "The code, generally human readable, associated with an achievement."
@@ -60067,8 +60051,8 @@ components:
   items:
   type: string
   description: "A `NormalizedString` that represents an Internationalized\
-   \ Resource Identifier (IRI), which extends the ASCII characters subset\
-   \ of the Uniform Resource Identifier (URI)."
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
   version:
   type: string
@@ -60107,8 +60091,8 @@ components:
   specialization:
   type: string
   description: "Name given to the focus, concentration, or specific area of\
-   \ study defined in the achievement. Examples include 'Entrepreneurship',\
-   \ 'Technical Communication', and 'Finance'."
+  \ study defined in the achievement. Examples include 'Entrepreneurship',\
+  \ 'Technical Communication', and 'Finance'."
   x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
   id:
   type: string
@@ -60221,8 +60205,8 @@ components:
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
   additionalProperties: true
   description: "The information in CredentialStatus is used to discover information\
-   \ about the current status of a verifiable credential, such as whether it\
-   \ is suspended or revoked."
+  \ about the current status of a verifiable credential, such as whether it\
+  \ is suspended or revoked."
   x-class-pid: org.1edtech.ob.v3p0.credentialstatus.class
   Imsx_StatusInfo:
   required: - imsx_codeMajor - imsx_severity
@@ -60339,17 +60323,17 @@ components:
   x-imssf-image:
   type: string
   description: "An image representing the [=resource server=]. MAY be a Data\
-   \ URI or the URL where the image may be found."
+  \ URI or the URL where the image may be found."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
   x-imssf-privacyPolicyUrl:
   type: string
   description: "A fully qualified URL to the [=resource server=]'s privacy\
-   \ policy."
+  \ policy."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.url.class
   termsOfService:
   type: string
   description: "A fully qualified URL to the [=resource server=]'s terms of\
-   \ service."
+  \ service."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.url.class
   title:
   type: string
@@ -60361,8 +60345,8 @@ components:
   x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
   additionalProperties: true
   description: "The object provides metadata about the API. The metadata MAY be\
-   \ used by the clients if needed, and MAY be presented in editing or documentation\
-   \ generation tools for convenience."
+  \ used by the clients if needed, and MAY be presented in editing or documentation\
+  \ generation tools for convenience."
   x-class-pid: org.1edtech.ob.v3p0.openapiinfo.class
   EndorsementSubject:
   required: - id - type
@@ -60376,7 +60360,7 @@ components:
   id:
   type: string
   description: "The identifier of the individual, entity, organization, assertion,\
-   \ or achievement that is endorsed."
+  \ or achievement that is endorsed."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
   type:
   minItems: 1
@@ -60386,8 +60370,8 @@ components:
   items:
   type: string
   description: "A `NormalizedString` that represents an Internationalized\
-   \ Resource Identifier (IRI), which extends the ASCII characters subset\
-   \ of the Uniform Resource Identifier (URI)."
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
   additionalProperties: true
   description: A collection of information about the subject of the endorsement.
@@ -60410,18 +60394,18 @@ components:
   awardedDate:
   type: string
   description: "Timestamp of when the credential was awarded. `validFrom`\
-   \ is used to determine the most recent version of a Credential in conjunction\
-   \ with `issuer` and `id`. Consequently, the only way to update a Credental\
-   \ is to update the `validFrom`, losing the date when the Credential was\
-   \ originally awarded. `awardedDate` is meant to keep this original date."
+  \ is used to determine the most recent version of a Credential in conjunction\
+  \ with `issuer` and `id`. Consequently, the only way to update a Credental\
+  \ is to update the `validFrom`, losing the date when the Credential was\
+  \ originally awarded. `awardedDate` is meant to keep this original date."
   format: date-time
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.datetimez.class
   endorsement:
   minItems: 0
   type: array
   description: "Allows endorsers to make specific claims about the credential,\
-   \ and the achievement and profiles in the credential. These endorsements\
-   \ are signed with a Data Integrity proof format."
+  \ and the achievement and profiles in the credential. These endorsements\
+  \ are signed with a Data Integrity proof format."
   items:
   $ref: "#/components/schemas/EndorsementCredential"
   x-srcprop-pid: org.1edtech.ob.v3p0.endorsementcredential.class
@@ -60496,9 +60480,9 @@ components:
   minItems: 0
   type: array
   description: "The value of the `termsOfUse` property tells the verifier\
-   \ what actions it is required to perform (an obligation), not allowed\
-   \ to perform (a prohibition), or allowed to perform (a permission) if\
-   \ it is to accept the verifiable credential."
+  \ what actions it is required to perform (an obligation), not allowed\
+  \ to perform (a prohibition), or allowed to perform (a permission) if\
+  \ it is to accept the verifiable credential."
   items:
   $ref: "#/components/schemas/TermsOfUse"
           x-srcprop-pid: org.1edtech.ob.v3p0.termsofuse.class
@@ -60509,24 +60493,24 @@ components:
           x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
         refreshService:
           $ref: "#/components/schemas/RefreshService"
-        validUntil:
-          type: string
-          description: "If the credential has some notion of validity period, this\
-            \ indicates a timestamp when a credential should no longer be considered\
-            \ valid. After this time, the credential should be considered invalid."
-          format: date-time
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.datetimez.class
-        id:
-          type: string
-          description: Unambiguous reference to the credential.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        proof:
-          minItems: 0
-          type: array
-          description: "If present, one or more embedded cryptographic proofs that\
-            \ can be used to detect tampering and verify the authorship of the credential."
-          items:
-            $ref: "#/components/schemas/Proof"
+  validUntil:
+  type: string
+  description: "If the credential has some notion of validity period, this\
+  \ indicates a timestamp when a credential should no longer be considered\
+  \ valid. After this time, the credential should be considered invalid."
+  format: date-time
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.datetimez.class
+  id:
+  type: string
+  description: Unambiguous reference to the credential.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  proof:
+  minItems: 0
+  type: array
+  description: "If present, one or more embedded cryptographic proofs that\
+  \ can be used to detect tampering and verify the authorship of the credential."
+  items:
+  $ref: "#/components/schemas/Proof"
           x-srcprop-pid: org.1edtech.ob.v3p0.proof.class
       additionalProperties: true
       description: "AchievementCredentials are representations of an awarded achievement,\
@@ -60600,8 +60584,8 @@ components:
   items:
   type: string
   description: "A `NormalizedString` that represents an Internationalized\
-   \ Resource Identifier (IRI), which extends the ASCII characters subset\
-   \ of the Uniform Resource Identifier (URI)."
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
   version:
   type: string
@@ -60674,104 +60658,82 @@ components:
             frameworks.
           items:
             $ref: "#/components/schemas/Alignment"
-          x-srcprop-pid: org.1edtech.ob.v3p0.alignment.class
-        resultType:
-          description: The type of result this description represents. This is an
-            extensible enumerated vocabulary.
-          anyOf:
-          - type: string
-            enum:
-            - GradePointAverage
-            - LetterGrade
-            - Percent
-            - PerformanceLevel
-            - PredictedScore
-            - RawScore
-            - Result
-            - RubricCriterion
-            - RubricCriterionLevel
-            - RubricScore
-            - ScaledScore
-            - Status
-          - pattern: "(ext:)[a-zA-Z0-9\\.\\-_]+"
-            type: string
-          x-srcprop-pid: org.1edtech.ob.v3p0.resulttype.class
-        requiredValue:
-          type: string
-          description: A value from `allowedValue` or within the range of `valueMin`
-            to `valueMax` required to pass as determined by the achievement creator.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-      additionalProperties: true
-      description: Describes a possible achievement result.
-      x-class-pid: org.1edtech.ob.v3p0.resultdescription.class
-    Proof:
-      required:
-      - type
-      type: object
-      properties:
-        proofValue:
-          type: string
-          description: Value of the proof.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        created:
-          type: string
-          description: Date the proof was created.
-          format: date-time
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.datetime.class
-        domain:
-          type: string
-          description: The domain of the proof to restrict its use to a particular
-            target.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        challenge:
-          type: string
-          description: A value chosen by the verifier to mitigate authentication proof
-            replay attacks.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        proofPurpose:
-          type: string
-          description: The purpose of the proof to be used with `verificationMethod`.
-            MUST be 'assertionMethod'.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        type:
-          type: string
-          description: Signature suite used to produce proof.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-        verificationMethod:
-          type: string
-          description: The URL of the public key that can verify the signature.
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
-        nonce:
-          type: string
-          description: A value chosen by the creator of proof to randomize proof values
-            for privacy purposes.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        cryptosuite:
-          type: string
-          description: The suite used to create the proof.
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-      additionalProperties: true
-      description: A JSON-LD Linked Data proof.
-      x-class-pid: org.1edtech.ob.v3p0.proof.class
-    EndorsementCredential:
-      required:
-      - '@context'
-      - type
-      - id
-      - name
-      - credentialSubject
-      - issuer
-      - validFrom
-      type: object
-      properties:
-        credentialSchema:
-          minItems: 0
-          type: array
-          description: The value of the `credentialSchema` property MUST be one or
-            more data schemas that provide verifiers with enough information to determine
-            if the provided data conforms to the provided schema.
-          items:
-            $ref: "#/components/schemas/CredentialSchema"
+  x-srcprop-pid: org.1edtech.ob.v3p0.alignment.class
+  resultType:
+  description: The type of result this description represents. This is an
+  extensible enumerated vocabulary.
+  anyOf: - type: string
+  enum: - GradePointAverage - LetterGrade - Percent - PerformanceLevel - PredictedScore - RawScore - Result - RubricCriterion - RubricCriterionLevel - RubricScore - ScaledScore - Status - pattern: "(ext:)[a-zA-Z0-9\\.\\-_]+"
+  type: string
+  x-srcprop-pid: org.1edtech.ob.v3p0.resulttype.class
+  requiredValue:
+  type: string
+  description: A value from `allowedValue` or within the range of `valueMin`
+  to `valueMax` required to pass as determined by the achievement creator.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  additionalProperties: true
+  description: Describes a possible achievement result.
+  x-class-pid: org.1edtech.ob.v3p0.resultdescription.class
+  Proof:
+  required: - type
+  type: object
+  properties:
+  proofValue:
+  type: string
+  description: Value of the proof.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  created:
+  type: string
+  description: Date the proof was created.
+  format: date-time
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.datetime.class
+  domain:
+  type: string
+  description: The domain of the proof to restrict its use to a particular
+  target.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  challenge:
+  type: string
+  description: A value chosen by the verifier to mitigate authentication proof
+  replay attacks.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  proofPurpose:
+  type: string
+  description: The purpose of the proof to be used with `verificationMethod`.
+  MUST be 'assertionMethod'.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  type:
+  type: string
+  description: Signature suite used to produce proof.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  verificationMethod:
+  type: string
+  description: The URL of the public key that can verify the signature.
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.uri.class
+  nonce:
+  type: string
+  description: A value chosen by the creator of proof to randomize proof values
+  for privacy purposes.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  cryptosuite:
+  type: string
+  description: The suite used to create the proof.
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  additionalProperties: true
+  description: A JSON-LD Linked Data proof.
+  x-class-pid: org.1edtech.ob.v3p0.proof.class
+  EndorsementCredential:
+  required: - '@context' - type - id - name - credentialSubject - issuer - validFrom
+  type: object
+  properties:
+  credentialSchema:
+  minItems: 0
+  type: array
+  description: The value of the `credentialSchema` property MUST be one or
+  more data schemas that provide verifiers with enough information to determine
+  if the provided data conforms to the provided schema.
+  items:
+  $ref: "#/components/schemas/CredentialSchema"
           x-srcprop-pid: org.1edtech.ob.v3p0.credentialschema.class
         awardedDate:
           type: string
@@ -60790,9 +60752,9 @@ components:
             directly to the work is infeasible.
           items:
             $ref: "#/components/schemas/Evidence"
-          x-srcprop-pid: org.1edtech.ob.v3p0.evidence.class
-        credentialSubject:
-          $ref: "#/components/schemas/EndorsementSubject"
+  x-srcprop-pid: org.1edtech.ob.v3p0.evidence.class
+  credentialSubject:
+  $ref: "#/components/schemas/EndorsementSubject"
         description:
           type: string
           description: The short description of the credential for display purposes
@@ -60839,9 +60801,9 @@ components:
             description: A `NormalizedString` that respresents a Uniform Resource
               Identifier (URI).
           - $ref: "#/components/schemas/Profile"
-          x-srcprop-pid: org.1edtech.ob.v3p0.profileref.class
-        credentialStatus:
-          $ref: "#/components/schemas/CredentialStatus"
+  x-srcprop-pid: org.1edtech.ob.v3p0.profileref.class
+  credentialStatus:
+  $ref: "#/components/schemas/CredentialStatus"
         termsOfUse:
           minItems: 0
           type: array
@@ -60851,14 +60813,14 @@ components:
             \ it is to accept the verifiable credential."
           items:
             $ref: "#/components/schemas/TermsOfUse"
-          x-srcprop-pid: org.1edtech.ob.v3p0.termsofuse.class
-        name:
-          type: string
-          description: "The name of the credential for display purposes in wallets.\
-            \ For example, in a list of credentials and in detail views."
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        refreshService:
-          $ref: "#/components/schemas/RefreshService"
+  x-srcprop-pid: org.1edtech.ob.v3p0.termsofuse.class
+  name:
+  type: string
+  description: "The name of the credential for display purposes in wallets.\
+  \ For example, in a list of credentials and in detail views."
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  refreshService:
+  $ref: "#/components/schemas/RefreshService"
         validUntil:
           type: string
           description: "If the credential has some notion of validity period, this\
@@ -60877,43 +60839,41 @@ components:
             \ can be used to detect tampering and verify the authorship of the credential."
           items:
             $ref: "#/components/schemas/Proof"
-          x-srcprop-pid: org.1edtech.ob.v3p0.proof.class
-      additionalProperties: true
-      description: "A verifiable credential that asserts a claim about an entity.\
-        \ As described in [[[#data-integrity]]], at least one proof mechanism, and\
-        \ the details necessary to evaluate that proof, MUST be expressed for a credential\
-        \ to be a verifiable credential. In the case of an embedded proof, the credential\
-        \ MUST append the proof in the `proof` property."
-      x-class-pid: org.1edtech.ob.v3p0.endorsementcredential.class
-    AchievementSubject:
-      required:
-      - type
-      - achievement
-      type: object
-      properties:
-        identifier:
-          minItems: 0
-          type: array
-          description: Other identifiers for the recipient of the achievement. Either
-            `id` or at least one `identifier` MUST be supplied.
-          items:
-            $ref: "#/components/schemas/IdentityObject"
+  x-srcprop-pid: org.1edtech.ob.v3p0.proof.class
+  additionalProperties: true
+  description: "A verifiable credential that asserts a claim about an entity.\
+  \ As described in [[[#data-integrity]]], at least one proof mechanism, and\
+  \ the details necessary to evaluate that proof, MUST be expressed for a credential\
+  \ to be a verifiable credential. In the case of an embedded proof, the credential\
+  \ MUST append the proof in the `proof` property."
+  x-class-pid: org.1edtech.ob.v3p0.endorsementcredential.class
+  AchievementSubject:
+  required: - type - achievement
+  type: object
+  properties:
+  identifier:
+  minItems: 0
+  type: array
+  description: Other identifiers for the recipient of the achievement. Either
+  `id` or at least one `identifier` MUST be supplied.
+  items:
+  $ref: "#/components/schemas/IdentityObject"
           x-srcprop-pid: org.1edtech.ob.v3p0.identityobject.class
         image:
           $ref: "#/components/schemas/Image"
-        activityStartDate:
-          type: string
-          description: The datetime the activity started.
-          format: date-time
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.datetime.class
-        role:
-          type: string
-          description: "Role, position, or title of the learner when demonstrating\
-            \ or performing the achievement or evidence of learning being asserted.\
-            \ Examples include 'Student President', 'Intern', 'Captain', etc."
-          x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
-        achievement:
-          $ref: "#/components/schemas/Achievement"
+  activityStartDate:
+  type: string
+  description: The datetime the activity started.
+  format: date-time
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.datetime.class
+  role:
+  type: string
+  description: "Role, position, or title of the learner when demonstrating\
+  \ or performing the achievement or evidence of learning being asserted.\
+  \ Examples include 'Student President', 'Intern', 'Captain', etc."
+  x-srcprop-pid: org.1edtech.ob.v3p0.primitive.string.class
+  achievement:
+  $ref: "#/components/schemas/Achievement"
         narrative:
           type: string
           description: A narrative that connects multiple pieces of evidence. Likely
@@ -60921,23 +60881,23 @@ components:
           x-srcprop-pid: org.1edtech.ob.v3p0.derived.markdown.class
         source:
           $ref: "#/components/schemas/Profile"
-        type:
-          minItems: 1
-          type: array
-          description: The value of the type property MUST be an unordered set. One
-            of the items MUST be the IRI 'AchievementSubject'.
-          items:
-            type: string
-            description: "A `NormalizedString` that represents an Internationalized\
-              \ Resource Identifier (IRI), which extends the ASCII characters subset\
-              \ of the Uniform Resource Identifier (URI)."
-          x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
-        result:
-          minItems: 0
-          type: array
-          description: The set of results being asserted.
-          items:
-            $ref: "#/components/schemas/Result"
+  type:
+  minItems: 1
+  type: array
+  description: The value of the type property MUST be an unordered set. One
+  of the items MUST be the IRI 'AchievementSubject'.
+  items:
+  type: string
+  description: "A `NormalizedString` that represents an Internationalized\
+  \ Resource Identifier (IRI), which extends the ASCII characters subset\
+  \ of the Uniform Resource Identifier (URI)."
+  x-srcprop-pid: org.1edtech.ob.v3p0.derived.iri.class
+  result:
+  minItems: 0
+  type: array
+  description: The set of results being asserted.
+  items:
+  $ref: "#/components/schemas/Result"
           x-srcprop-pid: org.1edtech.ob.v3p0.result.class
         creditsEarned:
           type: number
@@ -60977,14 +60937,14 @@ components:
             Proof Format MUST be in the `credential` array.
           items:
             $ref: "#/components/schemas/AchievementCredential"
-          x-srcprop-pid: org.1edtech.ob.v3p0.achievementcredential.class
-        compactJwsString:
-          minItems: 0
-          type: array
-          description: OpenBadgeCredentials that have been signed with the VC-JWT
-            Proof Format MUST be in the `compactJwsString` array.
-          items:
-            pattern: "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
+  x-srcprop-pid: org.1edtech.ob.v3p0.achievementcredential.class
+  compactJwsString:
+  minItems: 0
+  type: array
+  description: OpenBadgeCredentials that have been signed with the VC-JWT
+  Proof Format MUST be in the `compactJwsString` array.
+  items:
+  pattern: "^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]+$"
   type: string
   description: "A `String` in Compact JWS format [[RFC7515]]."
   x-srcprop-pid: org.1edtech.ob.v3p0.derived.compactjws.class

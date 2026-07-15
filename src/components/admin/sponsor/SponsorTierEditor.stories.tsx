@@ -92,9 +92,7 @@ function TierEditorModal() {
                 setFormData({
                   ...formData,
                   tierType: e.target.value as
-                    | 'standard'
-                    | 'community'
-                    | 'media',
+                    'standard' | 'community' | 'media',
                 })
               }
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"

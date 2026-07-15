@@ -45,8 +45,7 @@ export async function getTravelSupport(
 
 export async function getTravelSupportById(id: string): Promise<{
   travelSupport:
-    | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
-    | null
+    (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
   error: Error | null
 }> {
   try {

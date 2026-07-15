@@ -85,10 +85,7 @@ export function SponsorCRMForm({
     invoiceStatus: (sponsor?.invoiceStatus || 'not-sent') as InvoiceStatus,
     contractValue: sponsor?.contractValue?.toString() || '',
     contractCurrency: (sponsor?.contractCurrency || 'NOK') as
-      | 'NOK'
-      | 'USD'
-      | 'EUR'
-      | 'GBP',
+      'NOK' | 'USD' | 'EUR' | 'GBP',
     tags: sponsor?.tags || ([] as SponsorTag[]),
     assignedTo: sponsor?.assignedTo?._id || '',
   })

@@ -26,8 +26,7 @@ export interface SpeakerIndicator {
  */
 export function getSpeakerIndicators(
   speakers: (
-    | SpeakerWithReviewInfo
-    | (Speaker & { proposals?: ProposalExisting[] })
+    SpeakerWithReviewInfo | (Speaker & { proposals?: ProposalExisting[] })
   )[],
   currentConferenceId?: string,
   featuredSpeakerIds: string[] = [],
@@ -125,8 +124,7 @@ export function getSpeakerIndicators(
 
 interface SpeakerIndicatorsProps {
   speakers: (
-    | SpeakerWithReviewInfo
-    | (Speaker & { proposals?: ProposalExisting[] })
+    SpeakerWithReviewInfo | (Speaker & { proposals?: ProposalExisting[] })
   )[]
   size?: 'sm' | 'md'
   maxVisible?: number

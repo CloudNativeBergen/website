@@ -1784,8 +1784,7 @@ export const proposalRouter = router({
 
           // Verify user owns the proposal (or is organizer)
           const proposalRef = invitation.proposal as
-            | { _ref: string }
-            | undefined
+            { _ref: string } | undefined
           if (!proposalRef?._ref) {
             throw new TRPCError({
               code: 'BAD_REQUEST',

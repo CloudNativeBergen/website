@@ -51,8 +51,7 @@ export async function verifyTravelSupportOwnership(
   isOrganizer: boolean = false,
 ): Promise<{
   travelSupport:
-    | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
-    | null
+    (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
   hasAccess: boolean
   error?: Error
 }> {

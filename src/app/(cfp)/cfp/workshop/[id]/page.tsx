@@ -328,9 +328,7 @@ export default async function WorkshopDetailsPage({
                             <ExperienceLevelIcon
                               level={
                                 signup.experienceLevel as
-                                  | 'beginner'
-                                  | 'intermediate'
-                                  | 'advanced'
+                                  'beginner' | 'intermediate' | 'advanced'
                               }
                             />
                             {levels.get(signup.experienceLevel as Level) ||
@@ -389,9 +387,7 @@ export default async function WorkshopDetailsPage({
                             <ExperienceLevelIcon
                               level={
                                 signup.experienceLevel as
-                                  | 'beginner'
-                                  | 'intermediate'
-                                  | 'advanced'
+                                  'beginner' | 'intermediate' | 'advanced'
                               }
                             />
                             {levels.get(signup.experienceLevel as Level) ||
