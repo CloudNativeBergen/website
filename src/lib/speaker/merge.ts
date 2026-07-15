@@ -190,12 +190,15 @@ export interface SurvivorFieldMerge {
 }
 
 /** Scalar/opaque fields the survivor keeps; the loser only fills gaps. */
+// NOTE: `consent` is deliberately NOT gap-filled. A GDPR consent record belongs
+// to the specific person/session that granted it; copying the loser's consent
+// onto the survivor would mis-attribute a consent artifact. Leave the survivor's
+// consent as-is (empty if they never granted one).
 const SCALAR_FILL_FIELDS = [
   'bio',
   'title',
   'links',
   'flags',
-  'consent',
   'image',
   'imageURL',
 ] as const
@@ -473,9 +476,21 @@ export async function mergeSpeakers(
       return { preview: plan.summary, committed: false, err: null }
     }
 
+    // Guard each referencing-doc repoint with the revision we read, so a
+    // concurrent edit to that doc's arrays (e.g. someone adds a co-speaker
+    // between our read and commit) makes the WHOLE transaction fail with a 409
+    // rather than silently clobbering their change with our stale full-array
+    // `.set()`. The admin simply retries the merge. Atomic + now isolated.
+    const revById = new Map(
+      referencingDocs.map((d) => [d._id as string, d._rev as string]),
+    )
     const transaction = clientWrite.transaction()
     for (const patch of plan.documentPatches) {
-      transaction.patch(patch.id, (p) => p.set(patch.set))
+      const rev = revById.get(patch.id)
+      transaction.patch(patch.id, (p) => {
+        const applied = p.set(patch.set)
+        return rev ? applied.ifRevisionId(rev) : applied
+      })
     }
     if (Object.keys(plan.survivorSet).length > 0) {
       transaction.patch(survivorId, (p) => p.set(plan.survivorSet))

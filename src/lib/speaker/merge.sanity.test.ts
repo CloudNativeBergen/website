@@ -7,22 +7,41 @@ const fetchMock = vi.fn()
 const commitMock = vi.fn().mockResolvedValue({ transactionId: 'tx-1' })
 const deleteMock = vi.fn()
 
-// Each `.patch(id, fn)` invokes `fn` with a fake patch builder whose `.set()`
-// records the argument, so tests can assert the exact ops in the transaction.
-const patchOps: Array<{ id: string; set: Record<string, unknown> }> = []
+// Ordered record of every op staged on the transaction, so tests can assert
+// not just WHAT was staged but the ORDER (delete must come last).
+const txOrder: Array<'patch' | 'delete'> = []
+
+// Each `.patch(id, fn)` invokes `fn` with a fake, chainable patch builder whose
+// `.set()`/`.ifRevisionId()` record their arguments, so tests can assert the
+// exact ops AND that each referencing-doc patch is revision-guarded.
+const patchOps: Array<{
+  id: string
+  set: Record<string, unknown>
+  rev?: string
+}> = []
 const patchMock = vi.fn(
   (
     id: string,
     fn: (p: { set: (o: Record<string, unknown>) => unknown }) => unknown,
   ) => {
-    const op = { id, set: {} as Record<string, unknown> }
-    fn({
+    const op = { id, set: {} as Record<string, unknown>, rev: undefined } as {
+      id: string
+      set: Record<string, unknown>
+      rev?: string
+    }
+    const builder = {
       set: (o: Record<string, unknown>) => {
         op.set = o
-        return {}
+        return builder
       },
-    })
+      ifRevisionId: (rev: string) => {
+        op.rev = rev
+        return builder
+      },
+    }
+    fn(builder)
     patchOps.push(op)
+    txOrder.push('patch')
     return transactionApi
   },
 )
@@ -33,6 +52,7 @@ const transactionApi = {
   delete: (id: string) => {
     deletedIds.push(id)
     deleteMock(id)
+    txOrder.push('delete')
     return transactionApi
   },
   commit: commitMock,
@@ -78,9 +98,23 @@ const referencingDocs = [
   {
     _id: 'talk-1',
     _type: 'talk',
+    _rev: 'rev-talk-1',
     speakers: [ref('other', 'k0'), ref(LOSER, 'k1')],
   },
-  { _id: 'conf-1', _type: 'conference', organizers: [ref(LOSER, 'k2')] },
+  {
+    _id: 'conf-1',
+    _type: 'conference',
+    _rev: 'rev-conf-1',
+    organizers: [ref(LOSER, 'k2')],
+  },
+  // A reference nested inside an object inside an array — the deep walk must
+  // still repoint it.
+  {
+    _id: 'review-1',
+    _type: 'review',
+    _rev: 'rev-review-1',
+    entries: [{ note: 'x', by: ref(LOSER) }],
+  },
 ]
 
 function routeFetch(query: string, params: Record<string, unknown> = {}) {
@@ -99,6 +133,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   patchOps.length = 0
   deletedIds.length = 0
+  txOrder.length = 0
   fetchMock.mockImplementation(routeFetch)
 })
 
@@ -116,7 +151,11 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(patchMock).not.toHaveBeenCalled()
     expect(commitMock).not.toHaveBeenCalled()
     expect(deletedIds).toEqual([])
-    expect(preview?.referenceRepointsByType).toEqual({ talk: 1, conference: 1 })
+    expect(preview?.referenceRepointsByType).toEqual({
+      talk: 1,
+      conference: 1,
+      review: 1,
+    })
   })
 
   it('commits repoint patches, the survivor patch, and deletes the loser LAST', async () => {
@@ -142,6 +181,12 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       { _type: 'reference', _ref: SURVIVOR, _key: 'k2' },
     ])
 
+    // Reference nested in an object inside an array is repointed too.
+    const reviewPatch = patchOps.find((p) => p.id === 'review-1')!
+    expect(reviewPatch.set.entries).toEqual([
+      { note: 'x', by: { _type: 'reference', _ref: SURVIVOR } },
+    ])
+
     // Survivor identity union patch.
     const survivorPatch = patchOps.find((p) => p.id === SURVIVOR)!
     expect(survivorPatch.set.providers).toEqual(['github:1', 'linkedin:2'])
@@ -150,9 +195,16 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       'ada.l@work.io',
     ])
 
-    // Loser deleted, and deletion happens after all patches were staged.
+    // Referencing-doc repoints are revision-guarded so a concurrent edit aborts
+    // the whole transaction instead of being clobbered.
+    expect(talkPatch.rev).toBeTruthy()
+    expect(confPatch.rev).toBeTruthy()
+
+    // Loser deleted, and deletion is the LAST op — after every patch was staged.
     expect(deletedIds).toEqual([LOSER])
     expect(deleteMock).toHaveBeenCalledWith(LOSER)
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
+    expect(txOrder.slice(0, -1).every((op) => op === 'patch')).toBe(true)
   })
 
   it('rejects a self-merge without any read/write', async () => {
