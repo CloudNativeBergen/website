@@ -314,6 +314,42 @@ describe('jwtSignInCallback — Phase 2 link consumption security', () => {
     )
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
   })
+
+  it('fails closed to the prior session when the initiating speaker cannot be loaded (never adopts the conflicting speaker)', async () => {
+    const intent = signLinkIntent({
+      speakerId: 'spk-X',
+      provider: 'github',
+      initiatorSub: 'sess-X',
+    })
+    currentJar = createJar({
+      [LINK_INTENT_COOKIE]: intent,
+      [SESSION_COOKIE]: 'PRIOR_X',
+    })
+    decodeMap.set('PRIOR_X', priorSession('spk-X', 'sess-X'))
+    attachProviderToSpeaker.mockResolvedValue({
+      speaker: { _id: 'spk-Z' },
+      status: 'already-linked-elsewhere',
+      err: null,
+    })
+    // X's document can no longer be loaded (deleted between mint and consume).
+    getSpeaker.mockResolvedValue({ speaker: {}, err: null })
+
+    const token = await jwtSignInCallback({
+      token: freshSignInToken(),
+      account: GITHUB,
+      trigger: 'signIn',
+    })
+
+    // Session is restored to X (the prior session) — NEVER switched to spk-Z —
+    // and the intent cookie is single-use deleted.
+    expect((token as JWT & { speaker?: { _id: string } }).speaker?._id).toBe(
+      'spk-X',
+    )
+    expect(
+      (token as JWT & { speaker?: { _id: string } }).speaker?._id,
+    ).not.toBe('spk-Z')
+    expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
+  })
 })
 
 describe('signOutHandler — clears link-flow state', () => {

@@ -239,6 +239,20 @@ export async function jwtSignInCallback({
           applySpeakerToToken(token, originX, priorAccount)
           return token
         }
+        // X's document could not be loaded (deleted/not found between mint and
+        // consumption). FAIL CLOSED: never fall through to the normal login path,
+        // which would adopt the conflicting speaker Z's identity. Restore the
+        // validated prior session (X); if there is none, keep the fresh token but
+        // do not run getOrCreateSpeaker.
+        if (prior) {
+          return prior
+        }
+        if (resultStore) resultStore.result = 'error'
+        console.error(
+          'Provider link already-linked-elsewhere but initiating speaker not found; keeping current session',
+          { speakerId: intent.speakerId },
+        )
+        return token
       }
 
       // Unexpected link failure — surface it and fall through to the normal

@@ -99,8 +99,8 @@ export function CFPProfilePage({
     [],
   )
 
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleProfileSubmit = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault()
     setSubmitError([])
     setSuccessMessage('')
 
@@ -161,7 +161,10 @@ export function CFPProfilePage({
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <form onSubmit={handleProfileSubmit} className="space-y-8">
+        {/* Not a <form>: LinkedProviders renders its own <form action> per
+            provider, and nesting forms is invalid HTML that breaks both the
+            profile save and the link buttons. Submit via the button below. */}
+        <div className="space-y-8">
           {linkResult === 'linked' && (
             <div
               role="status"
@@ -287,7 +290,8 @@ export function CFPProfilePage({
 
           <div className="flex justify-end border-t border-gray-200 pt-6 dark:border-gray-600">
             <button
-              type="submit"
+              type="button"
+              onClick={handleProfileSubmit}
               disabled={updateProfileMutation.isPending}
               className="font-space-grotesk inline-flex items-center rounded-lg bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue/90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus:outline-blue-500"
             >
@@ -301,7 +305,7 @@ export function CFPProfilePage({
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
