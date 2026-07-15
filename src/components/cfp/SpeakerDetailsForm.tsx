@@ -23,6 +23,9 @@ import {
   LinkInput,
 } from '../Form'
 
+// Derived purely from the module-level `genderOptions`; allocate once.
+const genderOptionsMap = new Map(genderOptions.map((g) => [g, g]))
+
 interface SpeakerDetailsFormProps {
   speaker: SpeakerInput
   setSpeaker: (speaker: SpeakerInput) => void
@@ -136,8 +139,6 @@ export function SpeakerDetailsForm({
     emails.map((email) => [email.email, email.email]),
   )
 
-  const genderOptionsMap = new Map(genderOptions.map((g) => [g, g]))
-
   function updateSpeakerFlag(flag: Flags, value: boolean) {
     if (value) {
       setSpeakerFlags([...speakerFlags, flag])
@@ -224,12 +225,14 @@ export function SpeakerDetailsForm({
       bio: speakerBio,
       flags: speakerFlags,
       links,
-      gender: speakerGender || undefined,
+      // Emit `null` (not `undefined`) when empty so the cleared value survives
+      // JSON serialization and is unset in Sanity by updateSpeaker.
+      gender: speakerGender || null,
       genderSelfDescribe:
         isSelfDescribe && speakerGenderSelfDescribe
           ? speakerGenderSelfDescribe
-          : undefined,
-      country: speakerCountry || undefined,
+          : null,
+      country: speakerCountry || null,
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -328,7 +331,8 @@ export function SpeakerDetailsForm({
             value={speakerGender}
             setValue={(value: string) => setSpeakerGender(value as Gender | '')}
             options={genderOptionsMap}
-            placeholder="Prefer not to say"
+            placeholder="Select…"
+            clearable
           />
           <HelpText>
             Optional. Collected only for aggregate diversity reporting and never

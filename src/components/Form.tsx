@@ -165,6 +165,7 @@ export function Dropdown({
   placeholder = 'Select an option',
   disabled,
   required,
+  clearable = false,
 }: {
   name: string
   label?: string
@@ -174,6 +175,7 @@ export function Dropdown({
   placeholder?: string
   disabled?: boolean
   required?: boolean
+  clearable?: boolean
 }) {
   return (
     <>
@@ -196,10 +198,14 @@ export function Dropdown({
           required={required}
           className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
         >
-          {!value && (
-            <option value="" disabled>
-              {placeholder}
-            </option>
+          {clearable ? (
+            <option value="">{placeholder}</option>
+          ) : (
+            !value && (
+              <option value="" disabled>
+                {placeholder}
+              </option>
+            )
           )}
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>

@@ -1,4 +1,8 @@
-import { Flags, genderOptions } from '../../src/lib/speaker/types'
+import {
+  Flags,
+  genderOptions,
+  genderPreferToSelfDescribe,
+} from '../../src/lib/speaker/types'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({
@@ -141,7 +145,7 @@ export default defineType({
       type: 'string',
       description:
         'Optional free-text value used when gender is "Prefer to self-describe".',
-      hidden: ({ parent }) => parent?.gender !== 'Prefer to self-describe',
+      hidden: ({ parent }) => parent?.gender !== genderPreferToSelfDescribe,
     }),
     defineField({
       name: 'country',

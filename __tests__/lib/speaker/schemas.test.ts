@@ -80,3 +80,61 @@ describe('Speaker gender and country fields', () => {
     expect(result.success).toBe(true)
   })
 })
+
+describe('genderSelfDescribe cross-field validation', () => {
+  it('rejects genderSelfDescribe when gender is not the self-describe preset', () => {
+    const result = SpeakerInputSchema.safeParse({
+      name: 'Alice',
+      gender: 'Woman',
+      genderSelfDescribe: 'Genderfluid',
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].path).toEqual(['genderSelfDescribe'])
+    }
+  })
+
+  it('rejects genderSelfDescribe when gender is absent', () => {
+    const result = SpeakerInputSchema.safeParse({
+      name: 'Alice',
+      genderSelfDescribe: 'Genderfluid',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('allows genderSelfDescribe with the self-describe preset', () => {
+    const result = SpeakerInputSchema.safeParse({
+      name: 'Alice',
+      gender: 'Prefer to self-describe',
+      genderSelfDescribe: 'Genderfluid',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('allows an empty genderSelfDescribe regardless of gender', () => {
+    const result = SpeakerInputSchema.safeParse({
+      name: 'Alice',
+      gender: 'Woman',
+      genderSelfDescribe: '',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('enforces the rule on the partial update schema', () => {
+    const result = SpeakerUpdateSchema.safeParse({
+      gender: 'Man',
+      genderSelfDescribe: 'Genderqueer',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('enforces the rule on the admin create schema', () => {
+    const result = SpeakerCreateSchema.safeParse({
+      name: 'Alice',
+      email: 'alice@example.com',
+      gender: 'Man',
+      genderSelfDescribe: 'Genderqueer',
+    })
+    expect(result.success).toBe(false)
+  })
+})

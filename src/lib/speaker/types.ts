@@ -53,9 +53,10 @@ interface SpeakerBase {
   image?: string
   links?: string[]
   flags?: Flags[]
-  gender?: Gender
-  genderSelfDescribe?: string
-  country?: string
+  // `null` explicitly clears a previously-set value on update (see updateSpeaker).
+  gender?: Gender | null
+  genderSelfDescribe?: string | null
+  country?: string | null
   consent?: SpeakerConsent
   galleryImages?: GalleryImageWithSpeakers[]
 }

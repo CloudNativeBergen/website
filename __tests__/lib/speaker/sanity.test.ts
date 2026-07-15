@@ -1,14 +1,15 @@
-const { mockCommit, mockSet, mockPatch, mockFetch, mockCreate } = vi.hoisted(
-  () => {
+const { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate } =
+  vi.hoisted(() => {
     const mockCommit = vi.fn().mockResolvedValue({})
+    const mockUnset = vi.fn()
     const mockSet = vi.fn()
-    mockSet.mockReturnValue({ commit: mockCommit })
+    mockSet.mockReturnValue({ commit: mockCommit, unset: mockUnset })
+    mockUnset.mockReturnValue({ commit: mockCommit })
     const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
     const mockFetch = vi.fn()
     const mockCreate = vi.fn()
-    return { mockCommit, mockSet, mockPatch, mockFetch, mockCreate }
-  },
-)
+    return { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate }
+  })
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -123,6 +124,47 @@ describe('updateSpeaker', () => {
 
     expect(mockSet).toHaveBeenCalledTimes(1)
     expect(mockSet).toHaveBeenCalledWith({ name: 'No Image' })
+  })
+
+  it('should unset clearable fields when they are cleared', async () => {
+    await updateSpeaker('speaker-1', {
+      name: 'Updated Name',
+      title: 'Engineer',
+      country: null,
+      gender: null,
+      genderSelfDescribe: '',
+      bio: '',
+    })
+
+    // Non-empty fields are still set; empty ones are removed from the set payload.
+    expect(mockSet).toHaveBeenCalledTimes(1)
+    expect(mockSet).toHaveBeenCalledWith({
+      name: 'Updated Name',
+      title: 'Engineer',
+    })
+
+    // Cleared fields are unset so the old value cannot persist in Sanity.
+    expect(mockUnset).toHaveBeenCalledTimes(1)
+    expect(mockUnset).toHaveBeenCalledWith([
+      'bio',
+      'gender',
+      'genderSelfDescribe',
+      'country',
+    ])
+    expect(mockCommit).toHaveBeenCalled()
+  })
+
+  it('should not call unset when no clearable field is empty', async () => {
+    await updateSpeaker('speaker-1', {
+      name: 'Updated Name',
+      country: 'Norway',
+    })
+
+    expect(mockSet).toHaveBeenCalledWith({
+      name: 'Updated Name',
+      country: 'Norway',
+    })
+    expect(mockUnset).not.toHaveBeenCalled()
   })
 
   it('should return error when patch fails', async () => {
