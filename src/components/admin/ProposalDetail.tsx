@@ -13,6 +13,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
 import {
   ProposalExisting,
+  Status,
   statuses,
   formats,
   levels,
@@ -191,6 +192,9 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
     speakers.some((speaker) =>
       speaker?.flags?.includes(Flags.requiresTravelFunding),
     ) || false
+  const withdrawnReason = proposal.withdrawnReason?.trim()
+  const showWithdrawnReason =
+    proposal.status === Status.withdrawn && !!withdrawnReason
 
   return (
     <div>
@@ -207,6 +211,22 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
       <div className="pt-4">
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
+            {showWithdrawnReason && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/40">
+                <div className="flex items-start gap-3">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                      Withdrawal reason
+                    </h2>
+                    <p className="mt-1 text-sm break-words whitespace-pre-wrap text-amber-700 dark:text-amber-300">
+                      {withdrawnReason}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <h2 className="mb-3 text-lg font-medium text-gray-900 dark:text-white">
                 Description
