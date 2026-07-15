@@ -9,6 +9,9 @@ import type { Resvg as ResvgType } from '@resvg/resvg-js'
  * below keeps any load failure contained to "generate the PDF without a logo".
  */
 function loadResvg(): typeof ResvgType {
+  // Deliberate lazy CommonJS require so a native-binary load failure surfaces
+  // here (inside the caller's try/catch) rather than at module import time.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   return (require('@resvg/resvg-js') as typeof import('@resvg/resvg-js')).Resvg
 }
 
