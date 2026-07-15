@@ -1,6 +1,7 @@
 import { SessionProvider } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import { auth } from '@/lib/auth'
+import { SessionRefreshOnRestore } from './SessionRefreshOnRestore'
 
 async function SessionLoader({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -34,7 +35,10 @@ async function SessionLoader({ children }: { children: React.ReactNode }) {
       : null
 
   return (
-    <SessionProvider session={sanitizedSession}>{children}</SessionProvider>
+    <SessionProvider session={sanitizedSession}>
+      <SessionRefreshOnRestore />
+      {children}
+    </SessionProvider>
   )
 }
 
