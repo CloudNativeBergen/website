@@ -87,6 +87,7 @@ export default async function SpeakerDashboard() {
           speakerId,
           conferenceId: conference._id,
           returnAll: false,
+          includeSchedule: true,
         }),
         getGalleryImages(
           {

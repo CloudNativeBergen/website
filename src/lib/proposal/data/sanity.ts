@@ -136,6 +136,7 @@ export async function getProposals({
   formats,
   statuses,
   includeCapacity = false,
+  includeSchedule = false,
 }: {
   speakerId?: string
   conferenceId?: string
@@ -145,6 +146,7 @@ export async function getProposals({
   formats?: string[]
   statuses?: Status[]
   includeCapacity?: boolean
+  includeSchedule?: boolean
 }): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
   let proposalsError = null
   let proposals: ProposalExisting[] = []
@@ -215,6 +217,22 @@ export async function getProposals({
         ? `,"signups": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"]),
     "waitlistCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"]),
     "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
+        : ''
+    }${
+      includeSchedule
+        ? `,"scheduleInfo": select(
+      (status == "accepted" || status == "confirmed") => {
+        "talkId": _id,
+        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ^._id in tracks[].talks[].talk._ref][0]
+      } {
+        "date": schedule.date,
+        "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
+        "timeSlot": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].talks[talk._ref == ^.talkId][0]{
+          startTime,
+          endTime
+        }
+      }
+    )`
         : ''
     }
   } | order(conference->startDate desc, _updatedAt desc)`

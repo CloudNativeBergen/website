@@ -10,6 +10,7 @@ import {
 } from '@/lib/proposal/types'
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { formatConferenceDateLong } from '@/lib/time'
 import { expect, within } from 'storybook/test'
 
 const mockSpeakers: Speaker[] = [
@@ -445,6 +446,105 @@ export const MultiSpeaker: Story = {
         story: 'Proposal with multiple speakers shows stacked avatars.',
       },
     },
+  },
+}
+
+export const ScheduledConfirmedTalk: Story = {
+  args: {
+    proposals: [
+      createMockProposal(
+        'talk-1',
+        'Building Scalable Microservices with Kubernetes',
+        Status.confirmed,
+        Format.presentation_45,
+        {
+          scheduleInfo: {
+            date: '2025-10-30',
+            trackTitle: 'Track 1 - Main Stage',
+            timeSlot: { startTime: '10:00', endTime: '10:45' },
+          },
+        },
+      ),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A confirmed talk with schedule information shows the date, time slot, and track/room.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.getByText(formatConferenceDateLong('2025-10-30')),
+    ).toBeInTheDocument()
+    expect(canvas.getByText('10:00 - 10:45')).toBeInTheDocument()
+    expect(canvas.getByText('Track 1 - Main Stage')).toBeInTheDocument()
+  },
+}
+
+export const AcceptedNotYetScheduled: Story = {
+  args: {
+    proposals: [
+      createMockProposal(
+        'talk-1',
+        'Accepted But Not Scheduled',
+        Status.accepted,
+        Format.presentation_45,
+      ),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'An accepted talk with no schedule information shows no schedule row and does not crash.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(
+      canvas.queryByText(/\d{2}:\d{2} - \d{2}:\d{2}/),
+    ).not.toBeInTheDocument()
+  },
+}
+
+export const NonApprovedHidesSchedule: Story = {
+  args: {
+    proposals: [
+      createMockProposal(
+        'talk-1',
+        'Submitted With Stray Schedule',
+        Status.submitted,
+        Format.presentation_45,
+        {
+          scheduleInfo: {
+            date: '2025-10-30',
+            trackTitle: 'Track 2',
+            timeSlot: { startTime: '13:00', endTime: '13:45' },
+          },
+        },
+      ),
+    ],
+    canEdit: true,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Non-approved proposals never show schedule info, even if the field is populated.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.queryByText('13:00 - 13:45')).not.toBeInTheDocument()
+    expect(canvas.queryByText('Track 2')).not.toBeInTheDocument()
   },
 }
 
