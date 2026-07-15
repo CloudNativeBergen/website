@@ -85,4 +85,7 @@ jobs:
         run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}"
 
       - name: Run migration
-        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}" --no-dry-run
+        # --no-confirm: the apply step otherwise prompts for confirmation,
+        # which fails in CI (non-interactive). The dry-run step above plus the
+        # dataset backup artifact are the safety gates.
+        run: pnpm sanity migration run "${{ inputs.migration }}" --project "$SANITY_STUDIO_PROJECT_ID" --dataset "${{ inputs.dataset }}" --no-dry-run --no-confirm
