@@ -112,6 +112,10 @@ export function ProposalActionModal({
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
 
+  const isWithdraw = action === Action.withdraw
+  // A withdrawal must always record a mandatory, non-empty reason (#212).
+  const withdrawReasonMissing = isWithdraw && !comment.trim()
+
   const actionIconType = useMemo(() => iconForAction(action), [action])
   const [iconBgColor, iconTextColor, buttonColor] = useMemo(
     () => colorForAction(action),
@@ -129,11 +133,16 @@ export function ProposalActionModal({
   })
 
   async function submitHandler() {
+    if (withdrawReasonMissing) {
+      setError('A reason is required to withdraw a proposal.')
+      return
+    }
     actionMutation.mutate({
       id: proposal._id,
       action,
       notify,
       comment,
+      reason: isWithdraw ? comment.trim() : undefined,
     })
   }
 
@@ -227,14 +236,21 @@ export function ProposalActionModal({
               <div className="mt-4">
                 <Textarea
                   name="action-comment"
-                  label="Comment"
+                  label={isWithdraw ? 'Reason for withdrawal' : 'Comment'}
                   rows={3}
                   value={comment}
                   setValue={setComment}
-                  placeholder="Add a comment..."
+                  placeholder={
+                    isWithdraw
+                      ? 'Why is this proposal being withdrawn?'
+                      : 'Add a comment...'
+                  }
+                  required={isWithdraw}
                 />
                 <HelpText>
-                  Your comment will be included in the email to the speaker.
+                  {isWithdraw
+                    ? 'A reason is required and will be recorded on the proposal.'
+                    : 'Your comment will be included in the email to the speaker.'}
                 </HelpText>
               </div>
             </div>
@@ -244,6 +260,22 @@ export function ProposalActionModal({
                 Are you sure you want to {action} the proposal{' '}
                 <span className="font-semibold">{proposal.title}</span>?
               </p>
+              {isWithdraw && (
+                <div className="mt-4 text-left">
+                  <Textarea
+                    name="action-reason"
+                    label="Reason for withdrawal"
+                    rows={3}
+                    value={comment}
+                    setValue={setComment}
+                    placeholder="Why is this proposal being withdrawn?"
+                    required
+                  />
+                  <HelpText>
+                    A reason is required and will be recorded on the proposal.
+                  </HelpText>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -251,10 +283,12 @@ export function ProposalActionModal({
       <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
         <button
           type="button"
-          disabled={actionMutation.isPending}
+          disabled={actionMutation.isPending || withdrawReasonMissing}
           className={clsx(
             buttonColor,
-            actionMutation.isPending ? 'cursor-not-allowed' : 'cursor-pointer',
+            actionMutation.isPending || withdrawReasonMissing
+              ? 'cursor-not-allowed opacity-50'
+              : 'cursor-pointer',
             'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
           )}
           onClick={() => submitHandler()}

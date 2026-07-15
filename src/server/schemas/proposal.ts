@@ -147,11 +147,38 @@ export const ProposalAdminUpdateSchema =
 
 // Proposal action schema
 // Used for validating proposal status change actions (submit, accept, reject, etc.)
+// `reason` captures the mandatory, free-text withdrawal reason (#212). It is
+// only required for the withdraw action; `requireWithdrawalReason` enforces that.
 export const ProposalActionSchema = z.object({
   action: z.nativeEnum(Action),
   notify: z.boolean().optional().default(true),
   comment: z.string().nullable().optional().transform(nullToUndefined),
+  reason: z.string().nullable().optional().transform(nullToUndefined),
 })
+
+/**
+ * A withdrawal must always record a non-empty, non-whitespace reason (#212).
+ * Exposed as a standalone refinement so it can be applied to the combined
+ * router input (which is built from `ProposalActionSchema.shape`) while keeping
+ * the base object's `.shape` available, and unit-tested in isolation.
+ */
+export function requireWithdrawalReason(
+  data: { action: Action; reason?: string },
+  ctx: z.RefinementCtx,
+) {
+  if (data.action === Action.withdraw && !data.reason?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'A reason is required to withdraw a proposal.',
+    })
+  }
+}
+
+// Convenience schema (base + withdrawal-reason rule) for validation/tests.
+export const ProposalActionInputSchema = ProposalActionSchema.superRefine(
+  requireWithdrawalReason,
+)
 
 // Co-speaker invitation schemas
 export const InvitationCreateSchema = z.object({

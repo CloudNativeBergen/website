@@ -131,6 +131,7 @@ export interface ProposalExisting extends Proposal {
   _createdAt: string
   _updatedAt: string
   status: Status
+  withdrawnReason?: string
   speakers?: Speaker[] | Reference[]
   scheduleInfo?: ScheduleInfo
   conference: Conference | Reference

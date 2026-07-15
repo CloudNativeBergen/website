@@ -1,7 +1,7 @@
 'use client'
 
 import { Conference } from '@/lib/conference/types'
-import { isCfpOpen } from '@/lib/conference/state'
+import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
 import { api } from '@/lib/trpc/client'
 import {
   Format,
@@ -221,12 +221,20 @@ export function ProposalForm({
     }
   }
 
+  const [withdrawReason, setWithdrawReason] = useState<string>('')
+
   const handleProposalAction = (action: Action) => {
     if (!currentProposalId) return
-    actionMutation.mutate({ id: currentProposalId, action })
+    actionMutation.mutate({
+      id: currentProposalId,
+      action,
+      reason: action === Action.withdraw ? withdrawReason.trim() : undefined,
+    })
   }
 
   const cfpOpen = isCfpOpen(conference)
+  // Speakers cannot self-withdraw within the pre-conference cutoff window (#251).
+  const withdrawalClosed = isWithdrawalCutoffActive(conference)
   const canUnsubmit =
     mode === 'user' &&
     currentProposalId &&
@@ -494,17 +502,23 @@ export function ProposalForm({
                 Unsubmit
               </button>
             )}
-            {canWithdraw && (
-              <button
-                type="button"
-                onClick={() => setConfirmAction(Action.withdraw)}
-                disabled={isMutating}
-                className="font-space-grotesk inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <XCircleIcon className="h-4 w-4" />
-                Withdraw
-              </button>
-            )}
+            {canWithdraw &&
+              (withdrawalClosed ? (
+                <p className="font-inter max-w-md text-sm text-amber-700 dark:text-amber-400">
+                  Withdrawals are closed within 14 days of the event. Please
+                  contact the organizers if you can no longer participate.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction(Action.withdraw)}
+                  disabled={isMutating}
+                  className="font-space-grotesk inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <XCircleIcon className="h-4 w-4" />
+                  Withdraw
+                </button>
+              ))}
           </div>
           <div className="flex items-center gap-x-4">
             <Link
@@ -547,17 +561,46 @@ export function ProposalForm({
       {confirmAction && confirmActionLabels[confirmAction] && (
         <ConfirmationModal
           isOpen={true}
-          onClose={() => setConfirmAction(null)}
+          onClose={() => {
+            setConfirmAction(null)
+            setWithdrawReason('')
+          }}
           onConfirm={() => {
             handleProposalAction(confirmAction)
             setConfirmAction(null)
+            setWithdrawReason('')
           }}
           title={confirmActionLabels[confirmAction]!.title}
           message={confirmActionLabels[confirmAction]!.message}
           confirmButtonText={confirmActionLabels[confirmAction]!.button}
           variant={confirmAction === Action.unsubmit ? 'warning' : 'danger'}
           isLoading={actionMutation.isPending}
-        />
+          confirmDisabled={
+            confirmAction === Action.withdraw && !withdrawReason.trim()
+          }
+        >
+          {confirmAction === Action.withdraw && (
+            <div>
+              <label
+                htmlFor="withdraw-reason"
+                className="font-inter block text-sm font-medium text-brand-slate-gray dark:text-gray-300"
+              >
+                Reason for withdrawal
+                <span className="text-red-600 dark:text-red-400"> *</span>
+              </label>
+              <textarea
+                id="withdraw-reason"
+                name="withdraw-reason"
+                required
+                rows={3}
+                value={withdrawReason}
+                onChange={(event) => setWithdrawReason(event.target.value)}
+                placeholder="Let the organizers know why you are withdrawing…"
+                className="font-inter mt-1 block w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm text-brand-slate-gray shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </div>
+          )}
+        </ConfirmationModal>
       )}
     </form>
   )

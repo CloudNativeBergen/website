@@ -101,6 +101,15 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'withdrawnReason',
+      title: 'Withdrawal reason',
+      type: 'text',
+      rows: 3,
+      readOnly: true,
+      description:
+        'Speaker-provided reason recorded when a proposal is withdrawn. Set automatically by the withdrawal flow.',
+    }),
+    defineField({
       name: 'speakers',
       title: 'Speakers',
       type: 'array',

@@ -6,6 +6,38 @@ import { Conference } from './types'
  */
 
 /**
+ * Number of days before the conference `startDate` after which speakers can no
+ * longer self-withdraw a proposal. Once inside this window a withdrawal is too
+ * disruptive to the program, so speakers must contact the organizers instead.
+ */
+export const WITHDRAWAL_CUTOFF_DAYS = 14
+
+/**
+ * Whether speaker self-withdrawal is closed because we are within
+ * `WITHDRAWAL_CUTOFF_DAYS` days of the conference `startDate` (or the
+ * conference has already started/ended).
+ *
+ * Fails OPEN: a missing or unparseable `startDate` returns `false` (withdrawal
+ * allowed) so a bad/absent date can never trap a speaker into a proposal they
+ * want to withdraw. Organizers are unaffected — this gate is only applied to
+ * speaker self-withdrawal in the mutation handler.
+ */
+export function isWithdrawalCutoffActive(
+  conference: Pick<Conference, 'startDate'>,
+  now: Date = new Date(),
+): boolean {
+  if (!conference.startDate) {
+    return false
+  }
+  const startDate = new Date(conference.startDate)
+  if (Number.isNaN(startDate.getTime())) {
+    return false
+  }
+  const cutoffMs = WITHDRAWAL_CUTOFF_DAYS * 24 * 60 * 60 * 1000
+  return startDate.getTime() - now.getTime() <= cutoffMs
+}
+
+/**
  * Check if the conference has ended (day after endDate has passed)
  */
 export function isConferenceOver(conference: Conference): boolean {

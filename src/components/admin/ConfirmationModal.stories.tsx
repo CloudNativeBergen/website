@@ -78,3 +78,41 @@ export const CustomButtons: Story = {
     variant: 'warning',
   },
 }
+
+export const WithdrawReasonRequired: Story = {
+  args: {
+    isOpen: true,
+    title: 'Withdraw proposal?',
+    message:
+      'This will withdraw your proposal from the conference. This action cannot be undone.',
+    confirmButtonText: 'Withdraw',
+    variant: 'danger',
+    // A mandatory reason keeps the confirm button disabled until it is filled in.
+    confirmDisabled: true,
+    children: (
+      <div>
+        <label
+          htmlFor="withdraw-reason"
+          className="font-inter block text-sm font-medium text-brand-slate-gray dark:text-gray-300"
+        >
+          Reason for withdrawal
+          <span className="text-red-600 dark:text-red-400"> *</span>
+        </label>
+        <textarea
+          id="withdraw-reason"
+          rows={3}
+          placeholder="Let the organizers know why you are withdrawing…"
+          className="font-inter mt-1 block w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm text-brand-slate-gray shadow-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+        />
+      </div>
+    ),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Withdrawal flow (#212): a mandatory reason is collected via the modal children, and the confirm button stays disabled until a reason is provided.',
+      },
+    },
+  },
+}
