@@ -8,6 +8,8 @@ import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import { EventJsonLd } from '@/components/seo/EventJsonLd'
+import { performersFromSchedules } from '@/lib/seo/eventJsonLd'
 
 export const metadata = {
   title: 'Program',
@@ -70,8 +72,15 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     )
   }
 
+  const performers = performersFromSchedules(conference.schedules)
+
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24 print:py-0">
+      <EventJsonLd
+        conference={conference}
+        domain={domain}
+        performers={performers}
+      />
       <DevTimeProvider />
       <DevTimeControl schedules={conference.schedules} />
       <BackgroundImage className="-top-40 -bottom-32 print:hidden" />
