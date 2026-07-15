@@ -2,6 +2,30 @@ import { Session } from 'next-auth'
 import { verifiedEmails as fetchGithubVerifiedEmails } from './github'
 import { ProfileEmail } from './types'
 import { normalizeEmail } from '../speaker/email'
+import { clientReadUncached } from '@/lib/sanity/client'
+
+/**
+ * The caller's persisted verified match-set (`speaker.knownEmails`). This field
+ * is only ever written from affirmatively-verified emails at login
+ * (`computeVerifiedEmails`), so membership here is proof of verified ownership —
+ * independent of, and authoritative over, the optimistic `verified` flag the
+ * picker uses. Returns [] when the id is missing or the read fails (fail-closed).
+ */
+async function getSpeakerKnownEmails(
+  speakerId: string | undefined,
+): Promise<string[]> {
+  if (!speakerId) return []
+  try {
+    const emails = await clientReadUncached.fetch<string[] | null>(
+      `*[_type == "speaker" && _id == $id][0].knownEmails`,
+      { id: speakerId },
+    )
+    return Array.isArray(emails) ? emails : []
+  } catch (error) {
+    console.error('Failed to read speaker knownEmails:', error)
+    return []
+  }
+}
 
 export function defaultEmails(session: Session): ProfileEmail[] {
   return [
@@ -26,9 +50,13 @@ export function defaultEmails(session: Session): ProfileEmail[] {
  * - GitHub: the verified set from the GitHub `/user/emails` API. On error or an
  *   empty response we fall back to the session primary, which GitHub only ever
  *   surfaces once verified.
- * - LinkedIn / other: the session primary. LinkedIn's primary was already gated
- *   through the affirmative `email_verified` check in the login path
- *   (`computeVerifiedEmails`) before the session was minted, so it is owned.
+ * - LinkedIn / other: the session primary (for the PICKER only — see below).
+ *
+ * NOTE: this powers the profile email PICKER (a UI convenience). It must NOT be
+ * the sole authority for `updateEmail` — the session is minted regardless of a
+ * LinkedIn `email_verified` claim, so the non-GitHub primary here is optimistic.
+ * The security-critical ownership check lives in {@link isEmailVerifiedForSession},
+ * which is authoritative and cross-checks the persisted verified match-set.
  */
 export async function getVerifiedProfileEmails(
   session: Session,
@@ -58,10 +86,21 @@ export async function getVerifiedProfileEmails(
 }
 
 /**
- * True when `email` is one the caller has provably verified with their login
- * provider. Used to authorize `speaker.updateEmail`: the requested display email
- * must be owned, because the display `email` is a login match key in
- * `getOrCreateSpeaker`. Comparison is normalized (case/whitespace-insensitive).
+ * Authoritative ownership check for `speaker.updateEmail`: the requested display
+ * email must be verified-owned by the caller, because the display `email` is a
+ * login match key in `getOrCreateSpeaker` — letting a caller set it to an
+ * address they don't own would reopen the cross-provider account-takeover.
+ *
+ * An email is owned iff EITHER:
+ *  - the caller signed in with GitHub and it's in their live GitHub-verified set
+ *    (which will also seed `knownEmails` on their next login), OR
+ *  - it's already in the caller's persisted `knownEmails` — the verified
+ *    match-set written only from affirmatively-verified logins.
+ *
+ * This deliberately does NOT blanket-trust the non-GitHub session primary the
+ * way {@link getVerifiedProfileEmails} does for the picker, keeping the guard
+ * consistent with the login-path `email_verified` check. Comparison is
+ * normalized (case/whitespace-insensitive).
  */
 export async function isEmailVerifiedForSession(
   session: Session,
@@ -69,6 +108,14 @@ export async function isEmailVerifiedForSession(
 ): Promise<boolean> {
   const requested = normalizeEmail(email)
   if (!requested) return false
-  const verified = await getVerifiedProfileEmails(session)
-  return verified.some((entry) => normalizeEmail(entry.email) === requested)
+
+  if (session.account?.provider === 'github') {
+    const verified = await getVerifiedProfileEmails(session)
+    if (verified.some((entry) => normalizeEmail(entry.email) === requested)) {
+      return true
+    }
+  }
+
+  const known = await getSpeakerKnownEmails(session.speaker?._id)
+  return known.some((entry) => normalizeEmail(entry) === requested)
 }
