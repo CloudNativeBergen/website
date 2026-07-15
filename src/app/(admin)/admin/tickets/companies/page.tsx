@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
+import { CompanyBreakdownTable } from './CompanyBreakdownTable'
 
 async function getTicketData(
   customerId: number,
@@ -310,69 +311,10 @@ export default async function CompaniesAdminPage() {
             className="rounded-lg bg-white p-12 shadow dark:bg-gray-900"
           />
         ) : (
-          <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Rank
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Company
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Attendees
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
-                      Orders
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                  {companyBreakdown.map((company, index) => (
-                    <tr
-                      key={company.normalizedName}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                        #{index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {company.originalName}
-                        </div>
-                        {company.normalizedName !==
-                          company.originalName.toLowerCase() && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Normalized: {company.normalizedName}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                            {company.attendeeCount}{' '}
-                            {company.attendeeCount === 1 ? 'ticket' : 'tickets'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                        {company.orderCount}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                Showing {companyBreakdown.length} companies with{' '}
-                {totalAttendees} total attendees (excluding speaker tickets)
-              </div>
-            </div>
-          </div>
+          <CompanyBreakdownTable
+            companies={companyBreakdown}
+            totalAttendees={totalAttendees}
+          />
         )}
       </div>
 
