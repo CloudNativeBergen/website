@@ -651,11 +651,18 @@ export const proposalRouter = router({
           )
 
         if (updateErr) {
+          // A failed ifRevisionID patch is a Sanity ClientError with
+          // statusCode 409 — key on that (reliable) rather than the message
+          // text, which isn't guaranteed to contain any specific token. Keep a
+          // message match only as a defensive fallback.
+          const conflictStatus =
+            (updateErr as { statusCode?: number }).statusCode === 409
           const isConcurrentConflict =
             action === Action.confirm &&
-            /revision|conflict|mismatch|409/i.test(
-              updateErr.message ?? String(updateErr),
-            )
+            (conflictStatus ||
+              /revision|conflict|mismatch|409/i.test(
+                updateErr.message ?? String(updateErr),
+              ))
 
           throw new TRPCError({
             code: isConcurrentConflict ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
