@@ -9,6 +9,7 @@ import {
 import {
   logContractStatusChange,
   logSignatureStatusChange,
+  promoteToClosedWonOnContract,
 } from '@/lib/sponsor-crm/activity'
 import { sanitizeSponsorName } from '@/lib/sponsor-crm/utils'
 import { getCurrentDateTime } from '@/lib/time'
@@ -183,6 +184,20 @@ export const signingRouter = router({
         )
       } catch (logError) {
         console.error('[signing] Failed to log signing activity:', logError)
+      }
+
+      // A signed contract advances the deal to Won (forward-only, tier-guarded).
+      try {
+        await promoteToClosedWonOnContract(
+          doc._id,
+          { status: doc.status, tier: doc.tier },
+          'signer',
+        )
+      } catch (promoteError) {
+        console.error(
+          '[signing] Failed to auto-promote pipeline to closed-won:',
+          promoteError,
+        )
       }
 
       // Send Slack notification (best-effort, non-critical)

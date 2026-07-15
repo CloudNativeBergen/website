@@ -2,6 +2,7 @@ import { clientReadUncached } from '@/lib/sanity/client'
 
 export interface SigningContractData {
   _id: string
+  status?: string
   signatureStatus: string
   signatureId: string
   signerEmail: string
@@ -38,6 +39,7 @@ export interface SigningContractData {
 
 const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId == $signingToken][0]{
   _id,
+  status,
   signatureStatus,
   signatureId,
   signerEmail,

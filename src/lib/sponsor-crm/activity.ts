@@ -2,6 +2,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { ActivityType, SponsorActivityInput } from './types'
 import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
+import { checkPipelineState, type SponsorState } from './state-machine'
 
 export async function createSponsorActivity(
   sponsorForConferenceId: string,
@@ -67,6 +68,95 @@ export async function logStageChange(
       timestamp: getCurrentDateTime(),
     },
   )
+}
+
+/**
+ * Pipeline stages a deal can be auto-advanced *from* when a contract is sent
+ * or signed. These are the pre-won, non-terminal stages; `closed-won` and
+ * `closed-lost` are deliberately excluded so promotion is forward-only.
+ */
+const EARLY_PIPELINE_STAGES: ReadonlyArray<string> = [
+  'prospect',
+  'contacted',
+  'negotiating',
+]
+
+export type PromotionResult = {
+  promoted: boolean
+  reason?: 'not-early-stage' | 'tier-missing'
+  error?: Error
+}
+
+/**
+ * The slice of a sponsor record the promotion helper reads. The tier arrives in
+ * different shapes at each call site (a dereferenced doc `{ _id, title, ... }`,
+ * a raw reference `{ _ref }`, or a partial `{ title }`) and only its presence
+ * matters to the tier guard, so it is accepted as `unknown`.
+ */
+export interface ContractPromotionSponsor {
+  status?: string | null
+  tier?: unknown
+}
+
+/**
+ * Forward-only pipeline promotion to `closed-won`, fired when a contract is
+ * sent or signed (issue #348). Monotonic and idempotent: it only advances a
+ * deal still resting in an early stage (prospect / contacted / negotiating).
+ * Records already `closed-won` or `closed-lost` are left untouched and never
+ * re-logged, so a re-send or a duplicate webhook can neither regress the
+ * pipeline nor spam the activity feed.
+ *
+ * The `closed-won` tier guard is enforced *before* promoting, so an automated
+ * caller (e.g. the Adobe Sign webhook) can never mint a tier-less `closed-won`
+ * — which would be silently hidden from the public site. When the tier is
+ * missing the promotion is skipped and a note is logged for the audit trail.
+ *
+ * Best-effort: failures are swallowed and returned in `error`, never thrown,
+ * so a promotion problem cannot fail the contract send/sign it rides along on.
+ */
+export async function promoteToClosedWonOnContract(
+  sponsorForConferenceId: string,
+  sponsor: ContractPromotionSponsor,
+  createdBy: string,
+): Promise<PromotionResult> {
+  const currentStatus = sponsor.status ?? 'prospect'
+
+  if (!EARLY_PIPELINE_STAGES.includes(currentStatus)) {
+    return { promoted: false, reason: 'not-early-stage' }
+  }
+
+  const guard = checkPipelineState('closed-won', {
+    tier: sponsor.tier as SponsorState['tier'],
+  })
+  if (!guard.ok) {
+    await createSponsorActivity(
+      sponsorForConferenceId,
+      'note',
+      'Auto-promotion to Won skipped: set a sponsor tier before this deal can be marked Won.',
+      createdBy,
+      { timestamp: getCurrentDateTime() },
+    )
+    return { promoted: false, reason: 'tier-missing' }
+  }
+
+  try {
+    await clientWrite
+      .patch(sponsorForConferenceId)
+      .set({ status: 'closed-won' })
+      .commit()
+  } catch (error) {
+    console.error('Failed to auto-promote sponsor to closed-won:', error)
+    return { promoted: false, error: error as Error }
+  }
+
+  await logStageChange(
+    sponsorForConferenceId,
+    currentStatus,
+    'closed-won',
+    createdBy,
+  )
+
+  return { promoted: true }
 }
 
 export async function logInvoiceStatusChange(
