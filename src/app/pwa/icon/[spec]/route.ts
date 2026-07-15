@@ -19,6 +19,8 @@
  * memoized via `'use cache'` (keyed by host + spec) and a long-lived
  * `Cache-Control` header lets the CDN keep it.
  */
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
@@ -47,6 +49,15 @@ async function renderCachedIconBase64(
   return png.toString('base64')
 }
 
+const CACHE_CONTROL =
+  'public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400'
+
+function pngResponse(buf: Buffer, cacheControl: string): Response {
+  return new Response(new Uint8Array(buf), {
+    headers: { 'Content-Type': 'image/png', 'Cache-Control': cacheControl },
+  })
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ spec: string }> },
@@ -54,19 +65,31 @@ export async function GET(
   const { spec: rawSpec } = await params
   const specKey = rawSpec.replace(/\.png$/i, '')
 
-  if (!ICON_SPECS[specKey]) {
+  // `Object.hasOwn` (not truthy indexing) so crafted keys like `constructor`
+  // or `__proto__` resolve to 404, never a prototype object.
+  if (!Object.hasOwn(ICON_SPECS, specKey)) {
     return new Response('Not found', { status: 404 })
   }
 
   const host = (await headers()).get('host') || 'localhost:3000'
-  const base64 = await renderCachedIconBase64(host, specKey)
-  const body = Buffer.from(base64, 'base64')
-
-  return new Response(new Uint8Array(body), {
-    headers: {
-      'Content-Type': 'image/png',
-      'Cache-Control':
-        'public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400',
-    },
-  })
+  try {
+    const base64 = await renderCachedIconBase64(host, specKey)
+    return pngResponse(Buffer.from(base64, 'base64'), CACHE_CONTROL)
+  } catch (error) {
+    // Ultimate fail-closed: rasterization is entirely unavailable (e.g. the
+    // native resvg binary failed to load). Serve the committed static PNG so an
+    // install NEVER receives a broken icon. Do NOT cache this fallback hard.
+    console.error('[pwa-icon] dynamic render failed; serving static fallback', {
+      specKey,
+      error,
+    })
+    const staticFile = ICON_SPECS[specKey].staticFile
+    if (!staticFile) return new Response('Not found', { status: 404 })
+    try {
+      const file = await readFile(join(process.cwd(), 'public', staticFile))
+      return pngResponse(file, 'public, max-age=300')
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  }
 }

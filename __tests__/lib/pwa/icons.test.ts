@@ -76,6 +76,28 @@ describe('renderIconPng', () => {
   })
 })
 
+describe('ICON_SPECS integrity', () => {
+  it('is prototype-safe — crafted keys resolve to undefined (no cached-500 bypass)', () => {
+    for (const key of [
+      'constructor',
+      '__proto__',
+      'toString',
+      'valueOf',
+      'hasOwnProperty',
+    ]) {
+      expect(ICON_SPECS[key]).toBeUndefined()
+      expect(Object.hasOwn(ICON_SPECS, key)).toBe(false)
+    }
+  })
+
+  it('every named spec declares a static fallback file (ultimate fail-closed)', () => {
+    for (const [key, spec] of Object.entries(ICON_SPECS)) {
+      expect(spec.staticFile, key).toBeTruthy()
+      expect(spec.staticFile).toMatch(/\.png$/)
+    }
+  })
+})
+
 describe('renderConferenceIconPng (fallback path)', () => {
   const spec = ICON_SPECS['192']
 

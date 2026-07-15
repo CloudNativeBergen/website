@@ -15,9 +15,21 @@
  *                  mark slightly more generous than maskable since iOS only
  *                  rounds the corners rather than applying an aggressive mask.
  */
-import { Resvg } from '@resvg/resvg-js'
+import type { Resvg as ResvgType } from '@resvg/resvg-js'
 import { sanitizeSvg } from '@/lib/svg'
 import { DEFAULT_LOGOMARK_SVG } from './default-mark'
+
+/**
+ * Lazily load the native `@resvg/resvg-js` binding. A static top-level import
+ * would throw at module-load time if the platform-specific `.node` binary can't
+ * be resolved (a serverless-bundling failure), which would take down the whole
+ * icon route with no fallback. Loading it inside the caller's try/catch keeps a
+ * load failure contained so the route can fall back to a committed static PNG.
+ */
+function loadResvg(): typeof ResvgType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return (require('@resvg/resvg-js') as typeof import('@resvg/resvg-js')).Resvg
+}
 
 /** Opaque background for maskable / apple icons. */
 export const ICON_BG_NAVY = '#0B1220'
@@ -27,16 +39,39 @@ export type IconVariant = 'any' | 'maskable' | 'apple'
 export interface IconSpec {
   size: number
   variant: IconVariant
+  /** Committed PNG under `public/` served as the ultimate fail-closed fallback
+   * (e.g. if the native resvg binary can't load at all). Present on the named
+   * `ICON_SPECS` entries; optional for ad-hoc specs (e.g. the generator). */
+  staticFile?: string
 }
 
-/** Named URL specs → concrete size/variant. Keep in sync with the manifest. */
-export const ICON_SPECS: Record<string, IconSpec> = {
-  '192': { size: 192, variant: 'any' },
-  '512': { size: 512, variant: 'any' },
-  '192-maskable': { size: 192, variant: 'maskable' },
-  '512-maskable': { size: 512, variant: 'maskable' },
-  'apple-touch': { size: 180, variant: 'apple' },
-}
+/**
+ * Named URL specs → concrete size/variant. Keep in sync with the manifest.
+ * `null`-prototype so a crafted spec key like `constructor`/`__proto__` can't
+ * pass an `in`/truthy guard (prototype pollution → cached 500).
+ */
+export const ICON_SPECS: Record<string, IconSpec> = Object.assign(
+  Object.create(null),
+  {
+    '192': { size: 192, variant: 'any', staticFile: 'icon-192.png' },
+    '512': { size: 512, variant: 'any', staticFile: 'icon-512.png' },
+    '192-maskable': {
+      size: 192,
+      variant: 'maskable',
+      staticFile: 'icon-192-maskable.png',
+    },
+    '512-maskable': {
+      size: 512,
+      variant: 'maskable',
+      staticFile: 'icon-512-maskable.png',
+    },
+    'apple-touch': {
+      size: 180,
+      variant: 'apple',
+      staticFile: 'apple-touch-icon.png',
+    },
+  },
+)
 
 interface VariantParams {
   /** Background fill, or `null` for a transparent canvas. */
@@ -134,6 +169,7 @@ export function composeIconSvg(markSvg: string, spec: IconSpec): string {
 /** Compose + rasterize a mark to a PNG buffer at the given spec. */
 export function renderIconPng(markSvg: string, spec: IconSpec): Buffer {
   const doc = composeIconSvg(markSvg, spec)
+  const Resvg = loadResvg()
   const resvg = new Resvg(doc, {
     fitTo: { mode: 'width', value: spec.size },
     background: 'rgba(0,0,0,0)',
