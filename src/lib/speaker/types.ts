@@ -35,14 +35,30 @@ interface SpeakerBase {
   slug?: string
   title?: string
   bio?: string
-  image?: string
   links?: string[]
   flags?: Flags[]
   consent?: SpeakerConsent
   galleryImages?: GalleryImageWithSpeakers[]
 }
 
-export type SpeakerInput = SpeakerBase
+/**
+ * Speaker data accepted by write paths (create / update).
+ *
+ * The `image` field is deliberately kept separate from the read-model
+ * {@link Speaker.image} because the two carry different values despite sharing
+ * the `string` type — this is the type ambiguity tracked in issue #353.
+ */
+export interface SpeakerInput extends SpeakerBase {
+  /**
+   * Write-side image value: a Sanity asset ID (e.g.
+   * `image-abc123-500x500-png`) produced by the image upload API when a new
+   * file is uploaded. `updateSpeaker()` only persists it when it matches the
+   * `image-` asset-ID shape; any other value (such as a resolved CDN URL
+   * round-tripped from a read model) is ignored. Forms should only include
+   * this field when a new image was actually uploaded.
+   */
+  image?: string
+}
 
 export interface Speaker extends SpeakerBase {
   _id: string
@@ -51,6 +67,20 @@ export interface Speaker extends SpeakerBase {
   _updatedAt: string
   email: string
   providers?: string[]
+  /**
+   * Read-side image value: a fully-resolved display URL projected by GROQ as
+   * `coalesce(image.asset->url, imageURL)`. It is either a Sanity CDN URL (from
+   * an uploaded image) or an external OAuth avatar URL (the {@link imageURL}
+   * fallback) — never a raw Sanity image object or a bare asset ID. Pass it
+   * through `speakerImageUrl()` for display transforms.
+   */
+  image?: string
+  /**
+   * Legacy OAuth provider avatar URL (GitHub / LinkedIn), stored on first
+   * sign-in by `getOrCreateSpeaker()`. Read queries do not project this field
+   * directly; it is the fallback source for the resolved {@link image} URL
+   * above.
+   */
   imageURL?: string
   isOrganizer?: boolean
 }
