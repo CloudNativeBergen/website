@@ -140,3 +140,19 @@ export const SpeakerSearchSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
   includeFeatured: z.boolean().optional().default(false),
 })
+
+/**
+ * Merge two duplicate speaker documents (identity Phase 3). `survivorId` is the
+ * canonical record kept (its slug/URL is preserved); `loserId` is folded in and
+ * deleted. A server-side guard rejects a self-merge, but we also block it here
+ * so the client can't even request it.
+ */
+export const SpeakerMergeSchema = z
+  .object({
+    survivorId: z.string().min(1, 'Survivor speaker id is required'),
+    loserId: z.string().min(1, 'Loser speaker id is required'),
+  })
+  .refine((data) => data.survivorId !== data.loserId, {
+    message: 'Cannot merge a speaker into itself',
+    path: ['loserId'],
+  })

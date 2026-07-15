@@ -11,9 +11,11 @@ import {
   SpeakerCreateSchema,
   SpeakerUpdateSchema,
   SpeakerSearchSchema,
+  SpeakerMergeSchema,
   EmailUpdateSchema,
   IdParamSchema,
 } from '@/server/schemas/speaker'
+import { mergeSpeakers, MergeValidationError } from '@/lib/speaker/merge'
 import {
   getSpeaker,
   updateSpeaker,
@@ -474,6 +476,60 @@ export const speakerRouter = router({
         })
       }
     }),
+
+    // Preview a duplicate-speaker merge (identity Phase 3). Read-only: computes
+    // exactly what the mutation would repoint/change WITHOUT writing anything so
+    // the organizer can review before confirming this destructive operation.
+    mergePreview: adminProcedure
+      .input(SpeakerMergeSchema)
+      .query(async ({ input, ctx }) => {
+        const { preview, err } = await mergeSpeakers({
+          survivorId: input.survivorId,
+          loserId: input.loserId,
+          actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
+          dryRun: true,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code:
+              err instanceof MergeValidationError
+                ? 'BAD_REQUEST'
+                : 'INTERNAL_SERVER_ERROR',
+            message: err.message || 'Failed to preview speaker merge',
+            cause: err,
+          })
+        }
+
+        return preview!
+      }),
+
+    // Merge a duplicate ("loser") speaker into the canonical ("survivor") one.
+    // Repoints every inbound reference, unions identity fields, then deletes the
+    // loser — all in one atomic Sanity transaction.
+    merge: adminProcedure
+      .input(SpeakerMergeSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { preview, committed, err } = await mergeSpeakers({
+          survivorId: input.survivorId,
+          loserId: input.loserId,
+          actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
+          dryRun: false,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code:
+              err instanceof MergeValidationError
+                ? 'BAD_REQUEST'
+                : 'INTERNAL_SERVER_ERROR',
+            message: err.message || 'Failed to merge speakers',
+            cause: err,
+          })
+        }
+
+        return { success: committed, preview: preview! }
+      }),
 
     // Update speaker email
     updateEmail: adminProcedure
