@@ -27,9 +27,7 @@ export function addImpersonateParam(
  */
 export function getImpersonateQueryString(
   searchParams:
-    | URLSearchParams
-    | { get: (key: string) => string | null }
-    | null,
+    URLSearchParams | { get: (key: string) => string | null } | null,
 ): string {
   if (!searchParams) return ''
   const impersonateId = searchParams.get('impersonate')

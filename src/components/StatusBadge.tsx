@@ -1,11 +1,5 @@
 export type BadgeColor =
-  | 'gray'
-  | 'red'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple'
-  | 'orange'
+  'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
 
 interface StatusBadgeProps {
   label: string

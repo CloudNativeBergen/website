@@ -63,12 +63,7 @@ function ActionButtons({
     label: string
     href: string
     variant:
-      | 'primary'
-      | 'secondary'
-      | 'success'
-      | 'warning'
-      | 'info'
-      | 'outline'
+      'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'outline'
     icon: React.ComponentType<{ className?: string }>
     event: string
   }> = [

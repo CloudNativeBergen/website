@@ -41,12 +41,10 @@ export async function fetchEventTickets(
       orderDateMap.set(orderUser.orderId, orderUser.createdAt)
     })
 
-    return tickets.map(
-      (ticket): EventTicket => ({
-        ...ticket,
-        order_date: orderDateMap.get(ticket.order_id) || '',
-      }),
-    )
+    return tickets.map((ticket): EventTicket => ({
+      ...ticket,
+      order_date: orderDateMap.get(ticket.order_id) || '',
+    }))
   } catch (error) {
     console.error('Failed to fetch event tickets with dates:', error)
     throw new Error(

@@ -2,13 +2,7 @@ import { ReactNode } from 'react'
 import clsx from 'clsx'
 
 export type StatColor =
-  | 'blue'
-  | 'green'
-  | 'purple'
-  | 'slate'
-  | 'indigo'
-  | 'yellow'
-  | 'red'
+  'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
 
 export interface StatCardProps {
   /** The main value to display */

@@ -212,8 +212,7 @@ export default defineMigration({
 
           // Handle nested ticket_targets fields
           const ticketTargets = (doc.ticket_targets ?? doc.ticketTargets) as
-            | Record<string, unknown>
-            | undefined
+            Record<string, unknown> | undefined
           if (ticketTargets && typeof ticketTargets === 'object') {
             ops.push(
               ...renameNestedFields(
@@ -225,8 +224,7 @@ export default defineMigration({
 
             // Handle milestones array nested target_percentage
             const milestones = ticketTargets.milestones as
-              | Array<Record<string, unknown>>
-              | undefined
+              Array<Record<string, unknown>> | undefined
             if (Array.isArray(milestones)) {
               milestones.forEach((milestone, i) => {
                 ops.push(
@@ -288,8 +286,7 @@ export default defineMigration({
 
           // Handle nested contact_persons[].is_primary
           const contactPersons = (doc.contact_persons ?? doc.contactPersons) as
-            | Array<Record<string, unknown>>
-            | undefined
+            Array<Record<string, unknown>> | undefined
           if (Array.isArray(contactPersons)) {
             contactPersons.forEach((person, i) => {
               ops.push(
@@ -332,8 +329,7 @@ export default defineMigration({
         case 'dashboardConfig': {
           // Handle widget array nested fields
           const widgets = doc.widgets as
-            | Array<Record<string, unknown>>
-            | undefined
+            Array<Record<string, unknown>> | undefined
           if (Array.isArray(widgets)) {
             widgets.forEach((widget, i) => {
               ops.push(

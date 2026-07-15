@@ -217,11 +217,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
             return updateInvoiceStatus.mutateAsync({
               id: sponsor._id,
               newStatus: targetColumnKey as
-                | 'not-sent'
-                | 'sent'
-                | 'paid'
-                | 'overdue'
-                | 'cancelled',
+                'not-sent' | 'sent' | 'paid' | 'overdue' | 'cancelled',
             })
           case 'contract':
             return updateContractStatus.mutateAsync({
@@ -271,11 +267,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
             return updateInvoiceStatus.mutateAsync({
               id: sponsor._id,
               newStatus: targetColumnKey as
-                | 'not-sent'
-                | 'sent'
-                | 'paid'
-                | 'overdue'
-                | 'cancelled',
+                'not-sent' | 'sent' | 'paid' | 'overdue' | 'cancelled',
             })
           case 'contract':
             return updateContractStatus.mutateAsync({

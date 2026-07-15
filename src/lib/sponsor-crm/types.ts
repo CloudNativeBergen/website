@@ -1,18 +1,10 @@
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
 
 export type SponsorStatus =
-  | 'prospect'
-  | 'contacted'
-  | 'negotiating'
-  | 'closed-won'
-  | 'closed-lost'
+  'prospect' | 'contacted' | 'negotiating' | 'closed-won' | 'closed-lost'
 
 export type InvoiceStatus =
-  | 'not-sent'
-  | 'sent'
-  | 'paid'
-  | 'overdue'
-  | 'cancelled'
+  'not-sent' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 
 export type ContractStatus =
   | 'none'
@@ -22,11 +14,7 @@ export type ContractStatus =
   | 'contract-signed'
 
 export type SignatureStatus =
-  | 'not-started'
-  | 'pending'
-  | 'signed'
-  | 'rejected'
-  | 'expired'
+  'not-started' | 'pending' | 'signed' | 'rejected' | 'expired'
 
 export type ActivityType =
   | 'stage_change'

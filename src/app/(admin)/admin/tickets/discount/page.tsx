@@ -67,8 +67,7 @@ export default async function DiscountCodesAdminPage() {
           title: tierTitle,
           tagline: sponsorData.tier?.tagline || '',
           tierType: (sponsorData.tier?.tierType || 'standard') as
-            | 'standard'
-            | 'special',
+            'standard' | 'special',
         },
         ticketEntitlement,
       }

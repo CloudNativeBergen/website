@@ -2,13 +2,7 @@ import clsx from 'clsx'
 
 type AdminButtonVariant = 'primary' | 'secondary' | 'ghost'
 type AdminButtonColor =
-  | 'indigo'
-  | 'blue'
-  | 'green'
-  | 'orange'
-  | 'red'
-  | 'purple'
-  | 'yellow'
+  'indigo' | 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow'
 type AdminButtonSize = 'xs' | 'sm' | 'md'
 
 interface AdminButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

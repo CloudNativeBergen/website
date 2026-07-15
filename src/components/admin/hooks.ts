@@ -65,12 +65,7 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
         ...filters,
         [filterType]: (() => {
           const currentValues = filters[filterType] as (
-            | Status
-            | Format
-            | Level
-            | Language
-            | Audience
-            | Flags
+            Status | Format | Level | Language | Audience | Flags
           )[]
           return currentValues.includes(value)
             ? currentValues.filter((v) => v !== value)

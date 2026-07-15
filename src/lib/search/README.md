@@ -133,11 +133,7 @@ export class MyNewSearchProvider implements SearchProvider {
 
 ```typescript
 export type SearchCategory =
-  | 'pages'
-  | 'proposals'
-  | 'speakers'
-  | 'sponsors'
-  | 'myCategory' // Add your new category
+  'pages' | 'proposals' | 'speakers' | 'sponsors' | 'myCategory' // Add your new category
 // ...
 ```
 
@@ -154,9 +150,7 @@ const providers = useMemo<SearchProvider[]>(
       new MyNewSearchProvider(), // Add your provider
     ]
   },
-  [
-    /* dependencies */
-  ],
+  [/* dependencies */],
 )
 ```
 
