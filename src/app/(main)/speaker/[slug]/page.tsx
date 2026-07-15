@@ -90,7 +90,9 @@ export async function generateMetadata({ params }: Props) {
       canonical: canonicalUrl(
         conference,
         domain,
-        `/speaker/${resolvedParams.slug}`,
+        // Use the speaker's own slug (not the raw request param) so slug
+        // variants all canonicalize to one URL.
+        `/speaker/${speaker.slug ?? decodedSlug}`,
       ),
     },
     openGraph: {
@@ -144,7 +146,12 @@ async function CachedSpeakerContent({
     )
   }
 
-  const speakerUrl = canonicalUrl(conference, domain, `/speaker/${slug}`)
+  const speakerUrl = canonicalUrl(
+    conference,
+    domain,
+    // Canonicalize on the speaker's own slug, not the request param.
+    `/speaker/${speaker.slug ?? slug}`,
+  )
   const speakerImage =
     speaker.image && typeof speaker.image === 'string'
       ? speakerImageUrl(speaker.image)
