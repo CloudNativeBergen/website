@@ -523,6 +523,7 @@ export async function updateProposalStatus(
   proposalId: string,
   status: Status,
   withdrawnReason?: string,
+  ifRevisionId?: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
@@ -536,7 +537,15 @@ export async function updateProposalStatus(
   }
 
   try {
-    const patch = clientWrite.patch(proposalId).set(fields)
+    // When a revision is supplied, gate the write on it so two concurrent
+    // transitions can't both succeed (optimistic concurrency). Sanity rejects
+    // the patch with a 409 if the document moved on since it was read, which
+    // the caller surfaces as an error instead of a duplicate status change.
+    const patch = ifRevisionId
+      ? clientWrite.patch(proposalId, { ifRevisionID: ifRevisionId })
+      : clientWrite.patch(proposalId)
+
+    patch.set(fields)
     // Any status change that isn't a withdrawal-with-reason must clear a
     // previous reason so it can't misrepresent a now-active proposal if a
     // transition out of `withdrawn` is ever added.
@@ -549,6 +558,31 @@ export async function updateProposalStatus(
   }
 
   return { proposal: updatedProposal, err }
+}
+
+/**
+ * Records that a confirmed speaker's complimentary ticket email was
+ * successfully delivered. Appended additively so the marker survives alongside
+ * any existing entries; the caller writes this only after a successful send so
+ * that a coupon created without a delivered email remains re-emailable.
+ */
+export async function recordSpeakerTicketEmailed(
+  proposalId: string,
+  speakerId: string,
+  code: string,
+): Promise<void> {
+  await clientWrite
+    .patch(proposalId)
+    .setIfMissing({ issuedSpeakerTickets: [] })
+    .append('issuedSpeakerTickets', [
+      {
+        _key: `speaker-ticket-${speakerId}`,
+        speakerId,
+        code,
+        emailedAt: new Date().toISOString(),
+      },
+    ])
+    .commit()
 }
 
 export async function createProposal(

@@ -25,14 +25,20 @@ vi.mock('@/lib/speaker/ticket-email', () => ({
   sendSpeakerTicketEmail: vi.fn(),
 }))
 
+vi.mock('@/lib/proposal/data/sanity', () => ({
+  recordSpeakerTicketEmailed: vi.fn(),
+}))
+
 import { checkinGraphQLClient } from '@/lib/tickets/graphql-client'
 import { getEventDiscounts, createEventDiscount } from '@/lib/discounts/api'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
+import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
 
 const mockedIsConfigured = vi.mocked(checkinGraphQLClient.isConfigured)
 const mockedGetEventDiscounts = vi.mocked(getEventDiscounts)
 const mockedCreateEventDiscount = vi.mocked(createEventDiscount)
 const mockedSendEmail = vi.mocked(sendSpeakerTicketEmail)
+const mockedRecordEmailed = vi.mocked(recordSpeakerTicketEmailed)
 
 function makeSpeaker(overrides: Partial<Speaker> = {}): Speaker {
   return {
@@ -74,6 +80,7 @@ beforeEach(() => {
   mockedCreateEventDiscount.mockResolvedValue({} as any)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockedSendEmail.mockResolvedValue({} as any)
+  mockedRecordEmailed.mockResolvedValue(undefined)
 })
 
 describe('handleSpeakerTicket', () => {
@@ -100,6 +107,14 @@ describe('handleSpeakerTicket', () => {
         registrationUrl: 'https://2026.cloudnativedays.no',
       }),
     )
+
+    // Delivery marker is written only after a successful send.
+    expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
+    expect(mockedRecordEmailed).toHaveBeenCalledWith(
+      'proposal-1',
+      speaker._id,
+      expectedCode,
+    )
   })
 
   it('issues a code for each speaker on the proposal', async () => {
@@ -114,9 +129,46 @@ describe('handleSpeakerTicket', () => {
     expect(mockedSendEmail).toHaveBeenCalledTimes(2)
   })
 
-  it('is idempotent: does not re-issue when the code already exists', async () => {
+  it('is idempotent: skips entirely when the speaker was already emailed', async () => {
     const speaker = makeSpeaker()
     const existingCode = speakerTicketCode(speaker._id)
+    // Both the coupon exists AND a delivery marker was recorded.
+    mockedGetEventDiscounts.mockResolvedValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      discounts: [{ triggerValue: existingCode } as any],
+      ticketTypes: [],
+    })
+
+    await handleSpeakerTicket(
+      makeEvent(
+        {
+          proposal: {
+            _id: 'proposal-1',
+            title: 'A great talk',
+            issuedSpeakerTickets: [
+              {
+                speakerId: speaker._id,
+                code: existingCode,
+                emailedAt: '2026-01-01T00:00:00Z',
+              },
+            ],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        },
+        [speaker],
+      ),
+    )
+
+    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockedSendEmail).not.toHaveBeenCalled()
+    expect(mockedRecordEmailed).not.toHaveBeenCalled()
+  })
+
+  it('resends the email without re-creating the coupon when it exists but was never emailed', async () => {
+    const speaker = makeSpeaker()
+    const existingCode = speakerTicketCode(speaker._id)
+    // Coupon exists (previous run created it) but there is NO delivery marker,
+    // meaning the earlier email never went out. Recovery = resend, no dup coupon.
     mockedGetEventDiscounts.mockResolvedValue({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       discounts: [{ triggerValue: existingCode } as any],
@@ -126,7 +178,38 @@ describe('handleSpeakerTicket', () => {
     await handleSpeakerTicket(makeEvent({}, [speaker]))
 
     expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
-    expect(mockedSendEmail).not.toHaveBeenCalled()
+    expect(mockedSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockedRecordEmailed).toHaveBeenCalledWith(
+      'proposal-1',
+      speaker._id,
+      existingCode,
+    )
+  })
+
+  it('does not record a delivery marker and stays recoverable when the email fails after coupon creation', async () => {
+    const speaker = makeSpeaker()
+    mockedSendEmail.mockRejectedValue(new Error('resend down'))
+
+    await expect(
+      handleSpeakerTicket(makeEvent({}, [speaker])),
+    ).resolves.toBeUndefined()
+
+    // Coupon was created, but because the email failed we must NOT mark the
+    // speaker as done — a re-trigger has to be able to resend.
+    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(1)
+    expect(mockedRecordEmailed).not.toHaveBeenCalled()
+  })
+
+  it('still succeeds (email delivered) even if recording the marker fails', async () => {
+    const speaker = makeSpeaker()
+    mockedRecordEmailed.mockRejectedValue(new Error('sanity write failed'))
+
+    await expect(
+      handleSpeakerTicket(makeEvent({}, [speaker])),
+    ).resolves.toBeUndefined()
+
+    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(1)
+    expect(mockedSendEmail).toHaveBeenCalledTimes(1)
   })
 
   it('no-ops (no lookups) when checkin is not configured', async () => {
