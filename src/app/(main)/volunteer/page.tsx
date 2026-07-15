@@ -7,10 +7,15 @@ import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata: Metadata = {
-  title: 'Volunteer | Cloud Native Days Norway',
-  description: 'Join our volunteer team and help make the conference a success',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Volunteer | Cloud Native Days Norway',
+    description:
+      'Join our volunteer team and help make the conference a success',
+    alternates: await canonicalAlternates('/volunteer'),
+  }
 }
 
 async function CachedVolunteerContent({ domain }: { domain: string }) {

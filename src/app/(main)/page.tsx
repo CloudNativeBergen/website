@@ -29,6 +29,7 @@ import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 import { EventJsonLd } from '@/components/seo/EventJsonLd'
+import { canonicalUrl } from '@/lib/seo/canonical'
 
 function truncateDescription(text: string, maxLength = 160): string {
   const trimmed = text.trim()
@@ -44,8 +45,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const { conference, error } = await getConferenceForDomain(domain)
 
+  const canonical = canonicalUrl(conference, domain, '/')
+
   if (error || !conference?.title) {
-    return { twitter: { card: 'summary_large_image' } }
+    return {
+      alternates: { canonical },
+      twitter: { card: 'summary_large_image' },
+    }
   }
 
   const dates = formatDatesSafe(conference.startDate, conference.endDate)
@@ -65,6 +71,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { absolute: title },
     ...(description && { description }),
+    alternates: { canonical },
     openGraph: {
       title,
       ...(description && { description }),

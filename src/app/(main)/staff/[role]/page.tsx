@@ -1,7 +1,20 @@
 import Image from 'next/image'
 import { cacheLife, cacheTag } from 'next/cache'
+import type { Metadata } from 'next'
 import { getStaffMembers } from '@/lib/staff/sanity'
 import { Container } from '@/components/Container'
+import { canonicalAlternates } from '@/lib/seo/canonical'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ role: string }>
+}): Promise<Metadata> {
+  const { role } = await params
+  return {
+    alternates: await canonicalAlternates(`/staff/${role}`),
+  }
+}
 
 async function CachedStaffContent({ role }: { role: string }) {
   'use cache'

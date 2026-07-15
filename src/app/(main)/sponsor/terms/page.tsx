@@ -6,11 +6,16 @@ import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Sponsorship Terms & Conditions - Cloud Native Days Norway',
-  description:
-    'General terms and conditions for sponsorship of Cloud Native Days Norway',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Sponsorship Terms & Conditions - Cloud Native Days Norway',
+    description:
+      'General terms and conditions for sponsorship of Cloud Native Days Norway',
+    alternates: await canonicalAlternates('/sponsor/terms'),
+  }
 }
 
 async function CachedTermsContent({ domain }: { domain: string }) {

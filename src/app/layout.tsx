@@ -15,6 +15,8 @@ import { headers } from 'next/headers'
 import { Suspense } from 'react'
 
 import '@/styles/tailwind.css'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
@@ -62,8 +64,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers()
   const host = headersList.get('host') || 'localhost:3000'
 
-  const protocol = host.includes('localhost') ? 'http' : 'https'
-  const metadataBase = new URL(`${protocol}://${host}`)
+  // Normalize the metadata origin to the resolved edition's canonical
+  // production host (its primary `domains` entry) so OpenGraph and canonical
+  // URLs point at the real domain even when served from a preview or apex
+  // host. When no conference resolves (e.g. localhost), this falls back to the
+  // request host, keeping local development correct.
+  const { conference } = await getConferenceForDomain(host)
+  const metadataBase = new URL(canonicalOrigin(conference, host))
 
   return {
     metadataBase,

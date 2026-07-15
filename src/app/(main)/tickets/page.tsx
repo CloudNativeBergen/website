@@ -37,6 +37,8 @@ import { headers } from 'next/headers'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
 import type { ElementType } from 'react'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
 const INCLUSION_ICONS: Record<string, ElementType> = {
   MicrophoneIcon,
@@ -61,12 +63,15 @@ const INCLUSION_ICONS: Record<string, ElementType> = {
   CheckBadgeIcon,
 }
 
-export const metadata = {
-  title: 'Tickets - Cloud Native Days Norway',
-  description: 'Get your tickets for Cloud Native Days Norway conference',
-  twitter: {
-    card: 'summary_large_image',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Tickets - Cloud Native Days Norway',
+    description: 'Get your tickets for Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/tickets'),
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
 }
 
 function DynamicIcon({
