@@ -6,14 +6,19 @@ import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Become a Sponsor - Cloud Native Days Norway',
-  description:
-    'Sponsorship opportunities for Cloud Native Days Norway conference',
-  twitter: {
-    card: 'summary_large_image',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Become a Sponsor - Cloud Native Days Norway',
+    description:
+      'Sponsorship opportunities for Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/sponsor'),
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
 }
 
 async function CachedSponsorContent({ domain }: { domain: string }) {

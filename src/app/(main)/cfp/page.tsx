@@ -13,14 +13,19 @@ import clsx from 'clsx'
 import Link from 'next/link'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Call for Presentations - Cloud Native Days Norway',
-  description:
-    'Submit your talk proposal for Cloud Native Days Norway conference',
-  twitter: {
-    card: 'summary_large_image',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Call for Presentations - Cloud Native Days Norway',
+    description:
+      'Submit your talk proposal for Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/cfp'),
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
 }
 
 async function CachedCFPContent({ domain }: { domain: string }) {

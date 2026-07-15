@@ -18,11 +18,16 @@ import Link from 'next/link'
 import { ContentCard } from '@/components/ContentCard'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Terms of Service - Cloud Native Days',
-  description:
-    'Terms of Service for Cloud Native Days conference and workshop services',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Terms of Service - Cloud Native Days',
+    description:
+      'Terms of Service for Cloud Native Days conference and workshop services',
+    alternates: await canonicalAlternates('/terms'),
+  }
 }
 
 async function CachedTermsContent({ domain }: { domain: string }) {

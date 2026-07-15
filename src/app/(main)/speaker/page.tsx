@@ -6,6 +6,20 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
+import { canonicalAlternates, canonicalUrl } from '@/lib/seo/canonical'
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Speakers',
+    description: 'Meet the speakers sharing their cloud native expertise.',
+    alternates: await canonicalAlternates('/speaker'),
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
+}
 
 async function CachedSpeakersContent({ domain }: { domain: string }) {
   'use cache'
@@ -26,6 +40,15 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
 
   return (
     <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', url: canonicalUrl(conference, domain, '/') },
+          {
+            name: 'Speakers',
+            url: canonicalUrl(conference, domain, '/speaker'),
+          },
+        ]}
+      />
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">

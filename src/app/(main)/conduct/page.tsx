@@ -4,11 +4,16 @@ import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Code of Conduct - Cloud Native Days Norway',
-  description:
-    'Community Code of Conduct for Cloud Native Days Norway events and activities.',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Code of Conduct - Cloud Native Days Norway',
+    description:
+      'Community Code of Conduct for Cloud Native Days Norway events and activities.',
+    alternates: await canonicalAlternates('/conduct'),
+  }
 }
 
 async function CachedConductContent({ domain }: { domain: string }) {

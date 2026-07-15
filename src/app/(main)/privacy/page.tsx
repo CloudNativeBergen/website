@@ -38,11 +38,16 @@ import {
 } from '@heroicons/react/24/outline'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Privacy Policy - Cloud Native Days Norway',
-  description:
-    'Privacy policy and data protection information for Cloud Native Days Norway conference',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Privacy Policy - Cloud Native Days Norway',
+    description:
+      'Privacy policy and data protection information for Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/privacy'),
+  }
 }
 
 async function CachedPrivacyContent({ domain }: { domain: string }) {
