@@ -41,7 +41,7 @@ export function SpeakerImageModal({
         </div>
         <button
           type="button"
-          className="shrink-0 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+          className="shrink-0 rounded text-gray-400 hover:text-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-gray-300"
           onClick={onClose}
           aria-label="Close"
         >

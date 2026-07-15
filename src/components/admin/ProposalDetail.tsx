@@ -31,7 +31,7 @@ import { RatingDisplay } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
-import { SpeakerImageModal } from '@/components/admin/SpeakerImageModal'
+import { SpeakerImageModal } from '@/components/admin'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
