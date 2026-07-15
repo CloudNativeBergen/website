@@ -5,15 +5,47 @@ import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
+import {
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+} from '@heroicons/react/24/outline'
 import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
+import { LinkedProviders } from './LinkedProviders'
+import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
+
+const PROVIDER_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  linkedin: 'LinkedIn',
+}
+
+/** Human-readable list of the providers currently managing this profile. */
+function describeProviders(providers?: string[]): string {
+  const names = Array.from(
+    new Set(
+      (providers ?? [])
+        .map((entry) => PROVIDER_LABELS[entry.split(':')[0]])
+        .filter((name): name is string => Boolean(name)),
+    ),
+  )
+  if (names.length === 0) return 'Managed by your sign-in provider'
+  if (names.length === 1) return `Managed by ${names[0]}`
+  return `Managed by ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
 
 interface CFPProfilePageProps {
   initialSpeaker: Speaker
   conferenceId?: string
+  /** Provider the user is currently signed in with (`session.account.provider`). */
+  currentProvider?: string
+  /** Outcome of a just-completed provider link, from `?linkResult=`. */
+  linkResult?: string
 }
 
-export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
+export function CFPProfilePage({
+  initialSpeaker,
+  currentProvider,
+  linkResult,
+}: CFPProfilePageProps) {
   const {
     data: profile,
     error: profileError,
@@ -130,6 +162,58 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
 
       <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <form onSubmit={handleProfileSubmit} className="space-y-8">
+          {linkResult === 'linked' && (
+            <div
+              role="status"
+              className="rounded-lg bg-brand-fresh-green/10 p-4 ring-1 ring-brand-fresh-green/20 dark:bg-green-900/20 dark:ring-green-500/30"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircleIcon
+                  className="h-5 w-5 text-brand-fresh-green dark:text-green-400"
+                  aria-hidden="true"
+                />
+                <p className="font-inter text-sm font-medium text-brand-fresh-green dark:text-green-400">
+                  Sign-in method linked. You can now use it to reach this
+                  profile.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {linkResult === 'already-linked' && (
+            <div
+              role="alert"
+              className="rounded-lg bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-900/20 dark:ring-amber-500/30"
+            >
+              <div className="flex">
+                <div className="shrink-0">
+                  <ExclamationCircleIcon
+                    className="h-5 w-5 text-amber-500 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-3">
+                  <p className="font-inter text-sm text-amber-800 dark:text-amber-200">
+                    That account is already linked to a different speaker
+                    profile. To combine the two profiles, please contact the
+                    organizers &mdash; we did not change either profile.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {linkResult === 'error' && (
+            <div
+              role="alert"
+              className="rounded-lg bg-red-50 p-4 ring-1 ring-red-200 dark:bg-red-900/20 dark:ring-red-500/30"
+            >
+              <p className="font-inter text-sm text-red-800 dark:text-red-200">
+                We couldn&apos;t link that sign-in method. Please try again.
+              </p>
+            </div>
+          )}
+
           {successMessage && (
             <div className="rounded-lg bg-brand-fresh-green/10 p-4 ring-1 ring-brand-fresh-green/20 dark:bg-green-900/20 dark:ring-green-500/30">
               <p className="font-inter text-sm font-medium text-brand-fresh-green dark:text-green-400">
@@ -176,9 +260,17 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
                 readOnly
               />
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Managed by your OAuth provider
+                {describeProviders(speaker.providers)}
               </span>
             </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
+            <LinkedProviders
+              providers={speaker.providers}
+              currentProvider={currentProvider}
+              onLinkAction={startProviderLink}
+            />
           </div>
 
           <SpeakerDetailsForm

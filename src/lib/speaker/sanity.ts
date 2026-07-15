@@ -388,6 +388,97 @@ export async function getOrCreateSpeaker(
   }
 }
 
+/** Outcome of an explicit self-service provider link. */
+export type ProviderLinkStatus = 'linked' | 'already-linked-elsewhere'
+
+/**
+ * Explicitly attach a just-authenticated provider account to an EXISTING speaker
+ * (identity Phase 2 "link another provider"). Unlike {@link getOrCreateSpeaker},
+ * this never creates or switches to a different document: the target speaker is
+ * fixed by `speakerId` (resolved from a verified, integrity-protected link-intent
+ * token — see `@/lib/auth-link`).
+ *
+ * SECURITY:
+ *  - The ownership proof is the OAuth round-trip the caller just completed with
+ *    `account`; only that provider id is attached.
+ *  - `knownEmails` is only ever unioned with this login's VERIFIED emails
+ *    (`computeVerifiedEmails`), preserving the Phase-1 verified-only invariant.
+ *  - If the provider account is ALREADY linked to a DIFFERENT speaker Z we do
+ *    NOT merge (that is the Phase-3 admin tool). We return
+ *    `already-linked-elsewhere` and leave BOTH documents untouched so the UI can
+ *    tell the user to contact the organizers.
+ *  - Re-linking a provider already on the target speaker is idempotent.
+ */
+export async function attachProviderToSpeaker(
+  speakerId: string,
+  user: User,
+  account: Account,
+  profile?: Profile,
+): Promise<{
+  speaker: Speaker
+  status: ProviderLinkStatus
+  err: Error | null
+}> {
+  if (!speakerId) {
+    return {
+      speaker: {} as Speaker,
+      status: 'linked',
+      err: new Error('Missing target speaker id'),
+    }
+  }
+  if (!user.email) {
+    return {
+      speaker: {} as Speaker,
+      status: 'linked',
+      err: new Error('Missing user email for provider link'),
+    }
+  }
+
+  const providerAccountId = providerAccount(
+    account.provider,
+    account.providerAccountId,
+  )
+
+  // Guard: is this provider account already claimed by some speaker?
+  const existing = await findSpeakerByProvider(providerAccountId)
+  if (existing.err) {
+    return { speaker: {} as Speaker, status: 'linked', err: existing.err }
+  }
+  if (existing.speaker?._id && existing.speaker._id !== speakerId) {
+    // Pre-existing duplicate: belongs to a DIFFERENT speaker. Do not merge.
+    return {
+      speaker: existing.speaker,
+      status: 'already-linked-elsewhere',
+      err: null,
+    }
+  }
+
+  // Load the fixed link target.
+  const { speaker: target, err: targetErr } = await getSpeaker(speakerId)
+  if (targetErr) {
+    return { speaker: {} as Speaker, status: 'linked', err: targetErr }
+  }
+  if (!target?._id) {
+    return {
+      speaker: {} as Speaker,
+      status: 'linked',
+      err: new Error('Link target speaker not found'),
+    }
+  }
+
+  // Attach the provider + this login's verified emails to the existing speaker.
+  const primaryEmail = normalizeEmail(user.email)
+  const verifiedIncoming = await computeVerifiedEmails(user, account, profile)
+  const { speaker, err } = await linkProviderToSpeaker(
+    target,
+    providerAccountId,
+    verifiedIncoming,
+    primaryEmail,
+  )
+
+  return { speaker, status: 'linked', err }
+}
+
 export async function getSpeaker(
   speakerId: string,
 ): Promise<{ speaker: Speaker; err: Error | null }> {

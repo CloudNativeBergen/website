@@ -1,15 +1,46 @@
 import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
 import LinkedIn from 'next-auth/providers/linkedin'
-import type { NextAuthConfig, Session, User } from 'next-auth'
+import type { Account, NextAuthConfig, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
+import type { Speaker } from '@/lib/speaker/types'
+import type { JWT } from 'next-auth/jwt'
 
 export interface NextAuthRequest extends NextRequest {
   auth: Session | null
+}
+
+/**
+ * Write a resolved speaker (and the account just authenticated with) onto the
+ * JWT. Shared by the normal login path and the Phase-2 link path so both mint an
+ * identical token shape.
+ */
+function applySpeakerToToken(
+  token: JWT,
+  speaker: Speaker,
+  account: Account,
+): void {
+  if (speaker.image && typeof speaker.image === 'string') {
+    token.picture = speakerImageUrl(speaker.image, {
+      width: 192,
+      height: 192,
+      fit: 'crop',
+    })
+  }
+
+  token.account = account
+  token.speaker = {
+    _id: speaker._id,
+    name: speaker.name,
+    email: speaker.email,
+    image: speaker.image,
+    isOrganizer: speaker.isOrganizer,
+    flags: speaker.flags,
+  }
 }
 
 const config = {
@@ -74,6 +105,71 @@ const config = {
           name: token.name,
           image: token.picture,
         }
+
+        // --- Phase 2: self-service "link another provider" -----------------
+        // If this sign-in carries a valid, integrity-protected link-intent
+        // cookie (minted only for an already-authenticated speaker X, bound to
+        // this provider), attach the just-authenticated account to the EXISTING
+        // speaker X instead of creating/switching to another document.
+        //
+        // `@/lib/auth-link` is imported dynamically so its Node-only crypto does
+        // not enter the edge middleware bundle that statically imports this file.
+        const { LINK_INTENT_COOKIE, verifyLinkIntent, linkResultStore } =
+          await import('@/lib/auth-link')
+        const { cookies } = await import('next/headers')
+        const linkToken = (await cookies()).get(LINK_INTENT_COOKIE)?.value
+        const intent = verifyLinkIntent(linkToken, account.provider)
+
+        if (intent) {
+          const { attachProviderToSpeaker, getSpeaker } =
+            await import('@/lib/speaker/sanity')
+          const resultStore = linkResultStore.getStore()
+
+          const {
+            speaker: linked,
+            status,
+            err: linkErr,
+          } = await attachProviderToSpeaker(
+            intent.speakerId,
+            user,
+            account,
+            profile,
+          )
+
+          if (!linkErr && status === 'linked') {
+            if (resultStore) resultStore.result = 'linked'
+            applySpeakerToToken(token, linked, account)
+            return token
+          }
+
+          if (status === 'already-linked-elsewhere') {
+            // Pre-existing duplicate. Do NOT merge and do NOT switch the session
+            // to the other speaker: keep the user signed in as X (their
+            // pre-link identity) and surface a clear "already linked" message.
+            if (resultStore) resultStore.result = 'already-linked'
+            const { speaker: originX } = await getSpeaker(intent.speakerId)
+            if (originX?._id) {
+              // Preserve X's original account (do not adopt the account that
+              // belongs to the other speaker).
+              const priorAccount = (token.account as Account) ?? account
+              applySpeakerToToken(token, originX, priorAccount)
+              return token
+            }
+          }
+
+          // Unexpected link failure — surface it and fall through to the normal
+          // login path so the user still ends up with a working session.
+          if (resultStore) resultStore.result = 'error'
+          console.error(
+            'Provider link failed; falling back to normal sign-in',
+            {
+              status,
+              linkErr,
+            },
+          )
+        }
+        // --- end Phase 2 link handling -------------------------------------
+
         const { speaker, err } = await getOrCreateSpeaker(
           user,
           account,
@@ -84,29 +180,32 @@ const config = {
           return {}
         }
 
-        if (speaker.image && typeof speaker.image === 'string') {
-          token.picture = speakerImageUrl(speaker.image, {
-            width: 192,
-            height: 192,
-            fit: 'crop',
-          })
-        }
-
-        token.account = account
-        token.speaker = {
-          _id: speaker._id,
-          name: speaker.name,
-          email: speaker.email,
-          image: speaker.image,
-          isOrganizer: speaker.isOrganizer,
-          flags: speaker.flags,
-        }
+        applySpeakerToToken(token, speaker, account)
       }
 
       return token
     },
-    redirect({ url, baseUrl }) {
-      return url.startsWith(baseUrl) ? url : baseUrl
+    async redirect({ url, baseUrl }) {
+      let target = url.startsWith(baseUrl) ? url : baseUrl
+
+      // Phase 2: append the link outcome (set by the jwt callback in the same
+      // request) so the profile page can show a success / already-linked banner.
+      const { linkResultStore, LINK_RESULT_PARAM } =
+        await import('@/lib/auth-link')
+      const result = linkResultStore.getStore()?.result
+      if (result) {
+        try {
+          const resolved = new URL(target, baseUrl)
+          if (resolved.origin === new URL(baseUrl).origin) {
+            resolved.searchParams.set(LINK_RESULT_PARAM, result)
+            target = resolved.toString()
+          }
+        } catch {
+          // Leave target unchanged on any URL parsing issue.
+        }
+      }
+
+      return target
     },
   },
 } satisfies NextAuthConfig
