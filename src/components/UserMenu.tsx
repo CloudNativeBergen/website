@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { signOut } from 'next-auth/react'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
-  AcademicCapIcon,
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   ArrowTopRightOnSquareIcon,
@@ -40,7 +39,6 @@ const SPEAKER_LINKS: MenuLink[] = [
   { href: '/cfp/list', label: 'My Dashboard', icon: Squares2X2Icon },
   { href: '/cfp/proposal', label: 'My Proposals', icon: DocumentTextIcon },
   { href: '/cfp/profile', label: 'Edit Profile', icon: PencilSquareIcon },
-  { href: '/cfp/workshop', label: 'Workshops', icon: AcademicCapIcon },
   { href: '/cfp/expense', label: 'Travel & Expenses', icon: BanknotesIcon },
 ]
 
