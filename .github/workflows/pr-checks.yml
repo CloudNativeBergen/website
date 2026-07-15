@@ -95,6 +95,12 @@ jobs:
       - name: Run tests
         run: pnpm run test
 
+      - name: Run scoped auth coverage gate
+        # Enforces the per-file coverage ratchets in vitest.config.ts, scoped
+        # ONLY to the security-critical auth modules. Unrelated files are not
+        # instrumented, so they can never fail this gate.
+        run: pnpm run test:coverage
+
   storybook:
     name: Storybook Tests
     runs-on: ubuntu-latest
@@ -177,9 +183,17 @@ jobs:
       - name: Build application
         run: pnpm run build
         env:
-          # CI environment variables (dummy values for build verification)
+          # CI environment variables (dummy values for build verification).
+          # These MUST match the Auth.js v5 names the code actually reads
+          # (see src/lib/auth.ts): AUTH_SECRET + AUTH_<PROVIDER>_ID/SECRET.
+          # The legacy v4 name (NEXTAUTH_SECRET) is not read by the app.
           NODE_ENV: production
-          NEXTAUTH_SECRET: ci-build-secret-not-for-production
+          AUTH_SECRET: ci-build-secret-not-for-production
+          AUTH_GITHUB_ID: ci-build-github-id-not-for-production
+          AUTH_GITHUB_SECRET: ci-build-github-secret-not-for-production
+          AUTH_LINKEDIN_ID: ci-build-linkedin-id-not-for-production
+          AUTH_LINKEDIN_SECRET: ci-build-linkedin-secret-not-for-production
+          # Still read at runtime by src/lib/contract-signing/self-hosted.ts.
           NEXTAUTH_URL: http://localhost:3000
           RESEND_API_KEY: re_ci_build_key_not_for_production
           INVITATION_TOKEN_SECRET: ci_invitation_token_secret_not_for_production
