@@ -13,6 +13,16 @@ import { cacheLife, cacheTag } from 'next/cache'
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
   '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
+
+// Optional string fields that should be removed (unset) from Sanity when the
+// caller sends an empty value, so a user can clear a previously-set value.
+const CLEARABLE_SPEAKER_FIELDS = [
+  'title',
+  'bio',
+  'gender',
+  'genderSelfDescribe',
+  'country',
+] as const
 export function providerAccount(
   provider: string,
   providerAccountId: string,
@@ -287,7 +297,25 @@ export async function updateSpeaker(
       }
     }
 
-    await clientWrite.patch(speakerId).set(patchData).commit()
+    // Clearing an optional field must remove it from Sanity. A key sent as
+    // null/undefined/'' is ignored by `.set()`, so the old value would persist.
+    // Collect those into `.unset()` instead so the field is actually cleared.
+    const unsetKeys: string[] = []
+    for (const key of CLEARABLE_SPEAKER_FIELDS) {
+      if (key in patchData) {
+        const value = patchData[key]
+        if (value === undefined || value === null || value === '') {
+          unsetKeys.push(key)
+          delete patchData[key]
+        }
+      }
+    }
+
+    const patch = clientWrite.patch(speakerId).set(patchData)
+    if (unsetKeys.length > 0) {
+      patch.unset(unsetKeys)
+    }
+    await patch.commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
       await getSpeaker(speakerId)

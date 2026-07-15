@@ -1,4 +1,8 @@
-import { Flags } from '../../src/lib/speaker/types'
+import {
+  Flags,
+  genderOptions,
+  genderPreferToSelfDescribe,
+} from '../../src/lib/speaker/types'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({
@@ -124,6 +128,31 @@ export default defineType({
           },
         ],
       },
+    }),
+    defineField({
+      name: 'gender',
+      title: 'Gender',
+      type: 'string',
+      description:
+        'Optional self-reported gender. Diversity data used only for aggregate reporting.',
+      options: {
+        list: genderOptions.map((value) => ({ title: value, value })),
+      },
+    }),
+    defineField({
+      name: 'genderSelfDescribe',
+      title: 'Gender (self-described)',
+      type: 'string',
+      description:
+        'Optional free-text value used when gender is "Prefer to self-describe".',
+      hidden: ({ parent }) => parent?.gender !== genderPreferToSelfDescribe,
+    }),
+    defineField({
+      name: 'country',
+      title: 'Country',
+      type: 'string',
+      description:
+        'Optional country of residence. Helps organizers understand travel needs.',
     }),
     defineField({
       name: 'consent',

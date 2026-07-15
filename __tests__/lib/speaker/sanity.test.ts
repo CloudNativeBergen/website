@@ -1,14 +1,15 @@
-const { mockCommit, mockSet, mockPatch, mockFetch, mockCreate } = vi.hoisted(
-  () => {
+const { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate } =
+  vi.hoisted(() => {
     const mockCommit = vi.fn().mockResolvedValue({})
+    const mockUnset = vi.fn()
     const mockSet = vi.fn()
-    mockSet.mockReturnValue({ commit: mockCommit })
+    mockSet.mockReturnValue({ commit: mockCommit, unset: mockUnset })
+    mockUnset.mockReturnValue({ commit: mockCommit })
     const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
     const mockFetch = vi.fn()
     const mockCreate = vi.fn()
-    return { mockCommit, mockSet, mockPatch, mockFetch, mockCreate }
-  },
-)
+    return { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate }
+  })
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -29,6 +30,7 @@ import {
   getOrCreateSpeaker,
   getSpeaker,
 } from '@/lib/speaker/sanity'
+import { SpeakerInputSchema } from '@/server/schemas/speaker'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Account, User } from 'next-auth'
 
@@ -123,6 +125,72 @@ describe('updateSpeaker', () => {
 
     expect(mockSet).toHaveBeenCalledTimes(1)
     expect(mockSet).toHaveBeenCalledWith({ name: 'No Image' })
+  })
+
+  it('should unset clearable fields when they are cleared', async () => {
+    await updateSpeaker('speaker-1', {
+      name: 'Updated Name',
+      title: 'Engineer',
+      country: null,
+      gender: null,
+      genderSelfDescribe: '',
+      bio: '',
+    })
+
+    // Non-empty fields are still set; empty ones are removed from the set payload.
+    expect(mockSet).toHaveBeenCalledTimes(1)
+    expect(mockSet).toHaveBeenCalledWith({
+      name: 'Updated Name',
+      title: 'Engineer',
+    })
+
+    // Cleared fields are unset so the old value cannot persist in Sanity.
+    expect(mockUnset).toHaveBeenCalledTimes(1)
+    expect(mockUnset).toHaveBeenCalledWith([
+      'bio',
+      'gender',
+      'genderSelfDescribe',
+      'country',
+    ])
+    expect(mockCommit).toHaveBeenCalled()
+  })
+
+  it('should not call unset when no clearable field is empty', async () => {
+    await updateSpeaker('speaker-1', {
+      name: 'Updated Name',
+      country: 'Norway',
+    })
+
+    expect(mockSet).toHaveBeenCalledWith({
+      name: 'Updated Name',
+      country: 'Norway',
+    })
+    expect(mockUnset).not.toHaveBeenCalled()
+  })
+
+  // Integration guard for the clear-field seam: the form emits `null` for a
+  // cleared field, the Zod schema transforms `null` -> `undefined` while
+  // KEEPING the key present, and updateSpeaker relies on that retained key to
+  // decide what to unset. This asserts the whole chain so a future Zod upgrade
+  // that drops undefined-valued keys can't silently break clearing.
+  it('unsets fields cleared through the SpeakerInputSchema transform', async () => {
+    const parsed = SpeakerInputSchema.parse({
+      name: 'Updated Name',
+      gender: null,
+      country: null,
+    })
+
+    // The transform yields undefined but the keys must survive for the unset.
+    expect('gender' in parsed).toBe(true)
+    expect('country' in parsed).toBe(true)
+    expect(parsed.gender).toBeUndefined()
+    expect(parsed.country).toBeUndefined()
+
+    await updateSpeaker('speaker-1', parsed)
+
+    expect(mockSet).toHaveBeenCalledWith({ name: 'Updated Name' })
+    expect(mockUnset).toHaveBeenCalledTimes(1)
+    expect(mockUnset).toHaveBeenCalledWith(['gender', 'country'])
   })
 
   it('should return error when patch fails', async () => {
