@@ -10,10 +10,6 @@ import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { formatNumber } from '@/lib/format'
 import {
-  PencilIcon,
-  TrashIcon,
-  EnvelopeIcon,
-  DocumentTextIcon,
   ExclamationTriangleIcon,
   Bars2Icon,
   EllipsisHorizontalIcon,
