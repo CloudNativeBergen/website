@@ -42,6 +42,20 @@ describe('rasterizeLogoToPngDataUrl', () => {
       expect(result).toMatch(/^data:image\/png;base64,/)
     })
 
+    it('rasterizes SVG preceded by a DOCTYPE', () => {
+      const result = rasterizeLogoToPngDataUrl(
+        `<?xml version="1.0"?>\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n${SAMPLE_SVG}`,
+      )
+      expect(result).toMatch(/^data:image\/png;base64,/)
+    })
+
+    it('rasterizes SVG preceded by a comment', () => {
+      const result = rasterizeLogoToPngDataUrl(
+        `<!-- Generator: some tool -->\n${SAMPLE_SVG}`,
+      )
+      expect(result).toMatch(/^data:image\/png;base64,/)
+    })
+
     it('honours a custom rasterization width', () => {
       const narrow = rasterizeLogoToPngDataUrl(SAMPLE_SVG, { width: 60 })
       const wide = rasterizeLogoToPngDataUrl(SAMPLE_SVG, { width: 600 })
