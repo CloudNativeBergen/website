@@ -14,3 +14,8 @@ export type { UpdateBannerProps } from './UpdateBanner'
 export { ServiceWorkerRegistrar } from './ServiceWorkerRegistrar'
 export { PwaInstallProvider, usePwaInstall } from './PwaInstallProvider'
 export type { InstallPlatform } from './PwaInstallProvider'
+export {
+  PushNotificationSettings,
+  PushNotificationSettingsView,
+} from './PushNotificationSettings'
+export type { PushNotificationSettingsViewProps } from './PushNotificationSettings'

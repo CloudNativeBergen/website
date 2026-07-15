@@ -200,6 +200,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               and used only for aggregate diversity reporting)
                             </li>
                             <li>• Local speaker status (optional)</li>
+                            <li>
+                              • Web push notification subscriptions (browser
+                              endpoint and device type), stored only if you opt
+                              in to push notifications and removed when you turn
+                              them off
+                            </li>
                           </ul>
                         </div>
                       </div>

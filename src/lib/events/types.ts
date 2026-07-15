@@ -57,12 +57,46 @@ export interface GallerySpeakerTaggedEvent {
 }
 
 /**
+ * Event fired when someone is invited to co-present a proposal (issue #444).
+ *
+ * The co-speaker invitation flow bypasses the proposal-status bus and emails the
+ * invitee directly (see `src/lib/cospeaker/server.ts`). This event runs IN
+ * ADDITION to that email so the push handler can notify the invitee — but ONLY
+ * when they already have a speaker account with a push subscription. An invitee
+ * without an account simply gets no push (the email still reaches them).
+ *
+ * The payload carries only the invitee's email (to resolve their account) plus
+ * public-to-them context (who invited them, the proposal title); it never
+ * carries the invitation bearer token.
+ */
+export interface CoSpeakerInvitedEvent {
+  eventType: 'cospeaker.invited'
+  timestamp: Date
+  /** The email the invitation was sent to (used to resolve a speaker account). */
+  invitedEmail: string
+  invitedName?: string
+  proposal: {
+    _id: string
+    title: string
+  }
+  invitedBy: {
+    name: string
+    email: string
+  }
+  conference: Conference
+  metadata: {
+    domain: string
+  }
+}
+
+/**
  * Map of event types to their corresponding event interfaces
  * This provides type-safe event handling throughout the application
  */
 export interface EventTypeMap {
   'proposal.status.changed': ProposalStatusChangeEvent
   'gallery.speaker.tagged': GallerySpeakerTaggedEvent
+  'cospeaker.invited': CoSpeakerInvitedEvent
 }
 
 /**

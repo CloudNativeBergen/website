@@ -46,4 +46,28 @@ describe('public/sw.js source invariants', () => {
   it('serves the precached offline page as the navigation fallback', () => {
     expect(source).toContain('/offline')
   })
+
+  // --- Web push handlers (#444) --------------------------------------------
+
+  it('registers push, notificationclick and pushsubscriptionchange handlers', () => {
+    expect(source).toContain("addEventListener('push'")
+    expect(source).toContain("addEventListener('notificationclick'")
+    expect(source).toContain("addEventListener('pushsubscriptionchange'")
+  })
+
+  it('shows a notification from the push handler', () => {
+    expect(source).toContain('self.registration.showNotification')
+  })
+
+  it('constrains a notification click to a same-origin path', () => {
+    // Mirrors src/lib/pwa/push-payload.ts sanitizeUrl: reject "//..." absolute
+    // and protocol-relative URLs so a click can never leave the origin.
+    expect(source).toContain("value.startsWith('/')")
+    expect(source).toContain("!value.startsWith('//')")
+  })
+
+  it('opens or focuses a window on notification click', () => {
+    expect(source).toContain('clients.matchAll')
+    expect(source).toContain('clients.openWindow')
+  })
 })

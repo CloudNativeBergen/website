@@ -503,6 +503,30 @@ export async function getSpeaker(
   return { speaker, err }
 }
 
+/**
+ * Resolve a single speaker account by an email address, matching either the
+ * display `email` or the verified `knownEmails` match-set (both compared
+ * case-insensitively). Returns the oldest matching account, or `null` when no
+ * speaker owns that email.
+ *
+ * Used by the co-speaker push handler (#444) to decide whether an invitee has
+ * an account to push to; an unmatched email simply means no push.
+ */
+export async function getSpeakerByEmail(
+  email: string,
+): Promise<{ speaker: Speaker | null; err: Error | null }> {
+  const normalized = normalizeEmail(email)
+  if (!normalized) {
+    return { speaker: null, err: null }
+  }
+
+  const { speakers, err } = await findSpeakersByEmails([normalized])
+  if (err) {
+    return { speaker: null, err }
+  }
+  return { speaker: speakers[0] ?? null, err: null }
+}
+
 export async function getPublicSpeaker(
   conferenceId: string,
   speakerSlug: string,

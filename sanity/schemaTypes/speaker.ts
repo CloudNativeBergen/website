@@ -262,6 +262,91 @@ export default defineType({
         )
       },
     }),
+    // Opt-in web push (#444). Additive/optional — legacy speaker documents
+    // without these fields remain valid, so no migration is required. Managed
+    // entirely by the app (tRPC `push` router); read-only in the Studio.
+    defineField({
+      name: 'pushSubscriptions',
+      title: 'Push Subscriptions',
+      type: 'array',
+      description:
+        'Browser web-push subscriptions this speaker has opted into. Managed by the app; do not edit here.',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({ name: 'endpoint', title: 'Endpoint', type: 'url' }),
+            defineField({
+              name: 'keys',
+              title: 'Keys',
+              type: 'object',
+              fields: [
+                defineField({ name: 'p256dh', title: 'p256dh', type: 'string' }),
+                defineField({ name: 'auth', title: 'auth', type: 'string' }),
+              ],
+            }),
+            defineField({
+              name: 'createdAt',
+              title: 'Created At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'userAgent',
+              title: 'User Agent',
+              type: 'string',
+            }),
+          ],
+          preview: {
+            select: { title: 'userAgent', subtitle: 'endpoint' },
+          },
+        },
+      ],
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
+    defineField({
+      name: 'pushPreferences',
+      title: 'Push Preferences',
+      type: 'object',
+      description:
+        'Per-category web push opt-outs. Absent/unset means all categories are enabled.',
+      readOnly: true,
+      fields: [
+        defineField({
+          name: 'proposalDecisions',
+          title: 'Proposal Decisions',
+          type: 'boolean',
+          initialValue: true,
+        }),
+        defineField({
+          name: 'talkConfirmed',
+          title: 'Talk Confirmed',
+          type: 'boolean',
+          initialValue: true,
+        }),
+        defineField({
+          name: 'coSpeakerInvites',
+          title: 'Co-Speaker Invites',
+          type: 'boolean',
+          initialValue: true,
+        }),
+      ],
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
   preview: {
     select: {
