@@ -35,6 +35,7 @@ function applySpeakerToToken(
   token.account = account
   token.speaker = {
     _id: speaker._id,
+    slug: speaker.slug,
     name: speaker.name,
     email: speaker.email,
     image: speaker.image,

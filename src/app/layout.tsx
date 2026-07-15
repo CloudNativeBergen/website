@@ -18,7 +18,11 @@ import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
-import { InstallPrompt, ServiceWorkerRegistrar } from '@/components/pwa'
+import {
+  InstallPrompt,
+  PwaInstallProvider,
+  ServiceWorkerRegistrar,
+} from '@/components/pwa'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { SessionProviderWrapper } from '@/components/providers/SessionProviderWrapper'
@@ -164,14 +168,16 @@ export default function RootLayout({
       <body className="flex min-h-full bg-white dark:bg-gray-950">
         <ThemeProvider>
           <TRPCProvider>
-            <div className="flex w-full flex-col">
-              <DevBanner />
-              <Suspense>
-                <SessionProviderWrapper>{children}</SessionProviderWrapper>
-              </Suspense>
-              <InstallPrompt />
-              <ServiceWorkerRegistrar />
-            </div>
+            <PwaInstallProvider>
+              <div className="flex w-full flex-col">
+                <DevBanner />
+                <Suspense>
+                  <SessionProviderWrapper>{children}</SessionProviderWrapper>
+                </Suspense>
+                <InstallPrompt />
+                <ServiceWorkerRegistrar />
+              </div>
+            </PwaInstallProvider>
           </TRPCProvider>
         </ThemeProvider>
         <Analytics />
