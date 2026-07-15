@@ -27,6 +27,7 @@ export { ProposalReviewList } from './ProposalReviewList'
 export { ProposalActionModal } from './ProposalActionModal'
 
 export { SpeakerTable } from './SpeakerTable'
+export { SpeakerMergeModal } from './SpeakerMergeModal'
 export { GeneralBroadcastModal } from './GeneralBroadcastModal'
 export { SpeakerEmailModal } from './SpeakerEmailModal'
 export { SpeakerImageModal } from './SpeakerImageModal'
