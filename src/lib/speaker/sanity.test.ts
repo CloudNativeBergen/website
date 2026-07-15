@@ -235,10 +235,9 @@ describe('getOrCreateSpeaker — verified-only security invariant', () => {
     expect(speaker._id).not.toBe('spk-existing')
   })
 
-  // H2 — LinkedIn email_verified must be affirmatively true. Absent / string
-  // 'false' must NOT be treated as verified (previously fail-open).
+  // LinkedIn: only an EXPLICIT false/"false" blocks the link. LinkedIn asserts
+  // only the holder's own verified primary, so absent/true are treated verified.
   it.each([
-    ['absent', undefined],
     ['string "false"', 'false'],
     ['boolean false', false],
   ])(
@@ -255,31 +254,39 @@ describe('getOrCreateSpeaker — verified-only security invariant', () => {
       )
 
       expect(err).toBeNull()
-      // Unverified -> no link, fresh speaker.
+      // Explicitly unverified -> no link, fresh speaker.
       expect(patchMock).not.toHaveBeenCalled()
       expect(createMock).toHaveBeenCalledTimes(1)
       expect(speaker._id).not.toBe('spk-existing')
     },
   )
 
-  // H2 — the stringified OIDC claim 'true' is honored as verified.
-  it('treats the LinkedIn primary as verified when email_verified is the string "true"', async () => {
-    fetchMock.mockImplementation(
-      routeFetch({ provider: {}, emailMatches: [existingSpeaker()] }),
-    )
+  // LinkedIn: true, the string 'true', and an ABSENT claim are all treated as
+  // verified (LinkedIn only asserts the holder's own verified email).
+  it.each([
+    ['boolean true', true],
+    ['string "true"', 'true'],
+    ['absent', undefined],
+  ])(
+    'treats the LinkedIn primary as verified when email_verified is %s',
+    async (_label, claim) => {
+      fetchMock.mockImplementation(
+        routeFetch({ provider: {}, emailMatches: [existingSpeaker()] }),
+      )
 
-    const { speaker, err } = await getOrCreateSpeaker(
-      user({ email: 'jane@example.com' }),
-      linkedinAccount(),
-      { email_verified: 'true' } as unknown as Profile,
-    )
+      const { speaker, err } = await getOrCreateSpeaker(
+        user({ email: 'jane@example.com' }),
+        linkedinAccount(),
+        { email_verified: claim } as unknown as Profile,
+      )
 
-    expect(err).toBeNull()
-    // Verified -> links into the existing speaker.
-    expect(createMock).not.toHaveBeenCalled()
-    expect(patchMock).toHaveBeenCalledWith('spk-existing')
-    expect(speaker._id).toBe('spk-existing')
-  })
+      expect(err).toBeNull()
+      // Verified -> links into the existing speaker.
+      expect(createMock).not.toHaveBeenCalled()
+      expect(patchMock).toHaveBeenCalledWith('spk-existing')
+      expect(speaker._id).toBe('spk-existing')
+    },
+  )
 })
 
 describe('getOrCreateSpeaker — multiple existing matches', () => {

@@ -162,8 +162,11 @@ async function findSpeakersByEmails(
  *   userinfo only exposes a verified primary email, so `user.email` is treated
  *   as provider-verified and included as a fallback (e.g. if the API call
  *   fails).
- * - LinkedIn (OIDC): the primary is trusted ONLY when the `email_verified` claim
- *   is affirmatively true (default-deny). See H2 note below.
+ * - LinkedIn (OIDC): the primary is trusted as verified UNLESS `email_verified`
+ *   is explicitly false. LinkedIn only ever asserts the account holder's own
+ *   verified primary email (you cannot make it assert an address you don't own),
+ *   so an absent claim is treated as verified; only an explicit `false`/`"false"`
+ *   blocks the link. See LinkedIn note below.
  * - Unknown providers: no email is treated as verified (no auto-link).
  */
 async function computeVerifiedEmails(
@@ -193,16 +196,16 @@ async function computeVerifiedEmails(
       break
     }
     case 'linkedin': {
-      // H2 — affirmative default-deny. Previously `claim !== false` fail-open:
-      // it accepted absent/undefined AND the STRING "false" as verified, which
-      // let an unverified LinkedIn email link into (take over) an account. Now
-      // the primary counts as verified ONLY when the claim is explicitly true.
-      // OIDC claims can be stringified, so accept the string 'true' as well;
-      // everything else (absent, false, 'false', anything else) is unverified.
+      // LinkedIn only asserts the account holder's own verified primary email —
+      // it cannot be induced to assert an address the login user doesn't own —
+      // so the primary is trusted as verified unless `email_verified` is
+      // explicitly false. OIDC claims can be stringified, so block both the
+      // boolean `false` and the string "false"; absent/true/anything-else is
+      // treated as verified.
       const claim = (
         profile as { email_verified?: boolean | string } | undefined
       )?.email_verified
-      const isVerified = claim === true || claim === 'true'
+      const isVerified = claim !== false && claim !== 'false'
       if (primary && isVerified) {
         verified.push(primary)
       }
