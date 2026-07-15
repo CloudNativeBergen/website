@@ -159,6 +159,11 @@ export async function handleSpeakerTicket(
       continue
     }
 
+    // Guard against the same speaker appearing more than once on one proposal:
+    // once emailed, skip any later occurrence in this same run so we neither
+    // re-send nor append a duplicate-`_key` marker entry.
+    emailedSpeakerIds.add(speaker._id)
+
     // Email delivered — record the marker so we never re-email this speaker.
     // A failure here only risks a duplicate email on a future re-trigger, which
     // is far less harmful than the send failure above, so we just log it.
