@@ -238,6 +238,18 @@ export function getDaysPending(contractSentAt?: string): number | null {
   return Math.max(0, days)
 }
 
+export function getDaysInactive(
+  sponsor: SponsorForConferenceExpanded,
+): number | null {
+  const lastActivityDate = sponsor.lastActivity?.createdAt ?? sponsor._updatedAt
+  if (!lastActivityDate) return null
+
+  const activityTime = new Date(lastActivityDate).getTime()
+  const now = Date.now()
+  const days = Math.floor((now - activityTime) / (1000 * 60 * 60 * 24))
+  return Math.max(0, days)
+}
+
 export function checkSponsorNeedsFollowUp(
   sponsor: SponsorForConferenceExpanded,
   thresholds?: CrmActivityThreshold[],

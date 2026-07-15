@@ -17,6 +17,9 @@ import type {
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
 import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
+import { canTransition } from '@/lib/sponsor-crm/state-machine'
+import { StatusListbox } from './form'
+import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import {
   XMarkIcon,
   PencilSquareIcon,
@@ -221,6 +224,35 @@ export function SponsorCRMForm({
     }
   }, [sponsor, formData.logo])
 
+  const invoiceOptions = useMemo(() => {
+    return INVOICE_STATUSES.map((opt) => {
+      const fromStatus = sponsor?.invoiceStatus || 'not-sent'
+      const transition = canTransition('invoice', fromStatus, opt.value, {
+        tier: formData.tierId,
+        contractValue: formData.contractValue
+          ? parseFloat(formData.contractValue)
+          : undefined,
+        contractCurrency: formData.contractCurrency,
+        billing: sponsor?.billing,
+        contractStatus: formData.contractStatus,
+        invoiceStatus: fromStatus,
+      })
+      return {
+        ...opt,
+        disabled: !transition.ok,
+        disabledReason: !transition.ok
+          ? transition.missing.map((m) => m.message).join('\n')
+          : undefined,
+      }
+    })
+  }, [
+    sponsor,
+    formData.tierId,
+    formData.contractValue,
+    formData.contractCurrency,
+    formData.contractStatus,
+  ])
+
   return (
     <>
       <Transition show={isOpen} as={Fragment}>
@@ -262,6 +294,41 @@ export function SponsorCRMForm({
                             {sponsor.sponsor.name}
                           </p>
                         )}
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <StatusListbox
+                            label=""
+                            value={formData.status}
+                            onChange={(value) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                status: value,
+                              }))
+                            }
+                            options={STATUSES}
+                          />
+                          <StatusListbox
+                            label=""
+                            value={formData.contractStatus}
+                            onChange={(value) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                contractStatus: value,
+                              }))
+                            }
+                            options={CONTRACT_STATUSES}
+                          />
+                          <StatusListbox
+                            label=""
+                            value={formData.invoiceStatus}
+                            onChange={(value) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                invoiceStatus: value,
+                              }))
+                            }
+                            options={invoiceOptions}
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2">

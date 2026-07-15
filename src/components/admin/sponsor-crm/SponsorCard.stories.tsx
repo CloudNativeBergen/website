@@ -74,6 +74,8 @@ export const Interactive: Story = {
     onEdit: () => console.log('Edit clicked'),
     onDelete: () => console.log('Delete clicked'),
     onEmail: () => console.log('Email clicked'),
+    onOpenHistory: () => console.log('Open history clicked'),
+    onAdvanceStage: (stage) => console.log(`Advance stage clicked: ${stage}`),
   },
   parameters: {
     docs: {

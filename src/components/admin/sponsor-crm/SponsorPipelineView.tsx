@@ -7,10 +7,9 @@ import type {
   ContractStatus,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import { canTransition } from '@/lib/sponsor-crm/state-machine'
+import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import type { SponsorTier } from '@/lib/sponsor/types'
 import {
-  StatusListbox,
   SponsorCombobox,
   TierRadioGroup,
   AddonsCheckboxGroup,
@@ -19,7 +18,6 @@ import {
   TagCombobox,
   SponsorGlobalInfoFields,
 } from './form'
-import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import clsx from 'clsx'
 
 export interface SponsorPipelineFormData {
@@ -89,143 +87,76 @@ export function SponsorPipelineView({
     sponsor?.contractStatus === 'contract-sent' ||
     sponsor?.contractStatus === 'contract-signed'
 
-  const invoiceOptions = INVOICE_STATUSES.map((opt) => {
-    const fromStatus = sponsor?.invoiceStatus || 'not-sent'
-    const transition = canTransition('invoice', fromStatus, opt.value, {
-      tier: formData.tierId,
-      contractValue: formData.contractValue
-        ? parseFloat(formData.contractValue)
-        : undefined,
-      contractCurrency: formData.contractCurrency,
-      billing: sponsor?.billing,
-      contractStatus: formData.contractStatus,
-      invoiceStatus: fromStatus,
-    })
-    return {
-      ...opt,
-      disabled: !transition.ok,
-      disabledReason: !transition.ok
-        ? transition.missing.map((m) => m.message).join('\n')
-        : undefined,
-    }
-  })
-
   return (
     <form onSubmit={onSubmit}>
-      <div className="space-y-3">
-        {/* Sponsor Selection - Only show when adding new */}
-        {!sponsor && (
-          <SponsorCombobox
-            value={formData.sponsorId}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
+        <div className="col-span-1 space-y-4 md:col-span-3">
+          {/* Sponsor Selection - Only show when adding new */}
+          {!sponsor && (
+            <SponsorCombobox
+              value={formData.sponsorId}
+              onChange={(value) =>
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  sponsorId: value,
+                }))
+              }
+              availableSponsors={availableSponsors}
+              disabled={!!sponsor}
+            />
+          )}
+
+          {sponsor && (
+            <SponsorGlobalInfoFields
+              name={formData.name}
+              website={formData.website}
+              orgNumber={formData.orgNumber}
+              address={formData.address}
+              onNameChange={(name) =>
+                onFormDataChange((prev) => ({ ...prev, name }))
+              }
+              onWebsiteChange={(website) =>
+                onFormDataChange((prev) => ({ ...prev, website }))
+              }
+              onOrgNumberChange={(orgNumber) =>
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  orgNumber,
+                }))
+              }
+              onAddressChange={(address) =>
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  address,
+                }))
+              }
+            />
+          )}
+
+          {/* Tier Selection */}
+          <TierRadioGroup
+            tiers={regularTiers}
+            value={formData.tierId}
             onChange={(value) =>
               onFormDataChange((prev) => ({
                 ...prev,
-                sponsorId: value,
-              }))
-            }
-            availableSponsors={availableSponsors}
-            disabled={!!sponsor}
-          />
-        )}
-
-        {sponsor && (
-          <SponsorGlobalInfoFields
-            name={formData.name}
-            website={formData.website}
-            orgNumber={formData.orgNumber}
-            address={formData.address}
-            onNameChange={(name) =>
-              onFormDataChange((prev) => ({ ...prev, name }))
-            }
-            onWebsiteChange={(website) =>
-              onFormDataChange((prev) => ({ ...prev, website }))
-            }
-            onOrgNumberChange={(orgNumber) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                orgNumber,
-              }))
-            }
-            onAddressChange={(address) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                address,
+                tierId: value,
               }))
             }
           />
-        )}
 
-        {/* Tier Selection */}
-        <TierRadioGroup
-          tiers={regularTiers}
-          value={formData.tierId}
-          onChange={(value) =>
-            onFormDataChange((prev) => ({
-              ...prev,
-              tierId: value,
-            }))
-          }
-        />
+          {/* Addons Selection */}
+          <AddonsCheckboxGroup
+            addons={addonTiers}
+            value={formData.addonIds}
+            onChange={(value) =>
+              onFormDataChange((prev) => ({
+                ...prev,
+                addonIds: value,
+              }))
+            }
+          />
 
-        {/* Addons Selection */}
-        <AddonsCheckboxGroup
-          addons={addonTiers}
-          value={formData.addonIds}
-          onChange={(value) =>
-            onFormDataChange((prev) => ({
-              ...prev,
-              addonIds: value,
-            }))
-          }
-        />
-
-        {/* Status, Contract Status, and Invoice Status */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <StatusListbox
-              label="Status *"
-              value={formData.status}
-              onChange={(value) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  status: value,
-                }))
-              }
-              options={STATUSES}
-            />
-          </div>
-
-          <div>
-            <StatusListbox
-              label="Contract Status *"
-              value={formData.contractStatus}
-              onChange={(value) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  contractStatus: value,
-                }))
-              }
-              options={CONTRACT_STATUSES}
-            />
-          </div>
-
-          <div>
-            <StatusListbox
-              label="Invoice Status *"
-              value={formData.invoiceStatus}
-              onChange={(value) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  invoiceStatus: value,
-                }))
-              }
-              options={invoiceOptions}
-            />
-          </div>
-        </div>
-
-        {/* Assigned To and Contract Value */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <OrganizerCombobox
             value={formData.assignedTo}
             onChange={(value) =>
@@ -236,7 +167,9 @@ export function SponsorPipelineView({
             }
             organizers={organizers}
           />
+        </div>
 
+        <div className="col-span-1 space-y-4 border-l border-gray-200 pl-6 md:col-span-2 dark:border-gray-700">
           <ContractValueInput
             value={formData.contractValue}
             currency={formData.contractCurrency}
@@ -260,18 +193,25 @@ export function SponsorPipelineView({
                 : undefined
             }
           />
-        </div>
 
-        {/* Tags */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="col-span-full">
-            <TagCombobox
-              value={formData.tags}
-              onChange={(tags) =>
-                onFormDataChange((prev) => ({ ...prev, tags }))
-              }
-            />
-          </div>
+          <TagCombobox
+            value={formData.tags}
+            onChange={(tags) => onFormDataChange((prev) => ({ ...prev, tags }))}
+          />
+
+          {sponsor && (
+            <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
+              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                Recent Activity
+              </h4>
+              <SponsorActivityTimeline
+                sponsorForConferenceId={sponsor._id}
+                limit={2}
+                compact={true}
+                showHeaderFooter={false}
+              />
+            </div>
+          )}
         </div>
       </div>
 
