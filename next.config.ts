@@ -11,7 +11,16 @@ const config: NextConfig = {
       'rdf-canonize-native': './src/lib/empty-module.ts',
     },
   },
-  serverExternalPackages: ['jsdom', 'isomorphic-dompurify', 'dompurify'],
+  // `@resvg/resvg-js` ships a native (N-API) binary. Bundling it breaks binary
+  // resolution on Vercel serverless, so it must stay external and be required
+  // at runtime. (The held PR #432 adds this exact same entry; keeping it
+  // identical here lets the two reconcile without conflict.)
+  serverExternalPackages: [
+    'jsdom',
+    'isomorphic-dompurify',
+    'dompurify',
+    '@resvg/resvg-js',
+  ],
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Ignore optional native dependency that's not available in serverless environments
@@ -42,6 +51,23 @@ const config: NextConfig = {
         hostname: '*.public.blob.vercel-storage.com',
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        // The service worker lives at a stable URL and must never be cached by
+        // the browser HTTP cache — otherwise a deploy's new `/sw.js` bytes are
+        // not seen and the update flow never fires. Registration also uses
+        // `updateViaCache: 'none'` for the same reason.
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+    ]
   },
   async redirects() {
     return [

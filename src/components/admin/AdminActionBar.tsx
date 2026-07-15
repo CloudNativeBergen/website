@@ -17,6 +17,7 @@ import {
   ArrowUturnLeftIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
+import { ProposalStatusBadge } from '@/lib/proposal/ui'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
@@ -157,28 +158,13 @@ export function AdminActionBar({
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
               Status:
             </span>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                proposal.status === 'accepted'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                  : proposal.status === 'waitlisted'
-                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                    : proposal.status === 'rejected'
-                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                      : proposal.status === 'submitted'
-                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-              }`}
-            >
-              {proposal.status.charAt(0).toUpperCase() +
-                proposal.status.slice(1)}
-            </span>
+            <ProposalStatusBadge status={proposal.status} />
           </div>
 
           {proposal.reviews && proposal.reviews.length > 0 && (
@@ -262,7 +248,7 @@ export function AdminActionBar({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
           <AdminButton
             size="xs"
             onClick={handleEditProposal}

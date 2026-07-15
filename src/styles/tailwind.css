@@ -28,6 +28,17 @@
 
 /* Critical utilities for production builds - Force arbitrary values to be included */
 /* Using explicit class names instead of @layer utilities for better compatibility */
+
+/* Hide the scrollbar while keeping the element keyboard/touch scrollable.
+   Used by the Featured Speakers shelf. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .chart-height-300 {
   height: 300px !important;
 }

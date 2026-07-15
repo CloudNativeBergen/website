@@ -523,16 +523,14 @@ export async function fetchRecentActivity(
         new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime(),
     )
     .slice(0, 15)
-    .map(
-      (item): ActivityItem => ({
-        id: item.id,
-        type: item.type,
-        description: item.description,
-        user: item.user,
-        timestamp: item.timestamp,
-        link: item.link,
-      }),
-    )
+    .map((item): ActivityItem => ({
+      id: item.id,
+      type: item.type,
+      description: item.description,
+      user: item.user,
+      timestamp: item.timestamp,
+      link: item.link,
+    }))
 }
 
 // --- Quick Actions ---

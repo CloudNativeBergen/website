@@ -21,6 +21,7 @@ export async function generateMetadata({
   if (error || !badge) {
     return {
       title: 'Badge Not Found',
+      robots: { index: false, follow: false },
     }
   }
 
@@ -36,6 +37,7 @@ export async function generateMetadata({
   if (!currentConference._id || badgeConferenceId !== currentConference._id) {
     return {
       title: 'Badge Not Found',
+      robots: { index: false, follow: false },
     }
   }
 
@@ -57,6 +59,7 @@ export async function generateMetadata({
   return {
     title,
     description,
+    robots: { index: false, follow: false },
     openGraph: {
       title,
       description: `Verified badge earned at ${conferenceName}`,

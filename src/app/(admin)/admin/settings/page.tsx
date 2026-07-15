@@ -63,12 +63,7 @@ function FieldRow({
 }: {
   label: string
   value:
-    | string
-    | boolean
-    | Array<string | NamedItem>
-    | number
-    | null
-    | undefined
+    string | boolean | Array<string | NamedItem> | number | null | undefined
   type?:
     | 'text'
     | 'date'

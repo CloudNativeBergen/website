@@ -1,5 +1,7 @@
 'use client'
 
+import { formatDateSafe } from '@/lib/time'
+
 import { useState, useEffect } from 'react'
 import {
   Dialog,
@@ -28,6 +30,7 @@ import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
 import { SearchInput } from '@/components/SearchInput'
+import { StatusBadge } from '@/components/StatusBadge'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
@@ -37,6 +40,7 @@ import {
   ActionMenuItem,
   ActionMenuDivider,
 } from '@/components/ActionMenu'
+import { DataTable, type Column } from '@/components/DataTable'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 
@@ -350,6 +354,139 @@ export function BadgeManagementClient({
 
   const isDevelopment = isLocalhostClient()
 
+  const columns: Column<SpeakerWithProposals>[] = [
+    {
+      key: 'speaker',
+      header: 'Speaker',
+      primary: true,
+      render: (speaker) => {
+        const isSelected = selectedSpeakers.has(speaker._id)
+        const hasBadge = hasExistingBadge(speaker._id)
+        return (
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => handleSelectSpeaker(speaker._id)}
+              disabled={hasBadge}
+              className="text-brand-aqua focus:ring-brand-aqua rounded border-gray-300 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-brand-cloud-blue dark:focus:ring-brand-cloud-blue"
+            />
+            {speaker.image && (
+              <img
+                src={`${speaker.image}?w=80&h=80&q=85&auto=format&fit=crop`}
+                alt={speaker.name}
+                className="h-10 w-10 rounded-full object-cover"
+              />
+            )}
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white">
+                {speaker.name}
+              </div>
+              {speaker.title && (
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {speaker.title}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      render: (speaker) => (
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          {speaker.email}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Badge Status',
+      width: '13rem',
+      render: (speaker) => {
+        const hasBadge = hasExistingBadge(speaker._id)
+        const badge = getBadgeForSpeaker(speaker._id)
+        const hasEmailError = badge && !badge.emailSent && badge.emailError
+        return hasBadge && badge ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              {hasEmailError ? (
+                <StatusBadge
+                  label="Email Failed"
+                  color="red"
+                  icon={ExclamationTriangleIcon}
+                />
+              ) : (
+                <StatusBadge label="Issued" color="green" icon={CheckIcon} />
+              )}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {formatDateSafe(badge.issuedAt)}
+            </div>
+            {hasEmailError && badge.emailError && (
+              <div className="text-xs text-red-600 dark:text-red-400">
+                {badge.emailError}
+              </div>
+            )}
+          </div>
+        ) : (
+          <StatusBadge label="Not Issued" color="gray" />
+        )
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      width: '11rem',
+      render: (speaker) => {
+        const hasBadge = hasExistingBadge(speaker._id)
+        const badge = getBadgeForSpeaker(speaker._id)
+        return hasBadge && badge ? (
+          <ActionMenu ariaLabel="Badge actions">
+            <ActionMenuItem
+              onClick={() => handleViewBadge(badge)}
+              icon={EyeIcon}
+            >
+              View Badge
+            </ActionMenuItem>
+            <ActionMenuItem
+              onClick={() => handleCopyBadgeUrl(badge.badgeId, speaker.name)}
+              icon={ClipboardDocumentIcon}
+            >
+              Copy URL
+            </ActionMenuItem>
+            <ActionMenuItem
+              onClick={() => {}}
+              icon={ArrowDownTrayIcon}
+              href={`/api/badge/${badge.badgeId}/download`}
+              download
+            >
+              Download
+            </ActionMenuItem>
+            {isDevelopment && (
+              <>
+                <ActionMenuDivider />
+                <ActionMenuItem
+                  onClick={() => handleDeleteBadge(badge.badgeId, speaker.name)}
+                  icon={TrashIcon}
+                  variant="danger"
+                  disabled={deleteMutation.isPending}
+                >
+                  Delete
+                </ActionMenuItem>
+              </>
+            )}
+          </ActionMenu>
+        ) : (
+          <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+        )
+      },
+    },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
@@ -529,224 +666,44 @@ export function BadgeManagementClient({
             </div>
           </div>
 
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {eligibleSpeakers.length} of {eligibleSpeakers.length}{' '}
-            speakers
+          <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            {eligibleSpeakers.length > 0 && (
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={
+                    eligibleSpeakers.length > 0 &&
+                    selectedSpeakers.size === eligibleSpeakers.length
+                  }
+                  onChange={handleSelectAll}
+                  className="text-brand-aqua focus:ring-brand-aqua rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-brand-cloud-blue dark:focus:ring-brand-cloud-blue"
+                />
+                Select all
+              </label>
+            )}
+            <span>
+              Showing {eligibleSpeakers.length} of {eligibleSpeakers.length}{' '}
+              speakers
+            </span>
           </div>
 
           {/* Speakers Table */}
-          <div className="overflow-x-auto">
-            <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
-              <table className="w-full table-fixed divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th scope="col" className="w-12 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={
-                          eligibleSpeakers.length > 0 &&
-                          selectedSpeakers.size === eligibleSpeakers.length
-                        }
-                        onChange={handleSelectAll}
-                        className="text-brand-aqua focus:ring-brand-aqua rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-brand-cloud-blue dark:focus:ring-brand-cloud-blue"
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                    >
-                      Speaker
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                    >
-                      Email
-                    </th>
-                    <th
-                      scope="col"
-                      className="w-52 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                    >
-                      Badge Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="w-44 px-4 py-3 text-right text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                  {eligibleSpeakers.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center">
-                        <div className="text-gray-500 dark:text-gray-400">
-                          {badgeType === 'speaker' ? (
-                            <p>
-                              No eligible speakers found. Speakers must have
-                              accepted or confirmed talks.
-                            </p>
-                          ) : (
-                            <p>No organizers found.</p>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    eligibleSpeakers.map((speaker: SpeakerWithProposals) => {
-                      const isSelected = selectedSpeakers.has(speaker._id)
-                      const hasBadge = hasExistingBadge(speaker._id)
-                      const badge = getBadgeForSpeaker(speaker._id)
-                      const hasEmailError =
-                        badge && !badge.emailSent && badge.emailError
-
-                      return (
-                        <tr
-                          key={speaker._id}
-                          className={`${
-                            isSelected
-                              ? 'bg-brand-sky-mist dark:bg-brand-cloud-blue/10'
-                              : hasBadge
-                                ? 'bg-gray-50 dark:bg-gray-900/50'
-                                : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
-                          } transition-colors`}
-                        >
-                          <td className="px-4 py-4">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleSelectSpeaker(speaker._id)}
-                              disabled={hasBadge}
-                              className="text-brand-aqua focus:ring-brand-aqua rounded border-gray-300 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-brand-cloud-blue dark:focus:ring-brand-cloud-blue"
-                            />
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-3">
-                              {speaker.image && (
-                                <img
-                                  src={`${speaker.image}?w=80&h=80&q=85&auto=format&fit=crop`}
-                                  alt={speaker.name}
-                                  className="h-10 w-10 rounded-full object-cover"
-                                />
-                              )}
-                              <div>
-                                <div className="font-medium text-gray-900 dark:text-white">
-                                  {speaker.name}
-                                </div>
-                                {speaker.title && (
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {speaker.title}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
-                            {speaker.email}
-                          </td>
-                          <td className="px-4 py-4">
-                            {hasBadge && badge ? (
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                      hasEmailError
-                                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                        : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                    }`}
-                                  >
-                                    {hasEmailError ? (
-                                      <>
-                                        <ExclamationTriangleIcon className="h-3 w-3" />
-                                        Email Failed
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckIcon className="h-3 w-3" />
-                                        Issued
-                                      </>
-                                    )}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(
-                                    badge.issuedAt,
-                                  ).toLocaleDateString()}
-                                </div>
-                                {hasEmailError && badge.emailError && (
-                                  <div className="text-xs text-red-600 dark:text-red-400">
-                                    {badge.emailError}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                Not Issued
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            {hasBadge && badge ? (
-                              <ActionMenu ariaLabel="Badge actions">
-                                <ActionMenuItem
-                                  onClick={() => handleViewBadge(badge)}
-                                  icon={EyeIcon}
-                                >
-                                  View Badge
-                                </ActionMenuItem>
-                                <ActionMenuItem
-                                  onClick={() =>
-                                    handleCopyBadgeUrl(
-                                      badge.badgeId,
-                                      speaker.name,
-                                    )
-                                  }
-                                  icon={ClipboardDocumentIcon}
-                                >
-                                  Copy URL
-                                </ActionMenuItem>
-                                <ActionMenuItem
-                                  onClick={() => {}}
-                                  icon={ArrowDownTrayIcon}
-                                  href={`/api/badge/${badge.badgeId}/download`}
-                                  download
-                                >
-                                  Download
-                                </ActionMenuItem>
-                                {isDevelopment && (
-                                  <>
-                                    <ActionMenuDivider />
-                                    <ActionMenuItem
-                                      onClick={() =>
-                                        handleDeleteBadge(
-                                          badge.badgeId,
-                                          speaker.name,
-                                        )
-                                      }
-                                      icon={TrashIcon}
-                                      variant="danger"
-                                      disabled={deleteMutation.isPending}
-                                    >
-                                      Delete
-                                    </ActionMenuItem>
-                                  </>
-                                )}
-                              </ActionMenu>
-                            ) : (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
-                                —
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable<SpeakerWithProposals>
+            data={eligibleSpeakers}
+            columns={columns}
+            keyExtractor={(speaker) => speaker._id}
+            isRowSelected={(speaker) => selectedSpeakers.has(speaker._id)}
+            emptyState={{
+              title:
+                badgeType === 'speaker'
+                  ? 'No eligible speakers found'
+                  : 'No organizers found',
+              description:
+                badgeType === 'speaker'
+                  ? 'Speakers must have accepted or confirmed talks.'
+                  : undefined,
+            }}
+          />
 
           {/* Badge Preview Modal */}
           <Transition appear show={showPreview}>

@@ -7,62 +7,62 @@ B.1.1 Achievement
 A collection of information about the accomplishment recognized by the Assertion. Many assertions may be created corresponding to one Achievement.
 Property Type Description Multiplicity
 id URI Unique URI for the Achievement. [1]
-type IRI The type MUST include the IRI 'Achievement'. [1..*]
-alignment Alignment An object describing which objectives or educational standards this achievement aligns to, if any. [0..*]
+type IRI The type MUST include the IRI 'Achievement'. [1.._]
+alignment Alignment An object describing which objectives or educational standards this achievement aligns to, if any. [0.._]
 achievementType AchievementType Enumeration The type of achievement. This is an extensible vocabulary. [0..1]
 creator Profile The person or organization that created the achievement definition. [0..1]
 creditsAvailable Float Credit hours associated with this entity, or credit hours possible. For example 3.0. [0..1]
 criteria Criteria Criteria describing how to earn the achievement. [1]
 description String A short description of the achievement. [1]
-endorsement EndorsementCredential Allows endorsers to make specific claims about the Achievement. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredential Allows endorsers to make specific claims about the Achievement. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format. [0.._]
 fieldOfStudy String Category, subject, area of study, discipline, or general branch of knowledge. Examples include Business, Education, Psychology, and Technology. [0..1]
 humanCode String The code, generally human readable, associated with an achievement. [0..1]
 image Image An image representing the achievement. [0..1]
 inLanguage LanguageCode The language of the achievement. [0..1]
 name String The name of the achievement. [1]
-otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0..*]
-related Related The related property identifies another Achievement that should be considered the same for most purposes. It is primarily intended to identify alternate language editions or previous versions of Achievements. [0..*]
-resultDescription ResultDescription The set of result descriptions that may be asserted as results with this achievement. [0..*]
+otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0.._]
+related Related The related property identifies another Achievement that should be considered the same for most purposes. It is primarily intended to identify alternate language editions or previous versions of Achievements. [0.._]
+resultDescription ResultDescription The set of result descriptions that may be asserted as results with this achievement. [0.._]
 specialization String Name given to the focus, concentration, or specific area of study defined in the achievement. Examples include 'Entrepreneurship', 'Technical Communication', and 'Finance'. [0..1]
-tag String One or more short, human-friendly, searchable, keywords that describe the type of achievement. [0..*]
+tag String One or more short, human-friendly, searchable, keywords that describe the type of achievement. [0.._]
 version String The version property allows issuers to set a version string for an Achievement. This is particularly useful when replacing a previous version with an update. [0..1]
 This class can be extended with additional properties.
 B.1.2 AchievementCredential
 
 AchievementCredentials are representations of an awarded achievement, used to share information about a achievement belonging to one earner. Maps to a Verifiable Credential as defined in the [VC-DATA-MODEL-2.0]. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2.._]
 id URI Unambiguous reference to the credential. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'AchievementCredential' or the URI 'OpenBadgeCredential'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'AchievementCredential' or the URI 'OpenBadgeCredential'. [1.._]
 name String The name of the credential for display purposes in wallets. For example, in a list of credentials and in detail views. [0..1]
 description String The short description of the credential for display purposes in wallets. [0..1]
 image Image The image representing the credential for display purposes in wallets. [0..1]
 awardedDate DateTimeZ Timestamp of when the credential was awarded. validFrom is used to determine the most recent version of a Credential in conjunction with issuer and id. Consequently, the only way to update a Credental is to update the validFrom, losing the date when the Credential was originally awarded. awardedDate is meant to keep this original date. [0..1]
 credentialSubject AchievementSubject The recipient of the achievement. [1]
-endorsement EndorsementCredential Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredential Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format. [0.._]
 issuer ProfileRef A description of the individual, entity, or organization that issued the credential. [1]
 validFrom DateTimeZ Timestamp of when the credential becomes valid. [1]
 validUntil DateTimeZ If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid. [0..1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.1.3 AchievementSubject
 
 A collection of information about the recipient of an achievement. Maps to Credential Subject in [VC-DATA-MODEL-2.0].
 Property Type Description Multiplicity
 id URI An identifier for the Credential Subject. Either id or at least one identifier MUST be supplied. [0..1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'AchievementSubject'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'AchievementSubject'. [1.._]
 activityEndDate DateTime The datetime the activity ended. [0..1]
 activityStartDate DateTime The datetime the activity started. [0..1]
 creditsEarned Float The number of credits earned, generally in semester or quarter credit hours. This field correlates with the Achievement creditsAvailable field. [0..1]
 achievement Achievement The achievement being awarded. [1]
-identifier IdentityObject Other identifiers for the recipient of the achievement. Either id or at least one identifier MUST be supplied. [0..*]
+identifier IdentityObject Other identifiers for the recipient of the achievement. Either id or at least one identifier MUST be supplied. [0.._]
 image Image An image representing this user's achievement. If present, this must be a PNG or SVG image, and should be prepared via the 'baking' instructions. An 'unbaked' image for the achievement is defined in the Achievement class and should not be duplicated here. [0..1]
 licenseNumber String The license number that was issued with this credential. [0..1]
 narrative Markdown A narrative that connects multiple pieces of evidence. Likely only present at this location if evidence is a multi-value array. [0..1]
@@ -108,8 +108,8 @@ B.1.7 EndorsementCredential
 
 A verifiable credential that asserts a claim about an entity. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2..*]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'. [1..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2.._]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'. [1.._]
 id URI Unambiguous reference to the credential. [1]
 name String The name of the credential for display purposes in wallets. For example, in a list of credentials and in detail views. [1]
 description String The short description of the credential for display purposes in wallets. [0..1]
@@ -118,12 +118,12 @@ awardedDate DateTimeZ Timestamp of when the credential was awarded. validFrom is
 issuer ProfileRef A description of the individual, entity, or organization that issued the credential. [1]
 validFrom DateTimeZ Timestamp of when the credential becomes valid. [1]
 validUntil DateTimeZ If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid. [0..1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.1.8 EndorsementSubject
 
@@ -180,17 +180,17 @@ B.1.14 Profile
 A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.
 Property Type Description Multiplicity
 id URI Unique URI for the Issuer/Profile file. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'. [1.._]
 name String The name of the entity or organization. [0..1]
 url URI The homepage or social media profile of the entity, whether individual or institutional. Should be a URL/URI Accessible via HTTP. [0..1]
 phone PhoneNumber [0..1]
 description String A short description of the issuer entity or organization. [0..1]
-endorsement EndorsementCredential Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredential Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format. [0.._]
 image Image An image representing the issuer. This must be a PNG or SVG image. [0..1]
 email EmailAddress An email address. [0..1]
 address Address An address for the individual or organization. [0..1]
-otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0..*]
+otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0.._]
 official String If the entity is an organization, official is the name of an authorized official of the organization. [0..1]
 parentOrg Profile The parent organization of the entity. [0..1]
 familyName String Family name. In the western world, often referred to as the 'last name' of a person. [0..1]
@@ -215,9 +215,9 @@ B.1.16 Result
 
 Describes a result that was achieved.
 Property Type Description Multiplicity
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Result'. [1.._]
 achievedLevel URI If the result represents an achieved rubric criterion level (e.g. Mastered), the value is the id of the RubricCriterionLevel in linked ResultDescription. [0..1]
-alignment Alignment The alignments between this result and nodes in external frameworks. This set of alignments are in addition to the set of alignments defined in the corresponding ResultDescription object. [0..*]
+alignment Alignment The alignments between this result and nodes in external frameworks. This set of alignments are in addition to the set of alignments defined in the corresponding ResultDescription object. [0.._]
 resultDescription URI An achievement can have many result descriptions describing possible results. The value of resultDescription is the id of the result description linked to this result. The linked result description must be in the achievement that is being asserted. [0..1]
 status ResultStatusType Enumeration The status of the achievement. Required if resultType of the linked ResultDescription is Status. [0..1]
 value String A string representing the result of the performance, or demonstration, of the achievement. For example, 'A' if the recipient received an A grade in class. [0..1]
@@ -227,14 +227,14 @@ B.1.17 ResultDescription
 Describes a possible achievement result.
 Property Type Description Multiplicity
 id URI The unique URI for this result description. Required so a result can link to this result description. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'ResultDescription'. [1..*]
-alignment Alignment Alignments between this result description and nodes in external frameworks. [0..*]
-allowedValue String An ordered list of allowed values. The values should be ordered from low to high as determined by the achievement creator. [0..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'ResultDescription'. [1.._]
+alignment Alignment Alignments between this result description and nodes in external frameworks. [0.._]
+allowedValue String An ordered list of allowed values. The values should be ordered from low to high as determined by the achievement creator. [0.._]
 name String The name of the result. [1]
 requiredLevel URI The id of the rubric criterion level required to pass as determined by the achievement creator. [0..1]
 requiredValue String A value from allowedValue or within the range of valueMin to valueMax required to pass as determined by the achievement creator. [0..1]
 resultType ResultType Enumeration The type of result this description represents. This is an extensible enumerated vocabulary. [1]
-rubricCriterionLevel RubricCriterionLevel An ordered array of rubric criterion levels that may be asserted in the linked result. The levels should be ordered from low to high as determined by the achievement creator. [0..*]
+rubricCriterionLevel RubricCriterionLevel An ordered array of rubric criterion levels that may be asserted in the linked result. The levels should be ordered from low to high as determined by the achievement creator. [0.._]
 valueMax String The maximum possible value that may be asserted in a linked result. [0..1]
 valueMin String The minimum possible value that may be asserted in a linked result. [0..1]
 This class can be extended with additional properties.
@@ -243,8 +243,8 @@ B.1.18 RubricCriterionLevel
 Describes a rubric criterion level.
 Property Type Description Multiplicity
 id URI The unique URI for this rubric criterion level. Required so a result can link to this rubric criterion level. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'. [1..*]
-alignment Alignment Alignments between this rubric criterion level and a rubric criterion levels defined in external frameworks. [0..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'RubricCriterionLevel'. [1.._]
+alignment Alignment Alignments between this rubric criterion level and a rubric criterion levels defined in external frameworks. [0.._]
 description String Description of the rubric criterion level. [0..1]
 level String The rubric performance level in terms of success. [0..1]
 name String The name of the rubric criterion level. [1]
@@ -254,19 +254,19 @@ B.1.19 VerifiableCredential
 
 A Verifiable Credential as defined in the [VC-DATA-MODEL-2.0]. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2'. [1..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/ns/credentials/v2'. [1.._]
 id URI Unambiguous reference to the credential. [0..1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential'. [1.._]
 issuer ProfileRef A description of the individual, entity, or organization that issued the credential. [1]
 validFrom DateTimeZ Timestamp of when the credential becomes valid. [1]
 validUntil DateTimeZ If the credential has some notion of validity period, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered invalid. [0..1]
 credentialSubject CredentialSubject The subject of the credential. [1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.1.20 ProfileRef
 
@@ -437,8 +437,8 @@ The data models in this section are used by the § 6. Open Badges API.
 B.2.1 GetOpenBadgeCredentialsResponse
 
 Property Type Description Multiplicity
-credential AchievementCredential OpenBadgeCredentials that have not been signed with the VC-JWT Proof Format MUST be in the credential array. [0..*]
-compactJwsString CompactJws OpenBadgeCredentials that have been signed with the VC-JWT Proof Format MUST be in the compactJwsString array. [0..*]
+credential AchievementCredential OpenBadgeCredentials that have not been signed with the VC-JWT Proof Format MUST be in the credential array. [0.._]
+compactJwsString CompactJws OpenBadgeCredentials that have been signed with the VC-JWT Proof Format MUST be in the compactJwsString array. [0.._]
 B.3 Shared API Data Models
 
 The data models in this section are shared by all 1EdTech service specifications.
@@ -648,25 +648,25 @@ B.9.2 AchievementCredentialv1p1
 
 AchievementCredentials are representations of an awarded achievement, used to share information about a achievement belonging to one earner. Maps to a Verifiable Credential as defined in the [VC-DATA-MODEL]. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2.._]
 id URI Unambiguous reference to the credential. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'AchievementCredential' or the URI 'OpenBadgeCredential'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'AchievementCredential' or the URI 'OpenBadgeCredential'. [1.._]
 name String The name of the credential for display purposes in wallets. For example, in a list of credentials and in detail views. [1]
 description String The short description of the credential for display purposes in wallets. [0..1]
 image Image The image representing the credential for display purposes in wallets. [0..1]
 awardedDate DateTimeZ Timestamp of when the credential was awarded. validFrom is used to determine the most recent version of a Credential in conjunction with issuer and id. Consequently, the only way to update a Credental is to update the validFrom, losing the date when the Credential was originally awarded. awardedDate is meant to keep this original date. [0..1]
 credentialSubject AchievementSubjectv1p1 The recipient of the achievement. [1]
-endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the credential, and the achievement and profiles in the credential. These endorsements are signed with the VC-JWT proof format. [0.._]
 issuer Profilev1p1 A description of the individual, entity, or organization that issued the credential. [1]
 issuanceDate DateTimeZ Timestamp of when the credential was issued. [1]
 expirationDate DateTimeZ If the credential has some notion of expiry, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered expired. [0..1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.9.3 AnyEndorsementCredential
 
@@ -680,8 +680,8 @@ B.9.4 EndorsementCredentialv1p1
 
 A verifiable credential that asserts a claim about an entity. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2..*]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'. [1..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1', and the second item is a URI with the value 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json'. [2.._]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential', and one of the items MUST be the URI 'EndorsementCredential'. [1.._]
 id URI Unambiguous reference to the credential. [1]
 name String The name of the credential for display purposes in wallets. For example, in a list of credentials and in detail views. [1]
 description String The short description of the credential for display purposes in wallets. [0..1]
@@ -690,42 +690,42 @@ awardedDate DateTimeZ Timestamp of when the credential was awarded. validFrom is
 issuer Profilev1p1 A description of the individual, entity, or organization that issued the credential. [1]
 issuanceDate DateTimeZ Timestamp of when the credential was issued. [1]
 expirationDate DateTimeZ If the credential has some notion of expiry, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered expired. [0..1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.9.5 VerifiableCredentialv1p1
 
 A Verifiable Credential as defined in the [VC-DATA-MODEL]. As described in § 8. Proofs (Signatures), at least one proof mechanism, and the details necessary to evaluate that proof, MUST be expressed for a credential to be a verifiable credential. In the case of an embedded proof, the credential MUST append the proof in the proof property.
 Property Type Description Multiplicity
-@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1'. [1..*]
+@context Context The value of the @context property MUST be an ordered set where the first item is a URI with the value 'https://www.w3.org/2018/credentials/v1'. [1.._]
 id URI Unambiguous reference to the credential. [0..1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the URI 'VerifiableCredential'. [1.._]
 issuer Profilev1p1 A description of the individual, entity, or organization that issued the credential. [1]
 issuanceDate DateTimeZ Timestamp of when the credential was issued. [1]
 expirationDate DateTimeZ If the credential has some notion of expiry, this indicates a timestamp when a credential should no longer be considered valid. After this time, the credential should be considered expired. [0..1]
 credentialSubject CredentialSubject The subject of the credential. [1]
-proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0..*]
-credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0..*]
+proof Proof If present, one or more embedded cryptographic proofs that can be used to detect tampering and verify the authorship of the credential. [0.._]
+credentialSchema CredentialSchema The value of the credentialSchema property MUST be one or more data schemas that provide verifiers with enough information to determine if the provided data conforms to the provided schema. [0.._]
 credentialStatus CredentialStatus The information in CredentialStatus is used to discover information about the current status of a verifiable credential, such as whether it is suspended or revoked. [0..1]
 refreshService RefreshService The information in RefreshService is used to refresh the verifiable credential. [0..1]
-termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0..*]
-evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0..*]
+termsOfUse TermsOfUse The value of the termsOfUse property tells the verifier what actions it is required to perform (an obligation), not allowed to perform (a prohibition), or allowed to perform (a permission) if it is to accept the verifiable credential. [0.._]
+evidence Evidence A description of the work that the recipient did to earn the credential. This can be a page that links out to other pages if linking directly to the work is infeasible. [0.._]
 This class can be extended with additional properties.
 B.9.6 AchievementSubjectv1p1
 
 A collection of information about the recipient of an achievement. Maps to Credential Subject in [VC-DATA-MODEL-2.0].
 Property Type Description Multiplicity
 id URI An identifier for the Credential Subject. Either id or at least one identifier MUST be supplied. [0..1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'AchievementSubject'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'AchievementSubject'. [1.._]
 activityEndDate DateTime The datetime the activity ended. [0..1]
 activityStartDate DateTime The datetime the activity started. [0..1]
 creditsEarned Float The number of credits earned, generally in semester or quarter credit hours. This field correlates with the Achievement creditsAvailable field. [0..1]
 achievement Achievementv1p1 The achievement being awarded. [1]
-identifier IdentityObject Other identifiers for the recipient of the achievement. Either id or at least one identifier MUST be supplied. [0..*]
+identifier IdentityObject Other identifiers for the recipient of the achievement. Either id or at least one identifier MUST be supplied. [0.._]
 image Image An image representing this user's achievement. If present, this must be a PNG or SVG image, and should be prepared via the 'baking' instructions. An 'unbaked' image for the achievement is defined in the Achievement class and should not be duplicated here. [0..1]
 licenseNumber String The license number that was issued with this credential. [0..1]
 narrative Markdown A narrative that connects multiple pieces of evidence. Likely only present at this location if evidence is a multi-value array. [0..1]
@@ -738,25 +738,25 @@ B.9.7 Achievementv1p1
 A collection of information about the accomplishment recognized by the Assertion. Many assertions may be created corresponding to one Achievement.
 Property Type Description Multiplicity
 id URI Unique URI for the Achievement. [1]
-type IRI [1..*]
-alignment Alignment An object describing which objectives or educational standards this achievement aligns to, if any. [0..*]
+type IRI [1.._]
+alignment Alignment An object describing which objectives or educational standards this achievement aligns to, if any. [0.._]
 achievementType AchievementType Enumeration The type of achievement. This is an extensible vocabulary. [0..1]
 creator Profilev1p1 The person or organization that created the achievement definition. [0..1]
 creditsAvailable Float Credit hours associated with this entity, or credit hours possible. For example 3.0. [0..1]
 criteria Criteria Criteria describing how to earn the achievement. [1]
 description String A short description of the achievement. [1]
-endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the Achievement. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the Achievement. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the Achievement. These endorsements are signed with the VC-JWT proof format. [0.._]
 fieldOfStudy String Category, subject, area of study, discipline, or general branch of knowledge. Examples include Business, Education, Psychology, and Technology. [0..1]
 humanCode String The code, generally human readable, associated with an achievement. [0..1]
 image Image An image representing the achievement. [0..1]
 inLanguage LanguageCode The language of the achievement. [0..1]
 name String The name of the achievement. [1]
-otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0..*]
-related Related The related property identifies another Achievement that should be considered the same for most purposes. It is primarily intended to identify alternate language editions or previous versions of Achievements. [0..*]
-resultDescription ResultDescription The set of result descriptions that may be asserted as results with this achievement. [0..*]
+otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0.._]
+related Related The related property identifies another Achievement that should be considered the same for most purposes. It is primarily intended to identify alternate language editions or previous versions of Achievements. [0.._]
+resultDescription ResultDescription The set of result descriptions that may be asserted as results with this achievement. [0.._]
 specialization String Name given to the focus, concentration, or specific area of study defined in the achievement. Examples include 'Entrepreneurship', 'Technical Communication', and 'Finance'. [0..1]
-tag String One or more short, human-friendly, searchable, keywords that describe the type of achievement. [0..*]
+tag String One or more short, human-friendly, searchable, keywords that describe the type of achievement. [0.._]
 version String The version property allows issuers to set a version string for an Achievement. This is particularly useful when replacing a previous version with an update. [0..1]
 This class can be extended with additional properties.
 B.9.8 Profilev1p1
@@ -764,17 +764,17 @@ B.9.8 Profilev1p1
 A Profile is a collection of information that describes the entity or organization using Open Badges. Issuers must be represented as Profiles, and endorsers, or other entities may also be represented using this vocabulary. Each Profile that represents an Issuer may be referenced in many BadgeClasses that it has defined. Anyone can create and host an Issuer file to start issuing Open Badges. Issuers may also serve as recipients of Open Badges, often identified within an Assertion by specific properties, like their url or contact email address.
 Property Type Description Multiplicity
 id URI Unique URI for the Issuer/Profile file. [1]
-type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'. [1..*]
+type IRI The value of the type property MUST be an unordered set. One of the items MUST be the IRI 'Profile'. [1.._]
 name String The name of the entity or organization. [0..1]
 url URI The homepage or social media profile of the entity, whether individual or institutional. Should be a URL/URI Accessible via HTTP. [0..1]
 phone PhoneNumber [0..1]
 description String A short description of the issuer entity or organization. [0..1]
-endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with a Data Integrity proof format. [0..*]
-endorsementJwt CompactJws Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format. [0..*]
+endorsement EndorsementCredentialv1p1 Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with a Data Integrity proof format. [0.._]
+endorsementJwt CompactJws Allows endorsers to make specific claims about the individual or organization represented by this profile. These endorsements are signed with the VC-JWT proof format. [0.._]
 image Image An image representing the issuer. This must be a PNG or SVG image. [0..1]
 email EmailAddress An email address. [0..1]
 address Address An address for the individual or organization. [0..1]
-otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0..*]
+otherIdentifier IdentifierEntry A list of identifiers for the described entity. [0.._]
 official String If the entity is an organization, official is the name of an authorized official of the organization. [0..1]
 parentOrg Profile The parent organization of the entity. [0..1]
 familyName String Family name. In the western world, often referred to as the 'last name' of a person. [0..1]

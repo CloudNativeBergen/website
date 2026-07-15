@@ -19,6 +19,7 @@ interface SponsorActivityTimelineProps {
   sponsorForConferenceId?: string
   limit?: number
   showHeaderFooter?: boolean
+  compact?: boolean
 }
 
 interface SponsorDayGroup {
@@ -152,7 +153,13 @@ function UserAvatar({
   )
 }
 
-function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
+function ActivityLine({
+  activity,
+  compact,
+}: {
+  activity: SponsorActivityExpanded
+  compact?: boolean
+}) {
   const iconType = useMemo(
     () => getActivityIcon(activity.activityType),
     [activity.activityType],
@@ -162,26 +169,48 @@ function ActivityLine({ activity }: { activity: SponsorActivityExpanded }) {
   })
 
   return (
-    <div className="group flex items-start gap-2.5 py-1.5">
+    <div
+      className={clsx(
+        'group flex items-start py-1.5',
+        compact ? 'gap-2' : 'gap-2.5',
+      )}
+    >
       <div
         className={clsx(
-          'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+          compact ? 'mt-0 flex h-4 w-4' : 'mt-0.5 flex h-5 w-5',
+          'shrink-0 items-center justify-center rounded-full',
           getActivityColor(activity.activityType),
         )}
       >
-        {React.createElement(iconType, { className: 'h-3 w-3' })}
+        {React.createElement(iconType, {
+          className: compact ? 'h-2.5 w-2.5' : 'h-3 w-3',
+        })}
       </div>
-      <p className="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
-        {activity.description}
+      <p
+        className={clsx(
+          'min-w-0 flex-1 text-gray-600 dark:text-gray-300',
+          compact ? 'text-xs' : 'text-sm',
+        )}
+      >
+        {compact && activity.description.length > 50
+          ? activity.description.substring(0, 50) + '...'
+          : activity.description}
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
-        <UserAvatar
-          name={activity.createdBy?.name ?? 'Automatic'}
-          image={activity.createdBy?.image}
-          isSystem={!activity.createdBy}
-          size="sm"
-        />
-        <time className="text-xs text-gray-400 dark:text-gray-500">
+        {!compact && (
+          <UserAvatar
+            name={activity.createdBy?.name ?? 'Automatic'}
+            image={activity.createdBy?.image}
+            isSystem={!activity.createdBy}
+            size="sm"
+          />
+        )}
+        <time
+          className={clsx(
+            'text-gray-400 dark:text-gray-500',
+            compact ? 'text-[10px]' : 'text-xs',
+          )}
+        >
           {timeAgo}
         </time>
       </div>
@@ -194,11 +223,13 @@ function SponsorCard({
   sponsorForConferenceId,
   activities,
   hideSponsorName,
+  compact,
 }: {
   sponsorName: string
   sponsorForConferenceId: string
   activities: SponsorActivityExpanded[]
   hideSponsorName: boolean
+  compact?: boolean
 }) {
   return (
     <div>
@@ -224,7 +255,11 @@ function SponsorCard({
         )}
       >
         {activities.map((activity) => (
-          <ActivityLine key={activity._id} activity={activity} />
+          <ActivityLine
+            key={activity._id}
+            activity={activity}
+            compact={compact}
+          />
         ))}
       </div>
     </div>
@@ -235,6 +270,7 @@ export function SponsorActivityTimeline({
   sponsorForConferenceId,
   limit = 10,
   showHeaderFooter = true,
+  compact = false,
 }: SponsorActivityTimelineProps) {
   const { data: activities = [], isLoading } =
     api.sponsor.crm.activities.list.useQuery({
@@ -309,7 +345,13 @@ export function SponsorActivityTimeline({
           </p>
         </div>
       ) : (
-        <div className={clsx('space-y-5', showHeaderFooter && 'mt-4')}>
+        <div
+          className={clsx(
+            'space-y-5',
+            showHeaderFooter && 'mt-4',
+            compact && '!space-y-2',
+          )}
+        >
           {grouped.map((dayGroup) => (
             <div key={dayGroup.dateKey}>
               <div className="mb-2 flex items-center gap-2">
@@ -326,6 +368,7 @@ export function SponsorActivityTimeline({
                     sponsorForConferenceId={group.sponsorForConferenceId}
                     activities={group.activities}
                     hideSponsorName={!!sponsorForConferenceId}
+                    compact={compact}
                   />
                 ))}
               </div>

@@ -5,9 +5,18 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isLinkResult } from '@/lib/auth-link'
 
-export default async function ProfilePage() {
+export default async function ProfilePage(props: {
+  searchParams: Promise<{ linkResult?: string }>
+}) {
   await connection()
+
+  const { linkResult: linkResultParam } = await props.searchParams
+  const linkResult =
+    linkResultParam && isLinkResult(linkResultParam)
+      ? linkResultParam
+      : undefined
 
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
@@ -35,6 +44,11 @@ export default async function ProfilePage() {
   const { conference } = await getConferenceForCurrentDomain()
 
   return (
-    <CFPProfilePage initialSpeaker={speaker} conferenceId={conference?._id} />
+    <CFPProfilePage
+      initialSpeaker={speaker}
+      conferenceId={conference?._id}
+      currentProvider={session.account?.provider}
+      linkResult={linkResult}
+    />
   )
 }

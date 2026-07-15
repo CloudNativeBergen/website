@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModal'
 import { SpeakerActions } from '@/components/admin/SpeakerActions'
+import { SpeakerMergeModal } from '@/components/admin/SpeakerMergeModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import {
@@ -13,6 +14,7 @@ import {
   EnvelopeIcon,
   AcademicCapIcon,
   CreditCardIcon,
+  ArrowsPointingInIcon,
 } from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
@@ -47,6 +49,7 @@ export default function SpeakersPageClient({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
   const [selectedSpeaker, setSelectedSpeaker] = useState<
     (Speaker & { proposals: ProposalExisting[] }) | null
   >(null)
@@ -191,6 +194,12 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
+              label: 'Merge Duplicates',
+              onClick: () => setIsMergeModalOpen(true),
+              icon: <ArrowsPointingInIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
               label: 'Email Speakers',
               onClick: () => setIsEmailModalOpen(true),
               icon: <EnvelopeIcon className="h-4 w-4" />,
@@ -235,6 +244,17 @@ export default function SpeakersPageClient({
             talks={previewTalks}
           />
         )}
+
+        <SpeakerMergeModal
+          isOpen={isMergeModalOpen}
+          onClose={() => setIsMergeModalOpen(false)}
+          speakers={speakers.map((s) => ({
+            _id: s._id,
+            name: s.name,
+            email: s.email,
+          }))}
+          onMerged={() => router.refresh()}
+        />
       </div>
 
       <SpeakerActions

@@ -243,3 +243,37 @@ export const WithOtherSubmissions: Story = {
     },
   },
 }
+
+export const WithdrawnWithReason: Story = {
+  args: {
+    proposal: createMockProposal({
+      status: Status.withdrawn,
+      withdrawnReason:
+        'The speaker is no longer able to attend the conference due to a scheduling conflict with another commitment, and has asked us to withdraw the talk so the slot can be offered to someone on the waitlist.',
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A withdrawn proposal surfaces the persisted withdrawal reason in a labelled callout near the top of the detail view.',
+      },
+    },
+  },
+}
+
+export const WithdrawnWithoutReason: Story = {
+  args: {
+    proposal: createMockProposal({
+      status: Status.withdrawn,
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A legacy withdrawn proposal with no stored reason renders no callout (and does not crash).',
+      },
+    },
+  },
+}

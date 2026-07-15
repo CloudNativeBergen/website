@@ -1,11 +1,7 @@
 'use client'
 
-import {
-  MagnifyingGlassIcon,
-  XMarkIcon,
-  FunnelIcon,
-} from '@heroicons/react/20/solid'
-import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
+import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import { AdminFilterBar } from '@/components/admin/AdminFilterBar'
 import {
   BoardViewSwitcher,
   type BoardView,
@@ -63,8 +59,6 @@ export interface SponsorCRMFilterBarProps {
   isMobileSearchOpen?: boolean
   /** Callback to toggle mobile search */
   onToggleMobileSearch?: () => void
-  /** Callback to open mobile filter sheet */
-  onOpenMobileFilter?: () => void
 }
 
 export function SponsorCRMFilterBar({
@@ -86,7 +80,6 @@ export function SponsorCRMFilterBar({
   onClearSelection,
   isMobileSearchOpen = false,
   onToggleMobileSearch,
-  onOpenMobileFilter,
 }: SponsorCRMFilterBarProps) {
   const activeFilterCount =
     tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
@@ -143,104 +136,51 @@ export function SponsorCRMFilterBar({
 
         <div className="hidden h-6 w-px bg-gray-200 sm:block dark:bg-gray-700" />
 
-        {/* Filter dropdowns - desktop only */}
-        <div className="hidden items-center gap-1.5 lg:flex">
-          <FilterDropdown
-            label="Tier"
-            activeCount={tiersFilter.length}
-            position="left"
-            size="sm"
-          >
-            {tiers.length === 0 ? (
-              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                No tiers available
-              </div>
-            ) : (
-              sortSponsorTiers(tiers).map((tier: SponsorTier) => (
-                <FilterOption
-                  key={tier._id}
-                  onClick={() => onToggleTier(tier._id)}
-                  checked={tiersFilter.includes(tier._id)}
-                  keepOpen
-                >
-                  {formatTierLabel(tier)}
-                </FilterOption>
-              ))
-            )}
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Owner"
-            activeCount={assignedToFilter ? 1 : 0}
-            position="left"
-            size="sm"
-          >
-            <FilterOption
-              onClick={() => onSetOrganizer(null)}
-              checked={!assignedToFilter}
-              type="radio"
-            >
-              All Owners
-            </FilterOption>
-            <FilterOption
-              onClick={() => onSetOrganizer('unassigned')}
-              checked={assignedToFilter === 'unassigned'}
-              type="radio"
-            >
-              Unassigned
-            </FilterOption>
-            <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-            {organizers.map((organizer) => (
-              <FilterOption
-                key={organizer._id}
-                onClick={() => onSetOrganizer(organizer._id)}
-                checked={assignedToFilter === organizer._id}
-                type="radio"
-              >
-                {organizer.name}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          <FilterDropdown
-            label="Tags"
-            activeCount={tagsFilter.length}
-            position="left"
-            size="sm"
-          >
-            {TAGS.map((tag) => (
-              <FilterOption
-                key={tag.value}
-                onClick={() => onToggleTag(tag.value)}
-                checked={tagsFilter.includes(tag.value)}
-                keepOpen
-              >
-                {tag.label}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-        </div>
-
-        {/* Mobile: Filter button with badge */}
-        {onOpenMobileFilter && (
-          <button
-            onClick={onOpenMobileFilter}
-            className={clsx(
-              'relative flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors lg:hidden',
-              activeFilterCount > 0
-                ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 ring-inset dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-700'
-                : 'text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800',
-            )}
-          >
-            <FunnelIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Filter</span>
-            {activeFilterCount > 0 && (
-              <span className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-bold text-white dark:bg-indigo-500">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        )}
+        {/* Filters: desktop dropdowns + mobile bottom sheet */}
+        <AdminFilterBar
+          variant="bare"
+          filters={[
+            {
+              key: 'tier',
+              label: 'Tier',
+              options: sortSponsorTiers(tiers).map((tier: SponsorTier) => ({
+                value: tier._id,
+                label: formatTierLabel(tier),
+              })),
+              selected: tiersFilter,
+              onChange: onToggleTier,
+              emptyText: 'No tiers available',
+            },
+            {
+              key: 'owner',
+              label: 'Owner',
+              options: [
+                { value: '', label: 'All Owners' },
+                { value: 'unassigned', label: 'Unassigned' },
+                ...organizers.map((organizer) => ({
+                  value: organizer._id,
+                  label: organizer.name,
+                })),
+              ],
+              selected: [assignedToFilter ?? ''],
+              onChange: (value) => onSetOrganizer(value === '' ? null : value),
+              multi: false,
+            },
+            {
+              key: 'tags',
+              label: 'Tags',
+              options: TAGS.map((tag) => ({
+                value: tag.value,
+                label: tag.label,
+              })),
+              selected: tagsFilter,
+              onChange: (value) => onToggleTag(value as SponsorTag),
+            },
+          ]}
+          onClearAll={onClearAllFilters}
+          activeFilterCount={activeFilterCount}
+          mobileFilterLabel="Filter"
+        />
 
         <div className="ml-auto hidden h-6 w-px bg-gray-200 sm:block dark:bg-gray-700" />
 

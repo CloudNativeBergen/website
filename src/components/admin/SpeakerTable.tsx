@@ -302,6 +302,97 @@ export function SpeakerTable({
     typeof value === 'boolean' ? value : value !== 'all',
   ).length
 
+  const renderSpeakerTalks = (speaker: SpeakerWithProposals) => (
+    <div className="space-y-1">
+      {speaker.proposals
+        .filter((proposal) => {
+          if (!currentConferenceId) return true
+          return getProposalConferenceId(proposal) === currentConferenceId
+        })
+        .map((proposal) => (
+          <div
+            key={`${speaker._id}-${proposal._id}`}
+            className="flex items-center gap-2 text-xs"
+          >
+            <StatusBadge
+              label={
+                proposal.status.charAt(0).toUpperCase() +
+                proposal.status.slice(1)
+              }
+              color={getProposalBadgeColor(proposal.status)}
+              icon={
+                proposal.status === Status.confirmed
+                  ? CheckBadgeIcon
+                  : ClockIcon
+              }
+            />
+            <span
+              className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
+              title={proposal.title}
+            >
+              {proposal.title}
+            </span>
+            <span
+              className="shrink-0 text-gray-500 dark:text-gray-400"
+              title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
+            >
+              {getCompactFormat(proposal.format)} •{' '}
+              {languages.get(proposal.language)}
+            </span>
+          </div>
+        ))}
+    </div>
+  )
+
+  const renderSpeakerActions = (speaker: SpeakerWithProposals) => (
+    <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
+      <ActionMenuItem
+        onClick={() =>
+          toggleFeatured(speaker._id, featuredSpeakerIds.includes(speaker._id))
+        }
+        icon={StarIcon}
+      >
+        {featuredSpeakerIds.includes(speaker._id)
+          ? 'Remove from Featured'
+          : 'Feature Speaker'}
+      </ActionMenuItem>
+      <ActionMenuDivider />
+      <ActionMenuItem onClick={() => onEditSpeaker(speaker)} icon={PencilIcon}>
+        Edit Speaker
+      </ActionMenuItem>
+      <ActionMenuItem onClick={() => onPreviewSpeaker(speaker)} icon={EyeIcon}>
+        Preview Profile
+      </ActionMenuItem>
+      {AppEnvironment.isDevelopment && (
+        <>
+          <ActionMenuDivider />
+          <ActionMenuItem
+            onClick={async () => {
+              const { addImpersonateParam } =
+                await import('@/lib/impersonation')
+              window.open(
+                addImpersonateParam('/cfp/list', speaker._id),
+                '_blank',
+              )
+            }}
+            icon={ArrowRightCircleIcon}
+          >
+            View as Speaker (dev)
+          </ActionMenuItem>
+        </>
+      )}
+    </ActionMenu>
+  )
+
+  const renderSpeakerAvatar = (speaker: SpeakerWithProposals) =>
+    speaker.image ? (
+      <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        <SpeakerAvatarImage src={speaker.image} name={speaker.name} size={32} />
+      </div>
+    ) : (
+      <MissingAvatar name={speaker.name} size={32} />
+    )
+
   if (speakers.length === 0) {
     return (
       <TableEmptyState
@@ -448,7 +539,110 @@ export function SpeakerTable({
         </FilterDropdown>
       </TableToolbar>
 
-      <TableContainer>
+      <div className="space-y-3 md:hidden">
+        {filteredSpeakers.map((speaker) => {
+          const linkedinLink = extractLinkedInLink(speaker.links)
+          const blueskyLink = hasBlueskySocial(speaker.links)
+
+          return (
+            <div
+              key={speaker._id}
+              className="rounded-lg border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center">
+                  <div className="h-8 w-8 shrink-0">
+                    {renderSpeakerAvatar(speaker)}
+                  </div>
+                  <div className="ml-3 min-w-0">
+                    <div className="truncate font-medium text-gray-900 dark:text-white">
+                      {speaker.name}
+                    </div>
+                    {speaker.title && (
+                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {speaker.title}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0">{renderSpeakerActions(speaker)}</div>
+              </div>
+
+              {columnVisibility.indicators && (
+                <div className="mt-3">
+                  <SpeakerIndicators
+                    speakers={[speaker]}
+                    size="md"
+                    maxVisible={5}
+                    className="justify-start"
+                    currentConferenceId={currentConferenceId}
+                    featuredSpeakerIds={featuredSpeakerIds}
+                  />
+                </div>
+              )}
+
+              {columnVisibility.email && speaker.email && (
+                <div className="mt-3 flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                  <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                  <a
+                    href={`mailto:${speaker.email}`}
+                    className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                    title={speaker.email}
+                  >
+                    {speaker.email}
+                  </a>
+                  <CopyEmailButton email={speaker.email} />
+                </div>
+              )}
+
+              {columnVisibility.linkedin && linkedinLink && (
+                <div className="mt-3 flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                  <div className="mr-2 h-4 w-4 shrink-0">
+                    {iconForLink(
+                      linkedinLink,
+                      'h-4 w-4 text-gray-400 dark:text-gray-500',
+                    )}
+                  </div>
+                  <a
+                    href={linkedinLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                    title={titleForLink(linkedinLink)}
+                  >
+                    View Profile
+                  </a>
+                </div>
+              )}
+
+              {columnVisibility.bluesky && blueskyLink && (
+                <div className="mt-3 flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                  <div className="mr-2 h-4 w-4 shrink-0">
+                    {iconForLink(
+                      blueskyLink,
+                      'h-4 w-4 text-gray-400 dark:text-gray-500',
+                    )}
+                  </div>
+                  <a
+                    href={blueskyLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                    title={titleForLink(blueskyLink)}
+                  >
+                    View Profile
+                  </a>
+                  <CopyBlueskyUsernameButton blueskyLink={blueskyLink} />
+                </div>
+              )}
+
+              <div className="mt-3">{renderSpeakerTalks(speaker)}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      <TableContainer className="hidden md:block">
         <table className="w-full table-fixed divide-y divide-gray-300 dark:divide-gray-700">
           <TableHeader>
             <tr>
@@ -477,17 +671,7 @@ export function SpeakerTable({
                   <Td>
                     <div className="flex min-w-0 items-center">
                       <div className="h-8 w-8 shrink-0">
-                        {speaker.image ? (
-                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
-                            <SpeakerAvatarImage
-                              src={speaker.image}
-                              name={speaker.name}
-                              size={32}
-                            />
-                          </div>
-                        ) : (
-                          <MissingAvatar name={speaker.name} size={32} />
-                        )}
+                        {renderSpeakerAvatar(speaker)}
                       </div>
                       <div className="ml-3 min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
@@ -585,98 +769,10 @@ export function SpeakerTable({
                       )}
                     </Td>
                   )}
-                  <Td>
-                    <div className="space-y-1">
-                      {speaker.proposals
-                        .filter((proposal) => {
-                          if (!currentConferenceId) return true
-                          return (
-                            getProposalConferenceId(proposal) ===
-                            currentConferenceId
-                          )
-                        })
-                        .map((proposal) => (
-                          <div
-                            key={`${speaker._id}-${proposal._id}`}
-                            className="flex items-center gap-2 text-xs"
-                          >
-                            <StatusBadge
-                              label={
-                                proposal.status.charAt(0).toUpperCase() +
-                                proposal.status.slice(1)
-                              }
-                              color={getProposalBadgeColor(proposal.status)}
-                              icon={
-                                proposal.status === Status.confirmed
-                                  ? CheckBadgeIcon
-                                  : ClockIcon
-                              }
-                            />
-                            <span
-                              className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
-                              title={proposal.title}
-                            >
-                              {proposal.title}
-                            </span>
-                            <span
-                              className="shrink-0 text-gray-500 dark:text-gray-400"
-                              title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
-                            >
-                              {getCompactFormat(proposal.format)} •{' '}
-                              {languages.get(proposal.language)}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </Td>
+                  <Td>{renderSpeakerTalks(speaker)}</Td>
                   <Td align="right" className="whitespace-nowrap">
                     <div className="flex items-center justify-end">
-                      <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
-                        <ActionMenuItem
-                          onClick={() =>
-                            toggleFeatured(
-                              speaker._id,
-                              featuredSpeakerIds.includes(speaker._id),
-                            )
-                          }
-                          icon={StarIcon}
-                        >
-                          {featuredSpeakerIds.includes(speaker._id)
-                            ? 'Remove from Featured'
-                            : 'Feature Speaker'}
-                        </ActionMenuItem>
-                        <ActionMenuDivider />
-                        <ActionMenuItem
-                          onClick={() => onEditSpeaker(speaker)}
-                          icon={PencilIcon}
-                        >
-                          Edit Speaker
-                        </ActionMenuItem>
-                        <ActionMenuItem
-                          onClick={() => onPreviewSpeaker(speaker)}
-                          icon={EyeIcon}
-                        >
-                          Preview Profile
-                        </ActionMenuItem>
-                        {AppEnvironment.isDevelopment && (
-                          <>
-                            <ActionMenuDivider />
-                            <ActionMenuItem
-                              onClick={async () => {
-                                const { addImpersonateParam } =
-                                  await import('@/lib/impersonation')
-                                window.open(
-                                  addImpersonateParam('/cfp/list', speaker._id),
-                                  '_blank',
-                                )
-                              }}
-                              icon={ArrowRightCircleIcon}
-                            >
-                              View as Speaker (dev)
-                            </ActionMenuItem>
-                          </>
-                        )}
-                      </ActionMenu>
+                      {renderSpeakerActions(speaker)}
                     </div>
                   </Td>
                 </Tr>

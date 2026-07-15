@@ -9,6 +9,56 @@ import {
   audiences,
 } from '../types'
 import { getFormatConfig } from './config'
+import {
+  StatusBadge as SharedStatusBadge,
+  type BadgeColor,
+} from '@/components/StatusBadge'
+
+/**
+ * Canonical proposal-status → shared badge colour mapping. Mirrors the hues in
+ * {@link getStatusBadgeConfig} so the shared {@link SharedStatusBadge} renders the
+ * same colour ladder used across proposal surfaces.
+ */
+const PROPOSAL_STATUS_BADGE_COLOR: Record<Status, BadgeColor> = {
+  [Status.draft]: 'yellow',
+  [Status.submitted]: 'blue',
+  [Status.accepted]: 'purple',
+  [Status.waitlisted]: 'orange',
+  [Status.confirmed]: 'green',
+  [Status.rejected]: 'red',
+  [Status.withdrawn]: 'gray',
+  [Status.deleted]: 'gray',
+}
+
+export function getProposalStatusBadgeColor(status: Status): BadgeColor {
+  return PROPOSAL_STATUS_BADGE_COLOR[status] ?? 'gray'
+}
+
+interface ProposalStatusBadgeProps {
+  status: Status
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  className?: string
+}
+
+/**
+ * Thin domain adapter around the shared {@link SharedStatusBadge}. Callers pass a
+ * proposal {@link Status} and get the canonical label + colour without
+ * re-deriving the ladder.
+ */
+export function ProposalStatusBadge({
+  status,
+  icon,
+  className,
+}: ProposalStatusBadgeProps) {
+  return (
+    <SharedStatusBadge
+      label={statuses.get(status) ?? 'Unknown'}
+      color={getProposalStatusBadgeColor(status)}
+      icon={icon}
+      className={className}
+    />
+  )
+}
 
 export interface BadgeConfig {
   text: string

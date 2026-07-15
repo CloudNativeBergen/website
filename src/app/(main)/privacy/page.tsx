@@ -38,11 +38,16 @@ import {
 } from '@heroicons/react/24/outline'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Privacy Policy - Cloud Native Days Norway',
-  description:
-    'Privacy policy and data protection information for Cloud Native Days Norway conference',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Privacy Policy - Cloud Native Days Norway',
+    description:
+      'Privacy policy and data protection information for Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/privacy'),
+  }
 }
 
 async function CachedPrivacyContent({ domain }: { domain: string }) {
@@ -176,6 +181,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Social media links and professional profiles
                             </li>
                             <li>• Profile photos and presentation history</li>
+                            <li>• Country of residence (optional)</li>
                           </ul>
                         </div>
                         <div>
@@ -188,9 +194,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               signing in)
                             </li>
                             <li>
-                              • Optional diversity and inclusion details
-                              (special category data, collected only with your
-                              explicit consent)
+                              • Optional diversity and inclusion details,
+                              including self-reported gender (special category
+                              data, collected only with your explicit consent
+                              and used only for aggregate diversity reporting)
                             </li>
                             <li>• Local speaker status (optional)</li>
                           </ul>

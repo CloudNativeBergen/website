@@ -1,4 +1,4 @@
-import { type Metadata } from 'next'
+import { type Metadata, type Viewport } from 'next'
 import {
   Inter,
   JetBrains_Mono,
@@ -15,7 +15,14 @@ import { headers } from 'next/headers'
 import { Suspense } from 'react'
 
 import '@/styles/tailwind.css'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
+import {
+  InstallPrompt,
+  PwaInstallProvider,
+  ServiceWorkerRegistrar,
+} from '@/components/pwa'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { SessionProviderWrapper } from '@/components/providers/SessionProviderWrapper'
@@ -62,8 +69,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers()
   const host = headersList.get('host') || 'localhost:3000'
 
-  const protocol = host.includes('localhost') ? 'http' : 'https'
-  const metadataBase = new URL(`${protocol}://${host}`)
+  // Normalize the metadata origin to the resolved edition's canonical
+  // production host (its primary `domains` entry) so OpenGraph and canonical
+  // URLs point at the real domain even when served from a preview or apex
+  // host. When no conference resolves (e.g. localhost), this falls back to the
+  // request host, keeping local development correct.
+  const { conference } = await getConferenceForDomain(host)
+  const metadataBase = new URL(canonicalOrigin(conference, host))
 
   return {
     metadataBase,
@@ -74,7 +86,37 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description:
       'We bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+    // PWA / installability. Next injects the manifest link automatically from
+    // `app/manifest.ts`; here we add the iOS web-app meta and the icon links.
+    // The apple-touch icon and favicons resolve per host via the dynamic
+    // `/pwa/icon/*` routes, with committed static PNGs as the ultimate fallback.
+    manifest: '/manifest.webmanifest',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: 'Cloud Native Days',
+    },
+    icons: {
+      icon: [
+        { url: '/favicon.ico', sizes: 'any' },
+        { url: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
+        { url: '/favicon-16.png', type: 'image/png', sizes: '16x16' },
+      ],
+      apple: [{ url: '/pwa/icon/apple-touch', sizes: '180x180' }],
+    },
   }
+}
+
+/**
+ * Viewport-level `theme-color`, switched per color scheme so the browser UI
+ * (Android status bar / desktop title bar) matches the page: white in light
+ * mode, deep navy in dark mode.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b1220' },
+  ],
 }
 
 export default function RootLayout({
@@ -126,12 +168,16 @@ export default function RootLayout({
       <body className="flex min-h-full bg-white dark:bg-gray-950">
         <ThemeProvider>
           <TRPCProvider>
-            <div className="flex w-full flex-col">
-              <DevBanner />
-              <Suspense>
-                <SessionProviderWrapper>{children}</SessionProviderWrapper>
-              </Suspense>
-            </div>
+            <PwaInstallProvider>
+              <div className="flex w-full flex-col">
+                <DevBanner />
+                <Suspense>
+                  <SessionProviderWrapper>{children}</SessionProviderWrapper>
+                </Suspense>
+                <InstallPrompt />
+                <ServiceWorkerRegistrar />
+              </div>
+            </PwaInstallProvider>
           </TRPCProvider>
         </ThemeProvider>
         <Analytics />

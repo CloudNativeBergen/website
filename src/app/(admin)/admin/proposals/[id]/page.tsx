@@ -86,7 +86,18 @@ export default async function ProposalDetailPage({
         </div>
 
         <div className="w-full lg:w-96 lg:shrink-0">
+          {/* Review scoring comes first: on mobile this column stacks below
+              the proposal, so a reviewer reaches scoring without scrolling
+              past the post-conference published content and audience feedback.
+              Source order (not CSS order) so keyboard/screen-reader order
+              matches the visual order. */}
           <div className="space-y-4 p-4">
+            <ProposalReviewPanel
+              proposalId={proposal._id}
+              initialReviews={proposal.reviews || []}
+              currentUser={session?.speaker}
+              domain={domain}
+            />
             <ProposalPublishedContent
               proposalId={proposal._id}
               currentVideoUrl={getProposalVideoUrl(proposal)}
@@ -99,12 +110,6 @@ export default async function ProposalDetailPage({
               currentFeedback={proposal.audienceFeedback}
               status={proposal.status}
               conferenceStartDate={conference.startDate}
-            />
-            <ProposalReviewPanel
-              proposalId={proposal._id}
-              initialReviews={proposal.reviews || []}
-              currentUser={session?.speaker}
-              domain={domain}
             />
           </div>
         </div>

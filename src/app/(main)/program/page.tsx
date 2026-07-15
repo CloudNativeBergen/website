@@ -8,13 +8,21 @@ import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import { EventJsonLd } from '@/components/seo/EventJsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
+import { performersFromSchedules } from '@/lib/seo/eventJsonLd'
+import { canonicalAlternates, canonicalUrl } from '@/lib/seo/canonical'
+import type { Metadata } from 'next'
 
-export const metadata = {
-  title: 'Program',
-  description: 'Conference program and schedule',
-  twitter: {
-    card: 'summary_large_image',
-  },
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Program',
+    description: 'Conference program and schedule',
+    alternates: await canonicalAlternates('/program'),
+    twitter: {
+      card: 'summary_large_image',
+    },
+  }
 }
 
 async function CachedProgramContent({ domain }: { domain: string }) {
@@ -70,8 +78,24 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     )
   }
 
+  const performers = performersFromSchedules(conference.schedules)
+
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24 print:py-0">
+      <EventJsonLd
+        conference={conference}
+        domain={domain}
+        performers={performers}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', url: canonicalUrl(conference, domain, '/') },
+          {
+            name: 'Program',
+            url: canonicalUrl(conference, domain, '/program'),
+          },
+        ]}
+      />
       <DevTimeProvider />
       <DevTimeControl schedules={conference.schedules} />
       <BackgroundImage className="-top-40 -bottom-32 print:hidden" />

@@ -30,6 +30,9 @@ import { PhotoGallerySection } from '@/components/PhotoGallerySection'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { PersonJsonLd } from '@/components/seo/PersonJsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
+import { canonicalUrl } from '@/lib/seo/canonical'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -83,6 +86,15 @@ export async function generateMetadata({ params }: Props) {
   return {
     title,
     description,
+    alternates: {
+      canonical: canonicalUrl(
+        conference,
+        domain,
+        // Use the speaker's own slug (not the raw request param) so slug
+        // variants all canonicalize to one URL.
+        `/speaker/${speaker.slug ?? decodedSlug}`,
+      ),
+    },
     openGraph: {
       title,
       description,
@@ -134,8 +146,30 @@ async function CachedSpeakerContent({
     )
   }
 
+  const speakerUrl = canonicalUrl(
+    conference,
+    domain,
+    // Canonicalize on the speaker's own slug, not the request param.
+    `/speaker/${speaker.slug ?? slug}`,
+  )
+  const speakerImage =
+    speaker.image && typeof speaker.image === 'string'
+      ? speakerImageUrl(speaker.image)
+      : undefined
+
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <PersonJsonLd speaker={speaker} url={speakerUrl} image={speakerImage} />
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', url: canonicalUrl(conference, domain, '/') },
+          {
+            name: 'Speakers',
+            url: canonicalUrl(conference, domain, '/speaker'),
+          },
+          { name: speaker.name, url: speakerUrl },
+        ]}
+      />
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-7xl">

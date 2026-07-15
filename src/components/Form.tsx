@@ -125,6 +125,7 @@ export function Textarea({
   value,
   setValue,
   placeholder,
+  required,
 }: {
   name: string
   label: string
@@ -132,6 +133,7 @@ export function Textarea({
   value?: string
   setValue: (val: string) => void
   placeholder?: string
+  required?: boolean
 }) {
   return (
     <>
@@ -140,6 +142,7 @@ export function Textarea({
         className="block text-sm/6 font-medium text-gray-900 dark:text-white"
       >
         {label}
+        {required && <span className="text-red-500"> *</span>}
       </label>
       <div className="mt-2">
         <textarea
@@ -147,6 +150,7 @@ export function Textarea({
           name={name}
           rows={rows}
           value={value}
+          required={required}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
@@ -165,6 +169,7 @@ export function Dropdown({
   placeholder = 'Select an option',
   disabled,
   required,
+  clearable = false,
 }: {
   name: string
   label?: string
@@ -174,6 +179,7 @@ export function Dropdown({
   placeholder?: string
   disabled?: boolean
   required?: boolean
+  clearable?: boolean
 }) {
   return (
     <>
@@ -196,10 +202,14 @@ export function Dropdown({
           required={required}
           className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
         >
-          {!value && (
-            <option value="" disabled>
-              {placeholder}
-            </option>
+          {clearable ? (
+            <option value="">{placeholder}</option>
+          ) : (
+            !value && (
+              <option value="" disabled>
+                {placeholder}
+              </option>
+            )
           )}
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>

@@ -1,7 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { SpeakerInput, Flags } from '@/lib/speaker/types'
+import {
+  SpeakerInput,
+  Flags,
+  genderOptions,
+  genderPreferToSelfDescribe,
+  type Gender,
+} from '@/lib/speaker/types'
 import { ProfileEmail } from '@/lib/profile/types'
 import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 import { api } from '@/lib/trpc/client'
@@ -16,6 +22,9 @@ import {
   Checkbox,
   LinkInput,
 } from '../Form'
+
+// Derived purely from the module-level `genderOptions`; allocate once.
+const genderOptionsMap = new Map(genderOptions.map((g) => [g, g]))
 
 interface SpeakerDetailsFormProps {
   speaker: SpeakerInput
@@ -55,6 +64,13 @@ export function SpeakerDetailsForm({
     string | null
   >(speaker?.image && speaker.image.startsWith('http') ? speaker.image : null)
   const [speakerFlags, setSpeakerFlags] = useState(speaker?.flags ?? [])
+  const [speakerGender, setSpeakerGender] = useState<Gender | ''>(
+    speaker?.gender ?? '',
+  )
+  const [speakerGenderSelfDescribe, setSpeakerGenderSelfDescribe] = useState(
+    speaker?.genderSelfDescribe ?? '',
+  )
+  const [speakerCountry, setSpeakerCountry] = useState(speaker?.country ?? '')
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
   )
@@ -101,6 +117,9 @@ export function SpeakerDetailsForm({
       speaker?.image && speaker.image.startsWith('http') ? speaker.image : null,
     )
     setSpeakerFlags(speaker?.flags ?? [])
+    setSpeakerGender(speaker?.gender ?? '')
+    setSpeakerGenderSelfDescribe(speaker?.genderSelfDescribe ?? '')
+    setSpeakerCountry(speaker?.country ?? '')
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
     setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
@@ -198,12 +217,22 @@ export function SpeakerDetailsForm({
   useEffect(() => {
     const links = speakerLinks.filter((link) => link.length > 0)
 
+    const isSelfDescribe = speakerGender === genderPreferToSelfDescribe
+
     setSpeaker({
       name: speakerName,
       title: speakerTitle,
       bio: speakerBio,
       flags: speakerFlags,
       links,
+      // Emit `null` (not `undefined`) when empty so the cleared value survives
+      // JSON serialization and is unset in Sanity by updateSpeaker.
+      gender: speakerGender || null,
+      genderSelfDescribe:
+        isSelfDescribe && speakerGenderSelfDescribe
+          ? speakerGenderSelfDescribe
+          : null,
+      country: speakerCountry || null,
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -231,6 +260,9 @@ export function SpeakerDetailsForm({
     speakerTitle,
     speakerBio,
     speakerFlags,
+    speakerGender,
+    speakerGenderSelfDescribe,
+    speakerCountry,
     speakerLinks,
     speakerImage,
     imageChanged,
@@ -277,6 +309,45 @@ export function SpeakerDetailsForm({
             value={speakerTitle}
             setValue={setSpeakerTitle}
           />
+        </div>
+
+        <div className="sm:col-span-4">
+          <Input
+            name="speaker_country"
+            label="Country (optional)"
+            value={speakerCountry}
+            setValue={setSpeakerCountry}
+          />
+          <HelpText>
+            Your country of residence. Optional, and used only to help
+            organizers understand travel needs.
+          </HelpText>
+        </div>
+
+        <div className="sm:col-span-4">
+          <Dropdown
+            name="speaker_gender"
+            label="Gender (optional)"
+            value={speakerGender}
+            setValue={(value: string) => setSpeakerGender(value as Gender | '')}
+            options={genderOptionsMap}
+            placeholder="Select…"
+            clearable
+          />
+          <HelpText>
+            Optional. Collected only for aggregate diversity reporting and never
+            shown on your public profile.
+          </HelpText>
+          {speakerGender === genderPreferToSelfDescribe && (
+            <div className="mt-4">
+              <Input
+                name="speaker_gender_self_describe"
+                label="Self-describe (optional)"
+                value={speakerGenderSelfDescribe}
+                setValue={setSpeakerGenderSelfDescribe}
+              />
+            </div>
+          )}
         </div>
 
         <div className="col-span-full">

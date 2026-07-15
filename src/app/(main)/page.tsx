@@ -5,6 +5,7 @@ import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import {
   isCfpOpen,
   isProgramPublished,
@@ -27,6 +28,8 @@ import { formatDatesSafe } from '@/lib/time'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import { EventJsonLd } from '@/components/seo/EventJsonLd'
+import { canonicalUrl } from '@/lib/seo/canonical'
 
 function truncateDescription(text: string, maxLength = 160): string {
   const trimmed = text.trim()
@@ -42,8 +45,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const { conference, error } = await getConferenceForDomain(domain)
 
+  const canonical = canonicalUrl(conference, domain, '/')
+
   if (error || !conference?.title) {
-    return { twitter: { card: 'summary_large_image' } }
+    return {
+      alternates: { canonical },
+      twitter: { card: 'summary_large_image' },
+    }
   }
 
   const dates = formatDatesSafe(conference.startDate, conference.endDate)
@@ -63,6 +71,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { absolute: title },
     ...(description && { description }),
+    alternates: { canonical },
     openGraph: {
       title,
       ...(description && { description }),
@@ -71,78 +80,6 @@ export async function generateMetadata(): Promise<Metadata> {
       card: 'summary_large_image',
     },
   }
-}
-
-/**
- * Builds a schema.org Event JSON-LD object for the homepage.
- * https://nextjs.org/docs/app/guides/json-ld
- */
-function buildEventJsonLd(
-  conference: Conference,
-  domain: string,
-  lowestTicketPrice: LowestTicketPrice | null,
-): Record<string, unknown> {
-  const protocol = domain.includes('localhost') ? 'http' : 'https'
-  const siteUrl = `${protocol}://${domain}`
-
-  const jsonLd: Record<string, unknown> = {
-    '@context': 'https://schema.org',
-    '@type': 'Event',
-    name: conference.title,
-    startDate: conference.startDate,
-    endDate: conference.endDate,
-    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-    eventStatus: 'https://schema.org/EventScheduled',
-    image: [`${siteUrl}/opengraph-image`],
-    organizer: {
-      '@type': 'Organization',
-      name: conference.organizer,
-      url: siteUrl,
-    },
-  }
-
-  if (conference.description && typeof conference.description === 'string') {
-    jsonLd.description = conference.description
-  }
-
-  if (conference.venueName || conference.city) {
-    const address: Record<string, unknown> = { '@type': 'PostalAddress' }
-    if (conference.venueAddress) {
-      address.streetAddress = conference.venueAddress
-    }
-    if (conference.city) {
-      address.addressLocality = conference.city
-    }
-    if (conference.country) {
-      address.addressCountry = conference.country
-    }
-
-    jsonLd.location = {
-      '@type': 'Place',
-      name: conference.venueName || conference.city,
-      address,
-    }
-  }
-
-  // Offers only while registration is genuinely available (registrationEnabled
-  // + link + conference not over) — structured data must never claim tickets
-  // are purchasable while the site itself hides every ticket CTA
-  if (isRegistrationAvailable(conference) && conference.registrationLink) {
-    const offers: Record<string, unknown> = {
-      '@type': 'Offer',
-      url: conference.registrationLink,
-      priceCurrency: 'NOK',
-      availability: 'https://schema.org/InStock',
-    }
-    if (lowestTicketPrice) {
-      // Google's Event spec wants the lowest price including all mandatory
-      // charges, so the structured-data price is incl. VAT
-      offers.price = lowestTicketPrice.amountInclVat
-    }
-    jsonLd.offers = offers
-  }
-
-  return jsonLd
 }
 
 /**
@@ -273,8 +210,6 @@ async function CachedHomeContent({ domain }: { domain: string }) {
     }
   }
 
-  const jsonLd = buildEventJsonLd(conference, domain, lowestTicketPrice)
-
   const hasSchedule =
     isProgramPublished(conference) &&
     conference.schedules &&
@@ -290,11 +225,10 @@ async function CachedHomeContent({ domain }: { domain: string }) {
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
-        }}
+      <EventJsonLd
+        conference={conference}
+        domain={domain}
+        lowestTicketPrice={lowestTicketPrice}
       />
       <Hero
         conference={conference}
@@ -323,15 +257,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
               </p>
             </div>
 
-            <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
-              {conference.featuredSpeakers!.map((speaker) => (
-                <SpeakerPromotionCard
-                  key={speaker._id}
-                  speaker={speaker}
-                  variant="featured"
-                />
-              ))}
-            </div>
+            <FeaturedSpeakersShelf speakers={conference.featuredSpeakers!} />
 
             <PhaseCtaRow
               conference={conference}

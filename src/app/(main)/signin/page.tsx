@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { signIn, providerMap } from '@/lib/auth'
@@ -6,6 +7,10 @@ import { AuthError } from 'next-auth'
 import { redirect } from 'next/navigation'
 
 const SIGNIN_ERROR_URL = '/error'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function Signin(props: {
   searchParams: Promise<{ callbackUrl?: string; error?: string }>

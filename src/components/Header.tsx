@@ -5,8 +5,7 @@ import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { useSession, signOut } from 'next-auth/react'
-import Image from 'next/image'
+import { useSession } from 'next-auth/react'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
@@ -16,7 +15,7 @@ import {
 } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
-import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
+import { UserMenu } from '@/components/UserMenu'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
@@ -87,37 +86,12 @@ export function Header({ c }: { c: Conference }) {
           <div className="flex items-center gap-4">
             <ThemeToggle />
             {session ? (
-              <Popover className="relative">
-                <PopoverButton className="flex items-center focus:outline-none">
-                  <Image
-                    src={session.user.picture || '/images/default-avatar.png'}
-                    alt={session.user.name || 'User'}
-                    width={40}
-                    height={40}
-                    className="h-10 w-10 rounded-full"
-                  />
-                </PopoverButton>
-
-                <PopoverPanel
-                  transition
-                  className="absolute right-0 z-10 mt-3 w-56 transition data-closed:translate-y-1 data-closed:opacity-0 data-enter:duration-200 data-enter:ease-out data-leave:duration-150 data-leave:ease-in"
-                >
-                  <div className="overflow-hidden rounded-xl bg-white p-2 text-sm font-semibold shadow-lg ring-1 ring-gray-900/5 dark:bg-gray-800 dark:ring-white/10">
-                    <Link
-                      href="/cfp/list"
-                      className="block rounded-lg px-3 py-2 text-gray-900 transition hover:bg-gray-50 dark:text-white dark:hover:bg-gray-700"
-                    >
-                      My Dashboard
-                    </Link>
-                    <button
-                      onClick={() => signOut({ callbackUrl: '/' })}
-                      className="block w-full rounded-lg px-3 py-2 text-left text-gray-900 transition hover:bg-gray-50 dark:text-white dark:hover:bg-gray-700"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                </PopoverPanel>
-              </Popover>
+              <UserMenu
+                name={session.user.name}
+                picture={session.user.picture}
+                speaker={session.speaker}
+                account={session.account}
+              />
             ) : (
               <Link href="/cfp/list" className="flex items-center">
                 <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />

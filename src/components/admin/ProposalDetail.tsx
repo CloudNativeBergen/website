@@ -13,6 +13,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
 import {
   ProposalExisting,
+  Status,
   statuses,
   formats,
   levels,
@@ -31,6 +32,7 @@ import { RatingDisplay } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
+import { SpeakerImageModal } from '@/components/admin'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -71,8 +73,10 @@ interface SpeakerCardProps {
 
 function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
   const [isBioExpanded, setIsBioExpanded] = useState(false)
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
   const bioText = speaker.bio || ''
   const shouldShowExpand = bioText.length > 150
+  const hasImage = typeof speaker.image === 'string' && speaker.image.length > 0
 
   return (
     <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
@@ -88,10 +92,15 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
       </div>
       <div>
         <div className="float-left mr-4 mb-2">
-          {speaker.image && typeof speaker.image === 'string' ? (
-            <div className="h-16 w-16 overflow-hidden rounded-full">
+          {hasImage ? (
+            <button
+              type="button"
+              onClick={() => setIsImageModalOpen(true)}
+              aria-label={`View ${speaker.name}'s photo`}
+              className="block h-16 w-16 overflow-hidden rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+            >
               <SpeakerAvatarImage
-                src={speakerImageUrl(speaker.image, {
+                src={speakerImageUrl(speaker.image as string, {
                   width: 128,
                   height: 128,
                   fit: 'crop',
@@ -99,7 +108,7 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
                 name={speaker.name}
                 size={64}
               />
-            </div>
+            </button>
           ) : (
             <MissingAvatar
               name={speaker.name}
@@ -161,6 +170,17 @@ function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
         </div>
         <div className="clear-both" />
       </div>
+      {hasImage && (
+        <SpeakerImageModal
+          isOpen={isImageModalOpen}
+          onClose={() => setIsImageModalOpen(false)}
+          speaker={{
+            name: speaker.name,
+            title: speaker.title,
+            image: speaker.image as string,
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -172,6 +192,9 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
     speakers.some((speaker) =>
       speaker?.flags?.includes(Flags.requiresTravelFunding),
     ) || false
+  const withdrawnReason = proposal.withdrawnReason?.trim()
+  const showWithdrawnReason =
+    proposal.status === Status.withdrawn && !!withdrawnReason
 
   return (
     <div>
@@ -188,11 +211,27 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
       <div className="pt-4">
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
+            {showWithdrawnReason && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/40">
+                <div className="flex items-start gap-3">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400" />
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                      Withdrawal reason
+                    </h2>
+                    <p className="mt-1 text-sm break-words whitespace-pre-wrap text-amber-700 dark:text-amber-300">
+                      {withdrawnReason}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <h2 className="mb-3 text-lg font-medium text-gray-900 dark:text-white">
                 Description
               </h2>
-              <div className="text-gray-600 dark:text-gray-300">
+              <div className="break-words text-gray-600 dark:text-gray-300">
                 {proposal.description && proposal.description.length > 0 ? (
                   <PortableText
                     value={proposal.description}
@@ -210,7 +249,9 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   Outline
                 </h2>
                 <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
-                  <p className="whitespace-pre-wrap">{proposal.outline}</p>
+                  <p className="break-words whitespace-pre-wrap">
+                    {proposal.outline}
+                  </p>
                 </div>
               </div>
             )}

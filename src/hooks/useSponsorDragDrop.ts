@@ -217,11 +217,57 @@ export function useSponsorDragDrop(currentView: BoardView) {
             return updateInvoiceStatus.mutateAsync({
               id: sponsor._id,
               newStatus: targetColumnKey as
-                | 'not-sent'
-                | 'sent'
-                | 'paid'
-                | 'overdue'
-                | 'cancelled',
+                'not-sent' | 'sent' | 'paid' | 'overdue' | 'cancelled',
+            })
+          case 'contract':
+            return updateContractStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'none'
+                | 'verbal-agreement'
+                | 'contract-sent'
+                | 'contract-signed',
+            })
+          default:
+            return Promise.resolve()
+        }
+      })
+    },
+    [
+      currentView,
+      runOptimisticMove,
+      moveStage,
+      updateInvoiceStatus,
+      updateContractStatus,
+    ],
+  )
+
+  const handleAdvanceStage = useCallback(
+    async (sponsor: SponsorForConferenceExpanded, targetColumnKey: string) => {
+      if (
+        dropNeedsTier(currentView, sponsor.status, targetColumnKey, sponsor)
+      ) {
+        setPendingTierMove({ sponsor, targetColumnKey })
+        return
+      }
+
+      await runOptimisticMove(sponsor._id, targetColumnKey, () => {
+        switch (currentView) {
+          case 'pipeline':
+            return moveStage.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'prospect'
+                | 'contacted'
+                | 'negotiating'
+                | 'closed-won'
+                | 'closed-lost',
+            })
+          case 'invoice':
+            return updateInvoiceStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                'not-sent' | 'sent' | 'paid' | 'overdue' | 'cancelled',
             })
           case 'contract':
             return updateContractStatus.mutateAsync({
@@ -283,6 +329,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
     isDragging: activeItem !== null,
     handleDragStart,
     handleDragEnd,
+    handleAdvanceStage,
     pendingTierMove,
     confirmTierMove,
     cancelTierMove,

@@ -7,6 +7,9 @@ import {
   VideoCameraIcon,
   ExclamationTriangleIcon,
   MinusCircleIcon,
+  CalendarIcon,
+  ClockIcon as ClockOutlineIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline'
 import {
   CheckBadgeIcon,
@@ -18,6 +21,7 @@ import {
 import type { ProposalExisting, Status } from '@/lib/proposal/types'
 import { statuses } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
+import { formatConferenceDateLong } from '@/lib/time'
 import { hasProposalVideo } from '@/lib/proposal/video'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { useImpersonateQueryString } from '@/lib/impersonation'
@@ -29,13 +33,7 @@ import { Action } from '@/lib/proposal/types'
 import { CheckIcon } from '@heroicons/react/20/solid'
 
 type BadgeColor =
-  | 'gray'
-  | 'red'
-  | 'yellow'
-  | 'green'
-  | 'blue'
-  | 'purple'
-  | 'orange'
+  'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
 
 interface CompactProposalListProps {
   proposals: ProposalExisting[]
@@ -163,16 +161,39 @@ export function CompactProposalList({
                     className={`h-4 w-4 shrink-0 ${formatInfo.color || 'text-gray-500'}`}
                   />
                 )}
-                <Link
-                  href={`/cfp/proposal/${proposal._id}${queryString}`}
-                  className={`flex-1 truncate font-medium hover:text-brand-cloud-blue dark:hover:text-blue-400 ${
-                    isMuted
-                      ? 'text-gray-600 dark:text-gray-400'
-                      : 'text-gray-900 dark:text-white'
-                  }`}
-                >
-                  {proposal.title}
-                </Link>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <Link
+                    href={`/cfp/proposal/${proposal._id}${queryString}`}
+                    className={`truncate font-medium hover:text-brand-cloud-blue dark:hover:text-blue-400 ${
+                      isMuted
+                        ? 'text-gray-600 dark:text-gray-400'
+                        : 'text-gray-900 dark:text-white'
+                    }`}
+                  >
+                    {proposal.title}
+                  </Link>
+                  {isApproved &&
+                    proposal.scheduleInfo?.date &&
+                    proposal.scheduleInfo?.timeSlot && (
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        <span className="flex items-center">
+                          <CalendarIcon className="mr-1 h-3.5 w-3.5" />
+                          {formatConferenceDateLong(proposal.scheduleInfo.date)}
+                        </span>
+                        <span className="flex items-center">
+                          <ClockOutlineIcon className="mr-1 h-3.5 w-3.5" />
+                          {proposal.scheduleInfo.timeSlot.startTime} -{' '}
+                          {proposal.scheduleInfo.timeSlot.endTime}
+                        </span>
+                        {proposal.scheduleInfo.trackTitle && (
+                          <span className="flex items-center">
+                            <MapPinIcon className="mr-1 h-3.5 w-3.5" />
+                            {proposal.scheduleInfo.trackTitle}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {showFeedback && (

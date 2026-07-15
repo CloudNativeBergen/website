@@ -105,6 +105,55 @@ export const AllSelected: Story = {
   },
 }
 
+/**
+ * Regression guard: long add-on titles inside a modal-width column must wrap to
+ * new rows without overflowing the container or overlapping neighbours. Before
+ * the wrapping-chip redesign these labels were `whitespace-nowrap` inside a
+ * fixed 3-column grid, so they bled outside the column and collided.
+ */
+export const LongLabels: Story = {
+  name: 'Long labels (narrow column)',
+  render: () => {
+    const [value, setValue] = useState<string[]>(['addon-barista'])
+    const longAddons = [
+      mockSponsorTier({
+        _id: 'addon-barista',
+        title: 'Barista Bar Sponsorship',
+        tierType: 'addon',
+      }),
+      mockSponsorTier({
+        _id: 'addon-lanyard',
+        title: 'Lanyard Sponsorship',
+        tierType: 'addon',
+      }),
+      mockSponsorTier({
+        _id: 'addon-afterparty',
+        title: 'Afterparty Sponsorship',
+        tierType: 'addon',
+      }),
+      mockSponsorTier({
+        _id: 'addon-streaming',
+        title: 'Streaming & Video Sponsorship',
+        tierType: 'addon',
+      }),
+      mockSponsorTier({
+        _id: 'addon-track',
+        title: 'Track Sponsorship',
+        tierType: 'addon',
+      }),
+    ]
+    return (
+      <div className="max-w-[430px] rounded-lg border border-dashed border-gray-300 p-3 dark:border-gray-600">
+        <AddonsCheckboxGroup
+          addons={longAddons}
+          value={value}
+          onChange={setValue}
+        />
+      </div>
+    )
+  },
+}
+
 export const ManyAddons: Story = {
   render: () => {
     const [value, setValue] = useState<string[]>(['addon-booth'])

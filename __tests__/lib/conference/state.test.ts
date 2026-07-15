@@ -8,6 +8,8 @@ import {
   isRegistrationAvailable,
   isWorkshopRegistrationOpen,
   isSeekingSponsors,
+  isWithdrawalCutoffActive,
+  WITHDRAWAL_CUTOFF_DAYS,
 } from '@/lib/conference/state'
 import { Conference } from '@/lib/conference/types'
 
@@ -202,6 +204,52 @@ describe('Conference State Helpers', () => {
     it('returns false when start date is missing', () => {
       const conferenceNoStart = { ...baseConference, startDate: '' }
       expect(isSeekingSponsors(conferenceNoStart)).toBe(false)
+    })
+  })
+
+  describe('isWithdrawalCutoffActive', () => {
+    // baseConference.startDate is 2025-06-01T00:00:00Z, so the 14-day cutoff
+    // boundary is 2025-05-18T00:00:00Z.
+    it('uses a 14-day cutoff window', () => {
+      expect(WITHDRAWAL_CUTOFF_DAYS).toBe(14)
+    })
+
+    it('is not active more than 14 days before the conference', () => {
+      // 16 days before — just outside the window.
+      const now = new Date('2025-05-16T00:00:00Z')
+      expect(isWithdrawalCutoffActive(baseConference, now)).toBe(false)
+    })
+
+    it('is active exactly 14 days before the conference (boundary)', () => {
+      const now = new Date('2025-05-18T00:00:00Z')
+      expect(isWithdrawalCutoffActive(baseConference, now)).toBe(true)
+    })
+
+    it('is active just inside the window (13 days before)', () => {
+      const now = new Date('2025-05-19T00:00:00Z')
+      expect(isWithdrawalCutoffActive(baseConference, now)).toBe(true)
+    })
+
+    it('is inactive just outside the window (15 days before)', () => {
+      const now = new Date('2025-05-17T00:00:01Z')
+      expect(isWithdrawalCutoffActive(baseConference, now)).toBe(false)
+    })
+
+    it('is active once the conference has started/passed', () => {
+      const now = new Date('2025-06-05T00:00:00Z')
+      expect(isWithdrawalCutoffActive(baseConference, now)).toBe(true)
+    })
+
+    it('fails open when the start date is missing', () => {
+      const conferenceNoStart = { ...baseConference, startDate: '' }
+      const now = new Date('2025-05-30T00:00:00Z')
+      expect(isWithdrawalCutoffActive(conferenceNoStart, now)).toBe(false)
+    })
+
+    it('fails open when the start date is unparseable', () => {
+      const conferenceBadStart = { ...baseConference, startDate: 'not-a-date' }
+      const now = new Date('2025-05-30T00:00:00Z')
+      expect(isWithdrawalCutoffActive(conferenceBadStart, now)).toBe(false)
     })
   })
 })

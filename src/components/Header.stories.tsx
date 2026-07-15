@@ -4,6 +4,19 @@ import { DiamondIcon } from '@/components/DiamondIcon'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
+import { UserMenu } from '@/components/UserMenu'
+import type { Speaker } from '@/lib/speaker/types'
+
+const mockSpeaker: Speaker = {
+  _id: 'spk-1',
+  _rev: 'rev-1',
+  _createdAt: '2026-01-01T00:00:00Z',
+  _updatedAt: '2026-01-01T00:00:00Z',
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  slug: 'jane-doe',
+  isOrganizer: false,
+}
 
 const meta = {
   title: 'Components/Layout/Header',
@@ -12,7 +25,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Main site header with conference logo, date/location info, registration button, theme toggle, and user avatar popover. Uses `useSession` for authentication state — stories use a mock wrapper to demonstrate logged-in and logged-out states.',
+          'Main site header with conference logo, date/location info, registration button, theme toggle, and the role-aware user avatar menu (see `Components/Layout/UserMenu`). Uses `useSession` for authentication state — stories use a mock wrapper to demonstrate logged-out, signed-in speaker, and organizer states.',
       },
     },
   },
@@ -23,10 +36,12 @@ type Story = StoryObj<typeof meta>
 
 function MockHeader({
   isLoggedIn = false,
+  isOrganizer = false,
   isPast = false,
   showRegistration = true,
 }: {
   isLoggedIn?: boolean
+  isOrganizer?: boolean
   isPast?: boolean
   showRegistration?: boolean
 }) {
@@ -76,15 +91,16 @@ function MockHeader({
           <div className="flex items-center gap-4">
             <ThemeToggle />
             {isLoggedIn ? (
-              <div className="relative">
-                <button className="flex items-center focus:outline-none">
-                  <img
-                    src="https://placehold.co/40x40/4f46e5/fff/png?text=JD"
-                    alt="Jane Doe"
-                    className="h-10 w-10 rounded-full"
-                  />
-                </button>
-              </div>
+              <UserMenu
+                name="Jane Doe"
+                picture="https://placehold.co/40x40/4f46e5/fff/png?text=JD"
+                speaker={{ ...mockSpeaker, isOrganizer }}
+                account={{
+                  provider: 'github',
+                  providerAccountId: '12345',
+                  type: 'oauth',
+                }}
+              />
             ) : (
               <a href="/cfp/list" className="flex items-center">
                 <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
@@ -114,7 +130,19 @@ export const LoggedIn: Story = {
     docs: {
       description: {
         story:
-          'Header when a user is logged in — shows avatar instead of the generic user icon.',
+          'Signed-in speaker — the avatar opens the role-aware user menu (CfP links, current sign-in provider, sign out). No Admin section.',
+      },
+    },
+  },
+}
+
+export const LoggedInOrganizer: Story = {
+  render: () => <MockHeader isLoggedIn isOrganizer />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Signed-in organizer — the avatar menu additionally exposes the gated Admin section (shown only when `speaker.isOrganizer`).',
       },
     },
   },

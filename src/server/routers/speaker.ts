@@ -11,9 +11,11 @@ import {
   SpeakerCreateSchema,
   SpeakerUpdateSchema,
   SpeakerSearchSchema,
+  SpeakerMergeSchema,
   EmailUpdateSchema,
   IdParamSchema,
 } from '@/server/schemas/speaker'
+import { mergeSpeakers, MergeValidationError } from '@/lib/speaker/merge'
 import {
   getSpeaker,
   updateSpeaker,
@@ -21,8 +23,10 @@ import {
   getSpeakers,
 } from '@/lib/speaker/sanity'
 import { clientWrite } from '@/lib/sanity/client'
-import { verifiedEmails } from '@/lib/profile/github'
-import { defaultEmails } from '@/lib/profile/server'
+import {
+  getVerifiedProfileEmails,
+  isEmailVerifiedForSession,
+} from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
 import { encode } from 'next-auth/jwt'
 
@@ -41,7 +45,7 @@ import {
 } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
-import { generateSlug } from '@/lib/speaker/sanity'
+import { generateUniqueSlug } from '@/lib/speaker/sanity'
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -112,26 +116,9 @@ export const speakerRouter = router({
       })
     }
 
-    try {
-      switch (session.account.provider) {
-        case 'github': {
-          const result = await verifiedEmails(session.account)
-          if (result.error) {
-            console.error('Failed to fetch GitHub emails:', result.error)
-            return defaultEmails(session)
-          }
-          return result.emails.length > 0
-            ? result.emails
-            : defaultEmails(session)
-        }
-
-        default:
-          return defaultEmails(session)
-      }
-    } catch (error) {
-      console.error('Error fetching emails:', error)
-      return defaultEmails(session)
-    }
+    // Single source of truth for the caller's verified emails; the same helper
+    // authorizes `updateEmail` so the picker and the guard can never diverge.
+    return getVerifiedProfileEmails(session)
   }),
 
   // Generate a CLI authentication token
@@ -172,6 +159,19 @@ export const speakerRouter = router({
     .input(EmailUpdateSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        // SECURITY (C1): the display `email` is a login match key in
+        // getOrCreateSpeaker, so the caller must PROVE they own the new address.
+        // Only accept emails in the caller's provider-verified set — recomputed
+        // server-side from the session, never trusting a client-supplied list.
+        const owns = await isEmailVerifiedForSession(ctx.session!, input.email)
+        if (!owns) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'You can only set an email address that is verified by your login provider.',
+          })
+        }
+
         const { error } = await updateProfileEmail(input.email, ctx.speaker._id)
 
         if (error) {
@@ -372,7 +372,7 @@ export const speakerRouter = router({
       .input(SpeakerCreateSchema)
       .mutation(async ({ input }) => {
         try {
-          const slug = generateSlug(input.name)
+          const slug = await generateUniqueSlug(input.name)
 
           const speaker = await clientWrite.create({
             _type: 'speaker',
@@ -477,6 +477,60 @@ export const speakerRouter = router({
       }
     }),
 
+    // Preview a duplicate-speaker merge (identity Phase 3). Read-only: computes
+    // exactly what the mutation would repoint/change WITHOUT writing anything so
+    // the organizer can review before confirming this destructive operation.
+    mergePreview: adminProcedure
+      .input(SpeakerMergeSchema)
+      .query(async ({ input, ctx }) => {
+        const { preview, err } = await mergeSpeakers({
+          survivorId: input.survivorId,
+          loserId: input.loserId,
+          actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
+          dryRun: true,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code:
+              err instanceof MergeValidationError
+                ? 'BAD_REQUEST'
+                : 'INTERNAL_SERVER_ERROR',
+            message: err.message || 'Failed to preview speaker merge',
+            cause: err,
+          })
+        }
+
+        return preview!
+      }),
+
+    // Merge a duplicate ("loser") speaker into the canonical ("survivor") one.
+    // Repoints every inbound reference, unions identity fields, then deletes the
+    // loser — all in one atomic Sanity transaction.
+    merge: adminProcedure
+      .input(SpeakerMergeSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { preview, committed, err } = await mergeSpeakers({
+          survivorId: input.survivorId,
+          loserId: input.loserId,
+          actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
+          dryRun: false,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code:
+              err instanceof MergeValidationError
+                ? 'BAD_REQUEST'
+                : 'INTERNAL_SERVER_ERROR',
+            message: err.message || 'Failed to merge speakers',
+            cause: err,
+          })
+        }
+
+        return { success: committed, preview: preview! }
+      }),
+
     // Update speaker email
     updateEmail: adminProcedure
       .input(
@@ -486,6 +540,11 @@ export const speakerRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // Organizer action: set the speaker's display `email` only. Post-C1,
+          // updateProfileEmail no longer writes `knownEmails`, so an admin edit
+          // can never inject an address into the verified match-set. (The admin
+          // is not required to prove ownership — this is a trusted organizer
+          // correcting contact details, not the self-service path.)
           const { error } = await updateProfileEmail(input.email, input.id)
 
           if (error) {

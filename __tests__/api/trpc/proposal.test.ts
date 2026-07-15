@@ -44,6 +44,7 @@ vi.mock('@/lib/proposal/server', () => ({
 vi.mock('@/lib/conference/state', () => ({
   isCfpOpen: vi.fn(),
   isConferenceOver: vi.fn(),
+  isWithdrawalCutoffActive: vi.fn(),
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -63,7 +64,7 @@ import {
   ProposalDeletionBlockedError,
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
-import { isCfpOpen } from '@/lib/conference/state'
+import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
 import {
   Status,
   Action,
@@ -445,7 +446,8 @@ describe('proposal router', () => {
       expect(result.proposalStatus).toBe(Status.draft)
     })
 
-    it('should allow speaker to withdraw a submitted proposal', async () => {
+    it('should allow speaker to withdraw a submitted proposal with a reason', async () => {
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
       vi.mocked(getProposalSanity).mockResolvedValue({
         proposal: mockProposal as any,
         proposalError: null,
@@ -459,6 +461,89 @@ describe('proposal router', () => {
       const result = await caller.proposal.action({
         id: 'proposal-1',
         action: Action.withdraw,
+        reason: 'I can no longer attend the conference.',
+      })
+      expect(result.proposalStatus).toBe(Status.withdrawn)
+      // The reason is persisted alongside the status change.
+      expect(vi.mocked(updateProposalStatus)).toHaveBeenCalledWith(
+        'proposal-1',
+        Status.withdrawn,
+        'I can no longer attend the conference.',
+      )
+    })
+
+    it('should reject a withdrawal with no reason (server-side)', async () => {
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    it('should reject a withdrawal whose reason is only whitespace', async () => {
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: '   ',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    it('should block speaker self-withdrawal within the cutoff window', async () => {
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(true)
+      vi.mocked(updateProposalStatus).mockClear()
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Something came up.',
+        }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('within 14 days'),
+      })
+      // Status must remain unchanged when blocked by the cutoff.
+      expect(vi.mocked(updateProposalStatus)).not.toHaveBeenCalled()
+    })
+
+    it('should allow organizer to withdraw within the cutoff window', async () => {
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.withdrawn } as any,
+        err: null,
+      })
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'Withdrawn on behalf of the speaker.',
       })
       expect(result.proposalStatus).toBe(Status.withdrawn)
     })
@@ -527,7 +612,11 @@ describe('proposal router', () => {
 
       const caller = createAuthenticatedCaller(regularSpeaker._id)
       await expect(
-        caller.proposal.action({ id: 'nonexistent', action: Action.withdraw }),
+        caller.proposal.action({
+          id: 'nonexistent',
+          action: Action.withdraw,
+          reason: 'No longer available.',
+        }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     })
 

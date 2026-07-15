@@ -6,11 +6,16 @@ import { InfoContent } from '@/components/info/InfoContent'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { canonicalAlternates } from '@/lib/seo/canonical'
 
-export const metadata = {
-  title: 'Practical Information - Cloud Native Days Norway',
-  description:
-    'Essential details for attending Cloud Native Days Norway conference',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Practical Information - Cloud Native Days Norway',
+    description:
+      'Essential details for attending Cloud Native Days Norway conference',
+    alternates: await canonicalAlternates('/info'),
+  }
 }
 
 function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {

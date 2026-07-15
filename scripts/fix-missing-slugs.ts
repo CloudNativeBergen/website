@@ -1,5 +1,5 @@
 import { clientWrite } from '@/lib/sanity/client'
-import { generateSlug } from '@/lib/speaker/sanity'
+import { generateUniqueSlug } from '@/lib/speaker/sanity'
 
 async function fixMissingSlugs() {
   console.log('Fixing speakers without slugs...\n')
@@ -20,7 +20,7 @@ async function fixMissingSlugs() {
   }
 
   for (const speaker of speakers) {
-    const slug = generateSlug(speaker.name)
+    const slug = await generateUniqueSlug(speaker.name, speaker._id)
     console.log(`Setting slug for ${speaker.name} (${speaker._id}): ${slug}`)
 
     await clientWrite

@@ -37,9 +37,9 @@ export function SponsorGlobalInfoFields({
 
   if (!editing) {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50/50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white">
+      <div className="flex items-start justify-between rounded-lg border border-gray-200 bg-gray-50/50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex max-w-full min-w-0 items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white">
             <BuildingOffice2Icon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             <span className="truncate">{name}</span>
           </div>
@@ -48,7 +48,7 @@ export function SponsorGlobalInfoFields({
               href={website}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+              className="flex max-w-full min-w-0 items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
             >
               <GlobeAltIcon className="h-3 w-3 shrink-0" />
               <span className="truncate">
@@ -63,7 +63,7 @@ export function SponsorGlobalInfoFields({
             </span>
           )}
           {address && (
-            <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+            <span className="flex max-w-full min-w-0 items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
               <MapPinIcon className="h-3 w-3 shrink-0" />
               <span className="truncate">{address}</span>
             </span>

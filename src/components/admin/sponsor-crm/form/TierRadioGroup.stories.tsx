@@ -86,6 +86,36 @@ export const SingleTier: Story = {
   },
 }
 
+/**
+ * Regression guard: a long tier name inside a modal-width column must wrap
+ * gracefully instead of overflowing outside the container. Before the
+ * wrapping-chip redesign, "Community Partner Package" was `whitespace-nowrap`
+ * inside a fixed 3-column grid and bled outside the modal's left edge.
+ */
+export const LongLabels: Story = {
+  name: 'Long labels (narrow column)',
+  render: () => {
+    const [value, setValue] = useState<string>('tier-community')
+    const longTiers = [
+      mockSponsorTier({
+        _id: 'tier-community',
+        title: 'Community Partner Package',
+      }),
+      mockSponsorTier({ _id: 'tier-gold', title: 'Gold Sponsorship Tier' }),
+      mockSponsorTier({ _id: 'tier-silver', title: 'Silver' }),
+      mockSponsorTier({
+        _id: 'tier-diversity',
+        title: 'Diversity & Inclusion Partner',
+      }),
+    ]
+    return (
+      <div className="max-w-[430px] rounded-lg border border-dashed border-gray-300 p-3 dark:border-gray-600">
+        <TierRadioGroup tiers={longTiers} value={value} onChange={setValue} />
+      </div>
+    )
+  },
+}
+
 export const ManyTiers: Story = {
   render: () => {
     const [value, setValue] = useState<string>('tier-service')

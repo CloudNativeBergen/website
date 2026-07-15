@@ -82,15 +82,13 @@ export function BlueskyFeed({
         return []
       }
 
-      return data.feed.map(
-        (feedItem): BlueskyPost => ({
-          uri: feedItem.post.uri,
-          cid: feedItem.post.cid,
-          author: feedItem.post.author,
-          record: feedItem.post.record,
-          indexedAt: feedItem.post.indexedAt,
-        }),
-      )
+      return data.feed.map((feedItem): BlueskyPost => ({
+        uri: feedItem.post.uri,
+        cid: feedItem.post.cid,
+        author: feedItem.post.author,
+        record: feedItem.post.record,
+        indexedAt: feedItem.post.indexedAt,
+      }))
     },
     [handle, postCount],
   )
