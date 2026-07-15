@@ -52,6 +52,23 @@ const config: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        // The service worker lives at a stable URL and must never be cached by
+        // the browser HTTP cache — otherwise a deploy's new `/sw.js` bytes are
+        // not seen and the update flow never fires. Registration also uses
+        // `updateViaCache: 'none'` for the same reason.
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+    ]
+  },
   async redirects() {
     return [
       {
