@@ -14,6 +14,7 @@ import { DevBanner } from '@/components/DevBanner'
 export const metadata: Metadata = {
   title: 'Co-Speaker Invitation | Cloud Native Days Norway',
   description: 'Respond to your co-speaker invitation',
+  robots: { index: false, follow: false },
 }
 
 interface PageProps {

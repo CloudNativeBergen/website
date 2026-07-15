@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 import { Layout } from '@/components/Layout'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notFound } from 'next/navigation'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function WorkshopLayout({
   children,

@@ -1,4 +1,9 @@
+import type { Metadata } from 'next'
 import { ContractSigningPage } from '@/components/sponsor/ContractSigningPage'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 interface SigningPageProps {
   params: Promise<{ token: string }>

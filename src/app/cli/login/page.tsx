@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { redirect } from 'next/navigation'
 import CLILoginClient from './cli-login-client'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function CLILoginPage(props: {
   searchParams: Promise<{ port?: string; state?: string }>
