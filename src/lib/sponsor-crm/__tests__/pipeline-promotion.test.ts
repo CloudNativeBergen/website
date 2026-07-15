@@ -2,12 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Control the Sanity write client so we can assert on the patch/log calls the
 // promotion helper makes without touching a real dataset.
+type MutationResult = {
+  transactionId: string
+  documentIds: string[]
+  results: { id: string; operation: string }[]
+}
+
 const { patch, set, commit, create } = vi.hoisted(() => {
-  const commit = vi.fn(async () => ({}))
+  // Default: the conditional patch matched the record and applied the update.
+  const commit = vi.fn<() => Promise<MutationResult>>(async () => ({
+    transactionId: 'txn-1',
+    documentIds: ['sfc-123'],
+    results: [{ id: 'sfc-123', operation: 'update' }],
+  }))
   const set = vi.fn<(fields: unknown) => { commit: typeof commit }>(() => ({
     commit,
   }))
-  const patch = vi.fn<(id: string) => { set: typeof set }>(() => ({ set }))
+  // The promotion helper selects the record with a GROQ query selection
+  // (`{ query, params }`), not a bare id, so the write is gated on the *stored*
+  // status.
+  const patch = vi.fn<(selection: unknown) => { set: typeof set }>(() => ({
+    set,
+  }))
   const create = vi.fn<(doc: unknown) => Promise<{ _id: string }>>(
     async () => ({
       _id: 'activity-id',
@@ -41,8 +57,20 @@ describe('promoteToClosedWonOnContract', () => {
 
       expect(result).toEqual({ promoted: true })
 
-      // Pipeline status patched to closed-won on the right record.
-      expect(patch).toHaveBeenCalledWith(SFC_ID)
+      // Pipeline status patched to closed-won on the right record, via a
+      // status-gated GROQ selection (not a bare id) so the write is conditional
+      // on the record still resting in an early stage.
+      const selection = patch.mock.calls[0][0] as {
+        query: string
+        params: { id: string; earlyStages: string[] }
+      }
+      expect(selection.params.id).toBe(SFC_ID)
+      expect(selection.query).toContain('status in $earlyStages')
+      expect(selection.params.earlyStages).toEqual([
+        'prospect',
+        'contacted',
+        'negotiating',
+      ])
       expect(set).toHaveBeenCalledWith({ status: 'closed-won' })
       expect(commit).toHaveBeenCalledTimes(1)
 
@@ -73,15 +101,61 @@ describe('promoteToClosedWonOnContract', () => {
     },
   )
 
-  it('defaults a missing status to an early stage and promotes', async () => {
+  it('fails closed on a missing status — skips without patching', async () => {
     const result = await promoteToClosedWonOnContract(
       SFC_ID,
       { tier: TIER },
       'user-1',
     )
 
-    expect(result).toEqual({ promoted: true })
-    expect(set).toHaveBeenCalledWith({ status: 'closed-won' })
+    // A missing status must never default into a promotable stage.
+    expect(result).toEqual({ promoted: false, reason: 'unknown-status' })
+    expect(patch).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 'weird-legacy-value'] as const)(
+    'fails closed on an unrecognised status (%o) — skips without patching',
+    async (status) => {
+      const result = await promoteToClosedWonOnContract(
+        SFC_ID,
+        { status, tier: TIER },
+        'user-1',
+      )
+
+      expect(result).toEqual({ promoted: false, reason: 'unknown-status' })
+      expect(patch).not.toHaveBeenCalled()
+      expect(create).not.toHaveBeenCalled()
+    },
+  )
+
+  it('does not resurrect a closed-lost deal when the stored status changed after a stale read', async () => {
+    // Caller read `negotiating`, but between that read and the write an admin
+    // marked the deal closed-lost. The conditional patch matches nothing.
+    commit.mockResolvedValueOnce({
+      transactionId: 'txn-empty',
+      documentIds: [],
+      results: [],
+    })
+
+    const result = await promoteToClosedWonOnContract(
+      SFC_ID,
+      { status: 'negotiating', tier: TIER },
+      'user-1',
+    )
+
+    expect(result).toEqual({ promoted: false, reason: 'concurrent-transition' })
+
+    // It attempted the status-gated conditional patch...
+    const selection = patch.mock.calls[0][0] as {
+      query: string
+      params: { id: string; earlyStages: string[] }
+    }
+    expect(selection.params.id).toBe(SFC_ID)
+    expect(selection.query).toContain('status in $earlyStages')
+
+    // ...but logged no phantom stage change since nothing was overwritten.
+    expect(create).not.toHaveBeenCalled()
   })
 
   it('skips promotion and logs a note when the tier guard fails', async () => {

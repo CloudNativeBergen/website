@@ -81,9 +81,25 @@ const EARLY_PIPELINE_STAGES: ReadonlyArray<string> = [
   'negotiating',
 ]
 
+/**
+ * Every pipeline status the CRM recognises. Used only to distinguish a *known*
+ * non-early stage (e.g. a legitimate `closed-lost` no-op) from a missing or
+ * unrecognised status — which signals a data problem, or a call site that
+ * forgot to select `status`, and must fail closed rather than promote.
+ */
+const KNOWN_PIPELINE_STAGES: ReadonlyArray<string> = [
+  ...EARLY_PIPELINE_STAGES,
+  'closed-won',
+  'closed-lost',
+]
+
 export type PromotionResult = {
   promoted: boolean
-  reason?: 'not-early-stage' | 'tier-missing'
+  reason?:
+    | 'not-early-stage'
+    | 'tier-missing'
+    | 'unknown-status'
+    | 'concurrent-transition'
   error?: Error
 }
 
@@ -111,6 +127,17 @@ export interface ContractPromotionSponsor {
  * — which would be silently hidden from the public site. When the tier is
  * missing the promotion is skipped and a note is logged for the audit trail.
  *
+ * Fails **closed**: a missing or unrecognised `status` is never treated as an
+ * early stage, so a legacy record without a status (or a future call site that
+ * forgets to select it) can never be silently auto-advanced.
+ *
+ * Guards against a TOCTOU resurrection: the caller passes a separately-fetched,
+ * potentially stale `status`, so the write is a GROQ-conditional patch that
+ * only sets `closed-won` while the record is *still* stored in an early stage.
+ * If an admin marked the deal `closed-lost` (or it reached any terminal state)
+ * between the read and this write, the patch matches nothing and the deal is
+ * left untouched — no overwrite, no phantom stage-change log.
+ *
  * Best-effort: failures are swallowed and returned in `error`, never thrown,
  * so a promotion problem cannot fail the contract send/sign it rides along on.
  */
@@ -119,10 +146,22 @@ export async function promoteToClosedWonOnContract(
   sponsor: ContractPromotionSponsor,
   createdBy: string,
 ): Promise<PromotionResult> {
-  const currentStatus = sponsor.status ?? 'prospect'
+  const currentStatus = sponsor.status
 
-  if (!EARLY_PIPELINE_STAGES.includes(currentStatus)) {
-    return { promoted: false, reason: 'not-early-stage' }
+  // Fail closed: only an explicit early stage is eligible. A missing or
+  // unrecognised status must never default into a promotable stage.
+  if (!currentStatus || !EARLY_PIPELINE_STAGES.includes(currentStatus)) {
+    if (currentStatus && KNOWN_PIPELINE_STAGES.includes(currentStatus)) {
+      // A recognised non-early stage (e.g. closed-won / closed-lost): a
+      // legitimate forward-only no-op, left silent so re-sends don't spam.
+      return { promoted: false, reason: 'not-early-stage' }
+    }
+    console.warn(
+      '[promoteToClosedWonOnContract] Skipping auto-promotion for %s: status %o is missing or not a recognised early stage',
+      sponsorForConferenceId,
+      currentStatus,
+    )
+    return { promoted: false, reason: 'unknown-status' }
   }
 
   const guard = checkPipelineState('closed-won', {
@@ -139,14 +178,32 @@ export async function promoteToClosedWonOnContract(
     return { promoted: false, reason: 'tier-missing' }
   }
 
+  // Conditional write: only advance while the *stored* status is still early.
+  // This closes the TOCTOU window between the caller's stale read and here, so
+  // a concurrently set terminal state (closed-lost / closed-won) is never
+  // clobbered.
+  let applied = false
   try {
-    await clientWrite
-      .patch(sponsorForConferenceId)
+    const result = await clientWrite
+      .patch({
+        query: '*[_id == $id && status in $earlyStages]',
+        params: {
+          id: sponsorForConferenceId,
+          earlyStages: [...EARLY_PIPELINE_STAGES],
+        },
+      })
       .set({ status: 'closed-won' })
-      .commit()
+      .commit({ returnFirst: false, returnDocuments: false })
+    applied = (result.results?.length ?? 0) > 0
   } catch (error) {
     console.error('Failed to auto-promote sponsor to closed-won:', error)
     return { promoted: false, error: error as Error }
+  }
+
+  if (!applied) {
+    // The stored status left the early stages between the caller's read and
+    // this write. Do not resurrect the deal and do not log a phantom change.
+    return { promoted: false, reason: 'concurrent-transition' }
   }
 
   await logStageChange(
