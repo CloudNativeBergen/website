@@ -278,6 +278,12 @@ export async function jwtSignInCallback({
   return token
 }
 
+// Trim once so a stray space in the deployed secret (".cloudnativedays.no ")
+// doesn't produce an invalid Domain attribute that browsers silently reject —
+// which would revert the cookie to host-only and quietly reintroduce the
+// cross-subdomain sign-out. Empty/whitespace-only ⇒ no override.
+const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined
+
 const config = {
   providers: [
     GitHub({
@@ -301,19 +307,19 @@ const config = {
   // signed-in user stays signed in when moving between them, instead of the
   // default host-only cookie that is dropped on a different subdomain.
   //
-  // Opt-in via AUTH_COOKIE_DOMAIN: when it is unset (localhost, preview deploys,
-  // tests) no override is applied and the cookie stays host-only. Only the
-  // `domain` option is set — @auth/core deep-merges it onto the defaults, so
-  // httpOnly / secure / sameSite=lax / path and the `__Secure-` name prefix are
-  // preserved (that prefix permits a Domain attribute, unlike `__Host-`). The
-  // CSRF cookie deliberately stays host-only (`__Host-`), which is fine as the
-  // sign-in POST happens on a single host.
-  ...(process.env.AUTH_COOKIE_DOMAIN
+  // Opt-in via AUTH_COOKIE_DOMAIN (trimmed above): when it is unset (localhost,
+  // preview deploys, tests) no override is applied and the cookie stays
+  // host-only. Only the `domain` option is set — @auth/core deep-merges it onto
+  // the defaults, so httpOnly / secure / sameSite=lax / path and the `__Secure-`
+  // name prefix are preserved (that prefix permits a Domain attribute, unlike
+  // `__Host-`). The CSRF cookie deliberately stays host-only (`__Host-`), which
+  // is fine as the sign-in POST happens on a single host.
+  ...(authCookieDomain
     ? {
         cookies: {
           sessionToken: {
             options: {
-              domain: process.env.AUTH_COOKIE_DOMAIN,
+              domain: authCookieDomain,
             },
           },
         },
