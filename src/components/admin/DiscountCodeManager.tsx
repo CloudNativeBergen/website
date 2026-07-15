@@ -488,7 +488,6 @@ export function DiscountCodeManager({
     {
       key: 'affects',
       header: 'Affects',
-      cardHidden: true,
       render: (discount) => (
         <span className="text-sm text-gray-500 dark:text-gray-400">
           {discount.ticketsOnly ? 'Tickets Only' : 'All Items'}

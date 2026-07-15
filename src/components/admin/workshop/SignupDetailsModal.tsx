@@ -1,5 +1,7 @@
 'use client'
 
+import { formatDateSafe } from '@/lib/time'
+
 import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
@@ -62,7 +64,7 @@ export function SignupDetailsModal({
       render: (signup) => {
         const dateStr = signup.signedUpAt || signup._createdAt
         if (!dateStr || typeof dateStr !== 'string') return 'N/A'
-        return new Date(dateStr).toLocaleDateString()
+        return formatDateSafe(dateStr)
       },
     },
     {

@@ -485,8 +485,11 @@ export const InteractionTest: StoryObj = {
     )
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const firstRow = canvas.getByText('Alice Johnson').closest('tr')
+    // Card mode also renders each value in a mobile card (CSS-hidden at desktop
+    // width), so scope the query to the table subtree to avoid duplicate matches.
+    const table = canvasElement.querySelector('table')
+    if (!table) throw new Error('table not rendered')
+    const firstRow = within(table).getByText('Alice Johnson').closest('tr')
     if (firstRow) {
       firstRow.click()
       // Note: fn() in render doesn't persist for testing, so we just verify the row is clickable

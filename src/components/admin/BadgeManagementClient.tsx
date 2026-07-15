@@ -1,5 +1,7 @@
 'use client'
 
+import { formatDateSafe } from '@/lib/time'
+
 import { useState, useEffect } from 'react'
 import {
   Dialog,
@@ -421,7 +423,7 @@ export function BadgeManagementClient({
               )}
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              {new Date(badge.issuedAt).toLocaleDateString()}
+              {formatDateSafe(badge.issuedAt)}
             </div>
             {hasEmailError && badge.emailError && (
               <div className="text-xs text-red-600 dark:text-red-400">

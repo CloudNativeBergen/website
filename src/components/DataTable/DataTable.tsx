@@ -82,7 +82,7 @@ export function DataTable<T>({
   )
 
   const cards =
-    mobileVariant === 'cards' ? (
+    mobileVariant === 'cards' && primaryColumn ? (
       <div className="space-y-3 md:hidden">
         {data.map((item, index) => {
           const selected = isRowSelected?.(item, index) ?? false
@@ -124,7 +124,12 @@ export function DataTable<T>({
                     {detailColumns.map((column) => (
                       <div
                         key={column.key}
-                        className="flex justify-between gap-3"
+                        className={clsx(
+                          'flex justify-between gap-3',
+                          // Honour hiddenBelow in cards too, matching the table
+                          column.hiddenBelow &&
+                            CARD_HIDDEN_BELOW[column.hiddenBelow],
+                        )}
                       >
                         <dt className="shrink-0 text-gray-500 dark:text-gray-400">
                           {column.header}
@@ -217,6 +222,18 @@ export function DataTable<T>({
       </TableContainer>
     </>
   )
+}
+
+// A card detail row is a flex element, so map hiddenBelow to flex utilities
+// (the table cells use table-cell equivalents in Th/Td).
+const CARD_HIDDEN_BELOW: Record<
+  NonNullable<Column<unknown>['hiddenBelow']>,
+  string
+> = {
+  sm: 'hidden sm:flex',
+  md: 'hidden md:flex',
+  lg: 'hidden lg:flex',
+  xl: 'hidden xl:flex',
 }
 
 function getCellValue<T>(item: T, key: string): string {
