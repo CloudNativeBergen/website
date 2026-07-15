@@ -41,6 +41,8 @@ export function FeaturedSpeakerTile({ speaker }: FeaturedSpeakerTileProps) {
           })}
           alt=""
           aria-hidden="true"
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-500 motion-safe:group-hover:scale-105"
         />
       ) : (
@@ -67,8 +69,13 @@ export function FeaturedSpeakerTile({ speaker }: FeaturedSpeakerTileProps) {
         </span>
       )}
 
-      {/* Caption (bottom-left) */}
-      <div className="relative z-10 p-4 sm:p-5">
+      {/* Caption (bottom-left).
+          NOTE: intentionally NOT `position: relative`. As a flex item it still
+          honors `z-10` (stacking above the scrim), while staying out of the
+          containing-block chain so the name link's stretched `after:inset-0`
+          resolves to the whole tile — making the entire portrait clickable,
+          not just this caption strip. */}
+      <div className="z-10 p-4 sm:p-5">
         <h3 className="font-space-grotesk text-lg font-bold text-white sm:text-xl">
           <Link
             href={`/speaker/${slug}`}

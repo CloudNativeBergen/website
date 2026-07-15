@@ -68,7 +68,11 @@ export function FeaturedSpeakersShelf({
   }, [])
 
   return (
-    <div className="relative mt-12">
+    <div
+      className="relative mt-12"
+      role="region"
+      aria-label="Featured speakers"
+    >
       {/* Desktop prev/next controls (hidden on mobile — touch swipe there). */}
       <div className="pointer-events-none absolute -top-16 right-0 hidden gap-2 lg:flex">
         <button
@@ -91,11 +95,13 @@ export function FeaturedSpeakersShelf({
         </button>
       </div>
 
+      {/* Keep the <ul> a real list (no role override) so AT announces
+          "list, N items". The region role/label lives on the wrapper above;
+          tabIndex keeps the row keyboard-scrollable. */}
       <ul
         ref={scrollerRef}
-        role="region"
-        aria-label="Featured speakers"
         tabIndex={0}
+        aria-label="Featured speakers"
         className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-offset-2 motion-safe:scroll-smooth"
       >
         {speakers.map((speaker) => (
