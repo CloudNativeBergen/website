@@ -11,7 +11,16 @@ const config: NextConfig = {
       'rdf-canonize-native': './src/lib/empty-module.ts',
     },
   },
-  serverExternalPackages: ['jsdom', 'isomorphic-dompurify', 'dompurify'],
+  // `@resvg/resvg-js` ships a native (N-API) binary. Bundling it breaks binary
+  // resolution on Vercel serverless, so it must stay external and be required
+  // at runtime. (The held PR #432 adds this exact same entry; keeping it
+  // identical here lets the two reconcile without conflict.)
+  serverExternalPackages: [
+    'jsdom',
+    'isomorphic-dompurify',
+    'dompurify',
+    '@resvg/resvg-js',
+  ],
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Ignore optional native dependency that's not available in serverless environments
