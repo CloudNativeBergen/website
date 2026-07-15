@@ -165,6 +165,19 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     expect(mockGetConference).not.toHaveBeenCalled()
   })
 
+  it('rejects a signature of the wrong length (timingSafeEqual length-guard) (401)', async () => {
+    const { POST } =
+      await import('@/app/api/webhooks/checkin/ticket-sold/route')
+
+    const payload = makePayload(makeData())
+    // A too-short signature makes crypto.timingSafeEqual throw on the buffer
+    // length mismatch; the verifier must catch it and reject (401), not 500.
+    const response = await POST(postRequest(payload, 'deadbeef'))
+
+    expect(response.status).toBe(401)
+    expect(mockGetConference).not.toHaveBeenCalled()
+  })
+
   it('rejects when the signature is valid for different data (tamper) (401)', async () => {
     const { POST } =
       await import('@/app/api/webhooks/checkin/ticket-sold/route')
