@@ -1,14 +1,39 @@
-const { mockFetch, mockTransaction, mockTxDelete, mockTxCommit } = vi.hoisted(
-  () => {
-    const mockTxDelete = vi.fn()
-    const mockTxCommit = vi.fn().mockResolvedValue({})
-    const transaction = { delete: mockTxDelete, commit: mockTxCommit }
-    mockTxDelete.mockReturnValue(transaction)
-    const mockTransaction = vi.fn(() => transaction)
-    const mockFetch = vi.fn()
-    return { mockFetch, mockTransaction, mockTxDelete, mockTxCommit }
-  },
-)
+const {
+  mockFetch,
+  mockTransaction,
+  mockTxDelete,
+  mockTxCommit,
+  mockPatch,
+  mockSet,
+  mockUnset,
+  mockPatchCommit,
+} = vi.hoisted(() => {
+  const mockTxDelete = vi.fn()
+  const mockTxCommit = vi.fn().mockResolvedValue({})
+  const transaction = { delete: mockTxDelete, commit: mockTxCommit }
+  mockTxDelete.mockReturnValue(transaction)
+  const mockTransaction = vi.fn(() => transaction)
+  const mockFetch = vi.fn()
+
+  const mockPatchCommit = vi.fn().mockResolvedValue({ _id: 'proposal-1' })
+  const mockUnset = vi.fn()
+  const mockSet = vi.fn()
+  const patch = { set: mockSet, unset: mockUnset, commit: mockPatchCommit }
+  mockSet.mockReturnValue(patch)
+  mockUnset.mockReturnValue(patch)
+  const mockPatch = vi.fn(() => patch)
+
+  return {
+    mockFetch,
+    mockTransaction,
+    mockTxDelete,
+    mockTxCommit,
+    mockPatch,
+    mockSet,
+    mockUnset,
+    mockPatchCommit,
+  }
+})
 
 vi.mock('next-sanity', () => ({
   groq: (strings: TemplateStringsArray, ...values: unknown[]) =>
@@ -25,13 +50,16 @@ vi.mock('@/lib/sanity/client', () => ({
   },
   clientWrite: {
     transaction: mockTransaction,
+    patch: mockPatch,
   },
 }))
 
 import {
   deleteProposal,
   ProposalDeletionBlockedError,
+  updateProposalStatus,
 } from '@/lib/proposal/data/sanity'
+import { Status } from '@/lib/proposal/types'
 
 describe('deleteProposal', () => {
   beforeEach(() => {
@@ -146,6 +174,55 @@ describe('deleteProposal', () => {
     mockTxCommit.mockRejectedValue(failure)
 
     const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBe(failure)
+  })
+})
+
+describe('updateProposalStatus', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPatchCommit.mockResolvedValue({ _id: 'proposal-1' })
+  })
+
+  it('persists the withdrawal reason and does not unset it', async () => {
+    await updateProposalStatus(
+      'proposal-1',
+      Status.withdrawn,
+      '  Family emergency  ',
+    )
+
+    expect(mockPatch).toHaveBeenCalledWith('proposal-1')
+    // Reason is trimmed and set alongside the status.
+    expect(mockSet).toHaveBeenCalledWith({
+      status: Status.withdrawn,
+      withdrawnReason: 'Family emergency',
+    })
+    expect(mockUnset).not.toHaveBeenCalled()
+    expect(mockPatchCommit).toHaveBeenCalled()
+  })
+
+  it('unsets a stale reason on a status change without a reason', async () => {
+    await updateProposalStatus('proposal-1', Status.accepted)
+
+    expect(mockSet).toHaveBeenCalledWith({ status: Status.accepted })
+    // No reason -> clear any previous withdrawnReason so it can't linger.
+    expect(mockUnset).toHaveBeenCalledWith(['withdrawnReason'])
+    expect(mockPatchCommit).toHaveBeenCalled()
+  })
+
+  it('treats a whitespace-only reason as no reason and unsets', async () => {
+    await updateProposalStatus('proposal-1', Status.withdrawn, '   ')
+
+    expect(mockSet).toHaveBeenCalledWith({ status: Status.withdrawn })
+    expect(mockUnset).toHaveBeenCalledWith(['withdrawnReason'])
+  })
+
+  it('returns the error when the patch commit fails', async () => {
+    const failure = new Error('patch failed')
+    mockPatchCommit.mockRejectedValueOnce(failure)
+
+    const { err } = await updateProposalStatus('proposal-1', Status.accepted)
 
     expect(err).toBe(failure)
   })

@@ -384,7 +384,14 @@ export async function updateProposalStatus(
   }
 
   try {
-    updatedProposal = await clientWrite.patch(proposalId).set(fields).commit()
+    const patch = clientWrite.patch(proposalId).set(fields)
+    // Any status change that isn't a withdrawal-with-reason must clear a
+    // previous reason so it can't misrepresent a now-active proposal if a
+    // transition out of `withdrawn` is ever added.
+    if (!trimmedReason) {
+      patch.unset(['withdrawnReason'])
+    }
+    updatedProposal = await patch.commit()
   } catch (error) {
     err = error as Error
   }
