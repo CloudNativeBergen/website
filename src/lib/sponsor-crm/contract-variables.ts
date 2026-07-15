@@ -65,6 +65,8 @@ export interface ContractVariableContext {
     venueName?: string
     venueAddress?: string
     sponsorEmail?: string
+    /** Raw SVG markup of the conference logo (bright variant). */
+    logoBright?: string
   }
 }
 

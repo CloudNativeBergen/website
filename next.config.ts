@@ -11,7 +11,15 @@ const config: NextConfig = {
       'rdf-canonize-native': './src/lib/empty-module.ts',
     },
   },
-  serverExternalPackages: ['jsdom', 'isomorphic-dompurify', 'dompurify'],
+  serverExternalPackages: [
+    'jsdom',
+    'isomorphic-dompurify',
+    'dompurify',
+    // Native module (platform-specific .node binary) used to rasterize the
+    // conference SVG logo for contract PDFs. Bundling breaks its dynamic
+    // binary resolution on Vercel serverless, so keep it external.
+    '@resvg/resvg-js',
+  ],
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Ignore optional native dependency that's not available in serverless environments
