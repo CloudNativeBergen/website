@@ -32,7 +32,7 @@ vi.mock('@/lib/profile/github', () => ({
   verifiedEmails: (...args: unknown[]) => verifiedEmailsMock(...args),
 }))
 
-import { getOrCreateSpeaker } from './sanity'
+import { attachProviderToSpeaker, getOrCreateSpeaker } from './sanity'
 
 // --- Fetch routing helpers -------------------------------------------------
 
@@ -371,5 +371,135 @@ describe('getOrCreateSpeaker — new speaker creation', () => {
     )
 
     expect(speaker.slug).toBe('speaker')
+  })
+})
+
+// --- Phase 2: attachProviderToSpeaker (self-service linking) ----------------
+
+interface AttachRoutes {
+  providerOwner?: Speaker | Record<string, never> | null
+  target?: Speaker | null
+  takenSlugs?: Set<string>
+}
+
+function attachRouteFetch(routes: AttachRoutes) {
+  const taken = routes.takenSlugs ?? new Set<string>()
+  return (query: string, params: Record<string, unknown> = {}) => {
+    if (query.includes('$id in providers')) {
+      return Promise.resolve(routes.providerOwner ?? {})
+    }
+    if (query.includes('_id == $speakerId')) {
+      return Promise.resolve(routes.target ?? null)
+    }
+    if (query.includes('slug.current == $slug')) {
+      return Promise.resolve(
+        taken.has(params.slug as string) ? 'taken-id' : null,
+      )
+    }
+    return Promise.resolve(null)
+  }
+}
+
+describe('attachProviderToSpeaker — explicit self-service link', () => {
+  it('attaches a new provider to the EXISTING speaker without creating a doc', async () => {
+    // Speaker X currently only has LinkedIn; we link a GitHub account to X.
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'jane.work@corp.com', verified: true }],
+    })
+    const target = existingSpeaker({
+      _id: 'spk-x',
+      providers: ['linkedin:li-456'],
+      knownEmails: ['jane@example.com'],
+    })
+    fetchMock.mockImplementation(
+      attachRouteFetch({ providerOwner: {}, target }),
+    )
+
+    const { speaker, status, err } = await attachProviderToSpeaker(
+      'spk-x',
+      user({ email: 'jane@example.com' }),
+      githubAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(status).toBe('linked')
+    expect(createMock).not.toHaveBeenCalled()
+    expect(patchMock).toHaveBeenCalledWith('spk-x')
+    expect(speaker._id).toBe('spk-x')
+    // Gains the second provider (deduped) ...
+    expect(speaker.providers).toEqual(
+      expect.arrayContaining(['linkedin:li-456', 'github:gh-123']),
+    )
+    // ... and this login's VERIFIED email is unioned into knownEmails.
+    expect(speaker.knownEmails).toEqual(
+      expect.arrayContaining(['jane@example.com', 'jane.work@corp.com']),
+    )
+  })
+
+  it('does NOT merge when the provider is already linked to another speaker', async () => {
+    // The GitHub account already belongs to a DIFFERENT speaker Z.
+    const otherSpeaker = existingSpeaker({ _id: 'spk-z' })
+    fetchMock.mockImplementation(
+      attachRouteFetch({
+        providerOwner: otherSpeaker,
+        target: existingSpeaker({ _id: 'spk-x' }),
+      }),
+    )
+
+    const { speaker, status, err } = await attachProviderToSpeaker(
+      'spk-x',
+      user({ email: 'jane@example.com' }),
+      githubAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(status).toBe('already-linked-elsewhere')
+    // Neither document is mutated — merging is the Phase-3 admin tool.
+    expect(patchMock).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+    // Surfaces the conflicting speaker so the UI can advise contacting organizers.
+    expect(speaker._id).toBe('spk-z')
+  })
+
+  it('is idempotent when the provider is already linked to the same speaker', async () => {
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+    const target = existingSpeaker({
+      _id: 'spk-x',
+      providers: ['github:gh-123'],
+    })
+    fetchMock.mockImplementation(
+      attachRouteFetch({ providerOwner: target, target }),
+    )
+
+    const { speaker, status, err } = await attachProviderToSpeaker(
+      'spk-x',
+      user({ email: 'jane@example.com' }),
+      githubAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(status).toBe('linked')
+    expect(createMock).not.toHaveBeenCalled()
+    expect(speaker.providers).toEqual(['github:gh-123'])
+  })
+
+  it('fails closed when the user has no email (cannot compute verified set)', async () => {
+    fetchMock.mockImplementation(
+      attachRouteFetch({
+        providerOwner: {},
+        target: existingSpeaker({ _id: 'spk-x' }),
+      }),
+    )
+
+    const { status, err } = await attachProviderToSpeaker(
+      'spk-x',
+      { name: 'Jane Doe' } as User,
+      githubAccount(),
+    )
+
+    expect(err).toBeInstanceOf(Error)
+    expect(status).toBe('linked')
+    expect(patchMock).not.toHaveBeenCalled()
   })
 })
