@@ -49,10 +49,71 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
-    exclude: ['node_modules', '.next', 'storybook-static'],
+    exclude: [
+      'node_modules',
+      '.next',
+      'storybook-static',
+      // Ignore copies of the suite living inside git worktrees (e.g. those
+      // created under .claude/worktrees/*). Without this, the `**/__tests__/**`
+      // include glob picks up stale duplicate suites and reports false failures.
+      '**/worktrees/**',
+      '.claude/worktrees/**',
+    ],
     setupFiles: ['./vitest.setup.ts'],
     coverage: {
       provider: 'v8',
+      // SCOPED coverage gate: only the security-critical auth modules are
+      // instrumented and gated. This deliberately keeps unrelated low-coverage
+      // files OUT of the report so they can never fail the build. In Vitest 4
+      // every file matching `include` is reported even if untested (so an
+      // untested included file such as proxy.ts counts as 0, not dropped).
+      include: [
+        'src/lib/auth.ts',
+        'src/lib/auth-link.ts',
+        'src/lib/speaker/sanity.ts',
+        'src/lib/profile/server.ts',
+        'src/proxy.ts',
+      ],
+      // Per-file RATCHET thresholds, set a few points below the coverage
+      // measured on 2026-07 so they lock in current coverage without being
+      // flaky. Raise these as coverage improves; never lower them. Only these
+      // globbed files are gated — there is no global threshold, so other files
+      // are never checked. Run via `pnpm test:coverage`.
+      thresholds: {
+        'src/lib/auth.ts': {
+          statements: 67,
+          branches: 64,
+          functions: 60,
+          lines: 70,
+        },
+        'src/lib/auth-link.ts': {
+          statements: 85,
+          branches: 83,
+          functions: 80,
+          lines: 85,
+        },
+        'src/lib/speaker/sanity.ts': {
+          statements: 61,
+          branches: 61,
+          functions: 63,
+          lines: 61,
+        },
+        'src/lib/profile/server.ts': {
+          statements: 84,
+          branches: 75,
+          functions: 95,
+          lines: 85,
+        },
+        // proxy.ts currently has no direct tests. Gate at 0 so it stays in the
+        // report (surfacing the gap) without failing the build; raise once
+        // tests are added.
+        'src/proxy.ts': {
+          statements: 0,
+          branches: 0,
+          functions: 0,
+          lines: 0,
+        },
+      },
     },
   },
 })

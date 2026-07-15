@@ -14,6 +14,7 @@
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:debug": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "test:badges": "vitest run __tests__/lib/badge/",
