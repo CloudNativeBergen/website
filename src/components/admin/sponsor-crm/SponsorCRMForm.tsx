@@ -17,16 +17,11 @@ import type {
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
 import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
-import { canTransition } from '@/lib/sponsor-crm/state-machine'
-import { StatusListbox } from './form'
-import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
+import { getPrimaryAction } from './form/deal-status'
 import {
   XMarkIcon,
-  PencilSquareIcon,
-  UserGroupIcon,
-  PhotoIcon,
-  ClockIcon,
-  DocumentTextIcon,
+  ChevronLeftIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
@@ -210,45 +205,35 @@ export function SponsorCRMForm({
     await submitForm(formData)
   }
 
-  const missingData = useMemo(() => {
-    if (!sponsor) return null
-    const hasContacts =
-      sponsor.contactPersons && sponsor.contactPersons.length > 0
-    const hasLogo = !!formData.logo && formData.logo.length > 0
-    return {
-      contacts: !hasContacts,
-      logo: !hasLogo,
-    }
-  }, [sponsor, formData.logo])
+  // The single most-relevant next step for this sponsor, shown as a contextual
+  // primary button in the header (only in the main pipeline view).
+  const primaryAction = useMemo(
+    () => (sponsor ? getPrimaryAction(formData, sponsor) : null),
+    [sponsor, formData],
+  )
 
-  const invoiceOptions = useMemo(() => {
-    return INVOICE_STATUSES.map((opt) => {
-      const fromStatus = sponsor?.invoiceStatus || 'not-sent'
-      const transition = canTransition('invoice', fromStatus, opt.value, {
-        tier: formData.tierId,
-        contractValue: formData.contractValue
-          ? parseFloat(formData.contractValue)
-          : undefined,
-        contractCurrency: formData.contractCurrency,
-        billing: sponsor?.billing,
-        contractStatus: formData.contractStatus,
-        invoiceStatus: fromStatus,
-      })
-      return {
-        ...opt,
-        disabled: !transition.ok,
-        disabledReason: !transition.ok
-          ? transition.missing.map((m) => m.message).join('\n')
-          : undefined,
-      }
-    })
-  }, [
-    sponsor,
-    formData.tierId,
-    formData.contractValue,
-    formData.contractCurrency,
-    formData.contractStatus,
-  ])
+  const handlePrimaryAction = () => {
+    if (!primaryAction) return
+    if (primaryAction.kind === 'view') {
+      setView(primaryAction.target)
+    } else if (primaryAction.kind === 'status') {
+      setFormData((prev) => ({ ...prev, status: primaryAction.target }))
+    } else {
+      setFormData((prev) => ({ ...prev, invoiceStatus: primaryAction.target }))
+    }
+  }
+
+  const primaryBlocked =
+    primaryAction && primaryAction.kind !== 'view'
+      ? primaryAction.blockedReason
+      : undefined
+
+  const SUBVIEW_TITLES: Record<Exclude<FormView, 'pipeline'>, string> = {
+    contract: 'Contract',
+    contacts: 'Contacts & billing',
+    logo: 'Logo',
+    history: 'History',
+  }
 
   return (
     <>
@@ -280,156 +265,54 @@ export function SponsorCRMForm({
                 <DialogPanel className="relative flex max-h-[85vh] w-full max-w-3xl transform flex-col overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
                   <div className="shrink-0 border-b border-gray-200 p-6 dark:border-gray-700">
                     <div className="flex items-start justify-between">
-                      <div className="text-left">
-                        <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-                          {sponsor
-                            ? 'Sponsor Details'
-                            : 'Add Sponsor to Pipeline'}
-                        </DialogTitle>
-                        {sponsor && (
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {sponsor.sponsor.name}
-                          </p>
-                        )}
-                        <div className="mt-3 flex flex-wrap items-center gap-3">
-                          <StatusListbox
-                            label=""
-                            value={formData.status}
-                            onChange={(value) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                status: value,
-                              }))
-                            }
-                            options={STATUSES}
-                          />
-                          <StatusListbox
-                            label=""
-                            value={formData.contractStatus}
-                            onChange={(value) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                contractStatus: value,
-                              }))
-                            }
-                            options={CONTRACT_STATUSES}
-                          />
-                          <StatusListbox
-                            label=""
-                            value={formData.invoiceStatus}
-                            onChange={(value) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                invoiceStatus: value,
-                              }))
-                            }
-                            options={invoiceOptions}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {sponsor && (
+                      <div className="min-w-0 text-left">
+                        {view === 'pipeline' ? (
+                          <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
+                            {sponsor
+                              ? 'Sponsor Details'
+                              : 'Add Sponsor to Pipeline'}
+                          </DialogTitle>
+                        ) : (
                           <>
                             <button
                               type="button"
                               onClick={() => setView('pipeline')}
-                              className={clsx(
-                                'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
-                                view === 'pipeline'
-                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
-                              )}
-                              title="Edit pipeline details"
+                              className="mb-1 -ml-1 inline-flex cursor-pointer items-center gap-1 rounded px-1 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                             >
-                              <PencilSquareIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Edit</span>
+                              <ChevronLeftIcon className="h-4 w-4" />
+                              Back to details
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setView('contract')}
-                              className={clsx(
-                                'relative inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 transition-colors ring-inset',
-                                view === 'contract'
-                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
-                              )}
-                              title="Contract"
-                            >
-                              {sponsor.contractStatus === 'contract-signed' && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
-                              {(sponsor.contractStatus === 'contract-sent' ||
-                                sponsor.signatureStatus === 'pending') && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
-                              {sponsor.registrationComplete &&
-                                sponsor.contractStatus !== 'contract-sent' &&
-                                sponsor.contractStatus !==
-                                  'contract-signed' && (
-                                  <span className="absolute -top-1 -right-1 h-2 w-2 animate-pulse rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
-                                )}
-                              <DocumentTextIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Contract</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setView('history')}
-                              className={clsx(
-                                'inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
-                                view === 'history'
-                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
-                              )}
-                              title="View history"
-                            >
-                              <ClockIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setView('logo')}
-                              className={clsx(
-                                'relative inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
-                                view === 'logo'
-                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : missingData?.logo
-                                    ? 'bg-white text-amber-600 ring-amber-300 hover:bg-amber-50 dark:bg-gray-800 dark:text-amber-400 dark:ring-amber-500/50 dark:hover:bg-gray-700'
-                                    : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
-                              )}
-                              title={
-                                missingData?.logo
-                                  ? 'No logo uploaded \u2014 click to add'
-                                  : 'Manage logo'
-                              }
-                            >
-                              {missingData?.logo && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
-                              <PhotoIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setView('contacts')}
-                              className={clsx(
-                                'relative inline-flex cursor-pointer items-center rounded-md p-2 shadow-sm ring-1 transition-colors ring-inset',
-                                view === 'contacts'
-                                  ? 'bg-indigo-50 text-indigo-600 ring-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-400 dark:ring-indigo-500/50'
-                                  : missingData?.contacts
-                                    ? 'bg-white text-amber-600 ring-amber-300 hover:bg-amber-50 dark:bg-gray-800 dark:text-amber-400 dark:ring-amber-500/50 dark:hover:bg-gray-700'
-                                    : 'bg-white text-gray-900 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700',
-                              )}
-                              title={
-                                missingData?.contacts
-                                  ? 'No contacts \u2014 click to add'
-                                  : 'Manage contact persons'
-                              }
-                            >
-                              {missingData?.contacts && (
-                                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-gray-900" />
-                              )}
-                              <UserGroupIcon className="h-5 w-5" />
-                            </button>
+                            <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
+                              {SUBVIEW_TITLES[view]}
+                            </DialogTitle>
                           </>
+                        )}
+                        {sponsor && (
+                          <p className="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">
+                            {sponsor.sponsor.name}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        {view === 'pipeline' && sponsor && primaryAction && (
+                          <button
+                            type="button"
+                            onClick={handlePrimaryAction}
+                            disabled={Boolean(primaryBlocked)}
+                            title={primaryBlocked}
+                            className={clsx(
+                              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors',
+                              primaryBlocked
+                                ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600'
+                                : 'cursor-pointer bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+                            )}
+                          >
+                            {primaryAction.label}
+                            {primaryAction.kind === 'view' && (
+                              <ArrowRightIcon className="h-4 w-4" />
+                            )}
+                          </button>
                         )}
                         <button
                           onClick={handleClose}
@@ -498,6 +381,7 @@ export function SponsorCRMForm({
                           isPending={isPending}
                           onSubmit={handleSubmit}
                           onCancel={handleClose}
+                          onOpenView={setView}
                         />
                       )}
                     </div>

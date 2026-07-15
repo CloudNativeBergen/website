@@ -17,7 +17,10 @@ import {
   ContractValueInput,
   TagCombobox,
   SponsorGlobalInfoFields,
+  DealStatusSection,
 } from './form'
+import { ManageCards } from './ManageCards'
+import type { SponsorSubView } from './form/deal-status'
 import clsx from 'clsx'
 
 export interface SponsorPipelineFormData {
@@ -67,8 +70,35 @@ export interface SponsorPipelineViewProps {
   isPending: boolean
   onSubmit: (e: React.FormEvent) => void
   onCancel: () => void
+  /** Open one of the focused sub-views (contract / contacts / logo / history). */
+  onOpenView: (view: SponsorSubView) => void
 }
 
+/** A titled block with an uppercase eyebrow, separated by hairline dividers. */
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="py-5 first:pt-0 last:pb-0">
+      <h3 className="mb-3 text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * The sponsor detail form as a single scrollable column of labeled sections:
+ * Identity → Deal status → Commercial terms → Ownership & tags → Manage →
+ * Recent activity. Replaces the former 3/2 split that mixed unlike things
+ * (identity + tier on the left; value + tags + activity on the right) and hid
+ * the status controls in the modal header.
+ */
 export function SponsorPipelineView({
   formData,
   onFormDataChange,
@@ -81,6 +111,7 @@ export function SponsorPipelineView({
   isPending,
   onSubmit,
   onCancel,
+  onOpenView,
 }: SponsorPipelineViewProps) {
   const isContractProcessStarted =
     sponsor?.contractStatus === 'registration-sent' ||
@@ -89,24 +120,19 @@ export function SponsorPipelineView({
 
   return (
     <form onSubmit={onSubmit}>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
-        <div className="col-span-1 space-y-4 md:col-span-3">
-          {/* Sponsor Selection - Only show when adding new */}
-          {!sponsor && (
+      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        {/* Identity — sponsor picker when creating, company details when editing */}
+        <Section title={sponsor ? 'Company' : 'Sponsor'}>
+          {!sponsor ? (
             <SponsorCombobox
               value={formData.sponsorId}
               onChange={(value) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  sponsorId: value,
-                }))
+                onFormDataChange((prev) => ({ ...prev, sponsorId: value }))
               }
               availableSponsors={availableSponsors}
               disabled={!!sponsor}
             />
-          )}
-
-          {sponsor && (
+          ) : (
             <SponsorGlobalInfoFields
               name={formData.name}
               website={formData.website}
@@ -119,103 +145,116 @@ export function SponsorPipelineView({
                 onFormDataChange((prev) => ({ ...prev, website }))
               }
               onOrgNumberChange={(orgNumber) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  orgNumber,
-                }))
+                onFormDataChange((prev) => ({ ...prev, orgNumber }))
               }
               onAddressChange={(address) =>
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  address,
-                }))
+                onFormDataChange((prev) => ({ ...prev, address }))
               }
             />
           )}
+        </Section>
 
-          {/* Tier Selection */}
-          <TierRadioGroup
-            tiers={regularTiers}
-            value={formData.tierId}
-            onChange={(value) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                tierId: value,
-              }))
+        {/* Deal status — the three coordinated tracks, labeled + gated */}
+        <Section title="Deal status">
+          <DealStatusSection
+            formData={formData}
+            sponsor={sponsor}
+            onStatusChange={(status) =>
+              onFormDataChange((prev) => ({ ...prev, status }))
+            }
+            onContractStatusChange={(contractStatus) =>
+              onFormDataChange((prev) => ({ ...prev, contractStatus }))
+            }
+            onInvoiceStatusChange={(invoiceStatus) =>
+              onFormDataChange((prev) => ({ ...prev, invoiceStatus }))
             }
           />
+        </Section>
 
-          {/* Addons Selection */}
-          <AddonsCheckboxGroup
-            addons={addonTiers}
-            value={formData.addonIds}
-            onChange={(value) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                addonIds: value,
-              }))
-            }
-          />
+        {/* Commercial terms — tier & add-ons drive the value that sits with them */}
+        <Section title="Commercial terms">
+          <div className="space-y-4">
+            <TierRadioGroup
+              tiers={regularTiers}
+              value={formData.tierId}
+              onChange={(value) =>
+                onFormDataChange((prev) => ({ ...prev, tierId: value }))
+              }
+            />
+            <AddonsCheckboxGroup
+              addons={addonTiers}
+              value={formData.addonIds}
+              onChange={(value) =>
+                onFormDataChange((prev) => ({ ...prev, addonIds: value }))
+              }
+            />
+            <ContractValueInput
+              value={formData.contractValue}
+              currency={formData.contractCurrency}
+              onValueChange={(value) => {
+                onFormDataChange((prev) => ({ ...prev, contractValue: value }))
+                onContractValueEdited?.()
+              }}
+              onCurrencyChange={(value) =>
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  contractCurrency: value as 'NOK' | 'USD' | 'EUR' | 'GBP',
+                }))
+              }
+              disabled={isContractProcessStarted}
+              helperText={
+                isContractProcessStarted
+                  ? 'Locked — contract has been sent'
+                  : undefined
+              }
+            />
+          </div>
+        </Section>
 
-          <OrganizerCombobox
-            value={formData.assignedTo}
-            onChange={(value) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                assignedTo: value,
-              }))
-            }
-            organizers={organizers}
-          />
-        </div>
+        {/* Ownership & tags */}
+        <Section title="Ownership & tags">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <OrganizerCombobox
+              value={formData.assignedTo}
+              onChange={(value) =>
+                onFormDataChange((prev) => ({ ...prev, assignedTo: value }))
+              }
+              organizers={organizers}
+            />
+            <TagCombobox
+              value={formData.tags}
+              onChange={(tags) =>
+                onFormDataChange((prev) => ({ ...prev, tags }))
+              }
+            />
+          </div>
+        </Section>
 
-        <div className="col-span-1 space-y-4 border-l border-gray-200 pl-6 md:col-span-2 dark:border-gray-700">
-          <ContractValueInput
-            value={formData.contractValue}
-            currency={formData.contractCurrency}
-            onValueChange={(value) => {
-              onFormDataChange((prev) => ({
-                ...prev,
-                contractValue: value,
-              }))
-              onContractValueEdited?.()
-            }}
-            onCurrencyChange={(value) =>
-              onFormDataChange((prev) => ({
-                ...prev,
-                contractCurrency: value as 'NOK' | 'USD' | 'EUR' | 'GBP',
-              }))
-            }
-            disabled={isContractProcessStarted}
-            helperText={
-              isContractProcessStarted
-                ? 'Locked — contract has been sent'
-                : undefined
-            }
-          />
+        {/* Manage — entry points to the focused sub-views */}
+        {sponsor && (
+          <Section title="Manage">
+            <ManageCards
+              sponsor={sponsor}
+              hasLogo={Boolean(formData.logo)}
+              onOpen={onOpenView}
+            />
+          </Section>
+        )}
 
-          <TagCombobox
-            value={formData.tags}
-            onChange={(tags) => onFormDataChange((prev) => ({ ...prev, tags }))}
-          />
-
-          {sponsor && (
-            <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
-              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
-                Recent Activity
-              </h4>
-              <SponsorActivityTimeline
-                sponsorForConferenceId={sponsor._id}
-                limit={2}
-                compact={true}
-                showHeaderFooter={false}
-              />
-            </div>
-          )}
-        </div>
+        {/* Recent activity */}
+        {sponsor && (
+          <Section title="Recent activity">
+            <SponsorActivityTimeline
+              sponsorForConferenceId={sponsor._id}
+              limit={2}
+              compact={true}
+              showHeaderFooter={false}
+            />
+          </Section>
+        )}
       </div>
 
-      <div className="mt-4 flex flex-row-reverse gap-3">
+      <div className="mt-6 flex flex-row-reverse gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
         <button
           type="submit"
           disabled={isPending}
