@@ -60,9 +60,17 @@ export function detectBrowser(): { isIOS: boolean; isSafari: boolean } {
     (/macintosh/i.test(ua) &&
       typeof document !== 'undefined' &&
       'ontouchend' in document)
-  // Safari's UA contains "Safari" but so do Chrome/Firefox/Edge on iOS; those
-  // add their own tokens (CriOS/FxiOS/EdgiOS) plus Chrome/Android on other OSes.
+  // Safari's UA contains "Safari" but so do many others: Chrome/Firefox/Edge
+  // (CriOS/FxiOS/EdgiOS + Chrome/Android), and in-app webviews (Facebook/
+  // Instagram/WeChat/Line/Google app) which CANNOT Add-to-Home-Screen. Excluding
+  // those routes them to the "open in Safari" guidance instead of A2HS steps
+  // that would not work. A true-standalone-capable Safari also carries a
+  // "Version/" token, which in-app WKWebViews typically omit.
+  const isInAppOrOtherBrowser =
+    /chrome|crios|android|fxios|edgios|edg\/|fban|fbav|instagram|line\/|micromessenger|gsa\//i.test(
+      ua,
+    )
   const isSafari =
-    /safari/i.test(ua) && !/chrome|crios|android|fxios|edgios|edg\//i.test(ua)
+    /safari/i.test(ua) && /version\//i.test(ua) && !isInAppOrOtherBrowser
   return { isIOS, isSafari }
 }
