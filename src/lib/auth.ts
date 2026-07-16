@@ -278,6 +278,82 @@ export async function jwtSignInCallback({
   return token
 }
 
+/**
+ * The `session` callback body: project the JWT's speaker/account and a trimmed
+ * user onto the client-visible session. Extracted (and exported) so the shape
+ * the browser receives is directly unit-testable. Referenced from
+ * `config.callbacks.session`.
+ */
+export async function sessionCallback({
+  session,
+  token,
+}: {
+  session: Session
+  token: JWT
+}): Promise<Session> {
+  const speaker = token.speaker
+  const account = token.account
+
+  return {
+    ...session,
+    user: {
+      sub: token.sub,
+      name: token.name,
+      email: token.email,
+      picture: token.picture,
+    },
+    speaker,
+    account,
+  } as Session
+}
+
+/**
+ * The `redirect` callback body. Extracted (and exported) so the security-
+ * critical OPEN-REDIRECT guard (`url.startsWith(baseUrl)`) and the Phase-2
+ * link-result param append are directly unit-testable. Referenced from
+ * `config.callbacks.redirect`.
+ */
+export async function redirectCallback({
+  url,
+  baseUrl,
+}: {
+  url: string
+  baseUrl: string
+}): Promise<string> {
+  // OPEN-REDIRECT GUARD: only ever return a URL on baseUrl's own origin.
+  // Compare parsed ORIGINS — a bare `url.startsWith(baseUrl)` is unsafe because a
+  // look-alike host such as `https://<base>.evil.com` is a string prefix of the
+  // base and would slip through. Relative URLs resolve onto baseUrl; anything
+  // else (off-site, protocol-relative `//evil`, unparseable) falls back to base.
+  let target: string
+  try {
+    const resolved = new URL(url, baseUrl)
+    target =
+      resolved.origin === new URL(baseUrl).origin
+        ? resolved.toString()
+        : baseUrl
+  } catch {
+    target = baseUrl
+  }
+
+  // Phase 2: append the link outcome (set by the jwt callback in the same
+  // request) so the profile page can show a success / already-linked banner.
+  // `target` is guaranteed same-origin above, so the append is always safe.
+  const { linkResultStore, LINK_RESULT_PARAM } = await import('@/lib/auth-link')
+  const result = linkResultStore.getStore()?.result
+  if (result) {
+    try {
+      const resolved = new URL(target, baseUrl)
+      resolved.searchParams.set(LINK_RESULT_PARAM, result)
+      target = resolved.toString()
+    } catch {
+      // Leave target unchanged on any URL parsing issue.
+    }
+  }
+
+  return target
+}
+
 const config = {
   providers: [
     GitHub({
@@ -305,47 +381,15 @@ const config = {
   },
 
   callbacks: {
-    async session({ session, token }) {
-      const speaker = token.speaker
-      const account = token.account
-
-      return {
-        ...session,
-        user: {
-          sub: token.sub,
-          name: token.name,
-          email: token.email,
-          picture: token.picture,
-        },
-        speaker,
-        account,
-      } as Session
+    async session(params) {
+      return sessionCallback(params)
     },
 
     async jwt(params) {
       return jwtSignInCallback(params)
     },
-    async redirect({ url, baseUrl }) {
-      let target = url.startsWith(baseUrl) ? url : baseUrl
-
-      // Phase 2: append the link outcome (set by the jwt callback in the same
-      // request) so the profile page can show a success / already-linked banner.
-      const { linkResultStore, LINK_RESULT_PARAM } =
-        await import('@/lib/auth-link')
-      const result = linkResultStore.getStore()?.result
-      if (result) {
-        try {
-          const resolved = new URL(target, baseUrl)
-          if (resolved.origin === new URL(baseUrl).origin) {
-            resolved.searchParams.set(LINK_RESULT_PARAM, result)
-            target = resolved.toString()
-          }
-        } catch {
-          // Leave target unchanged on any URL parsing issue.
-        }
-      }
-
-      return target
+    async redirect(params) {
+      return redirectCallback(params)
     },
   },
 } satisfies NextAuthConfig
