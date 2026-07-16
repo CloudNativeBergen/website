@@ -90,6 +90,7 @@ const meta = {
     onCancel: fn(),
     onFormDataChange: fn(),
     onContractValueEdited: fn(),
+    onOpenView: fn(),
   },
   decorators: [
     (Story) => (
