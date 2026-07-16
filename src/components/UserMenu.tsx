@@ -109,21 +109,12 @@ export interface UserMenuProps {
  * accessible and focus-visible; dark-mode and mobile aware.
  */
 export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
-  const { canInstall, platform, promptInstall, requestHint } = usePwaInstall()
+  const { canInstall } = usePwaInstall()
 
   const isOrganizer = Boolean(speaker?.isOrganizer)
   const slug = speaker?.slug
   const provider = account?.provider
   const providerMeta = provider ? PROVIDER_META[provider] : undefined
-
-  const handleInstall = () => {
-    if (platform === 'ios') {
-      // iOS Safari has no install prompt — surface the A2HS hint instead.
-      requestHint()
-      return
-    }
-    void promptInstall()
-  }
 
   return (
     <Menu as="div" className="relative">
@@ -173,16 +164,11 @@ export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
         <Divider />
 
         {canInstall && (
-          <MenuItem>
-            <button
-              type="button"
-              onClick={handleInstall}
-              className={itemClasses}
-            >
-              <ArrowDownTrayIcon className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
-              <span className="flex-1">Install app</span>
-            </button>
-          </MenuItem>
+          <LinkItem
+            href="/install"
+            label="Install app"
+            icon={ArrowDownTrayIcon}
+          />
         )}
 
         {providerMeta && (
