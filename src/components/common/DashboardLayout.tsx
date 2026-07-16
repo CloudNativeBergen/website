@@ -421,22 +421,44 @@ export function DashboardLayout({
 
           <div className="flex items-center gap-x-2" suppressHydrationWarning>
             <ThemeToggle />
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="focus:outline-none"
-            >
-              <span className="sr-only">Sign out</span>
-              <Image
-                alt=""
-                src={getAvatarUrl()}
-                width={32}
-                height={32}
-                className={clsx(
-                  'size-8 rounded-full transition-opacity hover:opacity-80',
-                  mode === 'speaker' ? 'bg-brand-cloud-blue' : 'bg-gray-800',
-                )}
-              />
-            </button>
+            {/*
+              Avatar opens a menu rather than signing out directly — a bare
+              onClick={signOut} here (the previous behaviour) meant tapping your
+              own profile photo instantly logged you out and bounced you to `/`,
+              which read as a mysterious "logged out on the landing page" bug.
+              Mirrors the desktop header's user menu below.
+            */}
+            <Menu as="div" className="relative">
+              <MenuButton
+                className="flex items-center focus:outline-none"
+                suppressHydrationWarning
+              >
+                <span className="sr-only">Open user menu</span>
+                <Image
+                  alt=""
+                  src={getAvatarUrl()}
+                  width={32}
+                  height={32}
+                  className={clsx(
+                    'size-8 rounded-full transition-opacity hover:opacity-80',
+                    mode === 'speaker' ? 'bg-brand-cloud-blue' : 'bg-gray-800',
+                  )}
+                />
+              </MenuButton>
+              <MenuItems
+                transition
+                className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 transition focus:outline-none data-closed:scale-95 data-closed:transform data-closed:opacity-0 data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-gray-900 dark:ring-white/10"
+              >
+                <MenuItem>
+                  <button
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    className="block w-full px-3 py-1 text-left text-sm leading-6 text-gray-900 data-focus:bg-gray-50 dark:text-white dark:data-focus:bg-gray-800"
+                  >
+                    Sign out
+                  </button>
+                </MenuItem>
+              </MenuItems>
+            </Menu>
           </div>
         </div>
 
