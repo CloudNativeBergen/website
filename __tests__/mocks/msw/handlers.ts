@@ -3,11 +3,13 @@ import { http, HttpResponse } from 'msw'
 /**
  * Default MSW request handlers for the external HTTP the auth/identity and
  * ticketing paths call. Until now `__tests__/mocks/*` were module ALIASES, not
- * a network server — GitHub (`/user/emails`), LinkedIn userinfo, and the
- * Checkin.no GraphQL API weren't intercepted, so any test exercising those
- * paths would hit the real network. These handlers make those paths
- * deterministic. Individual tests override a handler with `server.use(...)` to
- * exercise error/edge responses (see __tests__/lib/profile/github.test.ts).
+ * a network server — outbound HTTP (GitHub `/user/emails`, LinkedIn userinfo,
+ * the Checkin.no GraphQL API) wasn't intercepted, so any test exercising those
+ * paths would hit the real network. The handlers below cover the endpoints
+ * currently reached in tests — GitHub `/user/emails` and Checkin.no GraphQL;
+ * add a LinkedIn userinfo handler here when a test first needs one. Individual
+ * tests override a handler with `server.use(...)` to exercise error/edge
+ * responses (see __tests__/lib/profile/github.test.ts).
  *
  * The server is registered with `onUnhandledRequest: 'bypass'` (see
  * vitest.setup.ts), so adding these handlers does NOT change the behaviour of
