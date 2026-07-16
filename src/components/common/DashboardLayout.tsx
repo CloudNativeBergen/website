@@ -3,28 +3,23 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useTheme } from 'next-themes'
 import {
   Dialog,
   DialogBackdrop,
   DialogPanel,
   TransitionChild,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuItems,
 } from '@headlessui/react'
 import {
   Bars3Icon,
   XMarkIcon,
-  ChevronDownIcon,
   MagnifyingGlassIcon,
   BellIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { UserMenu } from '@/components/UserMenu'
 import clsx from 'clsx'
 
 export interface NavigationItem {
@@ -421,22 +416,12 @@ export function DashboardLayout({
 
           <div className="flex items-center gap-x-2" suppressHydrationWarning>
             <ThemeToggle />
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="focus:outline-none"
-            >
-              <span className="sr-only">Sign out</span>
-              <Image
-                alt=""
-                src={getAvatarUrl()}
-                width={32}
-                height={32}
-                className={clsx(
-                  'size-8 rounded-full transition-opacity hover:opacity-80',
-                  mode === 'speaker' ? 'bg-brand-cloud-blue' : 'bg-gray-800',
-                )}
-              />
-            </button>
+            <UserMenu
+              name={getUserName()}
+              picture={getAvatarUrl()}
+              speaker={session?.speaker}
+              account={session?.account}
+            />
           </div>
         </div>
 
@@ -485,46 +470,12 @@ export function DashboardLayout({
                 className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200 dark:bg-gray-700"
               />
 
-              <Menu as="div" className="relative">
-                <MenuButton
-                  className="-m-1.5 flex items-center p-1.5"
-                  suppressHydrationWarning
-                >
-                  <span className="sr-only">Open user menu</span>
-                  <Image
-                    alt=""
-                    src={getAvatarUrl()}
-                    width={32}
-                    height={32}
-                    className="size-8 rounded-full bg-gray-50 dark:bg-gray-800"
-                  />
-                  <span className="hidden lg:flex lg:items-center">
-                    <span
-                      aria-hidden="true"
-                      className="ml-4 text-sm leading-6 font-semibold text-gray-900 dark:text-white"
-                    >
-                      {getUserName()}
-                    </span>
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="ml-2 size-5 text-gray-400 dark:text-gray-500"
-                    />
-                  </span>
-                </MenuButton>
-                <MenuItems
-                  transition
-                  className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 transition focus:outline-none data-closed:scale-95 data-closed:transform data-closed:opacity-0 data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-gray-900 dark:ring-white/10"
-                >
-                  <MenuItem>
-                    <button
-                      onClick={() => signOut({ callbackUrl: '/' })}
-                      className="block w-full px-3 py-1 text-left text-sm leading-6 text-gray-900 data-focus:bg-gray-50 dark:text-white dark:data-focus:bg-gray-800"
-                    >
-                      Sign out
-                    </button>
-                  </MenuItem>
-                </MenuItems>
-              </Menu>
+              <UserMenu
+                name={getUserName()}
+                picture={getAvatarUrl()}
+                speaker={session?.speaker}
+                account={session?.account}
+              />
             </div>
           </div>
         </div>
