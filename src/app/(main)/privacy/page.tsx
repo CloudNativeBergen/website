@@ -989,7 +989,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       its purpose and legal requirements:
                     </p>
 
-                    <div className="my-6 overflow-hidden rounded-lg border border-gray-200 shadow-sm dark:border-gray-700 print:overflow-visible print:rounded-none print:border-black print:shadow-none">
+                    <div className="my-6 overflow-x-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700 print:overflow-visible print:rounded-none print:border-black print:shadow-none">
                       <table className="w-full border-collapse print:text-sm">
                         <thead>
                           <tr className="bg-gray-50 dark:bg-gray-800 print:bg-white">
