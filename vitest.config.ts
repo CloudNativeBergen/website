@@ -97,14 +97,15 @@ export default defineConfig({
           functions: 95,
           lines: 85,
         },
-        // proxy.ts currently has no direct tests. Gate at 0 so it stays in the
-        // report (surfacing the gap) without failing the build; raise once
-        // tests are added.
+        // proxy.ts is covered by __tests__/lib/auth/proxy.test.ts (routing,
+        // production dev-tools/impersonation guards, sign-in redirect, test-mode
+        // bypass). Measured 100/~96/100/100 on 2026-07; ratcheted a few points
+        // below to lock in coverage without flakiness.
         'src/proxy.ts': {
-          statements: 0,
-          branches: 0,
-          functions: 0,
-          lines: 0,
+          statements: 95,
+          branches: 90,
+          functions: 90,
+          lines: 95,
         },
       },
     },
