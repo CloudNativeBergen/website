@@ -51,6 +51,9 @@ export default defineConfig({
       // include glob picks up stale duplicate suites and reports false failures.
       '**/worktrees/**',
       '.claude/worktrees/**',
+      // Playwright e2e specs (e2e/*.spec.ts) are run by `pnpm test:e2e`, not
+      // vitest; the `**/*.spec.ts` include glob would otherwise pick them up.
+      'e2e/**',
     ],
     setupFiles: ['./vitest.setup.ts'],
     coverage: {

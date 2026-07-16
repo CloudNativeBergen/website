@@ -50,3 +50,7 @@ public/mockServiceWorker.js
 .storybook/.env
 
 certificates
+# Playwright e2e
+/test-results/
+/playwright-report/
+/e2e/.auth/
