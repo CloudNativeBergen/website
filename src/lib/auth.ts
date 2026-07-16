@@ -309,8 +309,8 @@ export async function sessionCallback({
 
 /**
  * The `redirect` callback body. Extracted (and exported) so the security-
- * critical OPEN-REDIRECT guard (`url.startsWith(baseUrl)`) and the Phase-2
- * link-result param append are directly unit-testable. Referenced from
+ * critical OPEN-REDIRECT guard (same-origin check on the parsed URL) and the
+ * Phase-2 link-result param append are directly unit-testable. Referenced from
  * `config.callbacks.redirect`.
  */
 export async function redirectCallback({

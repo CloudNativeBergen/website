@@ -6,8 +6,8 @@
  * which is passed to the globally-mocked `next-auth`, so the real logic never
  * ran in tests. They are now exported named functions referenced from the
  * config, making the security-critical behaviour directly testable:
- *   - `redirectCallback`: the OPEN-REDIRECT guard (`url.startsWith(baseUrl)`)
- *     and the Phase-2 `linkResult` param append (same-origin only).
+ *   - `redirectCallback`: the OPEN-REDIRECT guard (same-origin check on the
+ *     parsed URL) and the Phase-2 `linkResult` param append (same-origin only).
  *   - `sessionCallback`: the exact client-visible session shape (trimmed user +
  *     speaker/account lifted off the JWT).
  *
@@ -32,6 +32,14 @@ describe('redirectCallback — open-redirect guard', () => {
     expect(target).toBe(`${BASE}/cfp/list`)
   })
 
+  it('allows a relative URL by resolving it onto baseUrl', async () => {
+    const target = await redirectCallback({
+      url: '/cfp/list',
+      baseUrl: BASE,
+    })
+    expect(target).toBe(`${BASE}/cfp/list`)
+  })
+
   it('rejects an off-site absolute URL, falling back to baseUrl', async () => {
     const target = await redirectCallback({
       url: 'https://evil.example.com/steal',
@@ -45,13 +53,15 @@ describe('redirectCallback — open-redirect guard', () => {
       url: '//evil.example.com/steal',
       baseUrl: BASE,
     })
-    // Does not start with baseUrl → must fall back, never leak to the other host.
+    // Resolves to a different origin (https://evil.example.com) → must fall
+    // back, never leak to the other host.
     expect(target).toBe(BASE)
   })
 
   it('rejects a look-alike host that only prefixes the base host', async () => {
-    // `https://2026.cloudnativedays.no.evil.com` shares the base as a substring
-    // but not as a prefix of the full origin URL string — must be rejected.
+    // `https://2026.cloudnativedays.no.evil.com` IS a string prefix of the base
+    // URL — exactly what the old `startsWith(baseUrl)` guard leaked — but its
+    // parsed origin differs, so the origin check rejects it.
     const target = await redirectCallback({
       url: 'https://2026.cloudnativedays.no.evil.com/x',
       baseUrl: BASE,
