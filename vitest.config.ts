@@ -79,11 +79,14 @@ export default defineConfig({
           functions: 60,
           lines: 70,
         },
+        // Covered by auth-link-abuse.test.ts (signLinkIntent/verifyLinkIntent
+        // integrity, expiry, provider-binding, forgery) plus the jwt-callback
+        // path. Measured ~98/93/83/98 on 2026-07; ratcheted up a few points.
         'src/lib/auth-link.ts': {
-          statements: 85,
-          branches: 83,
+          statements: 92,
+          branches: 88,
           functions: 80,
-          lines: 85,
+          lines: 92,
         },
         'src/lib/speaker/sanity.ts': {
           statements: 61,
