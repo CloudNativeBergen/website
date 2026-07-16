@@ -45,6 +45,18 @@ function applySpeakerToToken(
 }
 
 /**
+ * `@auth/core`'s default session-token cookie names, most-specific first. Prod
+ * uses the `__Secure-` prefix (https); dev uses the bare name. Salt === cookie
+ * name, so these double as the decode salts. Exported so the contract test
+ * (`__tests__/lib/auth/authjs-jwt-contract.test.ts`) can pin them against a real
+ * encode/decode round-trip and catch an Auth.js rename.
+ */
+export const SESSION_TOKEN_COOKIE_NAMES = [
+  '__Secure-authjs.session-token',
+  'authjs.session-token',
+] as const
+
+/**
  * Decode the browser's PRE-EXISTING NextAuth session token from the request
  * cookies.
  *
@@ -64,9 +76,7 @@ async function readPriorSessionToken(jar: {
   const secret = process.env.AUTH_SECRET
   if (!secret) return null
 
-  // Prod uses the __Secure- prefix; dev uses the bare name. Salt === cookie name.
-  const baseNames = ['__Secure-authjs.session-token', 'authjs.session-token']
-  for (const base of baseNames) {
+  for (const base of SESSION_TOKEN_COOKIE_NAMES) {
     let value = jar.get(base)?.value
     if (!value) {
       const chunks: string[] = []
@@ -428,7 +438,9 @@ export const auth = _auth as typeof _auth &
 
 const SANITY_ID_PATTERN = /^[a-zA-Z0-9_-]+$/
 const MAX_IMPERSONATION_ID_LENGTH = 100
-const CLI_JWT_SALT = 'authjs.session-token'
+// CLI tokens are minted/read with the bare session-cookie salt. Exported so the
+// contract test can assert this equals the bare cookie name (not a magic string).
+export const CLI_JWT_SALT = SESSION_TOKEN_COOKIE_NAMES[1]
 
 function extractBearerToken(headers?: Headers): string | null {
   const value = headers?.get('authorization')

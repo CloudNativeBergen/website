@@ -18,22 +18,24 @@
  *   - the CLI bearer salt (`CLI_JWT_SALT`) equals the bare cookie name;
  *   - a wrong secret is rejected.
  *
- * The exact cookie-name STRINGS are asserted as the documented reference
- * (`@auth/core` is only a transitive dep here, so its `defaultCookies()` can't
- * be imported directly to diff against — a rename would need this test updated
- * deliberately alongside src/lib/auth.ts).
+ * The salts are the app's OWN exported constants (`SESSION_TOKEN_COOKIE_NAMES`,
+ * `CLI_JWT_SALT`), imported from src/lib/auth.ts, and asserted against the
+ * known-correct `@auth/core` default strings — so this guards the app, not a
+ * copy. (`@auth/core` is only a transitive dep here, so its `defaultCookies()`
+ * can't be imported to diff automatically; a rename must update auth.ts, which
+ * this test then flags against the reference strings.)
  */
 import { describe, it, expect } from 'vitest'
 import { encode, decode } from 'next-auth/jwt'
+import { SESSION_TOKEN_COOKIE_NAMES, CLI_JWT_SALT } from '@/lib/auth'
 
 const SECRET = 'contract-test-secret-long-enough-for-a256cbc-hs512'
 const OTHER_SECRET = 'a-totally-different-secret-of-sufficient-length!!'
 
-// Mirror of src/lib/auth.ts: salt === session-cookie name. Prod uses the
-// __Secure- prefix (https); dev uses the bare name.
-const DEV_COOKIE = 'authjs.session-token'
-const PROD_COOKIE = '__Secure-authjs.session-token'
-const CLI_SALT = 'authjs.session-token' // CLI_JWT_SALT in auth.ts
+// The REAL constants the app uses (salt === session-cookie name), imported from
+// src/lib/auth.ts so these assertions guard the app — not a copy.
+const [PROD_COOKIE, DEV_COOKIE] = SESSION_TOKEN_COOKIE_NAMES
+const CLI_SALT = CLI_JWT_SALT
 
 const payload = { sub: 'user-1', name: 'Ada', email: 'ada@example.com' }
 
