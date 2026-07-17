@@ -40,6 +40,3 @@ export interface DragItem {
   sourceTrackIndex?: number
   sourceTimeSlot?: string
 }
-
-export const DRAG_PERFORMANCE_THRESHOLD = 16
-export const BATCH_UPDATE_DELAY = 100

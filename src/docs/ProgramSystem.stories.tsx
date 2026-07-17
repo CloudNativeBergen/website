@@ -303,18 +303,6 @@ export const Architecture: Story = {
                 name="useScheduleEditor()"
                 desc="Core state manager. Manages schedule + unassigned proposals. Provides addTrack, removeTrack, updateTrack, moveTalkToTrack (with swap detection), moveServiceSessionToTrack, and removeTalkFromSchedule. Computes unassigned proposals across all days."
               />
-              <HookCard
-                name="usePerformanceTimer()"
-                desc="Dev-mode instrumentation for drag, save, and day-change operations. Logs slow operations (>100ms drag, >200ms day change) and periodic aggregate metrics."
-              />
-              <HookCard
-                name="useDragPerformance()"
-                desc="Manages requestAnimationFrame-based throttling during drag operations to maintain 60fps rendering."
-              />
-              <HookCard
-                name="useBatchUpdates()"
-                desc="Batches rapid filter/search state updates (100ms debounce) to avoid excessive re-renders in UnassignedProposals."
-              />
             </div>
           </div>
 
@@ -331,14 +319,6 @@ export const Architecture: Story = {
               <Field
                 name="lib/schedule/client.ts"
                 desc="saveSchedule() — POST to /admin/api/schedule with cache revalidation."
-              />
-              <Field
-                name="lib/schedule/performance.ts"
-                desc="SchedulePerformanceMonitor singleton, usePerformanceTimer hook. Tracks operation durations per component."
-              />
-              <Field
-                name="lib/schedule/performance-utils.ts"
-                desc="DragPerformanceManager (rAF throttling), BatchUpdateManager (debouncing), useDragPerformance, useBatchUpdates hooks."
               />
             </div>
           </div>

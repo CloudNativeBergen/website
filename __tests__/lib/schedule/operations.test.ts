@@ -309,6 +309,65 @@ describe('service add/resize/rename', () => {
   })
 })
 
+describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
+  it('moveProposal rejects a fresh drop whose end exceeds 21:00', () => {
+    const s = schedule(track('A'))
+    const dragItem: DragItem = { type: 'proposal', proposal: proposal('p') }
+    // talk_25 at 20:45 → 21:10, past the 21:00 grid end.
+    expect(moveProposal(s, dragItem, drop(0, '20:45')).ok).toBe(false)
+  })
+
+  it('moveProposal allows a drop ending exactly at 21:00', () => {
+    const s = schedule(track('A'))
+    const dragItem: DragItem = {
+      type: 'proposal',
+      proposal: proposal('p', 'talk_15'),
+    }
+    // talk_15 at 20:45 → 21:00, the boundary is inclusive.
+    const res = moveProposal(s, dragItem, drop(0, '20:45'))
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[0].talks[0].endTime).toBe('21:00')
+  })
+
+  it('moveServiceSession rejects a session whose end exceeds 21:00', () => {
+    const s = schedule(track('A'))
+    const dragItem: DragItem = {
+      type: 'service-session',
+      serviceSession: {
+        placeholder: 'Break',
+        startTime: '10:00',
+        endTime: '11:00',
+      },
+    }
+    // 60-min session dropped at 20:30 → 21:30, past 21:00.
+    expect(moveServiceSession(s, dragItem, drop(0, '20:30')).ok).toBe(false)
+  })
+
+  it('addService rejects a session whose end exceeds 21:00', () => {
+    const s = schedule(track('A'))
+    expect(
+      addService(s, 0, { title: 'Break', startTime: '20:45', duration: 30 }).ok,
+    ).toBe(false)
+  })
+
+  it('addService allows a session ending exactly at 21:00', () => {
+    const s = schedule(track('A'))
+    const res = addService(s, 0, {
+      title: 'Break',
+      startTime: '20:30',
+      duration: 30,
+    })
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[0].talks[0].endTime).toBe('21:00')
+  })
+
+  it('resizeService rejects a resize whose end exceeds 21:00', () => {
+    const s = schedule(track('A', service('Break', '20:30', '20:45')))
+    // Growing to 60 min → 21:30, past 21:00.
+    expect(resizeService(s, 0, 0, 60).ok).toBe(false)
+  })
+})
+
 describe('duplicateService — skips conflicting tracks', () => {
   it('copies into free tracks and SKIPS tracks where it would overlap', () => {
     const s = schedule(

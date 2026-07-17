@@ -13,7 +13,7 @@ import {
   TouchSensor,
   KeyboardSensor,
 } from '@dnd-kit/core'
-import { useEffect, useState, useReducer, useMemo, useCallback } from 'react'
+import { useState, useReducer, useMemo, useCallback } from 'react'
 import React from 'react'
 import {
   ScheduleTrack,
@@ -33,11 +33,6 @@ import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
 import { api } from '@/lib/trpc/client'
-import {
-  usePerformanceTimer,
-  performanceMonitor,
-} from '@/lib/schedule/performance'
-import { useDragPerformance } from '@/lib/schedule/performance-utils'
 import {
   PlusIcon,
   BookmarkIcon,
@@ -393,12 +388,6 @@ export function ScheduleEditor({
   initialSchedules,
   initialProposals,
 }: ScheduleEditorProps) {
-  const dragTimer = usePerformanceTimer('ScheduleEditor', 'drag-operation')
-  const saveTimer = usePerformanceTimer('ScheduleEditor', 'save-operation')
-  const dayChangeTimer = usePerformanceTimer('ScheduleEditor', 'day-change')
-
-  const { cancelUpdates } = useDragPerformance()
-
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -426,7 +415,6 @@ export function ScheduleEditor({
   )
 
   const handleSave = useCallback(async () => {
-    saveTimer.start()
     dispatch({ type: 'saveStart' })
     setSaveSuccess(false)
 
@@ -452,64 +440,44 @@ export function ScheduleEditor({
 
       dispatch({ type: 'saveEnd' })
       setSaveSuccess(true)
-      saveTimer.end()
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to save schedule'
       dispatch({ type: 'saveError', message })
-      saveTimer.end()
     }
-  }, [state.dirty, state.schedules, currentDayIndex, saveTimer, saveMutation])
+  }, [state.dirty, state.schedules, currentDayIndex, saveMutation])
 
-  const handleDragStart = useCallback(
-    (event: DragStartEvent) => {
-      dragTimer.start()
-      const { active } = event
-      setActiveItem(active.data.current as DragItem)
-    },
-    [dragTimer],
-  )
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event
+    setActiveItem(active.data.current as DragItem)
+  }, [])
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
 
-      if (!over || !active.data.current) {
-        setActiveItem(null)
-        cancelUpdates()
-        dragTimer.end()
-        return
-      }
-
-      const dragItem = active.data.current as DragItem
-      const dropData = over.data.current
-
-      if (dropData?.type === 'time-slot') {
-        const dropPosition = {
-          trackIndex: dropData.trackIndex,
-          timeSlot: dropData.timeSlot,
-        }
-        if (dragItem.proposal) {
-          dispatch({ type: 'moveProposal', dragItem, dropPosition })
-        } else if (dragItem.serviceSession) {
-          dispatch({ type: 'moveService', dragItem, dropPosition })
-        }
-      }
-
+    if (!over || !active.data.current) {
       setActiveItem(null)
-      const dragDuration = dragTimer.end()
+      return
+    }
 
-      if (dragDuration && dragDuration > 100) {
-        console.warn('Slow drag operation detected:', {
-          duration: dragDuration,
-          operation: 'drag-and-drop',
-          component: 'ScheduleEditor',
-        })
+    const dragItem = active.data.current as DragItem
+    const dropData = over.data.current
+
+    if (dropData?.type === 'time-slot') {
+      const dropPosition = {
+        trackIndex: dropData.trackIndex,
+        timeSlot: dropData.timeSlot,
       }
-    },
-    [dragTimer, cancelUpdates],
-  )
+      if (dragItem.proposal) {
+        dispatch({ type: 'moveProposal', dragItem, dropPosition })
+      } else if (dragItem.serviceSession) {
+        dispatch({ type: 'moveService', dragItem, dropPosition })
+      }
+    }
+
+    setActiveItem(null)
+  }, [])
 
   const handleAddTrack = useCallback(
     (trackData: { title: string; description: string }) => {
@@ -532,69 +500,10 @@ export function ScheduleEditor({
     setShowAddTrackModal(false)
   }, [])
 
-  const handleDayChange = useCallback(
-    (dayIndex: number) => {
-      dayChangeTimer.start()
-      dispatch({ type: 'changeDay', dayIndex })
-      setSaveSuccess(false)
-
-      const dayChangeDuration = dayChangeTimer.end()
-      if (
-        process.env.NODE_ENV === 'development' &&
-        dayChangeDuration &&
-        dayChangeDuration > 200
-      ) {
-        console.warn('Slow day change detected:', {
-          duration: dayChangeDuration,
-          toDay: dayIndex,
-        })
-      }
-    },
-    [dayChangeTimer],
-  )
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const interval = setInterval(() => {
-        const metrics = performanceMonitor.getMetrics()
-        if (metrics.length > 0) {
-          const avgDragTime = performanceMonitor.getAverageTime(
-            'drag-operation',
-            'ScheduleEditor',
-          )
-          const avgSaveTime = performanceMonitor.getAverageTime(
-            'save-operation',
-            'ScheduleEditor',
-          )
-          const avgDayChangeTime = performanceMonitor.getAverageTime(
-            'day-change',
-            'ScheduleEditor',
-          )
-
-          console.log('ScheduleEditor Performance Metrics:', {
-            totalOperations: metrics.length,
-            averageDragTime: avgDragTime
-              ? `${avgDragTime.toFixed(2)}ms`
-              : 'N/A',
-            averageSaveTime: avgSaveTime
-              ? `${avgSaveTime.toFixed(2)}ms`
-              : 'N/A',
-            averageDayChangeTime: avgDayChangeTime
-              ? `${avgDayChangeTime.toFixed(2)}ms`
-              : 'N/A',
-          })
-        }
-      }, 30000)
-
-      return () => clearInterval(interval)
-    }
+  const handleDayChange = useCallback((dayIndex: number) => {
+    dispatch({ type: 'changeDay', dayIndex })
+    setSaveSuccess(false)
   }, [])
-
-  useEffect(() => {
-    return () => {
-      cancelUpdates()
-    }
-  }, [cancelUpdates])
 
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {

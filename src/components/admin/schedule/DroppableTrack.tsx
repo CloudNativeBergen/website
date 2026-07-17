@@ -9,7 +9,10 @@ import {
   TimeSlot,
   findAvailableTimeSlot,
   canSwapTalks,
+  isTrackIntervalFree,
+  addMinutes,
 } from '@/lib/schedule/types'
+import { SCHEDULE_START, SCHEDULE_END } from '@/lib/schedule/time'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
 import {
@@ -60,8 +63,8 @@ interface ServiceSessionModalProps {
 }
 
 const SCHEDULE_CONFIG = {
-  START_TIME: '08:00',
-  END_TIME: '21:00',
+  START_TIME: SCHEDULE_START,
+  END_TIME: SCHEDULE_END,
   SLOT_INTERVAL: 5,
   PIXELS_PER_MINUTE: 2.4,
   LABEL_INTERVAL: 15,
@@ -531,9 +534,13 @@ const TimeSlotDropZone = ({
     )
   }, [activeDragItem, track, timeSlot.time, trackIndex])
 
+  // Gate on the WHOLE slot interval, not just an exact start-time match, so the
+  // "＋ Service" button never appears on a 5-min slot that falls INSIDE an
+  // existing talk/session (an exact-start check let it show mid-talk).
   const isOccupied = useMemo(() => {
-    return track.talks.some((talk) => talk.startTime === timeSlot.time)
-  }, [track.talks, timeSlot.time])
+    const slotEnd = addMinutes(timeSlot.time, SCHEDULE_CONFIG.SLOT_INTERVAL)
+    return !isTrackIntervalFree(track, timeSlot.time, slotEnd)
+  }, [track, timeSlot.time])
 
   const position = useMemo(
     () => calculateTimePosition(timeSlot.time),
@@ -840,9 +847,17 @@ function DroppableTrack({
   })
 
   const handleSaveEdit = useCallback(() => {
+    const trimmedTitle = editTitle.trim()
+    // Reject an empty/whitespace-only title (mirrors the service-session rename
+    // and AddTrackModal): keep the previous title and exit edit mode.
+    if (!trimmedTitle) {
+      setEditTitle(track.trackTitle)
+      setIsEditing(false)
+      return
+    }
     onUpdateTrack({
       ...track,
-      trackTitle: editTitle,
+      trackTitle: trimmedTitle,
       trackDescription: editDescription,
     })
     setIsEditing(false)
