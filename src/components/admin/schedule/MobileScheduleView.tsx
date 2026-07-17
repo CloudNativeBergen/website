@@ -52,6 +52,7 @@ interface MobileScheduleViewProps {
   currentDayIndex: number
   unassignedProposals: ProposalExisting[]
   dispatch: React.Dispatch<ScheduleAction>
+  onDayChange: (dayIndex: number) => void
   onSave: () => void
   onAddTrack: () => void
   isSaving: boolean
@@ -128,7 +129,10 @@ function useSwipeNavigation(onSwipe: (direction: 1 | -1) => void) {
       const dx = touch.clientX - start.current.x
       const dy = touch.clientY - start.current.y
       start.current = null
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      // Require a clearly horizontal gesture: past the distance threshold AND
+      // at least twice as horizontal as vertical, so a near-diagonal drag
+      // during vertical agenda scrolling doesn't switch tracks.
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) {
         onSwipe(dx < 0 ? 1 : -1)
       }
     },
@@ -152,13 +156,58 @@ function BottomSheet({
     () => `sheet-${title.replace(/\s+/g, '-').toLowerCase()}`,
     [title],
   )
+  const dialogRef = useRef<HTMLDivElement>(null)
 
+  // Escape to close, plus a focus trap and body-scroll lock so this
+  // `aria-modal` sheet actually behaves modally: keyboard/screen-reader users
+  // can't Tab into the covered background, and the page behind doesn't scroll.
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const { overflow } = document.body.style
+    document.body.style.overflow = 'hidden'
+
+    const focusables = (): HTMLElement[] =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      )
+
+    // Move focus into the sheet on open.
+    ;(focusables()[0] ?? dialogRef.current)?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      const outside = !dialogRef.current?.contains(active)
+      if (e.shiftKey && (active === first || outside)) {
+        // Wrap backwards to the last element (or pull stray focus back in).
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (active === last || outside)) {
+        // Wrap forwards to the first element; also pull focus back in if it
+        // somehow escaped the dialog, so Tab can't advance into the background.
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = overflow
+      previouslyFocused?.focus?.()
+    }
   }, [onClose])
 
   return (
@@ -170,10 +219,12 @@ function BottomSheet({
         className="absolute inset-0 bg-black/50"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex max-h-[85dvh] flex-col rounded-t-2xl bg-white shadow-xl dark:bg-gray-900"
+        tabIndex={-1}
+        className="relative flex max-h-[85dvh] flex-col rounded-t-2xl bg-white shadow-xl focus:outline-none dark:bg-gray-900"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <h2
@@ -522,12 +573,17 @@ function MoveSheet({
   ])
 
   // `startTime` starts empty and is only ever set by the user; the effective
-  // value falls back to the first free slot so we never need a setState-in-effect
-  // to "reset" it when the track (and its slot list) changes.
+  // value falls back to the talk's CURRENT slot (kept free by the same-track
+  // exclude above) so opening the sheet and tapping "Move here" without picking
+  // a time is a no-op instead of silently relocating the talk to the earliest
+  // free slot. When that time isn't offered (a different track), fall back to
+  // the first free slot. No setState-in-effect needed to "reset" on track change.
   const [startTime, setStartTime] = useState('')
   const effectiveStart = slots.includes(startTime)
     ? startTime
-    : (slots[0] ?? '')
+    : slots.includes(talk.startTime)
+      ? talk.startTime
+      : (slots[0] ?? '')
 
   const confirm = useCallback(() => {
     if (!effectiveStart) return
@@ -1047,6 +1103,7 @@ export function MobileScheduleView({
   currentDayIndex,
   unassignedProposals,
   dispatch,
+  onDayChange,
   onSave,
   onAddTrack,
   isSaving,
@@ -1096,11 +1153,13 @@ export function MobileScheduleView({
 
   const handleDayChange = useCallback(
     (dayIndex: number) => {
-      dispatch({ type: 'changeDay', dayIndex })
+      // Delegate to the parent so the "Saved" indicator (parent state) is
+      // cleared consistently with the desktop view; then reset local UI.
+      onDayChange(dayIndex)
       setSelectedTrackIndex(0)
       setSheet(null)
     },
-    [dispatch],
+    [onDayChange],
   )
 
   // The action sheet stores a talkIndex into the SORTED list; translate it back

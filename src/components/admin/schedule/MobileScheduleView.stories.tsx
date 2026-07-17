@@ -129,6 +129,7 @@ function MobileScheduleHarness({
       currentDayIndex={state.currentDayIndex}
       unassignedProposals={unassignedProposals}
       dispatch={dispatch}
+      onDayChange={(dayIndex) => dispatch({ type: 'changeDay', dayIndex })}
       onSave={() => {}}
       onAddTrack={() => {}}
       isSaving={state.ui.isSaving}
