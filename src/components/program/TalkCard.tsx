@@ -96,6 +96,13 @@ export function TalkCard({
   const isHappeningSoon = status === 'happening-soon'
 
   if (!talk.talk) {
+    // The slot HAD a `talk` reference that no longer resolves (the proposal was
+    // deleted). This is NOT a service session, so drop it rather than mislabel
+    // it as one and render a phantom entry at the old time.
+    if (talk.hasTalkRef) {
+      return null
+    }
+
     return (
       <div className="relative">
         <StatusIndicator status={status} />

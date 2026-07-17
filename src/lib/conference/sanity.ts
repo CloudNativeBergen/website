@@ -174,6 +174,7 @@ export async function getConferenceForDomain(
         startTime,
         endTime,
         placeholder,
+        "hasTalkRef": defined(talk),
         talk->{
           _id,
           title,

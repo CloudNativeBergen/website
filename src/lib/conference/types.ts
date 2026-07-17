@@ -18,6 +18,14 @@ export interface TrackTalk {
   placeholder?: string
   startTime: string
   endTime: string
+  /**
+   * True when the persisted slot HAD a `talk` reference, regardless of whether
+   * that reference still resolves. Lets renderers tell a genuine service
+   * session (no ref + placeholder) apart from a dangling reference whose
+   * proposal was deleted (`hasTalkRef` true but `talk` unresolved), so the
+   * latter is not mislabelled as a "Service Session".
+   */
+  hasTalkRef?: boolean
 }
 export interface ScheduleTrack {
   trackTitle: string

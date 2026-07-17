@@ -34,9 +34,27 @@ const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
   return Array.from(timeSlots).sort()
 }
 
-const getTalkAtTime = (track: ScheduleTrack, startTime: string) => {
-  return track.talks.find((talk) => talk.startTime === startTime)
-}
+// Return EVERY talk in a track that starts at the given time, paired with its
+// original index in `track.talks` (used for status keys and the live-scroll
+// target). Previously this returned only the first match, so a second slot
+// sharing a start time was silently dropped from the desktop grid while it
+// still rendered on mobile.
+// TODO(duration-spanning): the desktop grid keys rows purely off start time and
+// stacks co-starting slots in one cell. A duration-aware, row-spanning layout
+// (talks occupying multiple time rows based on end time) would render overlaps
+// more faithfully but is a larger change tracked separately.
+const getTalksAtTime = (track: ScheduleTrack, startTime: string) =>
+  track.talks
+    .map((talk, index) => ({ talk, index }))
+    .filter(({ talk }) => talk.startTime === startTime)
+
+// Sort talks by start time while preserving each talk's original index, so
+// desktop and mobile render slots in the same order without breaking the
+// index-based status keys / live-scroll targeting.
+const sortTalksWithIndex = (track: ScheduleTrack) =>
+  track.talks
+    .map((talk, index) => ({ talk, index }))
+    .sort((a, b) => a.talk.startTime.localeCompare(b.talk.startTime))
 
 const ScheduleTabbed = React.memo(function ScheduleTabbed({
   tracks,
@@ -218,7 +236,7 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
             className="ui-not-focus-visible:outline-none"
           >
             <div className="space-y-3">
-              {track.talks.map((talk, talkIndex) => {
+              {sortTalksWithIndex(track).map(({ talk, index: talkIndex }) => {
                 const talkData = {
                   ...talk,
                   scheduleDate: date,
@@ -322,44 +340,43 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
               </div>
 
               {tracks.map((track, trackIndex) => {
-                const talk = getTalkAtTime(track, timeSlot)
-                const talkIndex = talk
-                  ? track.talks.findIndex((t) => t.startTime === talk.startTime)
-                  : -1
-                const isScrollTarget =
-                  talk &&
-                  talkIndex !== -1 &&
-                  currentPosition &&
-                  currentPosition.scheduleIndex === scheduleIndex &&
-                  currentPosition.trackIndex === trackIndex &&
-                  currentPosition.talkIndex === talkIndex
+                const cellTalks = getTalksAtTime(track, timeSlot)
+                const isScrollTarget = cellTalks.some(
+                  ({ index }) =>
+                    currentPosition &&
+                    currentPosition.scheduleIndex === scheduleIndex &&
+                    currentPosition.trackIndex === trackIndex &&
+                    currentPosition.talkIndex === index,
+                )
 
                 return (
                   <div
                     key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
-                    className="min-h-15"
+                    className="min-h-15 space-y-2"
                     ref={isScrollTarget ? scrollTargetRef : undefined}
                   >
-                    {talk ? (
-                      <TalkCard
-                        key={`talk-${timeSlot}-${trackIndex}-${talk.talk?._id || talk.placeholder || 'empty'}`}
-                        talk={{
-                          ...talk,
-                          scheduleDate: date,
-                          trackTitle: track.trackTitle,
-                          trackIndex,
-                        }}
-                        status={talkStatusMap?.get(
-                          getTalkStatusKey(
-                            date,
-                            talk.startTime,
+                    {cellTalks.length > 0 ? (
+                      cellTalks.map(({ talk, index: talkIndex }) => (
+                        <TalkCard
+                          key={`talk-${timeSlot}-${trackIndex}-${talkIndex}-${talk.talk?._id || talk.placeholder || 'empty'}`}
+                          talk={{
+                            ...talk,
+                            scheduleDate: date,
+                            trackTitle: track.trackTitle,
                             trackIndex,
-                            talk.talk?._id,
-                          ),
-                        )}
-                        compact={true}
-                        fixedHeight={true}
-                      />
+                          }}
+                          status={talkStatusMap?.get(
+                            getTalkStatusKey(
+                              date,
+                              talk.startTime,
+                              trackIndex,
+                              talk.talk?._id,
+                            ),
+                          )}
+                          compact={true}
+                          fixedHeight={true}
+                        />
+                      ))
                     ) : (
                       <div className="h-full min-h-15" />
                     )}
