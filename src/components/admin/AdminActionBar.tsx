@@ -39,6 +39,28 @@ interface AdminActionBarProps {
   conference: Conference
 }
 
+type ActionColor =
+  'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow' | undefined
+
+interface ActionItem {
+  key: string
+  label: string
+  icon: typeof CheckIcon
+  color?: ActionColor
+  onClick: () => void
+  title?: string
+}
+
+/** Icon accent per action colour, for the mobile dropdown menu items. */
+const MENU_ACCENT: Record<NonNullable<ActionColor>, string> = {
+  blue: 'text-blue-500',
+  green: 'text-green-500',
+  orange: 'text-orange-500',
+  red: 'text-red-500',
+  purple: 'text-purple-500',
+  yellow: 'text-yellow-500',
+}
+
 export function AdminActionBar({
   proposal,
   domain,
@@ -162,16 +184,6 @@ export function AdminActionBar({
   // Single source of truth for the available actions, rendered as an inline
   // button row on sm+ and as a compact dropdown menu on mobile (where the wide
   // colored buttons previously wrapped awkwardly across several rows).
-  type ActionColor =
-    'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow' | undefined
-  interface ActionItem {
-    key: string
-    label: string
-    icon: typeof CheckIcon
-    color?: ActionColor
-    onClick: () => void
-    title?: string
-  }
   const actions: ActionItem[] = [
     {
       key: 'edit',
@@ -274,15 +286,6 @@ export function AdminActionBar({
         ]
       : []),
   ]
-
-  const menuAccent: Record<NonNullable<ActionColor>, string> = {
-    blue: 'text-blue-500',
-    green: 'text-green-500',
-    orange: 'text-orange-500',
-    red: 'text-red-500',
-    purple: 'text-purple-500',
-    yellow: 'text-yellow-500',
-  }
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -408,13 +411,14 @@ export function AdminActionBar({
                   <button
                     type="button"
                     onClick={action.onClick}
+                    title={action.title}
                     className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors data-focus:bg-gray-100 dark:text-gray-200 dark:data-focus:bg-gray-700"
                   >
                     <action.icon
                       className={clsx(
                         'h-4 w-4 shrink-0',
                         action.color
-                          ? menuAccent[action.color]
+                          ? MENU_ACCENT[action.color]
                           : 'text-gray-400 dark:text-gray-500',
                       )}
                     />
