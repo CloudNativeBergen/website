@@ -1,5 +1,24 @@
 import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
+import {
+  calculateEndTime,
+  getProposalDurationMinutes,
+  timesOverlap,
+} from './time'
+
+// Pure time helpers now live in ./time. Re-exported here so existing importers
+// (`@/lib/schedule/types`) keep working while the module is split up.
+export {
+  toMinutes,
+  toHHMM,
+  addMinutes,
+  durationBetween,
+  calculateEndTime,
+  timesOverlap,
+  generateTimeSlots,
+  getProposalDurationMinutes,
+  type TimeSlot,
+} from './time'
 
 export interface DropPosition {
   trackIndex: number
@@ -18,87 +37,8 @@ export interface DragItem {
   sourceTimeSlot?: string
 }
 
-export interface TimeSlot {
-  time: string
-  displayTime: string
-}
-
 export const DRAG_PERFORMANCE_THRESHOLD = 16
 export const BATCH_UPDATE_DELAY = 100
-
-const memoCache = new Map<string, number>()
-
-export function getProposalDurationMinutes(proposal: ProposalExisting): number {
-  const cacheKey = `duration-${proposal._id}-${proposal.format}`
-  const cached = memoCache.get(cacheKey)
-  if (cached !== undefined) {
-    return cached
-  }
-
-  // Handle null or undefined format
-  if (!proposal.format) {
-    const defaultDuration = 25
-    memoCache.set(cacheKey, defaultDuration)
-    return defaultDuration
-  }
-
-  const split = proposal.format.split('_')
-  let duration = 25
-
-  if (split.length >= 2) {
-    const parsed = parseInt(split[1], 10)
-    if (!isNaN(parsed)) {
-      duration = parsed
-    }
-  }
-
-  memoCache.set(cacheKey, duration)
-  return duration
-}
-
-export function generateTimeSlots(
-  startTime: string = '08:00',
-  endTime: string = '21:00',
-  intervalMinutes: number = 5,
-): TimeSlot[] {
-  const slots: TimeSlot[] = []
-  const start = new Date(`2000-01-01T${startTime}:00`)
-  const end = new Date(`2000-01-01T${endTime}:00`)
-
-  while (start <= end) {
-    const timeString = start.toTimeString().slice(0, 5)
-    slots.push({
-      time: timeString,
-      displayTime: timeString,
-    })
-    start.setMinutes(start.getMinutes() + intervalMinutes)
-  }
-
-  return slots
-}
-
-export function calculateEndTime(
-  startTime: string,
-  durationMinutes: number,
-): string {
-  const start = new Date(`2000-01-01T${startTime}:00`)
-  start.setMinutes(start.getMinutes() + durationMinutes)
-  return start.toTimeString().slice(0, 5)
-}
-
-export function timesOverlap(
-  start1: string,
-  end1: string,
-  start2: string,
-  end2: string,
-): boolean {
-  const s1 = new Date(`2000-01-01T${start1}:00`)
-  const e1 = new Date(`2000-01-01T${end1}:00`)
-  const s2 = new Date(`2000-01-01T${start2}:00`)
-  const e2 = new Date(`2000-01-01T${end2}:00`)
-
-  return s1 < e2 && s2 < e1
-}
 
 export function findAvailableTimeSlot(
   track: ScheduleTrack,
