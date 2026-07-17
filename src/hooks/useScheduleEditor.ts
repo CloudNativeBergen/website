@@ -9,9 +9,14 @@ import {
   DragItem,
   DropPosition,
   calculateEndTime,
+  durationBetween,
   getProposalDurationMinutes,
   findAvailableTimeSlot,
   canSwapTalks,
+  canPlaceDisplacedBack,
+  isTrackIntervalFree,
+  matchTalk,
+  matchService,
 } from '@/lib/schedule/types'
 
 export interface UseScheduleEditorReturn {
@@ -279,7 +284,22 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         dragItem.sourceTrackIndex !== undefined &&
         dragItem.sourceTimeSlot !== undefined
       ) {
-        if (!canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot)) {
+        const sourceTrack = schedule.tracks[dragItem.sourceTrackIndex]
+        // Validate BOTH directions: the dragged talk must fit in the target
+        // slot AND the displaced talk must fit back into the source track.
+        // Checking only the forward direction let a swap leave the source track
+        // overlapping.
+        const draggedExclude = matchTalk(proposal._id, dragItem.sourceTimeSlot)
+        if (
+          !canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot) ||
+          !sourceTrack ||
+          !canPlaceDisplacedBack(
+            sourceTrack,
+            occupiedTalk,
+            dragItem.sourceTimeSlot,
+            draggedExclude,
+          )
+        ) {
           return { success: false }
         }
 
@@ -370,11 +390,27 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       if (trackIndex < 0 || trackIndex >= schedule.tracks.length)
         return { success: false }
 
-      const startTime = new Date(`2000-01-01T${serviceSession.startTime}:00`)
-      const endTime = new Date(`2000-01-01T${serviceSession.endTime}:00`)
-      const durationMinutes =
-        (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+      const durationMinutes = durationBetween(
+        serviceSession.startTime,
+        serviceSession.endTime,
+      )
       const newEndTime = calculateEndTime(timeSlot, durationMinutes)
+
+      // A service session must not be dropped onto an occupied interval (a talk
+      // or another session). Previously service-session moves ran zero overlap
+      // checks and always succeeded, stacking items on top of each other.
+      const targetTrack = schedule.tracks[trackIndex]
+      const excludeExisting =
+        dragItem.type === 'scheduled-service' &&
+        dragItem.sourceTrackIndex === trackIndex &&
+        dragItem.sourceTimeSlot !== undefined
+          ? matchService(serviceSession.placeholder, dragItem.sourceTimeSlot)
+          : undefined
+      if (
+        !isTrackIntervalFree(targetTrack, timeSlot, newEndTime, excludeExisting)
+      ) {
+        return { success: false }
+      }
 
       let updatedSchedule: ConferenceSchedule | null = null
 
