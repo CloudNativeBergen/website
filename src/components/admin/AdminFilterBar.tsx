@@ -217,8 +217,8 @@ export function AdminFilterBar({
         className,
       )}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-row items-center gap-2 lg:justify-between lg:gap-3">
+        <div className="flex flex-1 items-center gap-2 lg:flex-none">
           {search && (
             <div className="relative w-full lg:w-64">
               <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
