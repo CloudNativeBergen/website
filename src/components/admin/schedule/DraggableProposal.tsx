@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { formats, audiences } from '@/lib/proposal/types'
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
+import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
@@ -35,8 +36,6 @@ const TALK_THRESHOLDS = {
   SHORT: 20,
   MEDIUM: 45,
 } as const
-
-const MINUTES_TO_PIXELS = 2.4
 
 const AUDIENCE_CONFIG = {
   developer: { abbr: 'DEV', icon: CodeBracketIcon },
@@ -378,7 +377,7 @@ export function DraggableProposal({
         style={{
           ...transformStyle,
           ...topicStyling.styles,
-          height: `${durationMinutes * MINUTES_TO_PIXELS}px`,
+          height: `${durationMinutes * PIXELS_PER_MINUTE}px`,
         }}
         title={tooltipContent}
         {...attributes}

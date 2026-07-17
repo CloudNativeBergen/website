@@ -3,6 +3,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { TrackTalk } from '@/lib/conference/types'
+import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { ClockIcon, Bars3Icon } from '@heroicons/react/24/outline'
 
 interface DraggableServiceSessionProps {
@@ -12,7 +13,6 @@ interface DraggableServiceSessionProps {
   isDragging?: boolean
 }
 
-const MINUTES_TO_PIXELS = 2.4
 const SERVICE_SESSION_THRESHOLDS = {
   SHORT: 15,
   MEDIUM: 25,
@@ -115,7 +115,7 @@ export function DraggableServiceSession({
       ref={setNodeRef}
       style={{
         ...transformStyle,
-        height: `${durationMinutes * MINUTES_TO_PIXELS}px`,
+        height: `${durationMinutes * PIXELS_PER_MINUTE}px`,
       }}
       className={containerClasses}
       {...attributes}
