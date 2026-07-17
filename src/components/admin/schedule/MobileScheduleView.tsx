@@ -85,13 +85,15 @@ const SECONDARY_BUTTON =
 /* Rail geometry                                                              */
 /* -------------------------------------------------------------------------- */
 
-// Duration-proportional heights, CLAMPED so short items stay tappable and long
-// ones don't dominate the rail. See the redesign spec: 1.4px/min, floor 56px
-// (touch target), ceilings 168px for talk/break and 120px for open gaps.
-const PX_PER_MIN = 1.4
+// Card heights are content-driven with a small floor; duration adds only a
+// GENTLE, hard-capped proportional nudge so a long workshop reads slightly
+// taller without producing a bulky, mostly-empty card that dominates the panel
+// and fights the swipe. The duration CHIP carries the exact length. Applied as
+// a `minHeight` on the card itself (never via a flex-stretched row).
+const PX_PER_MIN = 0.55
 const SEG_MIN_HEIGHT = 56
-const SEG_MAX_HEIGHT = 168
-const OPEN_MAX_HEIGHT = 120
+const SEG_MAX_HEIGHT = 112
+const OPEN_MAX_HEIGHT = 72
 // Open gaps shorter than this can't hold a talk, so they render as a slim,
 // non-interactive divider rather than an "assign here" target.
 const MIN_OPEN_SLOT_MIN = 10
@@ -855,11 +857,11 @@ function TrackRail({
           re-sorts track.talks, which would shift the picked-up item's stored
           talkIndex and corrupt a later Remove/Swap. */}
       {!placing && (
-        <div className="mb-2 flex items-center justify-end">
+        <div className="mb-1 flex items-center justify-end">
           <button
             type="button"
             onClick={() => onAddService(trackIndex)}
-            className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
+            className="inline-flex min-h-[36px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
           >
             <PlusIcon className="h-4 w-4" />
             Service
@@ -910,11 +912,7 @@ function TrackRail({
             const disabled = state === 'invalid'
 
             return (
-              <li
-                key={i}
-                className="relative flex"
-                style={{ minHeight: height }}
-              >
+              <li key={i} className="relative flex">
                 <span
                   className="absolute top-0 w-[46px] text-right text-xs text-gray-500 tabular-nums dark:text-gray-400"
                   style={{ left: -GUTTER_PX }}
@@ -933,14 +931,15 @@ function TrackRail({
                   style={{ left: 0 }}
                   aria-hidden="true"
                 />
-                <div className="flex-1 pb-1.5 pl-4">
+                <div className="flex-1 pb-2 pl-4">
                   <button
                     type="button"
                     disabled={disabled}
                     aria-label={segmentLabel(seg, placing, state)}
                     onClick={() => onSegmentTap(trackIndex, seg)}
+                    style={{ minHeight: height }}
                     className={clsx(
-                      'flex h-full w-full flex-col gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+                      'flex w-full flex-col justify-center gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                       state === 'source' &&
                         'border-blue-500 bg-blue-50 ring-2 ring-blue-500 dark:border-blue-500 dark:bg-blue-900/30',
                       state === 'valid' &&
@@ -972,11 +971,10 @@ function TrackRail({
 function RailBody({ seg }: { seg: RailSegment }) {
   if (seg.kind === 'open') {
     return (
-      <span className="flex h-full items-center text-sm font-medium text-blue-700 dark:text-blue-300">
+      <span className="flex items-center text-sm font-medium text-blue-700 dark:text-blue-300">
         <PlusIcon className="mr-1.5 h-4 w-4 shrink-0" />
-        <span className="tabular-nums">
-          Assign here · {seg.startTime}–{seg.endTime} · {seg.durationMin} min
-          free
+        <span className="truncate tabular-nums">
+          Assign · {seg.startTime}–{seg.endTime} · {seg.durationMin} min
         </span>
       </span>
     )
@@ -1424,7 +1422,7 @@ export function MobileScheduleView({
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="shrink-0 border-b border-gray-200 bg-white px-4 pt-4 dark:border-gray-700 dark:bg-gray-900">
+      <header className="shrink-0 border-b border-gray-200 bg-white px-4 pt-3 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
             Schedule
@@ -1467,7 +1465,7 @@ export function MobileScheduleView({
 
         {schedules.length > 1 && (
           <div
-            className="-mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1"
+            className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1"
             role="group"
             aria-label="Select day"
           >
@@ -1484,7 +1482,7 @@ export function MobileScheduleView({
                   onClick={() => handleDayChange(index)}
                   aria-pressed={isActive}
                   className={clsx(
-                    'min-h-[44px] shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
+                    'min-h-[40px] shrink-0 rounded-lg border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
                     isActive
                       ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                       : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
@@ -1499,7 +1497,7 @@ export function MobileScheduleView({
 
         {/* Fixed track tab strip (synced to the carousel below). */}
         {tracks.length > 0 ? (
-          <div className="mt-3 flex items-stretch gap-2 pb-3">
+          <div className="mt-2 flex items-stretch gap-2 pb-2.5">
             <div
               role="tablist"
               aria-label="Select track"
@@ -1602,7 +1600,7 @@ export function MobileScheduleView({
               // `snap-always` (scroll-snap-stop) forces exactly one track per
               // fling so a fast swipe can't skip past a track — each is a
               // distinct context (Trello/kanban column-swipe guidance).
-              className="shrink-0 basis-[86vw] snap-center snap-always overflow-y-auto px-1 pt-3"
+              className="shrink-0 basis-[86vw] snap-center snap-always overflow-y-auto px-1 pt-2"
             >
               <TrackRail
                 track={track}
