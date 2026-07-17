@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
+import clsx from 'clsx'
 import {
   ConferenceSchedule,
   ScheduleTrack,
@@ -42,6 +44,7 @@ import {
   TrashIcon,
   PencilIcon,
   ArrowsUpDownIcon,
+  InboxStackIcon,
 } from '@heroicons/react/24/outline'
 
 interface MobileScheduleViewProps {
@@ -100,6 +103,36 @@ function speakerNamesOf(proposal: ProposalExisting): string | null {
       ) as Speaker[])
     : []
   return populated.length > 0 ? formatSpeakerNames(populated) : null
+}
+
+/** Talks in a track ordered by start time (does not mutate the source array). */
+function sortTalks(track: ScheduleTrack): TrackTalk[] {
+  return [...track.talks].sort((a, b) => a.startTime.localeCompare(b.startTime))
+}
+
+/**
+ * Horizontal swipe detector for track navigation. Fires `onSwipe(1)` on a
+ * left swipe (next track) and `onSwipe(-1)` on a right swipe, but only when the
+ * gesture is clearly horizontal so it never hijacks vertical agenda scrolling.
+ */
+function useSwipeNavigation(onSwipe: (direction: 1 | -1) => void) {
+  const start = useRef<{ x: number; y: number } | null>(null)
+  return {
+    onTouchStart: (e: React.TouchEvent) => {
+      const touch = e.touches[0]
+      start.current = { x: touch.clientX, y: touch.clientY }
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (!start.current) return
+      const touch = e.changedTouches[0]
+      const dx = touch.clientX - start.current.x
+      const dy = touch.clientY - start.current.y
+      start.current = null
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        onSwipe(dx < 0 ? 1 : -1)
+      }
+    },
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1040,14 +1073,26 @@ export function MobileScheduleView({
 
   const currentTrack = tracks[safeTrackIndex] ?? null
 
-  const sortedTalks = useMemo(() => {
-    if (!currentTrack) return []
-    return [...currentTrack.talks].sort((a, b) =>
-      a.startTime.localeCompare(b.startTime),
-    )
-  }, [currentTrack])
+  const sortedTalks = useMemo(
+    () => (currentTrack ? sortTalks(currentTrack) : []),
+    [currentTrack],
+  )
 
   const closeSheet = useCallback(() => setSheet(null), [])
+
+  const goToTrack = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < tracks.length) setSelectedTrackIndex(index)
+    },
+    [tracks.length],
+  )
+
+  const swipe = useSwipeNavigation(
+    useCallback(
+      (direction: 1 | -1) => goToTrack(safeTrackIndex + direction),
+      [goToTrack, safeTrackIndex],
+    ),
+  )
 
   const handleDayChange = useCallback(
     (dayIndex: number) => {
@@ -1076,21 +1121,37 @@ export function MobileScheduleView({
       : null
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col bg-gray-50 dark:bg-gray-950">
+    <TabGroup
+      as="div"
+      className="flex h-[calc(100dvh-4rem)] flex-col bg-gray-50 dark:bg-gray-950"
+      selectedIndex={safeTrackIndex}
+      onChange={setSelectedTrackIndex}
+    >
       {/* Header */}
-      <header className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <header className="shrink-0 border-b border-gray-200 bg-white px-4 pt-3 dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex items-center justify-between gap-2">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
             Schedule
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setSheet({ kind: 'unassigned' })}
+              aria-label={`Unassigned (${unassignedProposals.length})`}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <InboxStackIcon className="h-5 w-5" />
+              <span className="tabular-nums">{unassignedProposals.length}</span>
+            </button>
             <LegendDisclosure />
             <button
               type="button"
               onClick={onSave}
               disabled={isSaving}
-              className={`${PRIMARY_BUTTON} ${
-                saveSuccess ? 'bg-green-600 hover:bg-green-700' : ''
+              className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 ${
+                saveSuccess
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
               }`}
             >
               {saveSuccess ? (
@@ -1110,7 +1171,7 @@ export function MobileScheduleView({
 
         {schedules.length > 1 && (
           <div
-            className="mt-3 flex flex-wrap gap-1.5"
+            className="-mx-4 mt-3 flex gap-1.5 overflow-x-auto px-4 pb-1"
             role="group"
             aria-label="Select day"
           >
@@ -1126,11 +1187,12 @@ export function MobileScheduleView({
                   type="button"
                   onClick={() => handleDayChange(index)}
                   aria-pressed={isActive}
-                  className={`min-h-[44px] rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                  className={clsx(
+                    'min-h-[44px] shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
                     isActive
                       ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
-                  }`}
+                      : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
+                  )}
                 >
                   Day {index + 1} · {label}
                 </button>
@@ -1139,48 +1201,35 @@ export function MobileScheduleView({
           </div>
         )}
 
-        {/* Track switcher */}
-        <div className="mt-3 flex items-center gap-2">
-          <label htmlFor="mobile-track" className="sr-only">
-            Select track
-          </label>
-          <div className="grid flex-1 grid-cols-1">
-            <select
-              id="mobile-track"
-              value={safeTrackIndex}
-              onChange={(e) => setSelectedTrackIndex(Number(e.target.value))}
-              disabled={tracks.length === 0}
-              className="col-start-1 row-start-1 w-full appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pr-8 pl-3 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        {/* Swipeable track tabs */}
+        {tracks.length > 0 ? (
+          <TabList className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-3">
+            {tracks.map((track, index) => (
+              <Tab
+                key={index}
+                className={clsx(
+                  'min-h-[44px] shrink-0 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+                  index === safeTrackIndex
+                    ? 'border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-600'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
+                )}
+              >
+                {track.trackTitle || `Track ${index + 1}`}
+              </Tab>
+            ))}
+            <button
+              type="button"
+              onClick={onAddTrack}
+              aria-label="Add track"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-4 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
-              {tracks.length === 0 ? (
-                <option value={0}>No tracks yet</option>
-              ) : (
-                tracks.map((track, index) => (
-                  <option key={index} value={index}>
-                    {track.trackTitle || `Track ${index + 1}`}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={onAddTrack}
-            className={SECONDARY_BUTTON}
-            aria-label="Add track"
-          >
-            <PlusIcon className="h-5 w-5" />
-            Track
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setSheet({ kind: 'unassigned' })}
-          className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-        >
-          Unassigned ({unassignedProposals.length})
-        </button>
+              <PlusIcon className="h-4 w-4" />
+              Track
+            </button>
+          </TabList>
+        ) : (
+          <div className="pb-3" />
+        )}
       </header>
 
       {error && (
@@ -1190,8 +1239,8 @@ export function MobileScheduleView({
       )}
 
       {/* Agenda */}
-      <main className="flex-1 overflow-y-auto px-4 py-4">
-        {tracks.length === 0 ? (
+      {tracks.length === 0 ? (
+        <main className="flex-1 overflow-y-auto px-4 py-4">
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
               No tracks created yet.
@@ -1205,49 +1254,61 @@ export function MobileScheduleView({
               Create first track
             </button>
           </div>
-        ) : (
-          <>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {currentTrack?.trackTitle || `Track ${safeTrackIndex + 1}`}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setSheet({ kind: 'addService' })}
-                className="text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
-              >
-                + Service
-              </button>
-            </div>
+        </main>
+      ) : (
+        <TabPanels
+          as="main"
+          className="flex-1 overflow-y-auto px-4 py-4"
+          onTouchStart={swipe.onTouchStart}
+          onTouchEnd={swipe.onTouchEnd}
+        >
+          {tracks.map((track, trackIndex) => {
+            const talks = sortTalks(track)
+            return (
+              <TabPanel key={trackIndex} className="focus:outline-none">
+                <div className="mb-3 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSheet({ kind: 'addService' })}
+                    className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Service
+                  </button>
+                </div>
 
-            {sortedTalks.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                Nothing scheduled in this track yet.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {sortedTalks.map((talk, index) => (
-                  <li key={`${talk.startTime}-${talk.endTime}-${index}`}>
-                    <AgendaCard
-                      talk={talk}
-                      onTap={() => setSheet({ kind: 'card', talkIndex: index })}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
+                {talks.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    Nothing scheduled in this track yet.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {talks.map((talk, index) => (
+                      <li key={`${talk.startTime}-${talk.endTime}-${index}`}>
+                        <AgendaCard
+                          talk={talk}
+                          onTap={() =>
+                            setSheet({ kind: 'card', talkIndex: index })
+                          }
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            <button
-              type="button"
-              onClick={() => setSheet({ kind: 'assign' })}
-              className={`mt-4 w-full ${PRIMARY_BUTTON}`}
-            >
-              <PlusIcon className="h-5 w-5" />
-              Assign a talk
-            </button>
-          </>
-        )}
-      </main>
+                <button
+                  type="button"
+                  onClick={() => setSheet({ kind: 'assign' })}
+                  className={`mt-4 w-full ${PRIMARY_BUTTON}`}
+                >
+                  <PlusIcon className="h-5 w-5" />
+                  Assign a talk
+                </button>
+              </TabPanel>
+            )
+          })}
+        </TabPanels>
+      )}
 
       {/* Sheets */}
       {sheet?.kind === 'assign' && currentTrack && (
@@ -1297,6 +1358,6 @@ export function MobileScheduleView({
           onClose={closeSheet}
         />
       )}
-    </div>
+    </TabGroup>
   )
 }

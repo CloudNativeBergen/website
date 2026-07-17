@@ -101,11 +101,20 @@ const setup = () => {
 describe('MobileScheduleView', () => {
   it('renders the selected track agenda', () => {
     setup()
+    expect(screen.getByRole('tab', { name: 'Main Stage' })).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Main Stage' }),
+      screen.getByRole('tab', { name: 'Workshop Room' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Scheduled Keynote Talk')).toBeInTheDocument()
     expect(screen.getByText('10:00–10:45')).toBeInTheDocument()
+  })
+
+  it('switches the visible agenda when another track tab is selected', () => {
+    setup()
+    fireEvent.click(screen.getByRole('tab', { name: 'Workshop Room' }))
+    expect(
+      screen.getByText('Nothing scheduled in this track yet.'),
+    ).toBeInTheDocument()
   })
 
   it('lists unassigned proposals in the assign sheet', () => {
