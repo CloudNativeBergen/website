@@ -1,7 +1,12 @@
+import { randomUUID } from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import { Conference } from '@/lib/conference/types'
-import { generateKey, createReference } from '@/lib/sanity/helpers'
+import {
+  generateKey,
+  createReference,
+  createReferenceWithKey,
+} from '@/lib/sanity/helpers'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
@@ -57,6 +62,29 @@ export async function saveScheduleToSanity(
     let savedSchedule: ConferenceSchedule
 
     if (schedule._id && schedule._id !== '') {
+      // SECURITY: `schedule._id` comes from the client, and `isOrganizer` is
+      // global across every edition (an organizer of conference A is an
+      // organizer on all domains). Without a scope check, a request could patch
+      // ANOTHER conference's schedule — or any document id at all — overwriting
+      // its `date`/`tracks`. Confirm the target is a `schedule` belonging to the
+      // conference being served before writing.
+      const target = await clientWrite.fetch<{
+        _type: string
+        conferenceRef: string | null
+      } | null>(`*[_id == $id][0]{ _type, "conferenceRef": conference._ref }`, {
+        id: schedule._id,
+      })
+
+      // One generic message for missing, wrong-type, and wrong-conference so a
+      // caller can't probe whether an arbitrary document id exists.
+      if (
+        !target ||
+        target._type !== 'schedule' ||
+        target.conferenceRef !== conference._id
+      ) {
+        return { error: 'Schedule not found or not accessible' }
+      }
+
       await clientWrite
         .patch(schedule._id)
         .set({
@@ -67,27 +95,34 @@ export async function saveScheduleToSanity(
 
       savedSchedule = schedule
     } else {
+      // Pre-generate the id so the create and the conference-link append run in
+      // ONE atomic transaction. Previously these were two sequential writes: if
+      // the append failed after the create succeeded, the error was swallowed
+      // and the client never learned the new id — orphaning the created
+      // schedule and creating a duplicate on the next save.
+      const newId = randomUUID()
       const newScheduleDoc = {
+        _id: newId,
         _type: 'schedule',
         date: schedule.date,
         tracks: sanitizedTracks,
         conference: createReference(conference._id),
       }
 
-      const createdSchedule = await clientWrite.create(newScheduleDoc)
+      await clientWrite
+        .transaction()
+        .create(newScheduleDoc)
+        .patch(conference._id, (patch) =>
+          patch
+            .setIfMissing({ schedules: [] })
+            // Array items need a stable _key, matching other reference arrays.
+            .append('schedules', [createReferenceWithKey(newId, 'schedule')]),
+        )
+        .commit()
 
       savedSchedule = {
         ...schedule,
-        _id: createdSchedule._id,
-      }
-
-      const existingScheduleIds = conference.schedules?.map((s) => s._id) || []
-      if (!existingScheduleIds.includes(savedSchedule._id)) {
-        await clientWrite
-          .patch(conference._id)
-          .setIfMissing({ schedules: [] })
-          .append('schedules', [createReference(savedSchedule._id)])
-          .commit()
+        _id: newId,
       }
     }
 
