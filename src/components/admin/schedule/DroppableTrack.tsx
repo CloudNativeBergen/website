@@ -31,6 +31,15 @@ interface DroppableTrackProps {
     serviceSession: TrackTalk,
     sourceTrackIndex: number,
   ) => void
+  // Service-session mutations are dispatched to the reducer by the parent, so
+  // this component no longer recomputes tracks itself — it reports the intent.
+  onAddServiceSession?: (
+    startTime: string,
+    title: string,
+    duration: number,
+  ) => void
+  onResizeServiceSession?: (talkIndex: number, duration: number) => void
+  onRenameServiceSession?: (talkIndex: number, title: string) => void
   activeDragItem?: DragItem | null
 }
 
@@ -86,13 +95,6 @@ const calculateTalkPosition = (
 const shouldShowTimeLabel = (time: string): boolean => {
   const [, minutes] = time.split(':').map(Number)
   return minutes % SCHEDULE_CONFIG.LABEL_INTERVAL === 0
-}
-
-const addMinutesToTime = (time: string, minutes: number): string => {
-  const [hours, mins] = time.split(':').map(Number)
-  const date = new Date(2000, 0, 1, hours, mins)
-  date.setMinutes(date.getMinutes() + minutes)
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
 const calculateTalkContentMinutes = (track: ScheduleTrack): number => {
@@ -798,6 +800,9 @@ function DroppableTrack({
   onRemoveTrack,
   onRemoveTalk,
   onDuplicateServiceSession,
+  onAddServiceSession,
+  onResizeServiceSession,
+  onRenameServiceSession,
   activeDragItem,
 }: DroppableTrackProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -868,27 +873,11 @@ function DroppableTrack({
 
   const handleSaveServiceSession = useCallback(
     (title: string, duration: number) => {
-      const startTime = selectedTimeSlot
-      const endTime = addMinutesToTime(startTime, duration)
-
-      const newServiceSession: TrackTalk = {
-        placeholder: title,
-        startTime,
-        endTime,
-      }
-
-      const updatedTrack = {
-        ...track,
-        talks: [...track.talks, newServiceSession].sort((a, b) => {
-          return a.startTime.localeCompare(b.startTime)
-        }),
-      }
-
-      onUpdateTrack(updatedTrack)
+      onAddServiceSession?.(selectedTimeSlot, title, duration)
       setShowServiceModal(false)
       setSelectedTimeSlot('')
     },
-    [selectedTimeSlot, track, onUpdateTrack],
+    [selectedTimeSlot, onAddServiceSession],
   )
 
   const handleCloseServiceModal = useCallback(() => {
@@ -898,42 +887,20 @@ function DroppableTrack({
 
   const handleUpdateServiceSession = useCallback(
     (index: number, newDuration: number) => {
-      const updatedTalks = [...track.talks]
-      const talk = updatedTalks[index]
-
-      if (talk.placeholder) {
-        updatedTalks[index] = {
-          ...talk,
-          endTime: addMinutesToTime(talk.startTime, newDuration),
-        }
-
-        onUpdateTrack({
-          ...track,
-          talks: updatedTalks,
-        })
+      if (track.talks[index]?.placeholder) {
+        onResizeServiceSession?.(index, newDuration)
       }
     },
-    [track, onUpdateTrack],
+    [track.talks, onResizeServiceSession],
   )
 
   const handleRenameServiceSession = useCallback(
     (index: number, newTitle: string) => {
-      const updatedTalks = [...track.talks]
-      const talk = updatedTalks[index]
-
-      if (talk.placeholder) {
-        updatedTalks[index] = {
-          ...talk,
-          placeholder: newTitle,
-        }
-
-        onUpdateTrack({
-          ...track,
-          talks: updatedTalks,
-        })
+      if (track.talks[index]?.placeholder) {
+        onRenameServiceSession?.(index, newTitle)
       }
     },
-    [track, onUpdateTrack],
+    [track.talks, onRenameServiceSession],
   )
 
   const handleDuplicateServiceSession = useCallback(
