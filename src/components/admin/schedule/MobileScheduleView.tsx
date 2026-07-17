@@ -190,13 +190,14 @@ function BottomSheet({
       const first = items[0]
       const last = items[items.length - 1]
       const active = document.activeElement
-      if (
-        e.shiftKey &&
-        (active === first || !dialogRef.current?.contains(active))
-      ) {
+      const outside = !dialogRef.current?.contains(active)
+      if (e.shiftKey && (active === first || outside)) {
+        // Wrap backwards to the last element (or pull stray focus back in).
         e.preventDefault()
         last.focus()
-      } else if (!e.shiftKey && active === last) {
+      } else if (!e.shiftKey && (active === last || outside)) {
+        // Wrap forwards to the first element; also pull focus back in if it
+        // somehow escaped the dialog, so Tab can't advance into the background.
         e.preventDefault()
         first.focus()
       }
