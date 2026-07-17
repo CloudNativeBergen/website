@@ -4,6 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { TrackTalk } from '@/lib/conference/types'
 import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
+import { durationBetween } from '@/lib/schedule/time'
 import { ClockIcon, Bars3Icon } from '@heroicons/react/24/outline'
 
 interface DraggableServiceSessionProps {
@@ -26,9 +27,10 @@ export function DraggableServiceSession({
   isDragging = false,
 }: DraggableServiceSessionProps) {
   const { dragType, durationMinutes, sessionSize, dragId } = useMemo(() => {
-    const startTime = new Date(`2000-01-01T${serviceSession.startTime}:00`)
-    const endTime = new Date(`2000-01-01T${serviceSession.endTime}:00`)
-    const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+    const duration = durationBetween(
+      serviceSession.startTime,
+      serviceSession.endTime,
+    )
 
     let size: 'short' | 'medium' | 'long' | 'very-long'
     if (duration <= SERVICE_SESSION_THRESHOLDS.SHORT) size = 'short'

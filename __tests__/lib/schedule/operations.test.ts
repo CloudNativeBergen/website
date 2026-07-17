@@ -131,6 +131,24 @@ describe('moveProposal — moving an already-scheduled talk', () => {
     expect(res.schedule.tracks[1].talks[0].talk?._id).toBe('a')
     expect(res.schedule.tracks[1].talks[0].startTime).toBe('11:00')
   })
+
+  it('treats a move onto the talk OWN slot as a no-op (no duplication)', () => {
+    // Regression: without the same-position guard this falls into the swap
+    // branch (the "occupied" talk is the dragged talk itself) and performSwap
+    // re-adds it at both target and source, silently duplicating it. Reachable
+    // from the mobile Move sheet, which can default the start to the current slot.
+    const s = schedule(track('A', talk('a', '10:00', '10:25')))
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '10:00',
+    }
+    const res = moveProposal(s, dragItem, drop(0, '10:00'))
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+    expect(res.schedule.tracks[0].talks).toHaveLength(1)
+  })
 })
 
 describe('moveProposal — swap (bidirectional validation)', () => {

@@ -154,6 +154,19 @@ export function moveProposal(
 
   if (trackIndex < 0 || trackIndex >= schedule.tracks.length) return fail
 
+  // A move onto the talk's own current slot is a no-op. Without this guard it
+  // falls into the swap branch below (the "occupied" talk IS the dragged talk),
+  // and `performSwap` re-adds the talk at both the target and the source slot —
+  // silently duplicating it. Reachable from the mobile Move sheet (which can
+  // default the start time to the talk's current slot) and any drop-in-place.
+  if (
+    dragItem.type === 'scheduled-talk' &&
+    dragItem.sourceTrackIndex === trackIndex &&
+    dragItem.sourceTimeSlot === timeSlot
+  ) {
+    return fail
+  }
+
   const targetTrack = schedule.tracks[trackIndex]
   const durationMinutes = getProposalDurationMinutes(proposal)
   const endTime = calculateEndTime(timeSlot, durationMinutes)

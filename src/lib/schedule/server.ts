@@ -63,6 +63,22 @@ export async function getScheduleData(): Promise<ScheduleData> {
 
     schedules.sort((a, b) => a.date.localeCompare(b.date))
 
+    // Drop "ghost" slots — entries whose talk reference no longer resolves (the
+    // proposal was deleted after being scheduled) and which aren't service
+    // placeholders. The projection keeps them as `{ talk: null }` with no
+    // placeholder; in the editor they render invisibly and can't be removed, and
+    // on save the payload validator rejects the whole day ("neither a talk nor a
+    // placeholder"), permanently bricking that day. The public read side already
+    // filters these out, so stripping them here keeps the write side symmetric.
+    for (const schedule of schedules) {
+      schedule.tracks = (schedule.tracks || []).map((track) => ({
+        ...track,
+        talks: (track.talks || []).filter(
+          (slot) => slot.talk || slot.placeholder,
+        ),
+      }))
+    }
+
     const { proposals, proposalsError } = await getProposals({
       conferenceId: conference._id,
       returnAll: true,
