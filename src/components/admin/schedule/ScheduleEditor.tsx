@@ -899,7 +899,11 @@ export function ScheduleEditor({
           </div>
         </div>
 
-        <DragOverlay>{dragOverlay}</DragOverlay>
+        {/* dropAnimation={null}: on a successful drop the source card unmounts
+            (the talk moves to its new slot / leaves the sidebar), so dnd-kit's
+            default animation of the overlay BACK to the origin rect reads as a
+            snap-back/"didn't take" even though the move succeeded. */}
+        <DragOverlay dropAnimation={null}>{dragOverlay}</DragOverlay>
       </DndContext>
 
       {showAddTrackModal && (

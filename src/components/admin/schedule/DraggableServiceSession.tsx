@@ -38,7 +38,7 @@ export function DraggableServiceSession({
 
     const type =
       sourceTrackIndex !== undefined ? 'scheduled-service' : 'service-session'
-    const id = `${type}-${serviceSession.startTime}-${sourceTrackIndex || 'unassigned'}-${sourceTimeSlot || 'new'}`
+    const id = `${type}-${serviceSession.startTime}-${sourceTrackIndex ?? 'unassigned'}-${sourceTimeSlot || 'new'}`
 
     return {
       dragType: type,
