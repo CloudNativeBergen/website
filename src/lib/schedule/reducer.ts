@@ -55,7 +55,12 @@ export type ScheduleAction =
       talkIndex: number
       duration: number
     }
-  | { type: 'renameService'; trackIndex: number; talkIndex: number; title: string }
+  | {
+      type: 'renameService'
+      trackIndex: number
+      talkIndex: number
+      title: string
+    }
   | {
       type: 'duplicateService'
       serviceSession: TrackTalk
@@ -129,7 +134,12 @@ export function scheduleReducer(
       )
       return withDayResult(
         state,
-        ops.moveProposal(current, action.dragItem, action.dropPosition, otherIds),
+        ops.moveProposal(
+          current,
+          action.dragItem,
+          action.dropPosition,
+          otherIds,
+        ),
       )
     }
 

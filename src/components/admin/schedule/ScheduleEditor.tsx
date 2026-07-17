@@ -615,7 +615,12 @@ export function ScheduleEditor({
   )
 
   const handleAddServiceSession = useCallback(
-    (trackIndex: number, startTime: string, title: string, duration: number) => {
+    (
+      trackIndex: number,
+      startTime: string,
+      title: string,
+      duration: number,
+    ) => {
       dispatch({ type: 'addService', trackIndex, startTime, title, duration })
     },
     [],

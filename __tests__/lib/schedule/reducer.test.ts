@@ -39,7 +39,10 @@ const track = (title: string, ...talks: TrackTalk[]): ScheduleTrack => ({
   talks,
 })
 
-const unsavedDay = (date: string, ...tracks: ScheduleTrack[]): ConferenceSchedule => ({
+const unsavedDay = (
+  date: string,
+  ...tracks: ScheduleTrack[]
+): ConferenceSchedule => ({
   _id: '',
   date,
   tracks,
@@ -174,7 +177,10 @@ describe('changeDay — day-collision regression (two unsaved days)', () => {
 
   it('rejects placing a proposal already scheduled on another day', () => {
     let state = initScheduleEditorState({
-      schedules: [unsavedDay('d1', track('A', talk('a', '10:00', '10:25'))), unsavedDay('d2', track('B'))],
+      schedules: [
+        unsavedDay('d1', track('A', talk('a', '10:00', '10:25'))),
+        unsavedDay('d2', track('B')),
+      ],
       proposals: [proposal('a')],
     })
     state = scheduleReducer(state, { type: 'changeDay', dayIndex: 1 })
