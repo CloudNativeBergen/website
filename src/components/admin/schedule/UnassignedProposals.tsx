@@ -4,7 +4,6 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { LevelIndicator } from '@/lib/proposal'
 import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
-import { useBatchUpdates } from '@/lib/schedule/performance-utils'
 import {
   FunnelIcon,
   XMarkIcon,
@@ -113,8 +112,6 @@ const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
 )
 
 export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
-  const { batchUpdate } = useBatchUpdates()
-
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFormat, setSelectedFormat] = useState<string>('')
   const [selectedLevel, setSelectedLevel] = useState<string>('')
@@ -137,7 +134,9 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     return proposals.filter((proposal) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase().trim()
-        const titleMatch = proposal.title.toLowerCase().includes(query)
+        // Null-guard every field: a proposal with a missing title/format or a
+        // speaker with no name must not throw and blank the whole panel.
+        const titleMatch = proposal.title?.toLowerCase().includes(query)
 
         const speakerMatch =
           proposal.speakers &&
@@ -146,10 +145,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             (speaker) =>
               typeof speaker === 'object' &&
               'name' in speaker &&
-              speaker.name.toLowerCase().includes(query),
+              speaker.name?.toLowerCase().includes(query),
           )
 
-        const formatMatch = proposal.format.toLowerCase().includes(query)
+        const formatMatch = proposal.format?.toLowerCase().includes(query)
 
         if (!titleMatch && !speakerMatch && !formatMatch) {
           return false
@@ -168,34 +167,23 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     })
   }, [proposals, searchQuery, selectedFormat, selectedLevel])
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      batchUpdate(() => setSearchQuery(value))
-    },
-    [batchUpdate],
-  )
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value)
+  }, [])
 
-  const handleFormatChange = useCallback(
-    (value: string) => {
-      batchUpdate(() => setSelectedFormat(value))
-    },
-    [batchUpdate],
-  )
+  const handleFormatChange = useCallback((value: string) => {
+    setSelectedFormat(value)
+  }, [])
 
-  const handleLevelChange = useCallback(
-    (value: string) => {
-      batchUpdate(() => setSelectedLevel(value))
-    },
-    [batchUpdate],
-  )
+  const handleLevelChange = useCallback((value: string) => {
+    setSelectedLevel(value)
+  }, [])
 
   const handleClearFilters = useCallback(() => {
-    batchUpdate(() => {
-      setSearchQuery('')
-      setSelectedFormat('')
-      setSelectedLevel('')
-    })
-  }, [batchUpdate])
+    setSearchQuery('')
+    setSelectedFormat('')
+    setSelectedLevel('')
+  }, [])
 
   const hasActiveFilters = useMemo(() => {
     return Boolean(searchQuery || selectedFormat || selectedLevel)

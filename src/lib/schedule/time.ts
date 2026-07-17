@@ -17,6 +17,16 @@ export interface TimeSlot {
   displayTime: string
 }
 
+/**
+ * Grid bounds of the schedule editor (one conference day). Single source of
+ * truth for the visible/placeable range: `DroppableTrack` renders slots across
+ * `[SCHEDULE_START, SCHEDULE_END]` and `operations.ts` rejects any placement
+ * whose end exceeds `SCHEDULE_END` (otherwise the item renders below the grid).
+ * Kept as `HH:MM` strings so they compose with the helpers below.
+ */
+export const SCHEDULE_START = '08:00'
+export const SCHEDULE_END = '21:00'
+
 /** `HH:MM` → minutes since midnight. */
 export function toMinutes(hhmm: string): number {
   const [hours, minutes] = hhmm.split(':').map(Number)

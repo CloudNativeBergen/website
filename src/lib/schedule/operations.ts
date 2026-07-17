@@ -16,7 +16,9 @@ import {
   isTrackIntervalFree,
   matchTalk,
   matchService,
+  toMinutes,
 } from './types'
+import { SCHEDULE_END } from './time'
 
 /**
  * Pure schedule transforms, lifted verbatim (behaviour-preserving) from the old
@@ -36,6 +38,16 @@ export interface OperationResult {
 
 const sortByStart = (a: TrackTalk, b: TrackTalk): number =>
   a.startTime.localeCompare(b.startTime)
+
+/**
+ * Does a placement ending at `endTime` fit within the schedule's end-of-day
+ * bound? Nothing may extend past {@link SCHEDULE_END}; without this guard an item
+ * dropped/created/resized near the bottom of the grid renders below it. Shared by
+ * move/create/resize so the rule lives in one place.
+ */
+function withinScheduleEnd(endTime: string): boolean {
+  return toMinutes(endTime) <= toMinutes(SCHEDULE_END)
+}
 
 /**
  * Swap the dragged talk with the talk occupying the target slot. Pure port of
@@ -145,6 +157,10 @@ export function moveProposal(
   const targetTrack = schedule.tracks[trackIndex]
   const durationMinutes = getProposalDurationMinutes(proposal)
   const endTime = calculateEndTime(timeSlot, durationMinutes)
+
+  // The dragged talk always lands ending at `endTime` (both for a fresh drop and
+  // as the forward half of a swap), so a single end-of-day guard covers both.
+  if (!withinScheduleEnd(endTime)) return fail
 
   if (dragItem.type !== 'scheduled-talk') {
     const scheduledHere = schedule.tracks.some((track) =>
@@ -261,6 +277,8 @@ export function moveServiceSession(
     serviceSession.endTime,
   )
   const newEndTime = calculateEndTime(timeSlot, durationMinutes)
+
+  if (!withinScheduleEnd(newEndTime)) return fail
 
   const targetTrack = schedule.tracks[trackIndex]
   const excludeExisting =
@@ -384,6 +402,7 @@ export function addService(
   }
   const track = schedule.tracks[trackIndex]
   const endTime = calculateEndTime(args.startTime, args.duration)
+  if (!withinScheduleEnd(endTime)) return { schedule, ok: false }
   // Reject a new service session that would overlap an existing talk/session
   // (the UI's ＋ button only gates on an exact-start match, so a session can be
   // created inside/over an existing item).
@@ -418,6 +437,7 @@ export function resizeService(
   if (!talk || !talk.placeholder) return { schedule, ok: false }
 
   const newEnd = calculateEndTime(talk.startTime, duration)
+  if (!withinScheduleEnd(newEnd)) return { schedule, ok: false }
   // Reject a resize that would grow the session over a following talk/session
   // (exclude the session being resized from the check).
   if (
