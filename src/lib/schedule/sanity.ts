@@ -55,37 +55,43 @@ export async function saveScheduleToSanity(
         _key: generateKey(`track-${trackIndex}`),
         trackTitle: track.trackTitle,
         trackDescription: track.trackDescription,
-        talks: (track.talks || []).map((talk, talkIndex) => {
-          const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
+        // Drop ghost slots (neither a resolved talk nor a placeholder) before
+        // serializing — otherwise the fallback branch below emits an empty slot
+        // that `validateSchedulePayload` rejects, failing the whole save. Load
+        // already strips these, so this is defense-in-depth for any that slip in.
+        talks: (track.talks || [])
+          .filter((talk) => talk.talk || talk.placeholder)
+          .map((talk, talkIndex) => {
+            const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
 
-          if (talk.placeholder) {
+            if (talk.placeholder) {
+              return {
+                _key: generateKey(`${baseKey}-service`),
+                placeholder: talk.placeholder,
+                startTime: talk.startTime,
+                endTime: talk.endTime,
+              }
+            }
+
+            if (talk.talk) {
+              const talkId =
+                talk.talk._id ||
+                (talk.talk as unknown as { _ref?: string })._ref ||
+                ''
+              return {
+                _key: generateKey(`${baseKey}-${talkId}`),
+                talk: createReference(talkId),
+                startTime: talk.startTime,
+                endTime: talk.endTime,
+              }
+            }
+
             return {
-              _key: generateKey(`${baseKey}-service`),
-              placeholder: talk.placeholder,
+              _key: generateKey(`${baseKey}-fallback`),
               startTime: talk.startTime,
               endTime: talk.endTime,
             }
-          }
-
-          if (talk.talk) {
-            const talkId =
-              talk.talk._id ||
-              (talk.talk as unknown as { _ref?: string })._ref ||
-              ''
-            return {
-              _key: generateKey(`${baseKey}-${talkId}`),
-              talk: createReference(talkId),
-              startTime: talk.startTime,
-              endTime: talk.endTime,
-            }
-          }
-
-          return {
-            _key: generateKey(`${baseKey}-fallback`),
-            startTime: talk.startTime,
-            endTime: talk.endTime,
-          }
-        }),
+          }),
       }),
     )
 
