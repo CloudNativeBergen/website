@@ -13,7 +13,7 @@ import {
   TouchSensor,
   KeyboardSensor,
 } from '@dnd-kit/core'
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useState, useReducer, useMemo, useCallback } from 'react'
 import React from 'react'
 import {
   ScheduleTrack,
@@ -22,7 +22,11 @@ import {
   Conference,
 } from '@/lib/conference/types'
 import { DragItem } from '@/lib/schedule/types'
-import { useScheduleEditor } from '@/hooks/useScheduleEditor'
+import {
+  scheduleReducer,
+  initScheduleEditorState,
+} from '@/lib/schedule/reducer'
+import { computeUnassigned } from '@/lib/schedule/operations'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
@@ -225,6 +229,9 @@ const TracksGrid = ({
   onRemoveTrack,
   onRemoveTalk,
   onDuplicateServiceSession,
+  onAddServiceSession,
+  onResizeServiceSession,
+  onRenameServiceSession,
   activeItem,
 }: {
   tracks: ScheduleTrack[]
@@ -234,6 +241,22 @@ const TracksGrid = ({
   onDuplicateServiceSession: (
     serviceSession: TrackTalk,
     sourceTrackIndex: number,
+  ) => void
+  onAddServiceSession: (
+    trackIndex: number,
+    startTime: string,
+    title: string,
+    duration: number,
+  ) => void
+  onResizeServiceSession: (
+    trackIndex: number,
+    talkIndex: number,
+    duration: number,
+  ) => void
+  onRenameServiceSession: (
+    trackIndex: number,
+    talkIndex: number,
+    title: string,
   ) => void
   activeItem: DragItem | null
 }) => {
@@ -248,6 +271,15 @@ const TracksGrid = ({
           onRemoveTrack={() => onRemoveTrack(index)}
           onRemoveTalk={(talkIndex) => onRemoveTalk(index, talkIndex)}
           onDuplicateServiceSession={onDuplicateServiceSession}
+          onAddServiceSession={(startTime, title, duration) =>
+            onAddServiceSession(index, startTime, title, duration)
+          }
+          onResizeServiceSession={(talkIndex, duration) =>
+            onResizeServiceSession(index, talkIndex, duration)
+          }
+          onRenameServiceSession={(talkIndex, title) =>
+            onRenameServiceSession(index, talkIndex, title)
+          }
           activeDragItem={activeItem}
         />
       ))}
@@ -369,113 +401,66 @@ export function ScheduleEditor({
 
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [currentDayIndex, setCurrentDayIndex] = useState(0)
 
   const saveMutation = api.schedule.save.useMutation()
 
-  const [modifiedSchedules, setModifiedSchedules] =
-    useState<ConferenceSchedule[]>(initialSchedules)
-  const hasInitialized = useRef(false)
+  // Single reducer over ALL days. The active day is `state.currentDayIndex`
+  // (identity), never an `_id` — see reducer.ts for why that fixes the
+  // day-collision bug. There is no second store to hand-sync.
+  const [state, dispatch] = useReducer(
+    scheduleReducer,
+    { schedules: initialSchedules, proposals: initialProposals },
+    initScheduleEditorState,
+  )
 
-  const scheduleEditor = useScheduleEditor()
+  const currentDayIndex = state.currentDayIndex
+  const currentSchedule = state.schedules[currentDayIndex] ?? null
+  const isSaving = state.ui.isSaving
+  const error = state.ui.error
 
-  const currentSchedule = modifiedSchedules[currentDayIndex] || null
-
-  useEffect(() => {
-    if (
-      !hasInitialized.current ||
-      scheduleEditor.schedule?._id !== currentSchedule?._id
-    ) {
-      scheduleEditor.setInitialData(
-        currentSchedule,
-        initialProposals,
-        modifiedSchedules,
-      )
-      hasInitialized.current = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scheduleEditor is stable ref
-  }, [currentSchedule, initialProposals, currentDayIndex, modifiedSchedules])
-
-  useEffect(() => {
-    if (hasInitialized.current) {
-      scheduleEditor.setInitialData(
-        currentSchedule,
-        initialProposals,
-        modifiedSchedules,
-      )
-    }
-  }, [modifiedSchedules, currentSchedule, initialProposals, scheduleEditor])
+  // Unassigned proposals are DERIVED from all days, never stored.
+  const unassignedProposals = useMemo(
+    () => computeUnassigned(state.proposals, state.schedules),
+    [state.proposals, state.schedules],
+  )
 
   const handleSave = useCallback(async () => {
-    if (!scheduleEditor.schedule) return
-
     saveTimer.start()
-    setIsSaving(true)
-    setError(null)
+    dispatch({ type: 'saveStart' })
     setSaveSuccess(false)
 
-    if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-      setModifiedSchedules((prev) => {
-        const updated = [...prev]
-        updated[currentDayIndex] = { ...scheduleEditor.schedule! }
-        return updated
-      })
-    }
+    // Persist every DIRTY day so edits on non-current days are not dropped. If
+    // nothing is dirty, fall back to saving the current day (matches the old
+    // always-save-current behaviour).
+    const dirtyIndices = state.dirty
+      .map((isDirty, index) => (isDirty ? index : -1))
+      .filter((index) => index >= 0)
+    const indicesToSave =
+      dirtyIndices.length > 0 ? dirtyIndices : [currentDayIndex]
 
     try {
-      const { schedule } = await saveMutation.mutateAsync(
-        scheduleEditor.schedule,
-      )
+      for (const index of indicesToSave) {
+        const daySchedule = state.schedules[index]
+        if (!daySchedule) continue
 
-      if (schedule && scheduleEditor.schedule) {
-        const updatedSchedule = {
-          ...scheduleEditor.schedule,
-          _id: schedule._id,
-        }
-        scheduleEditor.setSchedule(updatedSchedule)
-
-        if (
-          currentDayIndex >= 0 &&
-          currentDayIndex < modifiedSchedules.length
-        ) {
-          setModifiedSchedules((prev) => {
-            const updated = [...prev]
-            updated[currentDayIndex] = updatedSchedule
-            return updated
-          })
+        const { schedule } = await saveMutation.mutateAsync(daySchedule)
+        if (schedule) {
+          dispatch({ type: 'saveDaySucceeded', index, _id: schedule._id })
         }
       }
 
+      dispatch({ type: 'saveEnd' })
       setSaveSuccess(true)
-      const saveDuration = saveTimer.end()
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Schedule save completed:', {
-          duration: saveDuration,
-          scheduleId: scheduleEditor.schedule._id,
-          tracksCount: scheduleEditor.schedule.tracks.length,
-        })
-      }
-
+      saveTimer.end()
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      const errorMessage =
+      const message =
         err instanceof Error ? err.message : 'Failed to save schedule'
-      setError(errorMessage)
+      dispatch({ type: 'saveError', message })
       saveTimer.end()
-    } finally {
-      setIsSaving(false)
     }
-  }, [
-    scheduleEditor,
-    currentDayIndex,
-    modifiedSchedules.length,
-    saveTimer,
-    saveMutation,
-  ])
+  }, [state.dirty, state.schedules, currentDayIndex, saveTimer, saveMutation])
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -501,59 +486,14 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
+        const dropPosition = {
+          trackIndex: dropData.trackIndex,
+          timeSlot: dropData.timeSlot,
+        }
         if (dragItem.proposal) {
-          const result = scheduleEditor.moveTalkToTrack(dragItem, {
-            trackIndex: dropData.trackIndex,
-            timeSlot: dropData.timeSlot,
-          })
-
-          if (result.success && result.updatedSchedule) {
-            if (
-              currentDayIndex >= 0 &&
-              currentDayIndex < modifiedSchedules.length &&
-              result.updatedSchedule
-            ) {
-              const updatedSchedules = [...modifiedSchedules]
-              updatedSchedules[currentDayIndex] = result.updatedSchedule
-              setModifiedSchedules(updatedSchedules)
-
-              scheduleEditor.setInitialData(
-                result.updatedSchedule,
-                initialProposals,
-                updatedSchedules,
-              )
-            }
-          } else {
-            console.warn('Failed to drop proposal:', dragItem.proposal.title)
-          }
+          dispatch({ type: 'moveProposal', dragItem, dropPosition })
         } else if (dragItem.serviceSession) {
-          const result = scheduleEditor.moveServiceSessionToTrack(dragItem, {
-            trackIndex: dropData.trackIndex,
-            timeSlot: dropData.timeSlot,
-          })
-
-          if (result.success && result.updatedSchedule) {
-            if (
-              currentDayIndex >= 0 &&
-              currentDayIndex < modifiedSchedules.length &&
-              result.updatedSchedule
-            ) {
-              const updatedSchedules = [...modifiedSchedules]
-              updatedSchedules[currentDayIndex] = result.updatedSchedule
-              setModifiedSchedules(updatedSchedules)
-
-              scheduleEditor.setInitialData(
-                result.updatedSchedule,
-                initialProposals,
-                updatedSchedules,
-              )
-            }
-          } else {
-            console.warn(
-              'Failed to drop service session:',
-              dragItem.serviceSession.placeholder,
-            )
-          }
+          dispatch({ type: 'moveService', dragItem, dropPosition })
         }
       }
 
@@ -568,14 +508,7 @@ export function ScheduleEditor({
         })
       }
     },
-    [
-      scheduleEditor,
-      currentDayIndex,
-      modifiedSchedules,
-      initialProposals,
-      dragTimer,
-      cancelUpdates,
-    ],
+    [dragTimer, cancelUpdates],
   )
 
   const handleAddTrack = useCallback(
@@ -585,29 +518,10 @@ export function ScheduleEditor({
         trackDescription: trackData.description,
         talks: [],
       }
-      scheduleEditor.addTrack(newTrack)
-
-      if (
-        currentDayIndex >= 0 &&
-        currentDayIndex < modifiedSchedules.length &&
-        scheduleEditor.schedule
-      ) {
-        setModifiedSchedules((prev) => {
-          const updated = [...prev]
-          const currentSchedule = updated[currentDayIndex]
-          if (currentSchedule) {
-            updated[currentDayIndex] = {
-              ...currentSchedule,
-              tracks: [...(currentSchedule.tracks || []), newTrack],
-            }
-          }
-          return updated
-        })
-      }
-
+      dispatch({ type: 'addTrack', track: newTrack })
       setShowAddTrackModal(false)
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
+    [],
   )
 
   const handleShowAddTrackModal = useCallback(() => {
@@ -620,50 +534,23 @@ export function ScheduleEditor({
 
   const handleDayChange = useCallback(
     (dayIndex: number) => {
-      if (dayIndex >= 0 && dayIndex < modifiedSchedules.length) {
-        dayChangeTimer.start()
+      dayChangeTimer.start()
+      dispatch({ type: 'changeDay', dayIndex })
+      setSaveSuccess(false)
 
-        if (
-          scheduleEditor.schedule &&
-          currentDayIndex >= 0 &&
-          currentDayIndex < modifiedSchedules.length
-        ) {
-          setModifiedSchedules((prev) => {
-            const updated = [...prev]
-            updated[currentDayIndex] = { ...scheduleEditor.schedule! }
-            return updated
-          })
-        }
-
-        setCurrentDayIndex(dayIndex)
-
-        setSaveSuccess(false)
-        setError(null)
-
-        const dayChangeDuration = dayChangeTimer.end()
-
-        if (
-          process.env.NODE_ENV === 'development' &&
-          dayChangeDuration &&
-          dayChangeDuration > 200
-        ) {
-          console.warn('Slow day change detected:', {
-            duration: dayChangeDuration,
-            fromDay: currentDayIndex,
-            toDay: dayIndex,
-          })
-        }
+      const dayChangeDuration = dayChangeTimer.end()
+      if (
+        process.env.NODE_ENV === 'development' &&
+        dayChangeDuration &&
+        dayChangeDuration > 200
+      ) {
+        console.warn('Slow day change detected:', {
+          duration: dayChangeDuration,
+          toDay: dayIndex,
+        })
       }
     },
-    [
-      currentDayIndex,
-      modifiedSchedules,
-      scheduleEditor.schedule,
-      setModifiedSchedules,
-      setSaveSuccess,
-      setError,
-      dayChangeTimer,
-    ],
+    [dayChangeTimer],
   )
 
   useEffect(() => {
@@ -711,142 +598,58 @@ export function ScheduleEditor({
 
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {
-      scheduleEditor.updateTrack(index, track)
-
-      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-        const updatedSchedules = [...modifiedSchedules]
-        const currentSchedule = updatedSchedules[currentDayIndex]
-        if (currentSchedule?.tracks) {
-          const updatedTracks = [...currentSchedule.tracks]
-          updatedTracks[index] = track
-          updatedSchedules[currentDayIndex] = {
-            ...currentSchedule,
-            tracks: updatedTracks,
-          }
-          setModifiedSchedules(updatedSchedules)
-
-          scheduleEditor.setInitialData(
-            updatedSchedules[currentDayIndex],
-            initialProposals,
-            updatedSchedules,
-          )
-        }
-      }
+      dispatch({ type: 'updateTrack', trackIndex: index, track })
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
+    [],
   )
 
-  const handleRemoveTrack = useCallback(
-    (index: number) => {
-      scheduleEditor.removeTrack(index)
-
-      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-        const updatedSchedules = [...modifiedSchedules]
-        const currentSchedule = updatedSchedules[currentDayIndex]
-        if (currentSchedule?.tracks) {
-          const updatedTracks = currentSchedule.tracks.filter(
-            (_, i) => i !== index,
-          )
-          updatedSchedules[currentDayIndex] = {
-            ...currentSchedule,
-            tracks: updatedTracks,
-          }
-          setModifiedSchedules(updatedSchedules)
-
-          scheduleEditor.setInitialData(
-            updatedSchedules[currentDayIndex],
-            initialProposals,
-            updatedSchedules,
-          )
-        }
-      }
-    },
-    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
-  )
+  const handleRemoveTrack = useCallback((index: number) => {
+    dispatch({ type: 'removeTrack', trackIndex: index })
+  }, [])
 
   const handleRemoveTalk = useCallback(
     (trackIndex: number, talkIndex: number) => {
-      scheduleEditor.removeTalkFromSchedule(trackIndex, talkIndex)
-
-      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-        setModifiedSchedules((prev) => {
-          const updated = [...prev]
-          const currentSchedule = updated[currentDayIndex]
-          if (currentSchedule?.tracks?.[trackIndex]) {
-            const updatedTracks = [...currentSchedule.tracks]
-            const updatedTrack = { ...updatedTracks[trackIndex] }
-            updatedTrack.talks = updatedTrack.talks.filter(
-              (_, i) => i !== talkIndex,
-            )
-            updatedTracks[trackIndex] = updatedTrack
-            updated[currentDayIndex] = {
-              ...currentSchedule,
-              tracks: updatedTracks,
-            }
-          }
-          return updated
-        })
-      }
+      dispatch({ type: 'removeTalk', trackIndex, talkIndex })
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
+    [],
   )
 
-  const { schedule, unassignedProposals } = scheduleEditor
+  const handleAddServiceSession = useCallback(
+    (
+      trackIndex: number,
+      startTime: string,
+      title: string,
+      duration: number,
+    ) => {
+      dispatch({ type: 'addService', trackIndex, startTime, title, duration })
+    },
+    [],
+  )
+
+  const handleResizeServiceSession = useCallback(
+    (trackIndex: number, talkIndex: number, duration: number) => {
+      dispatch({ type: 'resizeService', trackIndex, talkIndex, duration })
+    },
+    [],
+  )
+
+  const handleRenameServiceSession = useCallback(
+    (trackIndex: number, talkIndex: number, title: string) => {
+      dispatch({ type: 'renameService', trackIndex, talkIndex, title })
+    },
+    [],
+  )
+
+  const schedule = currentSchedule
 
   const handleDuplicateServiceSession = useCallback(
     (serviceSession: TrackTalk, sourceTrackIndex: number) => {
-      if (!schedule?.tracks) return
-
-      const conflictingTracks: number[] = []
-
-      schedule.tracks.forEach((track, trackIndex) => {
-        if (trackIndex === sourceTrackIndex) return
-        if (!track.talks || !Array.isArray(track.talks)) return
-
-        const hasConflict = track.talks.some((talk) => {
-          const sessionStart = new Date(
-            `2000-01-01T${serviceSession.startTime}:00`,
-          )
-          const sessionEnd = new Date(`2000-01-01T${serviceSession.endTime}:00`)
-          const talkStart = new Date(`2000-01-01T${talk.startTime}:00`)
-          const talkEnd = new Date(`2000-01-01T${talk.endTime}:00`)
-
-          return sessionStart < talkEnd && talkStart < sessionEnd
-        })
-
-        if (hasConflict) {
-          conflictingTracks.push(trackIndex)
-        }
-      })
-
-      if (conflictingTracks.length > 0) {
-      }
-
-      const updatedTracks = schedule.tracks.map((track, trackIndex) => {
-        if (trackIndex === sourceTrackIndex) return track
-
-        const newTrack = {
-          ...track,
-          talks: [...track.talks, { ...serviceSession }].sort((a, b) => {
-            return a.startTime.localeCompare(b.startTime)
-          }),
-        }
-
-        return newTrack
-      })
-
-      updatedTracks.forEach((track, index) => {
-        if (index !== sourceTrackIndex) {
-          scheduleEditor.updateTrack(index, track)
-        }
-      })
+      dispatch({ type: 'duplicateService', serviceSession, sourceTrackIndex })
     },
-    [schedule, scheduleEditor],
+    [],
   )
 
-  const hasTracks = useMemo(() => {
-    return schedule?.tracks && schedule.tracks.length > 0
-  }, [schedule?.tracks])
+  const hasTracks = Boolean(schedule?.tracks && schedule.tracks.length > 0)
 
   const dragOverlay = useMemo(() => {
     if (!activeItem) return null
@@ -890,8 +693,8 @@ export function ScheduleEditor({
 
         <div className={LAYOUT_CLASSES.mainArea}>
           <MemoizedHeaderSection
-            schedule={scheduleEditor.schedule}
-            schedules={modifiedSchedules}
+            schedule={currentSchedule}
+            schedules={state.schedules}
             currentDayIndex={currentDayIndex}
             onDayChange={handleDayChange}
             onAddTrack={handleShowAddTrackModal}
@@ -910,6 +713,9 @@ export function ScheduleEditor({
                 onRemoveTrack={handleRemoveTrack}
                 onRemoveTalk={handleRemoveTalk}
                 onDuplicateServiceSession={handleDuplicateServiceSession}
+                onAddServiceSession={handleAddServiceSession}
+                onResizeServiceSession={handleResizeServiceSession}
+                onRenameServiceSession={handleRenameServiceSession}
                 activeItem={activeItem}
               />
             ) : (

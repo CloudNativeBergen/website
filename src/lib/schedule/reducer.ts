@@ -1,0 +1,267 @@
+import {
+  ConferenceSchedule,
+  ScheduleTrack,
+  TrackTalk,
+} from '@/lib/conference/types'
+import { ProposalExisting } from '@/lib/proposal/types'
+import { DragItem, DropPosition } from './types'
+import * as ops from './operations'
+
+/**
+ * Single source of truth for the schedule editor: ALL days live in `schedules`
+ * simultaneously and the active day is identified by `currentDayIndex` (an
+ * index, never an `_id`). This replaces the old dual store — `modifiedSchedules`
+ * (all days) hand-synced with a hook holding only the current day — and its two
+ * fragile sync effects.
+ *
+ * Why index, not `_id`: unsaved days all carry `_id: ''`, so keying the active
+ * day on `_id` made two unsaved days collide (switching kept the wrong day
+ * loaded and the next edit wrote onto the wrong day). Indexing on
+ * `currentDayIndex` keeps every day independent.
+ *
+ * `dirty[i]` marks day `i` as changed since its last save, so save can persist
+ * EVERY edited day (not just the current one — the old per-day-save bug dropped
+ * edits made on other days). `unassignedProposals` is DERIVED via
+ * `ops.computeUnassigned`, never stored.
+ */
+export interface ScheduleEditorState {
+  schedules: ConferenceSchedule[]
+  currentDayIndex: number
+  proposals: ProposalExisting[]
+  dirty: boolean[]
+  ui: {
+    isSaving: boolean
+    error: string | null
+  }
+}
+
+export type ScheduleAction =
+  | { type: 'moveProposal'; dragItem: DragItem; dropPosition: DropPosition }
+  | { type: 'moveService'; dragItem: DragItem; dropPosition: DropPosition }
+  | { type: 'addTrack'; track: ScheduleTrack }
+  | { type: 'removeTrack'; trackIndex: number }
+  | { type: 'updateTrack'; trackIndex: number; track: ScheduleTrack }
+  | { type: 'removeTalk'; trackIndex: number; talkIndex: number }
+  | {
+      type: 'addService'
+      trackIndex: number
+      title: string
+      startTime: string
+      duration: number
+    }
+  | {
+      type: 'resizeService'
+      trackIndex: number
+      talkIndex: number
+      duration: number
+    }
+  | {
+      type: 'renameService'
+      trackIndex: number
+      talkIndex: number
+      title: string
+    }
+  | {
+      type: 'duplicateService'
+      serviceSession: TrackTalk
+      sourceTrackIndex: number
+    }
+  | { type: 'changeDay'; dayIndex: number }
+  | { type: 'saveStart' }
+  | { type: 'saveDaySucceeded'; index: number; _id: string }
+  | { type: 'saveError'; message: string }
+  | { type: 'saveEnd' }
+
+export function initScheduleEditorState(args: {
+  schedules: ConferenceSchedule[]
+  proposals: ProposalExisting[]
+}): ScheduleEditorState {
+  return {
+    schedules: args.schedules,
+    currentDayIndex: 0,
+    proposals: args.proposals,
+    dirty: args.schedules.map(() => false),
+    ui: { isSaving: false, error: null },
+  }
+}
+
+/** Ids of talks scheduled on days OTHER than `dayIndex` (cross-day dup guard). */
+function scheduledIdsExcludingDay(
+  schedules: ConferenceSchedule[],
+  dayIndex: number,
+): Set<string> {
+  const ids = new Set<string>()
+  schedules.forEach((schedule, index) => {
+    if (index === dayIndex) return
+    schedule.tracks?.forEach((track) =>
+      track.talks.forEach((talk) => {
+        if (talk.talk?._id) ids.add(talk.talk._id)
+      }),
+    )
+  })
+  return ids
+}
+
+/**
+ * Apply a day-level transform result to the current day: on success, replace
+ * `schedules[currentDayIndex]` and mark it dirty; on failure, return state
+ * unchanged (an invalid drop must not touch state or dirty tracking).
+ */
+function withDayResult(
+  state: ScheduleEditorState,
+  result: ops.OperationResult,
+): ScheduleEditorState {
+  if (!result.ok) return state
+  const schedules = [...state.schedules]
+  schedules[state.currentDayIndex] = result.schedule
+  const dirty = [...state.dirty]
+  dirty[state.currentDayIndex] = true
+  return { ...state, schedules, dirty }
+}
+
+export function scheduleReducer(
+  state: ScheduleEditorState,
+  action: ScheduleAction,
+): ScheduleEditorState {
+  const current = state.schedules[state.currentDayIndex]
+
+  switch (action.type) {
+    case 'moveProposal': {
+      if (!current) return state
+      const otherIds = scheduledIdsExcludingDay(
+        state.schedules,
+        state.currentDayIndex,
+      )
+      return withDayResult(
+        state,
+        ops.moveProposal(
+          current,
+          action.dragItem,
+          action.dropPosition,
+          otherIds,
+        ),
+      )
+    }
+
+    case 'moveService': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.moveServiceSession(current, action.dragItem, action.dropPosition),
+      )
+    }
+
+    case 'addTrack': {
+      if (!current) return state
+      return withDayResult(state, ops.addTrack(current, action.track))
+    }
+
+    case 'removeTrack': {
+      if (!current) return state
+      return withDayResult(state, ops.removeTrack(current, action.trackIndex))
+    }
+
+    case 'updateTrack': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.updateTrack(current, action.trackIndex, action.track),
+      )
+    }
+
+    case 'removeTalk': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.removeTalk(current, action.trackIndex, action.talkIndex),
+      )
+    }
+
+    case 'addService': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.addService(current, action.trackIndex, {
+          title: action.title,
+          startTime: action.startTime,
+          duration: action.duration,
+        }),
+      )
+    }
+
+    case 'resizeService': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.resizeService(
+          current,
+          action.trackIndex,
+          action.talkIndex,
+          action.duration,
+        ),
+      )
+    }
+
+    case 'renameService': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.renameService(
+          current,
+          action.trackIndex,
+          action.talkIndex,
+          action.title,
+        ),
+      )
+    }
+
+    case 'duplicateService': {
+      if (!current) return state
+      return withDayResult(
+        state,
+        ops.duplicateService(
+          current,
+          action.serviceSession,
+          action.sourceTrackIndex,
+        ),
+      )
+    }
+
+    case 'changeDay': {
+      if (action.dayIndex < 0 || action.dayIndex >= state.schedules.length) {
+        return state
+      }
+      return {
+        ...state,
+        currentDayIndex: action.dayIndex,
+        ui: { ...state.ui, error: null },
+      }
+    }
+
+    case 'saveStart':
+      return { ...state, ui: { isSaving: true, error: null } }
+
+    case 'saveDaySucceeded': {
+      if (action.index < 0 || action.index >= state.schedules.length) {
+        return state
+      }
+      const schedules = [...state.schedules]
+      schedules[action.index] = {
+        ...schedules[action.index],
+        _id: action._id,
+      }
+      const dirty = [...state.dirty]
+      dirty[action.index] = false
+      return { ...state, schedules, dirty }
+    }
+
+    case 'saveError':
+      return { ...state, ui: { isSaving: false, error: action.message } }
+
+    case 'saveEnd':
+      return { ...state, ui: { ...state.ui, isSaving: false } }
+
+    default:
+      return state
+  }
+}
