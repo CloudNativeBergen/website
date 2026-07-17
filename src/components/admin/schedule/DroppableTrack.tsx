@@ -468,8 +468,12 @@ const TimeSlotDropZone = ({
 
     if (isSwapOperation && !isSelfSwap) {
       onSwapHover(timeSlot.time)
-    } else if (isOver) {
-      onSwapHover(null)
+      // Clear when this slot stops being the swap target — including when the
+      // pointer leaves the track entirely (isOver → false). Without this
+      // cleanup the amber "SWAP" ring stayed stuck on the talk because the old
+      // code only cleared inside the `else if (isOver)` branch, which never runs
+      // once the slot is no longer hovered.
+      return () => onSwapHover(null)
     }
   }, [isOver, timeSlot.time, track.talks, activeDragItem, onSwapHover])
 
