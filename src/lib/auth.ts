@@ -45,6 +45,21 @@ function applySpeakerToToken(
 }
 
 /**
+ * `@auth/core`'s default session-token cookie names, most-specific first. Prod
+ * uses the `__Secure-` prefix (https); dev uses the bare name. Salt === cookie
+ * name, so these double as the decode salts. Exported so the contract test
+ * (`__tests__/lib/auth/authjs-jwt-contract.test.ts`) can pin them against a real
+ * encode/decode round-trip and against the known reference strings. (It can't
+ * diff `@auth/core`'s own `defaultCookies()` automatically — that's a transitive
+ * dep — so an upstream rename is caught only once these constants are updated to
+ * match; the round-trip still guards the salt→key derivation independently.)
+ */
+export const SESSION_TOKEN_COOKIE_NAMES = [
+  '__Secure-authjs.session-token',
+  'authjs.session-token',
+] as const
+
+/**
  * Decode the browser's PRE-EXISTING NextAuth session token from the request
  * cookies.
  *
@@ -64,9 +79,7 @@ async function readPriorSessionToken(jar: {
   const secret = process.env.AUTH_SECRET
   if (!secret) return null
 
-  // Prod uses the __Secure- prefix; dev uses the bare name. Salt === cookie name.
-  const baseNames = ['__Secure-authjs.session-token', 'authjs.session-token']
-  for (const base of baseNames) {
+  for (const base of SESSION_TOKEN_COOKIE_NAMES) {
     let value = jar.get(base)?.value
     if (!value) {
       const chunks: string[] = []
@@ -428,7 +441,11 @@ export const auth = _auth as typeof _auth &
 
 const SANITY_ID_PATTERN = /^[a-zA-Z0-9_-]+$/
 const MAX_IMPERSONATION_ID_LENGTH = 100
-const CLI_JWT_SALT = 'authjs.session-token'
+// CLI tokens are minted/read with the bare session-cookie salt. Declared as an
+// independent literal (NOT derived from SESSION_TOKEN_COOKIE_NAMES) so the
+// contract test's `CLI_JWT_SALT === <bare cookie name>` assertion actually
+// verifies the two are kept in sync, rather than being true by construction.
+export const CLI_JWT_SALT = 'authjs.session-token'
 
 function extractBearerToken(headers?: Headers): string | null {
   const value = headers?.get('authorization')
