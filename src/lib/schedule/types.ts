@@ -1,13 +1,8 @@
-import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
-import {
-  calculateEndTime,
-  getProposalDurationMinutes,
-  timesOverlap,
-} from './time'
 
-// Pure time helpers now live in ./time. Re-exported here so existing importers
-// (`@/lib/schedule/types`) keep working while the module is split up.
+// Pure time helpers live in ./time and placement rules in ./rules. Re-exported
+// here so existing importers (`@/lib/schedule/types`) keep working while the
+// module is split up.
 export {
   toMinutes,
   toHHMM,
@@ -19,6 +14,15 @@ export {
   getProposalDurationMinutes,
   type TimeSlot,
 } from './time'
+export {
+  findAvailableTimeSlot,
+  canSwapTalks,
+  canPlaceDisplacedBack,
+  isTrackIntervalFree,
+  fitsInTrack,
+  matchTalk,
+  matchService,
+} from './rules'
 
 export interface DropPosition {
   trackIndex: number
@@ -39,67 +43,3 @@ export interface DragItem {
 
 export const DRAG_PERFORMANCE_THRESHOLD = 16
 export const BATCH_UPDATE_DELAY = 100
-
-export function findAvailableTimeSlot(
-  track: ScheduleTrack,
-  proposal: ProposalExisting,
-  preferredStartTime?: string,
-  excludeTalk?: { talkId: string; startTime: string },
-): string | null {
-  const durationMinutes = getProposalDurationMinutes(proposal)
-  const startTime = preferredStartTime || '08:00'
-  const proposalEndTime = calculateEndTime(startTime, durationMinutes)
-
-  const hasConflict = track.talks.some((talk) => {
-    if (!talk.talk) return false
-
-    if (
-      excludeTalk &&
-      talk.talk._id === excludeTalk.talkId &&
-      talk.startTime === excludeTalk.startTime
-    ) {
-      return false
-    }
-
-    return timesOverlap(
-      startTime,
-      proposalEndTime,
-      talk.startTime,
-      talk.endTime,
-    )
-  })
-
-  return hasConflict ? null : startTime
-}
-
-export function canSwapTalks(
-  track: ScheduleTrack,
-  draggedProposal: ProposalExisting,
-  targetTalk: TrackTalk,
-  targetStartTime: string,
-): boolean {
-  if (!targetTalk.talk) return false
-
-  const draggedDuration = getProposalDurationMinutes(draggedProposal)
-  const draggedEndTime = calculateEndTime(targetStartTime, draggedDuration)
-
-  const draggedHasConflict = track.talks.some((talk) => {
-    if (!talk.talk) return false
-
-    if (
-      talk.talk._id === targetTalk.talk!._id &&
-      talk.startTime === targetTalk.startTime
-    ) {
-      return false
-    }
-
-    return timesOverlap(
-      targetStartTime,
-      draggedEndTime,
-      talk.startTime,
-      talk.endTime,
-    )
-  })
-
-  return !draggedHasConflict
-}
