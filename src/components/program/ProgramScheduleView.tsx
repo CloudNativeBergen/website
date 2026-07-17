@@ -6,7 +6,11 @@ import {
   ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
-import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
+import {
+  ConferenceSchedule,
+  ScheduleTrack,
+  TrackTalk,
+} from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
 import { getTalkStatusKey, isScheduleInPast } from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
@@ -43,10 +47,17 @@ const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
 // stacks co-starting slots in one cell. A duration-aware, row-spanning layout
 // (talks occupying multiple time rows based on end time) would render overlaps
 // more faithfully but is a larger change tracked separately.
+// A slot whose talk reference no longer resolves (proposal deleted after
+// scheduling) renders nothing — drop it here so neither the desktop grid cell
+// nor the mobile list leaves an empty wrapper/gap. Genuine service sessions
+// (a real placeholder, no talk ref) are kept.
+const isDanglingRef = (talk: TrackTalk) =>
+  talk.hasTalkRef === true && !talk.talk
+
 const getTalksAtTime = (track: ScheduleTrack, startTime: string) =>
   track.talks
     .map((talk, index) => ({ talk, index }))
-    .filter(({ talk }) => talk.startTime === startTime)
+    .filter(({ talk }) => talk.startTime === startTime && !isDanglingRef(talk))
 
 // Sort talks by start time while preserving each talk's original index, so
 // desktop and mobile render slots in the same order without breaking the
@@ -54,6 +65,7 @@ const getTalksAtTime = (track: ScheduleTrack, startTime: string) =>
 const sortTalksWithIndex = (track: ScheduleTrack) =>
   track.talks
     .map((talk, index) => ({ talk, index }))
+    .filter(({ talk }) => !isDanglingRef(talk))
     .sort((a, b) => a.talk.startTime.localeCompare(b.talk.startTime))
 
 const ScheduleTabbed = React.memo(function ScheduleTabbed({
