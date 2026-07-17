@@ -102,6 +102,9 @@ describe('@auth/core JWT contract — salt ↔ cookie-name binding', () => {
   })
 
   it('CLI bearer salt equals the bare session-cookie name (getSessionFromBearerToken contract)', async () => {
+    // CLI_JWT_SALT and SESSION_TOKEN_COOKIE_NAMES are declared independently in
+    // auth.ts; this fails if they drift apart (getSessionFromBearerToken must
+    // decode tokens minted under the same salt the session cookie uses).
     expect(CLI_SALT).toBe(DEV_COOKIE)
     const token = await encode({
       token: payload,
