@@ -88,6 +88,7 @@ const setup = () => {
       currentDayIndex={0}
       unassignedProposals={[unassignedProposal]}
       dispatch={dispatch}
+      onDayChange={vi.fn()}
       onSave={vi.fn()}
       onAddTrack={vi.fn()}
       isSaving={false}

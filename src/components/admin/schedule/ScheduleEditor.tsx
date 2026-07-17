@@ -385,6 +385,7 @@ export function ScheduleEditor({
           currentDayIndex={currentDayIndex}
           unassignedProposals={unassignedProposals}
           dispatch={dispatch}
+          onDayChange={handleDayChange}
           onSave={handleSave}
           onAddTrack={handleShowAddTrackModal}
           isSaving={isSaving}
