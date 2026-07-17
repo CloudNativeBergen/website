@@ -73,21 +73,16 @@ export async function saveScheduleToSanity(
               }
             }
 
-            if (talk.talk) {
-              const talkId =
-                talk.talk._id ||
-                (talk.talk as unknown as { _ref?: string })._ref ||
-                ''
-              return {
-                _key: generateKey(`${baseKey}-${talkId}`),
-                talk: createReference(talkId),
-                startTime: talk.startTime,
-                endTime: talk.endTime,
-              }
-            }
-
+            // The filter above guarantees a resolved talk reaches this point
+            // (ghost slots — neither talk nor placeholder — are dropped), so this
+            // is the exhaustive final case, no fallback needed.
+            const talkId =
+              talk.talk?._id ||
+              (talk.talk as unknown as { _ref?: string })?._ref ||
+              ''
             return {
-              _key: generateKey(`${baseKey}-fallback`),
+              _key: generateKey(`${baseKey}-${talkId}`),
+              talk: createReference(talkId),
               startTime: talk.startTime,
               endTime: talk.endTime,
             }
