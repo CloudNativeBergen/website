@@ -480,7 +480,7 @@ export function DashboardLayout({
           </div>
         </div>
 
-        <main className="py-10 lg:pl-20">
+        <main className="py-4 lg:py-10 lg:pl-20">
           <div className="px-2 sm:px-4 lg:px-8">{children}</div>
         </main>
       </div>
