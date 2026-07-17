@@ -32,6 +32,8 @@ import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
+import { MobileScheduleView } from './MobileScheduleView'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { api } from '@/lib/trpc/client'
 import {
   PlusIcon,
@@ -392,6 +394,12 @@ export function ScheduleEditor({
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
+  // Desktop is the SSR default (`true`), so wide screens never flash the mobile
+  // layout and there is no hydration mismatch; phones flip to the tap-driven
+  // view after mount. The two layouts are mutually exclusive so the drag board's
+  // DndContext (and its touch sensors) is never mounted on a phone.
+  const isDesktop = useMediaQuery('(min-width: 768px)', true)
+
   const saveMutation = api.schedule.save.useMutation()
 
   // Single reducer over ALL days. The active day is `state.currentDayIndex`
@@ -589,6 +597,30 @@ export function ScheduleEditor({
     }),
     useSensor(KeyboardSensor),
   )
+
+  if (!isDesktop) {
+    return (
+      <>
+        <MobileScheduleView
+          schedules={state.schedules}
+          currentDayIndex={currentDayIndex}
+          unassignedProposals={unassignedProposals}
+          dispatch={dispatch}
+          onSave={handleSave}
+          onAddTrack={handleShowAddTrackModal}
+          isSaving={isSaving}
+          saveSuccess={saveSuccess}
+          error={error}
+        />
+        {showAddTrackModal && (
+          <AddTrackModal
+            onAdd={handleAddTrack}
+            onCancel={handleHideAddTrackModal}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <div className={LAYOUT_CLASSES.container}>
