@@ -383,10 +383,17 @@ export function addService(
     return { schedule, ok: false }
   }
   const track = schedule.tracks[trackIndex]
+  const endTime = calculateEndTime(args.startTime, args.duration)
+  // Reject a new service session that would overlap an existing talk/session
+  // (the UI's ＋ button only gates on an exact-start match, so a session can be
+  // created inside/over an existing item).
+  if (!isTrackIntervalFree(track, args.startTime, endTime)) {
+    return { schedule, ok: false }
+  }
   const newSession: TrackTalk = {
     placeholder: args.title,
     startTime: args.startTime,
-    endTime: calculateEndTime(args.startTime, args.duration),
+    endTime,
   }
   const newTracks = [...schedule.tracks]
   newTracks[trackIndex] = {
@@ -410,10 +417,24 @@ export function resizeService(
   const talk = track.talks[talkIndex]
   if (!talk || !talk.placeholder) return { schedule, ok: false }
 
+  const newEnd = calculateEndTime(talk.startTime, duration)
+  // Reject a resize that would grow the session over a following talk/session
+  // (exclude the session being resized from the check).
+  if (
+    !isTrackIntervalFree(
+      track,
+      talk.startTime,
+      newEnd,
+      matchService(talk.placeholder, talk.startTime),
+    )
+  ) {
+    return { schedule, ok: false }
+  }
+
   const newTalks = [...track.talks]
   newTalks[talkIndex] = {
     ...talk,
-    endTime: calculateEndTime(talk.startTime, duration),
+    endTime: newEnd,
   }
   const newTracks = [...schedule.tracks]
   newTracks[trackIndex] = { ...track, talks: newTalks }

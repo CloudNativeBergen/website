@@ -270,10 +270,31 @@ describe('service add/resize/rename', () => {
     expect(res.schedule.tracks[0].talks[0].endTime).toBe('10:15')
   })
 
+  it('addService rejects a session overlapping an existing item', () => {
+    const s = schedule(track('A', talk('a', '10:00', '10:45')))
+    // A 30-min break at 10:15 would sit inside the 10:00–10:45 talk.
+    expect(
+      addService(s, 0, { title: 'Coffee', startTime: '10:15', duration: 30 })
+        .ok,
+    ).toBe(false)
+  })
+
   it('resizeService updates the endTime from the duration', () => {
     const s = schedule(track('A', service('Break', '10:00', '10:15')))
     const res = resizeService(s, 0, 0, 30)
     expect(res.schedule.tracks[0].talks[0].endTime).toBe('10:30')
+  })
+
+  it('resizeService rejects a resize that overlaps the following item', () => {
+    const s = schedule(
+      track(
+        'A',
+        service('Break', '10:00', '10:15'),
+        talk('a', '10:20', '10:45'),
+      ),
+    )
+    // Growing the break to 30 min (→10:30) would overlap the 10:20 talk.
+    expect(resizeService(s, 0, 0, 30).ok).toBe(false)
   })
 
   it('resizeService ignores a real talk (not a service session)', () => {
