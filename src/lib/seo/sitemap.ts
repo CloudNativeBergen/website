@@ -71,6 +71,9 @@ export function buildSitemap(
 
   const seen = new Set<string>()
   const speakerEntries: MetadataRoute.Sitemap = speakers
+    // Normalise first: a blank / whitespace-only slug (seen historically, see
+    // the slug-repair migration) is not a real profile URL and must be dropped.
+    .map((speaker) => ({ ...speaker, slug: speaker.slug?.trim() }))
     .filter((speaker): speaker is SitemapSpeaker & { slug: string } => {
       if (!speaker.slug) return false
       const path = `/speaker/${speaker.slug}`

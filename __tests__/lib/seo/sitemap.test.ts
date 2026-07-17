@@ -71,6 +71,17 @@ describe('buildSitemap', () => {
     expect(adaEntries).toHaveLength(1)
   })
 
+  it('drops whitespace-only slugs and trims real ones', () => {
+    const map = buildSitemap(HOST, {
+      speakers: [{ slug: '   ' }, { slug: '  ada  ' }],
+    })
+    const speakerUrls = map
+      .map((e) => e.url)
+      .filter((u) => u.includes('/speaker/'))
+    // The blank slug produces no entry; the padded one is trimmed.
+    expect(speakerUrls).toEqual([`${BASE}/speaker/ada`])
+  })
+
   it('URL-encodes speaker slugs', () => {
     const map = buildSitemap(HOST, { speakers: [{ slug: 'josé garcía' }] })
     expect(
