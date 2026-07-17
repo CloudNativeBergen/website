@@ -27,6 +27,10 @@ export interface TimeSlot {
 export const SCHEDULE_START = '08:00'
 export const SCHEDULE_END = '21:00'
 
+/** `HH:MM` in 24h (00:00–23:59), anchored so no surrounding junk is accepted.
+ *  Single source of truth for the schema boundary gate and the server validator. */
+export const HHMM_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
+
 /** `HH:MM` → minutes since midnight. */
 export function toMinutes(hhmm: string): number {
   const [hours, minutes] = hhmm.split(':').map(Number)

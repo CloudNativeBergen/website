@@ -1,7 +1,8 @@
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure } from '@/server/trpc'
 import { SaveScheduleSchema } from '@/server/schemas/schedule'
-import { saveScheduleToSanity } from '@/lib/schedule/sanity'
+import { saveScheduleToSanity, getValidTalkIds } from '@/lib/schedule/sanity'
+import { validateSchedulePayload } from '@/lib/schedule/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
 import type { ConferenceSchedule } from '@/lib/conference/types'
@@ -18,10 +19,31 @@ export const scheduleRouter = router({
       })
     }
 
-    const { schedule, error: saveError } = await saveScheduleToSanity(
-      input as ConferenceSchedule,
-      conference,
-    )
+    const payload = input as ConferenceSchedule
+
+    // Validate the incoming payload BEFORE persisting: reject malformed times,
+    // out-of-bounds/overlapping slots, ambiguous slots (both/neither talk and
+    // placeholder), and dangling/foreign talk refs. The talk-id set is fetched
+    // once and passed to the pure validator.
+    const validTalkIds = await getValidTalkIds(conference._id)
+    const validationError = validateSchedulePayload(payload, validTalkIds)
+    if (validationError) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: validationError })
+    }
+
+    const {
+      schedule,
+      error: saveError,
+      conflict,
+    } = await saveScheduleToSanity(payload, conference)
+
+    if (conflict) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          saveError || 'This day was changed elsewhere since you loaded it.',
+      })
+    }
 
     if (saveError || !schedule) {
       throw new TRPCError({

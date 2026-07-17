@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { HHMM_PATTERN } from '@/lib/schedule/time'
+
+const timeString = z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)')
 
 const TrackTalkSchema = z.object({
   talk: z
@@ -10,8 +13,8 @@ const TrackTalkSchema = z.object({
     .optional()
     .nullable(),
   placeholder: z.string().optional().nullable(),
-  startTime: z.string(),
-  endTime: z.string(),
+  startTime: timeString,
+  endTime: timeString,
 })
 
 const ScheduleTrackSchema = z.object({
@@ -22,6 +25,9 @@ const ScheduleTrackSchema = z.object({
 
 export const SaveScheduleSchema = z.object({
   _id: z.string(),
+  // Optimistic-concurrency token from the loaded document; the SAVE patches with
+  // `ifRevisionId` when present so a stale write is rejected. Absent for a new day.
+  _rev: z.string().optional(),
   date: z.string(),
   tracks: z.array(ScheduleTrackSchema),
   conference: z

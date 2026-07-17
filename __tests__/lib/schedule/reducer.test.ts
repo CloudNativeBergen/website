@@ -255,6 +255,26 @@ describe('save lifecycle + dirty tracking', () => {
     expect(state.ui.isSaving).toBe(false)
   })
 
+  it('saveDaySucceeded stores the new _rev for optimistic concurrency', () => {
+    let state = scheduleReducer(twoDirtyDays(), { type: 'saveStart' })
+    state = scheduleReducer(state, {
+      type: 'saveDaySucceeded',
+      index: 0,
+      _id: 'server-id-0',
+      _rev: 'rev-abc',
+    })
+    expect(state.schedules[0]._rev).toBe('rev-abc')
+
+    // A save that returns no _rev keeps whatever revision was already stored
+    // (rather than wiping it to undefined and forcing an unconditional write).
+    state = scheduleReducer(state, {
+      type: 'saveDaySucceeded',
+      index: 0,
+      _id: 'server-id-0',
+    })
+    expect(state.schedules[0]._rev).toBe('rev-abc')
+  })
+
   it('saveError records the message and stops saving', () => {
     let state = scheduleReducer(twoDirtyDays(), { type: 'saveStart' })
     state = scheduleReducer(state, { type: 'saveError', message: 'boom' })

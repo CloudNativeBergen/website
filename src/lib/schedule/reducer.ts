@@ -68,7 +68,7 @@ export type ScheduleAction =
     }
   | { type: 'changeDay'; dayIndex: number }
   | { type: 'saveStart' }
-  | { type: 'saveDaySucceeded'; index: number; _id: string }
+  | { type: 'saveDaySucceeded'; index: number; _id: string; _rev?: string }
   | { type: 'saveError'; message: string }
   | { type: 'saveEnd' }
 
@@ -249,6 +249,9 @@ export function scheduleReducer(
       schedules[action.index] = {
         ...schedules[action.index],
         _id: action._id,
+        // Store the NEW revision returned by the write so a second save in the
+        // same session patches against the current `_rev` (not a false conflict).
+        _rev: action._rev ?? schedules[action.index]._rev,
       }
       const dirty = [...state.dirty]
       dirty[action.index] = false
