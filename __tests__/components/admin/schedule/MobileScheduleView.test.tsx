@@ -142,6 +142,22 @@ describe('MobileScheduleView', () => {
     })
   })
 
+  it('hides the "Service" control while placing (index-shift guard)', () => {
+    setup()
+    // A Service button per track before pick-up.
+    expect(
+      screen.getAllByRole('button', { name: 'Service' }).length,
+    ).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+    )
+    // While placing, adding a service would re-sort track.talks and invalidate
+    // the picked-up talkIndex — so the control is gone.
+    expect(
+      screen.queryByRole('button', { name: 'Service' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('swaps two talks: pick one up, tap the other', () => {
     const dispatch = vi.fn()
     const talkB = makeProposal({

@@ -851,16 +851,21 @@ function TrackRail({
 
   return (
     <div className="pb-8">
-      <div className="mb-2 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={() => onAddService(trackIndex)}
-          className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Service
-        </button>
-      </div>
+      {/* Hidden while placing: the rail is a target picker, and adding a service
+          re-sorts track.talks, which would shift the picked-up item's stored
+          talkIndex and corrupt a later Remove/Swap. */}
+      {!placing && (
+        <div className="mb-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => onAddService(trackIndex)}
+            className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Service
+          </button>
+        </div>
+      )}
 
       <div className="relative" style={{ paddingLeft: GUTTER_PX }}>
         {/* One continuous rail line behind all the rows. */}
@@ -1048,7 +1053,12 @@ function PlacingBanner({
   onCancel: () => void
 }) {
   const isProposal = placing.kind === 'proposal'
-  const isService = placing.kind === 'scheduled' && !placing.talk.talk
+  // A real service session has a placeholder; require it so a talk-less slot
+  // without one (defensively) never surfaces Rename/Duration.
+  const isService =
+    placing.kind === 'scheduled' &&
+    !placing.talk.talk &&
+    !!placing.talk.placeholder
   const title = isProposal
     ? placing.proposal.title
     : (placing.talk.talk?.title ?? placing.talk.placeholder ?? 'Untitled')
