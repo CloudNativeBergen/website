@@ -1,9 +1,7 @@
 import { z } from 'zod'
+import { HHMM_PATTERN } from '@/lib/schedule/time'
 
-// `HH:MM` in 24h. A cheap first gate at the schema boundary; the router's
-// validateSchedulePayload enforces the richer rules (ordering, bounds, overlap).
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
-const timeString = z.string().regex(HHMM, 'Time must be HH:MM (24h)')
+const timeString = z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)')
 
 const TrackTalkSchema = z.object({
   talk: z

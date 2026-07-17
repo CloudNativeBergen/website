@@ -1,5 +1,11 @@
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
-import { toMinutes, timesOverlap, SCHEDULE_START, SCHEDULE_END } from './time'
+import {
+  toMinutes,
+  timesOverlap,
+  SCHEDULE_START,
+  SCHEDULE_END,
+  HHMM_PATTERN,
+} from './time'
 
 /**
  * Server-side payload validation for an admin schedule SAVE (pure, so it is
@@ -14,9 +20,6 @@ import { toMinutes, timesOverlap, SCHEDULE_START, SCHEDULE_END } from './time'
  * Returns a human-readable error string on the FIRST problem found, or `null`
  * when the whole payload is valid.
  */
-
-/** `HH:MM` in 24h (00:00–23:59). Anchored so no surrounding junk is accepted. */
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
 /** The referenced talk id on a slot, from either `_id` or a Sanity `_ref`. */
 function talkRefId(slot: TrackTalk): string | undefined {
@@ -38,7 +41,10 @@ export function validateSchedulePayload(
     const label = track.trackTitle || 'Untitled track'
 
     for (const slot of slots) {
-      if (!HHMM.test(slot.startTime) || !HHMM.test(slot.endTime)) {
+      if (
+        !HHMM_PATTERN.test(slot.startTime) ||
+        !HHMM_PATTERN.test(slot.endTime)
+      ) {
         return `Track "${label}": times must be HH:MM (24h), got "${slot.startTime}"–"${slot.endTime}".`
       }
 
