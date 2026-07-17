@@ -7,6 +7,11 @@ import {
   DragOverlay,
   DragStartEvent,
   pointerWithin,
+  useSensor,
+  useSensors,
+  MouseSensor,
+  TouchSensor,
+  KeyboardSensor,
 } from '@dnd-kit/core'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import React from 'react'
@@ -860,9 +865,23 @@ export function ScheduleEditor({
     return null
   }, [activeItem])
 
+  // Explicit sensors so touch drag coexists with scrolling. Without any sensors
+  // dnd-kit's default PointerSensor has NO activation constraint, so on a phone
+  // the first move of a scroll swipe starts a drag and the board/list can't be
+  // scrolled. Mouse drags stay instant (tiny distance); touch requires a short
+  // press-and-hold (delay) so a quick swipe scrolls instead of dragging.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor),
+  )
+
   return (
     <div className={LAYOUT_CLASSES.container}>
       <DndContext
+        sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         collisionDetection={pointerWithin}
