@@ -1201,6 +1201,9 @@ export function MobileScheduleView({
       prevDayRef.current = currentDayIndex
       setSelectedTrackIndex(0)
       setPlacing(null)
+      // Also close any open sheet — if the day changed via parent state (not
+      // handleDayChange) a sheet could otherwise linger with stale context.
+      setSheet(null)
     }
     const scroller = scrollerRef.current
     if (scroller) scroller.scrollLeft = 0

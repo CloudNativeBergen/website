@@ -90,6 +90,21 @@ describe('buildTrackRail', () => {
     expect(talks.map((s) => s.talkIndex)).toEqual([1, 0])
   })
 
+  it('drops ghost slots (dangling ref: no talk, no placeholder) into open time', () => {
+    const rail = buildTrackRail(
+      track(
+        // ghost: has times but neither a resolved talk nor a placeholder
+        { startTime: '10:00', endTime: '10:25' } as TrackTalk,
+        talk('y', '11:00', '11:25'),
+      ),
+    )
+    expect(shape(rail)).toEqual([
+      'open:08:00-11:00',
+      'talk:11:00-11:25',
+      'open:11:25-21:00',
+    ])
+  })
+
   it('skips malformed slots without emitting a negative-width gap', () => {
     const rail = buildTrackRail(
       track(

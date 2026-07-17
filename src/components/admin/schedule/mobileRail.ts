@@ -43,7 +43,16 @@ export function buildTrackRail(track: ScheduleTrack): RailSegment[] {
     talkIndex,
   }))
   const ordered = indexed
-    .filter(({ talk }) => talk.startTime && talk.endTime)
+    // Drop malformed slots (missing times) and "ghost" slots — a dangling talk
+    // ref with neither a resolved `talk` nor a `placeholder`. The loader/saver
+    // already strip ghosts, but filtering here keeps the rail robust: a ghost
+    // must never become a pick-up-able segment (it has no title, can't be
+    // renamed/resized, and can't be a valid move/swap source). Its interval
+    // simply becomes open, tappable time instead.
+    .filter(
+      ({ talk }) =>
+        talk.startTime && talk.endTime && (talk.talk || talk.placeholder),
+    )
     .sort((a, b) => a.talk.startTime.localeCompare(b.talk.startTime))
 
   const segments: RailSegment[] = []
