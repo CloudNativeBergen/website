@@ -34,6 +34,13 @@ export interface ScheduleTrack {
 }
 export interface ConferenceSchedule {
   _id: string
+  /**
+   * Sanity document revision, threaded through load→edit→save for optimistic
+   * concurrency: the SAVE patches with `ifRevisionId` so a stale write (another
+   * organizer edited the same day since it was loaded) is rejected instead of
+   * silently clobbering their changes. Absent for a not-yet-persisted day.
+   */
+  _rev?: string
   date: string
   tracks: Array<ScheduleTrack>
   conference?: { _id: string }

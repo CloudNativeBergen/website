@@ -167,6 +167,7 @@ export async function getConferenceForDomain(
         schedule
           ? `schedules[]-> {
       ...,
+      _rev,
       tracks[]{
         trackTitle,
         trackDescription,

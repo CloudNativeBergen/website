@@ -442,7 +442,12 @@ export function ScheduleEditor({
 
         const { schedule } = await saveMutation.mutateAsync(daySchedule)
         if (schedule) {
-          dispatch({ type: 'saveDaySucceeded', index, _id: schedule._id })
+          dispatch({
+            type: 'saveDaySucceeded',
+            index,
+            _id: schedule._id,
+            _rev: schedule._rev,
+          })
         }
       }
 
@@ -450,8 +455,16 @@ export function ScheduleEditor({
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
+      // A CONFLICT means another organizer changed this day since it was loaded.
+      // Don't clobber the user's in-progress edits — stop and tell them to
+      // reload. Any other error keeps its original message.
+      const code = (err as { data?: { code?: string } })?.data?.code
       const message =
-        err instanceof Error ? err.message : 'Failed to save schedule'
+        code === 'CONFLICT'
+          ? 'This day was changed elsewhere — reload to get the latest before saving.'
+          : err instanceof Error
+            ? err.message
+            : 'Failed to save schedule'
       dispatch({ type: 'saveError', message })
     }
   }, [state.dirty, state.schedules, currentDayIndex, saveMutation])
