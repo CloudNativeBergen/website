@@ -61,23 +61,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    if (schedules.length === 1 && conferenceDates.length === 1) {
-      const baseDate = new Date(schedules[0].date)
-      const secondDay = new Date(baseDate)
-      secondDay.setDate(secondDay.getDate() + 1)
-
-      schedules.push({
-        _id: '',
-        date: secondDay.toISOString().split('T')[0],
-        tracks: [],
-      })
-
-      console.log(
-        'Added second day schedule:',
-        secondDay.toISOString().split('T')[0],
-      )
-    }
-
     schedules.sort((a, b) => a.date.localeCompare(b.date))
 
     const { proposals, proposalsError } = await getProposals({

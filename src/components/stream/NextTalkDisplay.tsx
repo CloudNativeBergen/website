@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import clsx from 'clsx'
 import { ClockIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
+import { isInactiveProposal } from '@/lib/proposal/types'
 import {
   getCurrentConferenceTime,
   getTalkStatus,
@@ -30,6 +31,23 @@ interface CurrentTalkData {
   talk: TrackTalk
   scheduleDate: string
   status: TalkStatus
+}
+
+/**
+ * A slot must not surface on the live stream when it is either:
+ *  - a cancelled talk: a resolved proposal whose status is withdrawn/rejected/
+ *    deleted (the stream reads with confirmedTalksOnly:false, so these resolve),
+ *    which otherwise renders with a "LIVE NOW"/"UP NEXT" badge; or
+ *  - a dangling reference: the slot HAD a talk reference that no longer resolves
+ *    (the proposal was deleted), which is indistinguishable from a genuine
+ *    service session and would otherwise render as a phantom "Service Session".
+ * Genuine service sessions (no talk reference, with a placeholder) stay visible.
+ */
+function isHiddenFromStream(talk: TrackTalk): boolean {
+  if (talk.talk) {
+    return isInactiveProposal(talk.talk.status)
+  }
+  return talk.hasTalkRef === true
 }
 
 function StatusBadge({ status }: { status: TalkStatus }) {
@@ -88,7 +106,7 @@ export default function NextTalkDisplay({
       currentTime,
     )
 
-    if (currentPosition) {
+    if (currentPosition && !isHiddenFromStream(currentPosition.talk)) {
       const schedule = sortedSchedules[currentPosition.scheduleIndex]
       const track = schedule.tracks[currentPosition.trackIndex]
 
@@ -126,6 +144,7 @@ export default function NextTalkDisplay({
 
       for (const talk of sortedTalks) {
         if (!talk.startTime || !talk.endTime) continue
+        if (isHiddenFromStream(talk)) continue
 
         const status = getTalkStatus(talk, schedule.date, currentTime)
 
@@ -161,6 +180,7 @@ export default function NextTalkDisplay({
 
         for (const talk of sortedTalks) {
           if (!talk.startTime || !talk.endTime) continue
+          if (isHiddenFromStream(talk)) continue
 
           // Find any session (talk or service) that starts at or after the given time
           if (talk.startTime >= afterTime) {
