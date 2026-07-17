@@ -33,6 +33,9 @@ export default defineConfig({
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
+      // Only run *.spec.ts here — without this, the top-level testMatch would
+      // also run auth.setup.ts as a chromium test (re-minting on every worker).
+      testMatch: /.*\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/user.json',

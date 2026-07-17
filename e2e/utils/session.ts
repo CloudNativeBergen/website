@@ -7,16 +7,27 @@ import { encode } from 'next-auth/jwt'
  * test-mode bypass) leaves an un-cookied context genuinely unauthenticated, so
  * the sign-in redirect is still testable.
  *
- * Dev over http uses the BARE cookie name / salt (`authjs.session-token`); the
- * `__Secure-` prefix only applies over https. This scaffold targets `next dev`
- * (http://localhost), so the bare name is correct. Salt === cookie name.
+ * `@auth/core` names the session cookie `__Secure-authjs.session-token` over
+ * https and the bare `authjs.session-token` over http, and salt === cookie name.
+ * We derive both (plus the cookie domain) from `E2E_BASE_URL` so the harness
+ * works against http://localhost (default) OR an https / non-localhost target.
  */
-export const SESSION_COOKIE_NAME = 'authjs.session-token'
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
+const IS_HTTPS = new URL(BASE_URL).protocol === 'https:'
+
+export const SESSION_COOKIE_NAME = IS_HTTPS
+  ? '__Secure-authjs.session-token'
+  : 'authjs.session-token'
+/** Cookie domain the app is served from (so the cookie is actually sent). */
+export const COOKIE_DOMAIN = new URL(BASE_URL).hostname
+/** Whether the cookie must be marked Secure (https only). */
+export const COOKIE_SECURE = IS_HTTPS
 const SALT = SESSION_COOKIE_NAME
 
 export interface E2ESpeaker {
   sub: string
   speakerId: string
+  slug: string
   name: string
   email: string
   isOrganizer: boolean
@@ -29,6 +40,7 @@ export function e2eSpeaker(): E2ESpeaker {
   return {
     sub: process.env.E2E_SPEAKER_SUB ?? 'e2e-sub',
     speakerId: process.env.E2E_SPEAKER_ID ?? 'e2e-speaker',
+    slug: process.env.E2E_SPEAKER_SLUG ?? 'e2e-speaker',
     name: process.env.E2E_SPEAKER_NAME ?? 'E2E Speaker',
     email: process.env.E2E_SPEAKER_EMAIL ?? 'e2e@example.com',
     isOrganizer: process.env.E2E_SPEAKER_IS_ORGANIZER === 'true',
@@ -38,7 +50,9 @@ export function e2eSpeaker(): E2ESpeaker {
 /**
  * Encode a session token whose shape matches what the app's `jwt`/`session`
  * callbacks require. IMPORTANT: the app's `jwt` callback returns `{}` (→ signed
- * out) when a read token lacks `account` AND `speaker`, so BOTH must be present.
+ * out) when a read token lacks `account` AND `speaker`, so BOTH must be present;
+ * `slug`/`image` mirror `applySpeakerToToken` so slug-gated UI (e.g. the "View
+ * public profile" link) renders.
  */
 export async function mintSessionToken(
   speaker: E2ESpeaker = e2eSpeaker(),
@@ -61,8 +75,10 @@ export async function mintSessionToken(
       picture: 'https://example.com/avatar.png',
       speaker: {
         _id: speaker.speakerId,
+        slug: speaker.slug,
         name: speaker.name,
         email: speaker.email,
+        image: undefined,
         isOrganizer: speaker.isOrganizer,
         flags: [],
       },

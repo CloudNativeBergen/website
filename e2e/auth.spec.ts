@@ -21,18 +21,20 @@ test.describe('unauthenticated', () => {
   test('redirects a protected route to sign-in', async ({ page }) => {
     await page.goto(PROTECTED)
     // proxy.ts sends unauthenticated users to /api/auth/signin, which resolves
-    // to the custom /signin page. Either URL means "not on the dashboard".
+    // to the custom /signin page. NB: don't assert the URL lacks the protected
+    // path — the sign-in URL carries it back as a `callbackUrl` param. Assert
+    // the landing PATHNAME is the sign-in page instead.
     await expect(page).toHaveURL(/signin/)
-    expect(page.url()).not.toContain(PROTECTED)
+    expect(new URL(page.url()).pathname).not.toBe(PROTECTED)
   })
 })
 
 test.describe('authenticated (minted session cookie)', () => {
   test('reaches the speaker dashboard without a redirect', async ({ page }) => {
     await page.goto(PROTECTED)
+    // On the dashboard (not bounced to sign-in).
     await expect(page).toHaveURL(new RegExp(`${PROTECTED}`))
-    // Must NOT have been bounced to sign-in.
-    expect(page.url()).not.toContain('signin')
+    await expect(page).not.toHaveURL(/signin/)
   })
 
   test('shows the signed-in user menu (avatar)', async ({ page }) => {
@@ -50,7 +52,7 @@ test.describe('authenticated (minted session cookie)', () => {
     await expect(page).toHaveURL(new RegExp(PROTECTED))
     await page.goto('/cfp/profile')
     // Still authenticated → not redirected to sign-in.
-    expect(page.url()).not.toContain('signin')
+    await expect(page).not.toHaveURL(/signin/)
   })
 
   test('signing out de-authenticates and blocks the protected route', async ({

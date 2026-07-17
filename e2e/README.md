@@ -69,6 +69,6 @@ server). The `setup` project mints the session cookie into
 
 The app decodes the session in its `jwt` callback and returns `{}` (signed out)
 if a read token lacks **both** `account` and `speaker`, so `utils/session.ts`
-mints both. Dev over http uses the bare `authjs.session-token` cookie name (the
-`__Secure-` prefix is https-only); switch the name in `utils/session.ts` if you
-point `E2E_BASE_URL` at an https origin.
+mints both (plus `slug`/`image` so slug-gated UI renders). The cookie name
+(`__Secure-` prefix vs bare), its `Secure` flag, and its domain are derived from
+`E2E_BASE_URL`, so pointing at an https or non-localhost target Just Works.

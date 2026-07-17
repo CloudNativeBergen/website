@@ -1,5 +1,10 @@
 import { test as setup } from '@playwright/test'
-import { mintSessionToken, SESSION_COOKIE_NAME } from './utils/session'
+import {
+  mintSessionToken,
+  SESSION_COOKIE_NAME,
+  COOKIE_DOMAIN,
+  COOKIE_SECURE,
+} from './utils/session'
 
 const AUTH_FILE = 'e2e/.auth/user.json'
 
@@ -16,9 +21,12 @@ setup('authenticate', async ({ browser }) => {
     {
       name: SESSION_COOKIE_NAME,
       value: token,
-      domain: 'localhost',
+      // Derived from E2E_BASE_URL so the cookie is actually sent (localhost vs
+      // 127.0.0.1 vs a custom/https host).
+      domain: COOKIE_DOMAIN,
       path: '/',
       httpOnly: true,
+      secure: COOKIE_SECURE,
       sameSite: 'Lax',
       // Session cookie for the run; the JWT itself carries the real expiry.
       expires: -1,
