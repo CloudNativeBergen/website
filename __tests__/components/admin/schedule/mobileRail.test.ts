@@ -82,12 +82,12 @@ describe('buildTrackRail', () => {
     const rail = buildTrackRail(
       track(talk('late', '14:00', '14:25'), talk('early', '10:00', '10:25')),
     )
+    // `filter` narrows to the talk/break variant (inferred type predicate), so
+    // `talkIndex` is available directly.
     const talks = rail.filter((s) => s.kind !== 'open')
     expect(talks.map((s) => s.startTime)).toEqual(['10:00', '14:00'])
     // 'early' is index 1 in the original array, 'late' is index 0
-    expect(talks.map((s) => (s.kind !== 'open' ? s.talkIndex : -1))).toEqual([
-      1, 0,
-    ])
+    expect(talks.map((s) => s.talkIndex)).toEqual([1, 0])
   })
 
   it('skips malformed slots without emitting a negative-width gap', () => {
