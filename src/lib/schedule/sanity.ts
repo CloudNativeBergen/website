@@ -2,7 +2,11 @@ import { randomUUID } from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import { Conference } from '@/lib/conference/types'
-import { generateKey, createReference } from '@/lib/sanity/helpers'
+import {
+  generateKey,
+  createReference,
+  createReferenceWithKey,
+} from '@/lib/sanity/helpers'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
@@ -71,14 +75,14 @@ export async function saveScheduleToSanity(
         id: schedule._id,
       })
 
-      if (!target) {
-        return { error: 'Schedule not found' }
-      }
+      // One generic message for missing, wrong-type, and wrong-conference so a
+      // caller can't probe whether an arbitrary document id exists.
       if (
+        !target ||
         target._type !== 'schedule' ||
         target.conferenceRef !== conference._id
       ) {
-        return { error: 'Schedule does not belong to this conference' }
+        return { error: 'Schedule not found or not accessible' }
       }
 
       await clientWrite
@@ -111,7 +115,8 @@ export async function saveScheduleToSanity(
         .patch(conference._id, (patch) =>
           patch
             .setIfMissing({ schedules: [] })
-            .append('schedules', [createReference(newId)]),
+            // Array items need a stable _key, matching other reference arrays.
+            .append('schedules', [createReferenceWithKey(newId, 'schedule')]),
         )
         .commit()
 
