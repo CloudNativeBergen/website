@@ -100,41 +100,132 @@ const setup = () => {
 }
 
 describe('MobileScheduleView', () => {
-  it('renders the selected track agenda', () => {
+  it('renders track tabs and the current track rail with a talk card', () => {
     setup()
     expect(screen.getByRole('tab', { name: 'Main Stage' })).toBeInTheDocument()
     expect(
       screen.getByRole('tab', { name: 'Workshop Room' }),
     ).toBeInTheDocument()
+    // Talk card: title, gutter start time, and clamp-proof duration chip.
     expect(screen.getByText('Scheduled Keynote Talk')).toBeInTheDocument()
-    expect(screen.getByText('10:00–10:45')).toBeInTheDocument()
+    expect(screen.getByText('10:00')).toBeInTheDocument()
+    expect(screen.getByText('45m')).toBeInTheDocument()
   })
 
-  it('switches the visible agenda when another track tab is selected', () => {
+  it('selects another track when its tab is tapped', () => {
     setup()
-    fireEvent.click(screen.getByRole('tab', { name: 'Workshop Room' }))
-    expect(
-      screen.getByText('Nothing scheduled in this track yet.'),
-    ).toBeInTheDocument()
+    const workshop = screen.getByRole('tab', { name: 'Workshop Room' })
+    expect(workshop).toHaveAttribute('aria-selected', 'false')
+    fireEvent.click(workshop)
+    expect(workshop).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Main Stage' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    )
   })
 
-  it('lists unassigned proposals in the assign sheet', () => {
-    setup()
-    fireEvent.click(screen.getByRole('button', { name: 'Assign a talk' }))
-    const dialog = screen.getByRole('dialog')
-    expect(
-      within(dialog).getByText('Unassigned Lightning Talk'),
-    ).toBeInTheDocument()
-  })
-
-  it('dispatches moveProposal when assigning a talk', () => {
+  it('picks up a talk into placing mode and removes it', () => {
     const { dispatch } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'Assign a talk' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+    )
+    // The placing banner appears as a live region.
+    const banner = screen.getByRole('status')
+    expect(banner).toHaveTextContent(/Moving/)
+    expect(banner).toHaveTextContent(/Scheduled Keynote Talk/)
+
+    fireEvent.click(within(banner).getByRole('button', { name: /Remove/ }))
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'removeTalk',
+      trackIndex: 0,
+      talkIndex: 0,
+    })
+  })
+
+  it('hides the "Service" control while placing (index-shift guard)', () => {
+    setup()
+    // A Service button per track before pick-up.
+    expect(
+      screen.getAllByRole('button', { name: 'Service' }).length,
+    ).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+    )
+    // While placing, adding a service would re-sort track.talks and invalidate
+    // the picked-up talkIndex — so the control is gone.
+    expect(
+      screen.queryByRole('button', { name: 'Service' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('swaps two talks: pick one up, tap the other', () => {
+    const dispatch = vi.fn()
+    const talkB = makeProposal({
+      _id: 'scheduled-2',
+      title: 'Second Talk',
+      format: Format.presentation_25,
+    })
+    const twoTalkSchedule: ConferenceSchedule = {
+      _id: 'day-1',
+      date: '2026-09-01',
+      tracks: [
+        {
+          trackTitle: 'Main Stage',
+          trackDescription: '',
+          talks: [
+            { talk: scheduledProposal, startTime: '10:00', endTime: '10:45' },
+            { talk: talkB, startTime: '11:00', endTime: '11:25' },
+          ],
+        },
+      ],
+    }
+    render(
+      <MobileScheduleView
+        schedules={[twoTalkSchedule]}
+        currentDayIndex={0}
+        unassignedProposals={[]}
+        dispatch={dispatch}
+        onDayChange={vi.fn()}
+        onSave={vi.fn()}
+        onAddTrack={vi.fn()}
+        isSaving={false}
+        saveSuccess={false}
+        error={null}
+      />,
+    )
+
+    // Pick up the keynote, then tap the second talk to swap.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Swap with Second Talk' }),
+    )
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'moveProposal',
+        dragItem: expect.objectContaining({
+          type: 'scheduled-talk',
+          proposal: expect.objectContaining({ _id: 'scheduled-1' }),
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '10:00',
+        }),
+        dropPosition: { trackIndex: 0, timeSlot: '11:00' },
+      }),
+    )
+  })
+
+  it('assigns a fitting proposal by tapping an open slot', () => {
+    const { dispatch } = setup()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Assign to open slot 08:00 to 10:00',
+      }),
+    )
 
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByText('Unassigned Lightning Talk'))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
 
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -143,23 +234,8 @@ describe('MobileScheduleView', () => {
           type: 'proposal',
           proposal: expect.objectContaining({ _id: 'unassigned-1' }),
         }),
-        dropPosition: expect.objectContaining({ trackIndex: 0 }),
+        dropPosition: { trackIndex: 0, timeSlot: '08:00' },
       }),
     )
-  })
-
-  it('dispatches removeTalk from a card action sheet', () => {
-    const { dispatch } = setup()
-    fireEvent.click(
-      screen.getByRole('button', { name: /Scheduled Keynote Talk/ }),
-    )
-    fireEvent.click(
-      screen.getByRole('button', { name: /Remove from schedule/ }),
-    )
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'removeTalk',
-      trackIndex: 0,
-      talkIndex: 0,
-    })
   })
 })

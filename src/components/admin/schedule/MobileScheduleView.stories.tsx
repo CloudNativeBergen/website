@@ -147,7 +147,7 @@ const meta: Meta<typeof MobileScheduleHarness> = {
     docs: {
       description: {
         component:
-          'Tap-to-assign mobile schedule editor rendered below the `md` breakpoint. A light top nav (Schedule title, unassigned/legend/save cluster, scrollable day chips) sits above a swipeable track tab strip — swipe or tap between tracks, with a trailing “＋” chip to add one. Agenda cards and bottom sheets handle assigning talks, moving them, and managing service sessions. Wired to the real schedule reducer so interactions mutate state.',
+          'Pick-up → drop mobile schedule editor rendered below the `md` breakpoint. A light top nav (Schedule title, unassigned/legend/save cluster, scrollable day chips) sits above a fixed track tab strip synced to a scroll-snap carousel — swipe between tracks (the neighbour peeks) or tap a tab. Each track is a hybrid time-rail: tap a talk/break to pick it up, then tap a valid open slot to move it (or another talk to swap); tap an open slot directly to assign a fitting unassigned proposal. Wired to the real schedule reducer so interactions mutate state.',
       },
     },
   },
