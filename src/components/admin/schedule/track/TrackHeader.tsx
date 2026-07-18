@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { calculateTalkContentMinutes } from '@/lib/schedule/geometry'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 
 export const TrackHeader = ({
   track,
@@ -29,6 +31,21 @@ export const TrackHeader = ({
 }) => {
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+
+  // Removing a track un-schedules its real talks (they return to the unassigned
+  // list) but permanently DELETES its service sessions — mirror the mobile
+  // TrackActionSheet's confirm step and wording so one click can't destroy them.
+  const serviceCount = track.talks.length - realTalks
+  const name = track.trackTitle || 'this track'
+  const removeMessage =
+    `Remove ${name}?` +
+    (realTalks > 0
+      ? ` Its ${realTalks} talk${realTalks === 1 ? '' : 's'} return to unassigned.`
+      : '') +
+    (serviceCount > 0
+      ? ` ${serviceCount} service session${serviceCount === 1 ? '' : 's'} will be deleted.`
+      : '')
 
   return (
     <div className="rounded-t-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -97,7 +114,7 @@ export const TrackHeader = ({
               <PencilIcon className="h-4 w-4" />
             </button>
             <button
-              onClick={onRemoveTrack}
+              onClick={() => setConfirmingRemove(true)}
               className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
               title="Remove track"
               type="button"
@@ -107,6 +124,19 @@ export const TrackHeader = ({
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmingRemove}
+        onClose={() => setConfirmingRemove(false)}
+        onConfirm={() => {
+          setConfirmingRemove(false)
+          onRemoveTrack()
+        }}
+        title="Remove track?"
+        message={removeMessage}
+        confirmButtonText="Remove"
+        variant="danger"
+      />
     </div>
   )
 }

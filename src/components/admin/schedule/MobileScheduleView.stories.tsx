@@ -137,6 +137,7 @@ function MobileScheduleHarness({
       onAddTrack={() => {}}
       isSaving={state.ui.isSaving}
       saveSuccess={false}
+      hasUnsavedChanges={false}
       error={state.ui.error}
     />
   )

@@ -13,6 +13,8 @@ export interface MobileScheduleViewProps {
   onAddTrack: () => void
   isSaving: boolean
   saveSuccess: boolean
+  /** Any day dirty since its last save — drives the Save button's unsaved dot. */
+  hasUnsavedChanges: boolean
   error: string | null
 }
 

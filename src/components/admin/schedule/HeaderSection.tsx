@@ -27,6 +27,7 @@ const HeaderSectionComponent = ({
   onSave,
   isSaving,
   saveSuccess,
+  hasUnsavedChanges,
 }: {
   schedule: ConferenceSchedule | null
   schedules: ConferenceSchedule[]
@@ -36,6 +37,7 @@ const HeaderSectionComponent = ({
   onSave: () => void
   isSaving: boolean
   saveSuccess: boolean
+  hasUnsavedChanges: boolean
 }) => {
   const trackCount = useMemo(
     () => schedule?.tracks?.length || 0,
@@ -115,6 +117,11 @@ const HeaderSectionComponent = ({
           <button
             onClick={onSave}
             disabled={isSaving}
+            aria-label={
+              !saveSuccess && !isSaving && hasUnsavedChanges
+                ? 'Save — you have unsaved changes'
+                : undefined
+            }
             className={`${PRIMARY_BUTTON} transition-all duration-300 ${
               saveSuccess
                 ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
@@ -131,6 +138,13 @@ const HeaderSectionComponent = ({
               <>
                 <BookmarkIcon className="h-4 w-4" />
                 {isSaving ? 'Saving...' : 'Save'}
+                {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
+                {hasUnsavedChanges && !isSaving && (
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 rounded-full bg-amber-300"
+                  />
+                )}
               </>
             )}
           </button>

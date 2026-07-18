@@ -35,6 +35,7 @@ export function MobileScheduleView({
   onAddTrack,
   isSaving,
   saveSuccess,
+  hasUnsavedChanges,
   error,
 }: MobileScheduleViewProps) {
   const schedule = schedules[currentDayIndex] ?? null
@@ -72,13 +73,34 @@ export function MobileScheduleView({
   const closeSheet = useCallback(() => setSheet(null), [])
 
   // Live view of the picked-up scheduled item: derived from current `tracks` so
-  // a rename/resize while placing is reflected, and the ORIGINAL talkIndex keeps
-  // reducer actions correct. Falls back to the snapshot if the index drifts.
+  // a resize while placing is reflected, and the ORIGINAL talkIndex keeps
+  // reducer actions correct. The index alone isn't identity — if the slot at
+  // that index no longer matches the picked-up item (same startTime AND same
+  // talk id / placeholder), the pick-up is DANGLING (the item was removed or
+  // replaced underneath us) and must be cancelled rather than silently
+  // retargeting whatever now sits at that index or acting on a stale snapshot.
   const effPlacing = useMemo<Placing | null>(() => {
     if (!placing || placing.kind !== 'scheduled') return placing
     const live = tracks[placing.trackIndex]?.talks[placing.talkIndex]
-    return live ? { ...placing, talk: live } : placing
+    const sameIdentity =
+      live &&
+      live.startTime === placing.talk.startTime &&
+      (placing.talk.talk
+        ? live.talk?._id === placing.talk.talk._id
+        : live.placeholder === placing.talk.placeholder)
+    return sameIdentity ? { ...placing, talk: live } : null
   }, [placing, tracks])
+
+  // Cancel a dangling pick-up (see above) so the placing banner doesn't stay
+  // half-alive with state that can no longer be acted on. Guarded + convergent:
+  // it fires at most once per dangling pick-up (setting `placing` to null makes
+  // the condition false), so no cascading renders.
+  useEffect(() => {
+    if (placing && placing.kind === 'scheduled' && !effPlacing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPlacing(null)
+    }
+  }, [placing, effPlacing])
 
   const goToTrack = useCallback((index: number) => {
     setSelectedTrackIndex(index)
@@ -329,6 +351,11 @@ export function MobileScheduleView({
               type="button"
               onClick={onSave}
               disabled={isSaving}
+              aria-label={
+                !saveSuccess && !isSaving && hasUnsavedChanges
+                  ? 'Save — you have unsaved changes'
+                  : undefined
+              }
               className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 ${
                 saveSuccess
                   ? 'bg-green-600 hover:bg-green-700'
@@ -344,6 +371,13 @@ export function MobileScheduleView({
                 <>
                   <BookmarkIcon className="h-5 w-5" />
                   {isSaving ? 'Saving…' : 'Save'}
+                  {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
+                  {hasUnsavedChanges && !isSaving && (
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 rounded-full bg-amber-300"
+                    />
+                  )}
                 </>
               )}
             </button>
@@ -450,9 +484,12 @@ export function MobileScheduleView({
               id={panelId(trackIndex)}
               aria-labelledby={tabId(trackIndex)}
               // Full-width panels (no side peek) so each track's cards use the
-              // whole screen width. `snap-always` (scroll-snap-stop) forces
-              // exactly one track per fling so a fast swipe can't skip a track.
-              className="shrink-0 basis-[100vw] snap-center snap-always overflow-y-auto px-3 pt-2"
+              // whole screen width. `basis-full` sizes against the scroll
+              // container (not the viewport, which includes any scrollbar
+              // width and clips the panel edge). `snap-always`
+              // (scroll-snap-stop) forces exactly one track per fling so a
+              // fast swipe can't skip a track.
+              className="shrink-0 basis-full snap-center snap-always overflow-y-auto px-3 pt-2"
             >
               <TrackRail
                 track={track}
@@ -535,6 +572,7 @@ export function MobileScheduleView({
           talk={sheet.talk}
           trackIndex={sheet.trackIndex}
           talkIndex={sheet.talkIndex}
+          track={tracks[sheet.trackIndex] ?? null}
           mode={sheet.mode}
           dispatch={dispatch}
           onClose={closeSheet}

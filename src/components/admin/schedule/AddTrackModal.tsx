@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
+import { useModalA11y } from './useModalA11y'
 
 const CANCEL_BUTTON_STYLE =
   'flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500'
@@ -14,6 +15,12 @@ export const AddTrackModal = ({
 }) => {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Modal semantics: Escape closes, focus moves in (preferring the autoFocus
+  // title input) and is restored on close, Tab is trapped. Shared with
+  // ServiceSessionModal and the mobile BottomSheet.
+  useModalA11y(dialogRef, onCancel)
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -40,9 +47,18 @@ export const AddTrackModal = ({
   )
 
   return (
-    <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-track-modal-title"
+        className="mx-4 w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800"
+      >
+        <h3
+          id="add-track-modal-title"
+          className="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
+        >
           Add New Track
         </h3>
 

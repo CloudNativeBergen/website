@@ -246,6 +246,7 @@ function DroppableTrack({
       <ServiceSessionModal
         isOpen={showServiceModal}
         timeSlot={selectedTimeSlot}
+        track={track}
         onClose={handleCloseServiceModal}
         onSave={handleSaveServiceSession}
       />

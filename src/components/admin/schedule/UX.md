@@ -72,12 +72,16 @@ Mobiscroll's min-row-height.
 
 With multiple tracks (columns) on one phone screen:
 
-- **Peek the adjacent track** (~7vw each side via a scroll-snap carousel of
-  `basis-[86vw]` panels). A peeking neighbour is the single strongest cue that the
-  panel swipes _and_ that another column exists — swipe is otherwise invisible.
+- **Full-width panels** (a scroll-snap carousel of `basis-full` panels — sized
+  against the scroll container, not the viewport, so a scrollbar can't clip the
+  panel edge). The shipped design deliberately drops the earlier ~86vw side-peek
+  (locked decision, PR #493): on a phone every horizontal pixel goes to the
+  track's cards, and swipe/next-column **discoverability is carried by the fixed
+  tab strip** instead of a peeking neighbour.
 - **Fixed, all-visible tab strip** synced to the carousel: the active tab updates
   _live_ as you swipe past a track's midpoint (it should track the drag, not jump on
-  release). Tabs are the accessible, non-swipe equivalent.
+  release). Tabs are the accessible, non-swipe equivalent — and, with no peek, the
+  primary cue that more tracks exist.
 - `scroll-snap-stop: always` — one track per fling; a fast swipe can't skip a track.
 - **Never auto-advance** columns.
 

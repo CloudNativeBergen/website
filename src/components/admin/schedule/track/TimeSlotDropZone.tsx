@@ -6,7 +6,10 @@ import { ScheduleTrack } from '@/lib/conference/types'
 import { TimeSlot } from '@/lib/schedule/types'
 import { addMinutes } from '@/lib/schedule/time'
 import { isTrackIntervalFree } from '@/lib/schedule/rules'
-import { classifyProposalDrop } from '@/lib/schedule/operations'
+import {
+  classifyProposalDrop,
+  classifyServiceDrop,
+} from '@/lib/schedule/operations'
 import {
   calculateTimePosition,
   shouldShowTimeLabel,
@@ -76,12 +79,20 @@ export const TimeSlotDropZone = ({
 
   const canDrop = useMemo(() => {
     if (!activeDragItem) return true
-    // Service drags aren't validated here (the reducer does); only proposals.
-    if (!activeDragItem.proposal) return true
     if (!schedule) return true
-    // Defer to the shared predicate so the drop indicator matches EXACTLY what
-    // the reducer's `moveProposal` will do — fit, bidirectional swap, and the
-    // end-of-day guard (which this inline check previously omitted).
+    // Defer to the shared predicates so the drop indicator matches EXACTLY
+    // what the reducer will do. Services get the same treatment as proposals
+    // (fit, end-of-day, same-position no-op) — previously a service drag
+    // showed every slot as droppable and let the reducer silently reject.
+    if (activeDragItem.serviceSession) {
+      return (
+        classifyServiceDrop(schedule.tracks, activeDragItem, {
+          trackIndex,
+          timeSlot: timeSlot.time,
+        }) !== 'invalid'
+      )
+    }
+    // Proposal drags: fit, bidirectional swap, and the end-of-day guard.
     return (
       classifyProposalDrop(
         schedule.tracks,
