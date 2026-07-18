@@ -861,7 +861,7 @@ function TrackRail({
           <button
             type="button"
             onClick={() => onAddService(trackIndex)}
-            className="inline-flex min-h-[36px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
+            className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
           >
             <PlusIcon className="h-4 w-4" />
             Service
@@ -973,7 +973,7 @@ function RailBody({ seg }: { seg: RailSegment }) {
     return (
       <span className="flex items-center text-sm font-medium text-blue-700 dark:text-blue-300">
         <PlusIcon className="mr-1.5 h-4 w-4 shrink-0" />
-        <span className="truncate tabular-nums">
+        <span className="min-w-0 truncate tabular-nums">
           Assign · {seg.startTime}–{seg.endTime} · {seg.durationMin} min
         </span>
       </span>
@@ -1482,7 +1482,7 @@ export function MobileScheduleView({
                   onClick={() => handleDayChange(index)}
                   aria-pressed={isActive}
                   className={clsx(
-                    'min-h-[40px] shrink-0 rounded-lg border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
+                    'min-h-[44px] shrink-0 rounded-lg border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
                     isActive
                       ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                       : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
