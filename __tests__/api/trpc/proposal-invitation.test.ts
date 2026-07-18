@@ -427,8 +427,8 @@ describe('proposal.invitation router', () => {
       expect(notifyItems[0]).toMatchObject({
         recipientId: regularSpeaker._id,
         conferenceId: 'conf-1',
-        notificationType: 'system',
-        title: `${invitedSpeaker.name} accepted your co-speaker invitation`,
+        notificationType: 'cospeaker_response',
+        title: `${invitedSpeaker.name} accepted your co-speaker invitation for "Test Proposal"`,
         actorId: invitedSpeaker._id,
         link: '/cfp/proposal/proposal-1',
       })
@@ -448,8 +448,8 @@ describe('proposal.invitation router', () => {
       const notifyItems = vi.mocked(createNotifications).mock.calls[0][0]
       expect(notifyItems[0]).toMatchObject({
         recipientId: regularSpeaker._id,
-        notificationType: 'system',
-        title: `${invitedSpeaker.name} declined your co-speaker invitation`,
+        notificationType: 'cospeaker_response',
+        title: `${invitedSpeaker.name} declined your co-speaker invitation for "Test Proposal"`,
         actorId: invitedSpeaker._id,
         link: '/cfp/proposal/proposal-1',
       })
