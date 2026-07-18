@@ -159,6 +159,17 @@ export default defineMigration({
       return
     }
 
+    // Always list every candidate so the operator can identify the right
+    // edition from a dry-run — the production dataset contains test/dummy
+    // conference docs (e.g. far-future startDates) that break the
+    // latest-startDate heuristic.
+    console.log('  Conference candidates:')
+    for (const c of conferences) {
+      console.log(
+        `    - ${c._id}  startDate=${c.startDate ?? '—'}  ${c.title ?? '—'}`,
+      )
+    }
+
     let conference: ConferenceRow | undefined
     if (CONFERENCE_OVERRIDE) {
       conference = conferences.find((c) => c._id === CONFERENCE_OVERRIDE)
