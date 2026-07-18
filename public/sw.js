@@ -27,9 +27,10 @@
  * banner, which posts { type: 'SKIP_WAITING' }.
  */
 
-// STAMPED AT BUILD TIME with the commit SHA (see scripts/stamp-sw.mjs). The
-// `cndn-dev` default is only used for local builds; every deploy replaces it so
-// the bytes change and the browser installs a fresh worker.
+// STAMPED AT BUILD TIME with the commit SHA (see scripts/stamp-sw.mjs). Any
+// build that exposes a commit SHA (Vercel/CI deploys) replaces this so the bytes
+// change and the browser installs a fresh worker; builds without a SHA (local)
+// keep the `cndn-dev` default unchanged.
 const CACHE_VERSION = 'cndn-dev'
 const PRECACHE = `${CACHE_VERSION}-precache`
 const RUNTIME = `${CACHE_VERSION}-runtime`

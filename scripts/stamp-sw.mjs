@@ -13,32 +13,53 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
-const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || ''
+// Tolerant of quote style and spacing so a prettier reformat of sw.js can't
+// silently defeat the stamp. Shared shape asserted by __tests__/pwa/stamp-sw.
+export const CACHE_VERSION_PATTERN =
+  /const\s+CACHE_VERSION\s*=\s*['"][^'"]*['"]/
 
-if (!sha) {
-  console.log(
-    '[stamp-sw] no commit SHA in env — leaving CACHE_VERSION unchanged',
-  )
-  process.exit(0)
-}
+function stampServiceWorker() {
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || ''
 
-try {
+  if (!sha) {
+    console.log(
+      '[stamp-sw] no commit SHA in env — leaving CACHE_VERSION unchanged',
+    )
+    return
+  }
+
   const swPath = path.resolve(process.cwd(), 'public/sw.js')
   const src = readFileSync(swPath, 'utf8')
+
+  // FAIL LOUDLY if the target moved: a silent miss would ship a service worker
+  // whose bytes never change → back to "PWA never updates", undetected. Better
+  // to break the build so the declaration/regex is fixed. (The unit test guards
+  // this too, so it's normally caught before a deploy.)
+  if (!CACHE_VERSION_PATTERN.test(src)) {
+    console.error(
+      '[stamp-sw] CACHE_VERSION declaration not found in public/sw.js — the ' +
+        'stamp target changed. Refusing to ship a service worker that can never ' +
+        'update. Fix the declaration or CACHE_VERSION_PATTERN.',
+    )
+    process.exit(1)
+  }
+
   const version = `cndn-${sha.slice(0, 8)}`
   const next = src.replace(
-    /const CACHE_VERSION = '[^']*'/,
+    CACHE_VERSION_PATTERN,
     `const CACHE_VERSION = '${version}'`,
   )
-  if (next === src) {
-    console.warn('[stamp-sw] CACHE_VERSION line not found — nothing stamped')
-  } else {
-    writeFileSync(swPath, next)
-    console.log(`[stamp-sw] CACHE_VERSION → ${version}`)
-  }
-} catch (err) {
-  // Never fail the build over the stamp; a stale-but-working SW beats no deploy.
-  console.warn('[stamp-sw] non-fatal:', err && err.message)
+  writeFileSync(swPath, next)
+  console.log(`[stamp-sw] CACHE_VERSION → ${version}`)
 }
-process.exit(0)
+
+// Only run when invoked directly (`node scripts/stamp-sw.mjs`), so importing the
+// pattern from a test doesn't execute the stamp or call process.exit.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  stampServiceWorker()
+}
