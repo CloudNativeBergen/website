@@ -1,4 +1,4 @@
-import { Speaker } from './types'
+import type { Speaker } from './types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 
 /**
