@@ -3,6 +3,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { TrackTalk } from '@/lib/conference/types'
+import type { DragItem } from '@/lib/schedule/types'
 import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { durationBetween } from '@/lib/schedule/time'
 import { ClockIcon, Bars3Icon } from '@heroicons/react/24/outline'
@@ -26,7 +27,7 @@ export function DraggableServiceSession({
   sourceTimeSlot,
   isDragging = false,
 }: DraggableServiceSessionProps) {
-  const { dragType, durationMinutes, sessionSize, dragId } = useMemo(() => {
+  const { dragItem, durationMinutes, sessionSize, dragId } = useMemo(() => {
     const duration = durationBetween(
       serviceSession.startTime,
       serviceSession.endTime,
@@ -38,12 +39,26 @@ export function DraggableServiceSession({
     else if (duration <= SERVICE_SESSION_THRESHOLDS.LONG) size = 'long'
     else size = 'very-long'
 
-    const type =
-      sourceTrackIndex !== undefined ? 'scheduled-service' : 'service-session'
-    const id = `${type}-${serviceSession.startTime}-${sourceTrackIndex ?? 'unassigned'}-${sourceTimeSlot || 'new'}`
+    const session = {
+      placeholder: serviceSession.placeholder || 'Service Session',
+      startTime: serviceSession.startTime,
+      endTime: serviceSession.endTime,
+    }
+    // A scheduled service is dragged FROM a slot (both source fields are always
+    // passed together by ServiceSession); a fresh service carries none.
+    const item: DragItem =
+      sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
+        ? {
+            type: 'scheduled-service',
+            serviceSession: session,
+            sourceTrackIndex,
+            sourceTimeSlot,
+          }
+        : { type: 'service-session', serviceSession: session }
+    const id = `${item.type}-${serviceSession.startTime}-${sourceTrackIndex ?? 'unassigned'}-${sourceTimeSlot || 'new'}`
 
     return {
-      dragType: type,
+      dragItem: item,
       durationMinutes: duration,
       sessionSize: size,
       dragId: id,
@@ -58,16 +73,7 @@ export function DraggableServiceSession({
     isDragging: isBeingDragged,
   } = useDraggable({
     id: dragId,
-    data: {
-      type: dragType,
-      serviceSession: {
-        placeholder: serviceSession.placeholder || 'Service Session',
-        startTime: serviceSession.startTime,
-        endTime: serviceSession.endTime,
-      },
-      sourceTrackIndex,
-      sourceTimeSlot,
-    },
+    data: dragItem,
   })
 
   const transformStyle = useMemo(() => {

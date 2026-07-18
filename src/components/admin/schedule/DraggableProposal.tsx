@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { formats, audiences } from '@/lib/proposal/types'
-import { getProposalDurationMinutes } from '@/lib/schedule/types'
+import { getProposalDurationMinutes, type DragItem } from '@/lib/schedule/types'
 import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
@@ -58,12 +58,21 @@ export function DraggableProposal({
 }: DraggableProposalProps) {
   const levelConfig = getLevelConfig(proposal.level)
 
-  const { dragType, durationMinutes, talkSize, dragId, speakerInfo } =
+  const { dragItem, durationMinutes, talkSize, dragId, speakerInfo } =
     useMemo(() => {
       const duration = getProposalDurationMinutes(proposal)
-      const type =
-        sourceTrackIndex !== undefined ? 'scheduled-talk' : 'proposal'
-      const id = `${type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
+      // A scheduled talk is dragged FROM a slot (both source fields are always
+      // passed together by ScheduledTalk); an unassigned proposal carries none.
+      const item: DragItem =
+        sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
+          ? {
+              type: 'scheduled-talk',
+              proposal,
+              sourceTrackIndex,
+              sourceTimeSlot,
+            }
+          : { type: 'proposal', proposal }
+      const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
 
       let size: 'very-short' | 'short' | 'medium' | 'long'
       if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
@@ -72,7 +81,7 @@ export function DraggableProposal({
       else size = 'long'
 
       return {
-        dragType: type,
+        dragItem: item,
         durationMinutes: duration,
         talkSize: size,
         dragId: id,
@@ -144,12 +153,7 @@ export function DraggableProposal({
     isDragging: isBeingDragged,
   } = useDraggable({
     id: dragId,
-    data: {
-      type: dragType,
-      proposal,
-      sourceTrackIndex,
-      sourceTimeSlot,
-    },
+    data: dragItem,
   })
 
   const transformStyle = useMemo(() => {

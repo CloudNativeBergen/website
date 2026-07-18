@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
+import type { EditorTrack } from '@/lib/schedule/types'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
 import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import {
@@ -37,7 +38,7 @@ export function TrackRail({
   onSegmentTap,
   onTrackOptions,
 }: {
-  track: ScheduleTrack
+  track: EditorTrack
   trackIndex: number
   tracks: ScheduleTrack[]
   placing: Placing | null

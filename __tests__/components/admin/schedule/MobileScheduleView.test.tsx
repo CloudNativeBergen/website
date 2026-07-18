@@ -12,6 +12,7 @@ import {
   Status,
 } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
+import { toEditorSchedule } from '@/lib/schedule/types'
 
 const makeProposal = (
   overrides: Partial<ProposalExisting> & { _id: string; title: string },
@@ -84,7 +85,7 @@ const setup = () => {
   const dispatch = vi.fn()
   render(
     <MobileScheduleView
-      schedules={[schedule]}
+      schedules={[toEditorSchedule(schedule)]}
       currentDayIndex={0}
       unassignedProposals={[unassignedProposal]}
       dispatch={dispatch}
@@ -163,7 +164,7 @@ describe('MobileScheduleView', () => {
     }
     render(
       <MobileScheduleView
-        schedules={[withService]}
+        schedules={[toEditorSchedule(withService)]}
         currentDayIndex={0}
         unassignedProposals={[]}
         dispatch={dispatch}
@@ -259,7 +260,7 @@ describe('MobileScheduleView', () => {
     }
     render(
       <MobileScheduleView
-        schedules={[twoTalkSchedule]}
+        schedules={[toEditorSchedule(twoTalkSchedule)]}
         currentDayIndex={0}
         unassignedProposals={[]}
         dispatch={dispatch}
@@ -399,7 +400,7 @@ describe('MobileScheduleView', () => {
     }
     render(
       <MobileScheduleView
-        schedules={[withService]}
+        schedules={[toEditorSchedule(withService)]}
         currentDayIndex={0}
         unassignedProposals={[]}
         dispatch={dispatch}

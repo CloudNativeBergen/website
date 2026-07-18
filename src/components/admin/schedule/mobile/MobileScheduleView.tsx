@@ -247,7 +247,11 @@ export function MobileScheduleView({
             },
           })
         }
-      } else if (seg.kind === 'talk' && active.kind === 'scheduled') {
+      } else if (
+        seg.kind === 'talk' &&
+        active.kind === 'scheduled' &&
+        active.talk.talk
+      ) {
         // Swap the picked-up talk with the occupied target slot.
         dispatch({
           type: 'moveProposal',

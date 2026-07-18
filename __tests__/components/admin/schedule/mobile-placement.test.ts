@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import type { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import type { Slot } from '@/lib/schedule/types'
 import type { RailSegment } from '@/components/admin/schedule/mobile'
 import type { Placing } from '@/components/admin/schedule/mobile'
 import { segmentState } from '@/components/admin/schedule/mobile'
@@ -17,7 +18,8 @@ import { segmentState } from '@/components/admin/schedule/mobile'
 const proposal = (id: string, format = 'talk_25'): ProposalExisting =>
   ({ _id: id, format }) as unknown as ProposalExisting
 
-const talk = (id: string, start: string, end: string): TrackTalk => ({
+const talk = (id: string, start: string, end: string): Slot => ({
+  kind: 'talk',
   talk: proposal(id),
   startTime: start,
   endTime: end,
@@ -58,7 +60,12 @@ const breakSeg = (
   idx: number,
 ): RailSegment => ({
   kind: 'break',
-  talk: { placeholder: 'Lunch', startTime: start, endTime: end },
+  talk: {
+    kind: 'service',
+    placeholder: 'Lunch',
+    startTime: start,
+    endTime: end,
+  },
   talkIndex: idx,
   startTime: start,
   endTime: end,
@@ -166,7 +173,12 @@ describe('segmentState', () => {
       kind: 'scheduled',
       trackIndex: 1,
       talkIndex: 0,
-      talk: { placeholder: 'Break', startTime: '09:00', endTime: '09:15' },
+      talk: {
+        kind: 'service',
+        placeholder: 'Break',
+        startTime: '09:00',
+        endTime: '09:15',
+      },
     }
     expect(
       segmentState(

@@ -7,26 +7,31 @@
  * time).
  */
 import { describe, it, expect } from 'vitest'
-import type { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import type { EditorTrack, Slot } from '@/lib/schedule/types'
 import { buildTrackRail } from '@/components/admin/schedule/mobile'
 
 const proposal = (id: string): ProposalExisting =>
   ({ _id: id, format: 'talk_25' }) as unknown as ProposalExisting
 
-const talk = (id: string, start: string, end: string): TrackTalk => ({
+const talk = (id: string, start: string, end: string): Slot => ({
+  kind: 'talk',
   talk: proposal(id),
   startTime: start,
   endTime: end,
 })
 
-const service = (name: string, start: string, end: string): TrackTalk => ({
+const service = (name: string, start: string, end: string): Slot => ({
+  kind: 'service',
   placeholder: name,
   startTime: start,
   endTime: end,
 })
 
-const track = (...talks: TrackTalk[]): ScheduleTrack => ({
+// Fixtures pass raw slots (including deliberately malformed ghost slots) so
+// buildTrackRail's OWN filtering is exercised — hence the loose `Slot[]` here
+// rather than converting via toEditorTrack (which would strip ghosts first).
+const track = (...talks: Slot[]): EditorTrack => ({
   trackTitle: 'A',
   trackDescription: '',
   talks,
@@ -94,7 +99,7 @@ describe('buildTrackRail', () => {
     const rail = buildTrackRail(
       track(
         // ghost: has times but neither a resolved talk nor a placeholder
-        { startTime: '10:00', endTime: '10:25' } as TrackTalk,
+        { startTime: '10:00', endTime: '10:25' } as unknown as Slot,
         talk('y', '11:00', '11:25'),
       ),
     )
@@ -108,7 +113,7 @@ describe('buildTrackRail', () => {
   it('skips malformed slots without emitting a negative-width gap', () => {
     const rail = buildTrackRail(
       track(
-        { talk: proposal('x'), startTime: '', endTime: '' } as TrackTalk,
+        { talk: proposal('x'), startTime: '', endTime: '' } as unknown as Slot,
         talk('y', '10:00', '10:25'),
       ),
     )

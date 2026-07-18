@@ -1,10 +1,10 @@
 import type React from 'react'
-import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import type { EditorSchedule, Slot } from '@/lib/schedule/types'
 import type { ScheduleAction } from '@/lib/schedule/reducer'
 
 export interface MobileScheduleViewProps {
-  schedules: ConferenceSchedule[]
+  schedules: EditorSchedule[]
   currentDayIndex: number
   unassignedProposals: ProposalExisting[]
   dispatch: React.Dispatch<ScheduleAction>
@@ -26,7 +26,7 @@ export type Placing =
       kind: 'scheduled'
       trackIndex: number
       talkIndex: number
-      talk: TrackTalk
+      talk: Slot
     }
   | { kind: 'proposal'; proposal: ProposalExisting }
 
@@ -47,13 +47,13 @@ export type ActiveSheet =
       kind: 'card'
       trackIndex: number
       talkIndex: number
-      talk: TrackTalk
+      talk: Slot
     }
   | {
       kind: 'serviceEdit'
       trackIndex: number
       talkIndex: number
-      talk: TrackTalk
+      talk: Slot
       mode: 'rename' | 'duration'
     }
   | null

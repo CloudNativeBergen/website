@@ -206,12 +206,13 @@ describe('moveServiceSession', () => {
     placeholder: string,
     start: string,
     end: string,
-    extra: Partial<DragItem> = {},
-  ): DragItem => ({
-    type: 'service-session',
-    serviceSession: { placeholder, startTime: start, endTime: end },
-    ...extra,
-  })
+    source?: { sourceTrackIndex: number; sourceTimeSlot: string },
+  ): DragItem => {
+    const serviceSession = { placeholder, startTime: start, endTime: end }
+    return source
+      ? { type: 'scheduled-service', serviceSession, ...source }
+      : { type: 'service-session', serviceSession }
+  }
 
   it('places a service session into a free interval', () => {
     const s = schedule(track('A'))
@@ -238,7 +239,6 @@ describe('moveServiceSession', () => {
   it('moves an existing service, excluding its own slot from the check', () => {
     const s = schedule(track('A', service('Break', '12:00', '12:15')))
     const dragItem = serviceDrag('Break', '12:00', '12:15', {
-      type: 'scheduled-service',
       sourceTrackIndex: 0,
       sourceTimeSlot: '12:00',
     })
@@ -540,12 +540,13 @@ describe('classifier ⇔ reducer equivalence', () => {
     placeholder: string,
     start: string,
     end: string,
-    extra: Partial<DragItem> = {},
-  ): DragItem => ({
-    type: 'service-session',
-    serviceSession: { placeholder, startTime: start, endTime: end },
-    ...extra,
-  })
+    source?: { sourceTrackIndex: number; sourceTimeSlot: string },
+  ): DragItem => {
+    const serviceSession = { placeholder, startTime: start, endTime: end }
+    return source
+      ? { type: 'scheduled-service', serviceSession, ...source }
+      : { type: 'service-session', serviceSession }
+  }
 
   const serviceCases: Array<{
     name: string
@@ -572,7 +573,6 @@ describe('classifier ⇔ reducer equivalence', () => {
       build: () => ({
         s: schedule(track('A', service('Break', '12:00', '12:15'))),
         d: serviceDrag('Break', '12:00', '12:15', {
-          type: 'scheduled-service',
           sourceTrackIndex: 0,
           sourceTimeSlot: '12:00',
         }),

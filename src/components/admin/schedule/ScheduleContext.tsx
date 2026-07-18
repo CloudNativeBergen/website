@@ -1,8 +1,7 @@
 'use client'
 
 import { createContext, useContext, type Dispatch } from 'react'
-import type { ConferenceSchedule } from '@/lib/conference/types'
-import type { DragItem } from '@/lib/schedule/types'
+import type { DragItem, EditorSchedule } from '@/lib/schedule/types'
 import type { ScheduleAction } from '@/lib/schedule/reducer'
 
 /**
@@ -20,7 +19,7 @@ import type { ScheduleAction } from '@/lib/schedule/reducer'
  */
 interface ScheduleContextValue {
   activeDragItem: DragItem | null
-  schedule: ConferenceSchedule | null
+  schedule: EditorSchedule | null
   otherScheduledProposalIds: ReadonlySet<string>
   dispatch: Dispatch<ScheduleAction>
 }

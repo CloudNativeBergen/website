@@ -114,14 +114,48 @@ export function toEditorSchedule(s: ConferenceSchedule): EditorSchedule {
   return { ...s, tracks: (s.tracks || []).map(toEditorTrack) }
 }
 
-export interface DragItem {
-  type: 'proposal' | 'scheduled-talk' | 'service-session' | 'scheduled-service'
-  proposal?: ProposalExisting
-  serviceSession?: {
-    placeholder: string
-    startTime: string
-    endTime: string
-  }
-  sourceTrackIndex?: number
-  sourceTimeSlot?: string
+/** The service-session payload a service drag carries (a break/lunch, etc.). */
+export interface DragServiceSession {
+  placeholder: string
+  startTime: string
+  endTime: string
 }
+
+/**
+ * A drag payload the editor moves around. A CLOSED discriminated union on
+ * `type`, mirroring {@link Slot}: each variant declares the content fields it
+ * does NOT carry as `?: undefined`, so wide reads (`dragItem.proposal?._id`) keep
+ * compiling in the classify predicates while `type` narrows each variant. The
+ * `scheduled-*` variants carry a non-optional source (`sourceTrackIndex` +
+ * `sourceTimeSlot`); the fresh (`proposal` / `service-session`) variants never
+ * do — which is how the `!` assertions in operations.ts are retired.
+ */
+export type DragItem =
+  | {
+      type: 'proposal'
+      proposal: ProposalExisting
+      serviceSession?: undefined
+      sourceTrackIndex?: undefined
+      sourceTimeSlot?: undefined
+    }
+  | {
+      type: 'scheduled-talk'
+      proposal: ProposalExisting
+      serviceSession?: undefined
+      sourceTrackIndex: number
+      sourceTimeSlot: string
+    }
+  | {
+      type: 'service-session'
+      proposal?: undefined
+      serviceSession: DragServiceSession
+      sourceTrackIndex?: undefined
+      sourceTimeSlot?: undefined
+    }
+  | {
+      type: 'scheduled-service'
+      proposal?: undefined
+      serviceSession: DragServiceSession
+      sourceTrackIndex: number
+      sourceTimeSlot: string
+    }
