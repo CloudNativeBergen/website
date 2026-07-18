@@ -15,13 +15,15 @@ import {
   getTravelSupportById,
   submitTravelSupport,
   updateTravelSupportStatus,
+  updateExpenseStatus,
+  getTravelExpenseRef,
 } from '@/lib/travel-support/sanity'
 import { authorizeTravelSupportOperation } from '@/lib/travel-support/auth'
 import {
   createNotifications,
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
-import { TravelSupportStatus } from '@/lib/travel-support/types'
+import { TravelSupportStatus, ExpenseStatus } from '@/lib/travel-support/types'
 import type { NotificationInput } from '@/lib/notification/types'
 
 vi.mock('@/lib/travel-support/sanity')
@@ -98,7 +100,7 @@ describe('travelSupport.submit — organizer notifications', () => {
     for (const item of items) {
       expect(item.notificationType).toBe('travel_support_update')
       expect(item.title).toBe('Travel support request from Acting Organizer')
-      expect(item.link).toBe('/admin/speakers/travel-support')
+      expect(item.link).toBe('/admin/speakers/travel-support?request=ts-1')
       expect(item.actorId).toBe('actor-1')
       expect(item.conferenceId).toBe('conf-1')
     }
@@ -188,6 +190,92 @@ describe('travelSupport.admin.updateStatus — affected-speaker notifications', 
       travelSupportId: 'ts-1',
       status: TravelSupportStatus.APPROVED,
     })
+    expect(createMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('travelSupport.admin.updateExpenseStatus — affected-speaker notifications', () => {
+  const mockOwner = (speakerId = 'sp-1') => {
+    vi.mocked(getTravelExpenseRef).mockResolvedValue({
+      travelSupport: { _ref: 'ts-1' },
+    })
+    vi.mocked(getTravelSupportById).mockResolvedValue({
+      travelSupport: {
+        _id: 'ts-1',
+        status: TravelSupportStatus.SUBMITTED,
+        speaker: { _id: speakerId, name: 'Jane Speaker', email: 'j@test.com' },
+        conference: { _id: 'conf-1', name: 'Test Conf' },
+        expenses: [],
+      } as never,
+      error: null,
+    })
+  }
+
+  beforeEach(() => {
+    vi.mocked(updateExpenseStatus).mockResolvedValue({
+      success: true,
+      error: null,
+    } as never)
+  })
+
+  it('notifies the affected speaker when an expense is approved, carrying reviewNotes', async () => {
+    mockOwner()
+
+    await createCaller(actor).travelSupport.admin.updateExpenseStatus({
+      expenseId: 'exp-1',
+      status: ExpenseStatus.APPROVED,
+      reviewNotes: 'Within policy',
+    })
+
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const item = lastItems()[0]
+    expect(item.recipientId).toBe('sp-1')
+    expect(item.notificationType).toBe('travel_support_update')
+    expect(item.title).toBe('Expense approved')
+    expect(item.message).toBe('Within policy')
+    expect(item.link).toBe('/cfp/expense')
+    expect(item.actorId).toBe('actor-1')
+    expect(item.conferenceId).toBe('conf-1')
+  })
+
+  it('titles a rejected expense', async () => {
+    mockOwner()
+    await createCaller(actor).travelSupport.admin.updateExpenseStatus({
+      expenseId: 'exp-1',
+      status: ExpenseStatus.REJECTED,
+    })
+    expect(lastItems()[0].title).toBe('Expense rejected')
+  })
+
+  it('does NOT notify for the pending echo status', async () => {
+    mockOwner()
+    await createCaller(actor).travelSupport.admin.updateExpenseStatus({
+      expenseId: 'exp-1',
+      status: ExpenseStatus.PENDING,
+    })
+    expect(createMock).not.toHaveBeenCalled()
+  })
+
+  it('does NOT notify when the affected speaker is the actor', async () => {
+    mockOwner('actor-1')
+    await createCaller(actor).travelSupport.admin.updateExpenseStatus({
+      expenseId: 'exp-1',
+      status: ExpenseStatus.APPROVED,
+    })
+    expect(createMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fail the mutation when the owner lookup throws', async () => {
+    vi.mocked(getTravelExpenseRef).mockRejectedValue(new Error('boom'))
+
+    const result = await createCaller(
+      actor,
+    ).travelSupport.admin.updateExpenseStatus({
+      expenseId: 'exp-1',
+      status: ExpenseStatus.APPROVED,
+    })
+
+    expect(result).toEqual({ success: true })
     expect(createMock).not.toHaveBeenCalled()
   })
 })

@@ -148,8 +148,10 @@ describe('status change — speakers minus actor, gated by shouldNotify', () => 
     expect(createMock).not.toHaveBeenCalled()
   })
 
-  it('does NOT notify for a non-speaker-facing action even with shouldNotify', async () => {
-    // `withdraw` is not in the speaker-notify action set (mirrors email gating).
+  it('does NOT notify the proposal speakers for confirm/withdraw (that is organizer routing)', async () => {
+    // confirm/withdraw are not in the speaker-notify action set — they route to
+    // organizers instead (asserted below), never to the proposal speakers.
+    organizersMock.mockResolvedValue(['org-1'])
     await handlePersistNotification(
       makeEvent({
         action: Action.withdraw,
@@ -159,6 +161,74 @@ describe('status change — speakers minus actor, gated by shouldNotify', () => 
         ] as unknown as ProposalStatusChangeEvent['speakers'],
       }),
     )
-    expect(createMock).not.toHaveBeenCalled()
+    // The proposal speaker (sp-1) is never a recipient — only organizers are.
+    const recipients = lastItems().map((i) => i.recipientId)
+    expect(recipients).not.toContain('sp-1')
+    expect(recipients).toEqual(['org-1'])
+  })
+})
+
+describe('confirm / withdraw — organizers minus actor', () => {
+  it('notifies every organizer except the actor when a speaker confirms', async () => {
+    organizersMock.mockResolvedValue(['org-1', 'actor-1', 'org-2'])
+
+    await handlePersistNotification(
+      makeEvent(
+        { action: Action.confirm, newStatus: Status.confirmed },
+        { shouldNotify: false },
+      ),
+    )
+
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const items = lastItems()
+    expect(items.map((i) => i.recipientId).sort()).toEqual(['org-1', 'org-2'])
+    for (const item of items) {
+      expect(item.notificationType).toBe('proposal_status_changed')
+      expect(item.title).toBe('Speaker confirmed: "My Talk"')
+      expect(item.link).toBe('/admin/proposals/prop-1')
+      expect(item.actorId).toBe('actor-1')
+      expect(item.relatedProposalId).toBe('prop-1')
+      expect(item.conferenceId).toBe('conf-1')
+      expect(item.message).toBeUndefined()
+    }
+  })
+
+  it('titles a withdrawal and carries metadata.reason as the message', async () => {
+    organizersMock.mockResolvedValue(['org-1'])
+
+    await handlePersistNotification(
+      makeEvent(
+        { action: Action.withdraw, newStatus: Status.withdrawn },
+        { reason: 'Speaker fell ill' },
+      ),
+    )
+
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const item = lastItems()[0]
+    expect(item.recipientId).toBe('org-1')
+    expect(item.title).toBe('Proposal withdrawn: "My Talk"')
+    expect(item.message).toBe('Speaker fell ill')
+    expect(item.link).toBe('/admin/proposals/prop-1')
+  })
+
+  it('omits the message when a withdrawal has no reason', async () => {
+    organizersMock.mockResolvedValue(['org-1'])
+
+    await handlePersistNotification(
+      makeEvent({ action: Action.withdraw, newStatus: Status.withdrawn }),
+    )
+
+    expect(lastItems()[0].message).toBeUndefined()
+  })
+
+  it('fires on confirm/withdraw regardless of shouldNotify', async () => {
+    organizersMock.mockResolvedValue(['org-1'])
+    await handlePersistNotification(
+      makeEvent(
+        { action: Action.confirm, newStatus: Status.confirmed },
+        { shouldNotify: false },
+      ),
+    )
+    expect(createMock).toHaveBeenCalledTimes(1)
   })
 })

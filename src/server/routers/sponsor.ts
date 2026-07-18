@@ -1125,7 +1125,7 @@ export const sponsorRouter = router({
                       ? `Sponsor ${sponsorName} moved to ${input.newStatus}`
                       : `Sponsor moved to ${input.newStatus}`,
                     actorId: userId,
-                    link: '/admin/sponsors/crm',
+                    link: `/admin/sponsors/crm?sponsor=${input.id}`,
                   })),
               )
             }
