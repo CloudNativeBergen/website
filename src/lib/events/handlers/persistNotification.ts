@@ -24,6 +24,9 @@ const SPEAKER_NOTIFY_ACTIONS: readonly Action[] = [
  *
  * - `submit`: notify every organizer (except the actor) that a new proposal
  *   arrived.
+ * - `confirm` / `withdraw`: notify every organizer (except the actor) that a
+ *   speaker confirmed or withdrew — mirrors the Slack organizer alert
+ *   (`slackNotification.ts`), which the in-app hub previously lacked.
  * - status change (mirroring the email handler's gating): notify each speaker
  *   on the proposal (except the actor) of the new status.
  *
@@ -47,6 +50,33 @@ export async function handlePersistNotification(
         conferenceId,
         notificationType: 'proposal_submitted',
         title: `New proposal: "${proposalTitle}"`,
+        actorId,
+        relatedProposalId: proposalId,
+        link: `/admin/proposals/${proposalId}`,
+      }))
+    await createNotifications(items)
+    return
+  }
+
+  if (event.action === Action.confirm || event.action === Action.withdraw) {
+    // Organizer routing is unconditional (like submit) — it mirrors the Slack
+    // organizer alert, not the email-gated speaker notification.
+    const isWithdraw = event.action === Action.withdraw
+    const organizerIds = await getOrganizerSpeakerIds()
+    const title = isWithdraw
+      ? `Proposal withdrawn: "${proposalTitle}"`
+      : `Speaker confirmed: "${proposalTitle}"`
+    // The mandatory withdrawal reason (#212) becomes the message when present.
+    const message =
+      isWithdraw && event.metadata.reason ? event.metadata.reason : undefined
+    const items: NotificationInput[] = organizerIds
+      .filter((id) => id && id !== actorId)
+      .map((id): NotificationInput => ({
+        recipientId: id,
+        conferenceId,
+        notificationType: 'proposal_status_changed',
+        title,
+        message,
         actorId,
         relatedProposalId: proposalId,
         link: `/admin/proposals/${proposalId}`,

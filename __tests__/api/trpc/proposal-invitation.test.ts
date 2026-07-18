@@ -7,6 +7,7 @@ import {
   sendInvitationEmail,
   sendResponseNotificationEmail,
 } from '@/lib/cospeaker/server'
+import { createNotifications } from '@/lib/notification/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { Status, Format } from '@/lib/proposal/types'
 import { speakers } from '../../helpers/trpc'
@@ -39,6 +40,9 @@ vi.mock('@/lib/sanity/client', () => ({
 vi.mock('@/lib/proposal/data/sanity')
 vi.mock('@/lib/cospeaker/sanity')
 vi.mock('@/lib/cospeaker/server')
+vi.mock('@/lib/notification/sanity', () => ({
+  createNotifications: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn().mockResolvedValue({
     conference: {
@@ -415,6 +419,56 @@ describe('proposal.invitation router', () => {
           respondentEmail: invitedSpeaker.email,
         }),
       )
+
+      // In-app mirror to the inviter
+      expect(createNotifications).toHaveBeenCalledTimes(1)
+      const notifyItems = vi.mocked(createNotifications).mock.calls[0][0]
+      expect(notifyItems).toHaveLength(1)
+      expect(notifyItems[0]).toMatchObject({
+        recipientId: regularSpeaker._id,
+        conferenceId: 'conf-1',
+        notificationType: 'system',
+        title: `${invitedSpeaker.name} accepted your co-speaker invitation`,
+        actorId: invitedSpeaker._id,
+        link: '/cfp/proposal/proposal-1',
+      })
+    })
+
+    it('sends the inviter an in-app decline notification', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue(mockInvitation as any)
+
+      const caller = createCaller(invitedSpeaker)
+      await caller.proposal.invitation.respond({
+        token: 'valid-token',
+        accept: false,
+        declineReason: 'Too busy',
+      })
+
+      expect(createNotifications).toHaveBeenCalledTimes(1)
+      const notifyItems = vi.mocked(createNotifications).mock.calls[0][0]
+      expect(notifyItems[0]).toMatchObject({
+        recipientId: regularSpeaker._id,
+        notificationType: 'system',
+        title: `${invitedSpeaker.name} declined your co-speaker invitation`,
+        actorId: invitedSpeaker._id,
+        link: '/cfp/proposal/proposal-1',
+      })
+    })
+
+    it('skips the in-app inviter notification when the inviter id is missing', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        invitedBy: undefined,
+      } as any)
+
+      const caller = createCaller(invitedSpeaker)
+      const result = await caller.proposal.invitation.respond({
+        token: 'valid-token',
+        accept: false,
+      })
+
+      expect(result.success).toBe(true)
+      expect(createNotifications).not.toHaveBeenCalled()
     })
 
     it('should reject if the email does not match (bug fix)', async () => {

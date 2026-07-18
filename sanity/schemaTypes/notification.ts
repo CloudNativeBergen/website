@@ -40,10 +40,12 @@ export default defineType({
             title: 'Proposal Status Changed',
             value: 'proposal_status_changed',
           },
+          // Reserved for future use — no emitter yet.
           { title: 'Proposal Comment', value: 'proposal_comment' },
           { title: 'Co-Speaker Response', value: 'cospeaker_response' },
           { title: 'Travel Support Update', value: 'travel_support_update' },
           { title: 'Sponsor Activity', value: 'sponsor_activity' },
+          // Reserved for future use — no emitter yet.
           { title: 'Schedule Update', value: 'schedule_update' },
           { title: 'Gallery Tagged', value: 'gallery_tagged' },
           { title: 'System', value: 'system' },

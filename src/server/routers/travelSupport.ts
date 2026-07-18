@@ -46,7 +46,7 @@ import {
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
-import { TravelSupportStatus } from '@/lib/travel-support/types'
+import { TravelSupportStatus, ExpenseStatus } from '@/lib/travel-support/types'
 
 /**
  * Human-readable notification titles for the travel support statuses that
@@ -60,6 +60,16 @@ const TRAVEL_STATUS_NOTIFY_TITLES: Partial<
   [TravelSupportStatus.APPROVED]: 'Travel support approved',
   [TravelSupportStatus.REJECTED]: 'Travel support rejected',
   [TravelSupportStatus.PAID]: 'Travel support marked paid',
+}
+
+/**
+ * Notification titles for the individual-expense decisions that warrant
+ * notifying the affected speaker. The pending status is intentionally absent —
+ * only an organizer approve/reject decision produces a notification.
+ */
+const EXPENSE_STATUS_NOTIFY_TITLES: Partial<Record<ExpenseStatus, string>> = {
+  [ExpenseStatus.APPROVED]: 'Expense approved',
+  [ExpenseStatus.REJECTED]: 'Expense rejected',
 }
 
 export const travelSupportRouter = router({
@@ -293,7 +303,7 @@ export const travelSupportRouter = router({
                   notificationType: 'travel_support_update',
                   title: `Travel support request from ${ctx.speaker.name}`,
                   actorId: ctx.speaker._id,
-                  link: '/admin/speakers/travel-support',
+                  link: `/admin/speakers/travel-support?request=${input.travelSupportId}`,
                 })),
             )
           }
@@ -776,6 +786,47 @@ export const travelSupportRouter = router({
               message: 'Failed to update expense status',
               cause: error,
             })
+          }
+
+          // Notify the affected speaker of an approve/reject decision (pending
+          // echoes are skipped), unless they made the change themselves. Mirrors
+          // the updateStatus emitter above and shares createNotifications'
+          // never-fail contract: the expense status is already persisted, so a
+          // failure here must not surface as an update error.
+          try {
+            const statusTitle = EXPENSE_STATUS_NOTIFY_TITLES[input.status]
+            if (statusTitle) {
+              const expenseRef = await getTravelExpenseRef(input.expenseId)
+              const travelSupportId = expenseRef?.travelSupport?._ref
+              if (travelSupportId) {
+                const { travelSupport } =
+                  await getTravelSupportById(travelSupportId)
+                const affectedSpeakerId = travelSupport?.speaker?._id
+                const conferenceId = travelSupport?.conference?._id
+                if (
+                  affectedSpeakerId &&
+                  conferenceId &&
+                  affectedSpeakerId !== ctx.speaker._id
+                ) {
+                  await createNotifications([
+                    {
+                      recipientId: affectedSpeakerId,
+                      conferenceId,
+                      notificationType: 'travel_support_update',
+                      title: statusTitle,
+                      message: input.reviewNotes || undefined,
+                      actorId: ctx.speaker._id,
+                      link: '/cfp/expense',
+                    },
+                  ])
+                }
+              }
+            }
+          } catch (notifyError) {
+            console.error(
+              'Failed to notify speaker of expense status change:',
+              notifyError,
+            )
           }
 
           return { success: true }

@@ -26,6 +26,11 @@ import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
 import { getCurrentDateTime } from '@/lib/time'
+import {
+  createNotifications,
+  getOrganizerSpeakerIds,
+} from '@/lib/notification/sanity'
+import type { NotificationInput } from '@/lib/notification/types'
 
 export const volunteerRouter = router({
   create: publicProcedure
@@ -73,6 +78,23 @@ export const volunteerRouter = router({
           const { conference, error } = await getConferenceForCurrentDomain()
           if (!error && conference) {
             void notifyNewVolunteer(result.volunteer, conference)
+
+            // In-app mirror for organizers. This is a public endpoint, so
+            // there is no actor to exclude. Shares createNotifications'
+            // never-fail contract: the volunteer record is already created.
+            const volunteerName = result.volunteer.name
+            const organizerIds = await getOrganizerSpeakerIds()
+            await createNotifications(
+              organizerIds
+                .filter((id) => id)
+                .map((id): NotificationInput => ({
+                  recipientId: id,
+                  conferenceId: conference._id,
+                  notificationType: 'system',
+                  title: `New volunteer signup: ${volunteerName}`,
+                  link: '/admin/volunteers',
+                })),
+            )
           }
         } catch {
           // Ignore notification errors
