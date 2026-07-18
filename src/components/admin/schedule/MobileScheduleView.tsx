@@ -26,6 +26,7 @@ import {
   matchTalk,
   matchService,
 } from '@/lib/schedule/rules'
+import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
 import { Status } from '@/lib/proposal/types'
@@ -47,6 +48,7 @@ import {
   PencilIcon,
   ArrowsUpDownIcon,
   InboxStackIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 
 interface MobileScheduleViewProps {
@@ -762,6 +764,64 @@ function UnassignedDrawer({
 /* Legend disclosure                                                          */
 /* -------------------------------------------------------------------------- */
 
+function dayLabel(schedule: ConferenceSchedule, index: number): string {
+  // Project convention: format YYYY-MM-DD via the shared, timezone-safe helper
+  // (no raw `new Date(date)` for display — see AGENTS.md).
+  const date = formatConferenceDate(schedule.date, {
+    month: 'short',
+    day: 'numeric',
+  })
+  return `Day ${index + 1} · ${date}`
+}
+
+/**
+ * Day selector (replaces the day-chip row). A single-day schedule renders as
+ * static text; multi-day uses a NATIVE styled <select> — this gives full
+ * keyboard + screen-reader support and the native mobile picker for free, with
+ * none of the focus/keyboard pitfalls of a hand-rolled listbox. Frees a full row
+ * of top chrome and scales to any number of days.
+ */
+function DaySelect({
+  schedules,
+  currentDayIndex,
+  onSelect,
+}: {
+  schedules: ConferenceSchedule[]
+  currentDayIndex: number
+  onSelect: (dayIndex: number) => void
+}) {
+  const current = schedules[currentDayIndex]
+
+  if (schedules.length <= 1) {
+    return (
+      <span className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+        {current ? dayLabel(current, currentDayIndex) : 'Schedule'}
+      </span>
+    )
+  }
+
+  return (
+    <div className="relative min-w-0">
+      <select
+        aria-label="Select day"
+        value={currentDayIndex}
+        onChange={(e) => onSelect(Number(e.target.value))}
+        className="min-h-[44px] max-w-full appearance-none truncate rounded-lg border border-gray-300 bg-white py-2 pr-9 pl-3 text-sm font-semibold text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+      >
+        {schedules.map((day, index) => (
+          <option key={`${index}-${day.date}`} value={index}>
+            {dayLabel(day, index)}
+          </option>
+        ))}
+      </select>
+      <ChevronDownIcon
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-400"
+      />
+    </div>
+  )
+}
+
 function LegendDisclosure() {
   const [open, setOpen] = useState(false)
   return (
@@ -1431,10 +1491,12 @@ export function MobileScheduleView({
       {/* Header */}
       <header className="shrink-0 border-b border-gray-200 bg-white px-4 pt-3 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Schedule
-          </h1>
-          <div className="flex items-center gap-1">
+          <DaySelect
+            schedules={schedules}
+            currentDayIndex={currentDayIndex}
+            onSelect={handleDayChange}
+          />
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setSheet({ kind: 'unassigned', context: null })}
@@ -1469,38 +1531,6 @@ export function MobileScheduleView({
             </button>
           </div>
         </div>
-
-        {schedules.length > 1 && (
-          <div
-            className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1"
-            role="group"
-            aria-label="Select day"
-          >
-            {schedules.map((day, index) => {
-              const isActive = index === currentDayIndex
-              const label = new Date(day.date).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })
-              return (
-                <button
-                  key={`${index}-${day.date}`}
-                  type="button"
-                  onClick={() => handleDayChange(index)}
-                  aria-pressed={isActive}
-                  className={clsx(
-                    'min-h-[44px] shrink-0 rounded-lg border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
-                    isActive
-                      ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
-                  )}
-                >
-                  Day {index + 1} · {label}
-                </button>
-              )
-            })}
-          </div>
-        )}
 
         {/* Fixed track tab strip (synced to the carousel below). */}
         {tracks.length > 0 ? (
