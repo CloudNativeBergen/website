@@ -13,6 +13,7 @@ import {
   PresentationChartBarIcon,
   AcademicCapIcon,
   CpuChipIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -28,6 +29,7 @@ const navigation: NavigationSection[] = [
       { name: 'Dashboard', href: '/admin', icon: HomeIcon },
       { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
       { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
+      { name: 'Messages', href: '/admin/messages', icon: EnvelopeIcon },
     ],
   },
   {

@@ -40,15 +40,19 @@ export type PushSettingsStatus =
   | 'disabled'
   | 'enabled'
 
-// A category with no entry here is intentionally hidden from the settings UI
-// (e.g. `messages` is default-on and gets its toggle in a later phase); the
-// render skips categories without a label.
+// A category with no entry here is intentionally hidden from the settings UI;
+// the render skips categories without a label.
 const CATEGORY_LABELS: Partial<
   Record<PushCategory, { title: string; description: string }>
 > = {
   proposalDecisions: {
     title: 'Proposal decisions',
     description: 'When a talk is accepted, rejected, or waitlisted.',
+  },
+  messages: {
+    title: 'Messages',
+    description:
+      'When an organizer or speaker replies in one of your conversations.',
   },
   talkConfirmed: {
     title: 'Talk confirmed',

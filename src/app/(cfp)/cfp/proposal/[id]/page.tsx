@@ -12,6 +12,7 @@ import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSideba
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
+import { ProposalMessagesSection } from '@/components/messaging'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
@@ -160,6 +161,10 @@ export default async function ProposalViewPage({
             <ProposalGuidanceSidebar conference={conference} />
           </div>
         </div>
+
+        <div className="mt-6 max-w-4xl">
+          <ProposalMessagesSection proposalId={id} audience="speaker" />
+        </div>
       </div>
     )
   }
@@ -211,6 +216,10 @@ export default async function ProposalViewPage({
             )}
           </div>
         )}
+      </div>
+
+      <div className="mt-6 max-w-4xl">
+        <ProposalMessagesSection proposalId={id} audience="speaker" />
       </div>
     </div>
   )
