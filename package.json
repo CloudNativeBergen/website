@@ -35,7 +35,8 @@
     "generate-badge-ed25519-key": "tsx scripts/generate-badge-ed25519-key.ts",
     "audit-sponsor-health": "tsx scripts/audit-sponsor-health.ts",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "shoot": "node scripts/shoot-story.mjs"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
