@@ -27,10 +27,11 @@ export function NotificationPanel({
 }: NotificationPanelProps) {
   const utils = api.useUtils()
 
-  const { data: items = [], isLoading } = api.notification.list.useQuery(
-    { limit: 20 },
-    { staleTime: 10_000 },
-  )
+  const {
+    data: items = [],
+    isLoading,
+    isError,
+  } = api.notification.list.useQuery({ limit: 20 }, { staleTime: 10_000 })
 
   const invalidate = () => {
     utils.notification.unreadCount.invalidate()
@@ -57,6 +58,7 @@ export function NotificationPanel({
     <NotificationList
       items={items}
       isLoading={isLoading}
+      isError={isError}
       unreadCount={unreadCount}
       onMarkAllRead={() => markAllRead.mutate()}
       isMarkingAll={markAllRead.isPending}

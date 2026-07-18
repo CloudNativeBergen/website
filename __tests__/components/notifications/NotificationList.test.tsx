@@ -99,4 +99,19 @@ describe('NotificationList', () => {
     )
     expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument()
   })
+
+  it('shows a distinct error state on load failure (never "all caught up")', () => {
+    renderList({ items: [], isError: true, unreadCount: 0 })
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /couldn.t load notifications/i,
+    )
+    expect(screen.queryByText(/all caught up/i)).not.toBeInTheDocument()
+  })
+
+  it('exposes the inbox as a named region landmark', () => {
+    renderList({ unreadCount: 2 })
+    expect(
+      screen.getByRole('region', { name: 'Notifications' }),
+    ).toBeInTheDocument()
+  })
 })
