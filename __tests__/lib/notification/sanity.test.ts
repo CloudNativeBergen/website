@@ -36,6 +36,7 @@ import {
   getUnreadCount,
   markNotificationsRead,
   markAllRead,
+  deleteNotificationsOlderThan,
 } from '@/lib/notification/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 
@@ -51,6 +52,7 @@ function installTransaction(commit: () => Promise<unknown> = async () => ({})) {
   const tx = {
     create: vi.fn((_doc?: unknown) => tx),
     patch: vi.fn((_id?: string, _ops?: unknown) => tx),
+    delete: vi.fn((_id?: string) => tx),
     commit: vi.fn(commit),
   }
   writeMock.transaction.mockReturnValue(tx)
@@ -311,5 +313,101 @@ describe('getNotificationsForSpeaker — cursor pagination', () => {
       conferenceId: 'conf-1',
     })
     expect(result).toEqual([])
+  })
+})
+
+describe('deleteNotificationsOlderThan — batched retention cleanup', () => {
+  const BATCH_SIZE = 500
+  const MAX_BATCHES = 20
+  const fullBatch = () => Array.from({ length: BATCH_SIZE }, (_, i) => `n-${i}`)
+
+  it('deletes a single partial batch in ONE transaction and returns the count', async () => {
+    readMock.fetch.mockResolvedValueOnce(['n-1', 'n-2', 'n-3'])
+    const tx = installTransaction()
+
+    const result = await deleteNotificationsOlderThan(90)
+
+    // One fetch, one transaction, one delete per id, one commit.
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    expect(writeMock.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.delete).toHaveBeenCalledTimes(3)
+    expect(tx.delete).toHaveBeenNthCalledWith(1, 'n-1')
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ deleted: 3 })
+  })
+
+  it('queries by a `createdAt < $cutoff` cutoff derived from `days`', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    const before = Date.now() - 91 * 24 * 60 * 60 * 1000
+    const after = Date.now() - 89 * 24 * 60 * 60 * 1000
+
+    await deleteNotificationsOlderThan(90)
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('_type == "notification"')
+    expect(query).toContain('createdAt < $cutoff')
+    const cutoff = Date.parse((params as { cutoff: string }).cutoff)
+    // ~90 days ago, bracketed to absorb the tiny execution delay.
+    expect(cutoff).toBeGreaterThanOrEqual(before)
+    expect(cutoff).toBeLessThanOrEqual(after)
+  })
+
+  it('is a no-op (no transaction) when nothing is expired', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    const tx = installTransaction()
+
+    const result = await deleteNotificationsOlderThan(90)
+
+    expect(result).toEqual({ deleted: 0 })
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('coalesces a null fetch result to zero deletions', async () => {
+    readMock.fetch.mockResolvedValueOnce(null)
+    const result = await deleteNotificationsOlderThan(90)
+    expect(result).toEqual({ deleted: 0 })
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+  })
+
+  it('loops across batches until a short batch drains the backlog, summing the total', async () => {
+    // A full batch (keep looping) followed by a partial batch (stop).
+    readMock.fetch
+      .mockResolvedValueOnce(fullBatch())
+      .mockResolvedValueOnce(['tail-1', 'tail-2'])
+    const tx = installTransaction()
+
+    const result = await deleteNotificationsOlderThan(90)
+
+    // Two fetches, two transactions/commits; no extra empty fetch after the
+    // short batch.
+    expect(readMock.fetch).toHaveBeenCalledTimes(2)
+    expect(writeMock.transaction).toHaveBeenCalledTimes(2)
+    expect(tx.commit).toHaveBeenCalledTimes(2)
+    expect(tx.delete).toHaveBeenCalledTimes(BATCH_SIZE + 2)
+    expect(result).toEqual({ deleted: BATCH_SIZE + 2 })
+  })
+
+  it('stops at the safety cap when every batch stays full (never spins forever)', async () => {
+    // Always a full batch: only the hard cap can end the loop.
+    readMock.fetch.mockResolvedValue(fullBatch())
+    const tx = installTransaction()
+
+    const result = await deleteNotificationsOlderThan(90)
+
+    expect(readMock.fetch).toHaveBeenCalledTimes(MAX_BATCHES)
+    expect(tx.commit).toHaveBeenCalledTimes(MAX_BATCHES)
+    expect(result).toEqual({ deleted: BATCH_SIZE * MAX_BATCHES })
+  })
+
+  it('PROPAGATES a commit failure (does NOT swallow it, unlike the fan-out paths)', async () => {
+    readMock.fetch.mockResolvedValueOnce(['n-1'])
+    installTransaction(async () => {
+      throw new Error('sanity down')
+    })
+
+    await expect(deleteNotificationsOlderThan(90)).rejects.toThrow(
+      'sanity down',
+    )
   })
 })

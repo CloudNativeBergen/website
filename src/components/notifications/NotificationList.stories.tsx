@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
 import { NotificationList } from './NotificationList'
-import { mockDateBeforeEach } from '@/lib/storybook/mockDate'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import type { NotificationItem } from '@/lib/notification/types'
 
 // createdAt values are computed relative to RENDER time (the factory below is

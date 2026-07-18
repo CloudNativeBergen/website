@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import {
   HomeIcon,
   DocumentTextIcon,
@@ -70,6 +71,9 @@ const notificationHandlers = [
 
 const meta = {
   title: 'Components/Layout/DashboardLayout',
+  // AGENTS.md deterministic-dates rule: pin Date so the msw notification
+  // fixtures (and their relative-time labels) are absolutely fixed.
+  beforeEach: mockDateBeforeEach(new Date('2026-07-18T12:00:00Z')),
   decorators: [
     (Story) => (
       <TRPCProvider>

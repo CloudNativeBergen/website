@@ -208,6 +208,61 @@ export async function markAllRead({
   return ids.length
 }
 
+/** How many expired notifications are fetched and deleted per cleanup batch. */
+const RETENTION_DELETE_BATCH_SIZE = 500
+
+/**
+ * A hard cap on how many batches a single cleanup run performs, so a runaway
+ * query (or a clock/skew bug) can never spin forever. At
+ * {@link RETENTION_DELETE_BATCH_SIZE} per batch this bounds one run to ~10k
+ * deletions; the next daily run picks up any remainder.
+ */
+const RETENTION_MAX_BATCHES = 20
+
+/**
+ * Permanently delete every `notification` document created more than `days` days
+ * ago, in bounded batches — each batch is fetched by id and deleted in ONE
+ * `clientWrite.transaction()` (chained `.delete()`), looping until none remain
+ * or the {@link RETENTION_MAX_BATCHES} safety cap is reached. Returns the total
+ * number of documents deleted.
+ *
+ * CONTRACT: unlike the fan-out write paths, this function MAY throw. It backs a
+ * retention cron route that reports (and should surface) failures rather than
+ * silently swallowing them, so the caller is expected to handle errors.
+ */
+export async function deleteNotificationsOlderThan(
+  days: number,
+): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  let deleted = 0
+  for (let batch = 0; batch < RETENTION_MAX_BATCHES; batch++) {
+    const ids = await clientReadUncached.fetch<string[]>(
+      `*[_type == "notification" && createdAt < $cutoff][0...${RETENTION_DELETE_BATCH_SIZE}]._id`,
+      { cutoff },
+    )
+
+    if (!ids || ids.length === 0) {
+      break
+    }
+
+    const tx = clientWrite.transaction()
+    for (const id of ids) {
+      tx.delete(id)
+    }
+    await tx.commit()
+
+    deleted += ids.length
+
+    // A short batch means the backlog is drained — stop before an empty fetch.
+    if (ids.length < RETENTION_DELETE_BATCH_SIZE) {
+      break
+    }
+  }
+
+  return { deleted }
+}
+
 /**
  * The `_id`s of every organizer speaker. `isOrganizer` is GLOBAL (an organizer
  * of one edition is an organizer everywhere); the conference scoping happens
