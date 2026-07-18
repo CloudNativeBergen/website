@@ -212,7 +212,8 @@ describe('saveScheduleToSanity — update happy path', () => {
     expect(result.schedule?._id).toBe('sched-1')
   })
 
-  it('skips ifRevisionId when the schedule carries no _rev (unconditional write)', async () => {
+  it('rejects an UPDATE that carries no _rev (F3 — no unconditional last-write-wins)', async () => {
+    // The security-scope fetch must NOT even be reached; the _rev guard is first.
     const patch = installPatch(async () => ({ _rev: 'new' }))
 
     const result = await saveScheduleToSanity(
@@ -220,8 +221,19 @@ describe('saveScheduleToSanity — update happy path', () => {
       conference,
     )
 
-    expect(patch.ifRevisionId).not.toHaveBeenCalled()
-    expect(patch.set).toHaveBeenCalledTimes(1)
+    expect(result.error).toMatch(/revision/i)
+    expect(result.schedule).toBeUndefined()
+    expect(mockClient.fetch).not.toHaveBeenCalled()
+    expect(clientWrite.patch).not.toHaveBeenCalled()
+    expect(patch.commit).not.toHaveBeenCalled()
+  })
+
+  it('always patches with ifRevisionId now that _rev is required for updates', async () => {
+    const patch = installPatch(async () => ({ _rev: 'new' }))
+
+    const result = await saveScheduleToSanity(updateDay(), conference)
+
+    expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-1')
     expect(patch.commit).toHaveBeenCalledTimes(1)
     expect(result.schedule?._rev).toBe('new')
   })
@@ -273,7 +285,11 @@ describe('saveScheduleToSanity — optimistic concurrency', () => {
 describe('saveScheduleToSanity — create path (no _id)', () => {
   it('runs one atomic transaction: create schedule + append conference link, then reads back _rev', async () => {
     const { tx, confPatch } = installTransaction()
-    mockClient.fetch.mockResolvedValue({ _rev: 'created-rev' })
+    // First fetch is the duplicate-day existence check (none exists → null);
+    // the second is the post-create read-back of the new _rev.
+    mockClient.fetch
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _rev: 'created-rev' })
 
     const newDay = updateDay({ _id: '', _rev: undefined })
     const result = await saveScheduleToSanity(newDay, conference)
@@ -313,6 +329,31 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     // The result carries the generated id and the read-back revision.
     expect(result.schedule?._id).toBe(created._id)
     expect(result.schedule?._rev).toBe('created-rev')
+  })
+
+  it('returns a conflict (no create) when a schedule for this (conference, date) already exists (F2)', async () => {
+    // The duplicate-day existence check finds a doc for this date.
+    mockClient.fetch.mockResolvedValueOnce('existing-sched-id')
+    const { tx } = installTransaction()
+
+    const newDay = updateDay({ _id: '', _rev: undefined, date: '2026-06-15' })
+    const result = await saveScheduleToSanity(newDay, conference)
+
+    // Surfaced as the same conflict shape as a revision mismatch.
+    expect(result.conflict).toBe(true)
+    expect(result.error).toMatch(/reload/i)
+    expect(result.schedule).toBeUndefined()
+
+    // No create happened.
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+    expect(tx.create).not.toHaveBeenCalled()
+
+    // The existence check queried by (conference, date).
+    const [query, params] = mockClient.fetch.mock.calls[0]
+    expect(query).toContain('_type == "schedule"')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('date == $date')
+    expect(params).toEqual({ conferenceId: 'conf-1', date: '2026-06-15' })
   })
 })
 
@@ -355,6 +396,35 @@ describe('saveScheduleToSanity — ghost-slot drop', () => {
     expect(talks[1]).toMatchObject({ placeholder: 'Lunch', startTime: '12:00' })
     // Nothing timed at 10:00 (the ghost) survives.
     expect(talks.some((t) => t.startTime === '10:00')).toBe(false)
+  })
+
+  it('drops a slot whose talk resolves to an empty id instead of serializing {_ref:""} (F7)', async () => {
+    const patch = installPatch(async () => ({ _rev: 'new' }))
+
+    const day = updateDay({
+      tracks: [
+        track([
+          { talk: asAny({ _id: 't1' }), startTime: '09:00', endTime: '09:25' },
+          // A malformed talk object: present but with neither `_id` nor `_ref`.
+          // The old fallback would emit `talk: {_ref: ''}`; it must be dropped.
+          { talk: asAny({}), startTime: '10:00', endTime: '10:25' },
+        ]),
+      ],
+    })
+
+    await saveScheduleToSanity(day, conference)
+
+    const setArg = patch.set.mock.calls[0][0] as {
+      tracks: Array<{ talks: Array<Record<string, unknown>> }>
+    }
+    const talks = setArg.tracks[0].talks
+
+    // Only the real ref survives; no empty reference is ever serialized.
+    expect(talks).toHaveLength(1)
+    expect(talks[0]).toMatchObject({ talk: { _ref: 't1' } })
+    expect(
+      talks.some((t) => (t.talk as { _ref?: string } | undefined)?._ref === ''),
+    ).toBe(false)
   })
 })
 

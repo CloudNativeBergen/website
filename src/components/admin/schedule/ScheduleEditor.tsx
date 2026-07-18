@@ -204,6 +204,10 @@ export function ScheduleEditor({
             index,
             _id: schedule._id,
             _rev: schedule._rev,
+            // Pass the EXACT object we sent so the reducer can identity-compare
+            // it against the current day and detect an edit made mid-save (which
+            // must stay dirty rather than be marked clean and lost).
+            saved: daySchedule,
           })
         }
       }

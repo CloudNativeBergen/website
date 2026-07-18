@@ -35,6 +35,19 @@ export async function getValidTalkIds(
   return new Set(ids || [])
 }
 
+/**
+ * The referenced talk id on a slot, resolved from either the projected `_id` or
+ * a raw Sanity `_ref`. Returns '' when the slot carries no resolvable talk (no
+ * `talk` at all, or a malformed `talk` object with neither field) — the caller
+ * treats a '' result on a non-placeholder slot as a ghost and drops it, so a
+ * `createReference('')` is never serialized.
+ */
+function resolveTalkId(talk: {
+  talk?: { _id?: string | null; _ref?: string | null } | null
+}): string {
+  return talk.talk?._id || talk.talk?._ref || ''
+}
+
 /** True when a Sanity write failed because `ifRevisionId` did not match (409). */
 function isRevisionMismatch(error: unknown): boolean {
   const statusCode = (error as { statusCode?: number })?.statusCode
@@ -48,21 +61,32 @@ export async function saveScheduleToSanity(
   conference: Conference,
 ): Promise<SaveScheduleResult> {
   try {
-    console.log('Saving schedule to Sanity:', schedule)
+    // Compact save log — the full payload used to be dumped every save, leaking
+    // the entire schedule into logs. Log only what's useful for tracing a write.
+    const slotCount = (schedule.tracks || []).reduce(
+      (n, track) => n + (track.talks?.length || 0),
+      0,
+    )
+    console.log(
+      `Saving schedule ${schedule._id || '(new)'} date=${schedule.date} tracks=${(schedule.tracks || []).length} slots=${slotCount}`,
+    )
 
     const sanitizedTracks = (schedule.tracks || []).map(
       (track, trackIndex) => ({
         _key: generateKey(`track-${trackIndex}`),
         trackTitle: track.trackTitle,
         trackDescription: track.trackDescription,
-        // Drop ghost slots (neither a resolved talk nor a placeholder) before
-        // serializing — otherwise the fallback branch below emits an empty slot
-        // that `validateSchedulePayload` rejects, failing the whole save. The
-        // editor load path is already ghost-free (`toEditorSchedule`), but this
-        // filter is NOT redundant: the tRPC save path also accepts client-supplied
-        // payloads that never crossed the load boundary, so keep it as-is.
+        // Drop ghost slots before serializing — otherwise the talk branch below
+        // emits an empty `{_ref:''}` that `validateSchedulePayload` rejects,
+        // failing the whole save. A ghost is a slot that is neither a placeholder
+        // NOR a resolvable talk: `resolveTalkId` returns '' for a slot with no
+        // talk at all AND for a malformed `talk` object carrying neither `_id`
+        // nor `_ref`. The editor load path is already ghost-free
+        // (`toEditorSchedule`), but this filter is NOT redundant: the tRPC save
+        // path also accepts client-supplied payloads that never crossed the load
+        // boundary, so keep it.
         talks: (track.talks || [])
-          .filter((talk) => talk.talk || talk.placeholder)
+          .filter((talk) => talk.placeholder || resolveTalkId(talk) !== '')
           .map((talk, talkIndex) => {
             const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
 
@@ -75,13 +99,9 @@ export async function saveScheduleToSanity(
               }
             }
 
-            // The filter above guarantees a resolved talk reaches this point
-            // (ghost slots — neither talk nor placeholder — are dropped), so this
-            // is the exhaustive final case, no fallback needed.
-            const talkId =
-              talk.talk?._id ||
-              (talk.talk as unknown as { _ref?: string })?._ref ||
-              ''
+            // The filter above guarantees a resolvable talk id (non-empty) reaches
+            // this point, so this is the exhaustive final case — no empty ref.
+            const talkId = resolveTalkId(talk)
             return {
               _key: generateKey(`${baseKey}-${talkId}`),
               talk: createReference(talkId),
@@ -95,6 +115,17 @@ export async function saveScheduleToSanity(
     let savedSchedule: ConferenceSchedule
 
     if (schedule._id && schedule._id !== '') {
+      // An UPDATE without a revision would patch UNCONDITIONALLY — a silent
+      // last-write-wins that clobbers a concurrent organizer's edit. The editor
+      // always loads `_rev` (projected on load), so a missing one means a
+      // malformed or hostile payload: reject it rather than degrade to LWW.
+      if (!schedule._rev) {
+        return {
+          error:
+            'Missing revision for this update — reload the day and try again.',
+        }
+      }
+
       // SECURITY: `schedule._id` comes from the client, and `isOrganizer` is
       // global across every edition (an organizer of conference A is an
       // organizer on all domains). Without a scope check, a request could patch
@@ -118,18 +149,16 @@ export async function saveScheduleToSanity(
         return { error: 'Schedule not found or not accessible' }
       }
 
-      // Optimistic concurrency: when the client carried a `_rev`, patch with
-      // `ifRevisionId` so a save is rejected if the day changed since it was
-      // loaded (two organizers editing the same day). Sanity throws a 409 on
-      // mismatch, which we surface as a distinct `conflict` result. The commit
-      // returns the persisted document, so we thread the NEW `_rev` back to the
-      // client — a second save in the same session then isn't a false conflict.
-      let patch = clientWrite.patch(schedule._id)
-      if (schedule._rev) {
-        patch = patch.ifRevisionId(schedule._rev)
-      }
-
-      const committed = await patch
+      // Optimistic concurrency: `_rev` is guaranteed present (rejected above),
+      // so ALWAYS patch with `ifRevisionId` — a save is rejected if the day
+      // changed since it was loaded (two organizers editing the same day).
+      // Sanity throws a 409 on mismatch, which we surface as a distinct
+      // `conflict` result. The commit returns the persisted document, so we
+      // thread the NEW `_rev` back to the client — a second save in the same
+      // session then isn't a false conflict.
+      const committed = await clientWrite
+        .patch(schedule._id)
+        .ifRevisionId(schedule._rev)
         .set({
           date: schedule.date,
           tracks: sanitizedTracks,
@@ -138,6 +167,25 @@ export async function saveScheduleToSanity(
 
       savedSchedule = { ...schedule, _rev: committed._rev }
     } else {
+      // DUPLICATE-DAY GUARD: any payload with `_id: ''` creates a fresh schedule
+      // doc and appends it to `conference.schedules`. Two organizers saving the
+      // same fabricated empty day — or a client retry after a lost response —
+      // would each create a doc for one date, producing duplicate day tabs and
+      // forked edits. Check for an existing schedule for this (conference, date)
+      // first; if one exists, surface the same conflict UX as a revision mismatch
+      // so the client tells the organizer to reload rather than fork the day.
+      const existingId = await clientWrite.fetch<string | null>(
+        `*[_type == "schedule" && conference._ref == $conferenceId && date == $date][0]._id`,
+        { conferenceId: conference._id, date: schedule.date },
+      )
+      if (existingId) {
+        return {
+          conflict: true,
+          error:
+            'A schedule for this date was just created — reload to continue.',
+        }
+      }
+
       // Pre-generate the id so the create and the conference-link append run in
       // ONE atomic transaction. Previously these were two sequential writes: if
       // the append failed after the create succeeded, the error was swallowed

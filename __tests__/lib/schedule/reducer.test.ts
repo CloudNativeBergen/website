@@ -241,6 +241,7 @@ describe('save lifecycle + dirty tracking', () => {
       type: 'saveDaySucceeded',
       index: 0,
       _id: 'server-id-0',
+      saved: state.schedules[0],
     })
     expect(state.schedules[0]._id).toBe('server-id-0')
     expect(state.dirty).toEqual([false, true])
@@ -249,6 +250,7 @@ describe('save lifecycle + dirty tracking', () => {
       type: 'saveDaySucceeded',
       index: 1,
       _id: 'server-id-1',
+      saved: state.schedules[1],
     })
     expect(state.schedules[1]._id).toBe('server-id-1')
     expect(state.dirty).toEqual([false, false])
@@ -264,6 +266,7 @@ describe('save lifecycle + dirty tracking', () => {
       index: 0,
       _id: 'server-id-0',
       _rev: 'rev-abc',
+      saved: state.schedules[0],
     })
     expect(state.schedules[0]._rev).toBe('rev-abc')
 
@@ -273,8 +276,97 @@ describe('save lifecycle + dirty tracking', () => {
       type: 'saveDaySucceeded',
       index: 0,
       _id: 'server-id-0',
+      saved: state.schedules[0],
     })
     expect(state.schedules[0]._rev).toBe('rev-abc')
+  })
+
+  // F1 — LOST-UPDATE RACE. `handleSave` captures a snapshot of the day and sends
+  // it; when the response lands, the reducer must clear `dirty` only if that
+  // exact snapshot is still the current day. An edit made while the save was in
+  // flight replaces the day object, so identity no longer matches and the day
+  // must stay dirty (its newer edits weren't part of the save).
+  describe('saveDaySucceeded — lost-update guard (F1)', () => {
+    it('clears dirty when no edit landed between saveStart and success', () => {
+      let state = scheduleReducer(twoDirtyDays(), { type: 'saveStart' })
+      // The snapshot handleSave would have sent is the current day object.
+      const snapshot = state.schedules[0]
+      state = scheduleReducer(state, {
+        type: 'saveDaySucceeded',
+        index: 0,
+        _id: 'server-id-0',
+        _rev: 'rev-1',
+        saved: snapshot,
+      })
+      expect(state.dirty[0]).toBe(false)
+      expect(state.schedules[0]._id).toBe('server-id-0')
+      expect(state.schedules[0]._rev).toBe('rev-1')
+    })
+
+    it('keeps the day dirty (and still updates _rev) when an edit lands mid-save', () => {
+      // saveStart captures the snapshot handleSave sends to the server.
+      let state = scheduleReducer(twoDirtyDays(), { type: 'saveStart' })
+      const snapshot = state.schedules[0]
+
+      // An edit lands on day 0 WHILE the save is in flight — switch to day 0 and
+      // edit it; the reducer replaces the day object, so it is no longer
+      // identical to the snapshot the save sent.
+      state = scheduleReducer(state, { type: 'changeDay', dayIndex: 0 })
+      state = scheduleReducer(state, { type: 'addTrack', track: track('C') })
+      expect(state.schedules[0]).not.toBe(snapshot)
+      const interleaved = state.schedules[0]
+
+      // The (now stale) save response lands.
+      state = scheduleReducer(state, {
+        type: 'saveDaySucceeded',
+        index: 0,
+        _id: 'server-id-0',
+        _rev: 'rev-2',
+        saved: snapshot,
+      })
+
+      // Dirty STAYS true: the interleaved edit was not part of this save.
+      expect(state.dirty[0]).toBe(true)
+      // But the doc really advanced, so the new _rev is threaded in — otherwise
+      // the next save would be a false conflict.
+      expect(state.schedules[0]._rev).toBe('rev-2')
+      expect(state.schedules[0]._id).toBe('server-id-0')
+      // The interleaved edit's content is preserved (only _id/_rev changed).
+      expect(state.schedules[0].tracks).toBe(interleaved.tracks)
+    })
+
+    it('the next save then persists the newer state (fresh _rev, still dirty)', () => {
+      let state = scheduleReducer(twoDirtyDays(), { type: 'saveStart' })
+      const snapshot = state.schedules[0]
+      // Interleaved edit on day 0.
+      state = scheduleReducer(state, { type: 'changeDay', dayIndex: 0 })
+      state = scheduleReducer(state, { type: 'addTrack', track: track('C') })
+      // Stale response lands: day stays dirty, _rev advances to rev-2.
+      state = scheduleReducer(state, {
+        type: 'saveDaySucceeded',
+        index: 0,
+        _id: 'server-id-0',
+        _rev: 'rev-2',
+        saved: snapshot,
+      })
+
+      // The next save sends the CURRENT (newer) day carrying the fresh _rev, so it
+      // doesn't false-conflict — model it as a second saveStart + success whose
+      // snapshot is the current day.
+      const nextSnapshot = state.schedules[0]
+      expect(nextSnapshot._rev).toBe('rev-2')
+      state = scheduleReducer(state, { type: 'saveStart' })
+      state = scheduleReducer(state, {
+        type: 'saveDaySucceeded',
+        index: 0,
+        _id: 'server-id-0',
+        _rev: 'rev-3',
+        saved: nextSnapshot,
+      })
+      // No further edit interleaved this time, so the newer state is now clean.
+      expect(state.dirty[0]).toBe(false)
+      expect(state.schedules[0]._rev).toBe('rev-3')
+    })
   })
 
   it('saveError records the message and stops saving', () => {
