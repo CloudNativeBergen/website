@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
 import { NotificationList } from './NotificationList'
+import { mockDateBeforeEach } from '@/lib/storybook/mockDate'
 import type { NotificationItem } from '@/lib/notification/types'
 
 // createdAt values are computed relative to RENDER time (the factory below is
@@ -59,6 +60,9 @@ const makeItems = (): NotificationItem[] => [
 const meta = {
   title: 'Components/Notifications/NotificationList',
   component: NotificationList,
+  // AGENTS.md deterministic-dates rule: pin Date so the relative-time labels
+  // ("4m ago") are absolutely fixed for Chromatic.
+  beforeEach: mockDateBeforeEach(new Date('2026-07-18T12:00:00Z')),
   parameters: { layout: 'padded' },
   args: {
     onMarkAllRead: fn(),
