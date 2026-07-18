@@ -4,8 +4,11 @@ import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
 import contractTemplate from './schemaTypes/contractTemplate'
+import conversation from './schemaTypes/conversation'
+import conversationPreference from './schemaTypes/conversationPreference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
+import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
@@ -42,6 +45,9 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     volunteer,
     staff,
     notification,
+    conversation,
+    message,
+    conversationPreference,
 
     // Topics & Talks
     talk,

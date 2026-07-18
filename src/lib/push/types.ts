@@ -11,6 +11,7 @@ export const PUSH_CATEGORIES = [
   'proposalDecisions',
   'talkConfirmed',
   'coSpeakerInvites',
+  'messages',
   'otherUpdates',
 ] as const
 
@@ -24,6 +25,8 @@ export interface PushPreferences {
   talkConfirmed: boolean
   /** Co-speaker activity (an invitation to co-present, or a response to yours). */
   coSpeakerInvites: boolean
+  /** New messages in a speaker↔organizer conversation (messaging M1). */
+  messages: boolean
   /**
    * Everything else the notification hub emits (a new submission for organizers,
    * travel-support and sponsor updates, gallery tags, and other system
@@ -40,6 +43,7 @@ export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   proposalDecisions: true,
   talkConfirmed: true,
   coSpeakerInvites: true,
+  messages: true,
   otherUpdates: true,
 }
 
@@ -94,6 +98,7 @@ export function normalizePushPreferences(
       value?.talkConfirmed ?? DEFAULT_PUSH_PREFERENCES.talkConfirmed,
     coSpeakerInvites:
       value?.coSpeakerInvites ?? DEFAULT_PUSH_PREFERENCES.coSpeakerInvites,
+    messages: value?.messages ?? DEFAULT_PUSH_PREFERENCES.messages,
     otherUpdates: value?.otherUpdates ?? DEFAULT_PUSH_PREFERENCES.otherUpdates,
   }
 }

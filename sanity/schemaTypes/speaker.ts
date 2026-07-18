@@ -342,6 +342,12 @@ export default defineType({
           initialValue: true,
         }),
         defineField({
+          name: 'messages',
+          title: 'Messages',
+          type: 'boolean',
+          initialValue: true,
+        }),
+        defineField({
           name: 'otherUpdates',
           title: 'Other Updates',
           type: 'boolean',
@@ -356,6 +362,18 @@ export default defineType({
           )
         )
       },
+    }),
+    // Messaging (M1). Opt-IN by default: when true, the speaker receives an email
+    // for new conversation messages whose per-conversation override is 'default'.
+    // Absent/unset means false (no email unless the speaker opts in, or a
+    // conversation override forces 'on'). Additive/optional — no migration.
+    defineField({
+      name: 'messagingEmailDefault',
+      title: 'Messaging Email (default)',
+      type: 'boolean',
+      description:
+        'Default email delivery for new conversation messages. Off by default; per-conversation overrides can force on/off.',
+      initialValue: false,
     }),
   ],
   preview: {

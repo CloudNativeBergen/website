@@ -10,6 +10,8 @@ export type NotificationType =
   | 'proposal_status_changed'
   // Reserved for future use — no emitter yet.
   | 'proposal_comment'
+  // Speaker↔organizer conversation message (messaging M1).
+  | 'message_received'
   | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'

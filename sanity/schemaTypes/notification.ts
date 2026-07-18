@@ -42,6 +42,7 @@ export default defineType({
           },
           // Reserved for future use — no emitter yet.
           { title: 'Proposal Comment', value: 'proposal_comment' },
+          { title: 'Message Received', value: 'message_received' },
           { title: 'Co-Speaker Response', value: 'cospeaker_response' },
           { title: 'Travel Support Update', value: 'travel_support_update' },
           { title: 'Sponsor Activity', value: 'sponsor_activity' },

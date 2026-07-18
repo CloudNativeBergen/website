@@ -222,6 +222,69 @@ export async function notifyNewProposal(
   await sendSlackNotification(message, conference)
 }
 
+/**
+ * Speaker-authored conversation message → organizer Slack channel (messaging
+ * M1). Mirrors {@link notifyNewProposal}: only fires for SPEAKER-authored
+ * messages (organizer-authored messages don't ping the organizer channel). The
+ * admin deep link is provided by the caller (proposal vs general thread).
+ */
+export async function notifyNewSpeakerMessage(
+  {
+    authorName,
+    subject,
+    excerpt,
+    adminPath,
+  }: {
+    authorName: string
+    subject: string
+    excerpt: string
+    adminPath: string
+  },
+  conference: Conference,
+) {
+  const domain = getDomainFromConference(conference)
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '💬 New Speaker Message',
+        emoji: true,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*From:*\n${authorName}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Subject:*\n${subject}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Message:*\n${excerpt}`,
+      },
+    },
+  ]
+
+  if (domain) {
+    blocks.push(
+      createAdminLinkButton(domain, adminPath, 'View in Admin', 'view_message'),
+    )
+  }
+
+  const message = { blocks }
+  await sendSlackNotification(message, conference)
+}
+
 export async function notifyNewVolunteer(
   volunteer: Volunteer,
   conference: Conference,

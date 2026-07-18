@@ -79,6 +79,7 @@ export async function sendPush(
  *       (speaker accept/reject/waitlist AND organizer-facing confirm/withdraw
  *        notifications both carry this type)
  *   - `cospeaker_response`       → `coSpeakerInvites`
+ *   - `message_received`         → `messages`
  *   - everything else            → `otherUpdates`
  *       (`proposal_submitted`, `travel_support_update`, `sponsor_activity`,
  *        `gallery_tagged`, `schedule_update`, `proposal_comment`, `system`)
@@ -95,6 +96,8 @@ export function pushCategoryForNotificationType(
       return 'proposalDecisions'
     case 'cospeaker_response':
       return 'coSpeakerInvites'
+    case 'message_received':
+      return 'messages'
     default:
       return 'otherUpdates'
   }

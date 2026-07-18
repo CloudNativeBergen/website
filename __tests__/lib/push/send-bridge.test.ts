@@ -35,6 +35,7 @@ const ALL_ON = {
   proposalDecisions: true,
   talkConfirmed: true,
   coSpeakerInvites: true,
+  messages: true,
   otherUpdates: true,
 }
 
@@ -87,6 +88,10 @@ describe('pushCategoryForNotificationType', () => {
     expect(pushCategoryForNotificationType('cospeaker_response')).toBe(
       'coSpeakerInvites',
     )
+  })
+
+  it('maps message_received → messages', () => {
+    expect(pushCategoryForNotificationType('message_received')).toBe('messages')
   })
 
   it.each([
