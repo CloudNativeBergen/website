@@ -7,7 +7,11 @@ import {
 } from './contract-templates'
 import { generateContractPdf } from './contract-pdf'
 import type { ContractSigningProvider } from '@/lib/contract-signing'
-import { logContractStatusChange, logSignatureStatusChange } from './activity'
+import {
+  logContractStatusChange,
+  logSignatureStatusChange,
+  promoteToClosedWonOnContract,
+} from './activity'
 import { sanitizeSponsorName } from './utils'
 
 export interface SendContractResult {
@@ -283,6 +287,20 @@ export async function generateAndSendContract(
         logError,
       )
     }
+  }
+
+  // Sending a contract advances the deal to Won (forward-only, tier-guarded).
+  try {
+    await promoteToClosedWonOnContract(
+      sponsorForConferenceId,
+      { status: sfc.status, tier: sfc.tier },
+      actorId,
+    )
+  } catch (promoteError) {
+    console.error(
+      `${logCtxFull} Failed to auto-promote pipeline to closed-won:`,
+      promoteError,
+    )
   }
 
   return { success: true, agreementId, signingUrl }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
+import { promoteToClosedWonOnContract } from '@/lib/sponsor-crm/activity'
 import type { WebhookEvent } from '@/lib/adobe-sign'
 
 function getExpectedClientIds(): string[] {
@@ -49,11 +50,14 @@ function validateClientId(request: NextRequest): string | null {
   return clientId
 }
 
-async function findSponsorByAgreementId(
-  agreementId: string,
-): Promise<{ _id: string; signatureStatus: string } | null> {
+async function findSponsorByAgreementId(agreementId: string): Promise<{
+  _id: string
+  signatureStatus: string
+  status?: string
+  tier?: { _ref: string }
+} | null> {
   const result = await clientWrite.fetch(
-    `*[_type == "sponsorForConference" && signatureId == $agreementId][0]{ _id, signatureStatus }`,
+    `*[_type == "sponsorForConference" && signatureId == $agreementId][0]{ _id, signatureStatus, status, tier }`,
     { agreementId },
   )
   return result
@@ -187,6 +191,20 @@ export async function POST(request: NextRequest) {
           updateFields.contractDocument ? 'attached' : 'not attached',
         )
         await logActivity(sfc._id, sfc.signatureStatus, 'signed')
+        // A signed contract advances the deal to Won (forward-only,
+        // tier-guarded so the webhook can't mint an invalid closed-won).
+        try {
+          await promoteToClosedWonOnContract(
+            sfc._id,
+            { status: sfc.status, tier: sfc.tier },
+            'system',
+          )
+        } catch (promoteError) {
+          console.error(
+            '[Adobe Sign webhook] Failed to auto-promote pipeline to closed-won:',
+            promoteError,
+          )
+        }
         await sendContractSignedNotification(sfc._id)
         break
       }

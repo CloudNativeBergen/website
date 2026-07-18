@@ -68,6 +68,7 @@ import {
   logSignatureStatusChange,
   createSponsorActivity,
   deleteSponsorActivity,
+  promoteToClosedWonOnContract,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -2055,6 +2056,21 @@ export const sponsorRouter = router({
               )
             }
           }
+        }
+
+        // Sending a contract advances the deal to Won (forward-only,
+        // tier-guarded). Best-effort: never fail the send over this.
+        try {
+          await promoteToClosedWonOnContract(
+            input.sponsorForConferenceId,
+            { status: sfc.status, tier: sfc.tier },
+            ctx.speaker._id,
+          )
+        } catch (promoteError) {
+          console.error(
+            `${logCtxFull} Failed to auto-promote pipeline to closed-won:`,
+            promoteError,
+          )
         }
 
         // Send branded signing email if we have a signing URL (non-critical)
