@@ -124,17 +124,17 @@ describe('MobileScheduleView', () => {
     )
   })
 
-  it('picks up a talk into placing mode and removes it', () => {
+  it('opens the card action sheet and removes a talk', () => {
     const { dispatch } = setup()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+      screen.getByRole('button', {
+        name: 'Options for Scheduled Keynote Talk',
+      }),
     )
-    // The placing banner appears as a live region.
-    const banner = screen.getByRole('status')
-    expect(banner).toHaveTextContent(/Moving/)
-    expect(banner).toHaveTextContent(/Scheduled Keynote Talk/)
-
-    fireEvent.click(within(banner).getByRole('button', { name: /Remove/ }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Remove from schedule/ }),
+    )
     expect(dispatch).toHaveBeenCalledWith({
       type: 'removeTalk',
       trackIndex: 0,
@@ -142,14 +142,80 @@ describe('MobileScheduleView', () => {
     })
   })
 
+  it('exposes Rename / Change duration for a service and dispatches rename', () => {
+    const dispatch = vi.fn()
+    const withService: ConferenceSchedule = {
+      _id: 'day-1',
+      date: '2026-09-01',
+      tracks: [
+        {
+          trackTitle: 'Main Stage',
+          trackDescription: '',
+          talks: [
+            {
+              placeholder: 'Coffee Break',
+              startTime: '10:00',
+              endTime: '10:15',
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <MobileScheduleView
+        schedules={[withService]}
+        currentDayIndex={0}
+        unassignedProposals={[]}
+        dispatch={dispatch}
+        onDayChange={vi.fn()}
+        onSave={vi.fn()}
+        onAddTrack={vi.fn()}
+        isSaving={false}
+        saveSuccess={false}
+        error={null}
+      />,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Options for Coffee Break' }),
+    )
+    const dialog = screen.getByRole('dialog')
+    // The service actions are discoverable in the sheet.
+    expect(
+      within(dialog).getByRole('button', { name: 'Rename' }),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: 'Change duration' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }))
+    const renameSheet = screen.getByRole('dialog')
+    fireEvent.change(within(renameSheet).getByLabelText('Session title'), {
+      target: { value: 'Lunch' },
+    })
+    fireEvent.click(within(renameSheet).getByRole('button', { name: 'Save' }))
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'renameService',
+      trackIndex: 0,
+      talkIndex: 0,
+      title: 'Lunch',
+    })
+  })
+
   it('hides the "Service" control while placing (index-shift guard)', () => {
     setup()
-    // A Service button per track before pick-up.
+    // A Service button per track before entering placing mode.
     expect(
       screen.getAllByRole('button', { name: 'Service' }).length,
     ).toBeGreaterThan(0)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+      screen.getByRole('button', {
+        name: 'Options for Scheduled Keynote Talk',
+      }),
+    )
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Move or swap',
+      }),
     )
     // While placing, adding a service would re-sort track.talks and invalidate
     // the picked-up talkIndex — so the control is gone.
@@ -158,7 +224,7 @@ describe('MobileScheduleView', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('swaps two talks: pick one up, tap the other', () => {
+  it('swaps two talks: options → move or swap → tap the other', () => {
     const dispatch = vi.fn()
     const talkB = makeProposal({
       _id: 'scheduled-2',
@@ -194,9 +260,16 @@ describe('MobileScheduleView', () => {
       />,
     )
 
-    // Pick up the keynote, then tap the second talk to swap.
+    // Open the keynote's sheet, choose Move or swap, then tap the second talk.
     fireEvent.click(
-      screen.getByRole('button', { name: 'Move Scheduled Keynote Talk' }),
+      screen.getByRole('button', {
+        name: 'Options for Scheduled Keynote Talk',
+      }),
+    )
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Move or swap',
+      }),
     )
     fireEvent.click(
       screen.getByRole('button', { name: 'Swap with Second Talk' }),
