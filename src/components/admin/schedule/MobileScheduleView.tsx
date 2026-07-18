@@ -53,16 +53,17 @@ import {
   TAP_TARGET,
   GUTTER_PX,
   MIN_OPEN_SLOT_MIN,
-} from './mobile/constants'
+  segmentHeight,
+  segmentLabel,
+  segmentState,
+} from './mobile'
 import type {
   ActiveSheet,
   MobileScheduleViewProps,
   Placing,
   SegmentState,
   SlotContext,
-} from './mobile/types'
-import { segmentHeight, segmentLabel } from './mobile/railGeometry'
-import { segmentState } from './mobile/placement'
+} from './mobile'
 
 /* -------------------------------------------------------------------------- */
 /* Bottom sheet                                                               */

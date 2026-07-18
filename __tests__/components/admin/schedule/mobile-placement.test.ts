@@ -11,8 +11,8 @@ import { describe, it, expect } from 'vitest'
 import type { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import type { RailSegment } from '@/components/admin/schedule/mobileRail'
-import type { Placing } from '@/components/admin/schedule/mobile/types'
-import { segmentState } from '@/components/admin/schedule/mobile/placement'
+import type { Placing } from '@/components/admin/schedule/mobile'
+import { segmentState } from '@/components/admin/schedule/mobile'
 
 const proposal = (id: string, format = 'talk_25'): ProposalExisting =>
   ({ _id: id, format }) as unknown as ProposalExisting
