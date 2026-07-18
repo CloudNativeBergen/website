@@ -1,5 +1,7 @@
+import 'server-only'
 import { getConfiguredWebPush, isPushConfigured } from './vapid'
 import { getSpeakerPushState, prunePushSubscription } from './sanity'
+import { isValidPushEndpoint } from './validate'
 import type {
   PushCategory,
   PushMessagePayload,
@@ -133,11 +135,20 @@ export async function sendPushForNotifications(
     else byRecipient.set(item.recipientId, [item])
   }
 
-  await Promise.allSettled(
-    Array.from(byRecipient.entries()).map(([recipientId, recipientItems]) =>
-      deliverPushToRecipient(recipientId, recipientItems),
-    ),
-  )
+  // Bound recipient-level concurrency. Typical fan-outs are 1–5 recipients so
+  // this changes nothing there; it only stops a broadcast-sized fan-out from
+  // opening hundreds of simultaneous Sanity reads/prunes and push requests. A
+  // tiny chunked loop keeps the zero-dependency, never-throw contract.
+  const RECIPIENT_CONCURRENCY = 5
+  const recipients = Array.from(byRecipient.entries())
+  for (let i = 0; i < recipients.length; i += RECIPIENT_CONCURRENCY) {
+    const chunk = recipients.slice(i, i + RECIPIENT_CONCURRENCY)
+    await Promise.allSettled(
+      chunk.map(([recipientId, recipientItems]) =>
+        deliverPushToRecipient(recipientId, recipientItems),
+      ),
+    )
+  }
 }
 
 /** Deliver every notification a single recipient earned, gated per category. */
@@ -158,6 +169,30 @@ async function deliverPushToRecipient(
 
   if (state.subscriptions.length === 0) return
 
+  // Defense in depth against SSRF: only ever POST to a subscription whose stored
+  // endpoint still passes the same public-https validation the input schemas
+  // enforce. A stored endpoint that no longer qualifies (e.g. persisted before
+  // this validation existed) is pruned and skipped rather than requested.
+  const subscriptions: typeof state.subscriptions = []
+  for (const subscription of state.subscriptions) {
+    if (isValidPushEndpoint(subscription.endpoint)) {
+      subscriptions.push(subscription)
+      continue
+    }
+    console.error(
+      `Skipping push to invalid stored endpoint for speaker ${recipientId}`,
+    )
+    await prunePushSubscription(recipientId, subscription.endpoint).catch(
+      (error) => {
+        console.error(
+          `Failed to prune invalid push subscription for speaker ${recipientId}:`,
+          error,
+        )
+      },
+    )
+  }
+  if (subscriptions.length === 0) return
+
   for (const item of items) {
     const category = pushCategoryForNotificationType(item.notificationType)
     if (!state.preferences[category]) continue
@@ -171,7 +206,7 @@ async function deliverPushToRecipient(
     }
 
     const results = await Promise.allSettled(
-      state.subscriptions.map(async (subscription) => {
+      subscriptions.map(async (subscription) => {
         const result = await sendPush(subscription, payload)
         if (result.gone) {
           await prunePushSubscription(recipientId, subscription.endpoint).catch(

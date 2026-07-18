@@ -54,9 +54,15 @@ export function parsePushPayload(
   return { title, body, url: sanitizeUrl(data.url), tag }
 }
 
-/** Only allow a same-origin absolute path (`/...`, not `//...`). */
+/**
+ * Only allow a same-origin absolute path (`/...`, not `//...`). A backslash is
+ * rejected outright: `new URL('/\\evil.com', origin)` (and browser URL parsing
+ * generally) treats `\` as `/`, so `/\evil.com` would otherwise resolve
+ * OFF-origin. Reject any string containing a backslash before the prefix check.
+ */
 function sanitizeUrl(value: unknown): string {
   if (typeof value !== 'string') return DEFAULT_URL
+  if (value.includes('\\')) return DEFAULT_URL
   if (value.startsWith('/') && !value.startsWith('//')) return value
   return DEFAULT_URL
 }

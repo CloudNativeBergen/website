@@ -202,9 +202,12 @@ const NOTIFICATION_DEFAULT_TITLE = 'Cloud Native Days'
 const NOTIFICATION_DEFAULT_URL = '/'
 
 // Only allow a same-origin absolute PATH ("/..."; never "//..."). Any absolute
-// or protocol-relative URL is dropped so a click can never leave the origin.
+// or protocol-relative URL is dropped so a click can never leave the origin. A
+// backslash is rejected outright: URL parsing treats "\" as "/", so "/\evil.com"
+// would resolve OFF-origin — mirror of sanitizeUrl in src/lib/pwa/push-payload.ts.
 function sanitizeNotificationUrl(value) {
   if (typeof value !== 'string') return NOTIFICATION_DEFAULT_URL
+  if (value.includes('\\')) return NOTIFICATION_DEFAULT_URL
   if (value.startsWith('/') && !value.startsWith('//')) return value
   return NOTIFICATION_DEFAULT_URL
 }
@@ -255,7 +258,20 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
-      const targetUrl = new URL(target, self.location.origin).href
+      // Belt-and-braces: even though `target` came through sanitizeNotificationUrl,
+      // re-check the RESOLVED origin here. If resolving it against our origin
+      // lands anywhere off-origin (or fails to parse), fall back to '/'. A click
+      // can then never open or navigate a window to another site.
+      let targetUrl
+      try {
+        const resolved = new URL(target, self.location.origin)
+        targetUrl =
+          resolved.origin === self.location.origin
+            ? resolved.href
+            : new URL(NOTIFICATION_DEFAULT_URL, self.location.origin).href
+      } catch (e) {
+        targetUrl = new URL(NOTIFICATION_DEFAULT_URL, self.location.origin).href
+      }
       const allClients = await clients.matchAll({
         type: 'window',
         includeUncontrolled: true,

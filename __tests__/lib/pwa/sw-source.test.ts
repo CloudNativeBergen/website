@@ -66,6 +66,18 @@ describe('public/sw.js source invariants', () => {
     expect(source).toContain("!value.startsWith('//')")
   })
 
+  it('rejects a backslash in the notification url (URL parsers treat \\ as /)', () => {
+    // "/\evil.com" must not survive sanitisation — new URL('/\\evil.com', origin)
+    // resolves OFF-origin. The mirror must reject any string containing a "\".
+    expect(source).toContain("value.includes('\\\\')")
+  })
+
+  it('re-checks the resolved origin before navigating/opening on click', () => {
+    // Belt-and-braces at resolution time: even a sanitised target is re-resolved
+    // and compared against self.location.origin before navigate/openWindow.
+    expect(source).toContain('resolved.origin === self.location.origin')
+  })
+
   it('opens or focuses a window on notification click', () => {
     expect(source).toContain('clients.matchAll')
     expect(source).toContain('clients.openWindow')

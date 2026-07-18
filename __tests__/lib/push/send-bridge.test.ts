@@ -221,4 +221,28 @@ describe('sendPushForNotifications', () => {
     await sendPushForNotifications([item()])
     expect(sendNotification).not.toHaveBeenCalled()
   })
+
+  it('skips and prunes a stored endpoint that fails SSRF validation', async () => {
+    // Defense in depth: an endpoint that no longer passes the public-https rule
+    // (e.g. an http/loopback endpoint persisted before validation) is pruned and
+    // never requested; a valid endpoint alongside it still receives the push.
+    mockGetState.mockResolvedValue(
+      state({
+        subscriptions: [
+          subscription('http://127.0.0.1/internal'),
+          subscription('https://push.example/ok'),
+        ],
+      }),
+    )
+    await sendPushForNotifications([item()])
+    expect(mockPrune).toHaveBeenCalledWith(
+      'speaker-1',
+      'http://127.0.0.1/internal',
+    )
+    expect(sendNotification).toHaveBeenCalledTimes(1)
+    const [target] = sendNotification.mock.calls[0]
+    expect((target as { endpoint: string }).endpoint).toBe(
+      'https://push.example/ok',
+    )
+  })
 })

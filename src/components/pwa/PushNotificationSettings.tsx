@@ -353,17 +353,30 @@ export function PushNotificationSettings() {
             }
             return
           }
-          await subscribeMutation.mutateAsync({
-            endpoint: result.subscription.endpoint,
-            keys: result.subscription.keys,
-            userAgent:
-              typeof navigator !== 'undefined'
-                ? navigator.userAgent
-                : undefined,
-          })
+          // The browser subscription now exists. If the server fails to record
+          // it, roll the browser subscription back so the UI can't later claim
+          // 'enabled' while the server has no record (which would silently drop
+          // every notification). Re-throw so the outer catch surfaces the error.
+          try {
+            await subscribeMutation.mutateAsync({
+              endpoint: result.subscription.endpoint,
+              keys: result.subscription.keys,
+              userAgent:
+                typeof navigator !== 'undefined'
+                  ? navigator.userAgent
+                  : undefined,
+            })
+          } catch (mutationError) {
+            await unsubscribeFromPush().catch(() => undefined)
+            throw mutationError
+          }
           setStatus('enabled')
         } else {
           const endpoint = await unsubscribeFromPush()
+          // Mirror side is intentionally left as-is: if the browser unsubscribe
+          // succeeds but this server-side unsubscribe fails, the stale server
+          // record self-heals — the next push to it returns 404/410 and the
+          // send path prunes it (see prunePushSubscription in send.ts).
           if (endpoint) {
             await unsubscribeMutation.mutateAsync({ endpoint })
           }

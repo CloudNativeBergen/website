@@ -11,6 +11,12 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: path.resolve(__dirname, 'src') },
       {
+        // `server-only` is a Next.js bundler marker with no Node resolution;
+        // stub it so server modules carrying the guard are unit-testable.
+        find: /^server-only$/,
+        replacement: path.resolve(__dirname, '__tests__/mocks/server-only.ts'),
+      },
+      {
         find: 'jose',
         replacement: path.resolve(__dirname, '__tests__/mocks/jose.ts'),
       },

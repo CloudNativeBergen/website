@@ -46,6 +46,19 @@ describe('parsePushPayload', () => {
     expect(result.url).toBe('/')
   })
 
+  it('drops a backslash-prefixed url that resolves off-origin', () => {
+    // new URL('/\\evil.com', origin) resolves to https://evil.com — a backslash
+    // is treated as a slash by URL parsers, so it must be rejected.
+    for (const url of [
+      '/\\evil.com',
+      '/\\/evil.com',
+      '/a\\b',
+      '\\\\evil.com',
+    ]) {
+      expect(parsePushPayload(JSON.stringify({ url })).url).toBe('/')
+    }
+  })
+
   it('keeps a same-origin absolute path', () => {
     const result = parsePushPayload(JSON.stringify({ url: '/cfp/list' }))
     expect(result.url).toBe('/cfp/list')
