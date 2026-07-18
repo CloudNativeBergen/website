@@ -122,6 +122,12 @@ export interface Speaker extends SpeakerBase {
    * {@link normalizePushPreferences}. Additive/optional; no migration required.
    */
   pushPreferences?: PushPreferences
+  /**
+   * Messaging email opt-in (M1). When true, the speaker is emailed for new
+   * conversation messages whose per-conversation override is 'default'. Absent
+   * means FALSE (email opt-in only). Additive/optional; no migration required.
+   */
+  messagingEmailDefault?: boolean
 }
 
 export interface SpeakerWithTalks extends Speaker {

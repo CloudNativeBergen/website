@@ -360,6 +360,41 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                     </div>
 
+                    {/* Messages */}
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-6 dark:border-sky-800 dark:bg-sky-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-sky-800 dark:text-sky-200">
+                        <ChatBubbleLeftRightIcon className="mr-3 h-5 w-5" />
+                        Messages
+                      </h3>
+                      <ul className="space-y-2 text-sm text-sky-700 dark:text-sky-300">
+                        <li>
+                          • <strong>Message content:</strong> The text you write
+                          in a conversation with organizers or co-speakers
+                        </li>
+                        <li>
+                          • <strong>Author &amp; timestamps:</strong> Who sent
+                          each message and when
+                        </li>
+                        <li>
+                          • <strong>Conversation preferences:</strong> Your
+                          per-conversation mute and email delivery settings
+                        </li>
+                      </ul>
+                      <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">
+                        <p className="text-xs text-sky-800 dark:text-sky-200">
+                          <strong>Visibility:</strong> Messages in a proposal
+                          thread are visible to that proposal&apos;s speakers
+                          and all conference organizers; messages in a general
+                          thread are visible to their author and all conference
+                          organizers. <strong>Purpose:</strong> Coordinating
+                          proposals and conference logistics.{' '}
+                          <strong>Legal Basis:</strong> Legitimate interest in
+                          conference coordination. Messages are retained until
+                          deleted.
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Photo Gallery Data */}
                     <div className="rounded-lg border border-pink-200 bg-pink-50 p-6 dark:border-pink-800 dark:bg-pink-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-pink-800 dark:text-pink-200">
@@ -1154,6 +1189,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </span>{' '}
                               Keeping speakers and organizers informed of
                               proposal and conference activity
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Messages
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Content, author, timestamps, conversation
+                                preferences)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Until deleted
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Speaker↔organizer coordination of proposals and
+                              conference logistics
                             </td>
                           </tr>
                           <tr>

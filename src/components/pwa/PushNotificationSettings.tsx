@@ -40,9 +40,11 @@ export type PushSettingsStatus =
   | 'disabled'
   | 'enabled'
 
-const CATEGORY_LABELS: Record<
-  PushCategory,
-  { title: string; description: string }
+// A category with no entry here is intentionally hidden from the settings UI
+// (e.g. `messages` is default-on and gets its toggle in a later phase); the
+// render skips categories without a label.
+const CATEGORY_LABELS: Partial<
+  Record<PushCategory, { title: string; description: string }>
 > = {
   proposalDecisions: {
     title: 'Proposal decisions',
@@ -236,31 +238,35 @@ export function PushNotificationSettingsView({
                 <legend className="font-inter text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
                   Notify me about
                 </legend>
-                {PUSH_CATEGORIES.map((category) => (
-                  <div
-                    key={category}
-                    className="flex items-center justify-between gap-4"
-                  >
-                    <div>
-                      <label
-                        htmlFor={`push-cat-${category}`}
-                        className="font-inter text-sm font-medium text-gray-900 dark:text-white"
-                      >
-                        {CATEGORY_LABELS[category].title}
-                      </label>
-                      <p className="font-inter text-xs text-gray-500 dark:text-gray-400">
-                        {CATEGORY_LABELS[category].description}
-                      </p>
+                {PUSH_CATEGORIES.map((category) => {
+                  const label = CATEGORY_LABELS[category]
+                  if (!label) return null
+                  return (
+                    <div
+                      key={category}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <div>
+                        <label
+                          htmlFor={`push-cat-${category}`}
+                          className="font-inter text-sm font-medium text-gray-900 dark:text-white"
+                        >
+                          {label.title}
+                        </label>
+                        <p className="font-inter text-xs text-gray-500 dark:text-gray-400">
+                          {label.description}
+                        </p>
+                      </div>
+                      <Toggle
+                        id={`push-cat-${category}`}
+                        label={label.title}
+                        checked={preferences[category]}
+                        disabled={savingPreferences}
+                        onChange={(next) => onToggleCategory(category, next)}
+                      />
                     </div>
-                    <Toggle
-                      id={`push-cat-${category}`}
-                      label={CATEGORY_LABELS[category].title}
-                      checked={preferences[category]}
-                      disabled={savingPreferences}
-                      onChange={(next) => onToggleCategory(category, next)}
-                    />
-                  </div>
-                ))}
+                  )
+                })}
               </fieldset>
             )}
           </div>
