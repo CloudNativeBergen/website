@@ -16,6 +16,7 @@ import {
 import { formatDatesSafe } from '@/lib/time'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { UserMenu } from '@/components/UserMenu'
+import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
@@ -85,6 +86,11 @@ export function Header({ c }: { c: Conference }) {
         <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            {/* Bell self-gates on `session?.speaker`; renders nothing (and
+                mounts no query) for signed-out visitors. Lives in this single
+                cluster which is present on both the mobile and desktop header,
+                so one placement covers every breakpoint. */}
+            <PublicHeaderBell />
             {session ? (
               <UserMenu
                 name={session.user.name}
