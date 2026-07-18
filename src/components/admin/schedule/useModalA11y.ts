@@ -90,6 +90,5 @@ export function useModalA11y(
       previouslyFocused?.focus?.()
     }
     // Mount-only (dialogRef is a stable ref object; onClose via the latest-ref).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogRef])
 }
