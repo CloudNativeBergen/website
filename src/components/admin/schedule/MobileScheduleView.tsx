@@ -26,6 +26,7 @@ import {
   matchTalk,
   matchService,
 } from '@/lib/schedule/rules'
+import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
 import { Status } from '@/lib/proposal/types'
@@ -48,7 +49,6 @@ import {
   ArrowsUpDownIcon,
   InboxStackIcon,
   ChevronDownIcon,
-  CheckIcon,
 } from '@heroicons/react/24/outline'
 
 interface MobileScheduleViewProps {
@@ -765,7 +765,9 @@ function UnassignedDrawer({
 /* -------------------------------------------------------------------------- */
 
 function dayLabel(schedule: ConferenceSchedule, index: number): string {
-  const date = new Date(schedule.date).toLocaleDateString('en-US', {
+  // Project convention: format YYYY-MM-DD via the shared, timezone-safe helper
+  // (no raw `new Date(date)` for display — see AGENTS.md).
+  const date = formatConferenceDate(schedule.date, {
     month: 'short',
     day: 'numeric',
   })
@@ -773,9 +775,11 @@ function dayLabel(schedule: ConferenceSchedule, index: number): string {
 }
 
 /**
- * Day selector as a compact dropdown (replaces the day-chip row). A single-day
- * schedule renders as static text. Frees a full row of top chrome and scales to
- * any number of days.
+ * Day selector (replaces the day-chip row). A single-day schedule renders as
+ * static text; multi-day uses a NATIVE styled <select> — this gives full
+ * keyboard + screen-reader support and the native mobile picker for free, with
+ * none of the focus/keyboard pitfalls of a hand-rolled listbox. Frees a full row
+ * of top chrome and scales to any number of days.
  */
 function DaySelect({
   schedules,
@@ -786,7 +790,6 @@ function DaySelect({
   currentDayIndex: number
   onSelect: (dayIndex: number) => void
 }) {
-  const [open, setOpen] = useState(false)
   const current = schedules[currentDayIndex]
 
   if (schedules.length <= 1) {
@@ -799,67 +802,22 @@ function DaySelect({
 
   return (
     <div className="relative min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="inline-flex min-h-[44px] max-w-full items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+      <select
+        aria-label="Select day"
+        value={currentDayIndex}
+        onChange={(e) => onSelect(Number(e.target.value))}
+        className="min-h-[44px] max-w-full appearance-none truncate rounded-lg border border-gray-300 bg-white py-2 pr-9 pl-3 text-sm font-semibold text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
       >
-        <span className="truncate">
-          {current ? dayLabel(current, currentDayIndex) : 'Select day'}
-        </span>
-        <ChevronDownIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-      </button>
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-30 cursor-default"
-          />
-          <ul
-            role="listbox"
-            aria-label="Select day"
-            className="absolute left-0 z-40 mt-1 w-60 max-w-[80vw] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
-          >
-            {schedules.map((day, index) => {
-              const isActive = index === currentDayIndex
-              return (
-                <li key={`${index}-${day.date}`}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={isActive}
-                    onClick={() => {
-                      onSelect(index)
-                      setOpen(false)
-                    }}
-                    className={clsx(
-                      'flex min-h-[44px] w-full items-center gap-2 px-3 text-left text-sm transition-colors',
-                      isActive
-                        ? 'font-semibold text-blue-700 dark:text-blue-300'
-                        : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700',
-                    )}
-                  >
-                    <CheckIcon
-                      className={clsx(
-                        'h-4 w-4 shrink-0',
-                        isActive
-                          ? 'text-blue-600 dark:text-blue-300'
-                          : 'invisible',
-                      )}
-                    />
-                    {dayLabel(day, index)}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
+        {schedules.map((day, index) => (
+          <option key={`${index}-${day.date}`} value={index}>
+            {dayLabel(day, index)}
+          </option>
+        ))}
+      </select>
+      <ChevronDownIcon
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-400"
+      />
     </div>
   )
 }
