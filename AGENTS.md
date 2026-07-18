@@ -49,5 +49,10 @@ Project uses [mise](https://mise.jdx.sh/). Key commands:
 - **Storybook** is the single source of truth for UI/UX.
   - Component stories go in `Components/` or `Systems/{SystemName}/`.
   - **Deterministic Dates:** Mock `globalThis.Date` in Storybook `beforeEach` to fix relative dates (prevents visual diff thrashing).
+- **Visual inspection is MANDATORY for UI work.** Whenever you create or change a component/layout, **look at the rendered result** — never conclude "it works" from code review, measurements, or unit tests alone (they miss overflow, truncation, spacing, and responsive bugs). Workflow:
+  - Ensure the component has a Storybook story (add one if missing) so it's inspectable in isolation.
+  - Screenshot it with **`rtk pnpm shoot <story-id> [width] [height]`** (`scripts/shoot-story.mjs`) — defaults to iPhone-portrait (393×852, DPR 3), auto-starts Storybook, flattens decorator insets so the capture maps 1:1 to the app, and prints a hard per-card viewport-overflow check. Then actually view the PNG.
+  - For full-screen/mobile views set `parameters.layout: 'fullscreen'` on the story so captures aren't inset.
+  - Prefer isolated Storybook capture over trusting a deployed URL — a stale **PWA service worker** can serve an old bundle (see `public/sw.js` / `scripts/stamp-sw.mjs`); a Safari **Private tab** bypasses the SW when checking production.
 - **Testing (Vitest):** Test behavior over implementation. Prefer integration tests. Mock at boundaries.
 - **Storybook Interaction:** Use `play` functions for interactive tests (`storybook/test`).
