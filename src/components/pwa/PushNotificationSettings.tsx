@@ -106,6 +106,8 @@ export interface PushTestResult {
   gone: number
   /** Whether the server has VAPID keys configured at all. */
   configured: boolean
+  /** Total subscriptions on the account when the test ran. */
+  total: number
 }
 
 export interface PushNotificationSettingsViewProps {
@@ -146,10 +148,18 @@ function testFeedback(
       tone: 'muted',
     }
   }
-  if (result.sent === 0 && result.gone === 0) {
+  if (result.total === 0) {
     return {
       text: 'No devices are subscribed on this account yet. Enable notifications on a device first.',
       tone: 'muted',
+    }
+  }
+  if (result.sent === 0 && result.gone === 0) {
+    // Devices exist but every send failed (non-gone transport errors) — a
+    // different situation from having no devices at all.
+    return {
+      text: 'Could not deliver to your devices right now. Please try again shortly.',
+      tone: 'warn',
     }
   }
   const devices = `${result.sent} device${result.sent === 1 ? '' : 's'}`

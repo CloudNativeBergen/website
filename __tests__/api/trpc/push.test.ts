@@ -190,7 +190,7 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 2, gone: 0, configured: true })
+      expect(result).toEqual({ sent: 2, gone: 0, total: 2, configured: true })
       expect(mockGetState).toHaveBeenCalledWith(speakerA)
       expect(mockSendPush).toHaveBeenCalledTimes(2)
       // Uses the production payload shape: deep link + collapse tag, bypassing
@@ -209,7 +209,7 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 0, gone: 0, configured: false })
+      expect(result).toEqual({ sent: 0, gone: 0, total: 0, configured: false })
       expect(mockGetState).not.toHaveBeenCalled()
       expect(mockSendPush).not.toHaveBeenCalled()
     })
@@ -222,7 +222,7 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 0, gone: 0, configured: true })
+      expect(result).toEqual({ sent: 0, gone: 0, total: 0, configured: true })
       expect(mockSendPush).not.toHaveBeenCalled()
     })
 
@@ -231,7 +231,7 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 0, gone: 1, configured: true })
+      expect(result).toEqual({ sent: 0, gone: 1, total: 1, configured: true })
       expect(mockPrune).toHaveBeenCalledWith(speakerA, SUB.endpoint)
     })
 
