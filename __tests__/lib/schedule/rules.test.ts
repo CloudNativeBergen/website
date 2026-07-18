@@ -97,11 +97,25 @@ describe('findAvailableTimeSlot', () => {
 })
 
 describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
+  // The displaced talk's landing duration is its FORMAT duration (what
+  // performSwap writes), so target talks carry a format matching their intended
+  // span — check-what-you-write.
+  const targetTalkWithFormat = (
+    id: string,
+    format: string,
+    start: string,
+    end: string,
+  ): TrackTalk => ({
+    talk: proposal(id, format),
+    startTime: start,
+    endTime: end,
+  })
+
   it('allows a swap when both directions fit', () => {
-    const target = track(talk('b', '10:00', '11:00'))
+    const targetTalk = targetTalkWithFormat('b', 'talk_60', '10:00', '11:00')
+    const target = track(targetTalk)
     const source = track(talk('a', '10:00', '10:20'))
     const dragged = proposal('a', 'talk_20')
-    const targetTalk = target.talks[0]
     expect(canSwapTalks(target, dragged, targetTalk, '10:00')).toBe(true)
     // b (60min) placed back at 10:00 in the source (only 'a' there, which is leaving) fits.
     expect(
@@ -120,8 +134,13 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
       talk('a', '10:00', '10:20'),
       talk('c', '10:25', '10:50'),
     )
-    // Target: b@10:00 is 45 min.
-    const targetTalk = talk('b', '10:00', '10:45')
+    // Target: b@10:00 is a 45-min FORMAT (presentation_45).
+    const targetTalk = targetTalkWithFormat(
+      'b',
+      'presentation_45',
+      '10:00',
+      '10:45',
+    )
     const target = track(targetTalk)
     const dragged = proposal('a', 'talk_20')
     // Forward fits (a into target excluding b)...
@@ -133,6 +152,51 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
         targetTalk,
         '10:00',
         matchTalk('a', '10:00'),
+      ),
+    ).toBe(false)
+  })
+
+  it('validates the displaced talk with its FORMAT duration, not the stored slot span', () => {
+    // Regression (F3): b is STORED as a 20-min slot (10:00–10:20) but its format
+    // is presentation_45. Validating with the stored span (20m) would pass while
+    // performSwap writes the 45m format duration, overlapping c. Must use the
+    // format duration and REJECT.
+    const source = track(
+      talk('a', '10:00', '10:20'),
+      talk('c', '10:30', '10:55'),
+    )
+    const targetTalk = targetTalkWithFormat(
+      'b',
+      'presentation_45',
+      '10:00',
+      '10:20',
+    )
+    expect(
+      canPlaceDisplacedBack(
+        source,
+        targetTalk,
+        '10:00',
+        matchTalk('a', '10:00'),
+      ),
+    ).toBe(false)
+  })
+
+  it('rejects the swap when the displaced talk would run past the end of the day (F2)', () => {
+    // Source slot at 20:45; the displaced 45-min talk would land 20:45→21:30,
+    // past SCHEDULE_END (21:00) — even though the source track is otherwise empty.
+    const source = track()
+    const targetTalk = targetTalkWithFormat(
+      'b',
+      'presentation_45',
+      '20:45',
+      '21:30',
+    )
+    expect(
+      canPlaceDisplacedBack(
+        source,
+        targetTalk,
+        '20:45',
+        matchTalk('a', '20:45'),
       ),
     ).toBe(false)
   })

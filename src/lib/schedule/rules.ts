@@ -2,7 +2,7 @@ import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import {
   calculateEndTime,
-  durationBetween,
+  endsWithinScheduleDay,
   getProposalDurationMinutes,
   timesOverlap,
 } from './time'
@@ -31,6 +31,13 @@ export function matchService(
 ): SlotMatcher {
   return (slot) =>
     slot.placeholder === placeholder && slot.startTime === startTime
+}
+
+/** Compose matchers: a slot is excluded if ANY of the matchers claim it. */
+export function anyMatch(
+  ...matchers: Array<SlotMatcher | undefined>
+): SlotMatcher {
+  return (slot) => matchers.some((match) => match?.(slot))
 }
 
 /**
@@ -97,19 +104,29 @@ export function findAvailableTimeSlot(
  * reverse (that the displaced talk fits back into the source track) via
  * {@link canPlaceDisplacedBack} — validating only this direction was the source
  * of the post-swap-overlap bug.
+ *
+ * `draggedExclude` skips the dragged talk's OWN source slot: on a SAME-TRACK
+ * swap the dragged talk is still sitting in this track at its source position,
+ * so without excluding it the forward check self-collides and rejects every
+ * legal same-track swap. Omitted for cross-track swaps (the dragged talk lives
+ * in a different track, so there is nothing of its to exclude here).
  */
 export function canSwapTalks(
   track: ScheduleTrack,
   draggedProposal: ProposalExisting,
   targetTalk: TrackTalk,
   targetStartTime: string,
+  draggedExclude?: SlotMatcher,
 ): boolean {
   if (!targetTalk.talk) return false
   return fitsInTrack(
     track,
     targetStartTime,
     getProposalDurationMinutes(draggedProposal),
-    matchTalk(targetTalk.talk._id, targetTalk.startTime),
+    anyMatch(
+      matchTalk(targetTalk.talk._id, targetTalk.startTime),
+      draggedExclude,
+    ),
   )
 }
 
@@ -117,6 +134,21 @@ export function canSwapTalks(
  * Reverse half of a swap: does the displaced `targetTalk` fit back into the
  * source track at `sourceStartTime`, once the dragged talk (which is leaving
  * that track) is excluded?
+ *
+ * The displaced talk's landing duration is its FORMAT duration
+ * ({@link getProposalDurationMinutes}) — the value `performSwap` actually writes
+ * — NOT the stored slot span. Validating with the stored span while the write
+ * uses the format duration let a swap pass here then overlap a neighbour after
+ * the write (when stored < format). Check-what-you-write.
+ *
+ * Two guards beyond interval-freedom:
+ *  - end-of-day: the displaced talk must not run past {@link SCHEDULE_END} at
+ *    its landing slot (the dragged talk's own end was checked by the caller, but
+ *    the displaced talk's was not — a short talk could push a long one off-grid);
+ *  - it excludes the TARGET's own old slot as well as the dragged source, so a
+ *    SAME-TRACK swap (source === target track, target still present at its old
+ *    position) does not self-collide. Cross-track: the target's old slot is in
+ *    another track, so excluding it here is a harmless no-op.
  */
 export function canPlaceDisplacedBack(
   sourceTrack: ScheduleTrack,
@@ -124,10 +156,16 @@ export function canPlaceDisplacedBack(
   sourceStartTime: string,
   draggedExclude: SlotMatcher,
 ): boolean {
+  if (!targetTalk.talk) return false
+  const displacedDuration = getProposalDurationMinutes(targetTalk.talk)
+  if (!endsWithinScheduleDay(sourceStartTime, displacedDuration)) return false
   return fitsInTrack(
     sourceTrack,
     sourceStartTime,
-    durationBetween(targetTalk.startTime, targetTalk.endTime),
-    draggedExclude,
+    displacedDuration,
+    anyMatch(
+      draggedExclude,
+      matchTalk(targetTalk.talk._id, targetTalk.startTime),
+    ),
   )
 }

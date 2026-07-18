@@ -186,8 +186,14 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       talk('a', '10:00', '10:20'),
       talk('c', '10:25', '10:50'),
     )
-    // Target: b@10:00 is 45m; forward fits but b back at 10:00→10:45 hits c.
-    const target = track('B', talk('b', '10:00', '10:45'))
+    // Target: b@10:00 has a 45m FORMAT; forward fits but b back at 10:00→10:45
+    // (its format duration, which performSwap writes) hits c.
+    const target = track('B', {
+      kind: 'talk',
+      talk: proposal('b', 'presentation_45'),
+      startTime: '10:00',
+      endTime: '10:45',
+    })
     const s = schedule(source, target)
     const dragItem: DragItem = {
       type: 'scheduled-talk',
@@ -198,6 +204,141 @@ describe('moveProposal — swap (bidirectional validation)', () => {
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
     expect(res.ok).toBe(false)
     expect(res.schedule).toBe(s)
+  })
+
+  it('REJECTS a swap validated with the stored span but applied with the FORMAT duration (F3)', () => {
+    // Source: a(talk_25)@11:00–11:25 leaving, c@11:30–11:55 staying.
+    const source = track(
+      'A',
+      talk('a', '11:00', '11:25'),
+      talk('c', '11:30', '11:55'),
+    )
+    // Target b is STORED as a 20-min slot (10:00–10:20) but its format is
+    // presentation_45. The old code validated the displaced talk with the stored
+    // span (20m → b back at 11:00–11:20, clears c) then performSwap wrote the 45m
+    // format duration (11:00–11:45, overlapping c). Check-what-you-write ⇒ REJECT.
+    const target = track('B', {
+      kind: 'talk',
+      talk: proposal('b', 'presentation_45'),
+      startTime: '10:00',
+      endTime: '10:20',
+    })
+    const s = schedule(source, target)
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a', 'talk_25'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '11:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '10:00'))).toBe(
+      'invalid',
+    )
+    const res = moveProposal(s, dragItem, drop(1, '10:00'))
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+  })
+
+  it('allows a legal SAME-TRACK swap and leaves non-overlapping slots (F6)', () => {
+    // One track: a(talk_25)@09:00, b STORED as a 60-min slot 09:30–10:30 but
+    // FORMAT talk_25. Pre-fix validated the displaced talk with the stored 60-min
+    // span, which self-collided with b's own vacated slot → this legal swap was
+    // wrongly rejected. With the FORMAT duration plus the vacated-slot exclusions
+    // it succeeds: b→09:00–09:25, a→09:30–09:55, non-overlapping.
+    const s = schedule(
+      track('A', talk('a', '09:00', '09:25'), {
+        kind: 'talk',
+        talk: proposal('b', 'talk_25'),
+        startTime: '09:30',
+        endTime: '10:30',
+      }),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a', 'talk_25'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '09:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
+      'swap',
+    )
+    const res = moveProposal(s, dragItem, drop(0, '09:30'))
+    expect(res.ok).toBe(true)
+    const slots = res.schedule.tracks[0].talks
+    expect(slots.map((t) => t.talk?._id)).toEqual(['b', 'a'])
+    expect(slots[0]).toMatchObject({ startTime: '09:00', endTime: '09:25' })
+    expect(slots[1]).toMatchObject({ startTime: '09:30', endTime: '09:55' })
+  })
+
+  it('REJECTS a same-track swap whose two talks would overlap EACH OTHER (F6 guard)', () => {
+    // a(talk_25)@09:00 dragged onto b(talk_60)@09:30. Each half-check passes in
+    // isolation (each ignores the other's vacated slot), but the final
+    // a@09:30–09:55 sits inside b@09:00–10:00. The same-track mutual-overlap guard
+    // rejects — the vacated-slot exclusions must not approve a self-overlapping swap.
+    const s = schedule(
+      track('A', talk('a', '09:00', '09:25'), {
+        kind: 'talk',
+        talk: proposal('b', 'talk_60'),
+        startTime: '09:30',
+        endTime: '10:30',
+      }),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a', 'talk_25'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '09:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
+      'invalid',
+    )
+    expect(moveProposal(s, dragItem, drop(0, '09:30')).ok).toBe(false)
+  })
+
+  it('REJECTS a same-track swap where the displaced talk lands on a THIRD talk (F6)', () => {
+    // Same track: a(talk_25)@09:00, d(talk_25)@09:35 (stays), b(talk_60)@10:30.
+    // Dragging a onto b displaces b back to 09:00 for its 60-min format
+    // (09:00–10:00), overlapping d@09:35. The reverse half-check (which does NOT
+    // exclude d) rejects — a real third-talk collision is not masked.
+    const s = schedule(
+      track('A', talk('a', '09:00', '09:25'), talk('d', '09:35', '10:00'), {
+        kind: 'talk',
+        talk: proposal('b', 'talk_60'),
+        startTime: '10:30',
+        endTime: '11:30',
+      }),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a', 'talk_25'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '09:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '10:30'))).toBe(
+      'invalid',
+    )
+    expect(moveProposal(s, dragItem, drop(0, '10:30')).ok).toBe(false)
+  })
+
+  it('leaves cross-track swaps unchanged (F6 — same-track guard does not apply)', () => {
+    // Regression guard: the same-track-only mutual-overlap check must not affect a
+    // legal cross-track swap. a(talk_25)@10:00 in track A ↔ b(talk_25)@11:00 in B.
+    const s = schedule(
+      track('A', talk('a', '10:00', '10:25')),
+      track('B', talk('b', '11:00', '11:25')),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a', 'talk_25'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '10:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
+      'swap',
+    )
+    const res = moveProposal(s, dragItem, drop(1, '11:00'))
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[1].talks[0].talk?._id).toBe('a')
+    expect(res.schedule.tracks[0].talks[0].talk?._id).toBe('b')
   })
 })
 
@@ -331,6 +472,41 @@ describe('service add/resize/rename', () => {
     const res = renameService(s, 0, 0, 'Coffee Break')
     expect(res.schedule.tracks[0].talks[0].placeholder).toBe('Coffee Break')
   })
+
+  it('addService rejects an empty / whitespace title (F7)', () => {
+    const s = schedule(track('A'))
+    expect(
+      addService(s, 0, { title: '', startTime: '10:00', duration: 15 }).ok,
+    ).toBe(false)
+    expect(
+      addService(s, 0, { title: '   ', startTime: '10:00', duration: 15 }).ok,
+    ).toBe(false)
+  })
+
+  it('addService trims a padded title (F7)', () => {
+    const s = schedule(track('A'))
+    const res = addService(s, 0, {
+      title: '  Coffee  ',
+      startTime: '10:00',
+      duration: 15,
+    })
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[0].talks[0].placeholder).toBe('Coffee')
+  })
+
+  it('renameService rejects an empty / whitespace title (F7)', () => {
+    const s = schedule(track('A', service('Break', '10:00', '10:15')))
+    expect(renameService(s, 0, 0, '').ok).toBe(false)
+    expect(renameService(s, 0, 0, '   ').ok).toBe(false)
+    expect(renameService(s, 0, 0, '   ').schedule).toBe(s)
+  })
+
+  it('renameService trims a padded title (F7)', () => {
+    const s = schedule(track('A', service('Break', '10:00', '10:15')))
+    const res = renameService(s, 0, 0, '  Lunch  ')
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[0].talks[0].placeholder).toBe('Lunch')
+  })
 })
 
 describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
@@ -390,6 +566,186 @@ describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
     // Growing to 60 min → 21:30, past 21:00.
     expect(resizeService(s, 0, 0, 60).ok).toBe(false)
   })
+
+  it('rejects a fresh drop whose 24h-WRAPPED end reads as within the day (F1)', () => {
+    // workshop_240 at 20:00 ends at 00:00 (wraps mod 24h). The old
+    // withinScheduleEnd(calculateEndTime(...)) saw 00:00 (0 min) ≤ 21:00 and
+    // wrongly allowed it; endsWithinScheduleDay sums 20:00 + 240 = 24:00 > 21:00.
+    const s = schedule(track('A'))
+    const dragItem: DragItem = {
+      type: 'proposal',
+      proposal: proposal('p', 'workshop_240'),
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '20:00'))).toBe(
+      'invalid',
+    )
+    expect(moveProposal(s, dragItem, drop(0, '20:00')).ok).toBe(false)
+  })
+
+  it('rejects a MOVE of a scheduled talk whose wrapped end reads as within the day (F1)', () => {
+    // Same wrap, over an existing talk: a workshop_240 dragged to 20:00 must not
+    // classify as a swap/move onto a 20:30 talk just because its end wrapped.
+    const s = schedule(
+      track('A', talk('victim', '20:30', '20:55')),
+      track('B', {
+        kind: 'talk',
+        talk: proposal('w', 'workshop_240'),
+        startTime: '08:00',
+        endTime: '12:00',
+      }),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('w', 'workshop_240'),
+      sourceTrackIndex: 1,
+      sourceTimeSlot: '08:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '20:00'))).toBe(
+      'invalid',
+    )
+    expect(moveProposal(s, dragItem, drop(0, '20:00')).ok).toBe(false)
+  })
+
+  it('addService rejects a huge duration that would wrap past midnight (F1)', () => {
+    const s = schedule(track('A'))
+    // 20:00 + 300 min = 25:00; the wrapped end (01:00) must not read as valid.
+    expect(
+      addService(s, 0, { title: 'Marathon', startTime: '20:00', duration: 300 })
+        .ok,
+    ).toBe(false)
+  })
+
+  it('resizeService rejects a huge duration that would wrap past midnight (F1)', () => {
+    const s = schedule(track('A', service('Break', '20:00', '20:15')))
+    // 20:00 + 300 → 01:00 wrapped; must be rejected, not accepted.
+    expect(resizeService(s, 0, 0, 300).ok).toBe(false)
+  })
+
+  it('moveServiceSession rejects a service whose wrapped end reads as within the day (F1)', () => {
+    const s = schedule(track('A'))
+    const dragItem: DragItem = {
+      type: 'service-session',
+      serviceSession: {
+        placeholder: 'Long',
+        startTime: '08:00',
+        endTime: '12:00', // a 240-min session
+      },
+    }
+    // Dropped at 20:00 → 00:00 wrapped; endsWithinScheduleDay rejects.
+    expect(classifyServiceDrop(s.tracks, dragItem, drop(0, '20:00'))).toBe(
+      'invalid',
+    )
+    expect(moveServiceSession(s, dragItem, drop(0, '20:00')).ok).toBe(false)
+  })
+})
+
+describe('F4 — stale / out-of-range drag source', () => {
+  it('rejects a scheduled-talk drag whose source track index is out of range (no throw)', () => {
+    const s = schedule(track('A', talk('a', '10:00', '10:25')), track('B'))
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a'),
+      sourceTrackIndex: 9, // out of range
+      sourceTimeSlot: '10:00',
+    }
+    expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
+      'invalid',
+    )
+    // The apply path used to index newTracks[9].talks and throw; now it fails soft.
+    expect(() => moveProposal(s, dragItem, drop(1, '11:00'))).not.toThrow()
+    expect(moveProposal(s, dragItem, drop(1, '11:00')).ok).toBe(false)
+  })
+
+  it('rejects a scheduled-talk drag whose source slot is stale (no duplication)', () => {
+    // Source track exists but the talk is no longer at sourceTimeSlot (it was
+    // '09:00', the talk actually sits at '10:00'). Removing nothing then re-adding
+    // would duplicate it; require the source slot to still match.
+    const s = schedule(track('A', talk('a', '10:00', '10:25')), track('B'))
+    const dragItem: DragItem = {
+      type: 'scheduled-talk',
+      proposal: proposal('a'),
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '09:00', // stale
+    }
+    const res = moveProposal(s, dragItem, drop(1, '11:00'))
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+    // 'a' still appears exactly once, only in track A.
+    const allIds = res.schedule.tracks.flatMap((t) =>
+      t.talks.map((x) => x.talk?._id),
+    )
+    expect(allIds.filter((id) => id === 'a')).toHaveLength(1)
+  })
+
+  it('rejects a scheduled-service drag whose source is out of range (no throw)', () => {
+    const s = schedule(
+      track('A', service('Break', '10:00', '10:15')),
+      track('B'),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-service',
+      serviceSession: {
+        placeholder: 'Break',
+        startTime: '10:00',
+        endTime: '10:15',
+      },
+      sourceTrackIndex: 9,
+      sourceTimeSlot: '10:00',
+    }
+    expect(classifyServiceDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
+      'invalid',
+    )
+    expect(() =>
+      moveServiceSession(s, dragItem, drop(1, '11:00')),
+    ).not.toThrow()
+    expect(moveServiceSession(s, dragItem, drop(1, '11:00')).ok).toBe(false)
+  })
+
+  it('rejects a scheduled-service drag whose source slot is stale (no duplication)', () => {
+    const s = schedule(
+      track('A', service('Break', '10:00', '10:15')),
+      track('B'),
+    )
+    const dragItem: DragItem = {
+      type: 'scheduled-service',
+      serviceSession: {
+        placeholder: 'Break',
+        startTime: '10:00',
+        endTime: '10:15',
+      },
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '09:00', // stale
+    }
+    const res = moveServiceSession(s, dragItem, drop(1, '11:00'))
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+    const allPlaceholders = res.schedule.tracks.flatMap((t) =>
+      t.talks.map((x) => x.placeholder),
+    )
+    expect(allPlaceholders.filter((p) => p === 'Break')).toHaveLength(1)
+  })
+})
+
+describe('F5 — service dropped on its own slot is a no-op', () => {
+  it('classifies a same-track same-slot service drop as invalid (not a dirtying move)', () => {
+    const s = schedule(track('A', service('Break', '12:00', '12:15')))
+    const dragItem: DragItem = {
+      type: 'scheduled-service',
+      serviceSession: {
+        placeholder: 'Break',
+        startTime: '12:00',
+        endTime: '12:15',
+      },
+      sourceTrackIndex: 0,
+      sourceTimeSlot: '12:00',
+    }
+    expect(classifyServiceDrop(s.tracks, dragItem, drop(0, '12:00'))).toBe(
+      'invalid',
+    )
+    const res = moveServiceSession(s, dragItem, drop(0, '12:00'))
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+  })
 })
 
 describe('duplicateService — skips conflicting tracks', () => {
@@ -422,6 +778,40 @@ describe('duplicateService — skips conflicting tracks', () => {
     const res = duplicateService(s, service('Break', '10:00', '10:15'), 0)
     expect(res.ok).toBe(false)
     expect(res.schedule).toBe(s)
+  })
+
+  it('rejects a talk-bearing slot instead of minting placeholder:"" copies (F8)', () => {
+    const s = schedule(track('Source'), track('Free'))
+    // A real talk slot is not a service; duplicating it would copy an untitled
+    // ghost service into the other tracks.
+    const res = duplicateService(s, talk('x', '10:00', '10:25'), 0)
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
+    expect(res.schedule.tracks[1].talks).toHaveLength(0)
+  })
+
+  it('rejects a ghost slot with no placeholder (F8)', () => {
+    const s = schedule(track('Source'), track('Free'))
+    const ghost = { startTime: '10:00', endTime: '10:15' } as unknown as Slot
+    const res = duplicateService(s, ghost, 0)
+    expect(res.ok).toBe(false)
+    expect(res.schedule.tracks[1].talks).toHaveLength(0)
+  })
+
+  it('rejects a session whose stored end runs past the end of the day (F8)', () => {
+    const s = schedule(track('Source'), track('Free'))
+    // Stored 20:00–21:30 (past SCHEDULE_END 21:00); the end-of-day re-check must
+    // reject before copying it into another track.
+    const res = duplicateService(s, service('Late', '20:00', '21:30'), 0)
+    expect(res.ok).toBe(false)
+    expect(res.schedule.tracks[1].talks).toHaveLength(0)
+  })
+
+  it('trims the placeholder on the copies (F8)', () => {
+    const s = schedule(track('Source'), track('Free'))
+    const res = duplicateService(s, service('  Break  ', '10:00', '10:15'), 0)
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[1].talks[0].placeholder).toBe('Break')
   })
 })
 
@@ -519,6 +909,63 @@ describe('classifier ⇔ reducer equivalence', () => {
         p: drop(0, '10:00'),
       }),
     },
+    {
+      name: 'reject a drop whose end wraps past midnight (F1)',
+      build: () => ({
+        s: schedule(track('A')),
+        d: { type: 'proposal', proposal: proposal('p', 'workshop_240') },
+        p: drop(0, '20:00'),
+      }),
+    },
+    {
+      name: 'reject a swap whose displaced talk would run past end of day (F2)',
+      build: () => ({
+        // a(talk_25)@20:35 dragged onto b(talk_45)@10:00; b displaced to 20:35
+        // for its 45m format → 21:20, past 21:00.
+        s: schedule(
+          track('A', talk('a', '20:35', '21:00')),
+          track('B', {
+            kind: 'talk',
+            talk: proposal('b', 'presentation_45'),
+            startTime: '10:00',
+            endTime: '10:45',
+          }),
+        ),
+        d: {
+          type: 'scheduled-talk',
+          proposal: proposal('a', 'talk_25'),
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '20:35',
+        },
+        p: drop(1, '10:00'),
+      }),
+    },
+    {
+      name: 'reject a scheduled-talk drag with an out-of-range source (F4)',
+      build: () => ({
+        s: schedule(track('A', talk('a', '10:00', '10:25')), track('B')),
+        d: {
+          type: 'scheduled-talk',
+          proposal: proposal('a'),
+          sourceTrackIndex: 9,
+          sourceTimeSlot: '10:00',
+        },
+        p: drop(1, '11:00'),
+      }),
+    },
+    {
+      name: 'reject a scheduled-talk drag with a stale source slot (F4)',
+      build: () => ({
+        s: schedule(track('A', talk('a', '10:00', '10:25')), track('B')),
+        d: {
+          type: 'scheduled-talk',
+          proposal: proposal('a'),
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '09:00',
+        },
+        p: drop(1, '11:00'),
+      }),
+    },
   ]
 
   proposalCases.forEach(({ name, build }) => {
@@ -577,6 +1024,47 @@ describe('classifier ⇔ reducer equivalence', () => {
           sourceTimeSlot: '12:00',
         }),
         p: drop(0, '12:05'),
+      }),
+    },
+    {
+      name: 'reject a service whose end wraps past midnight (F1)',
+      build: () => ({
+        s: schedule(track('A')),
+        d: serviceDrag('Long', '08:00', '12:00'), // 240m
+        p: drop(0, '20:00'),
+      }),
+    },
+    {
+      name: 'reject a service dropped on its own slot — no-op (F5)',
+      build: () => ({
+        s: schedule(track('A', service('Break', '12:00', '12:15'))),
+        d: serviceDrag('Break', '12:00', '12:15', {
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '12:00',
+        }),
+        p: drop(0, '12:00'),
+      }),
+    },
+    {
+      name: 'reject a scheduled-service drag with an out-of-range source (F4)',
+      build: () => ({
+        s: schedule(track('A', service('Break', '12:00', '12:15')), track('B')),
+        d: serviceDrag('Break', '12:00', '12:15', {
+          sourceTrackIndex: 9,
+          sourceTimeSlot: '12:00',
+        }),
+        p: drop(1, '13:00'),
+      }),
+    },
+    {
+      name: 'reject a scheduled-service drag with a stale source slot (F4)',
+      build: () => ({
+        s: schedule(track('A', service('Break', '12:00', '12:15')), track('B')),
+        d: serviceDrag('Break', '12:00', '12:15', {
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '09:00',
+        }),
+        p: drop(1, '13:00'),
       }),
     },
   ]

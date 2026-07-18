@@ -17,6 +17,7 @@ export {
   timesOverlap,
   generateTimeSlots,
   getProposalDurationMinutes,
+  endsWithinScheduleDay,
   type TimeSlot,
 } from './time'
 export {

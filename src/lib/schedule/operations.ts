@@ -14,6 +14,7 @@ import {
   calculateEndTime,
   getProposalDurationMinutes,
   durationBetween,
+  timesOverlap,
   findAvailableTimeSlot,
   canSwapTalks,
   canPlaceDisplacedBack,
@@ -21,7 +22,7 @@ import {
   matchTalk,
   matchService,
 } from './types'
-import { withinScheduleEnd } from './time'
+import { endsWithinScheduleDay } from './time'
 
 /**
  * Pure schedule transforms, lifted verbatim (behaviour-preserving) from the old
@@ -156,10 +157,30 @@ export function classifyProposalDrop(
     return 'invalid'
   }
 
+  // A `scheduled-talk` drag must still find its source slot exactly where the
+  // drag claims it is. Out of range → the apply path indexes
+  // `newTracks[sourceTrackIndex]` on `undefined` and the reducer throws; stale
+  // but in range → the source removal (by id + startTime) matches nothing while
+  // the re-add proceeds, duplicating the talk (the fresh-drop dup guard below is
+  // skipped for scheduled-talk). Reject before either can happen.
+  if (dragItem.type === 'scheduled-talk') {
+    const sourceTrack = tracks[dragItem.sourceTrackIndex]
+    const sourcePresent =
+      sourceTrack?.talks.some(
+        (slot) =>
+          slot.talk?._id === proposal._id &&
+          slot.startTime === dragItem.sourceTimeSlot,
+      ) ?? false
+    if (!sourcePresent) return 'invalid'
+  }
+
   const targetTrack = tracks[trackIndex]
   const durationMinutes = getProposalDurationMinutes(proposal)
-  const endTime = calculateEndTime(timeSlot, durationMinutes)
-  if (!withinScheduleEnd(endTime)) return 'invalid'
+  // Root end-of-day gate: `endsWithinScheduleDay` sums start + duration in raw
+  // minutes, so a long talk (e.g. workshop_240 at 20:00) can't wrap past
+  // midnight and read as ending before 21:00 the way
+  // `withinScheduleEnd(calculateEndTime(...))` did.
+  if (!endsWithinScheduleDay(timeSlot, durationMinutes)) return 'invalid'
 
   // Duplicate guard: a FRESH drop (not a `scheduled-talk` move) is rejected if
   // the proposal is already scheduled on THIS day or — via
@@ -185,18 +206,55 @@ export function classifyProposalDrop(
     dragItem.sourceTimeSlot !== undefined
   ) {
     const sourceTrack = tracks[dragItem.sourceTrackIndex]
-    // Validate BOTH directions of the swap.
+    if (!sourceTrack) return 'invalid'
+    // Validate BOTH directions of the swap. `draggedExclude` skips the dragged
+    // talk's own source slot: on a SAME-TRACK swap that slot is still in the
+    // track, so both halves must ignore it (forward via `canSwapTalks`, reverse
+    // via `canPlaceDisplacedBack`) or the check self-collides and rejects a legal
+    // swap. Cross-track: the dragged talk isn't in either track being probed, so
+    // the exclusion is a harmless no-op.
     const draggedExclude = matchTalk(proposal._id, dragItem.sourceTimeSlot)
-    return canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot) &&
-      sourceTrack &&
+    const bothDirectionsFit =
+      canSwapTalks(
+        targetTrack,
+        proposal,
+        occupiedTalk,
+        timeSlot,
+        draggedExclude,
+      ) &&
       canPlaceDisplacedBack(
         sourceTrack,
         occupiedTalk,
         dragItem.sourceTimeSlot,
         draggedExclude,
       )
-      ? 'swap'
-      : 'invalid'
+    if (!bothDirectionsFit) return 'invalid'
+
+    // Same-track swap: each half-check validates one talk with the OTHER removed
+    // (via the vacated-slot exclusions), so neither sees the two talks in their
+    // FINAL positions. In a single track that lets a long displaced talk land
+    // over the dragged talk's new slot and still pass both halves. Reject when
+    // the two swapped footprints (both at their FORMAT durations, what
+    // performSwap writes) overlap each other. Cross-track swaps land in separate
+    // tracks, so there is nothing to check here.
+    if (dragItem.sourceTrackIndex === trackIndex) {
+      const draggedEnd = calculateEndTime(timeSlot, durationMinutes)
+      const displacedEnd = calculateEndTime(
+        dragItem.sourceTimeSlot,
+        getProposalDurationMinutes(occupiedTalk.talk),
+      )
+      if (
+        timesOverlap(
+          timeSlot,
+          draggedEnd,
+          dragItem.sourceTimeSlot,
+          displacedEnd,
+        )
+      ) {
+        return 'invalid'
+      }
+    }
+    return 'swap'
   }
 
   if (occupiedTalk) return 'invalid'
@@ -231,12 +289,39 @@ export function classifyServiceDrop(
 
   if (trackIndex < 0 || trackIndex >= tracks.length) return 'invalid'
 
+  // A service dropped back onto its own slot is a no-op — mirror the talk path,
+  // else `excludeExisting` matches the session against itself and it reports as a
+  // legal 'move', marking the day dirty for an identical state.
+  if (
+    dragItem.type === 'scheduled-service' &&
+    dragItem.sourceTrackIndex === trackIndex &&
+    dragItem.sourceTimeSlot === timeSlot
+  ) {
+    return 'invalid'
+  }
+
+  // Mirror the scheduled-talk stale-source guard: an out-of-range source makes
+  // the reducer index `undefined.talks` and throw; a stale-but-in-range source
+  // removes nothing then re-adds, duplicating the session. Require the source
+  // service to still exist exactly where the drag claims it.
+  if (dragItem.type === 'scheduled-service') {
+    const sourceTrack = tracks[dragItem.sourceTrackIndex]
+    const sourcePresent =
+      sourceTrack?.talks.some(
+        (slot) =>
+          slot.placeholder === serviceSession.placeholder &&
+          slot.startTime === dragItem.sourceTimeSlot,
+      ) ?? false
+    if (!sourcePresent) return 'invalid'
+  }
+
   const durationMinutes = durationBetween(
     serviceSession.startTime,
     serviceSession.endTime,
   )
+  // Root end-of-day gate (see classifyProposalDrop) — no wrap possible.
+  if (!endsWithinScheduleDay(timeSlot, durationMinutes)) return 'invalid'
   const newEndTime = calculateEndTime(timeSlot, durationMinutes)
-  if (!withinScheduleEnd(newEndTime)) return 'invalid'
 
   const targetTrack = tracks[trackIndex]
   const excludeExisting =
@@ -483,9 +568,17 @@ export function addService(
   if (trackIndex < 0 || trackIndex >= schedule.tracks.length) {
     return { schedule, ok: false }
   }
+  // Reject an empty/whitespace title: an untitled placeholder is a ghost slot
+  // that toEditorSchedule silently strips on the next load (invisible data loss).
+  const title = args.title.trim()
+  if (!title) return { schedule, ok: false }
   const track = schedule.tracks[trackIndex]
+  // Root end-of-day gate (see classifyProposalDrop) — sums start + duration so a
+  // huge duration can't wrap past midnight and read as within the day.
+  if (!endsWithinScheduleDay(args.startTime, args.duration)) {
+    return { schedule, ok: false }
+  }
   const endTime = calculateEndTime(args.startTime, args.duration)
-  if (!withinScheduleEnd(endTime)) return { schedule, ok: false }
   // Reject a new service session that would overlap an existing talk/session
   // (the UI's ＋ button only gates on an exact-start match, so a session can be
   // created inside/over an existing item).
@@ -494,7 +587,7 @@ export function addService(
   }
   const newSession: Slot = {
     kind: 'service',
-    placeholder: args.title,
+    placeholder: title,
     startTime: args.startTime,
     endTime,
   }
@@ -520,8 +613,11 @@ export function resizeService(
   const talk = track.talks[talkIndex]
   if (!talk || !talk.placeholder) return { schedule, ok: false }
 
+  // Root end-of-day gate (see classifyProposalDrop) — no wrap possible.
+  if (!endsWithinScheduleDay(talk.startTime, duration)) {
+    return { schedule, ok: false }
+  }
   const newEnd = calculateEndTime(talk.startTime, duration)
-  if (!withinScheduleEnd(newEnd)) return { schedule, ok: false }
   // Reject a resize that would grow the session over a following talk/session
   // (exclude the session being resized from the check).
   if (
@@ -559,8 +655,12 @@ export function renameService(
   const talk = track.talks[talkIndex]
   if (!talk || !talk.placeholder) return { schedule, ok: false }
 
+  // Reject an empty/whitespace rename — an untitled placeholder becomes a ghost
+  // slot that the next load silently strips (see addService).
+  const trimmed = title.trim()
+  if (!trimmed) return { schedule, ok: false }
   const newTalks = [...track.talks]
-  newTalks[talkIndex] = { ...talk, placeholder: title }
+  newTalks[talkIndex] = { ...talk, placeholder: trimmed }
   const newTracks = [...schedule.tracks]
   newTracks[trackIndex] = { ...track, talks: newTalks }
   return { schedule: { ...schedule, tracks: newTracks }, ok: true }
@@ -579,12 +679,26 @@ export function duplicateService(
   serviceSession: TrackTalk,
   sourceTrackIndex: number,
 ): OperationResult {
-  // The UI dispatches the source slot as a wide TrackTalk; a duplicate is always
-  // a service, so tag it as a ServiceSlot (the `?? ''` only guards the type — a
-  // service session always carries a placeholder).
+  // The UI dispatches the source slot as a wide TrackTalk. Only an actual
+  // service session may be duplicated: a talk-bearing slot or a ghost (no
+  // placeholder) would otherwise mint `placeholder: ''` copies — untitled ghost
+  // sessions the next load strips. Guard both, mirroring the other constructors.
+  const placeholder = serviceSession.placeholder?.trim()
+  if (serviceSession.talk || !placeholder) return { schedule, ok: false }
+
+  // End-of-day guard, mirroring addService/resizeService: never copy a session
+  // that runs past SCHEDULE_END into a track.
+  const duration = durationBetween(
+    serviceSession.startTime,
+    serviceSession.endTime,
+  )
+  if (!endsWithinScheduleDay(serviceSession.startTime, duration)) {
+    return { schedule, ok: false }
+  }
+
   const copy: Slot = {
     kind: 'service',
-    placeholder: serviceSession.placeholder ?? '',
+    placeholder,
     startTime: serviceSession.startTime,
     endTime: serviceSession.endTime,
   }
