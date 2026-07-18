@@ -56,3 +56,16 @@ Project uses [mise](https://mise.jdx.sh/). Key commands:
   - Prefer isolated Storybook capture over trusting a deployed URL — a stale **PWA service worker** can serve an old bundle (see `public/sw.js` / `scripts/stamp-sw.mjs`); a Safari **Private tab** bypasses the SW when checking production.
 - **Testing (Vitest):** Test behavior over implementation. Prefer integration tests. Mock at boundaries.
 - **Storybook Interaction:** Use `play` functions for interactive tests (`storybook/test`).
+
+## In-app notifications
+
+The persistent notification hub (`src/lib/notification/*`, `src/server/routers/notification.ts`, `src/components/notifications/*`) is a durable, per-recipient inbox — surfaced by the `NotificationBell`. **Name-collision warning:** this is NOT the ephemeral toast system in `src/components/admin/NotificationProvider.tsx` (`useNotification()` / `showNotification()`), which shows transient, in-memory alerts and persists nothing. Keep the two straight — the bell may _bridge_ a new persistent notification into a toast, but they are separate systems.
+
+- **Never-fail contract:** a notification write must NEVER fail (or roll back) the business mutation that triggered it. `createNotifications` catches and logs its own errors and never throws into the caller — do not wrap it expecting to react to failures. A submitted proposal stays submitted even if the organizer notification write fails.
+- **Actor exclusion:** never notify the actor about their own action. Exclude `actorId` from the recipient set when fanning out.
+- **Per-recipient fan-out in ONE transaction:** fan out one `notification` document PER recipient (read state is per-user), and write the whole batch in a single `clientWrite.transaction()`.
+- **Link conventions:** link to the most-specific page for the audience — `/admin/...` for organizers, `/cfp/...` for speakers (e.g. `/cfp/proposal/<id>`, `/admin/proposals/<id>`). Same event to both audiences → two inputs with different links.
+- **Bus-handler vs router-inline:** emit from a domain **bus handler** when multiple call sites raise the same event or the emit is cross-cutting; emit **inline in the router/mutation** only when the notification is a one-off tightly coupled to that single mutation.
+- **Retention:** notifications older than **90 days are hard-deleted** by a daily cron — **including unread ones**. The hub is not an archive; anything that must persist longer belongs in its own record.
+
+See `docs/ADMIN_NOTIFICATION_SYSTEM.md` for the ephemeral toast system it is often confused with.

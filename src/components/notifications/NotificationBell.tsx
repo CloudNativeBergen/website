@@ -1,8 +1,11 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+import { useSession } from 'next-auth/react'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import { BellIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
+import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import { NotificationPanel } from './NotificationPanel'
 
 /**
@@ -16,14 +19,48 @@ import { NotificationPanel } from './NotificationPanel'
  * while the Popover is open.
  */
 export function NotificationBell() {
-  const { data: unreadCount = 0 } = api.notification.unreadCount.useQuery(
-    undefined,
-    {
-      refetchInterval: 30_000,
-      refetchOnWindowFocus: true,
-      staleTime: 10_000,
-    },
-  )
+  const { data, isSuccess } = api.notification.unreadCount.useQuery(undefined, {
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 10_000,
+  })
+  const unreadCount = data ?? 0
+
+  // Bridge a rising unread count to the ephemeral toast system so a live
+  // notification surfaces even when the bell is closed. `useNotificationSafe`
+  // returns `undefined` (rather than throwing) if the toast provider isn't
+  // mounted, keeping the bell resilient in any shell.
+  const notify = useNotificationSafe()
+  const { data: session } = useSession()
+  const isImpersonating = session?.isImpersonating === true
+
+  // Previous RESOLVED unread count. `null` until the first successful fetch, so
+  // login / first-load never fires a toast — only a subsequent increase does.
+  const prevUnreadRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!isSuccess) {
+      return
+    }
+    const prev = prevUnreadRef.current
+    prevUnreadRef.current = unreadCount
+    if (prev === null) {
+      // First resolved value: establish the baseline, don't toast.
+      return
+    }
+    // Only a genuine increase toasts — never a decrease (mark-read) or an
+    // unchanged refetch. Suppressed entirely while impersonating a speaker.
+    if (unreadCount > prev && !isImpersonating) {
+      const delta = unreadCount - prev
+      notify?.showNotification({
+        type: 'info',
+        title: 'You have new notifications',
+        message:
+          delta === 1
+            ? 'You have 1 new notification.'
+            : `You have ${delta} new notifications.`,
+      })
+    }
+  }, [isSuccess, unreadCount, isImpersonating, notify])
 
   const hasUnread = unreadCount > 0
   const badgeLabel = unreadCount > 9 ? '9+' : String(unreadCount)
