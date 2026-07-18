@@ -312,6 +312,47 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </ul>
                     </div>
 
+                    {/* In-App Notifications */}
+                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-6 dark:border-cyan-800 dark:bg-cyan-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-cyan-800 dark:text-cyan-200">
+                        <ChatBubbleOvalLeftIcon className="mr-3 h-5 w-5" />
+                        In-App Notifications
+                      </h3>
+                      <ul className="space-y-2 text-sm text-cyan-700 dark:text-cyan-300">
+                        <li>
+                          • <strong>Notification content:</strong> The title and
+                          message shown to you (e.g. a proposal status change or
+                          a new comment)
+                        </li>
+                        <li>
+                          • <strong>Recipient:</strong> The speaker or organizer
+                          the notification is delivered to
+                        </li>
+                        <li>
+                          • <strong>Acting user:</strong> The person whose
+                          action triggered the notification, where applicable
+                        </li>
+                        <li>
+                          • <strong>Related proposal reference:</strong> A link
+                          to the proposal the notification relates to, where
+                          applicable
+                        </li>
+                        <li>
+                          • <strong>Read status:</strong> Whether and when you
+                          have read the notification
+                        </li>
+                      </ul>
+                      <div className="mt-3 rounded-lg bg-cyan-100 p-2 dark:bg-cyan-800/30">
+                        <p className="text-xs text-cyan-800 dark:text-cyan-200">
+                          <strong>Purpose:</strong> Keeping speakers and
+                          organizers informed of proposal and conference
+                          activity. <strong>Legal Basis:</strong> Legitimate
+                          interest in conference coordination. These
+                          notifications are retained until deleted.
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Photo Gallery Data */}
                     <div className="rounded-lg border border-pink-200 bg-pink-50 p-6 dark:border-pink-800 dark:bg-pink-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-pink-800 dark:text-pink-200">
@@ -1087,6 +1128,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </span>{' '}
                               Conference documentation and operational
                               continuity
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              In-App Notifications
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Content, recipient, acting user, related
+                                proposal, read status)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Retained until deleted
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Keeping speakers and organizers informed of
+                              proposal and conference activity
                             </td>
                           </tr>
                           <tr>
