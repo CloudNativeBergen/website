@@ -190,3 +190,153 @@ self.addEventListener('fetch', (event) => {
   }
   // 'passthrough' — do not intercept; let the browser handle it normally.
 })
+
+// --- Web push (#444) -------------------------------------------------------
+//
+// Opt-in notifications for speakers. The caching handlers above are unchanged;
+// these handlers are strictly additive. The payload is built server-side by
+// `src/lib/push/messages.ts` and parsed here — this parsing MIRRORS the pure
+// helper in `src/lib/pwa/push-payload.ts` (kept in sync by the sw-source test).
+
+const NOTIFICATION_DEFAULT_TITLE = 'Cloud Native Days'
+const NOTIFICATION_DEFAULT_URL = '/'
+
+// Only allow a same-origin absolute PATH ("/..."; never "//..."). Any absolute
+// or protocol-relative URL is dropped so a click can never leave the origin. A
+// backslash is rejected outright: URL parsing treats "\" as "/", so "/\evil.com"
+// would resolve OFF-origin — mirror of sanitizeUrl in src/lib/pwa/push-payload.ts.
+function sanitizeNotificationUrl(value) {
+  if (typeof value !== 'string') return NOTIFICATION_DEFAULT_URL
+  if (value.includes('\\')) return NOTIFICATION_DEFAULT_URL
+  if (value.startsWith('/') && !value.startsWith('//')) return value
+  return NOTIFICATION_DEFAULT_URL
+}
+
+function parsePushPayload(raw) {
+  let data = {}
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        data = parsed
+      }
+    } catch (e) {
+      data = { body: raw }
+    }
+  }
+
+  const title =
+    typeof data.title === 'string' && data.title.trim()
+      ? data.title
+      : NOTIFICATION_DEFAULT_TITLE
+  const body = typeof data.body === 'string' ? data.body : ''
+  const tag = typeof data.tag === 'string' ? data.tag : undefined
+
+  return { title, body, url: sanitizeNotificationUrl(data.url), tag }
+}
+
+self.addEventListener('push', (event) => {
+  const raw = event.data ? event.data.text() : ''
+  const payload = parsePushPayload(raw)
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      tag: payload.tag,
+      data: { url: payload.url },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target =
+    (event.notification.data && event.notification.data.url) ||
+    NOTIFICATION_DEFAULT_URL
+
+  event.waitUntil(
+    (async () => {
+      // Belt-and-braces: even though `target` came through sanitizeNotificationUrl,
+      // re-check the RESOLVED origin here. If resolving it against our origin
+      // lands anywhere off-origin (or fails to parse), fall back to '/'. A click
+      // can then never open or navigate a window to another site.
+      let targetUrl
+      try {
+        const resolved = new URL(target, self.location.origin)
+        targetUrl =
+          resolved.origin === self.location.origin
+            ? resolved.href
+            : new URL(NOTIFICATION_DEFAULT_URL, self.location.origin).href
+      } catch (e) {
+        targetUrl = new URL(NOTIFICATION_DEFAULT_URL, self.location.origin).href
+      }
+      const allClients = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+
+      // Focus an existing tab already on the target URL if there is one.
+      for (const client of allClients) {
+        if (client.url === targetUrl && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      // Otherwise focus any open window and navigate it, or open a new one.
+      const existing = allClients[0]
+      if (existing && 'focus' in existing) {
+        await existing.focus()
+        if ('navigate' in existing) {
+          return existing.navigate(targetUrl).catch(() => undefined)
+        }
+        return undefined
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl)
+      }
+      return undefined
+    })(),
+  )
+})
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // Best-effort re-subscribe when the browser rotates the subscription, then
+  // tell the server the new endpoint so pushes keep flowing. The application
+  // server key rides along on the old subscription's options where available.
+  event.waitUntil(
+    (async () => {
+      try {
+        const applicationServerKey =
+          (event.oldSubscription &&
+            event.oldSubscription.options &&
+            event.oldSubscription.options.applicationServerKey) ||
+          undefined
+
+        const fresh =
+          event.newSubscription ||
+          (await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey,
+          }))
+
+        if (!fresh) return
+
+        await fetch('/api/push/resubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            oldEndpoint:
+              event.oldSubscription && event.oldSubscription.endpoint,
+            subscription: fresh.toJSON ? fresh.toJSON() : fresh,
+          }),
+          // Same-origin so the auth cookie is sent; failure is non-fatal.
+          credentials: 'same-origin',
+          keepalive: true,
+        }).catch(() => undefined)
+      } catch (e) {
+        // Re-subscribe can fail (permission revoked); nothing more to do.
+      }
+    })(),
+  )
+})

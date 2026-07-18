@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 import { LinkedProviders } from './LinkedProviders'
+import { PushNotificationSettings } from '@/components/pwa'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -287,6 +288,8 @@ export function CFPProfilePage({
             onImageUpload={uploadImage}
             className="space-y-6"
           />
+
+          <PushNotificationSettings />
 
           <div className="flex justify-end border-t border-gray-200 pt-6 dark:border-gray-600">
             <button

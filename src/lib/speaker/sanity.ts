@@ -12,6 +12,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { generateUniqueSpeakerSlug } from './slug'
 import { normalizeEmail, uniqueEmails } from './email'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
+import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -80,6 +81,7 @@ async function findSpeakerByProvider(
     speaker = await clientRead.fetch(
       `*[ _type == "speaker" && $id in providers][0]{
       ...,
+      ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       ${IS_ORGANIZER_FIELD}
@@ -109,6 +111,7 @@ async function findSpeakersByEmails(
     const speakers = (await clientRead.fetch(
       groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] {
         ...,
+        ${EXCLUDE_PUSH_FIELDS},
         "slug": slug.current,
         "image": coalesce(image.asset->url, imageURL),
         ${IS_ORGANIZER_FIELD}
@@ -489,6 +492,7 @@ export async function getSpeaker(
     speaker = await clientRead.fetch(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
+      ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       ${IS_ORGANIZER_FIELD}
@@ -669,6 +673,7 @@ export async function getSpeakers(
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
+      ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
@@ -746,6 +751,7 @@ export async function getOrganizers(): Promise<{
   try {
     const query = groq`*[_type == "speaker" && _id in *[_type == "conference"].organizers[]._ref] {
       ...,
+      ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       "isOrganizer": true
@@ -770,6 +776,7 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
     // Fetch organizers directly from the conference document's organizers array
     const query = groq`*[_type == "conference" && _id == $conferenceId][0].organizers[]-> {
       ...,
+      ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     } | order(name asc)`

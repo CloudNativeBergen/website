@@ -1,5 +1,6 @@
 import { ProposalExisting } from '@/lib/proposal/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import type { PushPreferences, PushSubscriptionRecord } from '@/lib/push/types'
 
 export enum Flags {
   localSpeaker = 'local',
@@ -110,6 +111,17 @@ export interface Speaker extends SpeakerBase {
    */
   imageURL?: string
   isOrganizer?: boolean
+  /**
+   * Opt-in web push subscriptions for this speaker (#444). Additive/optional —
+   * legacy documents without it remain valid. Managed exclusively by the tRPC
+   * `push` router, always scoped to the authenticated caller's own `_id`.
+   */
+  pushSubscriptions?: PushSubscriptionRecord[]
+  /**
+   * Per-category web push preferences (#444). Absent means "all enabled" — see
+   * {@link normalizePushPreferences}. Additive/optional; no migration required.
+   */
+  pushPreferences?: PushPreferences
 }
 
 export interface SpeakerWithTalks extends Speaker {

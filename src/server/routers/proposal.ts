@@ -1790,44 +1790,51 @@ export const proposalRouter = router({
             )
           })
 
-          // Mirror the inviter email with an in-app notification. Guarded like
-          // the other router-inline emitters: the response is already
-          // persisted, so a failure here (e.g. the conference fetch) must not
-          // surface as a respond error. The invitation projection dereferences
-          // `invitedBy`, so a resolvable inviter carries an `_id`.
+          // Persist an in-app notification for the inviter (and bridge it to
+          // web push, gated by their `coSpeakerInvites` preference) via the
+          // hub. Shares createNotifications' never-fail contract: the response
+          // is already committed above, so a notification failure must not fail
+          // the mutation. Best-effort resolution of the inviter/conference ids;
+          // if either is unresolvable we simply skip the in-app notification
+          // (the email above still reaches the inviter).
           const inviterId =
-            invitation.invitedBy &&
             typeof invitation.invitedBy === 'object' &&
+            invitation.invitedBy !== null &&
             '_id' in invitation.invitedBy
               ? invitation.invitedBy._id
               : undefined
-          if (inviterId) {
-            try {
-              const { conference: notifyConference } =
-                await getConferenceForCurrentDomain()
-              if (notifyConference) {
-                const responderName = ctx.speaker.name || ctx.speaker.email
-                await createNotifications([
-                  {
-                    recipientId: inviterId,
-                    conferenceId: notifyConference._id,
-                    notificationType: 'system',
-                    title: `${responderName} ${
-                      input.accept ? 'accepted' : 'declined'
-                    } your co-speaker invitation`,
-                    actorId: ctx.speaker._id,
-                    ...(proposalId
-                      ? { link: `/cfp/proposal/${proposalId}` }
-                      : {}),
-                  },
-                ])
-              }
-            } catch (notifyError) {
-              console.error(
-                'Failed to notify inviter of co-speaker response:',
-                notifyError,
-              )
-            }
+          // The invitation projection carries no conference ref (neither does
+          // its nested proposal), so resolve it from the current domain — the
+          // respond endpoint is always hit on the conference's own domain.
+          let notifyConferenceId: string | undefined
+          try {
+            const { conference: currentConference } =
+              await getConferenceForCurrentDomain()
+            notifyConferenceId = currentConference?._id
+          } catch {
+            notifyConferenceId = undefined
+          }
+          if (inviterId && notifyConferenceId) {
+            const respondentName = ctx.speaker.name || ctx.speaker.email
+            const proposalTitle =
+              typeof invitation.proposal === 'object' &&
+              invitation.proposal !== null &&
+              'title' in invitation.proposal
+                ? invitation.proposal.title
+                : undefined
+            await createNotifications([
+              {
+                recipientId: inviterId,
+                conferenceId: notifyConferenceId,
+                notificationType: 'cospeaker_response',
+                title: proposalTitle
+                  ? `${respondentName} ${input.accept ? 'accepted' : 'declined'} your co-speaker invitation for "${proposalTitle}"`
+                  : `${respondentName} ${input.accept ? 'accepted' : 'declined'} your co-speaker invitation`,
+                actorId: ctx.speaker._id,
+                relatedProposalId: proposalId,
+                link: proposalId ? `/cfp/proposal/${proposalId}` : '/cfp/list',
+              },
+            ])
           }
 
           return { success: true, status }

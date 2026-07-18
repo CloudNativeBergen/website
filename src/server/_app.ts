@@ -15,6 +15,7 @@ import { scheduleRouter } from './routers/schedule'
 import { statusRouter } from './routers/status'
 import { agentsRouter } from './routers/agents'
 import { notificationRouter } from './routers/notification'
+import { pushRouter } from './routers/push'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -33,6 +34,7 @@ export const appRouter = router({
   status: statusRouter,
   agents: agentsRouter,
   notification: notificationRouter,
+  push: pushRouter,
 })
 
 export type AppRouter = typeof appRouter

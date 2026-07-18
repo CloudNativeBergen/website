@@ -12,6 +12,7 @@ import {
   prepareReferenceArray,
   createReference,
   createReferenceWithKey,
+  EXCLUDE_PUSH_FIELDS,
 } from '@/lib/sanity/helpers'
 
 export async function getProposal({
@@ -45,6 +46,7 @@ export async function getProposal({
       ...,
       speakers[]-> {
         ...,
+        ${EXCLUDE_PUSH_FIELDS},
         "image": coalesce(image.asset->url, imageURL),
         ${
           isOrganizer && includeSubmittedTalks

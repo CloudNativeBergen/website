@@ -5,6 +5,20 @@ export function generateKey(prefix: string = 'item'): string {
   return `${prefix}-${nanoid()}`
 }
 
+/**
+ * GROQ projection fragment that strips a speaker's sensitive web-push fields
+ * (#444) out of any `...` spread. `pushSubscriptions` holds push endpoint URLs
+ * plus the `p256dh`/`auth` crypto keys; `pushPreferences` holds per-category
+ * opt-outs. These are read ONLY by the push server code
+ * (`src/lib/push/sanity.ts`, keyed by speaker id) and must never ride along in
+ * the general speaker projections that flow to clients or public surfaces.
+ *
+ * Append AFTER a `...` spread so the explicit `null`s override the spread's
+ * copies, e.g. `{ ..., ${EXCLUDE_PUSH_FIELDS}, "slug": slug.current }`.
+ */
+export const EXCLUDE_PUSH_FIELDS =
+  '"pushSubscriptions": null, "pushPreferences": null'
+
 export function ensureArrayKeys<T extends Record<string, unknown>>(
   array: T[],
   prefix: string = 'item',

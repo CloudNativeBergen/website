@@ -10,6 +10,7 @@ export type NotificationType =
   | 'proposal_status_changed'
   // Reserved for future use — no emitter yet.
   | 'proposal_comment'
+  | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'
   // Reserved for future use — no emitter yet.

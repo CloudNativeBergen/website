@@ -13,6 +13,7 @@
  */
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
+import { sendPushForNotifications } from '@/lib/push/send'
 import type { NotificationInput, NotificationItem } from './types'
 
 /**
@@ -66,6 +67,18 @@ export async function createNotifications(
     }
 
     await tx.commit()
+
+    // Bridge to web push (#444): mirror each committed notification to the
+    // recipient's opt-in push subscriptions. Push is a pure delivery CHANNEL —
+    // the hub already decided WHAT/WHEN above. This runs inside the same
+    // never-throw contract: `sendPushForNotifications` never throws, but we also
+    // isolate it so that even an unexpected failure can neither fail the
+    // (already committed) notification write nor the business mutation.
+    try {
+      await sendPushForNotifications(items)
+    } catch (pushError) {
+      console.error('Failed to send web push for notifications:', pushError)
+    }
   } catch (error) {
     // Never propagate — see the contract above.
     console.error('Failed to create notifications:', error)

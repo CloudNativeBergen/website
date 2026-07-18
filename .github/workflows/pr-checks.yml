@@ -197,3 +197,9 @@ jobs:
           NEXTAUTH_URL: http://localhost:3000
           RESEND_API_KEY: re_ci_build_key_not_for_production
           INVITATION_TOKEN_SECRET: ci_invitation_token_secret_not_for_production
+          # Web push (#444). Dummy VAPID values so `next build` compiles; no
+          # notification is ever delivered in CI. Generate REAL keys for prod
+          # with `pnpm tsx scripts/gen-vapid-keys.ts`.
+          VAPID_PUBLIC_KEY: ci_vapid_public_key_not_for_production
+          VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
+          VAPID_SUBJECT: mailto:ci@example.com
