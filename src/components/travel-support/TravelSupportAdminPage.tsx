@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import {
@@ -19,7 +20,13 @@ import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { ReceiptViewer } from './ReceiptViewer'
 
 export function TravelSupportAdminPage() {
-  const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  // Read-once from the `request` deep-link param (emitted by the travel-support
+  // notification links) so a notification can open straight to a request. No
+  // URL sync-back — subsequent selection is plain local state.
+  const [selectedRequest, setSelectedRequest] = useState<string | null>(() =>
+    searchParams.get('request'),
+  )
   const { data: session } = useSession()
 
   const {

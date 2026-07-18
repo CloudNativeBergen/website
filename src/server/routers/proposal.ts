@@ -1790,6 +1790,46 @@ export const proposalRouter = router({
             )
           })
 
+          // Mirror the inviter email with an in-app notification. Guarded like
+          // the other router-inline emitters: the response is already
+          // persisted, so a failure here (e.g. the conference fetch) must not
+          // surface as a respond error. The invitation projection dereferences
+          // `invitedBy`, so a resolvable inviter carries an `_id`.
+          const inviterId =
+            invitation.invitedBy &&
+            typeof invitation.invitedBy === 'object' &&
+            '_id' in invitation.invitedBy
+              ? invitation.invitedBy._id
+              : undefined
+          if (inviterId) {
+            try {
+              const { conference: notifyConference } =
+                await getConferenceForCurrentDomain()
+              if (notifyConference) {
+                const responderName = ctx.speaker.name || ctx.speaker.email
+                await createNotifications([
+                  {
+                    recipientId: inviterId,
+                    conferenceId: notifyConference._id,
+                    notificationType: 'system',
+                    title: `${responderName} ${
+                      input.accept ? 'accepted' : 'declined'
+                    } your co-speaker invitation`,
+                    actorId: ctx.speaker._id,
+                    ...(proposalId
+                      ? { link: `/cfp/proposal/${proposalId}` }
+                      : {}),
+                  },
+                ])
+              }
+            } catch (notifyError) {
+              console.error(
+                'Failed to notify inviter of co-speaker response:',
+                notifyError,
+              )
+            }
+          }
+
           return { success: true, status }
         } catch (error) {
           if (error instanceof TRPCError) throw error

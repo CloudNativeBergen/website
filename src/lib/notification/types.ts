@@ -8,9 +8,11 @@
 export type NotificationType =
   | 'proposal_submitted'
   | 'proposal_status_changed'
+  // Reserved for future use — no emitter yet.
   | 'proposal_comment'
   | 'travel_support_update'
   | 'sponsor_activity'
+  // Reserved for future use — no emitter yet.
   | 'schedule_update'
   | 'gallery_tagged'
   | 'system'

@@ -20,6 +20,11 @@ vi.mock('@/lib/slack/notify', () => ({
   notifyNewVolunteer: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/notification/sanity', () => ({
+  createNotifications: vi.fn().mockResolvedValue(undefined),
+  getOrganizerSpeakerIds: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vi.fn().mockResolvedValue({ success: true }),
 }))
@@ -38,6 +43,10 @@ import {
 } from '../../helpers/trpc'
 import { createVolunteer, getVolunteerById } from '@/lib/volunteer/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  createNotifications,
+  getOrganizerSpeakerIds,
+} from '@/lib/notification/sanity'
 import { Occupation, TShirtSize, VolunteerStatus } from '@/lib/volunteer/types'
 
 const mockConference = {
@@ -100,6 +109,43 @@ describe('volunteer router', () => {
           }),
         }),
       )
+    })
+
+    it('should mirror the signup to organizers as an in-app notification', async () => {
+      vi.mocked(createVolunteer).mockResolvedValue({
+        volunteer: { _id: 'vol-1', name: 'Test Volunteer' } as any,
+        error: null,
+      })
+      vi.mocked(getOrganizerSpeakerIds).mockResolvedValue(['org-1', 'org-2'])
+
+      const caller = createAnonymousCaller()
+      await caller.volunteer.create(validVolunteerInput)
+
+      expect(createNotifications).toHaveBeenCalledTimes(1)
+      const items = vi.mocked(createNotifications).mock.calls[0][0]
+      expect(items.map((i) => i.recipientId).sort()).toEqual(['org-1', 'org-2'])
+      for (const item of items) {
+        expect(item.notificationType).toBe('system')
+        expect(item.title).toBe('New volunteer signup: Test Volunteer')
+        expect(item.link).toBe('/admin/volunteers')
+        expect(item.conferenceId).toBe('conf-1')
+        // Public endpoint: no actor to attribute.
+        expect(item.actorId).toBeUndefined()
+      }
+    })
+
+    it('does not fail the signup when the organizer-id fetch throws', async () => {
+      vi.mocked(createVolunteer).mockResolvedValue({
+        volunteer: { _id: 'vol-1', name: 'Test Volunteer' } as any,
+        error: null,
+      })
+      vi.mocked(getOrganizerSpeakerIds).mockRejectedValue(new Error('boom'))
+
+      const caller = createAnonymousCaller()
+      const result = await caller.volunteer.create(validVolunteerInput)
+
+      expect(result).toEqual({ success: true, volunteerId: 'vol-1' })
+      expect(createNotifications).not.toHaveBeenCalled()
     })
 
     it('should throw on creation failure', async () => {
