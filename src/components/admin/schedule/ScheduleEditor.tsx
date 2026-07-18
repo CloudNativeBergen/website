@@ -15,13 +15,8 @@ import {
 } from '@dnd-kit/core'
 import { useState, useReducer, useMemo, useCallback } from 'react'
 import React from 'react'
-import {
-  ScheduleTrack,
-  ConferenceSchedule,
-  TrackTalk,
-  Conference,
-} from '@/lib/conference/types'
-import { DragItem } from '@/lib/schedule/types'
+import { ScheduleTrack, TrackTalk, Conference } from '@/lib/conference/types'
+import { DragItem, type EditorSchedule } from '@/lib/schedule/types'
 import {
   scheduleReducer,
   initScheduleEditorState,
@@ -44,7 +39,7 @@ import { api } from '@/lib/trpc/client'
 import { PlusIcon } from '@heroicons/react/24/outline'
 
 interface ScheduleEditorProps {
-  initialSchedules: ConferenceSchedule[]
+  initialSchedules: EditorSchedule[]
   conference: Conference
   initialProposals: ProposalExisting[]
 }

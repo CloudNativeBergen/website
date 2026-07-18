@@ -6,6 +6,7 @@ import {
   initScheduleEditorState,
 } from '@/lib/schedule/reducer'
 import { computeUnassigned } from '@/lib/schedule/operations'
+import { toEditorSchedule } from '@/lib/schedule/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import {
   ProposalExisting,
@@ -115,7 +116,9 @@ function MobileScheduleHarness({
 }) {
   const [state, dispatch] = useReducer(
     scheduleReducer,
-    { schedules: initialSchedules, proposals },
+    // Fixtures are persisted-shaped; resolve them to EditorSchedules at the
+    // (story) load boundary, exactly as `getScheduleData` does in production.
+    { schedules: initialSchedules.map(toEditorSchedule), proposals },
     initScheduleEditorState,
   )
   const unassignedProposals = computeUnassigned(

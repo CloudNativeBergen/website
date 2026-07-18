@@ -9,13 +9,14 @@
  *   - moveProposal's duplicate guard considers OTHER days (cross-day dedup).
  */
 import { describe, it, expect } from 'vitest'
-import type {
-  ConferenceSchedule,
-  ScheduleTrack,
-  TrackTalk,
-} from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
-import type { DragItem, DropPosition } from '@/lib/schedule/types'
+import type {
+  DragItem,
+  DropPosition,
+  Slot,
+  EditorTrack,
+  EditorSchedule,
+} from '@/lib/schedule/types'
 import {
   moveProposal,
   moveServiceSession,
@@ -36,25 +37,27 @@ import {
 const proposal = (id: string, format = 'talk_25'): ProposalExisting =>
   ({ _id: id, format }) as unknown as ProposalExisting
 
-const talk = (id: string, start: string, end: string): TrackTalk => ({
+const talk = (id: string, start: string, end: string): Slot => ({
+  kind: 'talk',
   talk: proposal(id),
   startTime: start,
   endTime: end,
 })
 
-const service = (name: string, start: string, end: string): TrackTalk => ({
+const service = (name: string, start: string, end: string): Slot => ({
+  kind: 'service',
   placeholder: name,
   startTime: start,
   endTime: end,
 })
 
-const track = (title: string, ...talks: TrackTalk[]): ScheduleTrack => ({
+const track = (title: string, ...talks: Slot[]): EditorTrack => ({
   trackTitle: title,
   trackDescription: '',
   talks,
 })
 
-const schedule = (...tracks: ScheduleTrack[]): ConferenceSchedule => ({
+const schedule = (...tracks: EditorTrack[]): EditorSchedule => ({
   _id: '',
   date: '2025-09-18',
   tracks,
@@ -446,7 +449,7 @@ describe('classifier ⇔ reducer equivalence', () => {
   const proposalCases: Array<{
     name: string
     build: () => {
-      s: ConferenceSchedule
+      s: EditorSchedule
       d: DragItem
       p: DropPosition
       others?: Set<string>
@@ -546,7 +549,7 @@ describe('classifier ⇔ reducer equivalence', () => {
 
   const serviceCases: Array<{
     name: string
-    build: () => { s: ConferenceSchedule; d: DragItem; p: DropPosition }
+    build: () => { s: EditorSchedule; d: DragItem; p: DropPosition }
   }> = [
     {
       name: 'place a service into a free interval',
