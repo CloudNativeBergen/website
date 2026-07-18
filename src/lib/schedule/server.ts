@@ -43,7 +43,10 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    const schedules: ConferenceSchedule[] = conference.schedules || []
+    // Operate on a COPY: fabricating empty days and sorting must never mutate
+    // the cached `conference.schedules` array in place (that leaks synthetic
+    // days and a reordering back into the shared, cached conference object).
+    const schedules: ConferenceSchedule[] = [...(conference.schedules ?? [])]
 
     const conferenceDates = generateConferenceDates(
       conference.startDate,
@@ -59,6 +62,9 @@ export async function getScheduleData(): Promise<ScheduleData> {
           date: date,
           tracks: [],
         })
+        // Keep the set in step with what we've fabricated so a duplicate date in
+        // `conferenceDates` can't fabricate the same day twice.
+        existingDates.add(date)
       }
     }
 

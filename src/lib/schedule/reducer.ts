@@ -64,7 +64,17 @@ export type ScheduleAction =
     }
   | { type: 'changeDay'; dayIndex: number }
   | { type: 'saveStart' }
-  | { type: 'saveDaySucceeded'; index: number; _id: string; _rev?: string }
+  | {
+      type: 'saveDaySucceeded'
+      index: number
+      _id: string
+      _rev?: string
+      // The EXACT day object that was sent to the server for this save. Every
+      // reducer edit REPLACES the day object, so an identity compare against the
+      // current `schedules[index]` tells us whether an edit landed while the save
+      // was in flight (see the case handler for the lost-update guard).
+      saved: EditorSchedule
+    }
   | { type: 'saveError'; message: string }
   | { type: 'saveEnd' }
 
@@ -225,15 +235,25 @@ export function scheduleReducer(
         return state
       }
       const schedules = [...state.schedules]
+      const currentDay = schedules[action.index]
+      // The document really advanced on the server, so ALWAYS thread the new
+      // `_id`/`_rev` — even when an edit landed mid-save. Keeping a stale `_rev`
+      // would make the NEXT save a false `ifRevisionId` conflict; carrying the
+      // fresh one lets that save re-send the newer state and actually persist it.
       schedules[action.index] = {
-        ...schedules[action.index],
+        ...currentDay,
         _id: action._id,
-        // Store the NEW revision returned by the write so a second save in the
-        // same session patches against the current `_rev` (not a false conflict).
-        _rev: action._rev ?? schedules[action.index]._rev,
+        _rev: action._rev ?? currentDay._rev,
       }
       const dirty = [...state.dirty]
-      dirty[action.index] = false
+      // LOST-UPDATE GUARD: clear `dirty[index]` ONLY if nothing changed since the
+      // snapshot we sent. Every edit replaces the day object, so identity still
+      // matching (`currentDay === action.saved`) means no interleaved edit — the
+      // save covered the current state. If they differ, an edit landed while the
+      // save was in flight; keep the day dirty so the next save re-sends it.
+      if (currentDay === action.saved) {
+        dirty[action.index] = false
+      }
       return { ...state, schedules, dirty }
     }
 

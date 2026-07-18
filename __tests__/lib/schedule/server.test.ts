@@ -106,6 +106,34 @@ describe('getScheduleData day tabs', () => {
     ])
   })
 
+  it('does not mutate conference.schedules in place (F8 — no fabricated days / reorder leak)', async () => {
+    // A multi-day conference whose only saved day is the LAST one: fabricating
+    // the earlier days and sorting would, if done in place, both grow and
+    // reorder the shared cached array.
+    const original = [{ _id: 'sched-1', date: '2026-03-12', tracks: [] }]
+    const conference = {
+      _id: 'conf-mut',
+      startDate: '2026-03-10',
+      endDate: '2026-03-12',
+      schedules: original,
+    }
+    mockGetConference.mockResolvedValue({ conference, error: null })
+
+    const { schedules } = await getScheduleData()
+
+    // The returned view has all three days, sorted.
+    expect(schedules.map((s) => s.date)).toEqual([
+      '2026-03-10',
+      '2026-03-11',
+      '2026-03-12',
+    ])
+
+    // The input array is untouched: same reference, same single element.
+    expect(conference.schedules).toBe(original)
+    expect(conference.schedules).toHaveLength(1)
+    expect(conference.schedules[0].date).toBe('2026-03-12')
+  })
+
   it('never returns a day outside the conference date range', async () => {
     mockGetConference.mockResolvedValue({
       conference: {
