@@ -348,7 +348,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           organizers informed of proposal and conference
                           activity. <strong>Legal Basis:</strong> Legitimate
                           interest in conference coordination. These
-                          notifications are retained until deleted.
+                          notifications are automatically deleted 90 days after
+                          they are created.
                         </p>
                       </div>
                     </div>
@@ -1139,7 +1140,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Retained until deleted
+                              90 days after creation
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
