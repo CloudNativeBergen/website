@@ -18,7 +18,7 @@ import {
   withinScheduleEnd,
 } from '@/lib/schedule/time'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
-import { fitsInTrack } from '@/lib/schedule/rules'
+import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
 import {
   classifyProposalDrop,
   classifyServiceDrop,
@@ -492,13 +492,25 @@ function UnassignedDrawer({
   const [serviceError, setServiceError] = useState<string | null>(null)
 
   // Offer only durations that fit inside the tapped slot's free length, so a
-  // service can never be created longer than the gap the user tapped into.
+  // service can never be created longer than the gap the user tapped into. If
+  // no standard option fits (a sub-5-min gap), fall back to the exact available
+  // minutes rather than a value that would fail the submit guard — otherwise the
+  // form is a dead end (title accepted, "Add session" always errors).
   const durationOptions = useMemo(() => {
     if (!context) return SERVICE_DURATION_OPTIONS
     const fitting = [...SERVICE_DURATION_OPTIONS].filter(
       ([mins]) => Number(mins) <= context.maxDurationMin,
     )
-    return new Map(fitting.length > 0 ? fitting : [['5', '5 minutes']])
+    return new Map(
+      fitting.length > 0
+        ? fitting
+        : [
+            [
+              String(context.maxDurationMin),
+              `${context.maxDurationMin} minutes`,
+            ],
+          ],
+    )
   }, [context])
   const effectiveDuration = durationOptions.has(serviceDuration)
     ? serviceDuration
@@ -520,6 +532,14 @@ function UnassignedDrawer({
       setServiceError('That duration runs past the free slot.')
       return
     }
+    // `maxDurationMin` was snapshotted when the slot was tapped; re-check against
+    // the LIVE track so a schedule change while the sheet is open (another
+    // edit / undo) can't drop a service into a now-occupied interval. The
+    // reducer would reject it too, but this keeps the UI honest.
+    if (track && !isTrackIntervalFree(track, context.startTime, endTime)) {
+      setServiceError('That slot was just taken — pick another.')
+      return
+    }
     dispatch({
       type: 'addService',
       trackIndex: context.trackIndex,
@@ -528,7 +548,7 @@ function UnassignedDrawer({
       duration: dur,
     })
     onClose()
-  }, [context, serviceTitle, effectiveDuration, dispatch, onClose])
+  }, [context, track, serviceTitle, effectiveDuration, dispatch, onClose])
 
   const handlePick = useCallback(
     (proposal: ProposalExisting) => {
