@@ -35,10 +35,20 @@ async function storybookUp() {
   }
 }
 
+// Use the package manager that invoked us, defaulting to pnpm (this repo's
+// declared packageManager). `.cmd` on Windows so spawn can find it.
+const ua = process.env.npm_config_user_agent || ''
+const pm = ua.startsWith('npm')
+  ? 'npm'
+  : ua.startsWith('yarn')
+    ? 'yarn'
+    : 'pnpm'
+const pmBin = process.platform === 'win32' ? `${pm}.cmd` : pm
+
 let started
 if (!(await storybookUp())) {
-  console.log('[shoot] starting Storybook on :6006 …')
-  started = spawn('npm', ['run', 'storybook', '--', '--ci', '--quiet'], {
+  console.log(`[shoot] starting Storybook on :6006 (via ${pm}) …`)
+  started = spawn(pmBin, ['run', 'storybook', '--', '--ci', '--quiet'], {
     stdio: 'ignore',
     detached: true,
   })
@@ -122,17 +132,24 @@ try {
     ),
   )
   const cut = info.cards.filter((c) => c.cut).length
+  // Note the count so a zero (e.g. the aria-label selector drifted and matched
+  // nothing) reads as "0 cards checked", not a false all-clear.
   console.log(
     cut
       ? `[shoot] WARNING: ${cut} card(s) exceed the ${width}px viewport`
-      : `[shoot] OK: every card fits within the ${width}px viewport`,
+      : `[shoot] OK: ${info.cards.length} card(s) checked, none exceed the ${width}px viewport`,
   )
 } finally {
   await browser.close()
-  // Only stop Storybook if this script started it.
-  if (started) {
+  // Only stop Storybook if this script started it. Kill the whole process group
+  // (detached) on POSIX; fall back to the single pid (e.g. Windows).
+  if (started?.pid) {
     try {
-      process.kill(-started.pid)
-    } catch {}
+      process.kill(process.platform === 'win32' ? started.pid : -started.pid)
+    } catch {
+      try {
+        started.kill()
+      } catch {}
+    }
   }
 }
