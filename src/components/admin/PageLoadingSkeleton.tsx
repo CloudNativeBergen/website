@@ -15,9 +15,9 @@ export function AdminPageLoading() {
         <div className="animate-pulse">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700" />
-            <div>
-              <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
-              <div className="mt-2 h-4 w-96 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="min-w-0">
+              <div className="h-8 w-44 rounded bg-gray-200 sm:w-64 dark:bg-gray-700" />
+              <div className="mt-2 h-4 w-56 max-w-full rounded bg-gray-200 sm:w-96 dark:bg-gray-700" />
             </div>
           </div>
         </div>
@@ -37,14 +37,14 @@ export function AdminTablePageLoading() {
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700" />
-              <div>
-                <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700" />
-                <div className="mt-2 h-4 w-80 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="h-8 w-8 shrink-0 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="min-w-0">
+                <div className="h-8 w-40 rounded bg-gray-200 sm:w-48 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-48 max-w-full rounded bg-gray-200 sm:w-80 dark:bg-gray-700" />
               </div>
             </div>
-            <div className="h-10 w-32 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-10 w-24 shrink-0 rounded bg-gray-200 sm:w-32 dark:bg-gray-700" />
           </div>
         </div>
       </div>
@@ -67,8 +67,8 @@ export function AdminDashboardLoading() {
     <div className="space-y-6">
       <div className="pb-6">
         <div className="animate-pulse">
-          <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-96 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-8 w-40 rounded bg-gray-200 sm:w-48 dark:bg-gray-700" />
+          <div className="mt-2 h-4 w-56 max-w-full rounded bg-gray-200 sm:w-96 dark:bg-gray-700" />
         </div>
       </div>
 
@@ -89,8 +89,8 @@ export function AdminFormPageLoading() {
     <div className="mx-auto max-w-4xl">
       <div className="pb-6">
         <div className="animate-pulse">
-          <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-80 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-8 w-44 rounded bg-gray-200 sm:w-64 dark:bg-gray-700" />
+          <div className="mt-2 h-4 w-48 max-w-full rounded bg-gray-200 sm:w-80 dark:bg-gray-700" />
         </div>
       </div>
 
@@ -125,7 +125,55 @@ export function AdminDetailPageLoading() {
 export function AdminScheduleLoading() {
   return (
     <div className="-mx-2 -my-8 sm:-mx-4 lg:-mx-8">
-      <div className="flex h-[calc(100vh-5rem)]">
+      {/* Mobile (<md): the time-rail carousel shape from MobileScheduleView —
+          a sticky header (day selector + actions, then track pills) over a
+          single full-width track panel with a left time gutter. The old
+          skeleton showed a desktop sidebar + track grid that never renders on
+          a phone. */}
+      <div className="flex h-[calc(100dvh-4rem)] flex-col bg-gray-50 md:hidden dark:bg-gray-950">
+        <div className="shrink-0 animate-pulse border-b border-gray-200 bg-white px-4 pt-5 pb-3 dark:border-gray-700 dark:bg-gray-900">
+          <div className="flex items-center justify-between gap-2">
+            <div className="h-11 w-32 rounded-lg bg-gray-200 dark:bg-gray-700" />
+            <div className="flex items-center gap-2">
+              <div className="h-11 w-28 rounded-lg bg-gray-200 dark:bg-gray-700" />
+              <div className="h-11 w-16 rounded-lg bg-gray-200 dark:bg-gray-700" />
+            </div>
+          </div>
+          <div className="mt-3 flex gap-1">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="h-11 flex-1 rounded-full bg-gray-200 dark:bg-gray-700"
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-1 gap-2 overflow-hidden px-3 pt-2">
+          {/* Left time gutter — 52px matches MobileScheduleView's GUTTER_PX. */}
+          <div className="w-[52px] shrink-0 animate-pulse space-y-8 pt-2">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="h-3 w-10 rounded bg-gray-200 dark:bg-gray-700"
+              />
+            ))}
+          </div>
+          {/* Stacked segment cards of varying heights. */}
+          <div className="flex-1 animate-pulse space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                style={{ height: `${64 + (i % 3) * 28}px` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop (md+): the drag board — sidebar + track columns. */}
+      <div className="hidden h-[calc(100vh-5rem)] md:flex">
         {/* Sidebar skeleton */}
         <div className="w-64 shrink-0 border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
           <div className="animate-pulse space-y-3 p-4">
