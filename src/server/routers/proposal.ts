@@ -48,6 +48,11 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
+import {
+  createNotifications,
+  getOrganizerSpeakerIds,
+} from '@/lib/notification/sanity'
+import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
 import { actionStateMachine } from '@/lib/proposal'
@@ -309,6 +314,32 @@ export const proposalRouter = router({
             message: 'Failed to create proposal',
             cause: err,
           })
+        }
+
+        // Notify organizers of a genuinely NEW submission (not a saved draft).
+        // INTENTIONAL ASYMMETRY: this create path does not publish a
+        // `proposal.status.changed` bus event, so the `persistNotification`
+        // bus handler never fires here — we fan out directly instead. We do
+        // NOT publish a bus event on purpose: that would also trigger the
+        // Slack/email handlers and change existing create behaviour (out of
+        // scope for the notification hub).
+        if (initialStatus === Status.submitted) {
+          const organizerIds = await getOrganizerSpeakerIds()
+          await createNotifications(
+            organizerIds
+              .filter((id) => id && id !== ctx.speaker._id)
+              .map(
+                (id): NotificationInput => ({
+                  recipientId: id,
+                  conferenceId: conference._id,
+                  notificationType: 'proposal_submitted',
+                  title: `New proposal: "${proposal.title}"`,
+                  actorId: ctx.speaker._id,
+                  relatedProposalId: proposal._id,
+                  link: `/admin/proposals/${proposal._id}`,
+                }),
+              ),
+          )
         }
 
         return proposal

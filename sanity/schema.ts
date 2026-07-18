@@ -8,6 +8,7 @@ import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
+import notification from './schemaTypes/notification'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import speaker from './schemaTypes/speaker'
@@ -40,6 +41,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     imageGallery,
     volunteer,
     staff,
+    notification,
 
     // Topics & Talks
     talk,

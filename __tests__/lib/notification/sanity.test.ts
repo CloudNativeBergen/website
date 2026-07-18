@@ -1,0 +1,315 @@
+/**
+ * @vitest-environment node
+ *
+ * Unit tests for the notification hub data layer (src/lib/notification/sanity.ts).
+ *
+ * These cover the behaviours the router test cannot (it mocks this module):
+ * - the single-transaction fan-out and the never-throw contract of
+ *   `createNotifications`;
+ * - the SECURITY guard in `markNotificationsRead` (a client must not be able to
+ *   mark another user's notifications read — only recipient-owned ids are
+ *   patched);
+ * - the unread-count query shape and the keyset-cursor argument passing.
+ *
+ * Both Sanity clients are mocked so we assert exactly what is (and is not)
+ * written / queried.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+vi.mock('@/lib/sanity/helpers', () => ({
+  createReference: (id: string) => ({ _type: 'reference', _ref: id }),
+}))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientWrite: {
+    transaction: vi.fn(),
+  },
+  clientReadUncached: {
+    fetch: vi.fn(),
+  },
+}))
+
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import {
+  createNotifications,
+  getNotificationsForSpeaker,
+  getUnreadCount,
+  markNotificationsRead,
+  markAllRead,
+} from '@/lib/notification/sanity'
+import type { NotificationInput } from '@/lib/notification/types'
+
+type LooseMock = ReturnType<typeof vi.fn>
+const writeMock = clientWrite as unknown as { transaction: LooseMock }
+const readMock = clientReadUncached as unknown as { fetch: LooseMock }
+
+/**
+ * A chainable Sanity transaction mock. `create` and `patch` return the same
+ * object; `commit` is configurable per test.
+ */
+function installTransaction(commit: () => Promise<unknown> = async () => ({})) {
+  const tx = {
+    create: vi.fn((_doc?: unknown) => tx),
+    patch: vi.fn((_id?: string, _ops?: unknown) => tx),
+    commit: vi.fn(commit),
+  }
+  writeMock.transaction.mockReturnValue(tx)
+  return tx
+}
+
+const input = (
+  overrides: Partial<NotificationInput> = {},
+): NotificationInput => ({
+  recipientId: 'sp-1',
+  conferenceId: 'conf-1',
+  notificationType: 'proposal_submitted',
+  title: 'New proposal: "Test"',
+  ...overrides,
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('createNotifications — single-transaction fan-out', () => {
+  it('writes one create per item in exactly one committed transaction', async () => {
+    const tx = installTransaction()
+
+    await createNotifications([
+      input({ recipientId: 'sp-1' }),
+      input({ recipientId: 'sp-2' }),
+      input({ recipientId: 'sp-3' }),
+    ])
+
+    expect(writeMock.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.create).toHaveBeenCalledTimes(3)
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+
+    const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc._type).toBe('notification')
+    expect(doc.recipient).toEqual({ _type: 'reference', _ref: 'sp-1' })
+    expect(doc.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+    expect(typeof doc.createdAt).toBe('string')
+  })
+
+  it('is a no-op (no transaction) for an empty list', async () => {
+    const tx = installTransaction()
+    await createNotifications([])
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('sets optional actor and a WEAK relatedProposal reference only when provided', async () => {
+    const tx = installTransaction()
+
+    await createNotifications([
+      input({
+        actorId: 'actor-1',
+        relatedProposalId: 'prop-1',
+        message: 'hi',
+        link: '/admin/proposals/prop-1',
+      }),
+    ])
+
+    const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.actor).toEqual({ _type: 'reference', _ref: 'actor-1' })
+    expect(doc.relatedProposal).toEqual({
+      _type: 'reference',
+      _ref: 'prop-1',
+      _weak: true,
+    })
+    expect(doc.message).toBe('hi')
+    expect(doc.link).toBe('/admin/proposals/prop-1')
+  })
+
+  it('omits optional fields when not provided', async () => {
+    const tx = installTransaction()
+    await createNotifications([input()])
+    const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
+    expect('actor' in doc).toBe(false)
+    expect('relatedProposal' in doc).toBe(false)
+    expect('message' in doc).toBe(false)
+    expect('link' in doc).toBe(false)
+  })
+
+  it('NEVER throws when the transaction commit fails — it swallows and logs', async () => {
+    installTransaction(async () => {
+      throw new Error('sanity down')
+    })
+
+    await expect(createNotifications([input()])).resolves.toBeUndefined()
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
+describe('markNotificationsRead — recipient security guard', () => {
+  it('patches ONLY recipient-owned ids (drops a foreign id) and returns the owned count', async () => {
+    // The client asked to mark two ids read; the ownership fetch confirms only
+    // one belongs to this speaker. The foreign id must never be patched.
+    readMock.fetch.mockResolvedValue(['own-1'])
+    const tx = installTransaction()
+
+    const count = await markNotificationsRead({
+      speakerId: 'sp-1',
+      ids: ['own-1', 'foreign-1'],
+    })
+
+    // The ownership query is scoped by recipient._ref == $speakerId.
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('_id in $ids')
+    expect(params).toEqual({ ids: ['own-1', 'foreign-1'], speakerId: 'sp-1' })
+
+    // Only the verified-own id is patched.
+    expect(tx.patch).toHaveBeenCalledTimes(1)
+    expect(tx.patch).toHaveBeenCalledWith('own-1', {
+      set: { readAt: expect.any(String) },
+    })
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(count).toBe(1)
+  })
+
+  it('returns 0 and does not fetch or write for an empty id list', async () => {
+    const tx = installTransaction()
+    const count = await markNotificationsRead({ speakerId: 'sp-1', ids: [] })
+    expect(count).toBe(0)
+    expect(readMock.fetch).not.toHaveBeenCalled()
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('returns 0 and writes nothing when none of the ids are owned', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    const count = await markNotificationsRead({
+      speakerId: 'sp-1',
+      ids: ['foreign-1', 'foreign-2'],
+    })
+
+    expect(count).toBe(0)
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('markAllRead', () => {
+  it('fetches bounded unread ids for the (speaker, conference) and patches each in one transaction', async () => {
+    readMock.fetch.mockResolvedValue(['n-1', 'n-2'])
+    const tx = installTransaction()
+
+    const count = await markAllRead({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('!defined(readAt)')
+    expect(query).toContain('[0...500]')
+    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
+
+    expect(tx.patch).toHaveBeenCalledTimes(2)
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(count).toBe(2)
+  })
+
+  it('returns 0 and writes nothing when there are no unread notifications', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+    const count = await markAllRead({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
+    expect(count).toBe(0)
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+})
+
+describe('getUnreadCount', () => {
+  it('runs a scoped count() query over undefined-readAt docs and returns the number', async () => {
+    readMock.fetch.mockResolvedValue(4)
+
+    const count = await getUnreadCount({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('count(')
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('!defined(readAt)')
+    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
+    expect(count).toBe(4)
+  })
+
+  it('coalesces a null count to 0', async () => {
+    readMock.fetch.mockResolvedValue(null)
+    const count = await getUnreadCount({ speakerId: 'sp-1', conferenceId: 'c' })
+    expect(count).toBe(0)
+  })
+})
+
+describe('getNotificationsForSpeaker — cursor pagination', () => {
+  it('omits the cursor clause and passes no `before` param when none is given', async () => {
+    readMock.fetch.mockResolvedValue([])
+
+    await getNotificationsForSpeaker({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('order(createdAt desc)')
+    expect(query).not.toContain('createdAt < $before')
+    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
+  })
+
+  it('adds the `createdAt < $before` clause and threads the cursor when `before` is given', async () => {
+    readMock.fetch.mockResolvedValue([])
+
+    await getNotificationsForSpeaker({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      before: '2026-07-01T00:00:00.000Z',
+      limit: 5,
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('createdAt < $before')
+    expect(query).toContain('[0...5]')
+    expect(params).toEqual({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      before: '2026-07-01T00:00:00.000Z',
+    })
+  })
+
+  it('clamps an out-of-range limit into the slice bound', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await getNotificationsForSpeaker({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      limit: 9999,
+    })
+    const [query] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('[0...50]')
+  })
+
+  it('coalesces a null result to an empty array', async () => {
+    readMock.fetch.mockResolvedValue(null)
+    const result = await getNotificationsForSpeaker({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
+    expect(result).toEqual([])
+  })
+})

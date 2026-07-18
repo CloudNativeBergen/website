@@ -1,0 +1,19 @@
+import { z } from 'zod'
+
+/**
+ * Input for `notification.list`. `before` is a `createdAt` keyset cursor: the
+ * `createdAt` of the last item on the previous page. `limit` is bounded so a
+ * client can't request an unbounded page.
+ */
+export const ListNotificationsSchema = z.object({
+  limit: z.number().int().min(1).max(50).default(20),
+  before: z.string().datetime().optional(),
+})
+
+/**
+ * Input for `notification.markRead`. Bounded at 100 ids per call; the data layer
+ * additionally verifies each id belongs to the caller before patching.
+ */
+export const MarkReadSchema = z.object({
+  ids: z.array(z.string()).min(1).max(100),
+})
