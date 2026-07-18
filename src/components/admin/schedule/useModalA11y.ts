@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -25,6 +25,15 @@ export function useModalA11y(
   dialogRef: RefObject<HTMLElement | null>,
   onClose: () => void,
 ) {
+  // Latest-ref for `onClose` so a caller passing a non-memoized callback (an
+  // inline arrow) doesn't re-run the whole effect mid-open — the cleanup would
+  // restore focus and unlock scroll while the dialog is still up. The effect
+  // itself runs once per mount; Escape always sees the current callback.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null
     const { overflow } = document.body.style
@@ -50,7 +59,7 @@ export function useModalA11y(
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== 'Tab') return
@@ -80,5 +89,7 @@ export function useModalA11y(
       document.body.style.overflow = overflow
       previouslyFocused?.focus?.()
     }
-  }, [dialogRef, onClose])
+    // Mount-only (dialogRef is a stable ref object; onClose via the latest-ref).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogRef])
 }
