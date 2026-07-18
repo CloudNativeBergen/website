@@ -1,4 +1,4 @@
-import type { RailSegment } from '../mobileRail'
+import type { RailSegment } from './rail'
 import type { Placing, SegmentState } from './types'
 import {
   OPEN_MAX_HEIGHT,

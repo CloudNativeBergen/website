@@ -4,7 +4,7 @@ import {
   classifyProposalDrop,
   classifyServiceDrop,
 } from '@/lib/schedule/operations'
-import type { RailSegment } from '../mobileRail'
+import type { RailSegment } from './rail'
 import { MIN_OPEN_SLOT_MIN } from './constants'
 import type { Placing, SegmentState } from './types'
 

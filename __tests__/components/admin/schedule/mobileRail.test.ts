@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import type { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
-import { buildTrackRail } from '@/components/admin/schedule/mobileRail'
+import { buildTrackRail } from '@/components/admin/schedule/mobile'
 
 const proposal = (id: string): ProposalExisting =>
   ({ _id: id, format: 'talk_25' }) as unknown as ProposalExisting
