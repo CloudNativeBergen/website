@@ -70,6 +70,11 @@ import {
   deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
 import {
+  createNotifications,
+  getOrganizerSpeakerIds,
+} from '@/lib/notification/sanity'
+import type { NotificationInput } from '@/lib/notification/types'
+import {
   SponsorForConferenceInputSchema,
   SponsorForConferenceUpdateSchema,
   SponsorForConferenceIdSchema,
@@ -1098,6 +1103,37 @@ export const sponsorRouter = router({
             await logStageChange(input.id, oldStatus, input.newStatus, userId)
           } catch (logError) {
             console.error('Failed to log stage change activity:', logError)
+          }
+
+          // Notify organizers (except the actor) of the stage move. Shares
+          // createNotifications' never-fail contract: the move is already
+          // persisted, so a failure here (e.g. the organizer-id fetch) must not
+          // surface as a moveStage error.
+          try {
+            const conferenceId = existing.conference?._id
+            if (conferenceId) {
+              const sponsorName = existing.sponsor?.name
+              const organizerIds = await getOrganizerSpeakerIds()
+              await createNotifications(
+                organizerIds
+                  .filter((id) => id && id !== userId)
+                  .map((id): NotificationInput => ({
+                    recipientId: id,
+                    conferenceId,
+                    notificationType: 'sponsor_activity',
+                    title: sponsorName
+                      ? `Sponsor ${sponsorName} moved to ${input.newStatus}`
+                      : `Sponsor moved to ${input.newStatus}`,
+                    actorId: userId,
+                    link: '/admin/sponsors/crm',
+                  })),
+              )
+            }
+          } catch (notifyError) {
+            console.error(
+              'Failed to notify organizers of sponsor stage move:',
+              notifyError,
+            )
           }
         }
 

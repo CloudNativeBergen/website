@@ -41,6 +41,26 @@ import {
   canAddExpenses,
   verifyTravelSupportOwnership,
 } from '@/lib/travel-support/auth'
+import {
+  createNotifications,
+  getOrganizerSpeakerIds,
+} from '@/lib/notification/sanity'
+import type { NotificationInput } from '@/lib/notification/types'
+import { TravelSupportStatus } from '@/lib/travel-support/types'
+
+/**
+ * Human-readable notification titles for the travel support statuses that
+ * warrant notifying the affected speaker. The draft/submitted statuses are
+ * intentionally absent — they are the speaker's own echoes, not an organizer
+ * decision, so no notification is produced for them.
+ */
+const TRAVEL_STATUS_NOTIFY_TITLES: Partial<
+  Record<TravelSupportStatus, string>
+> = {
+  [TravelSupportStatus.APPROVED]: 'Travel support approved',
+  [TravelSupportStatus.REJECTED]: 'Travel support rejected',
+  [TravelSupportStatus.PAID]: 'Travel support marked paid',
+}
 
 export const travelSupportRouter = router({
   getMine: protectedProcedure.query(async ({ ctx }) => {
@@ -252,6 +272,31 @@ export const travelSupportRouter = router({
             message: 'Failed to submit travel support request',
             cause: error,
           })
+        }
+
+        // Notify organizers (except the actor) of the new request. Shares
+        // createNotifications' never-fail contract: the request is already
+        // submitted, so a failure here (e.g. the organizer-id fetch) must not
+        // surface as a submit error to the speaker.
+        try {
+          const organizerIds = await getOrganizerSpeakerIds()
+          await createNotifications(
+            organizerIds
+              .filter((id) => id && id !== ctx.speaker._id)
+              .map((id): NotificationInput => ({
+                recipientId: id,
+                conferenceId: travelSupport.conference._id,
+                notificationType: 'travel_support_update',
+                title: `Travel support request from ${ctx.speaker.name}`,
+                actorId: ctx.speaker._id,
+                link: '/admin/speakers/travel-support',
+              })),
+          )
+        } catch (notifyError) {
+          console.error(
+            'Failed to notify organizers of travel support request:',
+            notifyError,
+          )
         }
 
         return { success: true }
@@ -652,6 +697,38 @@ export const travelSupportRouter = router({
               message: 'Failed to update travel support status',
               cause: error,
             })
+          }
+
+          // Notify the affected speaker of a decision (approved/rejected/paid
+          // only — draft/submitted echoes are skipped), unless they made the
+          // change themselves. Shares createNotifications' never-fail contract:
+          // the status is already persisted, so a failure here must not surface
+          // as an update error.
+          try {
+            const statusTitle = TRAVEL_STATUS_NOTIFY_TITLES[input.status]
+            const affectedSpeakerId = travelSupport.speaker._id
+            if (
+              statusTitle &&
+              affectedSpeakerId &&
+              affectedSpeakerId !== ctx.speaker._id
+            ) {
+              await createNotifications([
+                {
+                  recipientId: affectedSpeakerId,
+                  conferenceId: travelSupport.conference._id,
+                  notificationType: 'travel_support_update',
+                  title: statusTitle,
+                  message: input.reviewNotes || undefined,
+                  actorId: ctx.speaker._id,
+                  link: '/cfp/expense',
+                },
+              ])
+            }
+          } catch (notifyError) {
+            console.error(
+              'Failed to notify speaker of travel support status change:',
+              notifyError,
+            )
           }
 
           return { success: true }

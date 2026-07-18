@@ -12,6 +12,7 @@ export type NotificationType =
   | 'travel_support_update'
   | 'sponsor_activity'
   | 'schedule_update'
+  | 'gallery_tagged'
   | 'system'
 
 /**

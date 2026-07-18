@@ -44,6 +44,7 @@ export default defineType({
           { title: 'Travel Support Update', value: 'travel_support_update' },
           { title: 'Sponsor Activity', value: 'sponsor_activity' },
           { title: 'Schedule Update', value: 'schedule_update' },
+          { title: 'Gallery Tagged', value: 'gallery_tagged' },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',
