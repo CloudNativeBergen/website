@@ -20,14 +20,12 @@ import {
   withinScheduleEnd,
 } from '@/lib/schedule/time'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
+import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
 import {
-  fitsInTrack,
-  isTrackIntervalFree,
-  canSwapTalks,
-  canPlaceDisplacedBack,
-  matchTalk,
-  matchService,
-} from '@/lib/schedule/rules'
+  classifyProposalDrop,
+  classifyServiceDrop,
+} from '@/lib/schedule/operations'
+import type { DragItem } from '@/lib/schedule/types'
 import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
@@ -149,6 +147,34 @@ function isPlacingSource(
  * fitsInTrack / interval-free / swap checks + end-of-day guard) so the UI never
  * offers a drop the reducer would reject.
  */
+/** The engine DragItem for the current pick-up (proposal / scheduled talk /
+ * scheduled service), so the UI can defer every legality question to the shared
+ * classifiers instead of re-deriving the rule. */
+function placingDragItem(placing: Placing): DragItem {
+  if (placing.kind === 'proposal') {
+    return { type: 'proposal', proposal: placing.proposal }
+  }
+  const src = placing.talk
+  if (src.talk) {
+    return {
+      type: 'scheduled-talk',
+      proposal: src.talk,
+      sourceTrackIndex: placing.trackIndex,
+      sourceTimeSlot: src.startTime,
+    }
+  }
+  return {
+    type: 'scheduled-service',
+    serviceSession: {
+      placeholder: src.placeholder ?? '',
+      startTime: src.startTime,
+      endTime: src.endTime,
+    },
+    sourceTrackIndex: placing.trackIndex,
+    sourceTimeSlot: src.startTime,
+  }
+}
+
 function segmentState(
   placing: Placing,
   tracks: ScheduleTrack[],
@@ -156,64 +182,33 @@ function segmentState(
   seg: RailSegment,
 ): SegmentState {
   if (isPlacingSource(placing, T, seg)) return 'source'
-  const target = tracks[T]
-  if (!target) return 'invalid'
+  if (!tracks[T]) return 'invalid'
 
-  if (seg.kind === 'open') {
-    if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
-    if (placing.kind === 'proposal') {
-      const dur = getProposalDurationMinutes(placing.proposal)
-      const end = calculateEndTime(seg.startTime, dur)
-      return withinScheduleEnd(end) && fitsInTrack(target, seg.startTime, dur)
-        ? 'valid'
-        : 'invalid'
+  const dragItem = placingDragItem(placing)
+  const dropPosition = { trackIndex: T, timeSlot: seg.startTime }
+
+  // Service pick-up: only moves into open slots (services never swap).
+  if (dragItem.type === 'scheduled-service') {
+    if (seg.kind !== 'open' || seg.durationMin < MIN_OPEN_SLOT_MIN) {
+      return 'invalid'
     }
-    const src = placing.talk
-    const sameTrack = T === placing.trackIndex
-    if (src.talk) {
-      const dur = getProposalDurationMinutes(src.talk)
-      const end = calculateEndTime(seg.startTime, dur)
-      const exclude = sameTrack
-        ? matchTalk(src.talk._id, src.startTime)
-        : undefined
-      return withinScheduleEnd(end) &&
-        fitsInTrack(target, seg.startTime, dur, exclude)
-        ? 'valid'
-        : 'invalid'
-    }
-    const dur = durationBetween(src.startTime, src.endTime)
-    const end = calculateEndTime(seg.startTime, dur)
-    const exclude = sameTrack
-      ? matchService(src.placeholder ?? '', src.startTime)
-      : undefined
-    return withinScheduleEnd(end) &&
-      isTrackIntervalFree(target, seg.startTime, end, exclude)
+    return classifyServiceDrop(tracks, dragItem, dropPosition) === 'move'
       ? 'valid'
       : 'invalid'
   }
 
-  if (seg.kind === 'talk') {
-    // Occupied talk => SWAP, only when a scheduled TALK is being placed.
-    if (placing.kind !== 'scheduled' || !placing.talk.talk) return 'invalid'
-    const src = placing.talk
-    const sourceTrack = tracks[placing.trackIndex]
-    if (!sourceTrack) return 'invalid'
-    const draggedEnd = calculateEndTime(
-      seg.startTime,
-      getProposalDurationMinutes(src.talk!),
-    )
-    const ok =
-      withinScheduleEnd(draggedEnd) &&
-      canSwapTalks(target, src.talk!, seg.talk, seg.startTime) &&
-      canPlaceDisplacedBack(
-        sourceTrack,
-        seg.talk,
-        src.startTime,
-        matchTalk(src.talk!._id, src.startTime),
-      )
-    return ok ? 'valid' : 'invalid'
+  // Proposal / scheduled talk: an open slot is a MOVE, an occupied talk a SWAP.
+  if (seg.kind === 'open') {
+    if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
+    return classifyProposalDrop(tracks, dragItem, dropPosition) === 'move'
+      ? 'valid'
+      : 'invalid'
   }
-
+  if (seg.kind === 'talk') {
+    return classifyProposalDrop(tracks, dragItem, dropPosition) === 'swap'
+      ? 'valid'
+      : 'invalid'
+  }
   // `break` targets are never a valid drop.
   return 'invalid'
 }

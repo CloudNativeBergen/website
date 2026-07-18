@@ -121,55 +121,50 @@ function performSwap(
 }
 
 /**
- * Place / move a proposal into a track slot (pure port of `moveTalkToTrack`).
- *
- * Duplicate guard: a FRESH drop (not a `scheduled-talk` move) is rejected if the
- * proposal is already scheduled on THIS day or — via `otherScheduledProposalIds`
- * — on ANY other day. This is the cross-day duplicate fix; the old check only
- * looked at the current day so the same talk could be scheduled twice across
- * days.
+ * What a proposal drop would do: `move` into an empty slot, `swap` with the
+ * occupied talk, or `invalid`. SINGLE SOURCE OF TRUTH for "is this drop legal?"
+ * — `moveProposal` applies it, and both UIs (desktop `TimeSlotDropZone.canDrop`,
+ * mobile `segmentState`) call it so they can never offer a drop the reducer
+ * rejects. Pure, no mutation.
  */
-export function moveProposal(
-  schedule: ConferenceSchedule,
+export type DropClassification = 'move' | 'swap' | 'invalid'
+
+export function classifyProposalDrop(
+  tracks: readonly ScheduleTrack[],
   dragItem: DragItem,
   dropPosition: DropPosition,
   otherScheduledProposalIds?: ReadonlySet<string>,
-): OperationResult {
-  const fail: OperationResult = { schedule, ok: false }
-  if (!dragItem.proposal) return fail
-
+): DropClassification {
+  if (!dragItem.proposal) return 'invalid'
   const { proposal } = dragItem
   const { trackIndex, timeSlot } = dropPosition
 
-  if (trackIndex < 0 || trackIndex >= schedule.tracks.length) return fail
+  if (trackIndex < 0 || trackIndex >= tracks.length) return 'invalid'
 
-  // A move onto the talk's own current slot is a no-op. Without this guard it
-  // falls into the swap branch below (the "occupied" talk IS the dragged talk),
-  // and `performSwap` re-adds the talk at both the target and the source slot —
-  // silently duplicating it. Reachable from the mobile Move sheet (which can
-  // default the start time to the talk's current slot) and any drop-in-place.
+  // A move onto the talk's own current slot is a no-op — without this it falls
+  // into the swap branch (the "occupied" talk IS the dragged one) and duplicates.
   if (
     dragItem.type === 'scheduled-talk' &&
     dragItem.sourceTrackIndex === trackIndex &&
     dragItem.sourceTimeSlot === timeSlot
   ) {
-    return fail
+    return 'invalid'
   }
 
-  const targetTrack = schedule.tracks[trackIndex]
+  const targetTrack = tracks[trackIndex]
   const durationMinutes = getProposalDurationMinutes(proposal)
   const endTime = calculateEndTime(timeSlot, durationMinutes)
+  if (!withinScheduleEnd(endTime)) return 'invalid'
 
-  // The dragged talk always lands ending at `endTime` (both for a fresh drop and
-  // as the forward half of a swap), so a single end-of-day guard covers both.
-  if (!withinScheduleEnd(endTime)) return fail
-
+  // Duplicate guard: a FRESH drop (not a `scheduled-talk` move) is rejected if
+  // the proposal is already scheduled on THIS day or — via
+  // `otherScheduledProposalIds` — on ANY other day.
   if (dragItem.type !== 'scheduled-talk') {
-    const scheduledHere = schedule.tracks.some((track) =>
+    const scheduledHere = tracks.some((track) =>
       track.talks.some((talk) => talk.talk?._id === proposal._id),
     )
     if (scheduledHere || otherScheduledProposalIds?.has(proposal._id)) {
-      return fail
+      return 'invalid'
     }
   }
 
@@ -184,29 +179,22 @@ export function moveProposal(
     dragItem.sourceTrackIndex !== undefined &&
     dragItem.sourceTimeSlot !== undefined
   ) {
-    const sourceTrack = schedule.tracks[dragItem.sourceTrackIndex]
-    // Validate BOTH directions of the swap: the dragged talk must fit the target
-    // slot AND the displaced talk must fit back into the source track.
+    const sourceTrack = tracks[dragItem.sourceTrackIndex]
+    // Validate BOTH directions of the swap.
     const draggedExclude = matchTalk(proposal._id, dragItem.sourceTimeSlot)
-    if (
-      !canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot) ||
-      !sourceTrack ||
-      !canPlaceDisplacedBack(
+    return canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot) &&
+      sourceTrack &&
+      canPlaceDisplacedBack(
         sourceTrack,
         occupiedTalk,
         dragItem.sourceTimeSlot,
         draggedExclude,
       )
-    ) {
-      return fail
-    }
-    return {
-      schedule: performSwap(schedule, dragItem, occupiedTalk, dropPosition),
-      ok: true,
-    }
+      ? 'swap'
+      : 'invalid'
   }
 
-  if (occupiedTalk) return fail
+  if (occupiedTalk) return 'invalid'
 
   const excludeTalk =
     dragItem.type === 'scheduled-talk' &&
@@ -220,8 +208,84 @@ export function moveProposal(
     timeSlot,
     excludeTalk,
   )
-  if (!availableTime || availableTime !== timeSlot) return fail
+  return availableTime === timeSlot ? 'move' : 'invalid'
+}
 
+/**
+ * Whether a service-session drop is legal (services never swap, so `move` or
+ * `invalid`). Single source of truth shared by `moveServiceSession` and the UIs.
+ */
+export function classifyServiceDrop(
+  tracks: readonly ScheduleTrack[],
+  dragItem: DragItem,
+  dropPosition: DropPosition,
+): 'move' | 'invalid' {
+  if (!dragItem.serviceSession) return 'invalid'
+  const { serviceSession } = dragItem
+  const { trackIndex, timeSlot } = dropPosition
+
+  if (trackIndex < 0 || trackIndex >= tracks.length) return 'invalid'
+
+  const durationMinutes = durationBetween(
+    serviceSession.startTime,
+    serviceSession.endTime,
+  )
+  const newEndTime = calculateEndTime(timeSlot, durationMinutes)
+  if (!withinScheduleEnd(newEndTime)) return 'invalid'
+
+  const targetTrack = tracks[trackIndex]
+  const excludeExisting =
+    dragItem.type === 'scheduled-service' &&
+    dragItem.sourceTrackIndex === trackIndex &&
+    dragItem.sourceTimeSlot !== undefined
+      ? matchService(serviceSession.placeholder, dragItem.sourceTimeSlot)
+      : undefined
+
+  return isTrackIntervalFree(targetTrack, timeSlot, newEndTime, excludeExisting)
+    ? 'move'
+    : 'invalid'
+}
+
+/**
+ * Place / move a proposal into a track slot. Legality is decided by
+ * {@link classifyProposalDrop}; this function only applies the resulting
+ * move/swap so the rule lives in exactly one place.
+ */
+export function moveProposal(
+  schedule: ConferenceSchedule,
+  dragItem: DragItem,
+  dropPosition: DropPosition,
+  otherScheduledProposalIds?: ReadonlySet<string>,
+): OperationResult {
+  const fail: OperationResult = { schedule, ok: false }
+  const kind = classifyProposalDrop(
+    schedule.tracks,
+    dragItem,
+    dropPosition,
+    otherScheduledProposalIds,
+  )
+  if (kind === 'invalid') return fail
+
+  // classify returned non-invalid ⇒ dragItem.proposal is present.
+  const proposal = dragItem.proposal!
+  const { trackIndex, timeSlot } = dropPosition
+  const targetTrack = schedule.tracks[trackIndex]
+
+  if (kind === 'swap') {
+    const occupiedTalk = targetTrack.talks.find(
+      (talk) => talk.startTime === timeSlot,
+    )!
+    return {
+      schedule: performSwap(schedule, dragItem, occupiedTalk, dropPosition),
+      ok: true,
+    }
+  }
+
+  // kind === 'move': drop into the (now-known-free) slot, clearing the source.
+  const endTime = calculateEndTime(
+    timeSlot,
+    getProposalDurationMinutes(proposal),
+  )
   const newTracks = [...schedule.tracks]
 
   if (
@@ -267,34 +331,20 @@ export function moveServiceSession(
   dropPosition: DropPosition,
 ): OperationResult {
   const fail: OperationResult = { schedule, ok: false }
-  if (!dragItem.serviceSession) return fail
+  if (
+    classifyServiceDrop(schedule.tracks, dragItem, dropPosition) === 'invalid'
+  ) {
+    return fail
+  }
 
-  const { serviceSession } = dragItem
+  // classify returned non-invalid ⇒ dragItem.serviceSession is present.
+  const serviceSession = dragItem.serviceSession!
   const { trackIndex, timeSlot } = dropPosition
-
-  if (trackIndex < 0 || trackIndex >= schedule.tracks.length) return fail
-
   const durationMinutes = durationBetween(
     serviceSession.startTime,
     serviceSession.endTime,
   )
   const newEndTime = calculateEndTime(timeSlot, durationMinutes)
-
-  if (!withinScheduleEnd(newEndTime)) return fail
-
-  const targetTrack = schedule.tracks[trackIndex]
-  const excludeExisting =
-    dragItem.type === 'scheduled-service' &&
-    dragItem.sourceTrackIndex === trackIndex &&
-    dragItem.sourceTimeSlot !== undefined
-      ? matchService(serviceSession.placeholder, dragItem.sourceTimeSlot)
-      : undefined
-
-  if (
-    !isTrackIntervalFree(targetTrack, timeSlot, newEndTime, excludeExisting)
-  ) {
-    return fail
-  }
 
   const newTracks = [...schedule.tracks]
 

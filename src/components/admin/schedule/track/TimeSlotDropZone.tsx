@@ -5,13 +5,8 @@ import { useDroppable } from '@dnd-kit/core'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { TimeSlot } from '@/lib/schedule/types'
 import { addMinutes } from '@/lib/schedule/time'
-import {
-  findAvailableTimeSlot,
-  canSwapTalks,
-  canPlaceDisplacedBack,
-  isTrackIntervalFree,
-  matchTalk,
-} from '@/lib/schedule/rules'
+import { isTrackIntervalFree } from '@/lib/schedule/rules'
+import { classifyProposalDrop } from '@/lib/schedule/operations'
 import {
   calculateTimePosition,
   shouldShowTimeLabel,
@@ -80,74 +75,19 @@ export const TimeSlotDropZone = ({
 
   const canDrop = useMemo(() => {
     if (!activeDragItem) return true
-
+    // Service drags aren't validated here (the reducer does); only proposals.
     if (!activeDragItem.proposal) return true
-
-    const occupiedTalk = track.talks.find(
-      (talk) => talk.startTime === timeSlot.time,
-    )
-
-    if (occupiedTalk && occupiedTalk.talk) {
-      if (
-        activeDragItem.type === 'scheduled-talk' &&
-        activeDragItem.sourceTrackIndex !== undefined &&
-        activeDragItem.sourceTimeSlot !== undefined
-      ) {
-        if (
-          activeDragItem.proposal._id === occupiedTalk.talk._id &&
-          activeDragItem.sourceTimeSlot === timeSlot.time
-        ) {
-          return false
-        }
-
-        // Validate BOTH directions of the swap so the indicator matches what the
-        // reducer's `moveProposal` will actually do: the dragged talk must fit
-        // the target slot AND the displaced talk must fit back into the source
-        // track. Checking only the forward `canSwapTalks` let the UI show a swap
-        // as droppable that the drop then rejected.
-        const sourceTrack = schedule?.tracks[activeDragItem.sourceTrackIndex]
-        const draggedExclude = matchTalk(
-          activeDragItem.proposal._id,
-          activeDragItem.sourceTimeSlot,
-        )
-        return (
-          canSwapTalks(
-            track,
-            activeDragItem.proposal,
-            occupiedTalk,
-            timeSlot.time,
-          ) &&
-          !!sourceTrack &&
-          canPlaceDisplacedBack(
-            sourceTrack,
-            occupiedTalk,
-            activeDragItem.sourceTimeSlot,
-            draggedExclude,
-          )
-        )
-      }
-
-      return false
-    }
-
-    const excludeTalk =
-      activeDragItem.type === 'scheduled-talk' &&
-      activeDragItem.sourceTrackIndex === trackIndex
-        ? {
-            talkId: activeDragItem.proposal._id,
-            startTime: activeDragItem.sourceTimeSlot!,
-          }
-        : undefined
-
+    if (!schedule) return true
+    // Defer to the shared predicate so the drop indicator matches EXACTLY what
+    // the reducer's `moveProposal` will do — fit, bidirectional swap, and the
+    // end-of-day guard (which this inline check previously omitted).
     return (
-      findAvailableTimeSlot(
-        track,
-        activeDragItem.proposal,
-        timeSlot.time,
-        excludeTalk,
-      ) === timeSlot.time
+      classifyProposalDrop(schedule.tracks, activeDragItem, {
+        trackIndex,
+        timeSlot: timeSlot.time,
+      }) !== 'invalid'
     )
-  }, [activeDragItem, track, timeSlot.time, trackIndex, schedule])
+  }, [activeDragItem, schedule, trackIndex, timeSlot.time])
 
   // Gate on the WHOLE slot interval, not just an exact start-time match, so the
   // "＋ Service" button never appears on a 5-min slot that falls INSIDE an

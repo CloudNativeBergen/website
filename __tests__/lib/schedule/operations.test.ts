@@ -19,6 +19,8 @@ import type { DragItem, DropPosition } from '@/lib/schedule/types'
 import {
   moveProposal,
   moveServiceSession,
+  classifyProposalDrop,
+  classifyServiceDrop,
   addTrack,
   removeTrack,
   updateTrack,
@@ -431,5 +433,156 @@ describe('computeUnassigned', () => {
   it('returns all proposals when nothing is scheduled', () => {
     const proposals = [proposal('p1'), proposal('p2')]
     expect(computeUnassigned(proposals, [schedule(track('A'))])).toHaveLength(2)
+  })
+})
+
+// The drop indicators in BOTH UIs (desktop `TimeSlotDropZone.canDrop`, mobile
+// `segmentState`) call the classifiers, while the actual drop calls the reducer
+// ops. If the two ever diverge, the UI promises a drop the reducer then rejects
+// (or vice-versa). These tests pin the classifier's verdict to the op's outcome
+// on identical fixtures, so any future edit to one without the other fails here.
+describe('classifier ⇔ reducer equivalence', () => {
+  const proposalCases: Array<{
+    name: string
+    build: () => {
+      s: ConferenceSchedule
+      d: DragItem
+      p: DropPosition
+      others?: Set<string>
+      expectSwap?: boolean
+    }
+  }> = [
+    {
+      name: 'move into a free slot',
+      build: () => ({
+        s: schedule(track('A'), track('B')),
+        d: { type: 'proposal', proposal: proposal('p') },
+        p: drop(1, '11:00'),
+      }),
+    },
+    {
+      name: 'reject an out-of-bounds track index',
+      build: () => ({
+        s: schedule(track('A')),
+        d: { type: 'proposal', proposal: proposal('p') },
+        p: drop(5, '10:00'),
+      }),
+    },
+    {
+      name: 'reject a proposal already scheduled elsewhere (duplicate guard)',
+      build: () => ({
+        s: schedule(track('A')),
+        d: { type: 'proposal', proposal: proposal('p') },
+        p: drop(0, '10:00'),
+        others: new Set(['p']),
+      }),
+    },
+    {
+      name: 'reject a drop that runs past the end of the day',
+      build: () => ({
+        s: schedule(track('A')),
+        d: { type: 'proposal', proposal: proposal('p') },
+        p: drop(0, '20:45'),
+      }),
+    },
+    {
+      name: 'swap two talks across tracks',
+      build: () => ({
+        s: schedule(
+          track('A', talk('a', '10:00', '10:25')),
+          track('B', talk('b', '11:00', '11:25')),
+        ),
+        d: {
+          type: 'scheduled-talk',
+          proposal: proposal('a'),
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '10:00',
+        },
+        p: drop(1, '11:00'),
+        expectSwap: true,
+      }),
+    },
+    {
+      name: 'reject dropping a talk back onto its own slot (no-op)',
+      build: () => ({
+        s: schedule(track('A', talk('a', '10:00', '10:25'))),
+        d: {
+          type: 'scheduled-talk',
+          proposal: proposal('a'),
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '10:00',
+        },
+        p: drop(0, '10:00'),
+      }),
+    },
+  ]
+
+  proposalCases.forEach(({ name, build }) => {
+    it(`proposal: ${name}`, () => {
+      const { s, d, p, others, expectSwap } = build()
+      const kind = classifyProposalDrop(s.tracks, d, p, others)
+      const op = moveProposal(s, d, p, others)
+      expect(kind !== 'invalid').toBe(op.ok)
+      if (expectSwap) {
+        expect(kind).toBe('swap')
+        // A swap displaces the target talk back to the source rather than
+        // dropping it: the target track keeps exactly one talk.
+        expect(op.schedule.tracks[p.trackIndex].talks).toHaveLength(1)
+      }
+    })
+  })
+
+  const serviceDrag = (
+    placeholder: string,
+    start: string,
+    end: string,
+    extra: Partial<DragItem> = {},
+  ): DragItem => ({
+    type: 'service-session',
+    serviceSession: { placeholder, startTime: start, endTime: end },
+    ...extra,
+  })
+
+  const serviceCases: Array<{
+    name: string
+    build: () => { s: ConferenceSchedule; d: DragItem; p: DropPosition }
+  }> = [
+    {
+      name: 'place a service into a free interval',
+      build: () => ({
+        s: schedule(track('A')),
+        d: serviceDrag('Lunch', '12:00', '13:00'),
+        p: drop(0, '12:00'),
+      }),
+    },
+    {
+      name: 'reject a service overlapping an existing talk',
+      build: () => ({
+        s: schedule(track('A', talk('x', '12:30', '12:55'))),
+        d: serviceDrag('Lunch', '12:00', '13:00'),
+        p: drop(0, '12:00'),
+      }),
+    },
+    {
+      name: 'move an existing service, excluding its own slot',
+      build: () => ({
+        s: schedule(track('A', service('Break', '12:00', '12:15'))),
+        d: serviceDrag('Break', '12:00', '12:15', {
+          type: 'scheduled-service',
+          sourceTrackIndex: 0,
+          sourceTimeSlot: '12:00',
+        }),
+        p: drop(0, '12:05'),
+      }),
+    },
+  ]
+
+  serviceCases.forEach(({ name, build }) => {
+    it(`service: ${name}`, () => {
+      const { s, d, p } = build()
+      const kind = classifyServiceDrop(s.tracks, d, p)
+      const op = moveServiceSession(s, d, p)
+      expect(kind === 'move').toBe(op.ok)
+    })
   })
 })
