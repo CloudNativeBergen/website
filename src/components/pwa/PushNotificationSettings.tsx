@@ -98,6 +98,16 @@ function Toggle({ checked, onChange, disabled, label, id }: ToggleProps) {
   )
 }
 
+/** Result of a `push.sendTest` round-trip, surfaced as inline feedback. */
+export interface PushTestResult {
+  /** Devices the push service accepted. */
+  sent: number
+  /** Dead/invalid subscriptions pruned during the send. */
+  gone: number
+  /** Whether the server has VAPID keys configured at all. */
+  configured: boolean
+}
+
 export interface PushNotificationSettingsViewProps {
   status: PushSettingsStatus
   preferences: PushPreferences
@@ -108,6 +118,55 @@ export interface PushNotificationSettingsViewProps {
   error?: string | null
   onToggleMaster: (enable: boolean) => void
   onToggleCategory: (category: PushCategory, next: boolean) => void
+  /** Fire a self-serve test notification. Omit to hide the test button. */
+  onSendTest?: () => void
+  /** The test send is in flight (button disabled + spinner). */
+  sendTestPending?: boolean
+  /** Result of the last test send, or null if none attempted this session. */
+  sendTestResult?: PushTestResult | null
+  /** True when the last test send threw (network / server error). */
+  sendTestError?: boolean
+}
+
+/** Human-readable feedback for the last test-notification send. */
+function testFeedback(
+  result: PushTestResult | null | undefined,
+  error: boolean | undefined,
+): { text: string; tone: 'success' | 'muted' | 'warn' } | null {
+  if (error) {
+    return {
+      text: 'Could not send a test notification. Please try again.',
+      tone: 'warn',
+    }
+  }
+  if (!result) return null
+  if (!result.configured) {
+    return {
+      text: 'Push notifications aren’t available right now.',
+      tone: 'muted',
+    }
+  }
+  if (result.sent === 0 && result.gone === 0) {
+    return {
+      text: 'No devices are subscribed on this account yet. Enable notifications on a device first.',
+      tone: 'muted',
+    }
+  }
+  const devices = `${result.sent} device${result.sent === 1 ? '' : 's'}`
+  const base =
+    result.sent > 0
+      ? `Sent to ${devices} — check for the notification.`
+      : 'No active devices received the test.'
+  const expired =
+    result.gone > 0
+      ? ` Removed ${result.gone} expired subscription${
+          result.gone === 1 ? '' : 's'
+        }.`
+      : ''
+  return {
+    text: base + expired,
+    tone: result.sent > 0 ? 'success' : 'warn',
+  }
 }
 
 /**
@@ -123,8 +182,13 @@ export function PushNotificationSettingsView({
   error,
   onToggleMaster,
   onToggleCategory,
+  onSendTest,
+  sendTestPending,
+  sendTestResult,
+  sendTestError,
 }: PushNotificationSettingsViewProps) {
   const enabled = status === 'enabled'
+  const feedback = testFeedback(sendTestResult, sendTestError)
 
   return (
     <section
@@ -263,6 +327,34 @@ export function PushNotificationSettingsView({
                 ))}
               </fieldset>
             )}
+
+            {enabled && onSendTest && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={onSendTest}
+                  disabled={sendTestPending}
+                  className="font-inter inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                >
+                  {sendTestPending && <LoadingSpinner size="sm" />}
+                  {sendTestPending ? 'Sending test…' : 'Send test notification'}
+                </button>
+                {feedback && (
+                  <p
+                    role="status"
+                    className={`font-inter text-sm ${
+                      feedback.tone === 'success'
+                        ? 'text-green-700 dark:text-green-400'
+                        : feedback.tone === 'warn'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                  >
+                    {feedback.text}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -303,6 +395,22 @@ export function PushNotificationSettings() {
   const setPreferencesMutation = api.push.setPreferences.useMutation({
     onSuccess: () => utils.push.getPreferences.invalidate(),
   })
+
+  const [testResult, setTestResult] = useState<PushTestResult | null>(null)
+  const [testError, setTestError] = useState(false)
+  const sendTestMutation = api.push.sendTest.useMutation()
+
+  const handleSendTest = useCallback(async () => {
+    setTestError(false)
+    setTestResult(null)
+    try {
+      setTestResult(await sendTestMutation.mutateAsync())
+    } catch {
+      // Covers the cooldown (TOO_MANY_REQUESTS) and any transport error — the
+      // inline status shows a generic retry hint.
+      setTestError(true)
+    }
+  }, [sendTestMutation])
 
   // Server-side push availability: an empty VAPID public key means no keys are
   // configured in the environment, so subscribing can never work. Wait for the
@@ -416,6 +524,10 @@ export function PushNotificationSettings() {
       error={error}
       onToggleMaster={handleToggleMaster}
       onToggleCategory={handleToggleCategory}
+      onSendTest={handleSendTest}
+      sendTestPending={sendTestMutation.isPending}
+      sendTestResult={testResult}
+      sendTestError={testError}
     />
   )
 }
