@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
 import {
   HomeIcon,
   DocumentTextIcon,
@@ -7,20 +8,77 @@ import {
   CalendarDaysIcon,
   Cog6ToothIcon,
   MagnifyingGlassIcon,
-  BellIcon,
   ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { TRPCProvider } from '@/components/providers/TRPCProvider'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import clsx from 'clsx'
 import type {
   NavigationSection,
   NavigationItem,
 } from '@/components/common/DashboardLayout'
 
+// Deterministic tRPC responses for the REAL NotificationBell the mock shell
+// mounts: 3 unread (badge) and a small inbox. Handles httpBatchLink's
+// comma-batched GET paths generically.
+const notificationItems = () => [
+  {
+    id: 'n1',
+    type: 'proposal_status_changed',
+    title: 'Your proposal was accepted',
+    message: 'Congratulations! "Scaling Kubernetes" was accepted.',
+    link: '/cfp/proposal/1',
+    readAt: null,
+    createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    actor: { _id: 'a1', name: 'Program Committee' },
+  },
+  {
+    id: 'n2',
+    type: 'travel_support_update',
+    title: 'Travel support approved',
+    readAt: null,
+    createdAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+    actor: null,
+  },
+  {
+    id: 'n3',
+    type: 'system',
+    title: 'Schedule published',
+    readAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    actor: null,
+  },
+]
+
+const notificationHandlers = [
+  http.get('/api/trpc/:procs', ({ params }) =>
+    HttpResponse.json(
+      String(params.procs)
+        .split(',')
+        .map((proc) =>
+          proc === 'notification.list'
+            ? { result: { data: notificationItems() } }
+            : proc === 'notification.unreadCount'
+              ? { result: { data: 3 } }
+              : { result: { data: null } },
+        ),
+    ),
+  ),
+]
+
 const meta = {
   title: 'Components/Layout/DashboardLayout',
+  decorators: [
+    (Story) => (
+      <TRPCProvider>
+        <Story />
+      </TRPCProvider>
+    ),
+  ],
   parameters: {
+    msw: { handlers: notificationHandlers },
     layout: 'fullscreen',
     docs: {
       description: {
@@ -190,14 +248,10 @@ function MockDashboard({
           </div>
           <div className="flex items-center gap-x-4 lg:gap-x-6">
             <ThemeToggle />
-            {mode === 'admin' && (
-              <button
-                type="button"
-                className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500 dark:text-gray-500"
-              >
-                <BellIcon aria-hidden="true" className="size-6" />
-              </button>
-            )}
+            {/* The REAL bell (kept in sync with DashboardLayout post-#511):
+                needs a TRPCProvider (meta decorator); its queries are stubbed
+                by msw/route interception in visual QA. */}
+            <NotificationBell />
             <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200 dark:bg-gray-700" />
             <button className="-m-1.5 flex items-center p-1.5">
               <img

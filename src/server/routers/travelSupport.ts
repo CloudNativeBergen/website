@@ -279,19 +279,24 @@ export const travelSupportRouter = router({
         // submitted, so a failure here (e.g. the organizer-id fetch) must not
         // surface as a submit error to the speaker.
         try {
-          const organizerIds = await getOrganizerSpeakerIds()
-          await createNotifications(
-            organizerIds
-              .filter((id) => id && id !== ctx.speaker._id)
-              .map((id): NotificationInput => ({
-                recipientId: id,
-                conferenceId: travelSupport.conference._id,
-                notificationType: 'travel_support_update',
-                title: `Travel support request from ${ctx.speaker.name}`,
-                actorId: ctx.speaker._id,
-                link: '/admin/speakers/travel-support',
-              })),
-          )
+          // Defensive: mirror sponsor.ts — skip the fan-out entirely if the
+          // conference ref is missing rather than writing a broken reference.
+          const conferenceId = travelSupport.conference?._id
+          if (conferenceId) {
+            const organizerIds = await getOrganizerSpeakerIds()
+            await createNotifications(
+              organizerIds
+                .filter((id) => id && id !== ctx.speaker._id)
+                .map((id): NotificationInput => ({
+                  recipientId: id,
+                  conferenceId,
+                  notificationType: 'travel_support_update',
+                  title: `Travel support request from ${ctx.speaker.name}`,
+                  actorId: ctx.speaker._id,
+                  link: '/admin/speakers/travel-support',
+                })),
+            )
+          }
         } catch (notifyError) {
           console.error(
             'Failed to notify organizers of travel support request:',
