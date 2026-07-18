@@ -201,27 +201,39 @@ describe('MobileScheduleView', () => {
     })
   })
 
-  it('hides the "Service" control while placing (index-shift guard)', () => {
-    setup()
-    // A Service button per track before entering placing mode.
-    expect(
-      screen.getAllByRole('button', { name: 'Service' }).length,
-    ).toBeGreaterThan(0)
+  it('creates a service session from within the slot-tap sheet (merged add flow)', () => {
+    const { dispatch } = setup()
+    // Tap an open slot → the unified "assign a talk OR create a service" sheet.
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Options for Scheduled Keynote Talk',
+        name: 'Assign to open slot 08:00 to 10:00',
       }),
     )
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: 'Move or swap',
-      }),
-    )
-    // While placing, adding a service would re-sort track.talks and invalidate
-    // the picked-up talkIndex — so the control is gone.
+    const dialog = screen.getByRole('dialog')
+    // Service creation now lives INSIDE the talk-selection sheet (no separate
+    // per-track "Service" button anymore).
     expect(
       screen.queryByRole('button', { name: 'Service' }),
     ).not.toBeInTheDocument()
+    fireEvent.click(
+      within(dialog).getByRole('button', {
+        name: /Create service session here/,
+      }),
+    )
+    // The service form fixes the start time to the tapped slot (08:00).
+    const form = screen.getByRole('dialog')
+    fireEvent.change(within(form).getByLabelText('Session title'), {
+      target: { value: 'Coffee Break' },
+    })
+    fireEvent.click(within(form).getByRole('button', { name: 'Add session' }))
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'addService',
+        trackIndex: 0,
+        title: 'Coffee Break',
+        startTime: '08:00',
+      }),
+    )
   })
 
   it('swaps two talks: options → move or swap → tap the other', () => {

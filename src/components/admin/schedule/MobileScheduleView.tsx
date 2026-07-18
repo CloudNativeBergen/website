@@ -10,17 +10,15 @@ import {
 import { ProposalExisting } from '@/lib/proposal/types'
 import { ScheduleAction } from '@/lib/schedule/reducer'
 import {
-  SCHEDULE_START,
   SCHEDULE_END,
   calculateEndTime,
   durationBetween,
-  generateTimeSlots,
   getProposalDurationMinutes,
   toMinutes,
   withinScheduleEnd,
 } from '@/lib/schedule/time'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
-import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
+import { fitsInTrack } from '@/lib/schedule/rules'
 import {
   classifyProposalDrop,
   classifyServiceDrop,
@@ -51,6 +49,7 @@ import {
   ChevronDownIcon,
   Cog6ToothIcon,
   DocumentDuplicateIcon,
+  ArrowLeftIcon,
 } from '@heroicons/react/24/outline'
 
 interface MobileScheduleViewProps {
@@ -222,23 +221,6 @@ function segmentState(
   return 'invalid'
 }
 
-/** Every `intervalMinutes` start time whose full footprint is free in `track`. */
-function freeStartTimes(
-  track: ScheduleTrack,
-  durationMinutes: number,
-  intervalMinutes = 5,
-): string[] {
-  const endBound = toMinutes(SCHEDULE_END)
-  return generateTimeSlots(SCHEDULE_START, SCHEDULE_END, intervalMinutes)
-    .map((s) => s.time)
-    .filter((time) => {
-      if (toMinutes(calculateEndTime(time, durationMinutes)) > endBound) {
-        return false
-      }
-      return fitsInTrack(track, time, durationMinutes)
-    })
-}
-
 /* -------------------------------------------------------------------------- */
 /* Bottom sheet                                                               */
 /* -------------------------------------------------------------------------- */
@@ -346,39 +328,6 @@ function BottomSheet({
           {children}
         </div>
       </div>
-    </div>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* Time picker                                                                */
-/* -------------------------------------------------------------------------- */
-
-function TimeSelect({
-  id,
-  slots,
-  value,
-  onChange,
-}: {
-  id: string
-  slots: string[]
-  value: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="grid grid-cols-1">
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="col-start-1 row-start-1 w-full appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pr-8 pl-3 text-sm text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-      >
-        {slots.map((slot) => (
-          <option key={slot} value={slot}>
-            {slot}
-          </option>
-        ))}
-      </select>
     </div>
   )
 }
@@ -495,138 +444,18 @@ function ServiceEditSheet({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Add service sheet                                                          */
-/* -------------------------------------------------------------------------- */
-
-function AddServiceSheet({
-  track,
-  trackIndex,
-  dispatch,
-  onClose,
-}: {
-  track: ScheduleTrack
-  trackIndex: number
-  dispatch: React.Dispatch<ScheduleAction>
-  onClose: () => void
-}) {
-  const [title, setTitle] = useState('')
-  const [duration, setDuration] = useState('10')
-  const [inlineError, setInlineError] = useState<string | null>(null)
-
-  const slots = useMemo(
-    () => freeStartTimes(track, Number(duration)),
-    [track, duration],
-  )
-  const [startTime, setStartTime] = useState('')
-  const effectiveStart = slots.includes(startTime)
-    ? startTime
-    : (slots[0] ?? '')
-
-  const confirm = useCallback(() => {
-    if (!title.trim() || !effectiveStart) {
-      setInlineError('Enter a title and pick a free start time.')
-      return
-    }
-    const endTime = calculateEndTime(effectiveStart, Number(duration))
-    if (
-      toMinutes(endTime) > toMinutes(SCHEDULE_END) ||
-      !isTrackIntervalFree(track, effectiveStart, endTime)
-    ) {
-      setInlineError('That slot overlaps another item or runs past end of day.')
-      return
-    }
-    dispatch({
-      type: 'addService',
-      trackIndex,
-      title: title.trim(),
-      startTime: effectiveStart,
-      duration: Number(duration),
-    })
-    onClose()
-  }, [title, effectiveStart, duration, track, trackIndex, dispatch, onClose])
-
-  return (
-    <BottomSheet title="Add service session" onClose={onClose}>
-      <label
-        htmlFor="service-title"
-        className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-      >
-        Session title
-      </label>
-      <input
-        id="service-title"
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="e.g. Coffee Break, Lunch"
-        className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
-        autoFocus
-      />
-
-      <div className="mb-4">
-        <Dropdown
-          name="new-service-duration"
-          label="Duration (minutes)"
-          options={SERVICE_DURATION_OPTIONS}
-          value={duration}
-          setValue={setDuration}
-        />
-      </div>
-
-      {slots.length > 0 ? (
-        <>
-          <label
-            htmlFor="service-start-time"
-            className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Start time
-          </label>
-          <TimeSelect
-            id="service-start-time"
-            slots={slots}
-            value={effectiveStart}
-            onChange={setStartTime}
-          />
-        </>
-      ) : (
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          No free time slot of this length in this track.
-        </p>
-      )}
-
-      {inlineError && (
-        <p
-          role="alert"
-          className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
-        >
-          {inlineError}
-        </p>
-      )}
-
-      <div className="mt-5">
-        <button
-          type="button"
-          onClick={confirm}
-          disabled={!effectiveStart || !title.trim()}
-          className={`w-full ${PRIMARY_BUTTON}`}
-        >
-          Add session
-        </button>
-      </div>
-    </BottomSheet>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
 /* Unassigned drawer                                                          */
 /* -------------------------------------------------------------------------- */
 
 /**
- * The proposal drawer, in two modes:
- *  - `context` set   → contextual "assign here": only proposals that FIT the
- *    open slot are listed, and tapping one drops it straight into that slot.
+ * The unified "add to schedule" drawer, in two modes:
+ *  - `context` set   → tapped an OPEN slot. The user can EITHER assign a fitting
+ *    unassigned talk (tap drops it straight in) OR create a service session in
+ *    place (the start time is fixed to the tapped slot). This merges what used
+ *    to be two separate actions (assign talk vs. the per-track "+ Service").
  *  - `context` null  → the header's Unassigned list: tapping a proposal picks
- *    it up (`onPick`) so the user can then tap a slot.
+ *    it up (`onPick`) so the user can then tap a slot. No service creation here
+ *    because there is no target slot yet.
  */
 function UnassignedDrawer({
   proposals,
@@ -656,9 +485,50 @@ function UnassignedDrawer({
 
   const filters = useProposalFilters(source)
 
-  const title = context
-    ? `Assign at ${context.startTime}`
-    : `Unassigned (${proposals.length})`
+  // Inline service-creation sub-view (only reachable when a slot was tapped).
+  const [creatingService, setCreatingService] = useState(false)
+  const [serviceTitle, setServiceTitle] = useState('')
+  const [serviceDuration, setServiceDuration] = useState('10')
+  const [serviceError, setServiceError] = useState<string | null>(null)
+
+  // Offer only durations that fit inside the tapped slot's free length, so a
+  // service can never be created longer than the gap the user tapped into.
+  const durationOptions = useMemo(() => {
+    if (!context) return SERVICE_DURATION_OPTIONS
+    const fitting = [...SERVICE_DURATION_OPTIONS].filter(
+      ([mins]) => Number(mins) <= context.maxDurationMin,
+    )
+    return new Map(fitting.length > 0 ? fitting : [['5', '5 minutes']])
+  }, [context])
+  const effectiveDuration = durationOptions.has(serviceDuration)
+    ? serviceDuration
+    : (durationOptions.keys().next().value ?? '5')
+
+  const confirmService = useCallback(() => {
+    if (!context) return
+    const trimmed = serviceTitle.trim()
+    if (!trimmed) {
+      setServiceError('Enter a session title.')
+      return
+    }
+    const dur = Number(effectiveDuration)
+    const endTime = calculateEndTime(context.startTime, dur)
+    if (
+      dur > context.maxDurationMin ||
+      toMinutes(endTime) > toMinutes(SCHEDULE_END)
+    ) {
+      setServiceError('That duration runs past the free slot.')
+      return
+    }
+    dispatch({
+      type: 'addService',
+      trackIndex: context.trackIndex,
+      title: trimmed,
+      startTime: context.startTime,
+      duration: dur,
+    })
+    onClose()
+  }, [context, serviceTitle, effectiveDuration, dispatch, onClose])
 
   const handlePick = useCallback(
     (proposal: ProposalExisting) => {
@@ -679,14 +549,104 @@ function UnassignedDrawer({
     [context, dispatch, onPick, onClose],
   )
 
+  // Service-creation sub-view: title + duration, start time fixed to the slot.
+  if (context && creatingService) {
+    return (
+      <BottomSheet
+        title={`New service at ${context.startTime}`}
+        onClose={onClose}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setCreatingService(false)
+            setServiceError(null)
+          }}
+          className="mb-3 inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-gray-300"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back to talks
+        </button>
+
+        <label
+          htmlFor="slot-service-title"
+          className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Session title
+        </label>
+        <input
+          id="slot-service-title"
+          type="text"
+          value={serviceTitle}
+          onChange={(e) => setServiceTitle(e.target.value)}
+          placeholder="e.g. Coffee Break, Lunch"
+          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+          autoFocus
+        />
+
+        <div className="mb-4">
+          <Dropdown
+            name="slot-service-duration"
+            label="Duration (minutes)"
+            options={durationOptions}
+            value={effectiveDuration}
+            setValue={setServiceDuration}
+          />
+        </div>
+
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          Starts at {context.startTime} · up to {context.maxDurationMin} min
+          available
+        </p>
+
+        {serviceError && (
+          <p
+            role="alert"
+            className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
+          >
+            {serviceError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={confirmService}
+          disabled={!serviceTitle.trim()}
+          className={`w-full ${PRIMARY_BUTTON}`}
+        >
+          Add session
+        </button>
+      </BottomSheet>
+    )
+  }
+
+  const title = context
+    ? `Assign at ${context.startTime}`
+    : `Unassigned (${proposals.length})`
+
   return (
     <BottomSheet title={title} onClose={onClose}>
       {context && (
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Free until{' '}
-          {calculateEndTime(context.startTime, context.maxDurationMin)} ·{' '}
-          {context.maxDurationMin} min available
-        </p>
+        <>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            Free until{' '}
+            {calculateEndTime(context.startTime, context.maxDurationMin)} ·{' '}
+            {context.maxDurationMin} min available
+          </p>
+          {/* The merged "create a service session" path — same tap-a-slot entry
+              point as assigning a talk, no separate per-track button. */}
+          <button
+            type="button"
+            onClick={() => {
+              setCreatingService(true)
+              setServiceError(null)
+            }}
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Create service session here
+          </button>
+        </>
       )}
       <div className="relative mb-4">
         <ProposalFilters filters={filters} />
@@ -887,7 +847,6 @@ function TrackRail({
   placing,
   otherScheduledProposalIds,
   onSegmentTap,
-  onAddService,
   onTrackOptions,
 }: {
   track: ScheduleTrack
@@ -896,18 +855,17 @@ function TrackRail({
   placing: Placing | null
   otherScheduledProposalIds: ReadonlySet<string>
   onSegmentTap: (trackIndex: number, seg: RailSegment) => void
-  onAddService: (trackIndex: number) => void
   onTrackOptions: (trackIndex: number) => void
 }) {
   const segments = useMemo(() => buildTrackRail(track), [track])
 
   return (
     <div className="pb-8">
-      {/* Hidden while placing: the rail is a target picker, and adding a service
-          re-sorts track.talks, which would shift the picked-up item's stored
-          talkIndex and corrupt a later Remove/Swap. */}
+      {/* Hidden while placing: the rail is a target picker, so the per-track
+          controls would only get in the way. Adding a service now lives in the
+          slot-tap sheet (tap an open slot → "Create service session here"). */}
       {!placing && (
-        <div className="mb-1 flex items-center justify-between">
+        <div className="mb-1 flex items-center">
           <button
             type="button"
             onClick={() => onTrackOptions(trackIndex)}
@@ -916,14 +874,6 @@ function TrackRail({
           >
             <Cog6ToothIcon className="h-4 w-4" />
             Track
-          </button>
-          <button
-            type="button"
-            onClick={() => onAddService(trackIndex)}
-            className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:text-blue-400"
-          >
-            <PlusIcon className="h-4 w-4" />
-            Service
           </button>
         </div>
       )}
@@ -1376,7 +1326,6 @@ function TrackActionSheet({
 /* -------------------------------------------------------------------------- */
 
 type ActiveSheet =
-  | { kind: 'addService'; trackIndex: number }
   | { kind: 'unassigned'; context: SlotContext | null }
   | { kind: 'track'; trackIndex: number }
   | {
@@ -1637,10 +1586,6 @@ export function MobileScheduleView({
     [effPlacing, tracks, dispatch, otherScheduledProposalIds],
   )
 
-  const openAddService = useCallback((trackIndex: number) => {
-    setSheet({ kind: 'addService', trackIndex })
-  }, [])
-
   const openTrackOptions = useCallback((trackIndex: number) => {
     setSheet({ kind: 'track', trackIndex })
   }, [])
@@ -1666,8 +1611,6 @@ export function MobileScheduleView({
   const tabId = (i: number) => `sched-tab-${i}`
   const panelId = (i: number) => `sched-panel-${i}`
 
-  const addServiceTrack =
-    sheet?.kind === 'addService' ? (tracks[sheet.trackIndex] ?? null) : null
   const trackSheetTrack =
     sheet?.kind === 'track' ? (tracks[sheet.trackIndex] ?? null) : null
   const drawerTrack =
@@ -1832,7 +1775,6 @@ export function MobileScheduleView({
                 placing={effPlacing}
                 otherScheduledProposalIds={otherScheduledProposalIds}
                 onSegmentTap={handleSegmentTap}
-                onAddService={openAddService}
                 onTrackOptions={openTrackOptions}
               />
             </div>
@@ -1841,15 +1783,6 @@ export function MobileScheduleView({
       )}
 
       {/* Sheets */}
-      {sheet?.kind === 'addService' && addServiceTrack && (
-        <AddServiceSheet
-          track={addServiceTrack}
-          trackIndex={sheet.trackIndex}
-          dispatch={dispatch}
-          onClose={closeSheet}
-        />
-      )}
-
       {sheet?.kind === 'unassigned' && (
         <UnassignedDrawer
           proposals={unassignedProposals}
