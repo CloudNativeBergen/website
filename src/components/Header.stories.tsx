@@ -1,11 +1,56 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { http, HttpResponse } from 'msw'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import { UserMenu } from '@/components/UserMenu'
+import { TRPCProvider } from '@/components/providers/TRPCProvider'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import type { Speaker } from '@/lib/speaker/types'
+
+// Deterministic tRPC responses for the REAL NotificationBell rendered in the
+// signed-in header states. Mirrors the pattern in DashboardLayout.stories:
+// splits httpBatchLink's comma-batched GET paths so `notification.unreadCount`
+// resolves to 3 (badge) and `notification.list` to a small inbox.
+const notificationItems = () => [
+  {
+    id: 'n1',
+    type: 'proposal_status_changed',
+    title: 'Your proposal was accepted',
+    message: 'Congratulations! "Scaling Kubernetes" was accepted.',
+    link: '/cfp/proposal/1',
+    readAt: null,
+    createdAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    actor: { _id: 'a1', name: 'Program Committee' },
+  },
+  {
+    id: 'n2',
+    type: 'travel_support_update',
+    title: 'Travel support approved',
+    readAt: null,
+    createdAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+    actor: null,
+  },
+]
+
+const notificationHandlers = [
+  http.get('/api/trpc/:procs', ({ params }) =>
+    HttpResponse.json(
+      String(params.procs)
+        .split(',')
+        .map((proc) =>
+          proc === 'notification.list'
+            ? { result: { data: notificationItems() } }
+            : proc === 'notification.unreadCount'
+              ? { result: { data: 3 } }
+              : { result: { data: null } },
+        ),
+    ),
+  ),
+]
 
 const mockSpeaker: Speaker = {
   _id: 'spk-1',
@@ -20,12 +65,26 @@ const mockSpeaker: Speaker = {
 
 const meta = {
   title: 'Components/Layout/Header',
+  // Pin Date so the msw notification fixtures (and their relative-time labels)
+  // are deterministic, per the AGENTS.md deterministic-dates rule.
+  beforeEach: mockDateBeforeEach(new Date('2026-07-18T12:00:00Z')),
+  // Wrap in the real (httpBatchLink) TRPCProvider so the bell's queries are
+  // comma-batched into a single request that `notificationHandlers` splits —
+  // matching the DashboardLayout.stories pattern.
+  decorators: [
+    (Story) => (
+      <TRPCProvider>
+        <Story />
+      </TRPCProvider>
+    ),
+  ],
   parameters: {
+    msw: { handlers: notificationHandlers },
     layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'Main site header with conference logo, date/location info, registration button, theme toggle, and the role-aware user avatar menu (see `Components/Layout/UserMenu`). Uses `useSession` for authentication state — stories use a mock wrapper to demonstrate logged-out, signed-in speaker, and organizer states.',
+          'Main site header with conference logo, date/location info, registration button, theme toggle, the notification bell (signed-in only), and the role-aware user avatar menu (see `Components/Layout/UserMenu`). Uses `useSession` for authentication state — stories use a mock wrapper to demonstrate logged-out, signed-in speaker, and organizer states. In production the bell is gated by `PublicHeaderBell` on `session?.speaker`; the mock shell below gates on the `isLoggedIn` prop, and the gate itself is covered by the `PublicHeaderBell` unit test.',
       },
     },
   },
@@ -90,6 +149,12 @@ function MockHeader({
         <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            {/* The REAL NotificationBell, shown only in signed-in states — its
+                unreadCount/list queries are stubbed by the msw handlers above.
+                Production gates this via PublicHeaderBell on `session?.speaker`;
+                here the mock shell gates on the `isLoggedIn` prop so the
+                signed-out variants render no bell (no layout shift). */}
+            {isLoggedIn && <NotificationBell />}
             {isLoggedIn ? (
               <UserMenu
                 name="Jane Doe"
