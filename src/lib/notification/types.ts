@@ -9,6 +9,7 @@ export type NotificationType =
   | 'proposal_submitted'
   | 'proposal_status_changed'
   | 'proposal_comment'
+  | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'
   | 'schedule_update'

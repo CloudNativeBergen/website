@@ -27,4 +27,5 @@ export const PushPreferencesSchema = z.object({
   proposalDecisions: z.boolean(),
   talkConfirmed: z.boolean(),
   coSpeakerInvites: z.boolean(),
+  otherUpdates: z.boolean(),
 })

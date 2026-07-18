@@ -15,9 +15,6 @@ import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseT
 import { AppEnvironment } from '@/lib/environment'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
-import { eventBus } from '@/lib/events/bus'
-import type { CoSpeakerInvitedEvent } from '@/lib/events/types'
-import '@/lib/events/registry'
 
 const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
 
@@ -293,26 +290,6 @@ export async function sendInvitationEmail(
       'email' in invitation.invitedBy
         ? invitation.invitedBy.email
         : ''
-
-    // Additionally publish a domain event so opt-in web push can reach the
-    // invitee IF they already have a speaker account + subscription (#444).
-    // This is ADDITIVE to the email above and must never block or fail it, so
-    // it is fire-and-forget with its own error isolation.
-    if (proposalId) {
-      const invitedEvent: CoSpeakerInvitedEvent = {
-        eventType: 'cospeaker.invited',
-        timestamp: new Date(),
-        invitedEmail: invitation.invitedEmail,
-        invitedName: invitation.invitedName,
-        proposal: { _id: proposalId, title: proposalTitle || 'a proposal' },
-        invitedBy: { name: inviterName, email: inviterEmail },
-        conference,
-        metadata: { domain },
-      }
-      eventBus.publish(invitedEvent).catch((error) => {
-        console.error('Failed to publish co-speaker invited event:', error)
-      })
-    }
 
     if (AppEnvironment.isTestMode) {
       console.log('[TEST MODE] Would send co-speaker invitation email:')

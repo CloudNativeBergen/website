@@ -41,6 +41,7 @@ export default defineType({
             value: 'proposal_status_changed',
           },
           { title: 'Proposal Comment', value: 'proposal_comment' },
+          { title: 'Co-Speaker Response', value: 'cospeaker_response' },
           { title: 'Travel Support Update', value: 'travel_support_update' },
           { title: 'Sponsor Activity', value: 'sponsor_activity' },
           { title: 'Schedule Update', value: 'schedule_update' },

@@ -24,9 +24,21 @@ import {
   unsubscribeFromPush,
 } from '@/lib/pwa/push-client'
 
-/** Presentational state of the push settings control. */
+/**
+ * Presentational state of the push settings control.
+ *
+ * `unavailable` = push is not configured on the SERVER (no VAPID public key), so
+ * the control is shown as unavailable rather than a toggle that would fail on
+ * click. Distinct from `unsupported` (the browser lacks the push APIs).
+ */
 export type PushSettingsStatus =
-  'loading' | 'unsupported' | 'ios-install' | 'denied' | 'disabled' | 'enabled'
+  | 'loading'
+  | 'unavailable'
+  | 'unsupported'
+  | 'ios-install'
+  | 'denied'
+  | 'disabled'
+  | 'enabled'
 
 const CATEGORY_LABELS: Record<
   PushCategory,
@@ -41,8 +53,14 @@ const CATEGORY_LABELS: Record<
     description: 'When your talk is confirmed for the programme.',
   },
   coSpeakerInvites: {
-    title: 'Co-speaker invitations',
-    description: 'When someone invites you to co-present.',
+    title: 'Co-speaker activity',
+    description:
+      'When someone invites you to co-present, or responds to your invitation.',
+  },
+  otherUpdates: {
+    title: 'Other updates',
+    description:
+      'New submissions, travel and sponsor updates, gallery tags, and other notifications.',
   },
 }
 
@@ -152,6 +170,13 @@ export function PushNotificationSettingsView({
         {status === 'unsupported' && (
           <p className="font-inter rounded-lg bg-gray-50 p-4 text-sm text-gray-600 dark:bg-gray-700/40 dark:text-gray-300">
             This browser doesn&apos;t support push notifications. You&apos;ll
+            still receive email updates.
+          </p>
+        )}
+
+        {status === 'unavailable' && (
+          <p className="font-inter rounded-lg bg-gray-50 p-4 text-sm text-gray-600 dark:bg-gray-700/40 dark:text-gray-300">
+            Push notifications aren&apos;t available right now. You&apos;ll
             still receive email updates.
           </p>
         )}
@@ -279,6 +304,11 @@ export function PushNotificationSettings() {
     onSuccess: () => utils.push.getPreferences.invalidate(),
   })
 
+  // Server-side push availability: an empty VAPID public key means no keys are
+  // configured in the environment, so subscribing can never work. Wait for the
+  // query to resolve (`vapid === undefined`) before concluding it's missing.
+  const pushConfigured = vapid ? Boolean(vapid.publicKey) : undefined
+
   // Determine the initial control state on mount. This ONLY inspects existing
   // state (permission + current subscription); it never requests permission.
   useEffect(() => {
@@ -356,9 +386,17 @@ export function PushNotificationSettings() {
     [preferences, setPreferencesMutation],
   )
 
+  // Surface the server-unconfigured state as `unavailable` instead of a toggle
+  // that would fail on click. Browser-level blockers (unsupported / ios-install
+  // / denied) are more specific and actionable, so they win.
+  const effectiveStatus: PushSettingsStatus =
+    pushConfigured === false && (status === 'disabled' || status === 'enabled')
+      ? 'unavailable'
+      : status
+
   return (
     <PushNotificationSettingsView
-      status={status}
+      status={effectiveStatus}
       preferences={preferences}
       busy={busy}
       savingPreferences={setPreferencesMutation.isPending}

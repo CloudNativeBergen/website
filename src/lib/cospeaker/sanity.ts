@@ -50,7 +50,8 @@ export async function getInvitationByToken(
     _createdAt,
     _updatedAt,
     proposal-> { _id, title, format, status },
-    invitedBy-> { _id, name, email }
+    invitedBy-> { _id, name, email },
+    conference-> { _id }
   }`
 
   try {

@@ -26,6 +26,7 @@ const meta = {
       control: 'radio',
       options: [
         'loading',
+        'unavailable',
         'unsupported',
         'ios-install',
         'denied',
@@ -49,11 +50,15 @@ export const Enabled: Story = {
   args: { status: 'enabled' },
 }
 
-/** Subscribed but the co-speaker category has been turned off. */
+/** Subscribed but two categories (co-speaker + other updates) turned off. */
 export const EnabledWithCategoryOff: Story = {
   args: {
     status: 'enabled',
-    preferences: { ...DEFAULT_PUSH_PREFERENCES, coSpeakerInvites: false },
+    preferences: {
+      ...DEFAULT_PUSH_PREFERENCES,
+      coSpeakerInvites: false,
+      otherUpdates: false,
+    },
   },
 }
 
@@ -70,6 +75,11 @@ export const PermissionDenied: Story = {
 /** Browser without push support. */
 export const Unsupported: Story = {
   args: { status: 'unsupported' },
+}
+
+/** Server has no VAPID keys configured — push is unavailable, not broken. */
+export const Unavailable: Story = {
+  args: { status: 'unavailable' },
 }
 
 /** Busy while the subscribe/unsubscribe round-trip is in flight. */

@@ -11,6 +11,7 @@ export const PUSH_CATEGORIES = [
   'proposalDecisions',
   'talkConfirmed',
   'coSpeakerInvites',
+  'otherUpdates',
 ] as const
 
 export type PushCategory = (typeof PUSH_CATEGORIES)[number]
@@ -21,8 +22,14 @@ export interface PushPreferences {
   proposalDecisions: boolean
   /** A talk being confirmed for the programme. */
   talkConfirmed: boolean
-  /** Being invited as a co-speaker on someone else's proposal. */
+  /** Co-speaker activity (an invitation to co-present, or a response to yours). */
   coSpeakerInvites: boolean
+  /**
+   * Everything else the notification hub emits (a new submission for organizers,
+   * travel-support and sponsor updates, gallery tags, and other system
+   * notifications). Maps every hub `notificationType` not covered above.
+   */
+  otherUpdates: boolean
 }
 
 /**
@@ -33,6 +40,7 @@ export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   proposalDecisions: true,
   talkConfirmed: true,
   coSpeakerInvites: true,
+  otherUpdates: true,
 }
 
 /** The encryption keys the browser hands us for a PushSubscription. */
@@ -86,5 +94,6 @@ export function normalizePushPreferences(
       value?.talkConfirmed ?? DEFAULT_PUSH_PREFERENCES.talkConfirmed,
     coSpeakerInvites:
       value?.coSpeakerInvites ?? DEFAULT_PUSH_PREFERENCES.coSpeakerInvites,
+    otherUpdates: value?.otherUpdates ?? DEFAULT_PUSH_PREFERENCES.otherUpdates,
   }
 }

@@ -282,7 +282,11 @@ export default defineType({
               title: 'Keys',
               type: 'object',
               fields: [
-                defineField({ name: 'p256dh', title: 'p256dh', type: 'string' }),
+                defineField({
+                  name: 'p256dh',
+                  title: 'p256dh',
+                  type: 'string',
+                }),
                 defineField({ name: 'auth', title: 'auth', type: 'string' }),
               ],
             }),
@@ -334,6 +338,12 @@ export default defineType({
         defineField({
           name: 'coSpeakerInvites',
           title: 'Co-Speaker Invites',
+          type: 'boolean',
+          initialValue: true,
+        }),
+        defineField({
+          name: 'otherUpdates',
+          title: 'Other Updates',
           type: 'boolean',
           initialValue: true,
         }),

@@ -1790,6 +1790,48 @@ export const proposalRouter = router({
             )
           })
 
+          // Persist an in-app notification for the inviter (and bridge it to
+          // web push, gated by their `coSpeakerInvites` preference) via the
+          // hub. Shares createNotifications' never-fail contract: the response
+          // is already committed above, so a notification failure must not fail
+          // the mutation. Best-effort resolution of the inviter/conference ids;
+          // if either is unresolvable we simply skip the in-app notification
+          // (the email above still reaches the inviter).
+          const inviterId =
+            typeof invitation.invitedBy === 'object' &&
+            invitation.invitedBy !== null &&
+            '_id' in invitation.invitedBy
+              ? invitation.invitedBy._id
+              : undefined
+          const notifyConferenceId =
+            typeof invitation.conference === 'object' &&
+            invitation.conference !== null &&
+            '_id' in invitation.conference
+              ? invitation.conference._id
+              : undefined
+          if (inviterId && notifyConferenceId) {
+            const respondentName = ctx.speaker.name || ctx.speaker.email
+            const proposalTitle =
+              typeof invitation.proposal === 'object' &&
+              invitation.proposal !== null &&
+              'title' in invitation.proposal
+                ? invitation.proposal.title
+                : undefined
+            await createNotifications([
+              {
+                recipientId: inviterId,
+                conferenceId: notifyConferenceId,
+                notificationType: 'cospeaker_response',
+                title: proposalTitle
+                  ? `${respondentName} ${input.accept ? 'accepted' : 'declined'} your co-speaker invitation for "${proposalTitle}"`
+                  : `${respondentName} ${input.accept ? 'accepted' : 'declined'} your co-speaker invitation`,
+                actorId: ctx.speaker._id,
+                relatedProposalId: proposalId,
+                link: proposalId ? `/cfp/proposal/${proposalId}` : '/cfp/list',
+              },
+            ])
+          }
+
           return { success: true, status }
         } catch (error) {
           if (error instanceof TRPCError) throw error

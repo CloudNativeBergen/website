@@ -22,6 +22,7 @@ vi.mock('@/lib/push/sanity', () => ({
     proposalDecisions: true,
     talkConfirmed: true,
     coSpeakerInvites: true,
+    otherUpdates: true,
   }),
   setPushPreferences: vi.fn().mockImplementation(async (_id, prefs) => prefs),
 }))
@@ -92,6 +93,7 @@ describe('push router', () => {
       proposalDecisions: true,
       talkConfirmed: false,
       coSpeakerInvites: true,
+      otherUpdates: false,
     }
     await caller.push.setPreferences(prefs)
 
