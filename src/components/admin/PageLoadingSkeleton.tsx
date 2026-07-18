@@ -15,9 +15,9 @@ export function AdminPageLoading() {
         <div className="animate-pulse">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700" />
-            <div>
-              <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
-              <div className="mt-2 h-4 w-96 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="min-w-0">
+              <div className="h-8 w-44 rounded bg-gray-200 sm:w-64 dark:bg-gray-700" />
+              <div className="mt-2 h-4 w-56 max-w-full rounded bg-gray-200 sm:w-96 dark:bg-gray-700" />
             </div>
           </div>
         </div>
@@ -37,14 +37,14 @@ export function AdminTablePageLoading() {
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700" />
-              <div>
-                <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700" />
-                <div className="mt-2 h-4 w-80 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="h-8 w-8 shrink-0 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="min-w-0">
+                <div className="h-8 w-40 rounded bg-gray-200 sm:w-48 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-48 max-w-full rounded bg-gray-200 sm:w-80 dark:bg-gray-700" />
               </div>
             </div>
-            <div className="h-10 w-32 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-10 w-24 shrink-0 rounded bg-gray-200 sm:w-32 dark:bg-gray-700" />
           </div>
         </div>
       </div>
@@ -67,8 +67,8 @@ export function AdminDashboardLoading() {
     <div className="space-y-6">
       <div className="pb-6">
         <div className="animate-pulse">
-          <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-96 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-8 w-40 rounded bg-gray-200 sm:w-48 dark:bg-gray-700" />
+          <div className="mt-2 h-4 w-56 max-w-full rounded bg-gray-200 sm:w-96 dark:bg-gray-700" />
         </div>
       </div>
 
@@ -89,8 +89,8 @@ export function AdminFormPageLoading() {
     <div className="mx-auto max-w-4xl">
       <div className="pb-6">
         <div className="animate-pulse">
-          <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-80 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-8 w-44 rounded bg-gray-200 sm:w-64 dark:bg-gray-700" />
+          <div className="mt-2 h-4 w-48 max-w-full rounded bg-gray-200 sm:w-80 dark:bg-gray-700" />
         </div>
       </div>
 
