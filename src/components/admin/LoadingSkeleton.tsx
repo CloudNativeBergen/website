@@ -50,8 +50,10 @@ export function SkeletonTable({
 }) {
   return (
     <div className={`animate-pulse ${className}`}>
+      {/* Column header exists only in the md+ table; the mobile view is a card
+          list, so hide it below md to match the real pages. */}
       <div
-        className="grid gap-4 border-b border-gray-200 pb-3 dark:border-gray-700"
+        className="hidden gap-4 border-b border-gray-200 pb-3 md:grid dark:border-gray-700"
         style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
       >
         {[...Array(columns)].map((_, i) => (
@@ -59,22 +61,29 @@ export function SkeletonTable({
         ))}
       </div>
 
-      <div className="space-y-3 pt-3">
+      <div className="space-y-3 md:pt-3">
         {[...Array(rows)].map((_, rowIndex) => (
-          <div
-            key={rowIndex}
-            className="grid gap-4"
-            style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
-          >
-            {[...Array(columns)].map((_, colIndex) => (
-              <div
-                key={colIndex}
-                className="h-4 rounded bg-gray-200 dark:bg-gray-700"
-                style={{
-                  width: colIndex === columns - 1 ? '60%' : '100%',
-                }}
-              />
-            ))}
+          <div key={rowIndex}>
+            {/* Mobile: a stacked card mirroring the real `md:hidden` card list. */}
+            <div className="rounded-lg border border-gray-100 p-3 md:hidden dark:border-gray-800">
+              <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+              <div className="mt-2 h-3 w-1/3 rounded bg-gray-200 dark:bg-gray-700" />
+            </div>
+            {/* md+: a table row. */}
+            <div
+              className="hidden gap-4 md:grid"
+              style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
+            >
+              {[...Array(columns)].map((_, colIndex) => (
+                <div
+                  key={colIndex}
+                  className="h-4 rounded bg-gray-200 dark:bg-gray-700"
+                  style={{
+                    width: colIndex === columns - 1 ? '60%' : '100%',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -357,6 +366,20 @@ export function SkeletonModal({
   )
 }
 
+// Responsive column classes keyed by the desktop column count. Full literal
+// strings so Tailwind's JIT picks them up (dynamic `grid-cols-${n}` would not).
+// Every skeleton stacks toward a single column on phones so it mirrors the real
+// pages, which collapse their multi-column grids at small widths instead of
+// cramming N columns into 320px.
+const SKELETON_GRID_COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
+  5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+  6: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
+}
+
 export function SkeletonGrid({
   className = '',
   items = 4,
@@ -368,11 +391,10 @@ export function SkeletonGrid({
   columns?: number
   cardHeight?: string
 }) {
+  const colClass =
+    SKELETON_GRID_COLS[columns] ?? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
   return (
-    <div
-      className={`grid animate-pulse gap-4 ${className}`}
-      style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
-    >
+    <div className={`grid animate-pulse gap-4 ${colClass} ${className}`}>
       {[...Array(items)].map((_, i) => (
         <div
           key={i}
