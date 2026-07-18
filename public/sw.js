@@ -19,15 +19,19 @@
  *   - Only GET is handled; everything else passes through untouched.
  *
  * Update flow: this file lives at the stable URL `/sw.js` and is served with
- * `Cache-Control: no-cache`. Changing its bytes (e.g. bumping CACHE_VERSION)
- * is what triggers the browser to install a new worker. We do NOT call
- * skipWaiting() on install — the new worker waits until the user clicks
- * "Reload" in the update banner, which posts { type: 'SKIP_WAITING' }.
+ * `Cache-Control: no-cache`. Changing its bytes is what triggers the browser to
+ * install a new worker. `CACHE_VERSION` is STAMPED with the deploy's commit SHA
+ * at build time (scripts/stamp-sw.mjs), so `/sw.js` differs every deploy — that
+ * is what makes the update lifecycle actually run. We do NOT call skipWaiting()
+ * on install — the new worker waits until the user clicks "Reload" in the update
+ * banner, which posts { type: 'SKIP_WAITING' }.
  */
 
-// Bump this to invalidate the precache and force an update. The changed bytes
-// are what the browser diffs to detect a new worker.
-const CACHE_VERSION = 'cndn-v1'
+// STAMPED AT BUILD TIME with the commit SHA (see scripts/stamp-sw.mjs). Any
+// build that exposes a commit SHA (Vercel/CI deploys) replaces this so the bytes
+// change and the browser installs a fresh worker; builds without a SHA (local)
+// keep the `cndn-dev` default unchanged.
+const CACHE_VERSION = 'cndn-dev'
 const PRECACHE = `${CACHE_VERSION}-precache`
 const RUNTIME = `${CACHE_VERSION}-runtime`
 
