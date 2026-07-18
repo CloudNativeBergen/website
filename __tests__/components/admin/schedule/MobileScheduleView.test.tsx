@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { MobileScheduleView } from '@/components/admin/schedule/MobileScheduleView'
+import { MobileScheduleView } from '@/components/admin/schedule/mobile'
 import {
   ProposalExisting,
   Format,

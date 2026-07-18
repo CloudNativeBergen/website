@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useReducer } from 'react'
-import { MobileScheduleView } from './MobileScheduleView'
+import { MobileScheduleView } from './mobile'
 import {
   scheduleReducer,
   initScheduleEditorState,
