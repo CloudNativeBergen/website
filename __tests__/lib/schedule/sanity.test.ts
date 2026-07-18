@@ -11,7 +11,7 @@
  * otherwise untested. Here `@/lib/sanity/client` is mocked so we assert exactly
  * what is (and is not) written for each case.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Deterministic key generation so assertions on serialized payloads don't
 // depend on nanoid randomness. References keep their real (trivial) shape.
@@ -118,6 +118,11 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  // Restore the console spies so they don't stack across tests.
+  vi.restoreAllMocks()
 })
 
 describe('saveScheduleToSanity — security scope check (update path)', () => {
@@ -295,8 +300,14 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     expect(confPatch.setIfMissing).toHaveBeenCalledWith({ schedules: [] })
     const appendArgs = confPatch.append.mock.calls[0]
     expect(appendArgs[0]).toBe('schedules')
+    // A keyed reference (createReferenceWithKey) — array items MUST carry a
+    // `_key`, so assert it, not just the `_ref`.
     expect(appendArgs[1]).toEqual([
-      expect.objectContaining({ _ref: created._id, _type: 'reference' }),
+      expect.objectContaining({
+        _ref: created._id,
+        _type: 'reference',
+        _key: 'schedule-key',
+      }),
     ])
 
     // The result carries the generated id and the read-back revision.
