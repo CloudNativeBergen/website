@@ -311,4 +311,106 @@ describe('MobileScheduleView', () => {
       }),
     )
   })
+
+  it('renames a track (preserving its talks) via track options', () => {
+    const { dispatch } = setup()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Track options' })[0])
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Rename track',
+      }),
+    )
+    const sheet = screen.getByRole('dialog')
+    fireEvent.change(within(sheet).getByLabelText('Track name'), {
+      target: { value: 'Keynote Hall' },
+    })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }))
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'updateTrack',
+        trackIndex: 0,
+        track: expect.objectContaining({
+          trackTitle: 'Keynote Hall',
+          // talks must be preserved on rename
+          talks: expect.arrayContaining([
+            expect.objectContaining({
+              talk: expect.objectContaining({ _id: 'scheduled-1' }),
+            }),
+          ]),
+        }),
+      }),
+    )
+  })
+
+  it('removes a track only after the confirm step', () => {
+    const { dispatch } = setup()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Track options' })[0])
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Remove track',
+      }),
+    )
+    // confirm step
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Remove',
+      }),
+    )
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'removeTrack',
+      trackIndex: 0,
+    })
+  })
+
+  it('duplicates a service to all tracks from the card sheet', () => {
+    const dispatch = vi.fn()
+    const withService: ConferenceSchedule = {
+      _id: 'day-1',
+      date: '2026-09-01',
+      tracks: [
+        {
+          trackTitle: 'Main Stage',
+          trackDescription: '',
+          talks: [
+            {
+              placeholder: 'Coffee Break',
+              startTime: '10:00',
+              endTime: '10:15',
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <MobileScheduleView
+        schedules={[withService]}
+        currentDayIndex={0}
+        unassignedProposals={[]}
+        dispatch={dispatch}
+        onDayChange={vi.fn()}
+        onSave={vi.fn()}
+        onAddTrack={vi.fn()}
+        isSaving={false}
+        saveSuccess={false}
+        error={null}
+      />,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Options for Coffee Break' }),
+    )
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Duplicate to all tracks',
+      }),
+    )
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'duplicateService',
+        sourceTrackIndex: 0,
+        serviceSession: expect.objectContaining({
+          placeholder: 'Coffee Break',
+        }),
+      }),
+    )
+  })
 })
