@@ -17,7 +17,9 @@ import {
   generateTimeSlots,
   getProposalDurationMinutes,
   toMinutes,
+  withinScheduleEnd,
 } from '@/lib/schedule/time'
+import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
 import {
   fitsInTrack,
   isTrackIntervalFree,
@@ -30,8 +32,7 @@ import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
 import { Status } from '@/lib/proposal/types'
-import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
-import type { Speaker } from '@/lib/speaker/types'
+import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import { Dropdown } from '@/components/Form'
 import { useProposalFilters } from './useProposalFilters'
 import { ProposalFilters } from './ProposalFilters'
@@ -63,17 +64,6 @@ interface MobileScheduleViewProps {
   saveSuccess: boolean
   error: string | null
 }
-
-const SERVICE_DURATION_OPTIONS = new Map([
-  ['5', '5 minutes'],
-  ['10', '10 minutes'],
-  ['15', '15 minutes'],
-  ['20', '20 minutes'],
-  ['30', '30 minutes'],
-  ['45', '45 minutes'],
-  ['60', '60 minutes'],
-  ['90', '90 minutes'],
-])
 
 const TAP_TARGET = 'min-h-[44px]'
 
@@ -109,9 +99,6 @@ function segmentHeight(seg: RailSegment): number {
     Math.max(SEG_MIN_HEIGHT, Math.round(seg.durationMin * PX_PER_MIN)),
   )
 }
-
-const withinEnd = (endTime: string): boolean =>
-  toMinutes(endTime) <= toMinutes(SCHEDULE_END)
 
 /* -------------------------------------------------------------------------- */
 /* Placement model                                                            */
@@ -175,7 +162,7 @@ function segmentState(
     if (placing.kind === 'proposal') {
       const dur = getProposalDurationMinutes(placing.proposal)
       const end = calculateEndTime(seg.startTime, dur)
-      return withinEnd(end) && fitsInTrack(target, seg.startTime, dur)
+      return withinScheduleEnd(end) && fitsInTrack(target, seg.startTime, dur)
         ? 'valid'
         : 'invalid'
     }
@@ -187,7 +174,8 @@ function segmentState(
       const exclude = sameTrack
         ? matchTalk(src.talk._id, src.startTime)
         : undefined
-      return withinEnd(end) && fitsInTrack(target, seg.startTime, dur, exclude)
+      return withinScheduleEnd(end) &&
+        fitsInTrack(target, seg.startTime, dur, exclude)
         ? 'valid'
         : 'invalid'
     }
@@ -196,7 +184,7 @@ function segmentState(
     const exclude = sameTrack
       ? matchService(src.placeholder ?? '', src.startTime)
       : undefined
-    return withinEnd(end) &&
+    return withinScheduleEnd(end) &&
       isTrackIntervalFree(target, seg.startTime, end, exclude)
       ? 'valid'
       : 'invalid'
@@ -213,7 +201,7 @@ function segmentState(
       getProposalDurationMinutes(src.talk!),
     )
     const ok =
-      withinEnd(draggedEnd) &&
+      withinScheduleEnd(draggedEnd) &&
       canSwapTalks(target, src.talk!, seg.talk, seg.startTime) &&
       canPlaceDisplacedBack(
         sourceTrack,
@@ -226,15 +214,6 @@ function segmentState(
 
   // `break` targets are never a valid drop.
   return 'invalid'
-}
-
-function speakerNamesOf(proposal: ProposalExisting): string | null {
-  const populated = Array.isArray(proposal.speakers)
-    ? (proposal.speakers.filter(
-        (s) => s && typeof s === 'object' && 'name' in s,
-      ) as Speaker[])
-    : []
-  return populated.length > 0 ? formatSpeakerNames(populated) : null
 }
 
 /** Every `intervalMinutes` start time whose full footprint is free in `track`. */
@@ -663,7 +642,8 @@ function UnassignedDrawer({
     return proposals.filter((p) => {
       const dur = getProposalDurationMinutes(p)
       if (dur > context.maxDurationMin) return false
-      if (!withinEnd(calculateEndTime(context.startTime, dur))) return false
+      if (!withinScheduleEnd(calculateEndTime(context.startTime, dur)))
+        return false
       return fitsInTrack(track, context.startTime, dur)
     })
   }, [proposals, context, track])
@@ -719,7 +699,7 @@ function UnassignedDrawer({
       ) : (
         <ul className="space-y-2">
           {filters.filteredProposals.map((proposal) => {
-            const speakers = speakerNamesOf(proposal)
+            const speakers = populatedSpeakerNames(proposal)
             return (
               <li key={proposal._id}>
                 <button
@@ -1060,7 +1040,7 @@ function RailBody({ seg }: { seg: RailSegment }) {
     )
   }
 
-  const speakers = proposal ? speakerNamesOf(proposal) : null
+  const speakers = proposal ? populatedSpeakerNames(proposal) : null
   return (
     <>
       <div className="flex items-start justify-between gap-2">
