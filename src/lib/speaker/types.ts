@@ -1,9 +1,6 @@
 import { ProposalExisting } from '@/lib/proposal/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
-import type {
-  PushPreferences,
-  PushSubscriptionRecord,
-} from '@/lib/push/types'
+import type { PushPreferences, PushSubscriptionRecord } from '@/lib/push/types'
 
 export enum Flags {
   localSpeaker = 'local',
