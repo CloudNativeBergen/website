@@ -50,11 +50,11 @@ const sortByStart = (a: Slot, b: Slot): number =>
  */
 function performSwap(
   schedule: EditorSchedule,
-  dragItem: DragItem,
+  dragItem: Extract<DragItem, { type: 'scheduled-talk' }>,
   targetTalk: TalkSlot,
   dropPosition: DropPosition,
 ): EditorSchedule {
-  const proposal = dragItem.proposal!
+  const { proposal, sourceTrackIndex, sourceTimeSlot } = dragItem
   const { trackIndex, timeSlot } = dropPosition
 
   const draggedEndTime = calculateEndTime(
@@ -62,24 +62,20 @@ function performSwap(
     getProposalDurationMinutes(proposal),
   )
   const targetEndTime = calculateEndTime(
-    dragItem.sourceTimeSlot!,
+    sourceTimeSlot,
     getProposalDurationMinutes(targetTalk.talk),
   )
 
   const newTracks = [...schedule.tracks]
 
-  if (
-    dragItem.sourceTrackIndex !== undefined &&
-    dragItem.sourceTimeSlot !== undefined
-  ) {
-    const sourceTrack = newTracks[dragItem.sourceTrackIndex]
-    newTracks[dragItem.sourceTrackIndex] = {
+  {
+    const sourceTrack = newTracks[sourceTrackIndex]
+    newTracks[sourceTrackIndex] = {
       ...sourceTrack,
       talks: sourceTrack.talks.filter(
         (talk) =>
           !(
-            talk.talk?._id === proposal._id &&
-            talk.startTime === dragItem.sourceTimeSlot
+            talk.talk?._id === proposal._id && talk.startTime === sourceTimeSlot
           ),
       ),
     }
@@ -104,18 +100,15 @@ function performSwap(
     talks: [...newTargetTalks, newDraggedTalk].sort(sortByStart),
   }
 
-  if (
-    dragItem.sourceTrackIndex !== undefined &&
-    dragItem.sourceTimeSlot !== undefined
-  ) {
+  {
     const newTargetTalkAtSource: TalkSlot = {
       kind: 'talk',
       talk: targetTalk.talk,
-      startTime: dragItem.sourceTimeSlot,
+      startTime: sourceTimeSlot,
       endTime: targetEndTime,
     }
-    const finalSourceTrack = newTracks[dragItem.sourceTrackIndex]
-    newTracks[dragItem.sourceTrackIndex] = {
+    const finalSourceTrack = newTracks[sourceTrackIndex]
+    newTracks[sourceTrackIndex] = {
       ...finalSourceTrack,
       talks: [...finalSourceTrack.talks, newTargetTalkAtSource].sort(
         sortByStart,
@@ -211,7 +204,7 @@ export function classifyProposalDrop(
   const excludeTalk =
     dragItem.type === 'scheduled-talk' &&
     dragItem.sourceTrackIndex === trackIndex
-      ? { talkId: proposal._id, startTime: dragItem.sourceTimeSlot! }
+      ? { talkId: proposal._id, startTime: dragItem.sourceTimeSlot }
       : undefined
 
   const availableTime = findAvailableTimeSlot(
@@ -276,10 +269,12 @@ export function moveProposal(
     dropPosition,
     otherScheduledProposalIds,
   )
-  if (kind === 'invalid') return fail
+  // classify returned non-invalid ⇒ dragItem.proposal is present; the truthiness
+  // narrow (never independently true here — classify rejects a proposal-less drag)
+  // proves it to TS, retiring the old `dragItem.proposal!`.
+  if (kind === 'invalid' || !dragItem.proposal) return fail
 
-  // classify returned non-invalid ⇒ dragItem.proposal is present.
-  const proposal = dragItem.proposal!
+  const { proposal } = dragItem
   const { trackIndex, timeSlot } = dropPosition
   const targetTrack = schedule.tracks[trackIndex]
 
@@ -290,6 +285,9 @@ export function moveProposal(
     // classify returned 'swap' ⇒ the occupying slot is a resolved talk; the
     // `kind` narrow gives performSwap a TalkSlot (no non-null assertion needed).
     if (occupiedTalk?.kind !== 'talk') return fail
+    // classify returned 'swap' ⇒ dragItem is a `scheduled-talk` (the only variant
+    // that swaps); this narrow gives performSwap its `scheduled-talk` param.
+    if (dragItem.type !== 'scheduled-talk') return fail
     return {
       schedule: performSwap(schedule, dragItem, occupiedTalk, dropPosition),
       ok: true,
@@ -347,14 +345,18 @@ export function moveServiceSession(
   dropPosition: DropPosition,
 ): OperationResult {
   const fail: OperationResult = { schedule, ok: false }
+  // classify returned non-invalid ⇒ dragItem.serviceSession is present; the
+  // truthiness narrow (never independently true — classify rejects a
+  // session-less drag) proves it to TS, retiring the old `dragItem.serviceSession!`.
   if (
-    classifyServiceDrop(schedule.tracks, dragItem, dropPosition) === 'invalid'
+    classifyServiceDrop(schedule.tracks, dragItem, dropPosition) ===
+      'invalid' ||
+    !dragItem.serviceSession
   ) {
     return fail
   }
 
-  // classify returned non-invalid ⇒ dragItem.serviceSession is present.
-  const serviceSession = dragItem.serviceSession!
+  const { serviceSession } = dragItem
   const { trackIndex, timeSlot } = dropPosition
   const durationMinutes = durationBetween(
     serviceSession.startTime,

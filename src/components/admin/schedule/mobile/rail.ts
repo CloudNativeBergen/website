@@ -1,4 +1,4 @@
-import type { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
+import type { EditorTrack, Slot } from '@/lib/schedule/types'
 import {
   SCHEDULE_START,
   SCHEDULE_END,
@@ -19,7 +19,7 @@ import {
 export type RailSegment =
   | {
       kind: 'talk' | 'break'
-      talk: TrackTalk
+      talk: Slot
       talkIndex: number
       startTime: string
       endTime: string
@@ -37,7 +37,7 @@ export type RailSegment =
  * Malformed slots (missing times) are skipped; overlaps (which shouldn't occur
  * post-validation) never emit a negative-width open segment.
  */
-export function buildTrackRail(track: ScheduleTrack): RailSegment[] {
+export function buildTrackRail(track: EditorTrack): RailSegment[] {
   const indexed = (track.talks ?? []).map((talk, talkIndex) => ({
     talk,
     talkIndex,
