@@ -20,6 +20,7 @@ const meta = {
     preferences: DEFAULT_PUSH_PREFERENCES,
     onToggleMaster: fn(),
     onToggleCategory: fn(),
+    onSendTest: fn(),
   },
   argTypes: {
     status: {
@@ -48,6 +49,43 @@ export const Disabled: Story = {
 /** Subscribed — master on, per-category toggles revealed. */
 export const Enabled: Story = {
   args: { status: 'enabled' },
+}
+
+/**
+ * Subscribed, with the self-serve "Send test notification" button revealed
+ * (only shown when `onSendTest` is wired and the master toggle is on).
+ */
+export const EnabledWithTestButton: Story = {
+  args: { status: 'enabled' },
+}
+
+/** Test send in flight — button disabled with a spinner. */
+export const EnabledSendingTest: Story = {
+  args: { status: 'enabled', sendTestPending: true },
+}
+
+/** Test delivered to two devices — success feedback via role="status". */
+export const EnabledTestSent: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: { sent: 2, gone: 0, configured: true },
+  },
+}
+
+/** Test attempted but no devices are subscribed on this account yet. */
+export const EnabledTestNoDevices: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: { sent: 0, gone: 0, configured: true },
+  },
+}
+
+/** Test delivered, and an expired subscription was pruned in the process. */
+export const EnabledTestWithExpired: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: { sent: 1, gone: 1, configured: true },
+  },
 }
 
 /** Subscribed but two categories (co-speaker + other updates) turned off. */

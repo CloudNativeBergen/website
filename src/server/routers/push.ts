@@ -10,8 +10,48 @@ import {
   removePushSubscription,
   getPushPreferences,
   setPushPreferences,
+  getSpeakerPushState,
+  prunePushSubscription,
 } from '@/lib/push/sanity'
-import { getVapidPublicKey } from '@/lib/push/vapid'
+import { getVapidPublicKey, isPushConfigured } from '@/lib/push/vapid'
+import { sendPush } from '@/lib/push/send'
+import { isValidPushEndpoint } from '@/lib/push/validate'
+import type { PushMessagePayload } from '@/lib/push/types'
+
+/**
+ * Best-effort, per-speaker cooldown for `sendTest` so an accidental double-tap
+ * can't hammer the push services. Lives in module memory, so on serverless it is
+ * PER-INSTANCE only — a retry routed to a different (or cold) instance won't see
+ * a prior send. That's acceptable: the endpoint is self-targeted and the push
+ * services rate-limit further downstream. The map is size-capped so it can never
+ * grow without bound (oldest-active entry evicted on overflow).
+ */
+const TEST_COOLDOWN_MS = 10_000
+const MAX_COOLDOWN_ENTRIES = 10_000
+const lastTestSentAt = new Map<string, number>()
+
+/**
+ * Record a test send for `speakerId` and report whether it is allowed right now.
+ * Returns false when the speaker sent a test within {@link TEST_COOLDOWN_MS};
+ * otherwise stamps the current time and returns true.
+ */
+function claimTestCooldown(speakerId: string): boolean {
+  const now = Date.now()
+  const previous = lastTestSentAt.get(speakerId)
+  if (previous !== undefined && now - previous < TEST_COOLDOWN_MS) {
+    return false
+  }
+  // Bound memory: a Map iterates in insertion order, so the first key is the
+  // least-recently-active. Delete-then-set keeps the just-active speaker at the
+  // tail, so eviction always targets the genuinely oldest entry.
+  lastTestSentAt.delete(speakerId)
+  if (lastTestSentAt.size >= MAX_COOLDOWN_ENTRIES) {
+    const oldest = lastTestSentAt.keys().next().value
+    if (oldest !== undefined) lastTestSentAt.delete(oldest)
+  }
+  lastTestSentAt.set(speakerId, now)
+  return true
+}
 
 /**
  * Web push subscription + preference management (issue #444).
@@ -94,4 +134,107 @@ export const pushRouter = router({
         })
       }
     }),
+
+  /**
+   * Send a test notification to the CALLER'S OWN subscriptions so a speaker can
+   * verify their push setup end-to-end (keys → subscription → SW display → deep
+   * link) with one tap.
+   *
+   * SECURITY: self-targeted only — no input, the recipient is always
+   * `ctx.speaker._id`. Like every other procedure here it can never read or
+   * write another speaker's subscriptions, so it needs no extra authz beyond
+   * `protectedProcedure`.
+   *
+   * Returns `{ sent, gone, configured }`:
+   *   - `configured`: whether the server has VAPID keys at all;
+   *   - `sent`: how many of the caller's devices the push service accepted;
+   *   - `gone`: how many dead/invalid subscriptions were pruned in the process.
+   */
+  sendTest: protectedProcedure.mutation(async ({ ctx }) => {
+    // No VAPID keys → push can never work; report it rather than pretending.
+    if (!isPushConfigured()) {
+      return { sent: 0, gone: 0, configured: false }
+    }
+
+    // Best-effort guard against accidental hammering (see claimTestCooldown).
+    if (!claimTestCooldown(ctx.speaker._id)) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Please wait a few seconds before sending another test.',
+      })
+    }
+
+    let state
+    try {
+      state = await getSpeakerPushState(ctx.speaker._id)
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to load push subscriptions',
+        cause: error,
+      })
+    }
+
+    if (state.subscriptions.length === 0) {
+      return { sent: 0, gone: 0, configured: true }
+    }
+
+    // A deliberate, explicit user action — so it BYPASSES per-category
+    // preferences entirely (unlike sendPushForNotifications, which gates each
+    // notification on the speaker's category prefs). If a speaker taps "send
+    // test", they get the test regardless of which categories they've muted.
+    const payload: PushMessagePayload = {
+      title: 'Test notification',
+      body: 'Push notifications are working on this device 🎉',
+      url: '/cfp/profile',
+      tag: 'test-notification',
+    }
+
+    let sent = 0
+    let gone = 0
+
+    // Same transport as production (`sendPush`) and the SAME prune helper
+    // (`prunePushSubscription`) on a 404/410, so this exercises the real path.
+    const results = await Promise.allSettled(
+      state.subscriptions.map(async (subscription) => {
+        // Defense in depth against SSRF, mirroring send.ts: never POST to a
+        // stored endpoint that no longer passes public-https validation. Prune
+        // and skip it (counts as gone) rather than requesting it.
+        if (!isValidPushEndpoint(subscription.endpoint)) {
+          await prunePushSubscription(
+            ctx.speaker._id,
+            subscription.endpoint,
+          ).catch((error) => {
+            console.error(
+              `Failed to prune invalid push subscription for speaker ${ctx.speaker._id}:`,
+              error,
+            )
+          })
+          return { ok: false, gone: true }
+        }
+
+        const result = await sendPush(subscription, payload)
+        if (result.gone) {
+          await prunePushSubscription(
+            ctx.speaker._id,
+            subscription.endpoint,
+          ).catch((error) => {
+            console.error(
+              `Failed to prune dead push subscription for speaker ${ctx.speaker._id}:`,
+              error,
+            )
+          })
+        }
+        return result
+      }),
+    )
+
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue
+      if (r.value.ok) sent += 1
+      if (r.value.gone) gone += 1
+    }
+
+    return { sent, gone, configured: true }
+  }),
 })
