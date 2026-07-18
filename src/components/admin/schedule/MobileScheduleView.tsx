@@ -19,12 +19,7 @@ import {
 } from '@/lib/schedule/time'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
 import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
-import {
-  classifyProposalDrop,
-  classifyServiceDrop,
-  scheduledProposalIdsExcludingDay,
-} from '@/lib/schedule/operations'
-import type { DragItem } from '@/lib/schedule/types'
+import { scheduledProposalIdsExcludingDay } from '@/lib/schedule/operations'
 import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
@@ -52,174 +47,23 @@ import {
   ArrowLeftIcon,
 } from '@heroicons/react/24/outline'
 
-interface MobileScheduleViewProps {
-  schedules: ConferenceSchedule[]
-  currentDayIndex: number
-  unassignedProposals: ProposalExisting[]
-  dispatch: React.Dispatch<ScheduleAction>
-  onDayChange: (dayIndex: number) => void
-  onSave: () => void
-  onAddTrack: () => void
-  isSaving: boolean
-  saveSuccess: boolean
-  error: string | null
-}
-
-const TAP_TARGET = 'min-h-[44px]'
-
-const PRIMARY_BUTTON =
-  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600'
-
-const SECONDARY_BUTTON =
-  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-
-/* -------------------------------------------------------------------------- */
-/* Rail geometry                                                              */
-/* -------------------------------------------------------------------------- */
-
-// Card heights are content-driven with a small floor; duration adds only a
-// GENTLE, hard-capped proportional nudge so a long workshop reads slightly
-// taller without producing a bulky, mostly-empty card that dominates the panel
-// and fights the swipe. The duration CHIP carries the exact length. Applied as
-// a `minHeight` on the card itself (never via a flex-stretched row).
-const PX_PER_MIN = 0.55
-const SEG_MIN_HEIGHT = 56
-const SEG_MAX_HEIGHT = 112
-const OPEN_MAX_HEIGHT = 72
-// Open gaps shorter than this can't hold a talk, so they render as a slim,
-// non-interactive divider rather than an "assign here" target.
-const MIN_OPEN_SLOT_MIN = 10
-// Left time gutter width (~52px) — the rail line sits at its right edge.
-const GUTTER_PX = 52
-
-function segmentHeight(seg: RailSegment): number {
-  const max = seg.kind === 'open' ? OPEN_MAX_HEIGHT : SEG_MAX_HEIGHT
-  return Math.min(
-    max,
-    Math.max(SEG_MIN_HEIGHT, Math.round(seg.durationMin * PX_PER_MIN)),
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/* Placement model                                                            */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A picked-up item awaiting a drop. Persists across track swipes, so dropping
- * into another track is "swipe, then tap a slot". A `scheduled` pick-up carries
- * the ORIGINAL `track.talks` index so reducer actions target the right slot.
- */
-type Placing =
-  | {
-      kind: 'scheduled'
-      trackIndex: number
-      talkIndex: number
-      talk: TrackTalk
-    }
-  | { kind: 'proposal'; proposal: ProposalExisting }
-
-/** The open interval a contextual "assign here" drawer was opened for. */
-interface SlotContext {
-  trackIndex: number
-  startTime: string
-  maxDurationMin: number
-}
-
-type SegmentState = 'default' | 'source' | 'valid' | 'invalid'
-
-/** Does `seg` represent the currently picked-up scheduled item? */
-function isPlacingSource(
-  placing: Placing,
-  panelTrackIndex: number,
-  seg: RailSegment,
-): boolean {
-  return (
-    placing.kind === 'scheduled' &&
-    (seg.kind === 'talk' || seg.kind === 'break') &&
-    panelTrackIndex === placing.trackIndex &&
-    seg.talkIndex === placing.talkIndex
-  )
-}
-
-/**
- * Whether `seg` in panel `T` is a legal drop target for the current pick-up.
- * Mirrors `operations.moveProposal` / `moveServiceSession` exactly (same
- * fitsInTrack / interval-free / swap checks + end-of-day guard) so the UI never
- * offers a drop the reducer would reject.
- */
-/** The engine DragItem for the current pick-up (proposal / scheduled talk /
- * scheduled service), so the UI can defer every legality question to the shared
- * classifiers instead of re-deriving the rule. */
-function placingDragItem(placing: Placing): DragItem {
-  if (placing.kind === 'proposal') {
-    return { type: 'proposal', proposal: placing.proposal }
-  }
-  const src = placing.talk
-  if (src.talk) {
-    return {
-      type: 'scheduled-talk',
-      proposal: src.talk,
-      sourceTrackIndex: placing.trackIndex,
-      sourceTimeSlot: src.startTime,
-    }
-  }
-  return {
-    type: 'scheduled-service',
-    serviceSession: {
-      placeholder: src.placeholder ?? '',
-      startTime: src.startTime,
-      endTime: src.endTime,
-    },
-    sourceTrackIndex: placing.trackIndex,
-    sourceTimeSlot: src.startTime,
-  }
-}
-
-function segmentState(
-  placing: Placing,
-  tracks: ScheduleTrack[],
-  T: number,
-  seg: RailSegment,
-  otherScheduledProposalIds: ReadonlySet<string>,
-): SegmentState {
-  if (isPlacingSource(placing, T, seg)) return 'source'
-  if (!tracks[T]) return 'invalid'
-
-  const dragItem = placingDragItem(placing)
-  const dropPosition = { trackIndex: T, timeSlot: seg.startTime }
-
-  // Service pick-up: only moves into open slots (services never swap).
-  if (dragItem.type === 'scheduled-service') {
-    if (seg.kind !== 'open' || seg.durationMin < MIN_OPEN_SLOT_MIN) {
-      return 'invalid'
-    }
-    return classifyServiceDrop(tracks, dragItem, dropPosition) === 'move'
-      ? 'valid'
-      : 'invalid'
-  }
-
-  // Proposal / scheduled talk: an open slot is a MOVE, an occupied talk a SWAP.
-  // The cross-day duplicate set is only consulted for a FRESH proposal drop
-  // (moving an already-scheduled talk bypasses the guard), matching the reducer.
-  if (seg.kind === 'open') {
-    if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
-    return classifyProposalDrop(
-      tracks,
-      dragItem,
-      dropPosition,
-      otherScheduledProposalIds,
-    ) === 'move'
-      ? 'valid'
-      : 'invalid'
-  }
-  if (seg.kind === 'talk') {
-    return classifyProposalDrop(tracks, dragItem, dropPosition) === 'swap'
-      ? 'valid'
-      : 'invalid'
-  }
-  // `break` targets are never a valid drop.
-  return 'invalid'
-}
+import {
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+  TAP_TARGET,
+  GUTTER_PX,
+  MIN_OPEN_SLOT_MIN,
+  segmentHeight,
+  segmentLabel,
+  segmentState,
+} from './mobile'
+import type {
+  ActiveSheet,
+  MobileScheduleViewProps,
+  Placing,
+  SegmentState,
+  SlotContext,
+} from './mobile'
 
 /* -------------------------------------------------------------------------- */
 /* Bottom sheet                                                               */
@@ -841,20 +685,6 @@ function DurationChip({ minutes }: { minutes: number }) {
   )
 }
 
-function segmentLabel(
-  seg: RailSegment,
-  placing: Placing | null,
-  state: SegmentState,
-): string {
-  if (seg.kind === 'open') {
-    return `Assign to open slot ${seg.startTime} to ${seg.endTime}`
-  }
-  const title = seg.talk.talk?.title ?? seg.talk.placeholder ?? 'Untitled'
-  if (!placing) return `Options for ${title}`
-  if (state === 'source') return `Cancel moving ${title}`
-  return seg.kind === 'talk' ? `Swap with ${title}` : title
-}
-
 /**
  * One track's hybrid time-rail: a continuous gutter line with a node per
  * segment, and duration-proportional (clamped) bodies. When `placing` is set the
@@ -1344,24 +1174,6 @@ function TrackActionSheet({
 /* -------------------------------------------------------------------------- */
 /* Main view                                                                  */
 /* -------------------------------------------------------------------------- */
-
-type ActiveSheet =
-  | { kind: 'unassigned'; context: SlotContext | null }
-  | { kind: 'track'; trackIndex: number }
-  | {
-      kind: 'card'
-      trackIndex: number
-      talkIndex: number
-      talk: TrackTalk
-    }
-  | {
-      kind: 'serviceEdit'
-      trackIndex: number
-      talkIndex: number
-      talk: TrackTalk
-      mode: 'rename' | 'duration'
-    }
-  | null
 
 export function MobileScheduleView({
   schedules,
