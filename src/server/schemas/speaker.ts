@@ -64,6 +64,8 @@ export const SpeakerInputSchema = z
     country: z.string().nullable().optional().transform(nullToUndefined),
     consent: SpeakerConsentSchema.optional(),
     company: z.string().nullable().optional().transform(nullToUndefined),
+    // Default email delivery for speaker↔organizer messages (messaging M2).
+    messagingEmailDefault: z.boolean().optional(),
   })
   .refine(
     (data) => {
@@ -107,6 +109,8 @@ const SpeakerInputBaseSchema = z.object({
   country: z.string().nullable().optional().transform(nullToUndefined),
   consent: SpeakerConsentSchema.optional(),
   company: z.string().nullable().optional().transform(nullToUndefined),
+  // Default email delivery for speaker↔organizer messages (messaging M2).
+  messagingEmailDefault: z.boolean().optional(),
 })
 
 // Admin-specific speaker creation (includes email)

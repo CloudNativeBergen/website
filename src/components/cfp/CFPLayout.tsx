@@ -6,6 +6,7 @@ import {
   PlusIcon,
   ListBulletIcon,
   CreditCardIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
 import {
@@ -44,6 +45,11 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
       name: 'My Proposals',
       href: `/cfp/list${impersonateQuery}`,
       icon: ListBulletIcon,
+    },
+    {
+      name: 'Messages',
+      href: `/cfp/messages${impersonateQuery}`,
+      icon: ChatBubbleLeftRightIcon,
     },
   ]
 

@@ -11,6 +11,7 @@ import {
   AudienceFeedbackPanel,
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
+import { ProposalMessagesSection } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -82,6 +83,13 @@ export default async function ProposalDetailPage({
             </div>
 
             <ProposalDetail proposal={proposal} />
+
+            <div className="mt-6">
+              <ProposalMessagesSection
+                proposalId={proposal._id}
+                audience="organizer"
+              />
+            </div>
           </div>
         </div>
 

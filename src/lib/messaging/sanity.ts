@@ -13,6 +13,11 @@ import type {
   Message,
 } from './types'
 import { DEFAULT_CONVERSATION_PREFERENCE } from './types'
+import { proposalConversationId, conversationLinkPath } from './links'
+
+// Re-export the client-safe pure helpers so existing server importers keep
+// their `./sanity` import surface (the definitions live in `./links`).
+export { proposalConversationId, conversationLinkPath }
 
 /**
  * Server-only data layer for speaker↔organizer messaging (M1).
@@ -27,11 +32,6 @@ import { DEFAULT_CONVERSATION_PREFERENCE } from './types'
  * proposal speaker refs, organizer ids). No function here trusts a client to
  * say who they are.
  */
-
-/** Deterministic id for the single conversation attached to a proposal. */
-export function proposalConversationId(proposalId: string): string {
-  return `conversation.proposal.${proposalId}`
-}
 
 /** Deterministic id for the single (conversation, speaker) preference doc. */
 export function conversationPreferenceId(
@@ -119,32 +119,6 @@ export function canAccessConversation(
     return conversation.proposalSpeakerIds.includes(speaker._id)
   }
   return conversation.createdById === speaker._id
-}
-
-/**
- * The app-relative deep link to a conversation for a given audience. This is
- * the LINK CONTRACT M2 must implement its routes against.
- *
- * - proposal + organizer → `/admin/proposals/<proposalId>#messages`
- * - proposal + speaker   → `/cfp/proposal/<proposalId>#messages`
- * - general  + organizer → `/admin/messages/<conversationId>`
- * - general  + speaker   → `/cfp/messages/<conversationId>`
- */
-export function conversationLinkPath(
-  conversation: Pick<
-    ConversationWithContext,
-    '_id' | 'conversationType' | 'proposalId'
-  >,
-  isOrganizer: boolean,
-): string {
-  if (conversation.conversationType === 'proposal' && conversation.proposalId) {
-    return isOrganizer
-      ? `/admin/proposals/${conversation.proposalId}#messages`
-      : `/cfp/proposal/${conversation.proposalId}#messages`
-  }
-  return isOrganizer
-    ? `/admin/messages/${conversation._id}`
-    : `/cfp/messages/${conversation._id}`
 }
 
 // ---------------------------------------------------------------------------
