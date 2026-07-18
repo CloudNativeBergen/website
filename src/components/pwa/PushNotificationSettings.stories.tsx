@@ -76,7 +76,15 @@ export const EnabledTestSent: Story = {
 export const EnabledTestNoDevices: Story = {
   args: {
     status: 'enabled',
-    sendTestResult: { sent: 0, gone: 0, total: 1, configured: true },
+    sendTestResult: { sent: 0, gone: 0, total: 0, configured: true },
+  },
+}
+
+/** Devices exist but every send failed — distinct from having no devices. */
+export const EnabledTestDeliveryFailed: Story = {
+  args: {
+    ...EnabledTestNoDevices.args,
+    sendTestResult: { sent: 0, gone: 0, total: 2, configured: true },
   },
 }
 
