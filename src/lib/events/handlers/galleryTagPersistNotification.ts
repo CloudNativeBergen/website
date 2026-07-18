@@ -38,7 +38,7 @@ export async function handleGalleryTagPersistNotification(
       conferenceId,
       notificationType: 'gallery_tagged',
       title: 'You were tagged in a conference photo',
-      actorId: actorId || undefined,
+      actorId,
       link,
     })
   }
