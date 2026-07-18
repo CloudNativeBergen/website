@@ -25,7 +25,8 @@ export const notificationRouter = router({
         speakerId: ctx.speaker._id,
         conferenceId,
         limit: input.limit,
-        before: input.before,
+        // `cursor` is the `useInfiniteQuery` alias of `before` (see schema).
+        before: input.before ?? input.cursor,
       })
     }),
 

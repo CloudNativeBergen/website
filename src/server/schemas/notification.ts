@@ -8,6 +8,12 @@ import { z } from 'zod'
 export const ListNotificationsSchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
   before: z.string().datetime().optional(),
+  // Alias of `before` for tRPC's `useInfiniteQuery`: its react-query integration
+  // injects the value returned by `getNextPageParam` into an input field named
+  // literally `cursor`. Keeping `before` as well is backward compatible for
+  // direct callers; the router treats `before` as the canonical field and falls
+  // back to `cursor`.
+  cursor: z.string().datetime().optional(),
 })
 
 /**

@@ -114,4 +114,36 @@ describe('NotificationList', () => {
       screen.getByRole('region', { name: 'Notifications' }),
     ).toBeInTheDocument()
   })
+
+  it('does not render "Show more" when hasMore is false', () => {
+    renderList({ hasMore: false })
+    expect(
+      screen.queryByRole('button', { name: /show more/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders "Show more" and fires onShowMore when hasMore is true', () => {
+    const onShowMore = vi.fn()
+    renderList({ hasMore: true, onShowMore })
+    const button = screen.getByRole('button', { name: /show more/i })
+    fireEvent.click(button)
+    expect(onShowMore).toHaveBeenCalledOnce()
+  })
+
+  it('shows a loading label and disables "Show more" while loading the next page', () => {
+    renderList({ hasMore: true, isLoadingMore: true })
+    const button = screen.getByRole('button', { name: /loading/i })
+    expect(button).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: /^show more$/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('hides "Mark all read" and shows a read-only hint in read-only mode', () => {
+    renderList({ readOnly: true, unreadCount: 3 })
+    expect(
+      screen.queryByRole('button', { name: 'Mark all read' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText(/read-only/i)).toBeInTheDocument()
+  })
 })

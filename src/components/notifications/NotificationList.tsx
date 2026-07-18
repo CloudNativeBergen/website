@@ -25,6 +25,18 @@ export interface NotificationListProps {
    * the wrapping `<Link>`.
    */
   onItemClick: (item: NotificationItem) => void
+  /** Fired when "Show more" is pressed to load the next page. */
+  onShowMore?: () => void
+  /** When true, a "Show more" button is rendered under the list. */
+  hasMore?: boolean
+  /** Puts the "Show more" button in a loading state while the next page loads. */
+  isLoadingMore?: boolean
+  /**
+   * Read-only mode (e.g. an admin impersonating a speaker): hides "Mark all
+   * read" and shows a subtle hint that read state is untouched. Item activation
+   * still navigates; the container is responsible for not marking read.
+   */
+  readOnly?: boolean
 }
 
 function SkeletonRow() {
@@ -175,6 +187,10 @@ export function NotificationList({
   onMarkAllRead,
   isMarkingAll = false,
   onItemClick,
+  onShowMore,
+  hasMore = false,
+  isLoadingMore = false,
+  readOnly = false,
 }: NotificationListProps) {
   return (
     // `role="region"` makes the aria-label an actual named landmark — on a
@@ -184,14 +200,23 @@ export function NotificationList({
         <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
           Notifications
         </h2>
-        <button
-          type="button"
-          onClick={onMarkAllRead}
-          disabled={unreadCount === 0 || isMarkingAll}
-          className="rounded text-xs font-medium text-brand-cloud-blue transition hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-600"
-        >
-          Mark all read
-        </button>
+        {readOnly ? (
+          <span
+            title="Viewing as speaker — read state is left untouched"
+            className="ml-2 shrink-0 text-xs font-medium whitespace-nowrap text-gray-400 dark:text-gray-500"
+          >
+            Speaker view · read-only
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            disabled={unreadCount === 0 || isMarkingAll}
+            className="rounded text-xs font-medium text-brand-cloud-blue transition hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-600"
+          >
+            Mark all read
+          </button>
+        )}
       </div>
 
       <div className="max-h-[70vh] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800/70">
@@ -206,9 +231,23 @@ export function NotificationList({
         ) : items.length === 0 ? (
           <EmptyState />
         ) : (
-          items.map((item) => (
-            <ListItem key={item.id} item={item} onItemClick={onItemClick} />
-          ))
+          <>
+            {items.map((item) => (
+              <ListItem key={item.id} item={item} onItemClick={onItemClick} />
+            ))}
+            {hasMore && (
+              <div className="p-2">
+                <button
+                  type="button"
+                  onClick={onShowMore}
+                  disabled={isLoadingMore}
+                  className="w-full rounded-lg px-4 py-2 text-center text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-gray-800/60 dark:disabled:text-gray-600"
+                >
+                  {isLoadingMore ? 'Loading…' : 'Show more'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -113,3 +113,25 @@ export const LoadError: Story = {
     unreadCount: 0,
   },
 }
+
+// A full page was returned, so keyset pagination offers a "Show more" button.
+export const HasMore: Story = {
+  args: {
+    items: [],
+    unreadCount: 2,
+    hasMore: true,
+    onShowMore: fn(),
+  },
+  render: (args) => <NotificationList {...args} items={makeItems()} />,
+}
+
+// While an admin impersonates a speaker the panel is read-only: "Mark all read"
+// is replaced by a subtle hint and no read-state mutations can fire.
+export const ReadOnlyImpersonating: Story = {
+  args: {
+    items: [],
+    unreadCount: 2,
+    readOnly: true,
+  },
+  render: (args) => <NotificationList {...args} items={makeItems()} />,
+}

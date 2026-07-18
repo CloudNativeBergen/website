@@ -1,5 +1,7 @@
 # Admin Notification System
 
+> **Not the notification hub.** This document covers the **ephemeral toast** system (`src/components/admin/NotificationProvider.tsx`, `useNotification()` / `showNotification()`): transient, in-memory, auto-dismissing alerts that persist **nothing**. It is a different system from the **persistent in-app notification hub** (`src/lib/notification/*`, `src/components/notifications/*`, the `NotificationBell`), which is a durable, per-recipient inbox backed by Sanity. They share the word "notification" but nothing else — see the "In-app notifications" section in `AGENTS.md` for the hub. The bell _may_ bridge a newly arrived hub notification into a toast, but the two systems are otherwise independent.
+
 ## Overview
 
 The admin notification system provides a user-friendly toast notification system to replace browser `alert()` calls throughout the admin interface. This system provides better UX with styled notifications that match the brand design and automatically dismiss after a set duration.

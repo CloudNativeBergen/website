@@ -120,3 +120,13 @@ export function useNotification() {
   }
   return context
 }
+
+/**
+ * Non-throwing variant of {@link useNotification}: returns `undefined` when no
+ * `NotificationProvider` is mounted instead of throwing. Use this from
+ * components that render across multiple shells and must stay resilient if the
+ * toast provider happens to be absent (e.g. the notification bell).
+ */
+export function useNotificationSafe(): NotificationContextType | undefined {
+  return useContext(NotificationContext)
+}
