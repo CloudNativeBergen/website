@@ -150,8 +150,8 @@ export function AdminScheduleLoading() {
         </div>
 
         <div className="flex flex-1 gap-2 overflow-hidden px-3 pt-2">
-          {/* Left time gutter (~52px), matching the rail. */}
-          <div className="w-13 shrink-0 animate-pulse space-y-8 pt-2">
+          {/* Left time gutter — 52px matches MobileScheduleView's GUTTER_PX. */}
+          <div className="w-[52px] shrink-0 animate-pulse space-y-8 pt-2">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}

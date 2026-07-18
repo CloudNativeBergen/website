@@ -368,14 +368,14 @@ export function SkeletonModal({
 
 // Responsive column classes keyed by the desktop column count. Full literal
 // strings so Tailwind's JIT picks them up (dynamic `grid-cols-${n}` would not).
-// Every skeleton stacks toward a single column on phones so it mirrors the real
-// pages, which collapse their multi-column grids at small widths instead of
-// cramming N columns into 320px.
+// Every skeleton stacks toward one or two columns on phones so it mirrors the
+// real pages, which collapse their multi-column grids at small widths instead
+// of cramming N columns into 320px.
 const SKELETON_GRID_COLS: Record<number, string> = {
   1: 'grid-cols-1',
   2: 'grid-cols-1 sm:grid-cols-2',
   3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-  4: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
+  4: 'grid-cols-2 lg:grid-cols-4',
   5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   6: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6',
 }
