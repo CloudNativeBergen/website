@@ -1,0 +1,78 @@
+name: Deploy Sanity Studio
+
+# Auto-deploys the standalone Studio (appId pinned in sanity.cli.ts) whenever
+# studio-relevant files land on main, so new/changed schema types (e.g. the
+# `notification` document) become visible in the hosted Studio without a manual
+# `sanity deploy`. Main only advances through the merge queue with green CI, so
+# a push to main IS the "CI succeeded" signal.
+#
+# Data migrations stay deliberately manual via run-migration.yml (backup +
+# dry-run gates, human-controlled timing).
+#
+# Required repository configuration (already used by run-migration.yml):
+#   secrets.SANITY_AUTH_TOKEN        - token with deploy access to the project
+#   vars.SANITY_STUDIO_PROJECT_ID    - the Sanity project id
+#   vars.SANITY_STUDIO_DATASET       - (optional) dataset, defaults to production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sanity/**'
+      - 'sanity.config.ts'
+      - 'sanity.cli.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-studio.yml'
+  workflow_dispatch:
+
+# One studio deploy at a time; a newer push supersedes an in-flight deploy.
+concurrency:
+  group: sanity-studio-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-studio:
+    name: Deploy Studio
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
+      SANITY_STUDIO_PROJECT_ID: ${{ vars.SANITY_STUDIO_PROJECT_ID }}
+      SANITY_STUDIO_DATASET: ${{ vars.SANITY_STUDIO_DATASET || 'production' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # ratchet:pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy Studio
+        # Non-interactive: the deployment target is pinned via
+        # `deployment.appId` in sanity.cli.ts, so no hostname prompt occurs.
+        run: pnpm sanity deploy
