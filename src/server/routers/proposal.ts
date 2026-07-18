@@ -324,12 +324,16 @@ export const proposalRouter = router({
         // Slack/email handlers and change existing create behaviour (out of
         // scope for the notification hub).
         if (initialStatus === Status.submitted) {
-          const organizerIds = await getOrganizerSpeakerIds()
-          await createNotifications(
-            organizerIds
-              .filter((id) => id && id !== ctx.speaker._id)
-              .map(
-                (id): NotificationInput => ({
+          // The whole notify block shares createNotifications' never-fail
+          // contract: the proposal is already created at this point, so a
+          // failure here (e.g. the organizer-id fetch) must not surface as a
+          // create error to the submitting speaker.
+          try {
+            const organizerIds = await getOrganizerSpeakerIds()
+            await createNotifications(
+              organizerIds
+                .filter((id) => id && id !== ctx.speaker._id)
+                .map((id): NotificationInput => ({
                   recipientId: id,
                   conferenceId: conference._id,
                   notificationType: 'proposal_submitted',
@@ -337,9 +341,14 @@ export const proposalRouter = router({
                   actorId: ctx.speaker._id,
                   relatedProposalId: proposal._id,
                   link: `/admin/proposals/${proposal._id}`,
-                }),
-              ),
-          )
+                })),
+            )
+          } catch (notifyError) {
+            console.error(
+              'Failed to notify organizers of new proposal:',
+              notifyError,
+            )
+          }
         }
 
         return proposal
