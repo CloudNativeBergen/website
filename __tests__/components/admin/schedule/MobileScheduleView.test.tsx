@@ -350,7 +350,11 @@ describe('MobileScheduleView', () => {
         name: 'Remove track',
       }),
     )
-    // confirm step
+    // No removal yet — the menu button only opens the confirm step.
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'removeTrack' }),
+    )
+    // Confirm.
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Remove',

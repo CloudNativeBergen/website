@@ -1163,7 +1163,9 @@ function CardActionSheet({
   onRemove: () => void
   onClose: () => void
 }) {
-  const isService = !talk.talk
+  // A real service session has a placeholder; a talk-less slot without one
+  // (defensive) must not surface the service-only actions.
+  const isService = !talk.talk && !!talk.placeholder
   const title = talk.talk?.title ?? talk.placeholder ?? 'Untitled'
   const action =
     'inline-flex min-h-[44px] w-full items-center justify-start gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
@@ -1227,7 +1229,11 @@ function TrackActionSheet({
   const [title, setTitle] = useState(track.trackTitle ?? '')
   const [description, setDescription] = useState(track.trackDescription ?? '')
   const name = track.trackTitle || `Track ${trackIndex + 1}`
-  const talkCount = track.talks.length
+  // Removing a track un-schedules its real talks (they return to the unassigned
+  // list) but permanently DELETES its service sessions — word the confirm
+  // accordingly so it doesn't overstate recoverability.
+  const talkCount = track.talks.filter((t) => t.talk).length
+  const serviceCount = track.talks.length - talkCount
   const action =
     'inline-flex min-h-[44px] w-full items-center justify-start gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
 
@@ -1300,9 +1306,10 @@ function TrackActionSheet({
       <BottomSheet title="Remove track?" onClose={onClose}>
         <p className="mb-5 text-sm text-gray-600 dark:text-gray-300">
           Remove <span className="font-semibold">{name}</span>?
-          {talkCount > 0
-            ? ` Its ${talkCount} item${talkCount === 1 ? '' : 's'} return to unassigned.`
-            : ''}
+          {talkCount > 0 &&
+            ` Its ${talkCount} talk${talkCount === 1 ? '' : 's'} return to unassigned.`}
+          {serviceCount > 0 &&
+            ` ${serviceCount} service session${serviceCount === 1 ? '' : 's'} will be deleted.`}
         </p>
         <div className="flex gap-3">
           <button
