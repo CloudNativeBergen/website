@@ -20,6 +20,10 @@ on:
         required: true
         type: string
         default: 'production'
+      conference_id:
+        description: 'Optional conference _id override (exported as BACKFILL_CONFERENCE_ID for migrations that target a conference)'
+        required: false
+        type: string
 
 # Never run two migrations against the same dataset concurrently
 concurrency:
@@ -36,6 +40,7 @@ jobs:
       SANITY_AUTH_TOKEN: ${{ secrets.SANITY_AUTH_TOKEN }}
       SANITY_STUDIO_PROJECT_ID: ${{ vars.SANITY_STUDIO_PROJECT_ID }}
       SANITY_STUDIO_DATASET: ${{ inputs.dataset }}
+      BACKFILL_CONFERENCE_ID: ${{ inputs.conference_id }}
 
     steps:
       - name: Checkout code
