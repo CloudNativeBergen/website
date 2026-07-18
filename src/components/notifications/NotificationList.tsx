@@ -11,6 +11,8 @@ export interface NotificationListProps {
   items: NotificationItem[]
   /** When true, renders skeleton rows instead of items. */
   isLoading?: boolean
+  /** When true, renders a load-failure state (distinct from the empty state). */
+  isError?: boolean
   /** Unread total from the polled counter — drives the "Mark all read" state. */
   unreadCount: number
   /** Fired when "Mark all read" is pressed. */
@@ -46,6 +48,26 @@ function EmptyState() {
       />
       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
         You&apos;re all caught up
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Load-failure state, deliberately DISTINCT from the empty state: a failed
+ * fetch must not read as "you're all caught up".
+ */
+function ErrorState() {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center"
+    >
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+        Couldn&apos;t load notifications
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Check your connection and reopen the panel to retry.
       </p>
     </div>
   )
@@ -148,13 +170,16 @@ function ListItem({
 export function NotificationList({
   items,
   isLoading = false,
+  isError = false,
   unreadCount,
   onMarkAllRead,
   isMarkingAll = false,
   onItemClick,
 }: NotificationListProps) {
   return (
-    <div aria-label="Notifications" className="flex flex-col">
+    // `role="region"` makes the aria-label an actual named landmark — on a
+    // generic div the label is not exposed to assistive tech at all.
+    <div role="region" aria-label="Notifications" className="flex flex-col">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
         <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
           Notifications
@@ -176,6 +201,8 @@ export function NotificationList({
             <SkeletonRow />
             <SkeletonRow />
           </>
+        ) : isError ? (
+          <ErrorState />
         ) : items.length === 0 ? (
           <EmptyState />
         ) : (

@@ -3,12 +3,14 @@ import { fn } from 'storybook/test'
 import { NotificationList } from './NotificationList'
 import type { NotificationItem } from '@/lib/notification/types'
 
-// createdAt values are computed relative to render time so the compact relative
-// labels ("5m ago", "2h ago", …) stay realistic in the visual snapshot.
+// createdAt values are computed relative to RENDER time (the factory below is
+// invoked per story render, not at module load) so the compact relative labels
+// are deterministic in the visual snapshot: "4m ago" is always "4m ago", no
+// matter how long the Storybook module has been loaded.
 const minutesAgo = (m: number) =>
   new Date(Date.now() - m * 60_000).toISOString()
 
-const items: NotificationItem[] = [
+const makeItems = (): NotificationItem[] => [
   {
     id: '1',
     type: 'proposal_status_changed',
@@ -77,9 +79,12 @@ type Story = StoryObj<typeof meta>
 
 export const UnreadAndRead: Story = {
   args: {
-    items,
+    // Placeholder for typing; the render below rebuilds items at render time so
+    // the relative-time labels are stable.
+    items: [],
     unreadCount: 2,
   },
+  render: (args) => <NotificationList {...args} items={makeItems()} />,
 }
 
 export const Empty: Story = {
@@ -93,6 +98,14 @@ export const Loading: Story = {
   args: {
     items: [],
     isLoading: true,
+    unreadCount: 0,
+  },
+}
+
+export const LoadError: Story = {
+  args: {
+    items: [],
+    isError: true,
     unreadCount: 0,
   },
 }
