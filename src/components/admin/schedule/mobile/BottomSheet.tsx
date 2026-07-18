@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useMemo, useRef } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import { useModalA11y } from '../useModalA11y'
 
 /* -------------------------------------------------------------------------- */
 /* Bottom sheet                                                               */
@@ -25,54 +26,9 @@ export function BottomSheet({
   // Escape to close, plus a focus trap and body-scroll lock so this
   // `aria-modal` sheet actually behaves modally: keyboard/screen-reader users
   // can't Tab into the covered background, and the page behind doesn't scroll.
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    const { overflow } = document.body.style
-    document.body.style.overflow = 'hidden'
-
-    const focusables = (): HTMLElement[] =>
-      Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      )
-
-    // Move focus into the sheet on open.
-    ;(focusables()[0] ?? dialogRef.current)?.focus()
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-        return
-      }
-      if (e.key !== 'Tab') return
-      const items = focusables()
-      if (items.length === 0) {
-        e.preventDefault()
-        return
-      }
-      const first = items[0]
-      const last = items[items.length - 1]
-      const active = document.activeElement
-      const outside = !dialogRef.current?.contains(active)
-      if (e.shiftKey && (active === first || outside)) {
-        // Wrap backwards to the last element (or pull stray focus back in).
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && (active === last || outside)) {
-        // Wrap forwards to the first element; also pull focus back in if it
-        // somehow escaped the dialog, so Tab can't advance into the background.
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = overflow
-      previouslyFocused?.focus?.()
-    }
-  }, [onClose])
+  // Initial focus prefers an `autoFocus` input over the first focusable (the
+  // header Close button), so typing sheets open ready to type.
+  useModalA11y(dialogRef, onClose)
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">

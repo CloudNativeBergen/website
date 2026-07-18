@@ -3,7 +3,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { PIXELS_PER_MINUTE, SLOT_INTERVAL } from '@/lib/schedule/geometry'
-import { SCHEDULE_END, calculateEndTime, toMinutes } from '@/lib/schedule/time'
+import {
+  SCHEDULE_END,
+  calculateEndTime,
+  durationBetween,
+  toMinutes,
+} from '@/lib/schedule/time'
 import { isTrackIntervalFree, matchService } from '@/lib/schedule/rules'
 
 const MIN_DURATION = 5
@@ -41,6 +46,25 @@ export function useServiceSessionResize({
   const [isResizing, setIsResizing] = useState(false)
   const startYRef = useRef(0)
   const startHeightRef = useRef(0)
+  // Duration when the resize started, so Escape can revert to it.
+  const originalDurationRef = useRef(0)
+  // Last duration actually dispatched, so pointermove only dispatches CHANGES
+  // (not one resizeService per pixel of movement).
+  const lastDispatchedRef = useRef<number | null>(null)
+  // Capture target + pointer id, so Escape / unmount can release the capture
+  // (pointer events keep streaming to the handle until released).
+  const captureElRef = useRef<Element | null>(null)
+  const capturePointerIdRef = useRef<number | null>(null)
+
+  const releaseCapture = useCallback(() => {
+    const el = captureElRef.current
+    const pointerId = capturePointerIdRef.current
+    if (el && pointerId !== null && el.hasPointerCapture?.(pointerId)) {
+      el.releasePointerCapture(pointerId)
+    }
+    captureElRef.current = null
+    capturePointerIdRef.current = null
+  }, [])
 
   // Largest duration (quantized to the slot interval, within [MIN, MAX]) whose
   // end stays free and inside the schedule — i.e. clamp `requested` down until
@@ -70,11 +94,18 @@ export function useServiceSessionResize({
       e.preventDefault()
       e.stopPropagation()
       e.currentTarget.setPointerCapture(e.pointerId)
+      captureElRef.current = e.currentTarget
+      capturePointerIdRef.current = e.pointerId
       startYRef.current = e.clientY
       startHeightRef.current = height
+      originalDurationRef.current = durationBetween(
+        talk.startTime,
+        talk.endTime,
+      )
+      lastDispatchedRef.current = originalDurationRef.current
       setIsResizing(true)
     },
-    [height],
+    [height, talk.startTime, talk.endTime],
   )
 
   const handlePointerMove = useCallback(
@@ -89,7 +120,11 @@ export function useServiceSessionResize({
         SLOT_INTERVAL
 
       const duration = clampDuration(rawDuration)
-      if (duration >= MIN_DURATION) {
+      // Only dispatch when the quantized duration actually CHANGED — a
+      // pointermove fires per pixel and would otherwise flood the reducer with
+      // identical resizeService actions.
+      if (duration >= MIN_DURATION && duration !== lastDispatchedRef.current) {
+        lastDispatchedRef.current = duration
         onUpdateSession(talkIndex, duration)
       }
     },
@@ -101,18 +136,32 @@ export function useServiceSessionResize({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
+    captureElRef.current = null
+    capturePointerIdRef.current = null
+    lastDispatchedRef.current = null
     setIsResizing(false)
   }, [])
 
-  // Escape cancels an in-progress resize (parity with the old mouse handler).
+  // Escape CANCELS an in-progress resize: revert to the duration the resize
+  // started from and release the pointer capture (otherwise moves keep
+  // streaming to the handle and the "cancel" left the intermediate size).
   useEffect(() => {
     if (!isResizing) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsResizing(false)
+      if (e.key !== 'Escape') return
+      if (lastDispatchedRef.current !== originalDurationRef.current) {
+        onUpdateSession(talkIndex, originalDurationRef.current)
+      }
+      lastDispatchedRef.current = null
+      releaseCapture()
+      setIsResizing(false)
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isResizing])
+  }, [isResizing, talkIndex, onUpdateSession, releaseCapture])
+
+  // If the handle unmounts mid-resize, don't leave the pointer captured.
+  useEffect(() => releaseCapture, [releaseCapture])
 
   return {
     isResizing,

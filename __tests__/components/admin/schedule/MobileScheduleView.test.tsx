@@ -94,6 +94,7 @@ const setup = () => {
       onAddTrack={vi.fn()}
       isSaving={false}
       saveSuccess={false}
+      hasUnsavedChanges={false}
       error={null}
     />,
   )
@@ -173,6 +174,7 @@ describe('MobileScheduleView', () => {
         onAddTrack={vi.fn()}
         isSaving={false}
         saveSuccess={false}
+        hasUnsavedChanges={false}
         error={null}
       />,
     )
@@ -269,6 +271,7 @@ describe('MobileScheduleView', () => {
         onAddTrack={vi.fn()}
         isSaving={false}
         saveSuccess={false}
+        hasUnsavedChanges={false}
         error={null}
       />,
     )
@@ -409,6 +412,7 @@ describe('MobileScheduleView', () => {
         onAddTrack={vi.fn()}
         isSaving={false}
         saveSuccess={false}
+        hasUnsavedChanges={false}
         error={null}
       />,
     )
@@ -429,5 +433,55 @@ describe('MobileScheduleView', () => {
         }),
       }),
     )
+  })
+
+  it('clears an active placing and any open sheet when the day changes', () => {
+    const dayTwo: ConferenceSchedule = {
+      _id: 'day-2',
+      date: '2026-09-02',
+      tracks: [
+        { trackTitle: 'Day Two Stage', trackDescription: '', talks: [] },
+      ],
+    }
+    const props = {
+      schedules: [toEditorSchedule(schedule), toEditorSchedule(dayTwo)],
+      unassignedProposals: [unassignedProposal],
+      dispatch: vi.fn(),
+      onDayChange: vi.fn(),
+      onSave: vi.fn(),
+      onAddTrack: vi.fn(),
+      isSaving: false,
+      saveSuccess: false,
+      hasUnsavedChanges: false,
+      error: null,
+    }
+    const { rerender } = render(
+      <MobileScheduleView {...props} currentDayIndex={0} />,
+    )
+
+    // Pick up the scheduled talk → the placing banner (role=status) appears.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Options for Scheduled Keynote Talk',
+      }),
+    )
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Move or swap',
+      }),
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Moving “Scheduled Keynote Talk”',
+    )
+
+    // Also open a sheet on top of the pick-up (the header Unassigned drawer).
+    fireEvent.click(screen.getByRole('button', { name: 'Unassigned (1)' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    // Day changes via parent state → both the pick-up and the sheet are stale
+    // per-day UI and must be cleared.
+    rerender(<MobileScheduleView {...props} currentDayIndex={1} />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

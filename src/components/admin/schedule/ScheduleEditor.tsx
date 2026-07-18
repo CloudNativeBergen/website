@@ -13,7 +13,14 @@ import {
   TouchSensor,
   KeyboardSensor,
 } from '@dnd-kit/core'
-import { useState, useReducer, useMemo, useCallback } from 'react'
+import {
+  useState,
+  useReducer,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react'
 import React from 'react'
 import { ScheduleTrack, TrackTalk, Conference } from '@/lib/conference/types'
 import { DragItem, type EditorSchedule } from '@/lib/schedule/types'
@@ -173,6 +180,37 @@ export function ScheduleEditor({
   const isSaving = state.ui.isSaving
   const error = state.ui.error
 
+  // ANY dirty day means unsaved work — surfaced on both headers' Save button
+  // and guarding navigation below.
+  const hasUnsavedChanges = state.dirty.some(Boolean)
+
+  // Warn before a tab close / hard navigation while any day is dirty. (In-app
+  // route changes aren't guarded here — the editor is a single page.)
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      // Chrome requires returnValue to be set for the prompt to show.
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
+  // The saved-flash timeout is stored so a new save (or unmount) cancels the
+  // previous one instead of leaking it / clearing the wrong flash.
+  const saveSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
+  useEffect(
+    () => () => {
+      if (saveSuccessTimeoutRef.current !== null) {
+        clearTimeout(saveSuccessTimeoutRef.current)
+      }
+    },
+    [],
+  )
+
   // Unassigned proposals are DERIVED from all days, never stored.
   const unassignedProposals = useMemo(
     () => computeUnassigned(state.proposals, state.schedules),
@@ -182,6 +220,10 @@ export function ScheduleEditor({
   const handleSave = useCallback(async () => {
     dispatch({ type: 'saveStart' })
     setSaveSuccess(false)
+    if (saveSuccessTimeoutRef.current !== null) {
+      clearTimeout(saveSuccessTimeoutRef.current)
+      saveSuccessTimeoutRef.current = null
+    }
 
     // Persist every DIRTY day so edits on non-current days are not dropped. If
     // nothing is dirty, fall back to saving the current day (matches the old
@@ -214,7 +256,10 @@ export function ScheduleEditor({
 
       dispatch({ type: 'saveEnd' })
       setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+      saveSuccessTimeoutRef.current = setTimeout(() => {
+        setSaveSuccess(false)
+        saveSuccessTimeoutRef.current = null
+      }, 3000)
     } catch (err) {
       // A CONFLICT means another organizer changed this day since it was loaded.
       // Don't clobber the user's in-progress edits — stop and tell them to
@@ -233,6 +278,13 @@ export function ScheduleEditor({
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event
     setActiveItem(active.data.current as DragItem)
+  }, [])
+
+  // An Escape-cancelled drag must clear the active item too, or the board is
+  // left thinking a drag is still in flight (every "+ Service" button hidden,
+  // stale canDrop indicators) until the next successful drag.
+  const handleDragCancel = useCallback(() => {
+    setActiveItem(null)
   }, [])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -406,6 +458,7 @@ export function ScheduleEditor({
           onAddTrack={handleShowAddTrackModal}
           isSaving={isSaving}
           saveSuccess={saveSuccess}
+          hasUnsavedChanges={hasUnsavedChanges}
           error={error}
         />
         {showAddTrackModal && (
@@ -425,6 +478,7 @@ export function ScheduleEditor({
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
           collisionDetection={pointerWithin}
         >
           <UnassignedProposals proposals={unassignedProposals} />
@@ -439,6 +493,7 @@ export function ScheduleEditor({
               onSave={handleSave}
               isSaving={isSaving}
               saveSuccess={saveSuccess}
+              hasUnsavedChanges={hasUnsavedChanges}
             />
 
             {error && <ErrorBanner error={error} />}
