@@ -250,7 +250,7 @@ export function MobileScheduleView({
       } else if (
         seg.kind === 'talk' &&
         active.kind === 'scheduled' &&
-        active.talk.talk
+        active.talk.kind === 'talk'
       ) {
         // Swap the picked-up talk with the occupied target slot.
         dispatch({
