@@ -14,6 +14,7 @@ import {
   Audience,
   Status,
 } from '@/lib/proposal/types'
+import { toEditorSchedule } from '@/lib/schedule/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 
 const createMockProposal = (
@@ -283,7 +284,7 @@ type Story = StoryObj<typeof ScheduleEditor>
 
 export const EmptySchedule: Story = {
   args: {
-    initialSchedules: [emptySchedule],
+    initialSchedules: [emptySchedule].map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },
@@ -299,7 +300,7 @@ export const EmptySchedule: Story = {
 
 export const SingleDayWithTracks: Story = {
   args: {
-    initialSchedules: [singleDaySchedule],
+    initialSchedules: [singleDaySchedule].map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },
@@ -315,7 +316,7 @@ export const SingleDayWithTracks: Story = {
 
 export const MultiDay: Story = {
   args: {
-    initialSchedules: multiDaySchedules,
+    initialSchedules: multiDaySchedules.map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },

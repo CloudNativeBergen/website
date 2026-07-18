@@ -7,6 +7,10 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import {
   DragItem,
   DropPosition,
+  EditorSchedule,
+  Slot,
+  TalkSlot,
+  toEditorTrack,
   calculateEndTime,
   getProposalDurationMinutes,
   durationBetween,
@@ -31,11 +35,11 @@ import { withinScheduleEnd } from './time'
 
 /** Result of a transform: the (possibly unchanged) schedule and whether it took. */
 export interface OperationResult {
-  schedule: ConferenceSchedule
+  schedule: EditorSchedule
   ok: boolean
 }
 
-const sortByStart = (a: TrackTalk, b: TrackTalk): number =>
+const sortByStart = (a: Slot, b: Slot): number =>
   a.startTime.localeCompare(b.startTime)
 
 /**
@@ -45,11 +49,11 @@ const sortByStart = (a: TrackTalk, b: TrackTalk): number =>
  * already validated both directions with `canSwapTalks` + `canPlaceDisplacedBack`.
  */
 function performSwap(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   dragItem: DragItem,
-  targetTalk: TrackTalk,
+  targetTalk: TalkSlot,
   dropPosition: DropPosition,
-): ConferenceSchedule {
+): EditorSchedule {
   const proposal = dragItem.proposal!
   const { trackIndex, timeSlot } = dropPosition
 
@@ -59,7 +63,7 @@ function performSwap(
   )
   const targetEndTime = calculateEndTime(
     dragItem.sourceTimeSlot!,
-    getProposalDurationMinutes(targetTalk.talk!),
+    getProposalDurationMinutes(targetTalk.talk),
   )
 
   const newTracks = [...schedule.tracks]
@@ -85,11 +89,12 @@ function performSwap(
   const newTargetTalks = currentTargetTrack.talks.filter(
     (talk) =>
       !(
-        talk.talk?._id === targetTalk.talk!._id &&
+        talk.talk?._id === targetTalk.talk._id &&
         talk.startTime === targetTalk.startTime
       ),
   )
-  const newDraggedTalk: TrackTalk = {
+  const newDraggedTalk: TalkSlot = {
+    kind: 'talk',
     talk: proposal,
     startTime: timeSlot,
     endTime: draggedEndTime,
@@ -103,7 +108,8 @@ function performSwap(
     dragItem.sourceTrackIndex !== undefined &&
     dragItem.sourceTimeSlot !== undefined
   ) {
-    const newTargetTalkAtSource: TrackTalk = {
+    const newTargetTalkAtSource: TalkSlot = {
+      kind: 'talk',
       talk: targetTalk.talk,
       startTime: dragItem.sourceTimeSlot,
       endTime: targetEndTime,
@@ -258,7 +264,7 @@ export function classifyServiceDrop(
  * move/swap so the rule lives in exactly one place.
  */
 export function moveProposal(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   dragItem: DragItem,
   dropPosition: DropPosition,
   otherScheduledProposalIds?: ReadonlySet<string>,
@@ -280,7 +286,10 @@ export function moveProposal(
   if (kind === 'swap') {
     const occupiedTalk = targetTrack.talks.find(
       (talk) => talk.startTime === timeSlot,
-    )!
+    )
+    // classify returned 'swap' ⇒ the occupying slot is a resolved talk; the
+    // `kind` narrow gives performSwap a TalkSlot (no non-null assertion needed).
+    if (occupiedTalk?.kind !== 'talk') return fail
     return {
       schedule: performSwap(schedule, dragItem, occupiedTalk, dropPosition),
       ok: true,
@@ -313,7 +322,8 @@ export function moveProposal(
   }
 
   const finalTargetTrack = newTracks[trackIndex]
-  const newTalk: TrackTalk = {
+  const newTalk: TalkSlot = {
+    kind: 'talk',
     talk: proposal,
     startTime: timeSlot,
     endTime,
@@ -332,7 +342,7 @@ export function moveProposal(
  * check covers both talks and other service sessions).
  */
 export function moveServiceSession(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   dragItem: DragItem,
   dropPosition: DropPosition,
 ): OperationResult {
@@ -373,7 +383,8 @@ export function moveServiceSession(
   }
 
   const finalTargetTrack = newTracks[trackIndex]
-  const newServiceSession: TrackTalk = {
+  const newServiceSession: Slot = {
+    kind: 'service',
     placeholder: serviceSession.placeholder,
     startTime: timeSlot,
     endTime: newEndTime,
@@ -386,20 +397,27 @@ export function moveServiceSession(
   return { schedule: { ...schedule, tracks: newTracks }, ok: true }
 }
 
-/** Append a new track to the day. */
+/**
+ * Append a new track to the day. The UI hands a wide {@link ScheduleTrack}; it is
+ * resolved to an {@link EditorTrack} (a brand-new track's `talks` is empty, so
+ * this converts trivially) so the day stays an {@link EditorSchedule}.
+ */
 export function addTrack(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   track: ScheduleTrack,
 ): OperationResult {
   return {
-    schedule: { ...schedule, tracks: [...schedule.tracks, track] },
+    schedule: {
+      ...schedule,
+      tracks: [...schedule.tracks, toEditorTrack(track)],
+    },
     ok: true,
   }
 }
 
 /** Remove the track at `trackIndex` (no-op if out of range). */
 export function removeTrack(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
 ): OperationResult {
   if (trackIndex < 0 || trackIndex >= schedule.tracks.length) {
@@ -414,9 +432,14 @@ export function removeTrack(
   }
 }
 
-/** Replace the track at `trackIndex` (no-op if out of range). */
+/**
+ * Replace the track at `trackIndex` (no-op if out of range). The UI hands a wide
+ * {@link ScheduleTrack} (title/description edit carrying the existing talks); it
+ * is resolved back to an {@link EditorTrack} — those talks are already ghost-free
+ * so the conversion is 1:1, preserving order and fields.
+ */
 export function updateTrack(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
   track: ScheduleTrack,
 ): OperationResult {
@@ -424,13 +447,13 @@ export function updateTrack(
     return { schedule, ok: false }
   }
   const newTracks = [...schedule.tracks]
-  newTracks[trackIndex] = track
+  newTracks[trackIndex] = toEditorTrack(track)
   return { schedule: { ...schedule, tracks: newTracks }, ok: true }
 }
 
 /** Remove the talk / service session at `talkIndex` in `trackIndex`. */
 export function removeTalk(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
   talkIndex: number,
 ): OperationResult {
@@ -451,7 +474,7 @@ export function removeTalk(
 
 /** Add a service session of `duration` minutes at `startTime` to a track. */
 export function addService(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
   args: { title: string; startTime: string; duration: number },
 ): OperationResult {
@@ -467,7 +490,8 @@ export function addService(
   if (!isTrackIntervalFree(track, args.startTime, endTime)) {
     return { schedule, ok: false }
   }
-  const newSession: TrackTalk = {
+  const newSession: Slot = {
+    kind: 'service',
     placeholder: args.title,
     startTime: args.startTime,
     endTime,
@@ -482,7 +506,7 @@ export function addService(
 
 /** Resize the service session at `talkIndex` to a new duration (in minutes). */
 export function resizeService(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
   talkIndex: number,
   duration: number,
@@ -521,7 +545,7 @@ export function resizeService(
 
 /** Rename the service session at `talkIndex`. */
 export function renameService(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   trackIndex: number,
   talkIndex: number,
   title: string,
@@ -549,10 +573,19 @@ export function renameService(
  * `ok` is true only if the session was copied into at least one track.
  */
 export function duplicateService(
-  schedule: ConferenceSchedule,
+  schedule: EditorSchedule,
   serviceSession: TrackTalk,
   sourceTrackIndex: number,
 ): OperationResult {
+  // The UI dispatches the source slot as a wide TrackTalk; a duplicate is always
+  // a service, so tag it as a ServiceSlot (the `?? ''` only guards the type — a
+  // service session always carries a placeholder).
+  const copy: Slot = {
+    kind: 'service',
+    placeholder: serviceSession.placeholder ?? '',
+    startTime: serviceSession.startTime,
+    endTime: serviceSession.endTime,
+  }
   let changed = false
   const newTracks = schedule.tracks.map((track, trackIndex) => {
     if (trackIndex === sourceTrackIndex) return track
@@ -568,7 +601,7 @@ export function duplicateService(
     changed = true
     return {
       ...track,
-      talks: [...track.talks, { ...serviceSession }].sort(sortByStart),
+      talks: [...track.talks, { ...copy }].sort(sortByStart),
     }
   })
 

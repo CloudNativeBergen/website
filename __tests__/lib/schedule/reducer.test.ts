@@ -11,13 +11,14 @@
  *      the old code only saved the current day and dropped the rest.
  */
 import { describe, it, expect } from 'vitest'
-import type {
-  ConferenceSchedule,
-  ScheduleTrack,
-  TrackTalk,
-} from '@/lib/conference/types'
+import type { TrackTalk } from '@/lib/conference/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
-import type { DragItem } from '@/lib/schedule/types'
+import type {
+  DragItem,
+  Slot,
+  EditorTrack,
+  EditorSchedule,
+} from '@/lib/schedule/types'
 import {
   scheduleReducer,
   initScheduleEditorState,
@@ -27,13 +28,14 @@ import {
 const proposal = (id: string, format = 'talk_25'): ProposalExisting =>
   ({ _id: id, format }) as unknown as ProposalExisting
 
-const talk = (id: string, start: string, end: string): TrackTalk => ({
+const talk = (id: string, start: string, end: string): Slot => ({
+  kind: 'talk',
   talk: proposal(id),
   startTime: start,
   endTime: end,
 })
 
-const track = (title: string, ...talks: TrackTalk[]): ScheduleTrack => ({
+const track = (title: string, ...talks: Slot[]): EditorTrack => ({
   trackTitle: title,
   trackDescription: '',
   talks,
@@ -41,8 +43,8 @@ const track = (title: string, ...talks: TrackTalk[]): ScheduleTrack => ({
 
 const unsavedDay = (
   date: string,
-  ...tracks: ScheduleTrack[]
-): ConferenceSchedule => ({
+  ...tracks: EditorTrack[]
+): EditorSchedule => ({
   _id: '',
   date,
   tracks,

@@ -57,8 +57,10 @@ export async function saveScheduleToSanity(
         trackDescription: track.trackDescription,
         // Drop ghost slots (neither a resolved talk nor a placeholder) before
         // serializing — otherwise the fallback branch below emits an empty slot
-        // that `validateSchedulePayload` rejects, failing the whole save. Load
-        // already strips these, so this is defense-in-depth for any that slip in.
+        // that `validateSchedulePayload` rejects, failing the whole save. The
+        // editor load path is already ghost-free (`toEditorSchedule`), but this
+        // filter is NOT redundant: the tRPC save path also accepts client-supplied
+        // payloads that never crossed the load boundary, so keep it as-is.
         talks: (track.talks || [])
           .filter((talk) => talk.talk || talk.placeholder)
           .map((talk, talkIndex) => {

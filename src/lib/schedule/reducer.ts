@@ -1,10 +1,6 @@
-import {
-  ConferenceSchedule,
-  ScheduleTrack,
-  TrackTalk,
-} from '@/lib/conference/types'
+import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
-import { DragItem, DropPosition } from './types'
+import { DragItem, DropPosition, EditorSchedule } from './types'
 import * as ops from './operations'
 
 /**
@@ -25,7 +21,7 @@ import * as ops from './operations'
  * `ops.computeUnassigned`, never stored.
  */
 export interface ScheduleEditorState {
-  schedules: ConferenceSchedule[]
+  schedules: EditorSchedule[]
   currentDayIndex: number
   proposals: ProposalExisting[]
   dirty: boolean[]
@@ -73,7 +69,7 @@ export type ScheduleAction =
   | { type: 'saveEnd' }
 
 export function initScheduleEditorState(args: {
-  schedules: ConferenceSchedule[]
+  schedules: EditorSchedule[]
   proposals: ProposalExisting[]
 }): ScheduleEditorState {
   return {
