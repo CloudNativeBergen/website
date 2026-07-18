@@ -21,6 +21,7 @@ import {
   moveServiceSession,
   classifyProposalDrop,
   classifyServiceDrop,
+  scheduledProposalIdsExcludingDay,
   addTrack,
   removeTrack,
   updateTrack,
@@ -584,5 +585,30 @@ describe('classifier ⇔ reducer equivalence', () => {
       const op = moveServiceSession(s, d, p)
       expect(kind === 'move').toBe(op.ok)
     })
+  })
+
+  it('cross-day set: the guard rejects a proposal scheduled on another day', () => {
+    // Same fixtures both callers use: reducer computes the set, then the UIs
+    // read the SAME set from context/props, so classify must agree with the op.
+    const days = [
+      schedule(track('Day1', talk('p', '10:00', '10:25'))),
+      schedule(track('Day2')),
+    ]
+    const others = scheduledProposalIdsExcludingDay(days, 1)
+    expect(others.has('p')).toBe(true)
+
+    const d: DragItem = { type: 'proposal', proposal: proposal('p') }
+    const p = drop(0, '11:00')
+    // Day 2 has room, but `p` already lives on day 1 → both must refuse.
+    expect(classifyProposalDrop(days[1].tracks, d, p, others)).toBe('invalid')
+    expect(moveProposal(days[1], d, p, others).ok).toBe(false)
+    // Without the set the SAME drop is legal — proving the set is the only
+    // reason it fails, i.e. a UI omitting it would light up a rejected slot.
+    expect(classifyProposalDrop(days[1].tracks, d, p)).toBe('move')
+  })
+
+  it('cross-day set: EXCLUDES the queried day so same-day talks do not self-block', () => {
+    const days = [schedule(track('Day1', talk('p', '10:00', '10:25')))]
+    expect(scheduledProposalIdsExcludingDay(days, 0).has('p')).toBe(false)
   })
 })

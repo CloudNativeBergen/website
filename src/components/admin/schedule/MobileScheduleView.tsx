@@ -24,6 +24,7 @@ import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
 import {
   classifyProposalDrop,
   classifyServiceDrop,
+  scheduledProposalIdsExcludingDay,
 } from '@/lib/schedule/operations'
 import type { DragItem } from '@/lib/schedule/types'
 import { formatConferenceDate } from '@/lib/time'
@@ -180,6 +181,7 @@ function segmentState(
   tracks: ScheduleTrack[],
   T: number,
   seg: RailSegment,
+  otherScheduledProposalIds: ReadonlySet<string>,
 ): SegmentState {
   if (isPlacingSource(placing, T, seg)) return 'source'
   if (!tracks[T]) return 'invalid'
@@ -198,9 +200,16 @@ function segmentState(
   }
 
   // Proposal / scheduled talk: an open slot is a MOVE, an occupied talk a SWAP.
+  // The cross-day duplicate set is only consulted for a FRESH proposal drop
+  // (moving an already-scheduled talk bypasses the guard), matching the reducer.
   if (seg.kind === 'open') {
     if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
-    return classifyProposalDrop(tracks, dragItem, dropPosition) === 'move'
+    return classifyProposalDrop(
+      tracks,
+      dragItem,
+      dropPosition,
+      otherScheduledProposalIds,
+    ) === 'move'
       ? 'valid'
       : 'invalid'
   }
@@ -876,6 +885,7 @@ function TrackRail({
   trackIndex,
   tracks,
   placing,
+  otherScheduledProposalIds,
   onSegmentTap,
   onAddService,
   onTrackOptions,
@@ -884,6 +894,7 @@ function TrackRail({
   trackIndex: number
   tracks: ScheduleTrack[]
   placing: Placing | null
+  otherScheduledProposalIds: ReadonlySet<string>
   onSegmentTap: (trackIndex: number, seg: RailSegment) => void
   onAddService: (trackIndex: number) => void
   onTrackOptions: (trackIndex: number) => void
@@ -928,7 +939,13 @@ function TrackRail({
           {segments.map((seg, i) => {
             const height = segmentHeight(seg)
             const state: SegmentState = placing
-              ? segmentState(placing, tracks, trackIndex, seg)
+              ? segmentState(
+                  placing,
+                  tracks,
+                  trackIndex,
+                  seg,
+                  otherScheduledProposalIds,
+                )
               : 'default'
 
             // Slim, non-interactive divider for gaps too small to hold a talk.
@@ -1392,6 +1409,14 @@ export function MobileScheduleView({
   const schedule = schedules[currentDayIndex] ?? null
   const tracks = useMemo(() => schedule?.tracks ?? [], [schedule])
 
+  // Proposals scheduled on OTHER days — the cross-day duplicate set. Passed into
+  // `segmentState` so the rail's valid-target highlighting applies the SAME
+  // guard the reducer's `moveProposal` does and can't offer a rejected drop.
+  const otherScheduledProposalIds = useMemo(
+    () => scheduledProposalIdsExcludingDay(schedules, currentDayIndex),
+    [schedules, currentDayIndex],
+  )
+
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [placing, setPlacing] = useState<Placing | null>(null)
   const [sheet, setSheet] = useState<ActiveSheet>(null)
@@ -1535,7 +1560,13 @@ export function MobileScheduleView({
         return
       }
 
-      const state = segmentState(active, tracks, panelTrackIndex, seg)
+      const state = segmentState(
+        active,
+        tracks,
+        panelTrackIndex,
+        seg,
+        otherScheduledProposalIds,
+      )
       if (state === 'source') {
         setPlacing(null)
         return
@@ -1603,7 +1634,7 @@ export function MobileScheduleView({
       }
       setPlacing(null)
     },
-    [effPlacing, tracks, dispatch],
+    [effPlacing, tracks, dispatch, otherScheduledProposalIds],
   )
 
   const openAddService = useCallback((trackIndex: number) => {
@@ -1622,9 +1653,15 @@ export function MobileScheduleView({
     if (!track) return false
     return buildTrackRail(track).some(
       (seg) =>
-        segmentState(effPlacing, tracks, safeTrackIndex, seg) === 'valid',
+        segmentState(
+          effPlacing,
+          tracks,
+          safeTrackIndex,
+          seg,
+          otherScheduledProposalIds,
+        ) === 'valid',
     )
-  }, [effPlacing, tracks, safeTrackIndex])
+  }, [effPlacing, tracks, safeTrackIndex, otherScheduledProposalIds])
 
   const tabId = (i: number) => `sched-tab-${i}`
   const panelId = (i: number) => `sched-panel-${i}`
@@ -1793,6 +1830,7 @@ export function MobileScheduleView({
                 trackIndex={trackIndex}
                 tracks={tracks}
                 placing={effPlacing}
+                otherScheduledProposalIds={otherScheduledProposalIds}
                 onSegmentTap={handleSegmentTap}
                 onAddService={openAddService}
                 onTrackOptions={openTrackOptions}

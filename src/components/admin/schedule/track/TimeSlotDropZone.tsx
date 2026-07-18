@@ -33,7 +33,8 @@ export const TimeSlotDropZone = ({
   // `activeDragItem` and the whole-day `schedule` come from context instead of
   // being prop-drilled through TracksGrid → DroppableTrack. The schedule lets
   // `canDrop` validate the REVERSE half of a swap (see below).
-  const { activeDragItem, schedule } = useScheduleContext()
+  const { activeDragItem, schedule, otherScheduledProposalIds } =
+    useScheduleContext()
 
   const { setNodeRef, isOver } = useDroppable({
     id: `track-${trackIndex}-time-${timeSlot.time}`,
@@ -82,12 +83,20 @@ export const TimeSlotDropZone = ({
     // the reducer's `moveProposal` will do — fit, bidirectional swap, and the
     // end-of-day guard (which this inline check previously omitted).
     return (
-      classifyProposalDrop(schedule.tracks, activeDragItem, {
-        trackIndex,
-        timeSlot: timeSlot.time,
-      }) !== 'invalid'
+      classifyProposalDrop(
+        schedule.tracks,
+        activeDragItem,
+        { trackIndex, timeSlot: timeSlot.time },
+        otherScheduledProposalIds,
+      ) !== 'invalid'
     )
-  }, [activeDragItem, schedule, trackIndex, timeSlot.time])
+  }, [
+    activeDragItem,
+    schedule,
+    trackIndex,
+    timeSlot.time,
+    otherScheduledProposalIds,
+  ])
 
   // Gate on the WHOLE slot interval, not just an exact start-time match, so the
   // "＋ Service" button never appears on a 5-min slot that falls INSIDE an

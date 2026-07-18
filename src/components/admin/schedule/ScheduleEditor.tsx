@@ -26,7 +26,10 @@ import {
   scheduleReducer,
   initScheduleEditorState,
 } from '@/lib/schedule/reducer'
-import { computeUnassigned } from '@/lib/schedule/operations'
+import {
+  computeUnassigned,
+  scheduledProposalIdsExcludingDay,
+} from '@/lib/schedule/operations'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
@@ -340,11 +343,25 @@ export function ScheduleEditor({
 
   const hasTracks = Boolean(schedule?.tracks && schedule.tracks.length > 0)
 
+  // Ids scheduled on OTHER days — the cross-day duplicate set the reducer feeds
+  // `moveProposal`. Threading it through context lets `canDrop` apply the exact
+  // same guard so the indicator can't promise a drop the reducer rejects.
+  const otherScheduledProposalIds = useMemo(
+    () => scheduledProposalIdsExcludingDay(state.schedules, currentDayIndex),
+    [state.schedules, currentDayIndex],
+  )
+
   // Ambient board state for the leaf drop targets (see ScheduleContext): the
-  // active drag, the whole current day (for the swap reverse-check) and dispatch.
+  // active drag, the whole current day (for the swap reverse-check), the
+  // cross-day duplicate set, and dispatch.
   const scheduleContextValue = useMemo(
-    () => ({ activeDragItem: activeItem, schedule: currentSchedule, dispatch }),
-    [activeItem, currentSchedule],
+    () => ({
+      activeDragItem: activeItem,
+      schedule: currentSchedule,
+      otherScheduledProposalIds,
+      dispatch,
+    }),
+    [activeItem, currentSchedule, otherScheduledProposalIds],
   )
 
   const dragOverlay = useMemo(() => {

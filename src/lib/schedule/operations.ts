@@ -126,6 +126,12 @@ function performSwap(
  * — `moveProposal` applies it, and both UIs (desktop `TimeSlotDropZone.canDrop`,
  * mobile `segmentState`) call it so they can never offer a drop the reducer
  * rejects. Pure, no mutation.
+ *
+ * `otherScheduledProposalIds` is the cross-day duplicate set (a fresh proposal
+ * already scheduled on another day is rejected). It is OPTIONAL only so callers
+ * that never place fresh proposals can omit it; every real caller — the reducer
+ * (via {@link scheduledProposalIdsExcludingDay}) AND both UIs — passes it, so
+ * the "no rejected drop is ever offered" guarantee holds for cross-day dups too.
  */
 export type DropClassification = 'move' | 'swap' | 'invalid'
 
@@ -589,4 +595,26 @@ export function computeUnassigned(
     ),
   )
   return proposals.filter((proposal) => !scheduledIds.has(proposal._id))
+}
+
+/**
+ * Ids of proposals scheduled on days OTHER than `dayIndex` — the cross-day
+ * duplicate set. Passed as `otherScheduledProposalIds` to
+ * {@link classifyProposalDrop} so both the reducer and the drop indicators
+ * reject placing a proposal that already lives on another day.
+ */
+export function scheduledProposalIdsExcludingDay(
+  schedules: readonly ConferenceSchedule[],
+  dayIndex: number,
+): Set<string> {
+  const ids = new Set<string>()
+  schedules.forEach((schedule, index) => {
+    if (index === dayIndex) return
+    schedule.tracks?.forEach((track) =>
+      track.talks.forEach((talk) => {
+        if (talk.talk?._id) ids.add(talk.talk._id)
+      }),
+    )
+  })
+  return ids
 }
