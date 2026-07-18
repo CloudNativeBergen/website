@@ -931,7 +931,7 @@ function TrackRail({
                   style={{ left: 0 }}
                   aria-hidden="true"
                 />
-                <div className="flex-1 pb-2 pl-4">
+                <div className="min-w-0 flex-1 pb-2 pl-4">
                   <button
                     type="button"
                     disabled={disabled}
@@ -987,7 +987,7 @@ function RailBody({ seg }: { seg: RailSegment }) {
     return (
       <>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="inline-flex items-center gap-1.5 truncate text-sm font-medium text-gray-600 dark:text-gray-300">
+          <h3 className="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-600 dark:text-gray-300">
             <ClockIcon className="h-4 w-4 shrink-0" />
             {title}
           </h3>
@@ -1004,7 +1004,7 @@ function RailBody({ seg }: { seg: RailSegment }) {
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <h3 className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
           {title}
         </h3>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -1585,7 +1585,7 @@ export function MobileScheduleView({
         <div
           ref={scrollerRef}
           onScroll={handleScroll}
-          className="flex flex-1 snap-x snap-mandatory gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth px-[7vw] [&::-webkit-scrollbar]:hidden"
+          className="flex flex-1 snap-x snap-mandatory gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-smooth [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: 'none' }}
         >
           {tracks.map((track, trackIndex) => (
@@ -1597,10 +1597,10 @@ export function MobileScheduleView({
               role="tabpanel"
               id={panelId(trackIndex)}
               aria-labelledby={tabId(trackIndex)}
-              // `snap-always` (scroll-snap-stop) forces exactly one track per
-              // fling so a fast swipe can't skip past a track — each is a
-              // distinct context (Trello/kanban column-swipe guidance).
-              className="shrink-0 basis-[86vw] snap-center snap-always overflow-y-auto px-1 pt-2"
+              // Full-width panels (no side peek) so each track's cards use the
+              // whole screen width. `snap-always` (scroll-snap-stop) forces
+              // exactly one track per fling so a fast swipe can't skip a track.
+              className="shrink-0 basis-[100vw] snap-center snap-always overflow-y-auto px-3 pt-2"
             >
               <TrackRail
                 track={track}

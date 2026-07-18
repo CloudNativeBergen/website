@@ -143,6 +143,9 @@ const meta: Meta<typeof MobileScheduleHarness> = {
   title: 'Systems/Program/Admin/MobileScheduleView',
   component: MobileScheduleHarness,
   parameters: {
+    // Full-screen: this is a full-viewport mobile view, so drop Storybook's
+    // default story padding (which otherwise insets it and skews visual QA).
+    layout: 'fullscreen',
     viewport: { defaultViewport: 'mobile1' },
     docs: {
       description: {
