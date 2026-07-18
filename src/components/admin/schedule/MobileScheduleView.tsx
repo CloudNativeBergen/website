@@ -47,6 +47,8 @@ import {
   PencilIcon,
   ArrowsUpDownIcon,
   InboxStackIcon,
+  ChevronDownIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 
 interface MobileScheduleViewProps {
@@ -762,6 +764,106 @@ function UnassignedDrawer({
 /* Legend disclosure                                                          */
 /* -------------------------------------------------------------------------- */
 
+function dayLabel(schedule: ConferenceSchedule, index: number): string {
+  const date = new Date(schedule.date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+  return `Day ${index + 1} · ${date}`
+}
+
+/**
+ * Day selector as a compact dropdown (replaces the day-chip row). A single-day
+ * schedule renders as static text. Frees a full row of top chrome and scales to
+ * any number of days.
+ */
+function DaySelect({
+  schedules,
+  currentDayIndex,
+  onSelect,
+}: {
+  schedules: ConferenceSchedule[]
+  currentDayIndex: number
+  onSelect: (dayIndex: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const current = schedules[currentDayIndex]
+
+  if (schedules.length <= 1) {
+    return (
+      <span className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+        {current ? dayLabel(current, currentDayIndex) : 'Schedule'}
+      </span>
+    )
+  }
+
+  return (
+    <div className="relative min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="inline-flex min-h-[44px] max-w-full items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+      >
+        <span className="truncate">
+          {current ? dayLabel(current, currentDayIndex) : 'Select day'}
+        </span>
+        <ChevronDownIcon className="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-30 cursor-default"
+          />
+          <ul
+            role="listbox"
+            aria-label="Select day"
+            className="absolute left-0 z-40 mt-1 w-60 max-w-[80vw] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+          >
+            {schedules.map((day, index) => {
+              const isActive = index === currentDayIndex
+              return (
+                <li key={`${index}-${day.date}`}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      onSelect(index)
+                      setOpen(false)
+                    }}
+                    className={clsx(
+                      'flex min-h-[44px] w-full items-center gap-2 px-3 text-left text-sm transition-colors',
+                      isActive
+                        ? 'font-semibold text-blue-700 dark:text-blue-300'
+                        : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700',
+                    )}
+                  >
+                    <CheckIcon
+                      className={clsx(
+                        'h-4 w-4 shrink-0',
+                        isActive
+                          ? 'text-blue-600 dark:text-blue-300'
+                          : 'invisible',
+                      )}
+                    />
+                    {dayLabel(day, index)}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
 function LegendDisclosure() {
   const [open, setOpen] = useState(false)
   return (
@@ -1431,10 +1533,12 @@ export function MobileScheduleView({
       {/* Header */}
       <header className="shrink-0 border-b border-gray-200 bg-white px-4 pt-3 dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Schedule
-          </h1>
-          <div className="flex items-center gap-1">
+          <DaySelect
+            schedules={schedules}
+            currentDayIndex={currentDayIndex}
+            onSelect={handleDayChange}
+          />
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setSheet({ kind: 'unassigned', context: null })}
@@ -1469,38 +1573,6 @@ export function MobileScheduleView({
             </button>
           </div>
         </div>
-
-        {schedules.length > 1 && (
-          <div
-            className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1"
-            role="group"
-            aria-label="Select day"
-          >
-            {schedules.map((day, index) => {
-              const isActive = index === currentDayIndex
-              const label = new Date(day.date).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })
-              return (
-                <button
-                  key={`${index}-${day.date}`}
-                  type="button"
-                  onClick={() => handleDayChange(index)}
-                  aria-pressed={isActive}
-                  className={clsx(
-                    'min-h-[44px] shrink-0 rounded-lg border px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500',
-                    isActive
-                      ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      : 'border-gray-300 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300',
-                  )}
-                >
-                  Day {index + 1} · {label}
-                </button>
-              )
-            })}
-          </div>
-        )}
 
         {/* Fixed track tab strip (synced to the carousel below). */}
         {tracks.length > 0 ? (
