@@ -85,23 +85,6 @@ export function initScheduleEditorState(args: {
   }
 }
 
-/** Ids of talks scheduled on days OTHER than `dayIndex` (cross-day dup guard). */
-function scheduledIdsExcludingDay(
-  schedules: ConferenceSchedule[],
-  dayIndex: number,
-): Set<string> {
-  const ids = new Set<string>()
-  schedules.forEach((schedule, index) => {
-    if (index === dayIndex) return
-    schedule.tracks?.forEach((track) =>
-      track.talks.forEach((talk) => {
-        if (talk.talk?._id) ids.add(talk.talk._id)
-      }),
-    )
-  })
-  return ids
-}
-
 /**
  * Apply a day-level transform result to the current day: on success, replace
  * `schedules[currentDayIndex]` and mark it dirty; on failure, return state
@@ -128,7 +111,7 @@ export function scheduleReducer(
   switch (action.type) {
     case 'moveProposal': {
       if (!current) return state
-      const otherIds = scheduledIdsExcludingDay(
+      const otherIds = ops.scheduledProposalIdsExcludingDay(
         state.schedules,
         state.currentDayIndex,
       )

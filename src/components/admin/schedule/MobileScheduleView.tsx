@@ -20,14 +20,13 @@ import {
   withinScheduleEnd,
 } from '@/lib/schedule/time'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
+import { fitsInTrack, isTrackIntervalFree } from '@/lib/schedule/rules'
 import {
-  fitsInTrack,
-  isTrackIntervalFree,
-  canSwapTalks,
-  canPlaceDisplacedBack,
-  matchTalk,
-  matchService,
-} from '@/lib/schedule/rules'
+  classifyProposalDrop,
+  classifyServiceDrop,
+  scheduledProposalIdsExcludingDay,
+} from '@/lib/schedule/operations'
+import type { DragItem } from '@/lib/schedule/types'
 import { formatConferenceDate } from '@/lib/time'
 import { buildTrackRail, type RailSegment } from './mobileRail'
 import { StatusBadge, LevelIndicator } from '@/lib/proposal'
@@ -149,71 +148,76 @@ function isPlacingSource(
  * fitsInTrack / interval-free / swap checks + end-of-day guard) so the UI never
  * offers a drop the reducer would reject.
  */
+/** The engine DragItem for the current pick-up (proposal / scheduled talk /
+ * scheduled service), so the UI can defer every legality question to the shared
+ * classifiers instead of re-deriving the rule. */
+function placingDragItem(placing: Placing): DragItem {
+  if (placing.kind === 'proposal') {
+    return { type: 'proposal', proposal: placing.proposal }
+  }
+  const src = placing.talk
+  if (src.talk) {
+    return {
+      type: 'scheduled-talk',
+      proposal: src.talk,
+      sourceTrackIndex: placing.trackIndex,
+      sourceTimeSlot: src.startTime,
+    }
+  }
+  return {
+    type: 'scheduled-service',
+    serviceSession: {
+      placeholder: src.placeholder ?? '',
+      startTime: src.startTime,
+      endTime: src.endTime,
+    },
+    sourceTrackIndex: placing.trackIndex,
+    sourceTimeSlot: src.startTime,
+  }
+}
+
 function segmentState(
   placing: Placing,
   tracks: ScheduleTrack[],
   T: number,
   seg: RailSegment,
+  otherScheduledProposalIds: ReadonlySet<string>,
 ): SegmentState {
   if (isPlacingSource(placing, T, seg)) return 'source'
-  const target = tracks[T]
-  if (!target) return 'invalid'
+  if (!tracks[T]) return 'invalid'
 
-  if (seg.kind === 'open') {
-    if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
-    if (placing.kind === 'proposal') {
-      const dur = getProposalDurationMinutes(placing.proposal)
-      const end = calculateEndTime(seg.startTime, dur)
-      return withinScheduleEnd(end) && fitsInTrack(target, seg.startTime, dur)
-        ? 'valid'
-        : 'invalid'
+  const dragItem = placingDragItem(placing)
+  const dropPosition = { trackIndex: T, timeSlot: seg.startTime }
+
+  // Service pick-up: only moves into open slots (services never swap).
+  if (dragItem.type === 'scheduled-service') {
+    if (seg.kind !== 'open' || seg.durationMin < MIN_OPEN_SLOT_MIN) {
+      return 'invalid'
     }
-    const src = placing.talk
-    const sameTrack = T === placing.trackIndex
-    if (src.talk) {
-      const dur = getProposalDurationMinutes(src.talk)
-      const end = calculateEndTime(seg.startTime, dur)
-      const exclude = sameTrack
-        ? matchTalk(src.talk._id, src.startTime)
-        : undefined
-      return withinScheduleEnd(end) &&
-        fitsInTrack(target, seg.startTime, dur, exclude)
-        ? 'valid'
-        : 'invalid'
-    }
-    const dur = durationBetween(src.startTime, src.endTime)
-    const end = calculateEndTime(seg.startTime, dur)
-    const exclude = sameTrack
-      ? matchService(src.placeholder ?? '', src.startTime)
-      : undefined
-    return withinScheduleEnd(end) &&
-      isTrackIntervalFree(target, seg.startTime, end, exclude)
+    return classifyServiceDrop(tracks, dragItem, dropPosition) === 'move'
       ? 'valid'
       : 'invalid'
   }
 
-  if (seg.kind === 'talk') {
-    // Occupied talk => SWAP, only when a scheduled TALK is being placed.
-    if (placing.kind !== 'scheduled' || !placing.talk.talk) return 'invalid'
-    const src = placing.talk
-    const sourceTrack = tracks[placing.trackIndex]
-    if (!sourceTrack) return 'invalid'
-    const draggedEnd = calculateEndTime(
-      seg.startTime,
-      getProposalDurationMinutes(src.talk!),
-    )
-    const ok =
-      withinScheduleEnd(draggedEnd) &&
-      canSwapTalks(target, src.talk!, seg.talk, seg.startTime) &&
-      canPlaceDisplacedBack(
-        sourceTrack,
-        seg.talk,
-        src.startTime,
-        matchTalk(src.talk!._id, src.startTime),
-      )
-    return ok ? 'valid' : 'invalid'
+  // Proposal / scheduled talk: an open slot is a MOVE, an occupied talk a SWAP.
+  // The cross-day duplicate set is only consulted for a FRESH proposal drop
+  // (moving an already-scheduled talk bypasses the guard), matching the reducer.
+  if (seg.kind === 'open') {
+    if (seg.durationMin < MIN_OPEN_SLOT_MIN) return 'invalid'
+    return classifyProposalDrop(
+      tracks,
+      dragItem,
+      dropPosition,
+      otherScheduledProposalIds,
+    ) === 'move'
+      ? 'valid'
+      : 'invalid'
   }
-
+  if (seg.kind === 'talk') {
+    return classifyProposalDrop(tracks, dragItem, dropPosition) === 'swap'
+      ? 'valid'
+      : 'invalid'
+  }
   // `break` targets are never a valid drop.
   return 'invalid'
 }
@@ -881,6 +885,7 @@ function TrackRail({
   trackIndex,
   tracks,
   placing,
+  otherScheduledProposalIds,
   onSegmentTap,
   onAddService,
   onTrackOptions,
@@ -889,6 +894,7 @@ function TrackRail({
   trackIndex: number
   tracks: ScheduleTrack[]
   placing: Placing | null
+  otherScheduledProposalIds: ReadonlySet<string>
   onSegmentTap: (trackIndex: number, seg: RailSegment) => void
   onAddService: (trackIndex: number) => void
   onTrackOptions: (trackIndex: number) => void
@@ -933,7 +939,13 @@ function TrackRail({
           {segments.map((seg, i) => {
             const height = segmentHeight(seg)
             const state: SegmentState = placing
-              ? segmentState(placing, tracks, trackIndex, seg)
+              ? segmentState(
+                  placing,
+                  tracks,
+                  trackIndex,
+                  seg,
+                  otherScheduledProposalIds,
+                )
               : 'default'
 
             // Slim, non-interactive divider for gaps too small to hold a talk.
@@ -1397,6 +1409,14 @@ export function MobileScheduleView({
   const schedule = schedules[currentDayIndex] ?? null
   const tracks = useMemo(() => schedule?.tracks ?? [], [schedule])
 
+  // Proposals scheduled on OTHER days — the cross-day duplicate set. Passed into
+  // `segmentState` so the rail's valid-target highlighting applies the SAME
+  // guard the reducer's `moveProposal` does and can't offer a rejected drop.
+  const otherScheduledProposalIds = useMemo(
+    () => scheduledProposalIdsExcludingDay(schedules, currentDayIndex),
+    [schedules, currentDayIndex],
+  )
+
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [placing, setPlacing] = useState<Placing | null>(null)
   const [sheet, setSheet] = useState<ActiveSheet>(null)
@@ -1540,7 +1560,13 @@ export function MobileScheduleView({
         return
       }
 
-      const state = segmentState(active, tracks, panelTrackIndex, seg)
+      const state = segmentState(
+        active,
+        tracks,
+        panelTrackIndex,
+        seg,
+        otherScheduledProposalIds,
+      )
       if (state === 'source') {
         setPlacing(null)
         return
@@ -1608,7 +1634,7 @@ export function MobileScheduleView({
       }
       setPlacing(null)
     },
-    [effPlacing, tracks, dispatch],
+    [effPlacing, tracks, dispatch, otherScheduledProposalIds],
   )
 
   const openAddService = useCallback((trackIndex: number) => {
@@ -1627,9 +1653,15 @@ export function MobileScheduleView({
     if (!track) return false
     return buildTrackRail(track).some(
       (seg) =>
-        segmentState(effPlacing, tracks, safeTrackIndex, seg) === 'valid',
+        segmentState(
+          effPlacing,
+          tracks,
+          safeTrackIndex,
+          seg,
+          otherScheduledProposalIds,
+        ) === 'valid',
     )
-  }, [effPlacing, tracks, safeTrackIndex])
+  }, [effPlacing, tracks, safeTrackIndex, otherScheduledProposalIds])
 
   const tabId = (i: number) => `sched-tab-${i}`
   const panelId = (i: number) => `sched-panel-${i}`
@@ -1798,6 +1830,7 @@ export function MobileScheduleView({
                 trackIndex={trackIndex}
                 tracks={tracks}
                 placing={effPlacing}
+                otherScheduledProposalIds={otherScheduledProposalIds}
                 onSegmentTap={handleSegmentTap}
                 onAddService={openAddService}
                 onTrackOptions={openTrackOptions}
