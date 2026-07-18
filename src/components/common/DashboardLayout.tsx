@@ -15,11 +15,11 @@ import {
   Bars3Icon,
   XMarkIcon,
   MagnifyingGlassIcon,
-  BellIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UserMenu } from '@/components/UserMenu'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import clsx from 'clsx'
 
 export interface NavigationItem {
@@ -416,6 +416,7 @@ export function DashboardLayout({
 
           <div className="flex items-center gap-x-2" suppressHydrationWarning>
             <ThemeToggle />
+            <NotificationBell />
             <UserMenu
               name={getUserName()}
               picture={getAvatarUrl()}
@@ -455,15 +456,7 @@ export function DashboardLayout({
             >
               <ThemeToggle />
 
-              {mode === 'admin' && (
-                <button
-                  type="button"
-                  className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
-                >
-                  <span className="sr-only">View notifications</span>
-                  <BellIcon aria-hidden="true" className="size-6" />
-                </button>
-              )}
+              <NotificationBell />
 
               <div
                 aria-hidden="true"
