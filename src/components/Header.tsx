@@ -33,14 +33,47 @@ export function Header({ c }: { c: Conference }) {
   return (
     <header className="relative z-50 flex-none lg:pt-11">
       <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
-        <div className="mt-10 lg:mt-0">
-          <Link href="/">
-            <ConferenceLogo
-              conference={c}
-              variant="horizontal"
-              className="h-14 w-auto text-brand-slate-gray dark:text-white"
-            />
-          </Link>
+        {/* Mobile: logo + controls share ONE guaranteed row (justify-between
+            inside a non-wrapping wrapper) — the bell previously tipped the
+            container's flex-wrap into stacking the controls under the logo
+            with a huge mt-10 gap. ≥sm the wrapper dissolves (display:
+            contents) and `sm:order-last` restores the original source-order
+            layout, so tablet/desktop are untouched. */}
+        <div className="mt-6 flex w-full items-center justify-between gap-3 sm:contents">
+          <div className="min-w-0 flex-1 sm:mt-10 sm:flex-none lg:mt-0">
+            <Link href="/" className="block max-w-full">
+              {/* max-w-full lets the SVG scale DOWN on narrow screens instead of
+                  overflowing into the controls cluster (fixed-height + intrinsic
+                  width SVGs do not shrink in flex rows on their own). */}
+              <ConferenceLogo
+                conference={c}
+                variant="horizontal"
+                className="h-10 w-auto max-w-full text-brand-slate-gray sm:h-14 dark:text-white"
+              />
+            </Link>
+          </div>
+          <div className="shrink-0 sm:order-last sm:mt-10 sm:ml-10 lg:mt-0 lg:ml-4">
+            <div className="flex items-center gap-4">
+              <ThemeToggle />
+              {/* Bell self-gates on `session?.speaker`; renders nothing (and
+                mounts no query) for signed-out visitors. Lives in this single
+                cluster which is present on both the mobile and desktop header,
+                so one placement covers every breakpoint. */}
+              <PublicHeaderBell />
+              {session ? (
+                <UserMenu
+                  name={session.user.name}
+                  picture={session.user.picture}
+                  speaker={session.speaker}
+                  account={session.account}
+                />
+              ) : (
+                <Link href="/cfp/list" className="flex items-center">
+                  <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
         <div className="font-jetbrains order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-brand-cloud-blue/10 py-4 text-sm whitespace-nowrap sm:-mx-6 lg:order-0 lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
           <div
@@ -82,28 +115,6 @@ export function Header({ c }: { c: Conference }) {
               Get your ticket
             </Button>
           )}
-        </div>
-        <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            {/* Bell self-gates on `session?.speaker`; renders nothing (and
-                mounts no query) for signed-out visitors. Lives in this single
-                cluster which is present on both the mobile and desktop header,
-                so one placement covers every breakpoint. */}
-            <PublicHeaderBell />
-            {session ? (
-              <UserMenu
-                name={session.user.name}
-                picture={session.user.picture}
-                speaker={session.speaker}
-                account={session.account}
-              />
-            ) : (
-              <Link href="/cfp/list" className="flex items-center">
-                <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
-              </Link>
-            )}
-          </div>
         </div>
       </Container>
     </header>

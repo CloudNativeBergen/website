@@ -1,20 +1,21 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { SessionProvider } from 'next-auth/react'
+import type { Session } from 'next-auth'
 import { mockDateBeforeEach } from '@/lib/storybook'
-import { Container } from '@/components/Container'
-import { DiamondIcon } from '@/components/DiamondIcon'
-import { ConferenceLogo } from '@/components/ConferenceLogo'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { UserCircleIcon } from '@heroicons/react/24/solid'
-import { UserMenu } from '@/components/UserMenu'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
-import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { Header } from '@/components/Header'
+import type { Conference } from '@/lib/conference/types'
 import type { Speaker } from '@/lib/speaker/types'
 
-// Deterministic tRPC responses for the REAL NotificationBell rendered in the
-// signed-in header states. Mirrors the pattern in DashboardLayout.stories:
-// splits httpBatchLink's comma-batched GET paths so `notification.unreadCount`
-// resolves to 3 (badge) and `notification.list` to a small inbox.
+// These stories render the REAL Header (not a mock shell): the earlier replica
+// drifted from the component and visually "passed" while the real mobile
+// header wrapped and stacked in production. Session state is supplied via
+// next-auth's SessionProvider `session` prop; the bell's tRPC queries are
+// served by the msw handlers below.
+
+// Deterministic tRPC responses for the NotificationBell in signed-in states —
+// same comma-batch-splitting pattern as DashboardLayout.stories.
 const notificationItems = () => [
   {
     id: 'n1',
@@ -52,179 +53,110 @@ const notificationHandlers = [
   ),
 ]
 
-const mockSpeaker: Speaker = {
-  _id: 'spk-1',
-  _rev: 'rev-1',
-  _createdAt: '2026-01-01T00:00:00Z',
-  _updatedAt: '2026-01-01T00:00:00Z',
+const speaker = {
+  _id: 'speaker-1',
   name: 'Jane Doe',
   email: 'jane@example.com',
   slug: 'jane-doe',
-  isOrganizer: false,
-}
+} as unknown as Speaker
+
+const organizerSpeaker = {
+  ...(speaker as object),
+  isOrganizer: true,
+} as unknown as Speaker
+
+const makeSession = (s: Speaker): Session =>
+  ({
+    user: {
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      picture: 'https://placehold.co/40x40/4f46e5/fff/png?text=JD',
+    },
+    speaker: s,
+    account: {
+      provider: 'github',
+      providerAccountId: '12345',
+      type: 'oauth',
+    },
+    expires: '2027-01-01T00:00:00.000Z',
+  }) as unknown as Session
+
+// Minimal Conference fixture carrying every field the Header reads
+// (dates/location for the marquee, domains for the previous-year link,
+// registration state for the ticket button).
+const makeConference = (overrides: Record<string, unknown> = {}): Conference =>
+  ({
+    _id: 'conf-1',
+    title: 'Cloud Native Day Bergen',
+    city: 'Bergen',
+    country: 'Norway',
+    startDate: '2026-09-15',
+    endDate: '2026-09-15',
+    domains: ['2026.cloudnativebergen.dev'],
+    registrationEnabled: true,
+    registrationLink: 'https://example.com/tickets',
+    ...overrides,
+  }) as unknown as Conference
+
+const conference = makeConference()
+const pastConference = makeConference({
+  startDate: '2024-10-30',
+  endDate: '2024-10-30',
+  domains: ['2024.cloudnativebergen.dev'],
+})
 
 const meta = {
   title: 'Components/Layout/Header',
-  // Pin Date so the msw notification fixtures (and their relative-time labels)
-  // are deterministic, per the AGENTS.md deterministic-dates rule.
+  component: Header,
   beforeEach: mockDateBeforeEach(new Date('2026-07-18T12:00:00Z')),
-  // Wrap in the real (httpBatchLink) TRPCProvider so the bell's queries are
-  // comma-batched into a single request that `notificationHandlers` splits —
-  // matching the DashboardLayout.stories pattern.
-  decorators: [
-    (Story) => (
-      <TRPCProvider>
-        <Story />
-      </TRPCProvider>
-    ),
-  ],
   parameters: {
     msw: { handlers: notificationHandlers },
     layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'Main site header with conference logo, date/location info, registration button, theme toggle, the notification bell (signed-in only), and the role-aware user avatar menu (see `Components/Layout/UserMenu`). Uses `useSession` for authentication state — stories use a mock wrapper to demonstrate logged-out, signed-in speaker, and organizer states. In production the bell is gated by `PublicHeaderBell` on `session?.speaker`; the mock shell below gates on the `isLoggedIn` prop, and the gate itself is covered by the `PublicHeaderBell` unit test.',
+          'Main site header (the REAL component): conference logo, date/location marquee, registration button, theme toggle, the notification bell (signed-in only, via `PublicHeaderBell`), and the user avatar menu. Session state is injected through `SessionProvider`; the bell’s tRPC calls are msw-mocked.',
       },
     },
   },
-} satisfies Meta
+} satisfies Meta<typeof Header>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-function MockHeader({
-  isLoggedIn = false,
-  isOrganizer = false,
-  isPast = false,
-  showRegistration = true,
-}: {
-  isLoggedIn?: boolean
-  isOrganizer?: boolean
-  isPast?: boolean
-  showRegistration?: boolean
-}) {
+function withProviders(session: Session | null, c: Conference) {
   return (
-    <header className="relative z-50 flex-none lg:pt-11">
-      <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
-        <div className="mt-10 lg:mt-0">
-          <ConferenceLogo
-            variant="horizontal"
-            className="h-14 w-auto text-brand-slate-gray dark:text-white"
-          />
+    <SessionProvider session={session} refetchOnWindowFocus={false}>
+      <TRPCProvider>
+        <div className="bg-white dark:bg-gray-950">
+          <Header c={c} />
         </div>
-        <div className="font-jetbrains order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-brand-cloud-blue/10 py-4 text-sm whitespace-nowrap sm:-mx-6 lg:order-0 lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
-          <div
-            className={`mx-auto flex items-center gap-4 px-4 ${isPast ? 'text-brand-cloud-gray' : 'text-brand-cloud-blue'}`}
-          >
-            <p>
-              <time dateTime="2026-09-15">September 15, 2026</time>
-            </p>
-            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-            <p>Bergen, Norway</p>
-            {isPast && (
-              <span className="ml-2 rounded-full bg-brand-cloud-gray/20 px-2 py-0.5 text-sm font-semibold text-brand-cloud-gray">
-                Past Event
-              </span>
-            )}
-            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-            <a
-              href="#"
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              2025 Conference
-            </a>
-          </div>
-        </div>
-        <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
-          {showRegistration && (
-            <a
-              href="#"
-              className="inline-flex items-center justify-center rounded-full bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue/90"
-            >
-              Get your ticket
-            </a>
-          )}
-        </div>
-        <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            {/* The REAL NotificationBell, shown only in signed-in states — its
-                unreadCount/list queries are stubbed by the msw handlers above.
-                Production gates this via PublicHeaderBell on `session?.speaker`;
-                here the mock shell gates on the `isLoggedIn` prop so the
-                signed-out variants render no bell (no layout shift). */}
-            {isLoggedIn && <NotificationBell />}
-            {isLoggedIn ? (
-              <UserMenu
-                name="Jane Doe"
-                picture="https://placehold.co/40x40/4f46e5/fff/png?text=JD"
-                speaker={{ ...mockSpeaker, isOrganizer }}
-                account={{
-                  provider: 'github',
-                  providerAccountId: '12345',
-                  type: 'oauth',
-                }}
-              />
-            ) : (
-              <a href="/cfp/list" className="flex items-center">
-                <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
-              </a>
-            )}
-          </div>
-        </div>
-      </Container>
-    </header>
+      </TRPCProvider>
+    </SessionProvider>
   )
 }
 
 export const Default: Story = {
-  render: () => <MockHeader />,
-  parameters: {
-    docs: {
-      description: {
-        story: 'Default header with registration button and no user session.',
-      },
-    },
-  },
+  args: { c: conference },
+  render: () => withProviders(null, conference),
 }
 
 export const LoggedIn: Story = {
-  render: () => <MockHeader isLoggedIn />,
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Signed-in speaker — the avatar opens the role-aware user menu (CfP links, current sign-in provider, sign out). No Admin section.',
-      },
-    },
-  },
+  args: { c: conference },
+  render: () => withProviders(makeSession(speaker), conference),
 }
 
 export const LoggedInOrganizer: Story = {
-  render: () => <MockHeader isLoggedIn isOrganizer />,
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Signed-in organizer — the avatar menu additionally exposes the gated Admin section (shown only when `speaker.isOrganizer`).',
-      },
-    },
-  },
+  args: { c: conference },
+  render: () => withProviders(makeSession(organizerSpeaker), conference),
 }
 
 export const PastEvent: Story = {
-  render: () => <MockHeader isPast showRegistration={false} />,
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Header for a past conference. Registration button is hidden and date/location text is muted with a "Past Event" badge.',
-      },
-    },
-  },
+  args: { c: pastConference },
+  render: () => withProviders(null, pastConference),
 }
 
 export const PastEventLoggedIn: Story = {
-  render: () => <MockHeader isPast isLoggedIn showRegistration={false} />,
+  args: { c: pastConference },
+  render: () => withProviders(makeSession(speaker), pastConference),
 }
