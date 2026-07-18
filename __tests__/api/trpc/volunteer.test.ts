@@ -69,12 +69,19 @@ const validVolunteerInput = {
 
 describe('volunteer router', () => {
   beforeEach(() => {
-    vi.restoreAllMocks()
+    // clearAllMocks (not restoreAllMocks): since Vitest 3, restoreAllMocks
+    // only touches vi.spyOn spies — it no longer clears vi.fn() factory
+    // mocks, so call history would accumulate across tests. clearAllMocks
+    // resets history while keeping the factory implementations.
+    vi.clearAllMocks()
     vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
       conference: mockConference as any,
       domain: 'localhost',
       error: null,
     })
+    // Re-pin the default: per-test mockResolvedValue/mockRejectedValue
+    // overrides survive clearAllMocks and would otherwise leak forward.
+    vi.mocked(getOrganizerSpeakerIds).mockResolvedValue([])
   })
 
   describe('create', () => {
