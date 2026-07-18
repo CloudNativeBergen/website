@@ -68,9 +68,31 @@ export function durationBetween(start: string, end: string): number {
  * bound? Nothing may extend past {@link SCHEDULE_END}. Shared by the pure
  * operations and the mobile placement UI so the end-of-day rule lives in one
  * place.
+ *
+ * DANGER: only pass an end time that is known to be on the SAME day as its
+ * start. `calculateEndTime` wraps mod 24h, so `withinScheduleEnd(calculateEnd
+ * Time('20:00', 240))` sees `'00:00'` (0 min) and wrongly passes — an item that
+ * runs to midnight then reads as ending before 08:00. Placement gates that take
+ * a start + duration MUST use {@link endsWithinScheduleDay} instead; reserve
+ * this for callers that already hold a valid same-day end time.
  */
 export function withinScheduleEnd(endTime: string): boolean {
   return toMinutes(endTime) <= toMinutes(SCHEDULE_END)
+}
+
+/**
+ * Does a placement STARTING at `startTime` for `durationMinutes` fit within the
+ * schedule's end-of-day bound {@link SCHEDULE_END}? Computes the end in raw
+ * minutes (no `toHHMM` round-trip) so a duration that would push the end past
+ * midnight can never wrap back under the bound — the wrap hole that
+ * `withinScheduleEnd(calculateEndTime(...))` has. This is the end-of-day gate
+ * for every start+duration placement (drops, swaps, added/resized services).
+ */
+export function endsWithinScheduleDay(
+  startTime: string,
+  durationMinutes: number,
+): boolean {
+  return toMinutes(startTime) + durationMinutes <= toMinutes(SCHEDULE_END)
 }
 
 /**

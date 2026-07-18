@@ -180,10 +180,17 @@ describe('segmentState', () => {
         endTime: '09:15',
       },
     }
+    // The engine now requires the drag source to still exist (F4): track 1 must
+    // actually hold the Break@09:00 the pick-up references.
+    const sourceTrack = track({
+      placeholder: 'Break',
+      startTime: '09:00',
+      endTime: '09:15',
+    })
     expect(
       segmentState(
         placing,
-        [track()],
+        [track(), sourceTrack],
         0,
         openSeg('10:00', '11:00', 60),
         NO_OTHERS,
@@ -192,7 +199,7 @@ describe('segmentState', () => {
     expect(
       segmentState(
         placing,
-        [track(talk('a', '10:00', '10:25'))],
+        [track(talk('a', '10:00', '10:25')), sourceTrack],
         0,
         talkSeg('a', '10:00', '10:25', 25, 0),
         NO_OTHERS,
