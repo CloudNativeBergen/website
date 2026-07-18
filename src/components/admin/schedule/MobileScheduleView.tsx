@@ -824,7 +824,7 @@ function segmentLabel(
     return `Assign to open slot ${seg.startTime} to ${seg.endTime}`
   }
   const title = seg.talk.talk?.title ?? seg.talk.placeholder ?? 'Untitled'
-  if (!placing) return `Move ${title}`
+  if (!placing) return `Options for ${title}`
   if (state === 'source') return `Cancel moving ${title}`
   return seg.kind === 'talk' ? `Swap with ${title}` : title
 }
@@ -1038,21 +1038,13 @@ function RailBody({ seg }: { seg: RailSegment }) {
 function PlacingBanner({
   placing,
   hasValidTarget,
-  onRemove,
-  onRename,
-  onDuration,
   onCancel,
 }: {
   placing: Placing
   hasValidTarget: boolean
-  onRemove: () => void
-  onRename: () => void
-  onDuration: () => void
   onCancel: () => void
 }) {
   const isProposal = placing.kind === 'proposal'
-  // A real service session has a placeholder; require it so a talk-less slot
-  // without one (defensively) never surfaces Rename/Duration.
   const isService =
     placing.kind === 'scheduled' &&
     !placing.talk.talk &&
@@ -1061,10 +1053,12 @@ function PlacingBanner({
     ? placing.proposal.title
     : (placing.talk.talk?.title ?? placing.talk.placeholder ?? 'Untitled')
 
+  // The banner is now purely the "choose where" step — move/swap/remove/edit
+  // are chosen up front in the card action sheet. So this only guides the drop.
   const message = isProposal
     ? `Placing “${title}” — tap an open slot`
     : isService
-      ? `Moving “${title}” — tap an open slot to move`
+      ? `Moving “${title}” — tap an open slot`
       : `Moving “${title}” — tap a slot to move, or a talk to swap`
 
   return (
@@ -1077,53 +1071,81 @@ function PlacingBanner({
         <p className="flex-1 text-sm font-medium text-blue-900 dark:text-blue-100">
           {message}
         </p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
+        >
+          <XMarkIcon className="h-4 w-4" />
+          Cancel
+        </button>
       </div>
       {!hasValidTarget && (
         <p className="mt-1 pl-7 text-xs text-blue-700 dark:text-blue-300">
           No room here — swipe to another track.
         </p>
       )}
-      <div className="mt-2 flex flex-wrap gap-2">
-        {placing.kind === 'scheduled' && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-800 dark:bg-gray-900 dark:text-red-300 dark:hover:bg-red-900/30"
-          >
-            <TrashIcon className="h-4 w-4" />
-            Remove
-          </button>
-        )}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Card action sheet (tap a scheduled talk/service)                           */
+/* -------------------------------------------------------------------------- */
+
+function CardActionSheet({
+  talk,
+  onMove,
+  onRename,
+  onDuration,
+  onRemove,
+  onClose,
+}: {
+  talk: TrackTalk
+  onMove: () => void
+  onRename: () => void
+  onDuration: () => void
+  onRemove: () => void
+  onClose: () => void
+}) {
+  const isService = !talk.talk
+  const title = talk.talk?.title ?? talk.placeholder ?? 'Untitled'
+  const action =
+    'inline-flex min-h-[44px] w-full items-center justify-start gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+
+  return (
+    <BottomSheet title={title} onClose={onClose}>
+      <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+        {talk.startTime}–{talk.endTime}
+        {isService ? ' · Service session' : ''}
+      </p>
+      <div className="space-y-2">
+        <button type="button" onClick={onMove} className={action}>
+          <ArrowsRightLeftIcon className="h-5 w-5" />
+          {isService ? 'Move to another slot' : 'Move or swap'}
+        </button>
         {isService && (
           <>
-            <button
-              type="button"
-              onClick={onRename}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
-            >
-              <PencilIcon className="h-4 w-4" />
+            <button type="button" onClick={onRename} className={action}>
+              <PencilIcon className="h-5 w-5" />
               Rename
             </button>
-            <button
-              type="button"
-              onClick={onDuration}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
-            >
-              <ArrowsUpDownIcon className="h-4 w-4" />
-              Duration
+            <button type="button" onClick={onDuration} className={action}>
+              <ArrowsUpDownIcon className="h-5 w-5" />
+              Change duration
             </button>
           </>
         )}
         <button
           type="button"
-          onClick={onCancel}
-          className="ml-auto inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
+          onClick={onRemove}
+          className="inline-flex min-h-[44px] w-full items-center justify-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-900 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
         >
-          <XMarkIcon className="h-4 w-4" />
-          Cancel
+          <TrashIcon className="h-5 w-5" />
+          Remove from schedule
         </button>
       </div>
-    </div>
+    </BottomSheet>
   )
 }
 
@@ -1134,6 +1156,12 @@ function PlacingBanner({
 type ActiveSheet =
   | { kind: 'addService'; trackIndex: number }
   | { kind: 'unassigned'; context: SlotContext | null }
+  | {
+      kind: 'card'
+      trackIndex: number
+      talkIndex: number
+      talk: TrackTalk
+    }
   | {
       kind: 'serviceEdit'
       trackIndex: number
@@ -1288,8 +1316,11 @@ export function MobileScheduleView({
             },
           })
         } else {
-          setPlacing({
-            kind: 'scheduled',
+          // Tap a talk/break → a self-describing action sheet (Move/Swap for
+          // talks, Rename/Duration for services, Remove). Surfaces edit/remove
+          // that were previously hidden behind the placing banner.
+          setSheet({
+            kind: 'card',
             trackIndex: panelTrackIndex,
             talkIndex: seg.talkIndex,
             talk: seg.talk,
@@ -1384,30 +1415,6 @@ export function MobileScheduleView({
         segmentState(effPlacing, tracks, safeTrackIndex, seg) === 'valid',
     )
   }, [effPlacing, tracks, safeTrackIndex])
-
-  const removePlacing = useCallback(() => {
-    if (effPlacing?.kind !== 'scheduled') return
-    dispatch({
-      type: 'removeTalk',
-      trackIndex: effPlacing.trackIndex,
-      talkIndex: effPlacing.talkIndex,
-    })
-    setPlacing(null)
-  }, [effPlacing, dispatch])
-
-  const openServiceEdit = useCallback(
-    (mode: 'rename' | 'duration') => {
-      if (effPlacing?.kind !== 'scheduled') return
-      setSheet({
-        kind: 'serviceEdit',
-        trackIndex: effPlacing.trackIndex,
-        talkIndex: effPlacing.talkIndex,
-        talk: effPlacing.talk,
-        mode,
-      })
-    },
-    [effPlacing],
-  )
 
   const tabId = (i: number) => `sched-tab-${i}`
   const panelId = (i: number) => `sched-panel-${i}`
@@ -1557,9 +1564,6 @@ export function MobileScheduleView({
         <PlacingBanner
           placing={effPlacing}
           hasValidTarget={hasValidTargetHere}
-          onRemove={removePlacing}
-          onRename={() => openServiceEdit('rename')}
-          onDuration={() => openServiceEdit('duration')}
           onCancel={() => setPlacing(null)}
         />
       )}
@@ -1633,6 +1637,36 @@ export function MobileScheduleView({
           dispatch={dispatch}
           onPick={(proposal) => {
             setPlacing({ kind: 'proposal', proposal })
+            closeSheet()
+          }}
+          onClose={closeSheet}
+        />
+      )}
+
+      {sheet?.kind === 'card' && (
+        <CardActionSheet
+          talk={sheet.talk}
+          onMove={() => {
+            setPlacing({
+              kind: 'scheduled',
+              trackIndex: sheet.trackIndex,
+              talkIndex: sheet.talkIndex,
+              talk: sheet.talk,
+            })
+            closeSheet()
+          }}
+          onRename={() =>
+            setSheet({ ...sheet, kind: 'serviceEdit', mode: 'rename' })
+          }
+          onDuration={() =>
+            setSheet({ ...sheet, kind: 'serviceEdit', mode: 'duration' })
+          }
+          onRemove={() => {
+            dispatch({
+              type: 'removeTalk',
+              trackIndex: sheet.trackIndex,
+              talkIndex: sheet.talkIndex,
+            })
             closeSheet()
           }}
           onClose={closeSheet}
