@@ -153,7 +153,7 @@ export const pushRouter = router({
   sendTest: protectedProcedure.mutation(async ({ ctx }) => {
     // No VAPID keys → push can never work; report it rather than pretending.
     if (!isPushConfigured()) {
-      return { sent: 0, gone: 0, configured: false }
+      return { sent: 0, gone: 0, total: 0, configured: false }
     }
 
     // Best-effort guard against accidental hammering (see claimTestCooldown).
@@ -176,7 +176,7 @@ export const pushRouter = router({
     }
 
     if (state.subscriptions.length === 0) {
-      return { sent: 0, gone: 0, configured: true }
+      return { sent: 0, gone: 0, total: 0, configured: true }
     }
 
     // A deliberate, explicit user action — so it BYPASSES per-category
@@ -235,6 +235,8 @@ export const pushRouter = router({
       if (r.value.gone) gone += 1
     }
 
-    return { sent, gone, configured: true }
+    // `total` lets the client distinguish "no devices subscribed" (total 0)
+    // from "devices exist but every send failed" (total > 0, sent 0).
+    return { sent, gone, total: state.subscriptions.length, configured: true }
   }),
 })

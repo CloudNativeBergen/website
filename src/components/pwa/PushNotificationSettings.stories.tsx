@@ -68,7 +68,7 @@ export const EnabledSendingTest: Story = {
 export const EnabledTestSent: Story = {
   args: {
     status: 'enabled',
-    sendTestResult: { sent: 2, gone: 0, configured: true },
+    sendTestResult: { sent: 2, gone: 0, total: 2, configured: true },
   },
 }
 
@@ -76,7 +76,7 @@ export const EnabledTestSent: Story = {
 export const EnabledTestNoDevices: Story = {
   args: {
     status: 'enabled',
-    sendTestResult: { sent: 0, gone: 0, configured: true },
+    sendTestResult: { sent: 0, gone: 0, total: 1, configured: true },
   },
 }
 
@@ -84,7 +84,7 @@ export const EnabledTestNoDevices: Story = {
 export const EnabledTestWithExpired: Story = {
   args: {
     status: 'enabled',
-    sendTestResult: { sent: 1, gone: 1, configured: true },
+    sendTestResult: { sent: 1, gone: 1, total: 2, configured: true },
   },
 }
 
