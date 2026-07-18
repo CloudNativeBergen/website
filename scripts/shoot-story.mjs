@@ -48,7 +48,13 @@ const pmBin = process.platform === 'win32' ? `${pm}.cmd` : pm
 let started
 if (!(await storybookUp())) {
   console.log(`[shoot] starting Storybook on :6006 (via ${pm}) …`)
-  started = spawn(pmBin, ['run', 'storybook', '--', '--ci', '--quiet'], {
+  // npm needs `--` to forward flags to the script; pnpm/yarn forward them as-is
+  // and pass a literal `--` through to the storybook CLI, which Storybook 10
+  // rejects ("too many arguments for 'dev'"). Only insert it for npm.
+  const runArgs = ['run', 'storybook']
+  if (pm === 'npm') runArgs.push('--')
+  runArgs.push('--ci', '--quiet')
+  started = spawn(pmBin, runArgs, {
     stdio: 'ignore',
     detached: true,
   })
