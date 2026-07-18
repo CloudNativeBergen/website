@@ -64,6 +64,16 @@ export function durationBetween(start: string, end: string): number {
 }
 
 /**
+ * Does a placement ending at `endTime` fit within the schedule's end-of-day
+ * bound? Nothing may extend past {@link SCHEDULE_END}. Shared by the pure
+ * operations and the mobile placement UI so the end-of-day rule lives in one
+ * place.
+ */
+export function withinScheduleEnd(endTime: string): boolean {
+  return toMinutes(endTime) <= toMinutes(SCHEDULE_END)
+}
+
+/**
  * Do intervals `[start1,end1)` and `[start2,end2)` overlap? Strict `<`, so items
  * that merely touch at a boundary (one ends exactly when the next begins) do NOT
  * overlap.

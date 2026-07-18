@@ -8,8 +8,7 @@ import { getProposalDurationMinutes } from '@/lib/schedule/types'
 import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
-import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
-import type { Speaker } from '@/lib/speaker/types'
+import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import {
   ClockIcon,
   UserIcon,
@@ -72,26 +71,12 @@ export function DraggableProposal({
       else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
       else size = 'long'
 
-      const populatedSpeakers = Array.isArray(proposal.speakers)
-        ? (proposal.speakers.filter(
-            (s) =>
-              s &&
-              typeof s === 'object' &&
-              'name' in s &&
-              typeof s.name === 'string',
-          ) as Speaker[])
-        : []
-      const speaker =
-        populatedSpeakers.length > 0
-          ? formatSpeakerNames(populatedSpeakers)
-          : null
-
       return {
         dragType: type,
         durationMinutes: duration,
         talkSize: size,
         dragId: id,
-        speakerInfo: speaker,
+        speakerInfo: populatedSpeakerNames(proposal),
       }
     }, [proposal, sourceTrackIndex, sourceTimeSlot])
 

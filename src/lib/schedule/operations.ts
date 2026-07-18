@@ -16,9 +16,8 @@ import {
   isTrackIntervalFree,
   matchTalk,
   matchService,
-  toMinutes,
 } from './types'
-import { SCHEDULE_END } from './time'
+import { withinScheduleEnd } from './time'
 
 /**
  * Pure schedule transforms, lifted verbatim (behaviour-preserving) from the old
@@ -38,16 +37,6 @@ export interface OperationResult {
 
 const sortByStart = (a: TrackTalk, b: TrackTalk): number =>
   a.startTime.localeCompare(b.startTime)
-
-/**
- * Does a placement ending at `endTime` fit within the schedule's end-of-day
- * bound? Nothing may extend past {@link SCHEDULE_END}; without this guard an item
- * dropped/created/resized near the bottom of the grid renders below it. Shared by
- * move/create/resize so the rule lives in one place.
- */
-function withinScheduleEnd(endTime: string): boolean {
-  return toMinutes(endTime) <= toMinutes(SCHEDULE_END)
-}
 
 /**
  * Swap the dragged talk with the talk occupying the target slot. Pure port of

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import { Dropdown } from '@/components/Form'
+import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
 
 interface ServiceSessionModalProps {
   isOpen: boolean
@@ -73,18 +74,7 @@ export const ServiceSessionModal = ({
             <Dropdown
               name="duration"
               label="Duration (minutes)"
-              options={
-                new Map([
-                  ['5', '5 minutes'],
-                  ['10', '10 minutes'],
-                  ['15', '15 minutes'],
-                  ['20', '20 minutes'],
-                  ['30', '30 minutes'],
-                  ['45', '45 minutes'],
-                  ['60', '60 minutes'],
-                  ['90', '90 minutes'],
-                ])
-              }
+              options={SERVICE_DURATION_OPTIONS}
               value={String(duration)}
               setValue={(val) => setDuration(Number(val))}
             />

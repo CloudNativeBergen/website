@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react'
 import { ConferenceSchedule } from '@/lib/conference/types'
+import { formatConferenceDate } from '@/lib/time'
 import {
   PlusIcon,
   BookmarkIcon,
@@ -54,9 +55,11 @@ const HeaderSectionComponent = ({
         <div className="flex rounded-lg border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800">
           {schedules.map((daySchedule, index) => {
             const isActive = index === currentDayIndex
-            const dayDate = new Date(daySchedule.date)
             const dayLabel = `Day ${index + 1}`
-            const dateLabel = dayDate.toLocaleDateString('en-US', {
+            // Format the YYYY-MM-DD date via the shared, timezone-safe helper —
+            // a raw `new Date(date)` here is parsed as UTC midnight and can show
+            // the previous day in western timezones (see AGENTS.md).
+            const dateLabel = formatConferenceDate(daySchedule.date, {
               month: 'short',
               day: 'numeric',
             })
