@@ -10,6 +10,8 @@ vi.mock('@/lib/conference/sanity', () => ({
 const postSlackMessageMock = vi.fn()
 vi.mock('@/lib/slack/client', () => ({
   postSlackMessage: (...args: unknown[]) => postSlackMessageMock(...args),
+  escapeMrkdwn: (text: string) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
 }))
 
 const createOrReplaceMock = vi.fn()

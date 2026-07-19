@@ -2,7 +2,11 @@ import { router, adminProcedure } from '../trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { buildConferenceStatusSummary } from '@/lib/status/summary'
 import { buildSystemChecks } from '@/lib/system-status/checks'
-import { postSlackMessage, type SlackMessage } from '@/lib/slack/client'
+import {
+  postSlackMessage,
+  escapeMrkdwn,
+  type SlackMessage,
+} from '@/lib/slack/client'
 import { clientWrite } from '@/lib/sanity/client'
 import { TRPCError } from '@trpc/server'
 
@@ -92,7 +96,7 @@ export const statusRouter = router({
             'No weekly-update Slack channel is configured for this conference.',
         }
       }
-      const body = `Test message from the admin status page (sent by ${ctx.speaker.name})`
+      const body = `Test message from the admin status page (sent by ${escapeMrkdwn(ctx.speaker.name)})`
       const message: SlackMessage = {
         text: body,
         blocks: [{ type: 'section', text: { type: 'mrkdwn', text: body } }],
@@ -124,7 +128,7 @@ export const statusRouter = router({
           from,
           to,
           subject: 'Admin status page — test email',
-          html: `<p>This is a test email triggered from the admin status page by ${ctx.speaker.name}.</p>`,
+          text: `This is a test email triggered from the admin status page by ${ctx.speaker.name}.`,
         })
         if (error) {
           return { ok: false as const, error: error.message }
