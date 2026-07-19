@@ -677,20 +677,20 @@ export function ImageUploadZone({
                   className="h-32 w-full rounded-lg object-cover"
                 />
                 {file.status === 'error' && (
-                  <div className="bg-opacity-75 absolute inset-0 flex items-center justify-center rounded-lg bg-red-500">
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-red-500/75">
                     <p className="text-sm text-white">Failed</p>
                   </div>
                 )}
                 {file.status === 'completed' && (
-                  <div className="bg-opacity-75 absolute inset-0 flex items-center justify-center rounded-lg bg-green-700 dark:bg-green-800">
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-green-700/75 dark:bg-green-800/75">
                     <p className="text-sm text-white">Uploaded</p>
                   </div>
                 )}
                 {file.status === 'uploading' && (
-                  <div className="bg-opacity-75 absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-blue-600 dark:bg-blue-800">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-blue-600/75 dark:bg-blue-800/75">
                     <p className="text-sm text-white">Uploading...</p>
                     <p className="text-xs text-white">{file.progress}%</p>
-                    <div className="bg-opacity-30 mt-2 h-1 w-3/4 rounded-full bg-white">
+                    <div className="mt-2 h-1 w-3/4 rounded-full bg-white/30">
                       <div
                         className="h-full rounded-full bg-white transition-all duration-300"
                         style={{ width: `${file.progress}%` }}

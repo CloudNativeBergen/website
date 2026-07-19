@@ -80,7 +80,7 @@ export function ActionMenu({
 
   const getDropdownClasses = () => {
     const baseClasses =
-      'absolute z-50 w-48 ring-opacity-5 rounded-lg bg-white shadow-lg ring-1 ring-black focus:outline-none dark:bg-gray-800 dark:ring-gray-700'
+      'absolute z-50 w-48 rounded-lg bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-gray-700/5'
 
     const classes = shouldDropUp
       ? `${baseClasses} bottom-full mb-2 ${

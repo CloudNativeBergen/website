@@ -175,7 +175,7 @@ export function ImageGrid({
                   e.stopPropagation()
                   handleSelectImage(image._id)
                 }}
-                className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm dark:bg-gray-900"
+                className="rounded bg-white/80 p-1 shadow-sm hover:bg-white dark:bg-gray-900/80 dark:hover:bg-gray-900"
               >
                 <div
                   className={`h-4 w-4 rounded border ${

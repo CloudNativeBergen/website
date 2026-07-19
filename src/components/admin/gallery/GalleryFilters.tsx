@@ -282,7 +282,7 @@ export function GalleryFilters({
                 <ChevronUpDownIcon className="h-4 w-4 text-gray-400" />
               </Combobox.Button>
               {searchResults && searchResults.length > 0 && (
-                <Combobox.Options className="ring-opacity-5 absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-black focus:outline-none dark:bg-gray-800">
+                <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800">
                   {searchResults.map((speaker) => (
                     <Combobox.Option
                       key={speaker._id}

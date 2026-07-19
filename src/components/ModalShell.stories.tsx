@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
+import { EnvelopeIcon } from '@heroicons/react/24/outline'
+import { fn, userEvent } from 'storybook/test'
 import { ModalShell } from './ModalShell'
-import { fn } from 'storybook/test'
 
 const meta: Meta<typeof ModalShell> = {
   title: 'Components/Feedback/ModalShell',
@@ -11,10 +14,24 @@ const meta: Meta<typeof ModalShell> = {
     docs: {
       description: {
         component:
-          'A shared modal wrapper providing consistent HeadlessUI Dialog + Transition boilerplate. Supply `isOpen`, `onClose`, `size`, and render children for your modal content.',
+          'The shared modal primitive. Wraps HeadlessUI Dialog + Transition and provides the house backdrop (`bg-black/50`), a mobile bottom-sheet presentation (`sm+` stays a centered card), an opt-in standard header (`title`/`subtitle`/`icon`), and an opt-in dirty-close guard. Supply `isOpen`, `onClose`, `size`, and render children.',
       },
     },
   },
+  decorators: [
+    // ModalShell reads `next-themes`; HeadlessUI portals the dialog to
+    // document.body, so the toolbar's decorator wrapper never reaches it.
+    // React context DOES cross portals, so forcing the theme here (synced to
+    // the Storybook theme global) is what actually renders the modal dark.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   args: {
     isOpen: true,
     onClose: fn(),
@@ -141,5 +158,129 @@ export const Unpadded: Story = {
         </div>
       </div>
     ),
+  },
+}
+
+/**
+ * The default `presentation="sheet"` renders a bottom sheet below the `sm`
+ * breakpoint. Shoot this at 393px to see the sheet; at ≥640px it is the
+ * centered card. The tall body demonstrates the scrollable, safe-area-padded
+ * sheet body.
+ */
+export const SheetOnMobile: Story = {
+  args: {
+    size: 'lg',
+    children: (
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Bottom Sheet
+        </h3>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          On phones this pins to the bottom with a rounded top edge and scrolls
+          internally. On desktop it is the usual centered card.
+        </p>
+        <div className="mt-4 space-y-3">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-lg bg-gray-100 p-4 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            >
+              Row {i + 1}
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+}
+
+/**
+ * `presentation="centered"` forces the centered card at every size — the
+ * opt-out for edge cases that should never become a bottom sheet.
+ */
+export const CenteredAtAllSizes: Story = {
+  args: {
+    size: 'md',
+    presentation: 'centered',
+    children: (
+      <div className="text-center">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Always Centered
+        </h3>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Stays a centered card even on a phone.
+        </p>
+      </div>
+    ),
+  },
+}
+
+/**
+ * Opt-in standard header via `title`/`subtitle`/`icon`: renders the house
+ * header (icon slot, `DialogTitle` wired to `aria-labelledby`, and a single
+ * 44×44 close button).
+ */
+export const WithStandardHeader: Story = {
+  args: {
+    size: 'lg',
+    padded: false,
+    title: 'Compose message',
+    subtitle: 'Proposal thread: Scaling Kubernetes at the edge',
+    icon: <EnvelopeIcon className="h-5 w-5" aria-hidden="true" />,
+    children: (
+      <div className="p-6">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          The header above is provided by ModalShell. Body content renders below
+          it.
+        </p>
+      </div>
+    ),
+  },
+}
+
+function DirtyGuardDemo() {
+  const [open, setOpen] = useState(true)
+  return (
+    <ModalShell
+      isOpen={open}
+      onClose={() => setOpen(false)}
+      size="md"
+      title="Edit profile"
+      confirmOnDirtyClose
+      isDirty
+    >
+      <div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          There are unsaved changes. Press Escape or click the backdrop — the
+          modal asks you to confirm before discarding.
+        </p>
+        <input
+          type="text"
+          defaultValue="Unsaved value"
+          className="mt-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+        />
+      </div>
+    </ModalShell>
+  )
+}
+
+/**
+ * With `confirmOnDirtyClose` + `isDirty`, a backdrop-click / Escape / header
+ * close first reveals an in-dialog "Discard unsaved changes?" confirm. Open the
+ * story and press Escape to see it.
+ */
+export const DirtyCloseGuard: Story = {
+  render: () => <DirtyGuardDemo />,
+}
+
+/**
+ * The same guard with the confirm already revealed (a play function presses
+ * Escape on mount) so the in-dialog "Discard unsaved changes?" state is
+ * captured in screenshots.
+ */
+export const DirtyCloseConfirmShown: Story = {
+  render: () => <DirtyGuardDemo />,
+  play: async () => {
+    await userEvent.keyboard('{Escape}')
   },
 }
