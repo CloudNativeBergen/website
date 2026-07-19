@@ -12,6 +12,8 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   CalendarDaysIcon,
+  ChatBubbleLeftRightIcon,
+  DocumentPlusIcon,
   DocumentTextIcon,
   HomeIcon,
   PencilSquareIcon,
@@ -34,10 +36,36 @@ interface MenuLink {
   external?: boolean
 }
 
-/** Speaker-facing links available to every signed-in speaker. */
+/**
+ * The audience-aware Messages entry. Exactly ONE renders for any user: an
+ * organizer sees it in the Admin section (linking to the admin inbox), everyone
+ * else sees it inline with the speaker links (the speaker inbox). The audience
+ * rule everywhere is "isOrganizer wins", so it is omitted from the speaker links
+ * for organizers and added to the Admin links instead (see `speakerLinksFor`).
+ */
+const SPEAKER_MESSAGES_LINK: MenuLink = {
+  href: '/cfp/messages',
+  label: 'Messages',
+  icon: ChatBubbleLeftRightIcon,
+}
+const ADMIN_MESSAGES_LINK: MenuLink = {
+  href: '/admin/messages',
+  label: 'Messages',
+  icon: ChatBubbleLeftRightIcon,
+}
+
+/**
+ * Speaker-facing links available to every signed-in speaker. `/cfp/proposal` is
+ * the NEW-proposal form (the list lives at `/cfp/list` = "My Dashboard"), so it
+ * is labelled "Submit New Proposal" to avoid confusion with the dashboard.
+ */
 const SPEAKER_LINKS: MenuLink[] = [
   { href: '/cfp/list', label: 'My Dashboard', icon: Squares2X2Icon },
-  { href: '/cfp/proposal', label: 'My Proposals', icon: DocumentTextIcon },
+  {
+    href: '/cfp/proposal',
+    label: 'Submit New Proposal',
+    icon: DocumentPlusIcon,
+  },
   { href: '/cfp/profile', label: 'Edit Profile', icon: PencilSquareIcon },
   { href: '/cfp/expense', label: 'Travel & Expenses', icon: BanknotesIcon },
 ]
@@ -49,11 +77,22 @@ const SPEAKER_LINKS: MenuLink[] = [
 const ADMIN_LINKS: MenuLink[] = [
   { href: '/admin', label: 'Admin Dashboard', icon: HomeIcon },
   { href: '/admin/proposals', label: 'Proposals', icon: DocumentTextIcon },
+  ADMIN_MESSAGES_LINK,
   { href: '/admin/speakers', label: 'Speakers', icon: UsersIcon },
   { href: '/admin/sponsors', label: 'Sponsors', icon: BuildingOfficeIcon },
   { href: '/admin/schedule', label: 'Schedule', icon: CalendarDaysIcon },
   { href: '/admin/tickets', label: 'Tickets', icon: TicketIcon },
 ]
+
+/**
+ * The speaker links to render, given the viewer's audience. A non-organizer
+ * gets the Messages entry inline; an organizer gets it in the Admin section
+ * instead, so Messages never appears twice.
+ */
+function speakerLinksFor(isOrganizer: boolean): MenuLink[] {
+  if (isOrganizer) return SPEAKER_LINKS
+  return [SPEAKER_LINKS[0], SPEAKER_MESSAGES_LINK, ...SPEAKER_LINKS.slice(1)]
+}
 
 /** Maps a NextAuth provider id to its display name and brand icon. */
 const PROVIDER_META: Record<string, { name: string; Icon: IconType }> = {
@@ -139,7 +178,7 @@ export function UserMenu({ name, picture, speaker, account }: UserMenuProps) {
           </div>
         )}
 
-        {SPEAKER_LINKS.map((link) => (
+        {speakerLinksFor(isOrganizer).map((link) => (
           <LinkItem key={link.href} {...link} />
         ))}
         {slug && (

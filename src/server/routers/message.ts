@@ -9,6 +9,7 @@ import {
   ListMessagesSchema,
   SendMessageSchema,
   SetPreferenceSchema,
+  parseMessageCursor,
 } from '@/server/schemas/message'
 import {
   listConversationsForSpeaker,
@@ -101,11 +102,15 @@ export const messageRouter = router({
     .input(ListConversationsSchema)
     .query(async ({ ctx, input }) => {
       const conferenceId = await resolveConferenceId()
+      // The cursor is EITHER a plain ISO datetime (legacy) or `<iso>~<_id>`
+      // (compound keyset); split it so exact-timestamp ties page correctly.
+      const { before, beforeId } = parseMessageCursor(input.cursor)
       return listConversationsForSpeaker({
         speakerId: ctx.speaker._id,
         isOrganizer: ctx.speaker.isOrganizer === true,
         conferenceId,
-        before: input.cursor,
+        before,
+        beforeId,
       })
     }),
 
@@ -142,9 +147,13 @@ export const messageRouter = router({
           message: 'Conversation not found',
         })
       }
+      // Plain ISO (legacy) or `<iso>~<_id>` (compound keyset) — split so
+      // messages sharing an exact `createdAt` page without skips/dupes.
+      const { before, beforeId } = parseMessageCursor(input.cursor)
       return listMessages({
         conversationId: conversation._id,
-        before: input.cursor,
+        before,
+        beforeId,
       })
     }),
 

@@ -43,6 +43,7 @@ function recipients(n: number): MessageEmailRecipient[] {
     email: `r${i}@x.no`,
     name: `R${i}`,
     replyUrl: 'https://cndn.no/cfp/proposal/p1#messages',
+    isOrganizer: false,
   }))
 }
 

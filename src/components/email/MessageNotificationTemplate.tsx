@@ -13,6 +13,12 @@ export interface MessageNotificationTemplateProps {
   subject: string
   excerpt: string
   replyUrl: string
+  /**
+   * Whether the recipient is an organizer. Organizers get organizer-phrased copy
+   * (replying reaches the speaker + fellow organizers) and a `/admin` replyUrl;
+   * speakers get speaker-phrased copy (replying reaches the organizers).
+   */
+  isOrganizer?: boolean
   /** Absolute link to the recipient's notification preferences (cfp profile). */
   preferencesUrl?: string
   eventName: string
@@ -32,6 +38,7 @@ export function MessageNotificationTemplate({
   subject,
   excerpt,
   replyUrl,
+  isOrganizer = false,
   preferencesUrl,
   eventName,
   eventLocation,
@@ -68,8 +75,10 @@ export function MessageNotificationTemplate({
         </div>
 
         <EmailText size="14px" color="#64748B">
-          Prefer email? Replying to this email reaches the organizers by email,
-          while replying in the app keeps the whole conversation in one place.
+          Prefer email?{' '}
+          {isOrganizer
+            ? 'Replying to this email reaches the speaker and fellow organizers by email, while replying in the app keeps the whole conversation in one place.'
+            : 'Replying to this email reaches the organizers by email, while replying in the app keeps the whole conversation in one place.'}
         </EmailText>
 
         <EmailText size="14px" color="#64748B">

@@ -45,10 +45,13 @@ export function MessagesInbox({
     {},
     {
       staleTime: 10_000,
-      getNextPageParam: (lastPage) =>
-        lastPage.length === PAGE_SIZE
-          ? lastPage[lastPage.length - 1]?.lastMessageAt
-          : undefined,
+      getNextPageParam: (lastPage) => {
+        if (lastPage.length !== PAGE_SIZE) return undefined
+        const last = lastPage[lastPage.length - 1]
+        // Compound keyset cursor `<lastMessageAt>~<_id>` so conversations
+        // sharing an exact `lastMessageAt` page without skips (server splits it).
+        return last ? `${last.lastMessageAt}~${last._id}` : undefined
+      },
       initialCursor: undefined,
     },
   )

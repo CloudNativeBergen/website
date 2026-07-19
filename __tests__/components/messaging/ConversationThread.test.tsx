@@ -157,6 +157,31 @@ describe('ConversationThreadView', () => {
       />,
     )
     expect(live).toHaveTextContent('New message from Program Committee')
+
+    // Back-to-back message from the SAME author yields an identical phrase; the
+    // live region must still re-announce it (a plain setState would no-op). The
+    // announced text stays the same but the raw content differs (nonce).
+    const afterFirst = live?.textContent
+    const withSecond: DisplayMessage[] = [
+      ...withNew,
+      {
+        id: 'm4',
+        authorName: 'Program Committee',
+        isOrganizer: true,
+        isOwn: false,
+        body: 'And another…',
+        createdAt: new Date().toISOString(),
+      },
+    ]
+    rerender(
+      <ConversationThreadView
+        messages={withSecond}
+        emptyText="Start the conversation with the organizers."
+        onSend={vi.fn()}
+      />,
+    )
+    expect(live).toHaveTextContent('New message from Program Committee')
+    expect(live?.textContent).not.toBe(afterFirst)
   })
 
   it('disables Send when the composer is empty or whitespace', () => {

@@ -8,8 +8,44 @@ import { z } from 'zod'
  * client input (multi-tenant isolation rule).
  */
 
-/** Cursor pages use the `lastMessageAt` / `createdAt` of the last item seen. */
-const cursor = z.string().datetime().optional()
+/**
+ * Keyset cursor. Historically a bare ISO datetime (the `lastMessageAt` /
+ * `createdAt` of the last item seen). To totally-order rows that share an exact
+ * timestamp it now ALSO accepts the compound form `<iso>~<_id>` — the datetime
+ * plus the last row's document id. Both forms are accepted so an old inflight
+ * client sending a plain datetime keeps working. Anything else is rejected.
+ *
+ * A Sanity `_id` never contains `~`, and an ISO datetime never does either, so
+ * the FIRST `~` unambiguously splits the two parts.
+ */
+const CURSOR_MAX = 260
+
+export function parseMessageCursor(cursor: string | undefined): {
+  before?: string
+  beforeId?: string
+} {
+  if (!cursor) return {}
+  const idx = cursor.indexOf('~')
+  if (idx === -1) return { before: cursor }
+  return { before: cursor.slice(0, idx), beforeId: cursor.slice(idx + 1) }
+}
+
+const isoDateTime = z.string().datetime()
+
+const cursor = z
+  .string()
+  .max(CURSOR_MAX)
+  .refine((v) => {
+    const idx = v.indexOf('~')
+    const iso = idx === -1 ? v : v.slice(0, idx)
+    const id = idx === -1 ? undefined : v.slice(idx + 1)
+    // The datetime part must always be a valid ISO datetime; when a compound
+    // cursor carries an id, that id must be non-empty.
+    if (!isoDateTime.safeParse(iso).success) return false
+    if (id !== undefined && id.length === 0) return false
+    return true
+  }, 'Invalid cursor')
+  .optional()
 
 export const ListConversationsSchema = z.object({
   cursor,

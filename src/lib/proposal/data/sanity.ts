@@ -367,9 +367,14 @@ export async function deleteProposal(
     // them up front instead of surfacing a raw 409 to the user.
     const referencingDocs = await clientRead.fetch<
       Array<{ _id: string; _type: string }>
-    >(groq`*[references($proposalId) && _id != $proposalId]{ _id, _type }`, {
-      proposalId,
-    })
+    >(
+      groq`*[references($proposalId) && _id != $proposalId]{ _id, _type }`,
+      { proposalId },
+      // Mutation-path read: bypass the Next data cache so a stale entry can't
+      // hide a document that references the proposal (mirrors every other
+      // read in this file, which all pass `cache: 'no-store'`).
+      { cache: 'no-store' },
+    )
 
     const docs = referencingDocs ?? []
 
@@ -415,6 +420,9 @@ export async function deleteProposal(
       (await clientRead.fetch<string[]>(
         groq`*[_type == "conversation" && proposal._ref == $proposalId]._id`,
         { proposalId },
+        // A just-created conversation must not be missed by a stale cache read,
+        // or its messages/notifications would orphan on delete.
+        { cache: 'no-store' },
       )) ?? []
 
     let messageIds: string[] = []
@@ -423,6 +431,8 @@ export async function deleteProposal(
         (await clientRead.fetch<string[]>(
           groq`*[_type == "message" && conversation._ref in $conversationIds]._id`,
           { conversationIds },
+          // A just-sent message must not be missed by a stale cache read.
+          { cache: 'no-store' },
         )) ?? []
     }
 
@@ -439,6 +449,9 @@ export async function deleteProposal(
       (await clientRead.fetch<string[]>(
         groq`*[_type == "notification" && notificationType == "message_received" && link in $messageLinks]._id`,
         { messageLinks },
+        // A just-fanned-out message notification must not be missed by a stale
+        // cache read.
+        { cache: 'no-store' },
       )) ?? []
 
     // Deletion ORDER matters for strong references: a message strongly refs its
