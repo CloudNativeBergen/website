@@ -400,8 +400,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           organizers. <strong>Purpose:</strong> Coordinating
                           proposals and conference logistics.{' '}
                           <strong>Legal Basis:</strong> Legitimate interest in
-                          conference coordination. Messages are retained until
-                          deleted.
+                          conference coordination. Messages and conversations
+                          are retained for 24 months after the conference ends,
+                          then permanently deleted.
                         </p>
                       </div>
                     </div>
