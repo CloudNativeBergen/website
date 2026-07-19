@@ -379,8 +379,8 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
   })
 
   it('creates an organizer general thread when the recipient HAS standing (A5)', async () => {
-    // A proposal id comes back → the recipient belongs to this conference.
-    standingFetch.mockResolvedValue('talk-1')
+    // The speaker id comes back → proposal in this conference OR organizer.
+    standingFetch.mockResolvedValue('sp-target')
     getById.mockResolvedValue(organizerGeneralConv)
     const caller = createAdminCaller()
 
@@ -389,6 +389,13 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
       recipientSpeakerId: 'sp-target',
       body: 'hi',
     })
+
+    // Standing MUST accept organizers without a talk this edition — the picker
+    // (speaker.admin.search) offers them, and a narrower server check regressed
+    // into "Speaker not found" for autocompleted organizers in prod.
+    const standingQuery = standingFetch.mock.calls[0][0] as string
+    expect(standingQuery).toContain('isOrganizer == true')
+    expect(standingQuery).toContain('conference._ref == $conferenceId')
 
     expect(standingFetch).toHaveBeenCalledWith(
       expect.any(String),

@@ -72,18 +72,20 @@ function claimSendSlot(speakerId: string): boolean {
 }
 
 /**
- * Does `speakerId` have standing in `conferenceId` — i.e. at least one proposal
- * (talk) in that conference? An organizer-initiated general thread must target a
- * speaker who belongs to the CURRENT conference, not merely one who exists in
- * some conference (batch A / A5). Cheapest correct check: a single existence
- * probe rather than loading proposals.
+ * Does `speakerId` have standing in `conferenceId` — a proposal (talk) in that
+ * conference OR the organizer flag? This MUST match the population the admin
+ * speaker picker offers (`speaker.admin.search` = confirmed/accepted speakers ∪
+ * organizers): a stricter server check rejects recipients the UI legitimately
+ * suggests — the prod bug where an autocompleted organizer (no talk this
+ * edition) failed with "Speaker not found". Cross-conference targeting stays
+ * blocked: a talk-less non-organizer from another edition has no standing here.
  */
 async function speakerHasStandingInConference(
   speakerId: string,
   conferenceId: string,
 ): Promise<boolean> {
   const id = await clientReadUncached.fetch<string | null>(
-    `*[_type == "talk" && conference._ref == $conferenceId && $speakerId in speakers[]._ref][0]._id`,
+    `*[_type == "speaker" && _id == $speakerId && (isOrganizer == true || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
     { speakerId, conferenceId },
     { cache: 'no-store' },
   )
