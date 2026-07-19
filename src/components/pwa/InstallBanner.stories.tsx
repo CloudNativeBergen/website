@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Presentational, dismissible install affordance for the PWA. The `chromium` variant surfaces an actionable Install button driven by the `beforeinstallprompt` event; the `ios` variant shows an Add-to-Home-Screen hint since iOS Safari has no install prompt API. Event handling lives in the `InstallPrompt` container; this component is pure so it renders standalone.',
+          'Presentational, dismissible install affordance for the PWA. The `chromium` variant surfaces an actionable Install button driven by the `beforeinstallprompt` event; the `ios` variant shows an Add-to-Home-Screen hint since iOS Safari has no install prompt API. Event handling lives in the `InstallPrompt` container; this component is pure so it renders standalone. It is a polite `role="status"` live region (NOT a dialog — nothing traps focus), sits below open dialogs (`z-40`), pads for the safe-area inset, and gives its actions 44px touch targets.',
       },
     },
   },

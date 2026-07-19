@@ -134,6 +134,12 @@ export function DashboardLayout({
     if (mode === 'admin' && onSearch) {
       const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          // Don't open the search modal on top of another open dialog — a
+          // second focus trap stacked over the first traps the user with no way
+          // out. A live `[role="dialog"]` query catches both Headless UI and
+          // useModalA11y dialogs (all render that role), including the search
+          // modal itself once open. Mirrors the AdminActionBar fix in #538.
+          if (document.querySelector('[role="dialog"]')) return
           e.preventDefault()
           onSearch()
         }

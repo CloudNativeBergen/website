@@ -67,7 +67,7 @@ export function MobileFilterSheet({
           leaveFrom="translate-y-0"
           leaveTo="translate-y-full"
         >
-          <DialogPanel className="fixed inset-x-0 bottom-0 flex max-h-[90vh] flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900">
+          <DialogPanel className="fixed inset-x-0 bottom-0 flex max-h-[90dvh] flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-gray-900">
             {/* Handle bar */}
             <div className="shrink-0 bg-white pt-3 pb-2 dark:bg-gray-900">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600" />

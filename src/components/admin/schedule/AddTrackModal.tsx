@@ -99,19 +99,21 @@ export const AddTrackModal = ({
             />
           </div>
 
+          {/* Cancel LEFT, primary RIGHT — mirrors the SendMessageModal footer
+              (the house order); a primary-on-the-left footer read as a bug. */}
           <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-700 dark:hover:bg-blue-600"
-            >
-              Add Track
-            </button>
             <button
               type="button"
               onClick={onCancel}
               className={CANCEL_BUTTON_STYLE}
             >
               Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-700 dark:hover:bg-blue-600"
+            >
+              Add Track
             </button>
           </div>
         </form>

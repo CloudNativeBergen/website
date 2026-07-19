@@ -96,7 +96,7 @@ describe('ServiceWorkerRegistrar', () => {
     worker.setState('installed')
 
     expect(
-      await screen.findByRole('dialog', { name: 'Update available' }),
+      await screen.findByRole('status', { name: 'Update available' }),
     ).toBeInTheDocument()
   })
 
@@ -111,7 +111,7 @@ describe('ServiceWorkerRegistrar', () => {
     worker.setState('installed')
 
     expect(
-      screen.queryByRole('dialog', { name: 'Update available' }),
+      screen.queryByRole('status', { name: 'Update available' }),
     ).not.toBeInTheDocument()
   })
 
@@ -124,7 +124,7 @@ describe('ServiceWorkerRegistrar', () => {
     registration.dispatch('updatefound')
     worker.setState('installed')
 
-    await screen.findByRole('dialog', { name: 'Update available' })
+    await screen.findByRole('status', { name: 'Update available' })
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
 
     expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
@@ -141,7 +141,7 @@ describe('ServiceWorkerRegistrar', () => {
     registration.installing = worker
     registration.dispatch('updatefound')
     worker.setState('installed')
-    await screen.findByRole('dialog', { name: 'Update available' })
+    await screen.findByRole('status', { name: 'Update available' })
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
 
     container.dispatch('controllerchange')
@@ -171,14 +171,14 @@ describe('ServiceWorkerRegistrar', () => {
     registration.dispatch('updatefound')
     worker.setState('installed')
 
-    await screen.findByRole('dialog', { name: 'Update available' })
+    await screen.findByRole('status', { name: 'Update available' })
     fireEvent.click(
       screen.getByRole('button', { name: 'Dismiss update prompt' }),
     )
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Update available' }),
+        screen.queryByRole('status', { name: 'Update available' }),
       ).not.toBeInTheDocument(),
     )
     expect(reloadMock).not.toHaveBeenCalled()

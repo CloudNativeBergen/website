@@ -31,9 +31,14 @@ export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
 
   return (
     <div
-      role="dialog"
+      // A banner is NOT a dialog: nothing traps or returns focus, so
+      // `role="dialog"` misleads screen readers into announcing a modal.
+      // `role="status"` (implicit polite live region) announces it without
+      // stealing focus. It also sits BELOW open dialogs (shell family is z-50).
+      role="status"
+      aria-live="polite"
       aria-label="Update available"
-      className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4"
+      className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
     >
       <div
         className={`flex w-full max-w-md items-center gap-3 rounded-2xl bg-white p-3 shadow-lg ring-1 ring-gray-900/10 transition duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none dark:bg-gray-800 dark:ring-white/10 ${
@@ -51,7 +56,7 @@ export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
         <button
           type="button"
           onClick={onReload}
-          className="flex-none rounded-lg bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue"
+          className="flex min-h-11 flex-none items-center justify-center rounded-lg bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue"
         >
           Reload
         </button>
@@ -60,7 +65,7 @@ export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss update prompt"
-          className="flex-none rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          className="flex min-h-11 min-w-11 flex-none items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-700 dark:hover:text-gray-200"
         >
           <XMarkIcon className="size-5" />
         </button>
