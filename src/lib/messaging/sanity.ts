@@ -52,6 +52,7 @@ const CONVERSATION_PROJECTION = `{
   "proposalTitle": proposal->title,
   "proposalSpeakerIds": coalesce(proposal->speakers[]._ref, []),
   "createdById": createdBy._ref,
+  "subjectSpeakerId": subjectSpeaker._ref,
   subject,
   createdAt,
   lastMessageAt
@@ -64,13 +65,18 @@ const CONVERSATION_PROJECTION = `{
 /**
  * Every participant of a conversation:
  * - proposal thread → the proposal's speakers ∪ organizers;
- * - general thread  → the creator ∪ organizers.
- * De-duplicated (a speaker who is also an organizer appears once).
+ * - general thread  → the creator ∪ subjectSpeaker ∪ organizers.
+ * De-duplicated (a speaker who is also an organizer appears once). A general
+ * thread's `subjectSpeaker` is the speaker an organizer targeted; it is absent
+ * on speaker-created threads (where the creator IS the subject).
  */
 export function resolveParticipantIds(
   conversation: Pick<
     ConversationWithContext,
-    'conversationType' | 'proposalSpeakerIds' | 'createdById'
+    | 'conversationType'
+    | 'proposalSpeakerIds'
+    | 'createdById'
+    | 'subjectSpeakerId'
   >,
   organizerIds: string[],
 ): string[] {
@@ -79,6 +85,7 @@ export function resolveParticipantIds(
     for (const id of conversation.proposalSpeakerIds) ids.add(id)
   } else {
     ids.add(conversation.createdById)
+    if (conversation.subjectSpeakerId) ids.add(conversation.subjectSpeakerId)
   }
   return Array.from(ids)
 }
@@ -91,7 +98,10 @@ export function resolveParticipantIds(
 export function resolveRecipients(
   conversation: Pick<
     ConversationWithContext,
-    'conversationType' | 'proposalSpeakerIds' | 'createdById'
+    | 'conversationType'
+    | 'proposalSpeakerIds'
+    | 'createdById'
+    | 'subjectSpeakerId'
   >,
   actorId: string,
   organizerIds: string[],
@@ -105,12 +115,16 @@ export function resolveRecipients(
  * Whether `speaker` may read/write `conversation`:
  * - any organizer; OR
  * - a proposal thread where the speaker is on the proposal; OR
- * - a general thread the speaker created.
+ * - a general thread the speaker created OR is the subject speaker of (an
+ *   organizer-initiated general thread targets a `subjectSpeaker`).
  */
 export function canAccessConversation(
   conversation: Pick<
     ConversationWithContext,
-    'conversationType' | 'proposalSpeakerIds' | 'createdById'
+    | 'conversationType'
+    | 'proposalSpeakerIds'
+    | 'createdById'
+    | 'subjectSpeakerId'
   >,
   speaker: AccessSpeaker,
 ): boolean {
@@ -118,7 +132,10 @@ export function canAccessConversation(
   if (conversation.conversationType === 'proposal') {
     return conversation.proposalSpeakerIds.includes(speaker._id)
   }
-  return conversation.createdById === speaker._id
+  return (
+    conversation.createdById === speaker._id ||
+    conversation.subjectSpeakerId === speaker._id
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +217,14 @@ export async function getConversationParticipants(
  * `lastMessageAt` of the last item on the previous page).
  *
  * - organizers see EVERY conversation for the conference;
- * - a speaker sees only conversations they created or are a proposal-speaker on.
+ * - a speaker sees only conversations they created, are a proposal-speaker on,
+ *   or are the subject speaker of (an organizer-initiated general thread).
+ *
+ * Each row carries the caller's `unreadCount`: their unread `message_received`
+ * notifications for that conversation. Rather than N per-row subqueries we run
+ * ONE extra fetch of the caller's unread message links for the conference and
+ * count them in JS against each row's two audience link variants (the caller
+ * only ever received one variant, so matching both is simplest and correct).
  */
 export async function listConversationsForSpeaker({
   speakerId,
@@ -223,7 +247,7 @@ export async function listConversationsForSpeaker({
   let scope = ''
   if (!isOrganizer) {
     scope =
-      ' && (createdBy._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
+      ' && (createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
     params.speakerId = speakerId
   }
 
@@ -237,12 +261,31 @@ export async function listConversationsForSpeaker({
     lastMessageAt
   }`
 
-  const results = await clientReadUncached.fetch<ConversationListItem[]>(
-    query,
-    params,
+  const results = await clientReadUncached.fetch<
+    Omit<ConversationListItem, 'unreadCount'>[]
+  >(query, params, { cache: 'no-store' })
+  const rows = results ?? []
+  if (rows.length === 0) return []
+
+  // ONE extra read: the caller's unread message_received notification links for
+  // this conference. Counted in JS per conversation below.
+  const unreadLinks = await clientReadUncached.fetch<(string | null)[]>(
+    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)].link`,
+    { speakerId, conferenceId },
     { cache: 'no-store' },
   )
-  return results ?? []
+  const linkCounts = new Map<string, number>()
+  for (const link of unreadLinks ?? []) {
+    if (link) linkCounts.set(link, (linkCounts.get(link) ?? 0) + 1)
+  }
+
+  return rows.map((row) => {
+    // Match EITHER audience variant; the caller received only one of them.
+    const unreadCount =
+      (linkCounts.get(conversationLinkPath(row, true)) ?? 0) +
+      (linkCounts.get(conversationLinkPath(row, false)) ?? 0)
+    return { ...row, unreadCount }
+  })
 }
 
 /**
@@ -316,15 +359,23 @@ export async function ensureProposalConversation({
   return id
 }
 
-/** Create a free-standing general conversation (random id) and return its id. */
+/**
+ * Create a free-standing general conversation (random id) and return its id.
+ *
+ * `subjectSpeakerId` is set ONLY when an organizer initiates a thread targeting
+ * a speaker — it records who the conversation is ABOUT/with. Speaker-created
+ * threads omit it (the creator IS the subject speaker).
+ */
 export async function createGeneralConversation({
   conferenceId,
   createdById,
   subject,
+  subjectSpeakerId,
 }: {
   conferenceId: string
   createdById: string
   subject: string
+  subjectSpeakerId?: string
 }): Promise<string> {
   const id = `conversation.${nanoid()}`
   const now = new Date().toISOString()
@@ -334,11 +385,24 @@ export async function createGeneralConversation({
     conference: createReference(conferenceId),
     conversationType: 'general',
     createdBy: createReference(createdById),
+    ...(subjectSpeakerId
+      ? { subjectSpeaker: createReference(subjectSpeakerId) }
+      : {}),
     subject: subject.slice(0, 200),
     createdAt: now,
     lastMessageAt: now,
   })
   return id
+}
+
+/** Whether a speaker document with this id exists (server-side validation). */
+export async function speakerExists(speakerId: string): Promise<boolean> {
+  const id = await clientReadUncached.fetch<string | null>(
+    `*[_type == "speaker" && _id == $speakerId][0]._id`,
+    { speakerId },
+    { cache: 'no-store' },
+  )
+  return Boolean(id)
 }
 
 /**

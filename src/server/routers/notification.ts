@@ -2,11 +2,13 @@ import { router, protectedProcedure, resolveConferenceId } from '@/server/trpc'
 import {
   ListNotificationsSchema,
   MarkReadSchema,
+  MarkReadByLinkSchema,
 } from '@/server/schemas/notification'
 import {
   getNotificationsForSpeaker,
   getUnreadCount,
   markNotificationsRead,
+  markNotificationsReadByLinks,
   markAllRead,
 } from '@/lib/notification/sanity'
 
@@ -41,6 +43,16 @@ export const notificationRouter = router({
       const count = await markNotificationsRead({
         speakerId: ctx.speaker._id,
         ids: input.ids,
+      })
+      return { count }
+    }),
+
+  markReadByLink: protectedProcedure
+    .input(MarkReadByLinkSchema)
+    .mutation(async ({ ctx, input }) => {
+      const count = await markNotificationsReadByLinks({
+        speakerId: ctx.speaker._id,
+        links: input.links,
       })
       return { count }
     }),

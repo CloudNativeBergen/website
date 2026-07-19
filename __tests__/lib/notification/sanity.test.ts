@@ -35,6 +35,7 @@ import {
   getNotificationsForSpeaker,
   getUnreadCount,
   markNotificationsRead,
+  markNotificationsReadByLinks,
   markAllRead,
   deleteNotificationsOlderThan,
 } from '@/lib/notification/sanity'
@@ -197,6 +198,66 @@ describe('markNotificationsRead — recipient security guard', () => {
     expect(count).toBe(0)
     expect(writeMock.transaction).not.toHaveBeenCalled()
     expect(tx.patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('markNotificationsReadByLinks — link-matched read (recipient guard)', () => {
+  it('fetches the caller unread matching-link ids and patches ONLY those', async () => {
+    // The ownership + unread + link filter IS the guard: only the caller's own
+    // unread notifications whose link matches are ever returned and patched.
+    readMock.fetch.mockResolvedValue(['own-1', 'own-2'])
+    const tx = installTransaction()
+
+    const count = await markNotificationsReadByLinks({
+      speakerId: 'sp-1',
+      links: ['/cfp/messages/c1'],
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('!defined(readAt)')
+    expect(query).toContain('link in $links')
+    expect(params).toEqual({ speakerId: 'sp-1', links: ['/cfp/messages/c1'] })
+
+    expect(tx.patch).toHaveBeenCalledTimes(2)
+    expect(tx.patch).toHaveBeenCalledWith('own-1', {
+      set: { readAt: expect.any(String) },
+    })
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(count).toBe(2)
+  })
+
+  it('returns 0 and writes nothing when no unread notification matches a link', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    const count = await markNotificationsReadByLinks({
+      speakerId: 'sp-1',
+      links: ['/cfp/messages/none'],
+    })
+
+    expect(count).toBe(0)
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.patch).not.toHaveBeenCalled()
+  })
+
+  it('returns 0 and does not fetch for an empty link list', async () => {
+    const count = await markNotificationsReadByLinks({
+      speakerId: 'sp-1',
+      links: [],
+    })
+    expect(count).toBe(0)
+    expect(readMock.fetch).not.toHaveBeenCalled()
+  })
+
+  it('defensively bounds the query to at most 8 links', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const links = Array.from({ length: 12 }, (_, i) => `/cfp/messages/c${i}`)
+
+    await markNotificationsReadByLinks({ speakerId: 'sp-1', links })
+
+    const [, params] = readMock.fetch.mock.calls[0]
+    expect((params as { links: string[] }).links).toHaveLength(8)
   })
 })
 

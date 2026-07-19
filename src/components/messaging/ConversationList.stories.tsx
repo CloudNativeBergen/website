@@ -15,6 +15,7 @@ const makeItems = (): ConversationListItem[] => [
     proposalTitle: 'Scaling Kubernetes to 10,000 nodes',
     createdAt: minutesAgo(60 * 24 * 3),
     lastMessageAt: minutesAgo(24),
+    unreadCount: 0,
   },
   {
     _id: 'conversation.abc123',
@@ -22,6 +23,7 @@ const makeItems = (): ConversationListItem[] => [
     subject: 'Question about speaker travel',
     createdAt: minutesAgo(60 * 24 * 2),
     lastMessageAt: minutesAgo(60 * 5),
+    unreadCount: 0,
   },
   {
     _id: 'conversation.proposal.talk-2',
@@ -31,6 +33,7 @@ const makeItems = (): ConversationListItem[] => [
     proposalTitle: 'Designing for Failure',
     createdAt: minutesAgo(60 * 24 * 10),
     lastMessageAt: minutesAgo(60 * 24 * 4),
+    unreadCount: 0,
   },
 ]
 

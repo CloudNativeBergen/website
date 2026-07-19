@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ListNotificationsSchema,
   MarkReadSchema,
+  MarkReadByLinkSchema,
 } from '@/server/schemas/notification'
 
 describe('ListNotificationsSchema', () => {
@@ -61,6 +62,53 @@ describe('MarkReadSchema', () => {
       MarkReadSchema.safeParse({
         ids: Array.from({ length: 101 }, (_, i) => `id-${i}`),
       }).success,
+    ).toBe(false)
+  })
+})
+
+describe('MarkReadByLinkSchema', () => {
+  it('accepts 1..8 app-relative links', () => {
+    expect(
+      MarkReadByLinkSchema.safeParse({ links: ['/cfp/messages/c1'] }).success,
+    ).toBe(true)
+    expect(
+      MarkReadByLinkSchema.safeParse({
+        links: Array.from({ length: 8 }, (_, i) => `/cfp/messages/c${i}`),
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects an empty list and more than 8 links', () => {
+    expect(MarkReadByLinkSchema.safeParse({ links: [] }).success).toBe(false)
+    expect(
+      MarkReadByLinkSchema.safeParse({
+        links: Array.from({ length: 9 }, (_, i) => `/cfp/messages/c${i}`),
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects an absolute URL, a protocol-relative host, a backslash path, and a non-slash path', () => {
+    expect(
+      MarkReadByLinkSchema.safeParse({ links: ['https://evil.com/x'] }).success,
+    ).toBe(false)
+    // A single bad link taints the whole array.
+    expect(
+      MarkReadByLinkSchema.safeParse({
+        links: ['/cfp/messages/c1', 'http://evil.com'],
+      }).success,
+    ).toBe(false)
+    expect(
+      MarkReadByLinkSchema.safeParse({ links: ['\\\\server\\share'] }).success,
+    ).toBe(false)
+    expect(
+      MarkReadByLinkSchema.safeParse({ links: ['cfp/messages/c1'] }).success,
+    ).toBe(false)
+  })
+
+  it('rejects a link longer than 300 chars', () => {
+    expect(
+      MarkReadByLinkSchema.safeParse({ links: [`/${'x'.repeat(300)}`] })
+        .success,
     ).toBe(false)
   })
 })
