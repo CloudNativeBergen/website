@@ -145,10 +145,16 @@ export const pushRouter = router({
    * write another speaker's subscriptions, so it needs no extra authz beyond
    * `protectedProcedure`.
    *
-   * Returns `{ sent, gone, configured }`:
+   * Returns `{ sent, gone, total, configured, failures }`:
    *   - `configured`: whether the server has VAPID keys at all;
    *   - `sent`: how many of the caller's devices the push service accepted;
-   *   - `gone`: how many dead/invalid subscriptions were pruned in the process.
+   *   - `gone`: how many dead/invalid subscriptions were pruned in the process;
+   *   - `total`: how many subscriptions existed when the test ran;
+   *   - `failures`: deduped, capped diagnostics for LIVE subscriptions the push
+   *     service rejected (e.g. a 403 VapidPkHashMismatch), so the client can
+   *     advise the fix (turn notifications off/on to re-subscribe). A 403 is
+   *     NOT auto-pruned — a server-side key misconfig would otherwise mass-purge
+   *     valid subscriptions — it is surfaced as a hint only.
    */
   sendTest: protectedProcedure.mutation(async ({ ctx }) => {
     // No VAPID keys → push can never work; report it rather than pretending.
@@ -229,14 +235,58 @@ export const pushRouter = router({
       }),
     )
 
+    // Diagnostic failures for LIVE (non-gone) subscriptions the push service
+    // rejected. `sendPush` composes each `message` from the push-service
+    // response and never includes the endpoint, so it is safe to return to the
+    // authenticated OWNER of these subscriptions (their own device's result).
+    const failures: Array<{ statusCode?: number; message?: string }> = []
     for (const r of results) {
-      if (r.status !== 'fulfilled') continue
-      if (r.value.ok) sent += 1
-      if (r.value.gone) gone += 1
+      if (r.status !== 'fulfilled') {
+        // `sendPush` never throws and the prune helpers catch their own
+        // rejections, so this is unreachable in practice — but map it
+        // defensively rather than let a rejection vanish silently.
+        console.error(
+          `[push] test send task rejected for speaker ${ctx.speaker._id}:`,
+          r.reason,
+        )
+        failures.push({ statusCode: undefined, message: 'internal error' })
+        continue
+      }
+      if (r.value.ok) {
+        sent += 1
+        continue
+      }
+      if (r.value.gone) {
+        gone += 1
+        continue
+      }
+      failures.push({
+        statusCode: r.value.statusCode,
+        message: r.value.errorMessage,
+      })
+    }
+
+    // Dedupe identical (statusCode, message) pairs — every device behind the
+    // same push service typically fails identically — then cap the list so the
+    // response stays small.
+    const seen = new Set<string>()
+    const dedupedFailures: Array<{ statusCode?: number; message?: string }> = []
+    for (const failure of failures) {
+      const key = `${failure.statusCode ?? ''}::${failure.message ?? ''}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      dedupedFailures.push(failure)
     }
 
     // `total` lets the client distinguish "no devices subscribed" (total 0)
-    // from "devices exist but every send failed" (total > 0, sent 0).
-    return { sent, gone, total: state.subscriptions.length, configured: true }
+    // from "devices exist but every send failed" (total > 0, sent 0); `failures`
+    // lets it explain WHY (e.g. a 403 → re-subscribe hint).
+    return {
+      sent,
+      gone,
+      total: state.subscriptions.length,
+      configured: true,
+      failures: dedupedFailures.slice(0, 5),
+    }
   }),
 })

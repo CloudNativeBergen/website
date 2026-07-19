@@ -114,6 +114,13 @@ export interface PushTestResult {
   configured: boolean
   /** Total subscriptions on the account when the test ran. */
   total: number
+  /**
+   * Deduped, capped diagnostics for LIVE subscriptions the push service
+   * rejected (non-gone). Drives the actionable failure copy below. Each
+   * `message` is server-composed from the push-service response and never
+   * contains the endpoint.
+   */
+  failures?: Array<{ statusCode?: number; message?: string }>
 }
 
 export interface PushNotificationSettingsViewProps {
@@ -136,11 +143,79 @@ export interface PushNotificationSettingsViewProps {
   sendTestError?: boolean
 }
 
+type PushFailure = { statusCode?: number; message?: string }
+
+/** One-line technical detail cap so the muted line never wraps/overflows. */
+const MAX_DETAIL_LINE = 120
+
+/**
+ * The most actionable of the deduped failures: prefer one with a known HTTP
+ * status (it maps to specific advice) over a bare transport error.
+ */
+function dominantFailure(failures: PushFailure[]): PushFailure | undefined {
+  if (failures.length === 0) return undefined
+  return failures.find((f) => typeof f.statusCode === 'number') ?? failures[0]
+}
+
+/**
+ * Actionable, human copy for the dominant push-service rejection. A 403/400 is
+ * almost always a VAPID key mismatch (the subscription was created under an
+ * older/different applicationServerKey) — permanently unfixable server-side, so
+ * the ONLY remedy is for the user to re-subscribe on the affected device.
+ */
+function failureCopy(dominant: PushFailure | undefined): string {
+  const code = dominant?.statusCode
+  if (code === 403 || code === 400) {
+    return `The push service rejected the send (HTTP ${code}). This usually means this device was subscribed under an older server key — turn notifications off and on again on the affected device to re-subscribe.`
+  }
+  if (code === 401) {
+    return `The push service rejected the server’s credentials (HTTP 401). The server’s VAPID configuration may be wrong.`
+  }
+  if (code === 413) {
+    return 'The notification was too large to deliver (HTTP 413).'
+  }
+  if (code === 429) {
+    return 'The push service is rate-limiting sends (HTTP 429). Try again in a minute.'
+  }
+  const detail = dominant?.message?.trim() || 'network error'
+  return `Delivery failed (${detail}).`
+}
+
+/**
+ * Render one deduped failure as `<code> — <detail>` for the muted debug line.
+ * The server-composed `message` already carries an `HTTP <code> — ` prefix, so
+ * strip it to avoid repeating the status.
+ */
+function formatFailureDetail(failure: PushFailure): string {
+  const stripped = (failure.message ?? '')
+    .trim()
+    .replace(/^HTTP\s+\d+\s*(?:—|-)?\s*/i, '')
+  if (failure.statusCode !== undefined) {
+    return stripped
+      ? `${failure.statusCode} — ${stripped}`
+      : `${failure.statusCode}`
+  }
+  return stripped || 'unknown error'
+}
+
+/** Build the single muted technical line from the deduped failures. */
+function failureDetailLine(failures: PushFailure[]): string | undefined {
+  if (failures.length === 0) return undefined
+  const line = failures.map(formatFailureDetail).join(' · ')
+  return line.length > MAX_DETAIL_LINE
+    ? `${line.slice(0, MAX_DETAIL_LINE)}…`
+    : line
+}
+
 /** Human-readable feedback for the last test-notification send. */
 function testFeedback(
   result: PushTestResult | null | undefined,
   error: boolean | undefined,
-): { text: string; tone: 'success' | 'muted' | 'warn' } | null {
+): {
+  text: string
+  tone: 'success' | 'muted' | 'warn'
+  detail?: string
+} | null {
   if (error) {
     return {
       text: 'Could not send a test notification. Please try again.',
@@ -160,28 +235,60 @@ function testFeedback(
       tone: 'muted',
     }
   }
-  if (result.sent === 0 && result.gone === 0) {
-    // Devices exist but every send failed (non-gone transport errors) — a
-    // different situation from having no devices at all.
+
+  const failures = result.failures ?? []
+  const detail = failureDetailLine(failures)
+
+  if (result.sent === 0) {
+    if (failures.length > 0) {
+      // Live devices exist but the push service REJECTED the send — the
+      // diagnosable case (usually a 403 VAPID mismatch). Give the actionable fix
+      // plus the technical detail line for a maintainer reading a screenshot.
+      return {
+        text: failureCopy(dominantFailure(failures)),
+        tone: 'warn',
+        detail,
+      }
+    }
+    if (result.gone > 0) {
+      // Every device was a dead/expired subscription that got pruned — not a
+      // rejection we can advise on.
+      return {
+        text: `No active devices received the test. Removed ${result.gone} expired subscription${
+          result.gone === 1 ? '' : 's'
+        }.`,
+        tone: 'warn',
+      }
+    }
+    // Devices exist but the send failed with no diagnostics at all.
     return {
       text: 'Could not deliver to your devices right now. Please try again shortly.',
       tone: 'warn',
     }
   }
+
   const devices = `${result.sent} device${result.sent === 1 ? '' : 's'}`
-  const base =
-    result.sent > 0
-      ? `Sent to ${devices} — check for the notification.`
-      : 'No active devices received the test.'
+  const base = `Sent to ${devices} — check for the notification.`
   const expired =
     result.gone > 0
       ? ` Removed ${result.gone} expired subscription${
           result.gone === 1 ? '' : 's'
         }.`
       : ''
+
+  if (failures.length > 0) {
+    // Partial: some devices got it, others were rejected. Deliver the success
+    // count AND a secondary actionable line for the failing devices.
+    return {
+      text: `${base}${expired} ${failureCopy(dominantFailure(failures))}`,
+      tone: 'warn',
+      detail,
+    }
+  }
+
   return {
     text: base + expired,
-    tone: result.sent > 0 ? 'success' : 'warn',
+    tone: 'success',
   }
 }
 
@@ -360,18 +467,27 @@ export function PushNotificationSettingsView({
                   {sendTestPending ? 'Sending test…' : 'Send test notification'}
                 </button>
                 {feedback && (
-                  <p
-                    role="status"
-                    className={`font-inter text-sm ${
-                      feedback.tone === 'success'
-                        ? 'text-green-700 dark:text-green-400'
-                        : feedback.tone === 'warn'
-                          ? 'text-amber-700 dark:text-amber-400'
-                          : 'text-gray-500 dark:text-gray-400'
-                    }`}
-                  >
-                    {feedback.text}
-                  </p>
+                  <div role="status" className="space-y-1">
+                    <p
+                      className={`font-inter text-sm ${
+                        feedback.tone === 'success'
+                          ? 'text-green-700 dark:text-green-400'
+                          : feedback.tone === 'warn'
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {feedback.text}
+                    </p>
+                    {feedback.detail && (
+                      <p
+                        className="truncate font-mono text-xs text-gray-400 dark:text-gray-500"
+                        title={feedback.detail}
+                      >
+                        {feedback.detail}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

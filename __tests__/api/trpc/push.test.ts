@@ -192,7 +192,13 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 2, gone: 0, total: 2, configured: true })
+      expect(result).toEqual({
+        sent: 2,
+        gone: 0,
+        total: 2,
+        configured: true,
+        failures: [],
+      })
       expect(mockGetState).toHaveBeenCalledWith(speakerA)
       expect(mockSendPush).toHaveBeenCalledTimes(2)
       // Uses the production payload shape: deep link + collapse tag, bypassing
@@ -233,8 +239,85 @@ describe('push router', () => {
       const caller = createAuthenticatedCaller(speakerA)
       const result = await caller.push.sendTest()
 
-      expect(result).toEqual({ sent: 0, gone: 1, total: 1, configured: true })
+      expect(result).toEqual({
+        sent: 0,
+        gone: 1,
+        total: 1,
+        configured: true,
+        failures: [],
+      })
       expect(mockPrune).toHaveBeenCalledWith(speakerA, SUB.endpoint)
+    })
+
+    it('surfaces a rejected (non-gone) subscription as a diagnostic failure', async () => {
+      // A live subscription the push service rejected with a 403 — the VAPID
+      // key-mismatch case that used to vanish into a bare count.
+      mockSendPush.mockResolvedValue({
+        ok: false,
+        statusCode: 403,
+        gone: false,
+        errorMessage: 'HTTP 403 — VapidPkHashMismatch',
+      })
+      const caller = createAuthenticatedCaller(speakerA)
+      const result = await caller.push.sendTest()
+
+      expect(result).toMatchObject({ sent: 0, gone: 0, total: 1 })
+      expect(result.failures).toEqual([
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ])
+      // A 403 is NOT gone — it must not be pruned (a server-side key misconfig
+      // would otherwise mass-destroy valid subscriptions).
+      expect(mockPrune).not.toHaveBeenCalled()
+    })
+
+    it('dedupes identical (statusCode, message) failures across devices', async () => {
+      mockGetState.mockResolvedValue({
+        subscriptions: [
+          SUB,
+          { ...SUB, endpoint: 'https://fcm.googleapis.com/fcm/send/device-2' },
+          { ...SUB, endpoint: 'https://fcm.googleapis.com/fcm/send/device-3' },
+        ],
+        preferences: DEFAULT_PUSH_PREFERENCES,
+      })
+      mockSendPush.mockResolvedValue({
+        ok: false,
+        statusCode: 403,
+        gone: false,
+        errorMessage: 'HTTP 403 — VapidPkHashMismatch',
+      })
+      const caller = createAuthenticatedCaller(speakerA)
+      const result = await caller.push.sendTest()
+
+      expect(result).toMatchObject({ sent: 0, total: 3 })
+      // Three devices failed identically → one deduped entry.
+      expect(result.failures).toEqual([
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ])
+    })
+
+    it('caps the failures list at 5 distinct entries', async () => {
+      mockGetState.mockResolvedValue({
+        subscriptions: Array.from({ length: 8 }, (_, i) => ({
+          ...SUB,
+          endpoint: `https://fcm.googleapis.com/fcm/send/device-${i}`,
+        })),
+        preferences: DEFAULT_PUSH_PREFERENCES,
+      })
+      let call = 0
+      mockSendPush.mockImplementation(async () => {
+        const statusCode = 500 + call
+        call += 1
+        return {
+          ok: false,
+          statusCode,
+          gone: false,
+          errorMessage: `HTTP ${statusCode} — boom`,
+        }
+      })
+      const caller = createAuthenticatedCaller(speakerA)
+      const result = await caller.push.sendTest()
+
+      expect(result.failures).toHaveLength(5)
     })
 
     it('refuses a second test within the cooldown window', async () => {

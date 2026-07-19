@@ -23,11 +23,47 @@ export interface PushSendResult {
    * pruned from the speaker document.
    */
   gone: boolean
+  /**
+   * A short, human-readable failure summary composed from the push service's
+   * response (HTTP status + response body/message), truncated. Present only on
+   * failure. NEVER contains the subscription endpoint (a secret capability URL);
+   * it is safe to surface to the authenticated owner of the subscription.
+   */
+  errorMessage?: string
 }
 
 /** A push service returns 404/410 when a subscription is permanently dead. */
 function isGoneStatus(statusCode: number | undefined): boolean {
   return statusCode === 404 || statusCode === 410
+}
+
+/** Cap the push-service response body we log (it can be an arbitrary page). */
+const MAX_LOGGED_BODY = 300
+/** Cap the composed error summary we hand back to callers/clients. */
+const MAX_ERROR_MESSAGE = 200
+
+/** Truncate with an ellipsis so long push-service responses stay bounded. */
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value
+}
+
+/**
+ * Compose a short, greppable failure summary from a web-push error. The push
+ * service response `body` (e.g. FCM's `VapidPkHashMismatch`) is the most useful
+ * signal, so it wins over the library's generic `message`. Returns `undefined`
+ * only when there is genuinely nothing to report. NEVER includes the endpoint.
+ */
+function composeErrorMessage(
+  statusCode: number | undefined,
+  message: string | undefined,
+  body: string | undefined,
+): string | undefined {
+  const detail = body?.trim() || message?.trim() || undefined
+  if (statusCode === undefined && !detail) return undefined
+  const parts: string[] = []
+  if (statusCode !== undefined) parts.push(`HTTP ${statusCode}`)
+  if (detail) parts.push(detail)
+  return truncate(parts.join(' — '), MAX_ERROR_MESSAGE)
 }
 
 /**
@@ -45,7 +81,7 @@ export async function sendPush(
 ): Promise<PushSendResult> {
   const client = getConfiguredWebPush()
   if (!client) {
-    return { ok: false, gone: false }
+    return { ok: false, gone: false, errorMessage: 'VAPID keys not configured' }
   }
 
   try {
@@ -61,11 +97,41 @@ export async function sendPush(
     )
     return { ok: true, statusCode: response.statusCode, gone: false }
   } catch (error) {
-    const statusCode = (error as { statusCode?: number })?.statusCode
+    // web-push throws a `WebPushError` carrying the push service's HTTP status,
+    // response body, and a generic message. Capture all three: the status alone
+    // (the old behaviour) can't distinguish a transient 500 from a permanent
+    // 403 VapidPkHashMismatch (subscription made under a different/older
+    // applicationServerKey), which is only diagnosable from the body.
+    const err = error as {
+      statusCode?: number
+      message?: unknown
+      body?: unknown
+    }
+    const statusCode =
+      typeof err?.statusCode === 'number' ? err.statusCode : undefined
+    const message = typeof err?.message === 'string' ? err.message : undefined
+    const body = typeof err?.body === 'string' ? err.body : undefined
+
+    // Log the ORIGIN only — the full endpoint is a secret capability URL and is
+    // never logged anywhere in this module (matches deliverPushToRecipient).
+    let endpointOrigin: string
+    try {
+      endpointOrigin = new URL(subscription.endpoint).origin
+    } catch {
+      endpointOrigin = 'unknown'
+    }
+    console.error('[push] delivery failed', {
+      endpointOrigin,
+      statusCode,
+      message,
+      body: body === undefined ? undefined : truncate(body, MAX_LOGGED_BODY),
+    })
+
     return {
       ok: false,
       statusCode,
       gone: isGoneStatus(statusCode),
+      errorMessage: composeErrorMessage(statusCode, message, body),
     }
   }
 }
