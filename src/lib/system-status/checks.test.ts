@@ -166,6 +166,9 @@ describe('buildSystemChecks — live probes', () => {
 
   it('reports an ok Sanity read probe with latency', async () => {
     fetchMock.mockImplementation((query: string) => {
+      // The subscription stats query returns a {total, speakers} object.
+      if (query.includes('"total"'))
+        return Promise.resolve({ total: 5, speakers: 3 })
       if (query.includes('count(')) return Promise.resolve(5)
       return Promise.resolve('conf-1')
     })
@@ -173,7 +176,7 @@ describe('buildSystemChecks — live probes', () => {
     const probe = byId(checks, 'sanity.readProbe')
     expect(probe.status).toBe('ok')
     expect(probe.value).toMatch(/\d+ ms/)
-    expect(byId(checks, 'push.subscriptions').value).toBe('5')
+    expect(byId(checks, 'push.subscriptions').value).toBe('5 across 3 speakers')
   })
 
   it('reports an error Sanity read probe when the fetch throws', async () => {
