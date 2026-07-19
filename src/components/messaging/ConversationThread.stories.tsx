@@ -497,3 +497,53 @@ export const MutedEmailsDisabled: Story = {
     <ConversationThreadView {...args} messages={makeMessages()} />
   ),
 }
+
+/**
+ * SPONSOR THREAD (messaging G2b), organizer viewpoint: sponsor-authored messages
+ * render the contact person's snapshot name with an amber "Sponsor" badge (no
+ * speaker doc / avatar); the organizer's own replies are right-aligned. The
+ * subject is the sponsor company name.
+ */
+const makeSponsorMessages = (): DisplayMessage[] => [
+  {
+    id: 's1',
+    authorName: 'Dana Diaz',
+    isOrganizer: false,
+    isSponsor: true,
+    isOwn: false,
+    body: 'Hi! Could you confirm the booth dimensions and power supply for our stand?',
+    createdAt: minutesAgo(200),
+  },
+  {
+    id: 's2',
+    authorName: 'Ola Organizer',
+    isOrganizer: true,
+    isOwn: true,
+    body: 'Of course — the standard booth is 3×2m with two power sockets. I will email the full spec sheet today.',
+    createdAt: minutesAgo(90),
+  },
+  {
+    id: 's3',
+    authorName: 'Dana Diaz',
+    isOrganizer: false,
+    isSponsor: true,
+    isOwn: false,
+    body: 'Perfect, thank you!',
+    createdAt: minutesAgo(20),
+  },
+]
+
+export const SponsorThread: Story = {
+  args: { messages: [], subject: 'Acme Corp', preference: defaultPreference },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeSponsorMessages()} />
+  ),
+}
+
+export const SponsorThreadDark: Story = {
+  args: { messages: [], subject: 'Acme Corp', preference: defaultPreference },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeSponsorMessages()} />
+  ),
+}

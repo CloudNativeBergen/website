@@ -353,6 +353,14 @@ export function ConversationList({
                           Proposal
                         </span>
                       )}
+                      {/* SPONSOR thread chip (G2b) — mirrors the Proposal chip,
+                          amber to match the sponsor bubble/badge. The counterpart
+                          is the sponsor company name (server-resolved). */}
+                      {item.conversationType === 'sponsor' && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                          Sponsor
+                        </span>
+                      )}
                       {isResolved && (
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                           {isOrganizer ? 'Resolved' : 'Closed by organizers'}

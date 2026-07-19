@@ -286,6 +286,69 @@ export async function notifyNewSpeakerMessage(
   await sendSlackNotification(message, conference)
 }
 
+/**
+ * Sponsor→organizer new-message Slack post (messaging G2b). Mirrors
+ * {@link notifyNewSpeakerMessage} but routes to the SALES channel
+ * ({@link sendSalesNotification}) — a sponsor message is a sales-team concern —
+ * and is fired ONLY for sponsor-authored messages (an organizer's own reply
+ * doesn't Slack). `authorName` is the contact person who wrote it.
+ */
+export async function notifySponsorMessage(
+  {
+    authorName,
+    sponsorName,
+    excerpt,
+    adminPath,
+  }: {
+    authorName: string
+    sponsorName: string
+    excerpt: string
+    adminPath: string
+  },
+  conference: Conference,
+) {
+  const domain = getDomainFromConference(conference)
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '💬 New sponsor message',
+        emoji: true,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*From:*\n${escapeMrkdwn(authorName)}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Sponsor:*\n${escapeMrkdwn(sponsorName)}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Message:*\n${escapeMrkdwn(excerpt)}`,
+      },
+    },
+  ]
+
+  if (domain) {
+    blocks.push(
+      createAdminLinkButton(domain, adminPath, 'View in Admin', 'view_message'),
+    )
+  }
+
+  await sendSalesNotification({ blocks }, conference)
+}
+
 export async function notifyNewVolunteer(
   volunteer: Volunteer,
   conference: Conference,

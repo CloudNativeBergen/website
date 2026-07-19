@@ -19,6 +19,7 @@ import type {
 import { DEFAULT_CONVERSATION_PREFERENCE, ORGANIZERS_GROUP } from './types'
 import {
   proposalConversationId,
+  sponsorConversationId,
   conversationLinkPath,
   truncateToGraphemeBoundary,
   ORGANIZERS_LABEL,
@@ -26,7 +27,7 @@ import {
 
 // Re-export the client-safe pure helpers so existing server importers keep
 // their `./sanity` import surface (the definitions live in `./links`).
-export { proposalConversationId, conversationLinkPath }
+export { proposalConversationId, sponsorConversationId, conversationLinkPath }
 
 /**
  * Server-only data layer for speaker↔organizer messaging (M1).
@@ -143,7 +144,13 @@ const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && defin
  * (which CAN express the fallback) is the one that flipped.
  */
 export const SPEAKER_SCOPE_PREDICATE =
-  '(createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
+  '(conversationType != "sponsor" && (createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref))'
+// ^ The `conversationType != "sponsor"` clause is DEFENCE-IN-DEPTH (G2b). A
+// sponsor thread has no `createdBy`/`subjectSpeaker`/`proposal->speakers` that
+// could name a speaker, so it is ALREADY excluded from a speaker's scope by the
+// three field checks; the explicit type guard makes that guarantee independent
+// of a future field change and is covered by a test. The sponsor side is
+// token-authed via the portal and never reaches a speaker inbox.
 
 /**
  * The RAW GROQ predicate for an inbox `view` (no leading ` && `, empty for
@@ -318,6 +325,15 @@ function deriveParties(
     for (const id of conversation.proposalSpeakerIds) {
       parties.push({ partyType: 'speaker', speakerId: id })
     }
+  } else if (conversation.conversationType === 'sponsor') {
+    // A sponsor thread's non-organizer party is a `sponsor` party whose id
+    // (the `sponsorForConference`) is NOT expressible from the legacy fields —
+    // so it is ALWAYS written into `participants[]` at creation
+    // ({@link ensureSponsorConversation}) and the stored array is authoritative.
+    // This derive branch is unreachable for a real sponsor thread (they never
+    // lack `participants[]`); it returns just the organizers group so a
+    // hypothetical participants-less sponsor doc still resolves to a valid,
+    // speaker-free party set rather than a bogus empty-id speaker party.
   } else {
     parties.push({ partyType: 'speaker', speakerId: conversation.createdById })
     if (conversation.subjectSpeakerId) {
@@ -683,10 +699,15 @@ export async function listConversationsForSpeaker({
       body
     },
     "speakerSideName": select(
+      conversationType == "sponsor" => coalesce(participants[partyType == "sponsor"][0].sponsorForConference->sponsor->name, subject),
       conversationType == "proposal" => proposal->speakers[0]->name,
       defined(subjectSpeaker) => subjectSpeaker->name,
       createdBy->name
     ),
+    // Sponsor logos are stored as inline SVG (not a URL usable in an <img>), so a
+    // sponsor row deliberately has no counterpart image and falls back to an
+    // initials avatar (the "else initial" branch) — the select() has no sponsor
+    // case, so a sponsor thread yields null here.
     "speakerSideImage": select(
       conversationType == "proposal" => coalesce(proposal->speakers[0]->image.asset->url, proposal->speakers[0]->imageURL),
       defined(subjectSpeaker) => coalesce(subjectSpeaker->image.asset->url, subjectSpeaker->imageURL),
@@ -992,6 +1013,17 @@ export async function getConversationViewCounts({
   return counts
 }
 
+/** A message row as projected by {@link listMessages} (before normalization). */
+interface RawMessageRow {
+  _id: string
+  conversationId: string
+  authorId: string | null
+  body: string
+  createdAt: string
+  authorName?: string | null
+  authorSponsorId?: string | null
+}
+
 /**
  * A conversation's messages, NEWEST first, keyset-paginated by `before` (the
  * `createdAt` of the last item on the previous page). M2 reverses for display.
@@ -1026,15 +1058,27 @@ export async function listMessages({
   const query = `*[_type == "message" && conversation._ref == $conversationId${cursor}] | order(createdAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     "conversationId": conversation._ref,
-    "authorId": author._ref,
+    "authorId": coalesce(author._ref, ""),
     body,
-    createdAt
+    createdAt,
+    authorName,
+    "authorSponsorId": authorParty.sponsorForConference._ref
   }`
 
-  const results = await clientReadUncached.fetch<Message[]>(query, params, {
-    cache: 'no-store',
-  })
-  return results ?? []
+  const results = await clientReadUncached.fetch<RawMessageRow[]>(
+    query,
+    params,
+    { cache: 'no-store' },
+  )
+  return (results ?? []).map((row) => ({
+    _id: row._id,
+    conversationId: row.conversationId,
+    authorId: row.authorId ?? '',
+    body: row.body,
+    createdAt: row.createdAt,
+    ...(row.authorName ? { authorName: row.authorName } : {}),
+    ...(row.authorSponsorId ? { authorSponsorId: row.authorSponsorId } : {}),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -1090,6 +1134,61 @@ export async function ensureProposalConversation({
       createdAt: now,
       lastMessageAt: now,
       participants,
+    })
+    .commit()
+  return id
+}
+
+/**
+ * Ensure the SINGLE sponsor↔organizer conversation for a `sponsorForConference`
+ * exists and return its id (messaging G2b). Deterministic id
+ * `conversation.sponsor.<sfcId>` + `createIfNotExists`, so the portal-send and
+ * organizer-send paths converge on ONE document (the maintainer-locked
+ * "one thread per sponsorForConference" UI; the model stays multi-thread-general
+ * — this is simply the only thread a sponsor ever gets).
+ *
+ * PARTICIPANTS are the sponsor party + the organizers group, written directly
+ * (NOT through {@link deriveParties}, which can't reconstruct a sponsor party
+ * from the legacy fields — `participants[]` is authoritative for sponsor
+ * threads). `subject` is the sponsor company name (snapshotted so the thread
+ * renders without a deref, mirroring the proposal-title snapshot).
+ *
+ * CREATED-BY: unset for a PORTAL-initiated thread (a sponsor has no speaker doc;
+ * schema `createdBy` relaxed to optional for exactly this). An ORGANIZER-
+ * initiated thread passes `createdById` (the acting organizer) so the audit
+ * trail still names a human when one exists — the cleaner of the two documented
+ * options (relax-to-optional + acting-organizer-when-known).
+ */
+export async function ensureSponsorConversation({
+  conferenceId,
+  sponsorForConferenceId,
+  sponsorName,
+  createdById,
+}: {
+  conferenceId: string
+  sponsorForConferenceId: string
+  sponsorName: string
+  /** The acting organizer for an ORG-initiated thread; omitted portal-side. */
+  createdById?: string
+}): Promise<string> {
+  const id = sponsorConversationId(sponsorForConferenceId)
+  const now = new Date().toISOString()
+  const participants = partiesToStored([
+    { partyType: 'sponsor', sponsorForConferenceId },
+    { partyType: 'group', group: ORGANIZERS_GROUP },
+  ])
+  await clientWrite
+    .transaction()
+    .createIfNotExists({
+      _id: id,
+      _type: 'conversation',
+      conference: createReference(conferenceId),
+      conversationType: 'sponsor',
+      subject: (sponsorName || 'Sponsor').slice(0, 200),
+      createdAt: now,
+      lastMessageAt: now,
+      participants,
+      ...(createdById ? { createdBy: createReference(createdById) } : {}),
     })
     .commit()
   return id
@@ -1211,16 +1310,49 @@ export async function speakerExists(speakerId: string): Promise<boolean> {
 export async function addMessage({
   conversationId,
   authorId,
+  sponsorAuthor,
   body,
   reopen = false,
 }: {
   conversationId: string
-  authorId: string
+  /**
+   * The SPEAKER/organizer author id. Provide this OR {@link sponsorAuthor},
+   * never both. A speaker author writes the legacy `author` ref plus a speaker
+   * `authorParty`.
+   */
+  authorId?: string
+  /**
+   * A SPONSOR author (portal side, G2b): no speaker doc exists, so the message
+   * stores a `sponsor` `authorParty` plus an `authorName` snapshot (the contact
+   * person the sender picked) and leaves the `author` ref UNSET. Provide this OR
+   * {@link authorId}, never both.
+   */
+  sponsorAuthor?: { sponsorForConferenceId: string; authorName: string }
   body: string
   reopen?: boolean
 }): Promise<Message> {
   const now = new Date().toISOString()
   const messageId = `message.${nanoid()}`
+
+  // Build the author fields for the two shapes. A speaker author keeps the
+  // legacy `author` ref + speaker `authorParty` (unchanged); a sponsor author
+  // sets a `sponsor` `authorParty` + `authorName` snapshot with NO `author` ref
+  // (relaxed to optional in the schema for exactly this case).
+  const authorFields: Record<string, unknown> = sponsorAuthor
+    ? {
+        authorParty: partyToStored({
+          partyType: 'sponsor',
+          sponsorForConferenceId: sponsorAuthor.sponsorForConferenceId,
+        }),
+        authorName: sponsorAuthor.authorName,
+      }
+    : {
+        author: createReference(authorId as string),
+        authorParty: partyToStored({
+          partyType: 'speaker',
+          speakerId: authorId as string,
+        }),
+      }
 
   await clientWrite
     .transaction()
@@ -1228,14 +1360,9 @@ export async function addMessage({
       _id: messageId,
       _type: 'message',
       conversation: createReference(conversationId),
-      author: createReference(authorId),
       body,
       createdAt: now,
-      // Party model (G1): dual-write `authorParty` next to the legacy `author`
-      // ref. Only speaker parties are produced in G1 (the author is always a
-      // speaker/organizer speaker doc). Not yet read — `author` still drives
-      // fan-out; the read path flips in G2.
-      authorParty: partyToStored({ partyType: 'speaker', speakerId: authorId }),
+      ...authorFields,
     })
     .patch(conversationId, (patch) =>
       patch.set(
@@ -1246,7 +1373,19 @@ export async function addMessage({
     )
     .commit()
 
-  return { _id: messageId, conversationId, authorId, body, createdAt: now }
+  return {
+    _id: messageId,
+    conversationId,
+    authorId: sponsorAuthor ? '' : (authorId as string),
+    body,
+    createdAt: now,
+    ...(sponsorAuthor
+      ? {
+          authorName: sponsorAuthor.authorName,
+          authorSponsorId: sponsorAuthor.sponsorForConferenceId,
+        }
+      : {}),
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -35,6 +35,10 @@ export default defineType({
         list: [
           { title: 'Proposal', value: 'proposal' },
           { title: 'General', value: 'general' },
+          // A sponsor↔organizer thread (messaging party model, G2b). One per
+          // sponsorForConference; the sponsor side is a `sponsor` participant
+          // party (no speaker doc), authed by the portal token, never a session.
+          { title: 'Sponsor', value: 'sponsor' },
         ],
         layout: 'radio',
       },
@@ -67,8 +71,8 @@ export default defineType({
       // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion; a
       // dangling creator ref is tolerated.
       weak: true,
-      description: 'The speaker who started this conversation.',
-      validation: (Rule) => Rule.required(),
+      description:
+        'The speaker who started this conversation. OPTIONAL as of G2b: a sponsor thread has no speaker creator — an organizer-initiated sponsor thread records the acting organizer here, but a portal-initiated one (the sponsor sending the first message) leaves it unset. proposal/general threads still always carry it.',
     }),
     defineField({
       name: 'subjectSpeaker',

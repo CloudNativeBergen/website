@@ -47,6 +47,12 @@ export interface DisplayMessage {
   authorName: string
   authorImage?: string
   isOrganizer: boolean
+  /**
+   * True when the message was authored from the SPONSOR portal (G2b). It has no
+   * speaker doc — the name is the `authorName` snapshot — and renders a
+   * "(Sponsor)" badge instead of the organizer badge.
+   */
+  isSponsor?: boolean
   /** True when the current viewer authored the message (right-aligned accent). */
   isOwn: boolean
   body: string
@@ -177,10 +183,16 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
           <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
             {message.authorName}
           </span>
-          {message.isOrganizer && (
-            <span className="rounded-full bg-brand-cloud-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-cloud-blue dark:bg-blue-400/10 dark:text-blue-300">
-              Organizer
+          {message.isSponsor ? (
+            <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
+              Sponsor
             </span>
+          ) : (
+            message.isOrganizer && (
+              <span className="rounded-full bg-brand-cloud-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-cloud-blue dark:bg-blue-400/10 dark:text-blue-300">
+                Organizer
+              </span>
+            )
           )}
           <span className="text-xs text-gray-400 dark:text-gray-500">
             {formatRelativeTime(message.createdAt)}
@@ -1055,6 +1067,20 @@ export function ConversationThread({
     // oldest-first (chat convention, newest at the bottom).
     const flat = pages?.flat() ?? []
     return [...flat].reverse().map((msg) => {
+      // SPONSOR-authored (G2b): no speaker doc / participant — render the
+      // snapshot name and a "(Sponsor)" badge. Never "own" (the viewer here is
+      // always an organizer/speaker session, never the token-authed sponsor).
+      if (msg.authorSponsorId) {
+        return {
+          id: msg._id,
+          authorName: msg.authorName ?? 'Sponsor',
+          isOrganizer: false,
+          isSponsor: true,
+          isOwn: false,
+          body: msg.body,
+          createdAt: msg.createdAt,
+        }
+      }
       const p = participantById.get(msg.authorId)
       return {
         id: msg._id,
