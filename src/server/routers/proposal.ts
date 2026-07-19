@@ -74,13 +74,7 @@ import {
 } from '@/lib/proposal/server'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { getFeaturedTalks } from '@/lib/featured/sanity'
-import {
-  ensureProposalConversation,
-  getConversationById,
-  addMessage,
-} from '@/lib/messaging/sanity'
-import { notifyNewMessage } from '@/lib/messaging/notify'
-import { runAfterResponse } from '@/server/runAfterResponse'
+import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
 import '@/lib/events/registry'
 
 /**
@@ -771,12 +765,18 @@ export const proposalRouter = router({
           console.error('Failed to publish status change event:', error)
         })
 
-        // Messaging M4: an organizer decision comment also lands in the
+        // Messaging M4/S2: an organizer decision comment also lands in the
         // proposal's message thread, so the speaker keeps it with the rest of
-        // the conversation. Guarded never-fail: the status change above is
-        // already committed, so a messaging failure must not fail the action.
-        // NOTE: the speaker intentionally receives BOTH the status notification
-        // and a new-message notification (accepted by the maintainer).
+        // the conversation. We add the message (thread content + lastMessageAt
+        // bump) but DELIBERATELY SKIP the message fan-out (notifyNewMessage) —
+        // the DECISION STATUS RAIL is the single delivery for a decision: the
+        // `proposal_status_changed` hub notification and the decision email
+        // (published on `eventBus` above) ALREADY carry this same comment. Firing
+        // notifyNewMessage too would double-notify the speaker (a second hub
+        // item + a second email) for one organizer action. The message still
+        // appears in the thread on next open; it just doesn't generate its own
+        // notification. Guarded never-fail: the status change is already
+        // committed, so a messaging failure must not fail the action.
         const trimmedComment = comment?.trim()
         if (
           ctx.speaker.isOrganizer &&
@@ -790,26 +790,11 @@ export const proposalRouter = router({
               proposalTitle: proposal.title ?? 'Proposal',
               createdById: ctx.speaker._id,
             })
-            const conversation = await getConversationById(conversationId)
-            if (conversation) {
-              const message = await addMessage({
-                conversationId,
-                authorId: ctx.speaker._id,
-                body: trimmedComment,
-              })
-              // Never throws; fans out hub/email (no proposal actions, so no
-              // feedback loop with this procedure). Detached from the response
-              // path (A8) so the fan-out can't hang the decision action; the
-              // message is already committed above.
-              runAfterResponse(() =>
-                notifyNewMessage({
-                  conversation,
-                  message,
-                  authorId: ctx.speaker._id,
-                  conference,
-                }),
-              )
-            }
+            await addMessage({
+              conversationId,
+              authorId: ctx.speaker._id,
+              body: trimmedComment,
+            })
           } catch (error) {
             console.error(
               'Failed to mirror decision comment into the proposal thread:',

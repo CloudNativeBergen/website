@@ -10,6 +10,7 @@ import type {
   ConversationPreference,
   ConversationStatus,
   ConversationView,
+  ConversationViewCounts,
   ConversationWithContext,
   EmailOverride,
   Message,
@@ -65,7 +66,8 @@ const CONVERSATION_PROJECTION = `{
   lastMessageAt,
   "status": coalesce(status, 'open'),
   "assignedTo": assignedTo->{ _id, name },
-  archivedAt
+  archivedAt,
+  "archivedBy": archivedBy->{ _id, name }
 }`
 
 // ---------------------------------------------------------------------------
@@ -115,13 +117,27 @@ export const LAST_AUTHOR_REF =
 const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && defined(${LAST_AUTHOR_REF}) && !(${LAST_AUTHOR_REF} in $organizerIds)`
 
 /**
- * Build the GROQ predicate fragment (leading ` && ...`, or empty for `all`) for
- * an inbox `view`, plus whether it references `$organizerIds` (only
- * `needs-reply` does). See {@link ConversationView} for the full semantics; the
- * ORGANIZER `active` set — status open AND not globally archived AND not
- * per-user archived — is the shared base of the organizer-only views.
+ * The non-organizer access scope: a speaker sees only conversations they
+ * created, are the subject speaker of, or are a proposal-speaker on. Exported as
+ * ONE string so the inbox list and the view-count projection (S7) apply the
+ * IDENTICAL scope — the tab badges can never count threads the list wouldn't
+ * show. Binds `$speakerId`.
  */
-function buildViewPredicate(
+export const SPEAKER_SCOPE_PREDICATE =
+  '(createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
+
+/**
+ * The RAW GROQ predicate for an inbox `view` (no leading ` && `, empty for
+ * `all`), plus whether it references `$organizerIds` (only `needs-reply` does).
+ * This is the single home for every view's filter so the inbox list
+ * ({@link buildViewPredicate}) and the count-per-view projection
+ * ({@link getConversationViewCounts}, S7) share EXACTLY the same predicates —
+ * a badge count can never disagree with the list it labels. See
+ * {@link ConversationView} for the full semantics; the ORGANIZER `active` set —
+ * status open AND not globally archived AND not per-user archived — is the
+ * shared base of the organizer-only views.
+ */
+export function rawViewPredicate(
   view: ConversationView,
   isOrganizer: boolean,
 ): { predicate: string; needsOrganizerIds: boolean } {
@@ -130,42 +146,55 @@ function buildViewPredicate(
     // and status are organizer-side concepts a speaker never filters on.
     switch (view) {
       case 'archived':
-        return { predicate: ` && ${USER_ARCHIVED}`, needsOrganizerIds: false }
+        return { predicate: USER_ARCHIVED, needsOrganizerIds: false }
       case 'all':
         return { predicate: '', needsOrganizerIds: false }
       default: // 'active'
-        return {
-          predicate: ` && ${NOT_USER_ARCHIVED}`,
-          needsOrganizerIds: false,
-        }
+        return { predicate: NOT_USER_ARCHIVED, needsOrganizerIds: false }
     }
   }
   const active = `${STATUS_OPEN} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`
   switch (view) {
     case 'needs-reply':
       return {
-        predicate: ` && ${active} && ${NEEDS_REPLY}`,
+        predicate: `${active} && ${NEEDS_REPLY}`,
         needsOrganizerIds: true,
       }
     case 'mine':
       return {
-        predicate: ` && ${active} && assignedTo._ref == $speakerId`,
+        predicate: `${active} && assignedTo._ref == $speakerId`,
         needsOrganizerIds: false,
       }
     case 'resolved':
       return {
-        predicate: ` && ${STATUS_RESOLVED} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`,
+        predicate: `${STATUS_RESOLVED} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`,
         needsOrganizerIds: false,
       }
     case 'archived':
       return {
-        predicate: ` && (${GLOBALLY_ARCHIVED} || ${USER_ARCHIVED})`,
+        predicate: `(${GLOBALLY_ARCHIVED} || ${USER_ARCHIVED})`,
         needsOrganizerIds: false,
       }
     case 'all':
       return { predicate: '', needsOrganizerIds: false }
     default: // 'active'
-      return { predicate: ` && ${active}`, needsOrganizerIds: false }
+      return { predicate: active, needsOrganizerIds: false }
+  }
+}
+
+/**
+ * Build the GROQ predicate FRAGMENT (leading ` && ...`, or empty for `all`) for
+ * an inbox `view` — the inline form the list query ANDs into its base filter.
+ * Thin wrapper over {@link rawViewPredicate}.
+ */
+function buildViewPredicate(
+  view: ConversationView,
+  isOrganizer: boolean,
+): { predicate: string; needsOrganizerIds: boolean } {
+  const { predicate, needsOrganizerIds } = rawViewPredicate(view, isOrganizer)
+  return {
+    predicate: predicate ? ` && ${predicate}` : '',
+    needsOrganizerIds,
   }
 }
 
@@ -389,8 +418,7 @@ export async function listConversationsForSpeaker({
 
   let scope = ''
   if (!isOrganizer) {
-    scope =
-      ' && (createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
+    scope = ` && ${SPEAKER_SCOPE_PREDICATE}`
   }
 
   // Resolve the organizer id set UP FRONT for organizers: the `needs-reply`
@@ -420,6 +448,7 @@ export async function listConversationsForSpeaker({
     subject,
     "proposalId": proposal._ref,
     "proposalTitle": proposal->title,
+    "subjectSpeakerId": subjectSpeaker._ref,
     createdAt,
     lastMessageAt,
     "status": coalesce(status, 'open'),
@@ -509,7 +538,7 @@ export async function listConversationsForSpeaker({
     }
   }
 
-  return rows.map((row) => {
+  const items = rows.map((row) => {
     // Match EITHER audience variant; the caller received only one of them.
     const unreadCount =
       (linkCounts.get(conversationLinkPath(row, true)) ?? 0) +
@@ -542,12 +571,19 @@ export async function listConversationsForSpeaker({
       row.status !== 'resolved' &&
       row.lastMessage != null &&
       !organizerSet.has(row.lastMessage.authorId)
+    // DIRECT-THREAD IDENTITY (S10), viewer-relative: the caller is personally
+    // addressed — they ARE the subject speaker (organizer-initiated thread
+    // about/to them) OR they are the assignee.
+    const subjectSpeakerId = row.subjectSpeakerId ?? undefined
+    const direct =
+      subjectSpeakerId === speakerId || row.assignedTo?._id === speakerId
     return {
       _id: row._id,
       conversationType: row.conversationType,
       subject: row.subject,
       proposalId: row.proposalId,
       proposalTitle: row.proposalTitle,
+      subjectSpeakerId,
       createdAt: row.createdAt,
       lastMessageAt: row.lastMessageAt,
       unreadCount,
@@ -566,8 +602,24 @@ export async function listConversationsForSpeaker({
         : null,
       needsReply,
       archived,
+      direct,
     }
   })
+
+  // ACTIVE-VIEW DIRECT GROUPING (S10b, organizer audience only): float direct
+  // threads above non-direct ones. A STABLE partition WITHIN the fetched page —
+  // the base fetch already orders by (lastMessageAt desc, _id desc), so recency
+  // is preserved inside each group. TRADEOFF: because keyset pagination pages by
+  // lastMessageAt, this groups direct-first only within each page, not globally
+  // across page boundaries; a fully global grouping would need a second sort key
+  // in the cursor. Accepted (maintainer): the first page — where it matters most
+  // — is correctly grouped, and within-page recency is intact.
+  if (isOrganizer && view === 'active') {
+    const directRows = items.filter((item) => item.direct)
+    const rest = items.filter((item) => !item.direct)
+    return [...directRows, ...rest]
+  }
+  return items
 }
 
 /** A raw inbox row as projected by GROQ, before counterpart/excerpt mapping. */
@@ -579,7 +631,11 @@ type RawConversationRow = Omit<
   | 'assignedTo'
   | 'needsReply'
   | 'archived'
+  | 'subjectSpeakerId'
+  | 'direct'
 > & {
+  // `subjectSpeaker._ref` — null for proposal / speaker-created threads.
+  subjectSpeakerId: string | null
   lastMessage: {
     authorId: string
     authorName: string | null
@@ -626,6 +682,75 @@ function resolveCounterpart(
     return { name: author.authorName, image: author.authorImage ?? undefined }
   }
   return { name: ORGANIZERS_LABEL }
+}
+
+/**
+ * Conversation COUNTS per inbox view for the tab badges (S7). ORGANIZERS get
+ * `{ active, needsReply, mine, resolved, archived }`; SPEAKERS get
+ * `{ active, archived }` (the organizer-only tabs are omitted).
+ *
+ * ONE GROQ round trip: a single object projection whose fields are each a
+ * `count(*[<base> && <viewPredicate>])`, reusing the EXACT predicate strings the
+ * inbox list applies ({@link rawViewPredicate} + {@link SPEAKER_SCOPE_PREDICATE})
+ * so a badge can never disagree with the list it labels. The correlated
+ * per-user-archive / last-author subqueries inside those predicates use `^`,
+ * which resolves to the conversation being counted (one nesting level, exactly
+ * as in the list query).
+ *
+ * COST: bounded and cheap — the counts scan only this conference's conversation
+ * set (`conference._ref == $conferenceId`, plus the speaker scope for a
+ * non-organizer), no pagination, no document bodies fetched; the per-view
+ * `count()`s are evaluated server-side in the one request. It is meant to be
+ * called alongside the first inbox page, not polled hot.
+ */
+export async function getConversationViewCounts({
+  speakerId,
+  isOrganizer,
+  conferenceId,
+}: {
+  speakerId: string
+  isOrganizer: boolean
+  conferenceId: string
+}): Promise<ConversationViewCounts> {
+  const params: Record<string, unknown> = { conferenceId, speakerId }
+  const base = `_type == "conversation" && conference._ref == $conferenceId`
+  const scope = isOrganizer ? '' : ` && ${SPEAKER_SCOPE_PREDICATE}`
+
+  // Build one `count()` field per relevant view from the shared predicates.
+  const views: ConversationView[] = isOrganizer
+    ? ['active', 'needs-reply', 'mine', 'resolved', 'archived']
+    : ['active', 'archived']
+  // Stable field keys (the enum's hyphenated names aren't valid identifiers).
+  const KEY: Record<string, keyof ConversationViewCounts> = {
+    active: 'active',
+    'needs-reply': 'needsReply',
+    mine: 'mine',
+    resolved: 'resolved',
+    archived: 'archived',
+  }
+
+  const fields: string[] = []
+  for (const view of views) {
+    const { predicate, needsOrganizerIds } = rawViewPredicate(view, isOrganizer)
+    if (needsOrganizerIds) params.organizerIds = await getOrganizerSpeakerIds()
+    const filter = predicate ? ` && ${predicate}` : ''
+    fields.push(`"${KEY[view]}": count(*[${base}${scope}${filter}])`)
+  }
+
+  const result = await clientReadUncached.fetch<Partial<
+    Record<keyof ConversationViewCounts, number>
+  > | null>(`{ ${fields.join(', ')} }`, params, { cache: 'no-store' })
+
+  const counts: ConversationViewCounts = {
+    active: result?.active ?? 0,
+    archived: result?.archived ?? 0,
+  }
+  if (isOrganizer) {
+    counts.needsReply = result?.needsReply ?? 0
+    counts.mine = result?.mine ?? 0
+    counts.resolved = result?.resolved ?? 0
+  }
+  return counts
 }
 
 /**
@@ -761,15 +886,25 @@ export async function speakerExists(speakerId: string): Promise<boolean> {
 /**
  * Append a message AND bump the parent conversation's `lastMessageAt` in ONE
  * transaction (the two must never drift apart). Returns the created message.
+ *
+ * REOPEN-ON-REPLY (S3): pass `reopen: true` to ALSO set the conversation's
+ * `status` back to `'open'` in the SAME transaction. The router sets this when a
+ * NON-organizer replies to a `resolved` thread, so the speaker's follow-up
+ * re-enters the organizer needs-reply queue atomically with the message write (no
+ * window where the message exists but the thread is still resolved). Organizer
+ * replies never pass it (an organizer answering a resolved thread keeps it
+ * resolved).
  */
 export async function addMessage({
   conversationId,
   authorId,
   body,
+  reopen = false,
 }: {
   conversationId: string
   authorId: string
   body: string
+  reopen?: boolean
 }): Promise<Message> {
   const now = new Date().toISOString()
   const messageId = `message.${nanoid()}`
@@ -784,7 +919,13 @@ export async function addMessage({
       body,
       createdAt: now,
     })
-    .patch(conversationId, (patch) => patch.set({ lastMessageAt: now }))
+    .patch(conversationId, (patch) =>
+      patch.set(
+        reopen
+          ? { lastMessageAt: now, status: 'open' }
+          : { lastMessageAt: now },
+      ),
+    )
     .commit()
 
   return { _id: messageId, conversationId, authorId, body, createdAt: now }
@@ -823,23 +964,33 @@ export async function setConversationAssignee(
 }
 
 /**
- * Set/clear the GLOBAL organizer archive. Archiving stamps `archivedAt = now`;
- * because a thread is globally archived IFF `archivedAt >= lastMessageAt`, a
- * later message auto-resurfaces it with no further write. Unarchiving simply
- * unsets the field.
+ * Set/clear the GLOBAL organizer archive. Archiving stamps `archivedAt = now`
+ * AND records `archivedBy` (the organizer who archived it) for the audit trail
+ * (S6); because a thread is globally archived IFF `archivedAt >= lastMessageAt`,
+ * a later message auto-resurfaces it with no further write. Unarchiving unsets
+ * BOTH fields together (a cleared archive has no archiver). The `archiverId` ref
+ * is WEAK so erasing a speaker (GDPR) doesn't orphan-block their deletion —
+ * consistent with the other speaker refs on this doc.
  */
 export async function setConversationArchived(
   conversationId: string,
   archived: boolean,
+  archiverId: string,
 ): Promise<void> {
   if (archived) {
     await clientWrite
       .patch(conversationId)
-      .set({ archivedAt: new Date().toISOString() })
+      .set({
+        archivedAt: new Date().toISOString(),
+        archivedBy: { ...createReference(archiverId), _weak: true },
+      })
       .commit()
     return
   }
-  await clientWrite.patch(conversationId).unset(['archivedAt']).commit()
+  await clientWrite
+    .patch(conversationId)
+    .unset(['archivedAt', 'archivedBy'])
+    .commit()
 }
 
 // ---------------------------------------------------------------------------

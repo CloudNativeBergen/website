@@ -235,6 +235,51 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(tx.commit).toHaveBeenCalledTimes(1)
   })
 
+  it('DIRECT title (S10c): recipient IS the subject speaker → "Direct message from ..."', async () => {
+    readMock.fetch.mockResolvedValue([]) // new doc
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([
+      msgInput({ recipientId: 'sp-1', subjectSpeakerId: 'sp-1' }),
+    ])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.title).toBe('Direct message from Alice — A question')
+  })
+
+  it('NON-direct title: subjectSpeaker is a DIFFERENT recipient → standard title', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([
+      msgInput({ recipientId: 'sp-1', subjectSpeakerId: 'sp-2' }),
+    ])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.title).toBe('New message from Alice — A question')
+  })
+
+  it('DIRECT collapse form is unchanged: N>1 keeps the count title (S10c)', async () => {
+    readMock.fetch.mockResolvedValue([{ _id: MSG_ID, readAt: null, count: 2 }])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([
+      msgInput({ recipientId: 'sp-1', subjectSpeakerId: 'sp-1' }),
+    ])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.title).toBe('3 new messages — A question')
+  })
+
   it('UNREAD existing: increments count and switches to the N-messages title', async () => {
     readMock.fetch.mockResolvedValue([{ _id: MSG_ID, readAt: null, count: 2 }])
     const tx = installTransaction()

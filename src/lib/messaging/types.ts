@@ -89,6 +89,19 @@ export interface ConversationWithContext {
   status?: ConversationStatus
   assignedTo?: ConversationAssignee | null
   archivedAt?: string | null
+  /**
+   * WHO globally archived the thread (deref of the weak `archivedBy` ref), so
+   * the thread header can render "Archived by X" (S6). Set alongside
+   * `archivedAt` and unset with it; null when the thread is not archived (or the
+   * archiver speaker was erased). Only meaningful when `archivedAt` is set.
+   */
+  archivedBy?: ConversationArchiver | null
+}
+
+/** The organizer who globally archived a thread (deref of `archivedBy`). */
+export interface ConversationArchiver {
+  _id: string
+  name: string
 }
 
 /** The newest message of a conversation, summarized for an inbox row (M6). */
@@ -137,6 +150,20 @@ export interface ConversationListItem {
   lastMessage: ConversationLastMessage | null
   /** Audience-aware "who" for the row (see {@link ConversationCounterpart}). */
   counterpart: ConversationCounterpart
+  /**
+   * The speaker an organizer-initiated general thread is ABOUT/with (the
+   * conversation's `subjectSpeaker`); undefined for proposal or speaker-created
+   * threads. Projected so the client can derive direct-thread identity (S10).
+   */
+  subjectSpeakerId?: string
+  /**
+   * DIRECT-THREAD IDENTITY (S10), VIEWER-RELATIVE: this thread personally
+   * addresses the caller — the caller IS the conversation's `subjectSpeaker`
+   * (an organizer-initiated thread about/to them) OR the caller is its
+   * `assignedTo`. Computed server-side so the client stays dumb; drives the
+   * distinct direct-vs-org-broadcast chip/accent and the Active-view grouping.
+   */
+  direct?: boolean
   // NOTE: the ticketing fields below are ALWAYS populated by the data layer
   // (`listConversationsForSpeaker`). They are declared optional ONLY so that
   // pre-ticketing fixtures/stories (owned by the T2 UI work) still satisfy the
@@ -156,6 +183,19 @@ export interface ConversationListItem {
    * globally OR per-user archived; for a speaker, per-user archived only.
    */
   archived?: boolean
+}
+
+/**
+ * Per-view unread-independent CONVERSATION COUNTS for the inbox tab badges (S7).
+ * ORGANIZERS get every tab; SPEAKERS only `active` + `archived` (the
+ * organizer-only tabs are omitted — undefined — for a speaker caller).
+ */
+export interface ConversationViewCounts {
+  active: number
+  archived: number
+  needsReply?: number
+  mine?: number
+  resolved?: number
 }
 
 /** A single message in a thread. */

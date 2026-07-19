@@ -155,6 +155,27 @@ describe('HUB fan-out — per-recipient collapse-upsert inputs, actor excluded',
       expect(item.message).toContain('Hello there')
     }
   })
+
+  it('threads the conversation subjectSpeakerId into hub items (S10c direct title)', async () => {
+    const orgInitiated: ConversationWithContext = {
+      ...proposalConv,
+      _id: 'conversation.gen-1',
+      conversationType: 'general',
+      proposalId: undefined,
+      proposalSpeakerIds: [],
+      createdById: 'org-1',
+      subjectSpeakerId: 'sp-2',
+    }
+    await notifyNewMessage({
+      conversation: orgInitiated,
+      message: { ...message, authorId: 'org-1' },
+      authorId: 'org-1',
+      conference,
+    })
+    const items = lastItems()
+    const bob = items.find((i) => i.recipientId === 'sp-2')
+    expect(bob?.subjectSpeakerId).toBe('sp-2')
+  })
 })
 
 describe('muting — excluded from every channel', () => {
@@ -175,9 +196,34 @@ describe('muting — excluded from every channel', () => {
   })
 })
 
-describe('EMAIL — on by default, explicit opt-out wins', () => {
-  it('emails only recipients whose effective pref is ON', async () => {
-    // sp-2 has messagingEmailDefault true; org-1 is EXPLICITLY false (opt-out).
+// The org-contact copy (name === 'Organizers') and the individual-recipients
+// call are two SEPARATE sendMessageEmails calls for a speaker-authored message.
+type EmailRecip = {
+  email: string
+  name: string
+  isOrganizer: boolean
+  replyUrl: string
+  firstContact?: boolean
+}
+const isOrgContactCall = (c: [EmailRecip[], unknown]) =>
+  c[0].length === 1 && c[0][0].name === 'Organizers'
+const individualRecipients = (): EmailRecip[] => {
+  const call = emailMock.mock.calls.find(
+    (c) => !isOrgContactCall(c as [EmailRecip[], unknown]),
+  )
+  return (call?.[0] ?? []) as EmailRecip[]
+}
+const orgContactRecipient = (): EmailRecip | undefined => {
+  const call = emailMock.mock.calls.find((c) =>
+    isOrgContactCall(c as [EmailRecip[], unknown]),
+  )
+  return call?.[0]?.[0] as EmailRecip | undefined
+}
+
+describe('EMAIL — audience-dependent default (S1b), thread-page links (S8)', () => {
+  it('speaker recipient on by default; organizer recipient OFF by default', async () => {
+    // sp-2 (speaker) messagingEmailDefault true → on; org-1 (organizer) false →
+    // off (and would be off even if absent — organizers must opt IN).
     await notifyNewMessage({
       conversation: proposalConv,
       message,
@@ -185,18 +231,65 @@ describe('EMAIL — on by default, explicit opt-out wins', () => {
       conference,
     })
 
-    expect(emailMock).toHaveBeenCalledTimes(1)
-    const [recipients] = emailMock.mock.calls[0]
-    expect(recipients.map((r: { email: string }) => r.email)).toEqual([
-      'bob@x.no',
-    ])
-    // Speaker recipient → absolute cfp link.
-    expect(recipients[0].replyUrl).toBe(
-      'https://cndn.no/cfp/proposal/prop-1#messages',
+    const emails = individualRecipients().map((r) => r.email)
+    expect(emails).toEqual(['bob@x.no'])
+    // S8: email links point at the dedicated thread page, not the proposal
+    // `#messages` fragment.
+    expect(individualRecipients()[0].replyUrl).toBe(
+      'https://cndn.no/cfp/messages/conversation.proposal.prop-1',
     )
   })
 
-  it("respects a per-conversation 'on' override even when the speaker default is off", async () => {
+  it('an organizer recipient stays OFF even when messagingEmailDefault is absent (S1b opt-in)', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
+      { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' }, // speaker absent → on
+      { _id: 'org-1', name: 'Olga', email: 'olga@x.no' }, // organizer absent → OFF
+    ])
+
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference,
+    })
+
+    expect(individualRecipients().map((r) => r.email)).toEqual(['bob@x.no'])
+  })
+
+  it('an organizer recipient opts IN with messagingEmailDefault === true', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
+      {
+        _id: 'sp-2',
+        name: 'Bob',
+        email: 'bob@x.no',
+        messagingEmailDefault: false,
+      },
+      {
+        _id: 'org-1',
+        name: 'Olga',
+        email: 'olga@x.no',
+        messagingEmailDefault: true, // organizer opted in
+      },
+    ])
+
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference,
+    })
+
+    // org opted in; sp-2 opted out. Organizer email links go to /admin thread page.
+    const recips = individualRecipients()
+    expect(recips.map((r) => r.email)).toEqual(['olga@x.no'])
+    expect(recips[0].replyUrl).toBe(
+      'https://cndn.no/admin/messages/conversation.proposal.prop-1',
+    )
+  })
+
+  it("a per-conversation 'on' override pierces the organizer opt-out default", async () => {
     prefsMock.mockResolvedValue(
       new Map([['org-1', { muted: false, emailOverride: 'on' }]]),
     )
@@ -208,42 +301,15 @@ describe('EMAIL — on by default, explicit opt-out wins', () => {
       conference,
     })
 
-    const [recipients] = emailMock.mock.calls[0]
-    // org-1 forced on, plus sp-2 default-on.
-    expect(recipients.map((r: { email: string }) => r.email).sort()).toEqual([
-      'bob@x.no',
-      'olga@x.no',
-    ])
+    // org-1 forced on despite its default-off; sp-2 default-on.
+    expect(
+      individualRecipients()
+        .map((r) => r.email)
+        .sort(),
+    ).toEqual(['bob@x.no', 'olga@x.no'])
   })
 
-  it('emails a recipient whose speaker doc has NO messagingEmailDefault field (absent = enabled)', async () => {
-    fetchMock.mockResolvedValue([
-      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
-      // No messagingEmailDefault on sp-2: M4 absent-means-enabled.
-      { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
-      {
-        _id: 'org-1',
-        name: 'Olga',
-        email: 'olga@x.no',
-        messagingEmailDefault: false,
-      },
-    ])
-
-    await notifyNewMessage({
-      conversation: proposalConv,
-      message,
-      authorId: 'sp-1',
-      conference,
-    })
-
-    expect(emailMock).toHaveBeenCalledTimes(1)
-    const [recipients] = emailMock.mock.calls[0]
-    expect(recipients.map((r: { email: string }) => r.email)).toEqual([
-      'bob@x.no',
-    ])
-  })
-
-  it("respects a per-conversation 'off' override even when the speaker default is on", async () => {
+  it("a per-conversation 'off' override still beats a speaker's default-on", async () => {
     prefsMock.mockResolvedValue(
       new Map([['sp-2', { muted: false, emailOverride: 'off' }]]),
     )
@@ -255,40 +321,158 @@ describe('EMAIL — on by default, explicit opt-out wins', () => {
       conference,
     })
 
-    // sp-2 default-on is overridden off; org-1 remains explicitly opted out.
-    expect(emailMock).not.toHaveBeenCalled()
+    // sp-2 off; org-1 default-off. No INDIVIDUAL recipients (org-contact still fires).
+    expect(individualRecipients()).toEqual([])
+  })
+})
+
+describe('EMAIL — org-contact shared copy (S1a)', () => {
+  it('sends ONE organizer-variant copy to the org contact for a speaker-authored message', async () => {
+    // Prefer contactEmail over cfpEmail.
+    const withContact = {
+      ...conference,
+      contactEmail: 'hei@cndn.no',
+    } as unknown as Conference
+
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference: withContact,
+    })
+
+    const org = orgContactRecipient()
+    expect(org).toBeDefined()
+    expect(org!.email).toBe('hei@cndn.no')
+    expect(org!.isOrganizer).toBe(true)
+    expect(org!.firstContact).toBe(false)
+    // Admin thread-page reply link (S8).
+    expect(org!.replyUrl).toBe(
+      'https://cndn.no/admin/messages/conversation.proposal.prop-1',
+    )
   })
 
-  it('sends no email when every recipient has explicitly opted out', async () => {
-    fetchMock.mockResolvedValue([
-      {
-        _id: 'sp-1',
-        name: 'Alice',
-        email: 'alice@x.no',
-        messagingEmailDefault: false,
-      },
-      {
-        _id: 'sp-2',
-        name: 'Bob',
-        email: 'bob@x.no',
-        messagingEmailDefault: false,
-      },
-      {
-        _id: 'org-1',
-        name: 'Olga',
-        email: 'olga@x.no',
-        messagingEmailDefault: false,
-      },
-    ])
+  it('falls back to cfpEmail when contactEmail is unset', async () => {
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference, // only cfpEmail
+    })
+    expect(orgContactRecipient()?.email).toBe('cfp@cndn.no')
+  })
 
+  it('is MUTE-INDEPENDENT: still sent when every individual recipient is muted', async () => {
+    prefsMock.mockResolvedValue(
+      new Map([
+        ['org-1', { muted: true, emailOverride: 'default' }],
+        ['sp-2', { muted: true, emailOverride: 'default' }],
+      ]),
+    )
     await notifyNewMessage({
       conversation: proposalConv,
       message,
       authorId: 'sp-1',
       conference,
     })
+    expect(individualRecipients()).toEqual([])
+    expect(orgContactRecipient()?.email).toBe('cfp@cndn.no')
+  })
 
-    expect(emailMock).not.toHaveBeenCalled()
+  it('is NOT sent for an organizer-authored message', async () => {
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message: { ...message, authorId: 'org-1' },
+      authorId: 'org-1',
+      conference,
+    })
+    expect(orgContactRecipient()).toBeUndefined()
+  })
+
+  it('is skipped when neither contactEmail nor cfpEmail is set', async () => {
+    const noEmails = {
+      ...conference,
+      cfpEmail: undefined,
+      contactEmail: undefined,
+    } as unknown as Conference
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference: noEmails,
+    })
+    expect(orgContactRecipient()).toBeUndefined()
+  })
+})
+
+describe('EMAIL — first-contact warmer variant (S9c)', () => {
+  const orgInitiatedConv: ConversationWithContext = {
+    _id: 'conversation.gen-1',
+    conferenceId: 'conf-1',
+    conversationType: 'general',
+    proposalSpeakerIds: [],
+    createdById: 'org-1',
+    subjectSpeakerId: 'sp-2',
+    subject: 'Quick question',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastMessageAt: '2026-01-01T00:00:00.000Z',
+  }
+
+  it('flags firstContact for a SPEAKER recipient on an organizer-authored first message', async () => {
+    // speaker rows + the message-count fetch (=== 1 → first message).
+    fetchMock
+      .mockResolvedValueOnce([
+        {
+          _id: 'org-1',
+          name: 'Olga',
+          email: 'olga@x.no',
+          messagingEmailDefault: true,
+        },
+        { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
+      ])
+      .mockResolvedValueOnce(1) // count() === 1
+
+    await notifyNewMessage({
+      conversation: orgInitiatedConv,
+      message: {
+        ...message,
+        authorId: 'org-1',
+        conversationId: 'conversation.gen-1',
+      },
+      authorId: 'org-1',
+      conference,
+    })
+
+    const bob = individualRecipients().find((r) => r.email === 'bob@x.no')
+    expect(bob?.firstContact).toBe(true)
+  })
+
+  it('does NOT flag firstContact once the thread already has messages', async () => {
+    fetchMock
+      .mockResolvedValueOnce([
+        {
+          _id: 'org-1',
+          name: 'Olga',
+          email: 'olga@x.no',
+          messagingEmailDefault: true,
+        },
+        { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
+      ])
+      .mockResolvedValueOnce(3) // count() > 1 → not first
+
+    await notifyNewMessage({
+      conversation: orgInitiatedConv,
+      message: {
+        ...message,
+        authorId: 'org-1',
+        conversationId: 'conversation.gen-1',
+      },
+      authorId: 'org-1',
+      conference,
+    })
+
+    const bob = individualRecipients().find((r) => r.email === 'bob@x.no')
+    expect(bob?.firstContact).toBe(false)
   })
 })
 

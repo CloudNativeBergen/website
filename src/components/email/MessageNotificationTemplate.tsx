@@ -15,10 +15,17 @@ export interface MessageNotificationTemplateProps {
   replyUrl: string
   /**
    * Whether the recipient is an organizer. Organizers get organizer-phrased copy
-   * (replying reaches the speaker + fellow organizers) and a `/admin` replyUrl;
-   * speakers get speaker-phrased copy (replying reaches the organizers).
+   * (replies land in the CFP inbox, not the conversation) and a `/admin`
+   * replyUrl; speakers get speaker-phrased copy (replies reach the organizers'
+   * shared inbox).
    */
   isOrganizer?: boolean
+  /**
+   * Whether this is a speaker's FIRST contact in a thread (S9c) — an organizer
+   * opening a conversation. Renders a warmer heading + intro. Only ever set for
+   * a speaker recipient.
+   */
+  firstContact?: boolean
   /** Absolute link to the recipient's notification preferences (cfp profile). */
   preferencesUrl?: string
   eventName: string
@@ -39,6 +46,7 @@ export function MessageNotificationTemplate({
   excerpt,
   replyUrl,
   isOrganizer = false,
+  firstContact = false,
   preferencesUrl,
   eventName,
   eventLocation,
@@ -47,13 +55,25 @@ export function MessageNotificationTemplate({
   socialLinks = [],
 }: MessageNotificationTemplateProps) {
   const customContent = {
-    heading: 'New message',
+    heading: firstContact
+      ? `The ${eventName} organizers reached out`
+      : 'New message',
     body: (
       <>
         <div style={{ marginBottom: '24px' }}>
           <EmailText>
-            <strong>{authorName}</strong> sent you a new message about{' '}
-            <strong>&quot;{subject}&quot;</strong>.
+            {firstContact ? (
+              <>
+                The <strong>{eventName}</strong> organizers have started a
+                conversation with you about{' '}
+                <strong>&quot;{subject}&quot;</strong>.
+              </>
+            ) : (
+              <>
+                <strong>{authorName}</strong> sent you a new message about{' '}
+                <strong>&quot;{subject}&quot;</strong>.
+              </>
+            )}
           </EmailText>
         </div>
 
@@ -74,16 +94,19 @@ export function MessageNotificationTemplate({
           <EmailButton href={replyUrl}>Reply in app</EmailButton>
         </div>
 
+        {/* S9a: truthful reply-fallback copy. There is no Reply-To / inbound
+            handler, so a reply never reaches the conversation — it lands in the
+            CFP inbox that organizers read. */}
         <EmailText size="14px" color="#64748B">
-          Prefer email?{' '}
           {isOrganizer
-            ? 'Replying to this email reaches the speaker and fellow organizers by email, while replying in the app keeps the whole conversation in one place.'
-            : 'Replying to this email reaches the organizers by email, while replying in the app keeps the whole conversation in one place.'}
+            ? 'Replies to this email land in the CFP inbox, not the conversation. Reply in the app to post to the thread.'
+            : "Replying to this email reaches the organizers' shared inbox — for the full conversation, reply in the app."}
         </EmailText>
 
+        {/* S9b: describe what the link actually opens — the GLOBAL message-email
+            setting on your profile — with no per-conversation promise. */}
         <EmailText size="14px" color="#64748B">
-          You can manage message emails for this conversation from its
-          notification settings.{' '}
+          The link below opens the global message-email setting on your profile.{' '}
           {preferencesUrl && (
             <a
               href={preferencesUrl}

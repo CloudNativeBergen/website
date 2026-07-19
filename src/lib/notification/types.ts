@@ -15,6 +15,9 @@ export type NotificationType =
   // A stale, unanswered speaker↔organizer thread (ticketing stale-nudge cron).
   // Rendered generically by the hub (title/message/actor); no dedicated icon.
   | 'message_stale'
+  // A conversation was assigned to this organizer for follow-up (S4). Rendered
+  // generically by the hub (title/message/actor); no dedicated icon.
+  | 'conversation_assigned'
   | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'
@@ -77,6 +80,13 @@ export interface MessageNotificationInput {
   actorId?: string
   /** Weakly referenced proposal (talk) id, for proposal threads. */
   relatedProposalId?: string
+  /**
+   * The conversation's `subjectSpeaker` id (organizer-initiated thread about/to a
+   * speaker), if any. When it EQUALS this item's `recipientId`, the collapsed
+   * notification's single-message title becomes the DIRECT variant (S10) —
+   * "Direct message from <author> — <subject>".
+   */
+  subjectSpeakerId?: string
 }
 
 /** The actor sub-object projected for the client. */

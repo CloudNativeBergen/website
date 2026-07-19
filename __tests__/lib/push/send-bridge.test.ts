@@ -94,6 +94,16 @@ describe('pushCategoryForNotificationType', () => {
     expect(pushCategoryForNotificationType('message_received')).toBe('messages')
   })
 
+  it('maps message_stale → messages (S5)', () => {
+    expect(pushCategoryForNotificationType('message_stale')).toBe('messages')
+  })
+
+  it('maps conversation_assigned → messages (S4)', () => {
+    expect(pushCategoryForNotificationType('conversation_assigned')).toBe(
+      'messages',
+    )
+  })
+
   it.each([
     'proposal_submitted',
     'travel_support_update',
