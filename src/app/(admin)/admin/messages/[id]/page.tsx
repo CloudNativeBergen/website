@@ -27,9 +27,12 @@ export default async function AdminConversationPage({
   }
 
   return (
-    // dvh-bounded column so the composer stays pinned above the iOS PWA
-    // keyboard: the message list flexes and scrolls, the composer does not.
-    <div className="mx-auto flex h-[100dvh] max-w-3xl flex-col p-4">
+    // Content-sized column: the card hugs its content and the LIST caps its own
+    // height (max-h in ConversationThread's standalone mode), so long threads
+    // scroll internally WITHOUT the page claiming a full viewport inside the
+    // dashboard shell — an h-[100dvh] wrapper here stacked on the shell's chrome
+    // and produced ~200px of dead scroll below the card.
+    <div className="mx-auto max-w-3xl p-4">
       <div className="mb-4 shrink-0">
         <BackLink fallbackUrl="/admin/messages">Back to Messages</BackLink>
       </div>

@@ -688,11 +688,12 @@ export function ConversationThreadView({
     <div
       role="region"
       aria-label={subject ? `Conversation: ${subject}` : 'Conversation'}
-      // fillHeight sizes to CONTENT and only SHRINKS (list scrolls) when the
-      // thread exceeds the viewport — never grows, so a short thread keeps the
-      // composer right under the last message instead of pinned to the bottom
-      // of a stretched card.
-      className={fillHeight ? 'flex min-h-0 flex-col' : 'flex flex-col'}
+      // Standalone (fillHeight) sizes to CONTENT with the LIST capping its own
+      // height (max-h below) — a short thread keeps the composer right under the
+      // last message, a long thread scrolls the list internally, and the page
+      // never claims viewport height inside the shell (which stacked on the
+      // shell's chrome and produced dead scroll below the card).
+      className="flex flex-col"
     >
       {(subject || onSetMuted || onSetStatus) && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
@@ -793,7 +794,13 @@ export function ConversationThreadView({
         ref={scrollRef}
         onScroll={handleScroll}
         className={`space-y-3 overflow-y-auto overscroll-contain py-4 ${
-          fillHeight ? 'min-h-[8rem] shrink' : 'max-h-[60vh] min-h-[8rem]'
+          // Standalone gets a taller cap than the proposal embed: the page is
+          // dedicated to the thread, but the cap (not a viewport-filling flex
+          // chain) is what keeps composer + header on screen with no dead
+          // scroll under the dashboard shell's chrome.
+          fillHeight
+            ? 'max-h-[65dvh] min-h-[8rem]'
+            : 'max-h-[60vh] min-h-[8rem]'
         }`}
       >
         {isLoading ? (

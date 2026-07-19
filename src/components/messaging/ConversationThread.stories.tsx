@@ -342,10 +342,9 @@ export const SpeakerArchiveAffordanceDark: Story = {
 
 /**
  * The standalone thread page layout (fillHeight) with a SHORT thread: the card
- * must size to its content — composer directly under the last message — and
- * NOT stretch to fill the viewport-height container (the maintainer-reported
- * "unnecessarily high" regression). The wrapper mimics the message pages'
- * h-[100dvh] column at a fixed capture height.
+ * sizes to content: composer directly under the last message, no stretched
+ * card and no dead scroll below it (the standalone pages no longer claim
+ * viewport height inside the shell).
  */
 export const FillHeightShortThread: Story = {
   args: {
@@ -355,7 +354,7 @@ export const FillHeightShortThread: Story = {
     fillHeight: true,
   },
   render: (args) => (
-    <div className="flex h-[760px] flex-col">
+    <div>
       <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <ConversationThreadView
           {...args}
@@ -378,7 +377,7 @@ export const FillHeightLongThread: Story = {
     fillHeight: true,
   },
   render: (args) => (
-    <div className="flex h-[760px] flex-col">
+    <div>
       <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <ConversationThreadView {...args} messages={makeLongHistory()} />
       </div>
