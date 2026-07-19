@@ -74,15 +74,18 @@ const makeItems = (): ConversationListItem[] => [
 ]
 
 /** msw handler answering the inbox's `message.listConversations` infinite query
- * with a single page (fewer than PAGE_SIZE rows ⇒ no "show more"). */
-const conversationHandlers = (items: ConversationListItem[]) => [
+ * with a single page (fewer than PAGE_SIZE rows ⇒ no "show more"). Takes a
+ * BUILDER, invoked per request, so `minutesAgo` timestamps are computed after
+ * `mockDateBeforeEach` has pinned the clock — calling `makeItems()` at module
+ * load would freeze them against the real wall clock instead. */
+const conversationHandlers = (getItems: () => ConversationListItem[]) => [
   http.get('/api/trpc/:procs', ({ params }) =>
     HttpResponse.json(
       String(params.procs)
         .split(',')
         .map((proc) =>
           proc === 'message.listConversations'
-            ? { result: { data: items } }
+            ? { result: { data: getItems() } }
             : { result: { data: null } },
         ),
     ),
@@ -136,30 +139,30 @@ type Story = StoryObj<typeof meta>
 /** Speaker audience with no conversations yet — the empty state. */
 export const SpeakerEmpty: Story = {
   args: { audience: 'speaker' },
-  parameters: { msw: { handlers: conversationHandlers([]) } },
+  parameters: { msw: { handlers: conversationHandlers(() => []) } },
 }
 
 /** Organizer audience with no conversations yet — the empty state. */
 export const OrganizerEmpty: Story = {
   args: { audience: 'organizer' },
-  parameters: { msw: { handlers: conversationHandlers([]) } },
+  parameters: { msw: { handlers: conversationHandlers(() => []) } },
 }
 
 /** Speaker inbox with a representative Who/What/When mix (rows link to /cfp). */
 export const SpeakerPopulated: Story = {
   args: { audience: 'speaker' },
-  parameters: { msw: { handlers: conversationHandlers(makeItems()) } },
+  parameters: { msw: { handlers: conversationHandlers(makeItems) } },
 }
 
 export const SpeakerEmptyDark: Story = {
   args: { audience: 'speaker' },
-  parameters: { dark: true, msw: { handlers: conversationHandlers([]) } },
+  parameters: { dark: true, msw: { handlers: conversationHandlers(() => []) } },
 }
 
 export const SpeakerPopulatedDark: Story = {
   args: { audience: 'speaker' },
   parameters: {
     dark: true,
-    msw: { handlers: conversationHandlers(makeItems()) },
+    msw: { handlers: conversationHandlers(makeItems) },
   },
 }
