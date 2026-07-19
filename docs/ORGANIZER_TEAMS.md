@@ -117,11 +117,26 @@ untouched by routing; only which organizers receive the fan-out narrows. Access,
 `canAccessConversation`, participant/party resolution, and inbox visibility are
 left entirely alone — this change adds no access boundary.
 
-## Greenlit lenses (TEAMS-3)
+## Lenses (TEAMS-3 — IMPLEMENTED)
 
-Four further lenses are greenlit on this foundation, all still soft: a team
-inbox/triage view, per-team dashboards, per-team digest scheduling, and
-team-scoped assignment suggestions. None of them introduce access boundaries.
+The four shipped lenses, all soft (visible only when teams are configured;
+none introduce access boundaries):
+
+1. **Inbox "My teams" view** — an organizer inbox tab filtering active threads
+   whose ROUTING team (sponsor threads → `sponsors`, everything else → `cfp`)
+   is one of the caller's teams. Inert (matches all active) for organizers on
+   no team; the tab is hidden entirely when the conference has no teams.
+2. **Team chips on inbox rows** — a sponsor row's amber chip shows the
+   sponsors-team TITLE (fallback "Sponsor"); other rows get a quiet cfp-team
+   chip. No chips when teams aren't configured.
+3. **CRM team filter** — a Teams option group in the sponsor pipeline's Owner
+   filter (`team=<key>` URL param → the team's member set).
+4. **Dashboard "My areas" widget** — per-team needs-attention cards
+   (needs-reply threads, unassigned sponsors, pending volunteers) with
+   deep links, visible when the viewer belongs to ≥1 team.
+
+Earlier aspirational candidates (per-team digest scheduling, assignment
+suggestions) remain unbuilt and unscheduled.
 
 ## Foundation scope (TEAMS-1)
 
