@@ -4,6 +4,7 @@ import Link from 'next/link'
 import {
   PencilIcon,
   ChatBubbleBottomCenterTextIcon,
+  ChatBubbleLeftRightIcon,
   VideoCameraIcon,
   ExclamationTriangleIcon,
   MinusCircleIcon,
@@ -39,6 +40,13 @@ interface CompactProposalListProps {
   proposals: ProposalExisting[]
   canEdit: boolean
   conferenceHasEnded?: boolean
+  /**
+   * Unread message count per proposal id (V2b). A row with a positive count
+   * shows an unread-messages badge. Presentational — the parent
+   * ({@link CompactConferenceCard}) owns the `message.unreadByProposalIds` query
+   * and passes the map down, so this component stays testable without tRPC.
+   */
+  unreadByProposalId?: Record<string, number>
 }
 
 function getProposalStatusConfig(
@@ -79,6 +87,7 @@ export function CompactProposalList({
   proposals,
   canEdit,
   conferenceHasEnded = false,
+  unreadByProposalId,
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
   const router = useRouter()
@@ -138,6 +147,8 @@ export function CompactProposalList({
             proposal.attachments.some((a) => a.attachmentType === 'slides')
           const showMissingAttachments = isApproved && !hasAttachments
 
+          const unreadMessages = unreadByProposalId?.[proposal._id] ?? 0
+
           return (
             <div
               key={proposal._id}
@@ -196,6 +207,20 @@ export function CompactProposalList({
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {unreadMessages > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-brand-cloud-blue/10 px-2.5 py-1 text-xs font-semibold text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400"
+                    title={`${unreadMessages} unread message${
+                      unreadMessages === 1 ? '' : 's'
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className="h-3 w-3" />
+                    {unreadMessages}
+                    <span className="sr-only">
+                      unread message{unreadMessages === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                )}
                 {showFeedback && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"

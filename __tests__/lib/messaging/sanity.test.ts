@@ -44,6 +44,7 @@ import {
   listConversationsForSpeaker,
   listMessages,
   speakerExists,
+  getUnreadCountsByProposalIds,
 } from '@/lib/messaging/sanity'
 import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import type { ConversationWithContext } from '@/lib/messaging/types'
@@ -803,5 +804,67 @@ describe('truncateToGraphemeBoundary (B6)', () => {
   it('keeps a whole emoji when the cap lands exactly after it', () => {
     // 'a' + 😀 (2 code units) = length 3; cap 3 keeps both.
     expect(truncateToGraphemeBoundary('a😀bc', 3)).toBe('a😀')
+  })
+})
+
+describe('getUnreadCountsByProposalIds (V2b)', () => {
+  beforeEach(() => {
+    readMock.fetch.mockReset()
+  })
+
+  it('returns {} without querying when no proposal ids are given', async () => {
+    const out = await getUnreadCountsByProposalIds({
+      speakerId: 'me',
+      conferenceId: 'conf-1',
+      proposalIds: [],
+    })
+    expect(out).toEqual({})
+    expect(readMock.fetch).not.toHaveBeenCalled()
+  })
+
+  it('maps unread notifications back onto their proposal, summing collapsed counts', async () => {
+    // Speaker received the /cfp variant for prop-1 (count 3); prop-2 has none.
+    readMock.fetch.mockResolvedValueOnce([
+      { link: '/cfp/proposal/prop-1#messages', count: 3 },
+    ])
+    const out = await getUnreadCountsByProposalIds({
+      speakerId: 'me',
+      conferenceId: 'conf-1',
+      proposalIds: ['prop-1', 'prop-2'],
+    })
+    expect(out).toEqual({ 'prop-1': 3 })
+
+    // ONE round trip, scoped to the caller's own notifications and both variants.
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    const [, params] = readMock.fetch.mock.calls[0]
+    expect(params).toMatchObject({ speakerId: 'me', conferenceId: 'conf-1' })
+    expect(params.links).toContain('/cfp/proposal/prop-1#messages')
+    expect(params.links).toContain('/admin/proposals/prop-1#messages')
+  })
+
+  it('sums an organizer-variant link (count absent ⇒ 1) onto the proposal', async () => {
+    readMock.fetch.mockResolvedValueOnce([
+      { link: '/admin/proposals/prop-9#messages', count: 1 },
+      { link: '/admin/proposals/prop-9#messages', count: 1 },
+    ])
+    const out = await getUnreadCountsByProposalIds({
+      speakerId: 'org',
+      conferenceId: 'conf-1',
+      proposalIds: ['prop-9'],
+    })
+    expect(out).toEqual({ 'prop-9': 2 })
+  })
+
+  it('de-dupes proposal ids and ignores unmatched/null links', async () => {
+    readMock.fetch.mockResolvedValueOnce([
+      { link: null, count: 5 },
+      { link: '/cfp/proposal/other#messages', count: 4 },
+    ])
+    const out = await getUnreadCountsByProposalIds({
+      speakerId: 'me',
+      conferenceId: 'conf-1',
+      proposalIds: ['prop-1', 'prop-1'],
+    })
+    expect(out).toEqual({})
   })
 })

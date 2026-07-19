@@ -17,6 +17,7 @@ import { BadgeShare } from '@/components/cfp/BadgeShare'
 import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmationHandler'
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
+import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
@@ -279,6 +280,10 @@ export default async function SpeakerDashboard() {
         </div>
 
         <div className="mt-6">
+          <MessagesIntroCard />
+        </div>
+
+        <div className="mt-6">
           <NotSeeingTalksPrompt
             hasProposals={false}
             providers={speakerProviders}
@@ -312,6 +317,8 @@ export default async function SpeakerDashboard() {
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Main Content */}
         <div className="flex-1 space-y-3">
+          <MessagesIntroCard />
+
           {activeConferences.map((conferenceData) => (
             <CompactConferenceCard
               key={conferenceData.conference._id}

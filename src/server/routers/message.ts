@@ -12,6 +12,7 @@ import {
   SetStatusSchema,
   SetAssigneeSchema,
   SetArchivedSchema,
+  UnreadByProposalIdsSchema,
   parseMessageCursor,
 } from '@/server/schemas/message'
 import {
@@ -29,6 +30,7 @@ import {
   setConversationAssignee,
   setConversationArchived,
   getConversationViewCounts,
+  getUnreadCountsByProposalIds,
   canAccessConversation,
 } from '@/lib/messaging/sanity'
 import {
@@ -187,6 +189,24 @@ export const messageRouter = router({
       conferenceId,
     })
   }),
+
+  /**
+   * Unread message counts keyed by proposal id, for the CALLER (speaker-journey
+   * badges on proposal-list rows, V2b). ONE bounded GROQ over the caller's own
+   * unread `message_received` notifications — reuses the same notification store
+   * the inbox badges derive from, so no new polling. Reads only the caller's
+   * notifications, so arbitrary proposal ids reveal nothing.
+   */
+  unreadByProposalIds: protectedProcedure
+    .input(UnreadByProposalIdsSchema)
+    .query(async ({ ctx, input }) => {
+      const conferenceId = await resolveConferenceId()
+      return getUnreadCountsByProposalIds({
+        speakerId: ctx.speaker._id,
+        conferenceId,
+        proposalIds: input.proposalIds,
+      })
+    }),
 
   /** A single conversation + participants + the caller's own preference. */
   getConversation: protectedProcedure

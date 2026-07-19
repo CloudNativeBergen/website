@@ -11,6 +11,7 @@ import {
 import { Flags, Speaker } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { formatConferenceDateLong } from '@/lib/time'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import { expect, within } from 'storybook/test'
 
 const mockSpeakers: Speaker[] = [
@@ -130,6 +131,7 @@ const meta = {
     },
   },
   tags: ['autodocs'],
+  beforeEach: mockDateBeforeEach(new Date('2025-01-15T09:00:00Z')),
   decorators: [
     (Story: React.ComponentType) => (
       <div className="max-w-2xl">
@@ -226,6 +228,28 @@ export const SingleProposal: Story = {
       ),
     ],
     canEdit: true,
+  },
+}
+
+export const WithUnreadMessages: Story = {
+  args: {
+    proposals: mixedStatusProposals,
+    canEdit: true,
+    unreadByProposalId: { 'talk-1': 3, 'talk-3': 1 },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Rows whose proposal thread has unread messages show a blue unread-messages badge (count) alongside the status badge (V2b).',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // The unread counts render as badges with an accessible label.
+    expect(await canvas.findByText('3')).toBeInTheDocument()
+    expect(canvas.getAllByText(/unread message/i).length).toBeGreaterThan(0)
   },
 }
 

@@ -81,6 +81,7 @@ export function ProposalRejectTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      showMessagesLink
       footer={footer}
     >
       {decisionText}

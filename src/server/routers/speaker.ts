@@ -104,6 +104,29 @@ export const speakerRouter = router({
       }
     }),
 
+  /**
+   * NARROW autosave for the message-emails default (V2a). The profile page's
+   * "Message emails" toggle calls this on change so the setting sticks WITHOUT
+   * pressing "Update Profile" — and without persisting any half-edited fields
+   * still sitting in the profile form's local state (which a full `update` would
+   * sweep up). Writes exactly one boolean on the caller's own speaker doc.
+   */
+  setMessagingEmailDefault: protectedProcedure
+    .input(z.object({ messagingEmailDefault: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { speaker, err } = await updateSpeaker(ctx.speaker._id, {
+        messagingEmailDefault: input.messagingEmailDefault,
+      })
+      if (err || !speaker) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update message-email preference',
+          cause: err ?? undefined,
+        })
+      }
+      return { messagingEmailDefault: input.messagingEmailDefault }
+    }),
+
   // Get OAuth provider emails
   getEmails: protectedProcedure.query(async ({ ctx }) => {
     // Session is guaranteed by protectedProcedure, but account may not exist

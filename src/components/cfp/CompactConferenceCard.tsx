@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { api } from '@/lib/trpc/client'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { Speaker } from '@/lib/speaker/types'
 import { CompactConferenceHeader } from './CompactConferenceHeader'
@@ -24,6 +25,16 @@ export function CompactConferenceCard({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
   const { proposals, galleryImages, workshopStats, travelSupport, badges } =
     data
+
+  // Unread-message badges (V2b): ONE bounded `message.unreadByProposalIds` query
+  // per card that has proposals, reusing the caller's existing notification
+  // store (no new polling). Gated on `proposals.length` so cards without talks
+  // (gallery/workshop-only editions) never fire it.
+  const proposalIds = useMemo(() => proposals.map((p) => p._id), [proposals])
+  const { data: unreadByProposalId } = api.message.unreadByProposalIds.useQuery(
+    { proposalIds },
+    { enabled: proposalIds.length > 0, staleTime: 30_000 },
+  )
 
   const hasContent =
     proposals.length > 0 ||
@@ -62,6 +73,7 @@ export function CompactConferenceCard({
               proposals={proposals}
               canEdit={data.canEditProposals}
               conferenceHasEnded={data.isOver}
+              unreadByProposalId={unreadByProposalId}
             />
           )}
 

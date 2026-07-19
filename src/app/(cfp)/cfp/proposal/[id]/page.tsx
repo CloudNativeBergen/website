@@ -13,6 +13,8 @@ import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPa
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
 import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { ProposalMessagesSection } from '@/components/messaging'
+import { getUnreadCountsByProposalIds } from '@/lib/messaging/sanity'
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
@@ -110,6 +112,40 @@ export default async function ProposalViewPage({
 
   const backUrl = buildUrlWithImpersonation('/cfp/list', session)
 
+  // Unread-messages signal for THIS proposal thread (V2b): one bounded read of
+  // the caller's own message notifications. Non-fatal — a failed read just hides
+  // the badge.
+  const unreadMessages = await getUnreadCountsByProposalIds({
+    speakerId: session.speaker._id,
+    conferenceId: conference._id,
+    proposalIds: [id],
+  })
+    .then((counts) => counts[id] ?? 0)
+    .catch(() => 0)
+
+  // Compact "N unread messages" jump-link, shown near the top when there is
+  // unread activity (V2b). Anchors to the `#messages` section mounted below.
+  const unreadMessagesLink =
+    unreadMessages > 0 ? (
+      <a
+        href="#messages"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-cloud-blue/10 px-3 py-1.5 text-sm font-medium text-brand-cloud-blue transition-colors hover:bg-brand-cloud-blue/20 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50"
+      >
+        <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+        {unreadMessages} unread message{unreadMessages === 1 ? '' : 's'}
+      </a>
+    ) : null
+
+  // Adoption pitch above the messages section (V2c): rendered here in the PAGE
+  // (not inside ProposalMessagesSection, which the parallel messaging batch owns)
+  // so no messaging component is touched.
+  const messagesPitch = (
+    <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+      Questions about this proposal? Message the organizers below &mdash;
+      replies arrive here, by email, and as push.
+    </p>
+  )
+
   // Editable proposals (draft/submitted) render the edit form
   if (proposal.status === 'draft' || proposal.status === 'submitted') {
     let speakerData: { name: string; email: string } = currentUserSpeaker
@@ -138,6 +174,7 @@ export default async function ProposalViewPage({
               ? 'Continue working on your draft. Save your progress or submit when ready.'
               : 'Update your proposal details'}
           </p>
+          {unreadMessagesLink}
         </div>
 
         <div className="flex gap-6">
@@ -163,6 +200,7 @@ export default async function ProposalViewPage({
         </div>
 
         <div className="mt-6 max-w-4xl">
+          {messagesPitch}
           <ProposalMessagesSection proposalId={id} audience="speaker" />
         </div>
       </div>
@@ -182,6 +220,7 @@ export default async function ProposalViewPage({
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Read-only view of your proposal
         </p>
+        {unreadMessagesLink}
       </div>
 
       <div className="flex gap-6">
@@ -219,6 +258,7 @@ export default async function ProposalViewPage({
       </div>
 
       <div className="mt-6 max-w-4xl">
+        {messagesPitch}
         <ProposalMessagesSection proposalId={id} audience="speaker" />
       </div>
     </div>

@@ -74,6 +74,55 @@ export function CFPProfilePage({
   const speaker = profile || initialSpeaker
   const [speakerData, setSpeakerData] = useState(speaker)
 
+  // AUTOSAVE for the message-emails toggle (V2a). The toggle used to only mutate
+  // local `speakerData`, so the setting silently didn't stick unless the user
+  // also pressed the distant "Update Profile" button. It now saves ON CHANGE via
+  // a NARROW mutation (`speaker.setMessagingEmailDefault`, just this one field —
+  // so it never sweeps up half-edited profile-form fields), mirroring the
+  // per-category autosave pattern in PushNotificationSettings: optimistic UI with
+  // inline saved/error feedback, independent of the form submit.
+  const [emailSaveState, setEmailSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle')
+  const messagingEmailMutation =
+    api.speaker.setMessagingEmailDefault.useMutation()
+
+  const handleToggleMessagingEmail = useCallback(() => {
+    // Absent/true = on; only an explicit false is off (M4 absent-means-enabled).
+    const currentlyOn = speakerData.messagingEmailDefault !== false
+    const next = !currentlyOn
+    // Optimistic: flip local state immediately so the switch is responsive.
+    setSpeakerData((prev) => ({ ...prev, messagingEmailDefault: next }))
+    setEmailSaveState('saving')
+    messagingEmailMutation.mutate(
+      { messagingEmailDefault: next },
+      {
+        onSuccess: () => {
+          setEmailSaveState('saved')
+          setTimeout(
+            () =>
+              // Only clear the "Saved" note if nothing newer started saving.
+              setEmailSaveState((s) => (s === 'saved' ? 'idle' : s)),
+            2000,
+          )
+          refreshProfile()
+        },
+        onError: () => {
+          // Revert the optimistic flip so the UI matches the unsaved server state.
+          setSpeakerData((prev) => ({
+            ...prev,
+            messagingEmailDefault: currentlyOn,
+          }))
+          setEmailSaveState('error')
+        },
+      },
+    )
+  }, [
+    speakerData.messagingEmailDefault,
+    messagingEmailMutation,
+    refreshProfile,
+  ])
+
   const { uploadImage, error: uploadError } = useSpeakerImageUpload({
     speakerId: speaker._id,
   })
@@ -314,21 +363,18 @@ export function CFPProfilePage({
                   to rely on in-app notifications only — you can still override
                   it per conversation.
                 </label>
-                {/* ABSENT-MEANS-ENABLED (M4): only an explicit false is off. */}
+                {/* ABSENT-MEANS-ENABLED (M4): only an explicit false is off.
+                    Saves ON CHANGE (V2a) — disabled while a save is in flight so
+                    rapid double-toggles serialize and settle on the last intent. */}
                 <button
                   type="button"
                   role="switch"
                   id="messaging-email-default"
                   aria-checked={speakerData.messagingEmailDefault !== false}
                   aria-label="Email me about new messages"
-                  onClick={() =>
-                    setSpeakerData((prev) => ({
-                      ...prev,
-                      messagingEmailDefault:
-                        prev.messagingEmailDefault === false,
-                    }))
-                  }
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue ${
+                  disabled={messagingEmailMutation.isPending}
+                  onClick={handleToggleMessagingEmail}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 ${
                     speakerData.messagingEmailDefault !== false
                       ? 'bg-brand-cloud-blue dark:bg-blue-600'
                       : 'bg-gray-200 dark:bg-gray-600'
@@ -344,6 +390,21 @@ export function CFPProfilePage({
                   />
                 </button>
               </div>
+              {emailSaveState !== 'idle' && (
+                <p
+                  role="status"
+                  className={`font-inter mt-2 text-sm ${
+                    emailSaveState === 'error'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {emailSaveState === 'saving' && 'Saving…'}
+                  {emailSaveState === 'saved' && 'Saved'}
+                  {emailSaveState === 'error' &&
+                    'Couldn’t save that change. Please try again.'}
+                </p>
+              )}
             </section>
 
             <PushNotificationSettings />
