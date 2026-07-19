@@ -304,23 +304,26 @@ export function CFPProfilePage({
                 htmlFor="messaging-email-default"
                 className="font-inter flex-1 text-sm text-gray-600 dark:text-gray-400"
               >
-                Email me when an organizer replies in one of my conversations.
-                You can still override this per conversation.
+                Message emails are on by default: we email you when an organizer
+                writes in one of your conversations. Turn this off to rely on
+                in-app notifications only — you can still override it per
+                conversation.
               </label>
+              {/* ABSENT-MEANS-ENABLED (M4): only an explicit false is off. */}
               <button
                 type="button"
                 role="switch"
                 id="messaging-email-default"
-                aria-checked={speakerData.messagingEmailDefault === true}
+                aria-checked={speakerData.messagingEmailDefault !== false}
                 aria-label="Email me about new messages"
                 onClick={() =>
                   setSpeakerData((prev) => ({
                     ...prev,
-                    messagingEmailDefault: !prev.messagingEmailDefault,
+                    messagingEmailDefault: prev.messagingEmailDefault === false,
                   }))
                 }
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue ${
-                  speakerData.messagingEmailDefault
+                  speakerData.messagingEmailDefault !== false
                     ? 'bg-brand-cloud-blue dark:bg-blue-600'
                     : 'bg-gray-200 dark:bg-gray-600'
                 }`}
@@ -328,7 +331,7 @@ export function CFPProfilePage({
                 <span
                   aria-hidden="true"
                   className={`pointer-events-none inline-block h-5 w-5 translate-y-0.5 rounded-full bg-white shadow-sm transition-transform ${
-                    speakerData.messagingEmailDefault
+                    speakerData.messagingEmailDefault !== false
                       ? 'translate-x-5'
                       : 'translate-x-0.5'
                   }`}

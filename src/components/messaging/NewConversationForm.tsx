@@ -38,6 +38,11 @@ export interface NewConversationFormProps {
    * form in their own success flow (modal + toast) pass `false`.
    */
   navigateOnCreate?: boolean
+  /**
+   * Autofocus the first relevant field on mount (subject, or the message body
+   * in proposal mode). Used by modal/sheet mounts so they open ready to type.
+   */
+  autoFocusFirstField?: boolean
   /** Optional callback after a thread is created (before navigation). */
   onCreated?: (conversationId: string) => void
   /** Optional cancel handler (e.g. to collapse the form). */
@@ -57,6 +62,7 @@ export function NewConversationForm({
   fixedRecipient,
   proposalId,
   navigateOnCreate = true,
+  autoFocusFirstField = false,
   onCreated,
   onCancel,
 }: NewConversationFormProps) {
@@ -174,9 +180,10 @@ export function NewConversationForm({
             type="text"
             value={subject}
             maxLength={MAX_SUBJECT}
+            autoFocus={autoFocusFirstField}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="What's this about?"
-            className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            className="mt-1 block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
           />
         </div>
       )}
@@ -193,6 +200,7 @@ export function NewConversationForm({
           value={body}
           maxLength={MAX_BODY}
           rows={4}
+          autoFocus={autoFocusFirstField && isProposalThread}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write your first message…"
           className="mt-1 block w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
@@ -207,12 +215,13 @@ export function NewConversationForm({
         </p>
       )}
 
-      <div className="flex justify-end gap-2">
+      {/* Mobile: stacked, full-width, 44px touch targets; sm+: inline row. */}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-300 dark:hover:bg-gray-800"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue sm:w-auto dark:text-gray-300 dark:hover:bg-gray-800"
           >
             Cancel
           </button>
@@ -220,7 +229,7 @@ export function NewConversationForm({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex items-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:bg-blue-600 dark:hover:bg-blue-500"
         >
           {isProposalThread
             ? sendMutation.isPending

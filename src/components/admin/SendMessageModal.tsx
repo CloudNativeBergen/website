@@ -35,7 +35,8 @@ export function SendMessageModal({
   const notifications = useNotificationSafe()
   const [sent, setSent] = useState(false)
 
-  // Escape closes, focus is trapped and restored, body scroll locked.
+  // Escape closes, focus is trapped and restored, body scroll locked; initial
+  // focus prefers the form's autoFocus field over the header Close button.
   useModalA11y(dialogRef, onClose)
 
   const threadHref = `/admin/proposals/${proposalId}#messages`
@@ -50,7 +51,11 @@ export function SendMessageModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // <sm this renders as a BOTTOM SHEET, replicating the schedule editor's
+    // house pattern (src/components/admin/schedule/mobile/BottomSheet.tsx):
+    // rounded-t-2xl, max-h-[85dvh], scrollable overscroll-contained body with
+    // safe-area bottom padding. On sm+ it is a centered dialog.
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center sm:p-4">
       <button
         type="button"
         aria-label="Close"
@@ -63,9 +68,9 @@ export function SendMessageModal({
         aria-modal="true"
         aria-labelledby="send-message-modal-title"
         tabIndex={-1}
-        className="relative w-full max-w-lg rounded-xl bg-white shadow-xl focus:outline-none dark:bg-gray-900"
+        className="relative flex max-h-[85dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl focus:outline-none sm:max-w-lg sm:rounded-xl dark:bg-gray-900"
       >
-        <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+        <div className="flex shrink-0 items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
           <div className="flex min-w-0 items-start gap-2.5">
             <ChatBubbleLeftRightIcon
               className="mt-0.5 h-5 w-5 shrink-0 text-brand-cloud-blue dark:text-blue-400"
@@ -87,13 +92,13 @@ export function SendMessageModal({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
+            className="ml-3 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-5">
           {sent ? (
             <div className="text-center">
               <CheckCircleIcon
@@ -107,18 +112,18 @@ export function SendMessageModal({
                 The speaker(s) will find it in this proposal&apos;s
                 conversation.
               </p>
-              <div className="mt-4 flex justify-center gap-2">
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-300 dark:hover:bg-gray-800"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue sm:w-auto dark:text-gray-300 dark:hover:bg-gray-800"
                 >
                   Close
                 </button>
                 <Link
                   href={threadHref}
                   onClick={onClose}
-                  className="inline-flex items-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue sm:w-auto dark:bg-blue-600 dark:hover:bg-blue-500"
                 >
                   View conversation
                 </Link>
@@ -135,6 +140,7 @@ export function SendMessageModal({
                 basePath="/admin/messages"
                 proposalId={proposalId}
                 navigateOnCreate={false}
+                autoFocusFirstField
                 onCreated={handleCreated}
                 onCancel={onClose}
               />

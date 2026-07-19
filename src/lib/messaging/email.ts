@@ -48,6 +48,10 @@ async function sendOne(
           subject,
           excerpt,
           replyUrl: recipient.replyUrl,
+          // Same domain source as the deep link; profile hosts the settings.
+          preferencesUrl: conference.domains?.[0]
+            ? `https://${conference.domains[0]}/cfp/profile`
+            : undefined,
           eventName: conference.title,
           eventLocation: `${conference.city}, ${conference.country}`,
           eventDate: conference.startDate
