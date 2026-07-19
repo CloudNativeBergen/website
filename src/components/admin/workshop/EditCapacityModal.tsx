@@ -33,8 +33,9 @@ export function EditCapacityModal({
   }, [currentCapacity, isOpen])
 
   const handleSubmit = () => {
+    // The inline error (isInvalid) and the disabled submit button already
+    // surface this; guard silently rather than firing a native alert().
     if (capacity < currentSignups) {
-      alert(`Capacity cannot be less than current signups (${currentSignups})`)
       return
     }
     onSubmit(capacity)

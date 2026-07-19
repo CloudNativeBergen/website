@@ -324,7 +324,7 @@ export function EmailModal({
       onClose={handleClose}
       size="3xl"
       padded={false}
-      className="flex max-h-[90vh] flex-col"
+      className="flex max-h-[90dvh] flex-col"
     >
       <div className="flex items-center justify-between border-b border-gray-200 p-6 pb-4 dark:border-gray-700">
         <div className="flex-1">
@@ -413,11 +413,11 @@ export function EmailModal({
                 </div>
               </div>
 
-              <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
+              <div className="flex flex-col border-b border-gray-200/50 px-6 py-3 sm:flex-row sm:items-center dark:border-gray-700/50">
                 <div
                   className={
                     templateSelector
-                      ? 'flex w-1/2 items-center'
+                      ? 'flex w-full items-center sm:w-1/2'
                       : 'flex flex-1 items-center'
                   }
                 >
@@ -431,7 +431,7 @@ export function EmailModal({
                   </div>
                 </div>
                 {templateSelector && (
-                  <div className="flex w-1/2 items-center border-l border-gray-200/50 pl-4 dark:border-gray-700/50">
+                  <div className="mt-2 flex w-full items-center border-gray-200/50 sm:mt-0 sm:w-1/2 sm:border-l sm:pl-4 dark:border-gray-700/50">
                     <label className="font-space-grotesk mr-2 text-sm font-medium text-gray-600 dark:text-gray-300">
                       Template:
                     </label>
@@ -507,7 +507,7 @@ export function EmailModal({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 justify-between border-t border-gray-200 p-6 dark:border-gray-700">
+      <div className="flex shrink-0 justify-between border-t border-gray-200 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] dark:border-gray-700">
         <div className="flex space-x-3">
           {previewComponent && (
             <button

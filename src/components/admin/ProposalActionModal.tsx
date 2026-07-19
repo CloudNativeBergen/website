@@ -154,10 +154,10 @@ export function ProposalActionModal({
       padded={false}
       className="relative overflow-hidden px-6 py-5 sm:p-8"
     >
-      <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
+      <div className="absolute top-0 right-0 pt-2 pr-2">
         <button
           type="button"
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-400"
+          className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-400"
           onClick={() => close()}
         >
           <span className="sr-only">Close</span>

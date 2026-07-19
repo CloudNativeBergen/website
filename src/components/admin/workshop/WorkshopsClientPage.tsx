@@ -16,7 +16,6 @@ import type {
   ProposalWithWorkshopData,
 } from '@/lib/workshop/types'
 import { useQueryClient } from '@tanstack/react-query'
-import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { EmptyState } from '@/components/EmptyState'
 
 interface SignupModalState {
@@ -70,11 +69,6 @@ export function WorkshopsClientPage({
       currentCapacity: 0,
       currentSignups: 0,
     })
-  const [deleteSignupInfo, setDeleteSignupInfo] = useState<{
-    signupId: string
-    userName: string
-  } | null>(null)
-
   const { data: signupsData, refetch: refetchSignups } =
     api.workshop.admin.getAllSignups.useQuery(
       {
@@ -180,14 +174,10 @@ export function WorkshopsClientPage({
     )
   }
 
-  const handleDeleteSignup = (signupId: string, userName: string) => {
-    setDeleteSignupInfo({ signupId, userName })
-  }
-
-  const confirmDeleteSignup = () => {
-    if (!deleteSignupInfo) return
-    deleteMutation.mutate({ signupId: deleteSignupInfo.signupId })
-    setDeleteSignupInfo(null)
+  // Confirmation is handled inside SignupDetailsModal (its own ConfirmationModal
+  // gates this destructive action), so this runs only after the admin confirms.
+  const handleDeleteSignup = (signupId: string) => {
+    deleteMutation.mutate({ signupId })
   }
 
   const handleAddParticipant = (participant: ParticipantFormData) => {
@@ -362,16 +352,6 @@ export function WorkshopsClientPage({
         currentSignups={editCapacityModal.currentSignups}
         onSubmit={handleUpdateCapacity}
         isSubmitting={updateCapacityMutation.isPending}
-      />
-
-      <ConfirmationModal
-        isOpen={!!deleteSignupInfo}
-        onClose={() => setDeleteSignupInfo(null)}
-        onConfirm={confirmDeleteSignup}
-        title="Delete Signup"
-        message={`Are you sure you want to permanently delete ${deleteSignupInfo?.userName}&apos;s signup?`}
-        confirmButtonText="Delete"
-        variant="danger"
       />
     </div>
   )

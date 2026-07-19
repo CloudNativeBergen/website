@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { formatDateSafe } from '@/lib/time'
 
 import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
 import type {
   WorkshopSignupExisting,
@@ -34,6 +36,11 @@ export function SignupDetailsModal({
   isConfirming = false,
   isDeleting = false,
 }: SignupDetailsModalProps) {
+  const [deleteTarget, setDeleteTarget] = useState<{
+    signupId: string
+    userName: string
+  } | null>(null)
+
   const statusLabel = status
     ? status.charAt(0).toUpperCase() + status.slice(1)
     : ''
@@ -82,9 +89,14 @@ export function SignupDetailsModal({
             </button>
           )}
           <button
-            onClick={() => onDeleteSignup(signup._id, signup.userName)}
+            onClick={() =>
+              setDeleteTarget({
+                signupId: signup._id,
+                userName: signup.userName,
+              })
+            }
             disabled={isConfirming || isDeleting}
-            className="text-gray-600 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-red-400"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-gray-600 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
             title="Delete participant"
           >
             <TrashIcon className="h-4 w-4" />
@@ -133,6 +145,26 @@ export function SignupDetailsModal({
           </div>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            onDeleteSignup(deleteTarget.signupId, deleteTarget.userName)
+          }
+          setDeleteTarget(null)
+        }}
+        title="Delete signup"
+        message={
+          deleteTarget
+            ? `Are you sure you want to permanently delete ${deleteTarget.userName}'s signup for ${workshopTitle}? This cannot be undone.`
+            : ''
+        }
+        confirmButtonText="Delete"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </ModalShell>
   )
 }

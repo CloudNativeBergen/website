@@ -170,7 +170,7 @@ export function SpeakerManagementModal({
       isOpen={isOpen}
       onClose={onClose}
       size="3xl"
-      className="max-h-[90vh] transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white transition-all dark:border-gray-700"
+      className="max-h-[90dvh] transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white transition-all dark:border-gray-700"
     >
       <div className="mb-6 flex items-start justify-between">
         <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
@@ -187,7 +187,7 @@ export function SpeakerManagementModal({
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="max-h-[calc(90vh-200px)] overflow-y-auto py-6">
+        <div className="max-h-[calc(90dvh-200px)] overflow-y-auto py-6">
           <div className="mb-6">
             <Input
               name="email"
@@ -232,7 +232,7 @@ export function SpeakerManagementModal({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex justify-end gap-3 pb-[env(safe-area-inset-bottom)]">
           <Button
             type="button"
             variant="outline"

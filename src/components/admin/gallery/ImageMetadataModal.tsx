@@ -72,6 +72,7 @@ export function ImageMetadataModal({
     right: number
   } | null>(singleImage?.image?.crop || null)
   const speakerInputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const { data: searchResults } = api.speaker.admin.search.useQuery(
     { query: speakerQuery, includeFeatured: true },
@@ -140,8 +141,9 @@ export function ImageMetadataModal({
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         if (!isSubmitting) {
-          const form = document.querySelector('form') as HTMLFormElement | null
-          form?.requestSubmit()
+          // Scope the submit to THIS modal's form via a ref — a document-wide
+          // querySelector('form') would submit the first form on the page.
+          formRef.current?.requestSubmit()
         }
       }
     }
@@ -252,7 +254,7 @@ export function ImageMetadataModal({
       isOpen={isOpen}
       onClose={onClose}
       size="2xl"
-      className="max-h-screen overflow-y-auto rounded-xl shadow-lg"
+      className="max-h-[90dvh] overflow-y-auto rounded-xl shadow-lg"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
@@ -306,7 +308,7 @@ export function ImageMetadataModal({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div className="space-y-4">
           {!isBulkMode && singleImage?.image && (
             <ImageHotspotEditor

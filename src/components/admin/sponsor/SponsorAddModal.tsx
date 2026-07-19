@@ -25,6 +25,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { SponsorLogoEditor } from './SponsorLogoEditor'
 import { ModalShell } from '@/components/ModalShell'
+import { useNotification } from '@/components/admin/NotificationProvider'
 
 interface SponsorAddModalProps {
   isOpen: boolean
@@ -53,6 +54,7 @@ export function SponsorAddModal({
   onSponsorUpdated,
 }: SponsorAddModalProps) {
   const companyNameInputRef = useRef<HTMLInputElement>(null)
+  const { showNotification } = useNotification()
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
@@ -281,7 +283,14 @@ export function SponsorAddModal({
       onClose()
     } catch (error) {
       console.error('Error submitting sponsor:', error)
-      alert('Error submitting sponsor. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to save sponsor',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'An unexpected error occurred. Please try again.',
+      })
     }
   }
 
@@ -349,15 +358,16 @@ export function SponsorAddModal({
       isOpen={isOpen}
       onClose={onClose}
       size="4xl"
-      className="max-h-screen overflow-y-auto rounded-xl shadow-lg"
+      className="max-h-[90dvh] overflow-y-auto rounded-xl shadow-lg"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
           {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
         </h3>
         <button
+          type="button"
           onClick={onClose}
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
+          className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
         >
           <span className="sr-only">Close</span>
           <XMarkIcon className="h-6 w-6" aria-hidden="true" />
@@ -601,13 +611,15 @@ export function SponsorAddModal({
               !isFormValid() ||
               createMutation.isPending ||
               updateMutation.isPending ||
-              crmCreateMutation.isPending
+              crmCreateMutation.isPending ||
+              crmUpdateMutation.isPending
             }
             className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
           >
             {createMutation.isPending ||
             updateMutation.isPending ||
-            crmCreateMutation.isPending
+            crmCreateMutation.isPending ||
+            crmUpdateMutation.isPending
               ? 'Saving...'
               : editingSponsor
                 ? 'Update Sponsor'
