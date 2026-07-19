@@ -41,10 +41,8 @@ import {
   canAddExpenses,
   verifyTravelSupportOwnership,
 } from '@/lib/travel-support/auth'
-import {
-  createNotifications,
-  getOrganizerSpeakerIds,
-} from '@/lib/notification/sanity'
+import { createNotifications } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import { TravelSupportStatus, ExpenseStatus } from '@/lib/travel-support/types'
 
@@ -293,7 +291,16 @@ export const travelSupportRouter = router({
           // conference ref is missing rather than writing a broken reference.
           const conferenceId = travelSupport.conference?._id
           if (conferenceId) {
-            const organizerIds = await getOrganizerSpeakerIds()
+            // TEAMS-2: travel-support is speaker-facing, CFP-side work (it
+            // travels with an accepted proposal's speaker), so its NEW-request
+            // organizer alert routes to the `cfp` team — all organizers when the
+            // team is not configured. The two speaker-facing status
+            // notifications below (recipient = the affected speaker) are NOT
+            // organizer fan-outs and are deliberately left unrouted.
+            const organizerIds = await resolveRoutedOrganizerIds({
+              conferenceId,
+              teamKey: 'cfp',
+            })
             await createNotifications(
               organizerIds
                 .filter((id) => id && id !== ctx.speaker._id)

@@ -50,9 +50,9 @@ import { clientWrite } from '@/lib/sanity/client'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
-  getOrganizerSpeakerIds,
   deleteMessageNotificationsFor,
 } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { Action, Status, isInactiveProposal } from '@/lib/proposal/types'
@@ -347,7 +347,12 @@ export const proposalRouter = router({
           // failure here (e.g. the organizer-id fetch) must not surface as a
           // create error to the submitting speaker.
           try {
-            const organizerIds = await getOrganizerSpeakerIds()
+            // TEAMS-2: proposal events route to the `cfp` team (all organizers
+            // when it is not configured — the shared fallback contract).
+            const organizerIds = await resolveRoutedOrganizerIds({
+              conferenceId: conference._id,
+              teamKey: 'cfp',
+            })
             await createNotifications(
               organizerIds
                 .filter((id) => id && id !== ctx.speaker._id)

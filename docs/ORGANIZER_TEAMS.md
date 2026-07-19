@@ -53,18 +53,69 @@ team-specific routing, fall back to all organizers." Keeping that decision at th
 call site makes absent-means-today a single, auditable choice rather than a
 hidden default buried in the resolver.
 
-## Adopted routing map (implemented in TEAMS-2)
+## Adopted routing map (IMPLEMENTED — TEAMS-2)
 
-The consumption layer (a separate change) wires message kinds to well-known team
-keys, each with the all-organizers fallback:
+The consumption layer wires message kinds to well-known team keys, each with the
+all-organizers fallback. Every rule is INERT until its team is configured: with
+no team the recipient set is exactly today's all-organizers behaviour.
 
-- **proposal** → `cfp`
-- **sponsor** → `sponsors`
-- **volunteers** → `volunteers`
-- **nudge / assignee** → the assignee's team → all organizers
+| Message kind                         | Team key                                          |
+| ------------------------------------ | ------------------------------------------------- |
+| proposal events                      | `cfp`                                             |
+| speaker threads (proposal + general) | `cfp`                                             |
+| travel-support (new request)         | `cfp`                                             |
+| sponsor events + sponsor threads     | `sponsors`                                        |
+| volunteer signups                    | `volunteers`                                      |
+| stale nudge                          | assignee → thread's team (`sponsors`/`cfp`) → all |
 
 Arbitrary additional keys beyond the well-known four are allowed; the constant is
 the routing map's anchor, not an allow-list.
+
+### The single fallback contract
+
+One helper — `resolveRoutedOrganizerIds({ conferenceId, teamKey })`
+(`src/lib/teams/routing.ts`) — is the ONLY place ABSENT-MEANS-TODAY becomes a
+concrete recipient set. It returns the team's members when the team is configured
+with **≥1 member**, otherwise the FULL organizer set (`getOrganizerSpeakerIds`).
+An empty team is treated identically to an absent one (routing to zero organizers
+is never the intent). It is **never-fail**: a teams-fetch error logs and falls
+back to all organizers rather than mis-routing to a partial set. Teams are
+**routing only** here — the helper's output is a notification recipient list and
+never touches access, inbox visibility, or participant/party resolution.
+
+### Routing sites
+
+Every all-organizer notification fan-out now resolves its recipients through the
+helper with the mapped key (actor-exclusion and each site's never-fail envelope
+are unchanged):
+
+- `src/lib/events/handlers/persistNotification.ts` — `submit` and
+  `confirm`/`withdraw` organizer fan-outs → `cfp`.
+- `src/server/routers/proposal.ts` — direct-create submission fan-out → `cfp`.
+- `src/server/routers/travelSupport.ts` — NEW-request organizer alert → `cfp`
+  (travel support is speaker-facing, CFP-side work). Its two speaker-facing
+  status notifications are NOT organizer fan-outs and stay unrouted.
+- `src/server/routers/volunteer.ts` — signup organizer mirror → `volunteers`.
+- `src/server/routers/sponsor.ts` — stage-move fan-out → `sponsors`.
+- `src/lib/messaging/notify.ts` — `notifyNewMessage` (speaker threads) routes the
+  organizer-group RECIPIENT expansion through `cfp`; `notifySponsorMessage` →
+  `sponsors`. See the access-vs-routing split note below.
+- `src/lib/messaging/nudge.ts` — assignee → thread's team → all organizers.
+- Slack: `sendSalesNotification` (sponsor message + sponsor events) resolves the
+  `sponsors`/`sales` channel; speaker-message Slack resolves the `cfp`/`cfp`
+  channel. Both fall back to today's conference channels exactly.
+
+### Access vs routing in `notify.ts`
+
+`notifyNewMessage` seeds TWO organizer id sets. The FULL set
+(`getOrganizerSpeakerIds`) stays the **classifier** — it decides whether the
+author is an organizer and whether each recipient is an organizer (which drives
+the audience-dependent email default and the per-audience deep link). The ROUTED
+set (`resolveRoutedOrganizerIds({ teamKey: 'cfp' })`) is used ONLY to expand the
+`organizers` group party into notification RECIPIENTS. Speaker parties are
+untouched by routing; only which organizers receive the fan-out narrows. Access,
+`canAccessConversation`, participant/party resolution, and inbox visibility are
+left entirely alone — this change adds no access boundary.
 
 ## Greenlit lenses (TEAMS-3)
 

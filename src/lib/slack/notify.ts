@@ -10,30 +10,44 @@ import {
   type SlackBlock,
   type SlackMessage,
 } from '@/lib/slack/client'
+import { resolveTeamSlackChannel } from '@/lib/teams'
 
+/**
+ * Post to the CFP Slack channel. An explicit `channel` (resolved from a team,
+ * TEAMS-2) overrides the conference default; when omitted the behaviour is
+ * exactly today's (`conference.cfpNotificationChannel`).
+ */
 async function sendSlackNotification(
   message: SlackMessage,
   conference: Conference,
+  channel: string | undefined = conference.cfpNotificationChannel,
 ) {
   try {
-    await postSlackMessage(message, {
-      channel: conference.cfpNotificationChannel,
-    })
+    await postSlackMessage(message, { channel })
   } catch (error) {
     console.error('Error sending Slack notification:', error)
   }
 }
 
+/**
+ * Post to the SALES Slack channel. Every caller is a sponsor concern, so the
+ * channel is resolved through the `sponsors` team (TEAMS-2) — a configured team
+ * `slackChannel` wins, otherwise it falls back to
+ * `conference.salesNotificationChannel`, i.e. exactly today's channel.
+ */
 async function sendSalesNotification(
   message: SlackMessage,
   conference: Conference,
 ) {
-  if (!conference.salesNotificationChannel) return
+  const channel = resolveTeamSlackChannel({
+    conference,
+    teamKey: 'sponsors',
+    kind: 'sales',
+  })
+  if (!channel) return
 
   try {
-    await postSlackMessage(message, {
-      channel: conference.salesNotificationChannel,
-    })
+    await postSlackMessage(message, { channel })
   } catch (error) {
     console.error('Error sending Slack sales notification:', error)
   }
@@ -283,7 +297,13 @@ export async function notifyNewSpeakerMessage(
   }
 
   const message = { blocks }
-  await sendSlackNotification(message, conference)
+  // TEAMS-2: speaker-message Slack routes through the `cfp` team channel,
+  // falling back to `cfpNotificationChannel` (today's channel) when unset.
+  await sendSlackNotification(
+    message,
+    conference,
+    resolveTeamSlackChannel({ conference, teamKey: 'cfp', kind: 'cfp' }),
+  )
 }
 
 /**

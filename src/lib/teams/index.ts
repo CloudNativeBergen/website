@@ -17,5 +17,6 @@ export {
   resolveTeamSlackChannel,
   resolveTeamEmailIdentity,
 } from './resolve'
+export { resolveRoutedOrganizerIds } from './routing'
 export { formatTeamSummary } from './format'
 export { TEAM_KEY_PATTERN, isValidTeamKey, countTeamKey } from './validation'

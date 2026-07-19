@@ -256,6 +256,18 @@ the hub rule — you are never notified about your own message). Participants ar
 proposal threads → proposal speakers ∪ organizers; general threads → creator ∪
 subjectSpeaker ∪ organizers.
 
+**Team routing (TEAMS-2).** The `organizers` half of that recipient set is
+expanded through the `cfp` team (`resolveRoutedOrganizerIds`,
+`src/lib/teams/routing.ts`): when a conference configures a non-empty `cfp` team,
+only its members receive the organizer fan-out; **with no team the set is exactly
+all organizers, as before**. This is the routing column only — the speaker
+participants, `canAccessConversation`, and inbox visibility are untouched (the
+FULL organizer set still classifies who is an organizer for the email-default and
+link columns below). Sponsor threads (`notifySponsorMessage`) route the same way
+through the `sponsors` team; see the sponsor fan-out matrix. See
+`docs/ORGANIZER_TEAMS.md` for the full routing map and the single fallback
+contract.
+
 ### Contract table (per new message)
 
 Columns are the recipient's per-conversation state. "hub", "push", "email",
@@ -300,7 +312,9 @@ Notes on each channel:
   conference contact address instead of each organizer — landing in
   `fix/messaging-ux-server`.
 - **SLACK.** Fires **only for speaker-authored** messages (`!authorIsOrganizer`),
-  one post to `conference.cfpNotificationChannel`, and is **independent of every
+  one post to the `cfp` team's Slack channel — `resolveTeamSlackChannel({ teamKey:
+'cfp', kind: 'cfp' })`, which falls back to `conference.cfpNotificationChannel`
+  (today's channel) when no team channel is set — and is **independent of every
   per-recipient preference** — muting your own hub/email does not silence the
   organizer channel. All interpolated fields are `escapeMrkdwn`-escaped. Slack is
   the one channel that is **mute-independent**.
@@ -514,18 +528,20 @@ id.
 A sibling of `notifyNewMessage` (integrated, not forked — reuses
 `upsertMessageNotifications`, bounded-concurrency email, `createSponsorActivity`).
 
-| Author        | Hub (+push)                                                                                   | Email                                                                                                                                 | Slack                                                                 | Activity                     |
-| ------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------- |
-| **Sponsor**   | ALL organizers, title `New message from <name> (Sponsor) — <subject>`, `/admin/messages/<id>` | — (no speaker/contact emails)                                                                                                         | **sales** channel (`sendSalesNotification`, "💬 New sponsor message") | `message` (system)           |
-| **Organizer** | the OTHER organizers (author excluded, mute-respected)                                        | ALL `contactPersons` via `sponsorEmail` from-address, deep-linked to the portal (`buildPortalUrl` + `#messages`), bounded concurrency | — (no Slack)                                                          | `message` (acting organizer) |
+| Author        | Hub (+push)                                                                                                                        | Email                                                                                                                                 | Slack                                                                                                   | Activity                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **Sponsor**   | the `sponsors` **team** (all organizers when unset), title `New message from <name> (Sponsor) — <subject>`, `/admin/messages/<id>` | — (no speaker/contact emails)                                                                                                         | **sales** channel (`sendSalesNotification` → `sponsors`/`sales` team channel, "💬 New sponsor message") | `message` (system)           |
+| **Organizer** | the `sponsors` **team** minus the author (mute-respected)                                                                          | ALL `contactPersons` via `sponsorEmail` from-address, deep-linked to the portal (`buildPortalUrl` + `#messages`), bounded concurrency | — (no Slack)                                                                                            | `message` (acting organizer) |
 
 **Preferences.** `conversationPreference` (mute/email) applies to the ORGANIZER
 participants exactly as for speaker threads. **Sponsors have no preference
 documents** (no speaker id to key one on) — they always receive the email.
 
-**Hub routing note.** Sponsor hub notifications currently route to **ALL
-organizers**. When the sponsors TEAM lands (**TEAMS-2**) this should route to that
-team instead of the whole organizer set (noted inline in `notify.ts`).
+**Hub routing note (TEAMS-2, implemented).** Sponsor hub notifications route
+through the `sponsors` team via `resolveRoutedOrganizerIds`, falling back to
+**ALL organizers** when that team is not configured (the single fallback
+contract). Team routing is recipient-only and adds no access boundary — see
+`docs/ORGANIZER_TEAMS.md`.
 
 ## Related documents
 

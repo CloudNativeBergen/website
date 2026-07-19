@@ -1,9 +1,7 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Action } from '@/lib/proposal/types'
-import {
-  createNotifications,
-  getOrganizerSpeakerIds,
-} from '@/lib/notification/sanity'
+import { createNotifications } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 
 /**
@@ -42,7 +40,12 @@ export async function handlePersistNotification(
   const proposalTitle = event.proposal.title
 
   if (event.action === Action.submit) {
-    const organizerIds = await getOrganizerSpeakerIds()
+    // TEAMS-2: proposal events route to the `cfp` team (all organizers when it
+    // is not configured — the shared fallback contract).
+    const organizerIds = await resolveRoutedOrganizerIds({
+      conferenceId,
+      teamKey: 'cfp',
+    })
     const items: NotificationInput[] = organizerIds
       .filter((id) => id && id !== actorId)
       .map((id): NotificationInput => ({
@@ -62,7 +65,12 @@ export async function handlePersistNotification(
     // Organizer routing is unconditional (like submit) — it mirrors the Slack
     // organizer alert, not the email-gated speaker notification.
     const isWithdraw = event.action === Action.withdraw
-    const organizerIds = await getOrganizerSpeakerIds()
+    // TEAMS-2: proposal events route to the `cfp` team (all organizers when it
+    // is not configured).
+    const organizerIds = await resolveRoutedOrganizerIds({
+      conferenceId,
+      teamKey: 'cfp',
+    })
     const title = isWithdraw
       ? `Proposal withdrawn: "${proposalTitle}"`
       : `Speaker confirmed: "${proposalTitle}"`

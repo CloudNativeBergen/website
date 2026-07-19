@@ -69,10 +69,8 @@ import {
   createSponsorActivity,
   deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
-import {
-  createNotifications,
-  getOrganizerSpeakerIds,
-} from '@/lib/notification/sanity'
+import { createNotifications } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import {
   SponsorForConferenceInputSchema,
@@ -1113,7 +1111,12 @@ export const sponsorRouter = router({
             const conferenceId = existing.conference?._id
             if (conferenceId) {
               const sponsorName = existing.sponsor?.name
-              const organizerIds = await getOrganizerSpeakerIds()
+              // TEAMS-2: sponsor events route to the `sponsors` team (all
+              // organizers when it is not configured — the shared fallback).
+              const organizerIds = await resolveRoutedOrganizerIds({
+                conferenceId,
+                teamKey: 'sponsors',
+              })
               await createNotifications(
                 organizerIds
                   .filter((id) => id && id !== userId)

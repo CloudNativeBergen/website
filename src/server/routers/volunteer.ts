@@ -26,10 +26,8 @@ import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
 import { getCurrentDateTime } from '@/lib/time'
-import {
-  createNotifications,
-  getOrganizerSpeakerIds,
-} from '@/lib/notification/sanity'
+import { createNotifications } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 
 export const volunteerRouter = router({
@@ -83,7 +81,12 @@ export const volunteerRouter = router({
             // there is no actor to exclude. Shares createNotifications'
             // never-fail contract: the volunteer record is already created.
             const volunteerName = result.volunteer.name
-            const organizerIds = await getOrganizerSpeakerIds()
+            // TEAMS-2: volunteer signups route to the `volunteers` team (all
+            // organizers when it is not configured — the shared fallback).
+            const organizerIds = await resolveRoutedOrganizerIds({
+              conferenceId: conference._id,
+              teamKey: 'volunteers',
+            })
             await createNotifications(
               organizerIds
                 .filter((id) => id)
