@@ -225,6 +225,16 @@ export async function getConversationParticipants(
  * ONE extra fetch of the caller's unread message links for the conference and
  * count them in JS against each row's two audience link variants (the caller
  * only ever received one variant, so matching both is simplest and correct).
+ *
+ * Each row also carries Who/What metadata (M6):
+ * - `lastMessage`: the newest message's author + a ~120-char excerpt (null for
+ *   a conversation with no messages yet);
+ * - `counterpart`: who the row is "with" for the caller's audience —
+ *   ORGANIZERS see the speaker side (proposal → first proposal speaker;
+ *   general → subject speaker, else the creator); SPEAKERS see the last
+ *   message's author when that author is an organizer, else the collective
+ *   'Organizers' label with no image (the organizer side has no single
+ *   counterpart, so a label is the honest rendering).
  */
 export async function listConversationsForSpeaker({
   speakerId,
@@ -251,6 +261,10 @@ export async function listConversationsForSpeaker({
     params.speakerId = speakerId
   }
 
+  // `lastMessage` is a correlated subquery (newest message per conversation) so
+  // the whole page stays ONE fetch; `speakerSide*` pre-resolves the speaker-side
+  // counterpart (organizer audience) via the house
+  // `coalesce(image.asset->url, imageURL)` speaker-image pattern.
   const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}] | order(lastMessageAt desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     conversationType,
@@ -258,12 +272,30 @@ export async function listConversationsForSpeaker({
     "proposalId": proposal._ref,
     "proposalTitle": proposal->title,
     createdAt,
-    lastMessageAt
+    lastMessageAt,
+    "lastMessage": *[_type == "message" && conversation._ref == ^._id] | order(createdAt desc) [0] {
+      "authorId": author._ref,
+      "authorName": author->name,
+      "authorImage": coalesce(author->image.asset->url, author->imageURL),
+      body
+    },
+    "speakerSideName": select(
+      conversationType == "proposal" => proposal->speakers[0]->name,
+      defined(subjectSpeaker) => subjectSpeaker->name,
+      createdBy->name
+    ),
+    "speakerSideImage": select(
+      conversationType == "proposal" => coalesce(proposal->speakers[0]->image.asset->url, proposal->speakers[0]->imageURL),
+      defined(subjectSpeaker) => coalesce(subjectSpeaker->image.asset->url, subjectSpeaker->imageURL),
+      coalesce(createdBy->image.asset->url, createdBy->imageURL)
+    )
   }`
 
-  const results = await clientReadUncached.fetch<
-    Omit<ConversationListItem, 'unreadCount'>[]
-  >(query, params, { cache: 'no-store' })
+  const results = await clientReadUncached.fetch<RawConversationRow[]>(
+    query,
+    params,
+    { cache: 'no-store' },
+  )
   const rows = results ?? []
   if (rows.length === 0) return []
 
@@ -273,13 +305,20 @@ export async function listConversationsForSpeaker({
   // notification represents `count` unread messages (absent = 1, which also
   // covers pre-collapse per-message documents), so we SUM `coalesce(count, 1)`
   // per link in JS rather than counting documents.
-  const unreadRows = await clientReadUncached.fetch<
-    { link: string | null; count: number }[]
-  >(
-    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500]{ link, "count": coalesce(count, 1) }`,
-    { speakerId, conferenceId },
-    { cache: 'no-store' },
-  )
+  //
+  // A SPEAKER caller additionally needs the organizer id set to decide whether
+  // the last message's author is "an organizer" (their counterpart); organizers
+  // don't (their counterpart is the pre-resolved speaker side), so their path
+  // stays at two fetches.
+  const [unreadRows, organizerIds] = await Promise.all([
+    clientReadUncached.fetch<{ link: string | null; count: number }[]>(
+      `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500]{ link, "count": coalesce(count, 1) }`,
+      { speakerId, conferenceId },
+      { cache: 'no-store' },
+    ),
+    isOrganizer ? Promise.resolve<string[]>([]) : getOrganizerSpeakerIds(),
+  ])
+  const organizerSet = new Set(organizerIds)
   const linkCounts = new Map<string, number>()
   for (const row of unreadRows ?? []) {
     if (row.link) {
@@ -292,8 +331,72 @@ export async function listConversationsForSpeaker({
     const unreadCount =
       (linkCounts.get(conversationLinkPath(row, true)) ?? 0) +
       (linkCounts.get(conversationLinkPath(row, false)) ?? 0)
-    return { ...row, unreadCount }
+    return {
+      _id: row._id,
+      conversationType: row.conversationType,
+      subject: row.subject,
+      proposalId: row.proposalId,
+      proposalTitle: row.proposalTitle,
+      createdAt: row.createdAt,
+      lastMessageAt: row.lastMessageAt,
+      unreadCount,
+      lastMessage: row.lastMessage
+        ? {
+            authorId: row.lastMessage.authorId,
+            authorName: row.lastMessage.authorName ?? 'Unknown',
+            excerpt: excerptOf(row.lastMessage.body ?? ''),
+          }
+        : null,
+      counterpart: resolveCounterpart(row, isOrganizer, organizerSet),
+    }
   })
+}
+
+/** A raw inbox row as projected by GROQ, before counterpart/excerpt mapping. */
+type RawConversationRow = Omit<
+  ConversationListItem,
+  'unreadCount' | 'lastMessage' | 'counterpart'
+> & {
+  lastMessage: {
+    authorId: string
+    authorName: string | null
+    authorImage: string | null
+    body: string | null
+  } | null
+  speakerSideName: string | null
+  speakerSideImage: string | null
+}
+
+/** Inbox snippet length — roughly two lines of a mobile row. */
+const EXCERPT_LENGTH = 120
+
+function excerptOf(body: string): string {
+  const trimmed = body.trim()
+  return trimmed.length > EXCERPT_LENGTH
+    ? `${trimmed.slice(0, EXCERPT_LENGTH).trimEnd()}…`
+    : trimmed
+}
+
+/**
+ * The audience-aware counterpart of an inbox row (see the
+ * {@link listConversationsForSpeaker} doc for the full rules).
+ */
+function resolveCounterpart(
+  row: RawConversationRow,
+  isOrganizer: boolean,
+  organizerSet: Set<string>,
+): { name: string; image?: string } {
+  if (isOrganizer) {
+    return {
+      name: row.speakerSideName ?? 'Speaker',
+      image: row.speakerSideImage ?? undefined,
+    }
+  }
+  const author = row.lastMessage
+  if (author && organizerSet.has(author.authorId) && author.authorName) {
+    return { name: author.authorName, image: author.authorImage ?? undefined }
+  }
+  return { name: 'Organizers' }
 }
 
 /**

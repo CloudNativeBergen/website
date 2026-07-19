@@ -97,6 +97,5 @@ export const ProposalThread: Story = {
   args: {
     basePath: '/admin/messages',
     proposalId: 'proposal-1',
-    navigateOnCreate: false,
   },
 }

@@ -139,7 +139,6 @@ export function SendMessageModal({
               <NewConversationForm
                 basePath="/admin/messages"
                 proposalId={proposalId}
-                navigateOnCreate={false}
                 autoFocusFirstField
                 onCreated={handleCreated}
                 onCancel={onClose}

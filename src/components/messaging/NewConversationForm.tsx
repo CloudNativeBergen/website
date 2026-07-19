@@ -34,8 +34,10 @@ export interface NewConversationFormProps {
    */
   proposalId?: string
   /**
-   * Navigate to the created thread on success (default). Callers embedding the
-   * form in their own success flow (modal + toast) pass `false`.
+   * Navigate to the created thread on success. OFF by default: embedded mounts
+   * (modals, proposal pages) own their success flow, and an implicit navigation
+   * combined with `proposalId` is a footgun. The standalone inbox pages opt in
+   * explicitly.
    */
   navigateOnCreate?: boolean
   /**
@@ -54,14 +56,14 @@ export interface NewConversationFormProps {
  * pick the recipient speaker the thread is about (`requireRecipient`) or have
  * one preset (`fixedRecipient`); with a `proposalId` the message goes to the
  * proposal's own thread instead. On success it navigates to the new thread
- * unless `navigateOnCreate` is false.
+ * only when `navigateOnCreate` is set.
  */
 export function NewConversationForm({
   basePath,
   requireRecipient = false,
   fixedRecipient,
   proposalId,
-  navigateOnCreate = true,
+  navigateOnCreate = false,
   autoFocusFirstField = false,
   onCreated,
   onCancel,

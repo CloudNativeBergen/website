@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { CheckCircleIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, Cog6ToothIcon } from '@heroicons/react/24/outline'
 import { formatRelativeTime } from '@/lib/notification/format'
 import type { NotificationItem } from '@/lib/notification/types'
 
@@ -49,6 +49,18 @@ export interface NotificationListProps {
    * popover (same flow as item clicks); navigation is handled by the `<Link>`.
    */
   onMessagesClick?: () => void
+  /**
+   * Href of the notification/messaging settings page. When provided, a gear
+   * shortcut is rendered in the header (left of "Mark all read"); omitted → no
+   * gear. A prop for the same reason as `messagesHref`: this component stays
+   * presentational.
+   */
+  settingsHref?: string
+  /**
+   * Fired when the settings gear is activated — the container closes the
+   * popover (same flow as item clicks); navigation is handled by the `<Link>`.
+   */
+  onSettingsClick?: () => void
 }
 
 function SkeletonRow() {
@@ -205,6 +217,8 @@ export function NotificationList({
   readOnly = false,
   messagesHref,
   onMessagesClick,
+  settingsHref,
+  onSettingsClick,
 }: NotificationListProps) {
   return (
     // `role="region"` makes the aria-label an actual named landmark — on a
@@ -214,23 +228,37 @@ export function NotificationList({
         <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
           Notifications
         </h2>
-        {readOnly ? (
-          <span
-            title="Viewing as speaker — read state is left untouched"
-            className="ml-2 shrink-0 text-xs font-medium whitespace-nowrap text-gray-400 dark:text-gray-500"
-          >
-            Speaker view · read-only
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={onMarkAllRead}
-            disabled={unreadCount === 0 || isMarkingAll}
-            className="rounded text-xs font-medium text-brand-cloud-blue transition hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-600"
-          >
-            Mark all read
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {settingsHref && (
+            <Link
+              href={settingsHref}
+              prefetch={false}
+              onClick={onSettingsClick}
+              aria-label="Notification settings"
+              // 44px tap target; negative margin keeps the header compact.
+              className="-my-2.5 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-500 dark:hover:bg-gray-800/60 dark:hover:text-gray-300"
+            >
+              <Cog6ToothIcon aria-hidden="true" className="h-5 w-5" />
+            </Link>
+          )}
+          {readOnly ? (
+            <span
+              title="Viewing as speaker — read state is left untouched"
+              className="ml-2 shrink-0 text-xs font-medium whitespace-nowrap text-gray-400 dark:text-gray-500"
+            >
+              Speaker view · read-only
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onMarkAllRead}
+              disabled={unreadCount === 0 || isMarkingAll}
+              className="rounded text-xs font-medium text-brand-cloud-blue transition hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:text-gray-300 dark:disabled:text-gray-600"
+            >
+              Mark all read
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="max-h-[70vh] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800/70">
