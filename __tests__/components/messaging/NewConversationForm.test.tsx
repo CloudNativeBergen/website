@@ -115,7 +115,7 @@ describe('NewConversationForm — organizer flow', () => {
       error: { data: { code: 'NOT_FOUND' } },
     }
     render(<NewConversationForm basePath="/admin/messages" requireRecipient />)
-    expect(screen.getByText(/speaker not found/i)).toBeInTheDocument()
+    expect(screen.getByText(/can't receive messages/i)).toBeInTheDocument()
     expect(screen.getByTestId('picker-invalid')).toBeInTheDocument()
     // The generic failure copy is suppressed in favour of the specific message.
     expect(
@@ -143,7 +143,7 @@ describe('NewConversationForm — organizer flow', () => {
       error: { data: { code: 'NOT_FOUND' } },
     }
     render(<NewConversationForm basePath="/admin/messages" requireRecipient />)
-    expect(screen.getByText(/speaker not found/i)).toBeInTheDocument()
+    expect(screen.getByText(/can't receive messages/i)).toBeInTheDocument()
 
     // Picking a DIFFERENT speaker must clear the stale NOT_FOUND.
     fireEvent.click(screen.getByTestId('pick-speaker'))
