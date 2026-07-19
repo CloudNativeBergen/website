@@ -56,6 +56,74 @@ export const SPEAKER_ALLOWED_VIEWS: ConversationView[] = [
 /** Per-conversation email delivery override. */
 export type EmailOverride = 'default' | 'on' | 'off'
 
+/** The universal organizer group key (the only group value produced in G1). */
+export const ORGANIZERS_GROUP = 'organizers'
+
+/**
+ * A single PARTY of a conversation — the GENERAL representation of "who is on a
+ * thread" (mirrors the `conversationParticipant` Sanity object). A discriminated
+ * union on `partyType`, each member carrying EXACTLY ONE identity (`'speaker'`
+ * and `'group'` are produced in G1; `'sponsor'` is reserved for G2):
+ * - `speaker` → a speaker id (the dereferenced `speaker._ref`);
+ * - `sponsor` → a `sponsorForConference` id (unused in G1; G2 begins using it);
+ * - `group`   → a group KEY (e.g. `'organizers'`).
+ *
+ * In G1 this is dual-written alongside the legacy `createdBy`/`subjectSpeaker`/
+ * `proposal` fields and is NOT yet the read source. See `resolveParticipants` in
+ * `./sanity` for the derive-or-prefer resolver.
+ */
+export type ConversationParty =
+  | { partyType: 'speaker'; speakerId: string }
+  | { partyType: 'sponsor'; sponsorForConferenceId: string }
+  | { partyType: 'group'; group: string }
+
+/**
+ * The loose value shape the `conversationParticipant` Sanity object validation
+ * receives (a partially-filled party object from Studio or a write).
+ */
+export interface ConversationParticipantInput {
+  partyType?: string
+  speaker?: { _ref?: string } | null
+  sponsorForConference?: { _ref?: string } | null
+  group?: string | null
+}
+
+/**
+ * Validate the discriminator↔identity congruence of a `conversationParticipant`:
+ * EXACTLY ONE identity field must be present AND it must match `partyType`. Pure
+ * (no Sanity imports) so the schema's `Rule.custom` and unit tests share ONE
+ * implementation — the same extract-and-test idiom the sponsor CRM validations
+ * use. Returns `true` when valid, otherwise a human-readable error string.
+ *
+ * An ABSENT `partyType` returns `true` here: the field carries its own
+ * `Rule.required()`, so this validator never double-reports the missing
+ * discriminator.
+ */
+export function validateConversationParticipant(
+  value: ConversationParticipantInput | undefined,
+): true | string {
+  const v = value ?? {}
+  const { partyType } = v
+  if (!partyType) return true
+  const hasSpeaker = Boolean(v.speaker?._ref)
+  const hasSponsor = Boolean(v.sponsorForConference?._ref)
+  const hasGroup = typeof v.group === 'string' && v.group.length > 0
+  const present = [hasSpeaker, hasSponsor, hasGroup].filter(Boolean).length
+  if (present !== 1) {
+    return 'A participant must carry exactly one identity field (speaker, sponsorForConference, or group).'
+  }
+  if (partyType === 'speaker' && !hasSpeaker) {
+    return 'A speaker party requires a speaker reference.'
+  }
+  if (partyType === 'sponsor' && !hasSponsor) {
+    return 'A sponsor party requires a sponsorForConference reference.'
+  }
+  if (partyType === 'group' && !hasGroup) {
+    return 'A group party requires a non-empty group key.'
+  }
+  return true
+}
+
 /** A speaker as needed for authorization decisions (server-derived). */
 export interface AccessSpeaker {
   _id: string
@@ -103,6 +171,15 @@ export interface ConversationWithContext {
    * archiver speaker was erased). Only meaningful when `archivedAt` is set.
    */
   archivedBy?: ConversationArchiver | null
+  /**
+   * The GENERAL party representation (messaging party model, G1), projected from
+   * the conversation's dual-written `participants[]` when present. OPTIONAL in
+   * G1: the read path still DERIVES participants from the legacy fields (see
+   * `resolveParticipants` in `./sanity`), so this is populated only for
+   * conversations created (or backfilled by migration 043) since the dual-write
+   * landed, and no consumer reads it yet. The read path flips to prefer it in G2.
+   */
+  participants?: ConversationParty[]
 }
 
 /** The organizer who globally archived a thread (deref of `archivedBy`). */

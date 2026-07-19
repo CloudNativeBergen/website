@@ -7,6 +7,7 @@ import type {
   AccessSpeaker,
   ConversationListItem,
   ConversationParticipant,
+  ConversationParty,
   ConversationPreference,
   ConversationStatus,
   ConversationView,
@@ -15,7 +16,7 @@ import type {
   EmailOverride,
   Message,
 } from './types'
-import { DEFAULT_CONVERSATION_PREFERENCE } from './types'
+import { DEFAULT_CONVERSATION_PREFERENCE, ORGANIZERS_GROUP } from './types'
 import {
   proposalConversationId,
   conversationLinkPath,
@@ -67,7 +68,13 @@ const CONVERSATION_PROJECTION = `{
   "status": coalesce(status, 'open'),
   "assignedTo": assignedTo->{ _id, name },
   archivedAt,
-  "archivedBy": archivedBy->{ _id, name }
+  "archivedBy": archivedBy->{ _id, name },
+  "participants": participants[]{
+    partyType,
+    "speakerId": speaker._ref,
+    "sponsorForConferenceId": sponsorForConference._ref,
+    group
+  }
 }`
 
 // ---------------------------------------------------------------------------
@@ -235,6 +242,157 @@ export function resolveParticipantIds(
   return Array.from(ids)
 }
 
+// ---------------------------------------------------------------------------
+// Party model (G1): the GENERAL participant representation.
+//
+// A conversation's participants are expressed as a list of PARTIES (speaker /
+// sponsor / group). G1 introduces this representation and DUAL-WRITES it (below)
+// alongside the legacy createdBy/subjectSpeaker/proposal fields; the read path
+// is UNCHANGED (canAccessConversation / resolveRecipients / the GROQ scope
+// predicates all keep their legacy logic). The read path flips to prefer
+// participants[] in G2 (with the sponsor branch), after migration 043 backfills
+// existing documents.
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the party list from the LEGACY fields — the pre-party participant set,
+ * in party form and in a STABLE order:
+ * - proposal thread → one `speaker` party per proposal speaker, then the
+ *   `organizers` group;
+ * - general thread  → the creator, then the `subjectSpeaker` (when set), then
+ *   the `organizers` group.
+ *
+ * The organizer team is ONE `group` party — NOT the expanded organizer id list.
+ * Organizers are resolved from conference membership at read time, so a thread
+ * records only THAT the organizer group is a party, never who is in it (mirrors
+ * how `resolveParticipantIds` seeds the set with the live organizer ids rather
+ * than storing them). This is the exact set `resolveParticipantIds` expresses,
+ * with organizers collapsed to their group.
+ */
+function deriveParties(
+  conversation: Pick<
+    ConversationWithContext,
+    | 'conversationType'
+    | 'proposalSpeakerIds'
+    | 'createdById'
+    | 'subjectSpeakerId'
+  >,
+): ConversationParty[] {
+  const parties: ConversationParty[] = []
+  if (conversation.conversationType === 'proposal') {
+    for (const id of conversation.proposalSpeakerIds) {
+      parties.push({ partyType: 'speaker', speakerId: id })
+    }
+  } else {
+    parties.push({ partyType: 'speaker', speakerId: conversation.createdById })
+    if (conversation.subjectSpeakerId) {
+      parties.push({
+        partyType: 'speaker',
+        speakerId: conversation.subjectSpeakerId,
+      })
+    }
+  }
+  parties.push({ partyType: 'group', group: ORGANIZERS_GROUP })
+  return parties
+}
+
+/**
+ * The G1 party RESOLVER: PREFERS the dual-written `participants[]` when present
+ * and non-empty, otherwise DERIVES the identical set from the legacy fields
+ * ({@link deriveParties}).
+ *
+ * This is the seam the read path flips onto in G2. In G1 no legacy read consumer
+ * calls it — they keep their current logic — but the dual-write below constructs
+ * the stored `participants[]` THROUGH this resolver (on a participants-less
+ * context, so it takes the derive branch), which GUARANTEES the written array is
+ * exactly what a legacy-only document resolves to. Tests prove the equivalence
+ * `resolveParticipants(legacy) === resolveParticipants(dual-written)` for every
+ * thread shape.
+ */
+export function resolveParticipants(
+  conversation: Pick<
+    ConversationWithContext,
+    | 'conversationType'
+    | 'proposalSpeakerIds'
+    | 'createdById'
+    | 'subjectSpeakerId'
+    | 'participants'
+  >,
+): ConversationParty[] {
+  if (conversation.participants && conversation.participants.length > 0) {
+    return conversation.participants
+  }
+  return deriveParties(conversation)
+}
+
+/** A `participants[]` row as PROJECTED by GROQ (before {@link normalizeParties}). */
+interface RawParty {
+  partyType?: string | null
+  speakerId?: string | null
+  sponsorForConferenceId?: string | null
+  group?: string | null
+}
+
+/**
+ * Normalize the GROQ-projected `participants[]` into the {@link ConversationParty}
+ * union, dropping any malformed / dangling row (e.g. a `speaker` party whose weak
+ * ref was erased leaves `speakerId` null). Returns `undefined` for an
+ * absent/empty array so {@link resolveParticipants} falls back to the legacy
+ * derivation rather than treating "no parties" as a real empty set.
+ */
+function normalizeParties(
+  raw: RawParty[] | null | undefined,
+): ConversationParty[] | undefined {
+  if (!raw || raw.length === 0) return undefined
+  const parties: ConversationParty[] = []
+  for (const p of raw) {
+    if (p.partyType === 'speaker' && p.speakerId) {
+      parties.push({ partyType: 'speaker', speakerId: p.speakerId })
+    } else if (p.partyType === 'sponsor' && p.sponsorForConferenceId) {
+      parties.push({
+        partyType: 'sponsor',
+        sponsorForConferenceId: p.sponsorForConferenceId,
+      })
+    } else if (p.partyType === 'group' && p.group) {
+      parties.push({ partyType: 'group', group: p.group })
+    }
+  }
+  return parties.length > 0 ? parties : undefined
+}
+
+/**
+ * Serialize a {@link ConversationParty} to its stored `conversationParticipant`
+ * object shape. Human-pointing refs (`speaker`, `sponsorForConference`) are WEAK
+ * so a later GDPR erase never orphan-blocks — consistent with every other
+ * messaging ref. Used for the single-object `message.authorParty`; array items
+ * add a `_key` (see {@link partiesToStored}).
+ */
+function partyToStored(party: ConversationParty): Record<string, unknown> {
+  if (party.partyType === 'speaker') {
+    return {
+      partyType: 'speaker',
+      speaker: { ...createReference(party.speakerId), _weak: true },
+    }
+  }
+  if (party.partyType === 'sponsor') {
+    return {
+      partyType: 'sponsor',
+      sponsorForConference: {
+        ...createReference(party.sponsorForConferenceId),
+        _weak: true,
+      },
+    }
+  }
+  return { partyType: 'group', group: party.group }
+}
+
+/** Serialize parties for a `participants[]` array (each item needs a `_key`). */
+function partiesToStored(
+  parties: ConversationParty[],
+): Record<string, unknown>[] {
+  return parties.map((party) => ({ _key: nanoid(), ...partyToStored(party) }))
+}
+
 /**
  * The recipients of a new message: all participants EXCEPT the actor (an actor
  * is never notified about their own message — mirrors the hub's actor-exclusion
@@ -314,17 +472,34 @@ export async function getProposalForConversation(proposalId: string): Promise<{
   }
 }
 
+/**
+ * The raw shape of {@link CONVERSATION_PROJECTION}: identical to
+ * {@link ConversationWithContext} except `participants` arrives in the projected
+ * {@link RawParty} shape (normalized below).
+ */
+type RawConversationWithContext = Omit<
+  ConversationWithContext,
+  'participants'
+> & { participants?: RawParty[] | null }
+
 /** A single conversation with its authorization/recipient context. */
 export async function getConversationById(
   id: string,
 ): Promise<ConversationWithContext | null> {
-  const result = await clientReadUncached.fetch<ConversationWithContext | null>(
-    `*[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION}`,
-    { id },
-    { cache: 'no-store' },
-  )
+  const result =
+    await clientReadUncached.fetch<RawConversationWithContext | null>(
+      `*[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION}`,
+      { id },
+      { cache: 'no-store' },
+    )
   if (!result) return null
-  return { ...result, proposalSpeakerIds: result.proposalSpeakerIds ?? [] }
+  return {
+    ...result,
+    proposalSpeakerIds: result.proposalSpeakerIds ?? [],
+    // Party model (G1): projected alongside the legacy fields. No legacy read
+    // consumer uses it yet; it powers the G2 read-path flip.
+    participants: normalizeParties(result.participants),
+  }
 }
 
 /**
@@ -834,14 +1009,32 @@ export async function ensureProposalConversation({
   proposalId,
   proposalTitle,
   createdById,
+  proposalSpeakerIds,
 }: {
   conferenceId: string
   proposalId: string
   proposalTitle: string
   createdById: string
+  /**
+   * The proposal's current speaker ids (party model, G1). Passed by the router
+   * from the proposal it already fetched, so the dual-written `participants[]`
+   * snapshots the proposal's speakers at thread creation — exactly what the
+   * legacy read path derives from `proposal->speakers[]._ref` for a fresh thread.
+   */
+  proposalSpeakerIds: string[]
 }): Promise<string> {
   const id = proposalConversationId(proposalId)
   const now = new Date().toISOString()
+  // Party model (G1): dual-write `participants[]` alongside the legacy fields,
+  // constructed THROUGH the read resolver (participants-less context → derive
+  // branch) so the stored array is exactly what a legacy-only doc resolves to.
+  const participants = partiesToStored(
+    resolveParticipants({
+      conversationType: 'proposal',
+      proposalSpeakerIds,
+      createdById,
+    }),
+  )
   await clientWrite
     .transaction()
     .createIfNotExists({
@@ -854,6 +1047,7 @@ export async function ensureProposalConversation({
       subject: (proposalTitle || 'Proposal').slice(0, 200),
       createdAt: now,
       lastMessageAt: now,
+      participants,
     })
     .commit()
   return id
@@ -879,6 +1073,17 @@ export async function createGeneralConversation({
 }): Promise<string> {
   const id = `conversation.${nanoid()}`
   const now = new Date().toISOString()
+  // Party model (G1): dual-write `participants[]` (creator + optional subject
+  // speaker + organizers group), constructed THROUGH the read resolver so it
+  // matches the legacy derivation exactly.
+  const participants = partiesToStored(
+    resolveParticipants({
+      conversationType: 'general',
+      proposalSpeakerIds: [],
+      createdById,
+      subjectSpeakerId,
+    }),
+  )
   await clientWrite.create({
     _id: id,
     _type: 'conversation',
@@ -891,6 +1096,7 @@ export async function createGeneralConversation({
     subject: subject.slice(0, 200),
     createdAt: now,
     lastMessageAt: now,
+    participants,
   })
   return id
 }
@@ -940,6 +1146,11 @@ export async function addMessage({
       author: createReference(authorId),
       body,
       createdAt: now,
+      // Party model (G1): dual-write `authorParty` next to the legacy `author`
+      // ref. Only speaker parties are produced in G1 (the author is always a
+      // speaker/organizer speaker doc). Not yet read — `author` still drives
+      // fan-out; the read path flips in G2.
+      authorParty: partyToStored({ partyType: 'speaker', speakerId: authorId }),
     })
     .patch(conversationId, (patch) =>
       patch.set(

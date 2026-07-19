@@ -5,6 +5,7 @@ import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
 import contractTemplate from './schemaTypes/contractTemplate'
 import conversation from './schemaTypes/conversation'
+import conversationParticipant from './schemaTypes/conversationParticipant'
 import conversationPreference from './schemaTypes/conversationPreference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
@@ -47,6 +48,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     staff,
     notification,
     conversation,
+    conversationParticipant,
     message,
     conversationPreference,
 

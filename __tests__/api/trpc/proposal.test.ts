@@ -720,6 +720,9 @@ describe('proposal router', () => {
         proposalId: 'proposal-1',
         proposalTitle: 'My Talk',
         createdById: adminSpeaker._id,
+        // Party model (G1): the decision-comment mirror now also seeds the
+        // dual-written participants[] from the proposal's current speakers.
+        proposalSpeakerIds: [regularSpeaker._id],
       })
       expect(addMessage).toHaveBeenCalledWith({
         conversationId,
