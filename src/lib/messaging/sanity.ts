@@ -1005,15 +1005,18 @@ export async function setConversationArchived(
   archiverId?: string,
 ): Promise<void> {
   if (archived) {
+    // The audit line ("Archived for everyone by X") depends on attribution —
+    // an anonymous archive must be a programming error, not a silent row.
+    if (!archiverId) {
+      throw new Error('setConversationArchived: archiverId required to archive')
+    }
     await clientWrite
       .patch(conversationId)
       .set({
         archivedAt: new Date().toISOString(),
-        // Attribute the archive when we know who did it; the ref is WEAK so a
-        // later GDPR erase of that organizer never orphan-blocks this doc.
-        ...(archiverId
-          ? { archivedBy: { ...createReference(archiverId), _weak: true } }
-          : {}),
+        // The ref is WEAK so a later GDPR erase of that organizer never
+        // orphan-blocks this doc.
+        archivedBy: { ...createReference(archiverId), _weak: true },
       })
       .commit()
     return
