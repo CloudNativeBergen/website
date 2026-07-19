@@ -60,7 +60,7 @@ export const ScheduledTalk = ({
       <div
         className={`relative h-full transition-all duration-200 ${
           isSwapTarget
-            ? 'ring-opacity-75 scale-105 transform shadow-lg ring-2 ring-amber-400'
+            ? 'scale-105 transform shadow-lg ring-2 ring-amber-400/75'
             : ''
         }`}
       >

@@ -115,7 +115,7 @@ export function FilterDropdown({
   }
 
   const getDropdownClasses = () => {
-    const baseClasses = `absolute z-50 ${getWidthClass()} ring-opacity-5 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none dark:bg-gray-800 dark:ring-gray-600`
+    const baseClasses = `absolute z-50 ${getWidthClass()} rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-gray-600/5`
 
     const classes = shouldDropUp
       ? `${baseClasses} bottom-full mb-2 ${

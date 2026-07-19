@@ -184,7 +184,7 @@ export function Hero({
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           {conference.announcement &&
             !isPortableTextEmpty(conference.announcement) && (
-              <div className="bg-opacity-20 mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow p-6 shadow-sm dark:border-brand-sunbeam-yellow dark:bg-brand-sunbeam-yellow/20 dark:shadow-md">
+              <div className="mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow/20 p-6 shadow-sm dark:border-brand-sunbeam-yellow dark:bg-brand-sunbeam-yellow/20 dark:shadow-md">
                 <div className="flex items-center">
                   <div className="font-space-grotesk text-brand-slate-gray dark:text-white">
                     <PortableText
