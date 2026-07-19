@@ -169,10 +169,13 @@ function FieldRow({
                   href={link as string}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                  className="inline-flex max-w-full min-w-0 items-start text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
-                  <span className="max-w-sm truncate">{link as string}</span>
-                  <LinkIcon className="ml-1 h-3 w-3 shrink-0" />
+                  {/* break-all, not truncate: a URL is an unbreakable token, and
+                      an unconstrained nowrap span dictated the row's intrinsic
+                      width — the whole page scrolled horizontally on mobile. */}
+                  <span className="min-w-0 break-all">{link as string}</span>
+                  <LinkIcon className="mt-1 ml-1 h-3 w-3 shrink-0" />
                 </a>
               </div>
             ))}
@@ -257,11 +260,14 @@ function FieldRow({
   }
 
   return (
-    <div className="flex justify-between border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
-      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+    <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+      <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
         {label}
       </dt>
-      <dd className="max-w-xs text-right text-sm text-gray-900 dark:text-white">
+      {/* min-w-0 lets the value column actually shrink inside the flex row —
+          without it, wide unbreakable content (URLs) forces the row past the
+          viewport and the page pans horizontally. */}
+      <dd className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
         {displayValue}
       </dd>
     </div>
