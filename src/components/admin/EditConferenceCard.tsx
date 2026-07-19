@@ -72,8 +72,13 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
     fields: [
       { name: 'title', label: 'Title', type: 'text', required: true },
       { name: 'organizer', label: 'Organizer', type: 'text', required: true },
-      { name: 'city', label: 'City', type: 'text' },
-      { name: 'country', label: 'Country', type: 'text' },
+      { name: 'city', label: 'City', type: 'text', nullableWhenEmpty: true },
+      {
+        name: 'country',
+        label: 'Country',
+        type: 'text',
+        nullableWhenEmpty: true,
+      },
       {
         name: 'tagline',
         label: 'Tagline',
