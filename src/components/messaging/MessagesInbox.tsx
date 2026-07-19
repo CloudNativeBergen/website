@@ -243,6 +243,9 @@ export function MessagesInbox({
   // fetched alongside the first inbox page, not polled hot).
   const { data: viewCounts } = api.message.viewCounts.useQuery(undefined, {
     staleTime: 30_000,
+    // Only the organizer tab bar renders count badges — don't spend the query
+    // on speakers, whose Active/Archived toggle shows none.
+    enabled: audience === 'organizer',
   })
 
   const {

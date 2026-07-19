@@ -34,8 +34,17 @@ interface BaseEmailTemplateProps {
  * with a trailing slash). Normalise all three to `https://<domain>/cfp/messages`.
  */
 function messagesUrlFromEventUrl(eventUrl: string): string {
-  const domain = eventUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
-  return `https://${domain}/cfp/messages`
+  // Parse rather than regex-strip: an eventUrl carrying a path (or lacking a
+  // scheme) must still resolve to the bare origin's /cfp/messages.
+  try {
+    const url = new URL(
+      /^https?:\/\//.test(eventUrl) ? eventUrl : `https://${eventUrl}`,
+    )
+    return `${url.origin}/cfp/messages`
+  } catch {
+    const domain = eventUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    return `https://${domain}/cfp/messages`
+  }
 }
 
 export function BaseEmailTemplate({
