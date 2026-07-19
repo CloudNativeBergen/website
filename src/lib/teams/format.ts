@@ -7,7 +7,11 @@ import type { OrganizerTeam } from './types'
  * React. Optional segments (channel, email identity) are omitted when unset.
  */
 export function formatTeamSummary(team: OrganizerTeam): string {
-  const count = team.members.length
+  // The settings teams projection can yield `null` members (a stored reference
+  // whose target was deleted dereferences to null, and an empty team omits the
+  // array entirely). Treat null/undefined as an empty roster so the count and
+  // the page never crash on it.
+  const count = team.members?.length ?? 0
   const parts: string[] = [`${count} member${count === 1 ? '' : 's'}`]
   if (team.slackChannel) {
     parts.push(

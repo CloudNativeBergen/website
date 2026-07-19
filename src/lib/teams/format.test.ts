@@ -25,6 +25,25 @@ describe('formatTeamSummary', () => {
     expect(formatTeamSummary(team)).toBe('Volunteers (volunteers) — 1 member')
   })
 
+  it('treats null/undefined members as an empty roster (#566)', () => {
+    // The settings projection can dereference a deleted member to null, or omit
+    // the array entirely — the formatter must not crash on either.
+    const nullMembers = {
+      key: 'ghosts',
+      title: 'Ghosts',
+      members: null,
+    } as unknown as OrganizerTeam
+    expect(formatTeamSummary(nullMembers)).toBe('Ghosts (ghosts) — 0 members')
+
+    const missingMembers = {
+      key: 'phantoms',
+      title: 'Phantoms',
+    } as unknown as OrganizerTeam
+    expect(formatTeamSummary(missingMembers)).toBe(
+      'Phantoms (phantoms) — 0 members',
+    )
+  })
+
   it('prefixes a missing # on the channel', () => {
     const team: OrganizerTeam = {
       key: 'sponsors',
