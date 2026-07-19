@@ -80,11 +80,75 @@ export const EnabledTestNoDevices: Story = {
   },
 }
 
-/** Devices exist but every send failed — distinct from having no devices. */
+/**
+ * Devices exist but every send failed with NO diagnostics (e.g. a network
+ * error the push service reported nothing useful for) — the generic retry hint.
+ */
 export const EnabledTestDeliveryFailed: Story = {
   args: {
     ...EnabledTestNoDevices.args,
     sendTestResult: { sent: 0, gone: 0, total: 2, configured: true },
+  },
+}
+
+/**
+ * All devices rejected with HTTP 403 (VAPID key mismatch): both of the two
+ * subscriptions failed identically, so the failure list deduped to one entry.
+ * Shows the actionable re-subscribe hint plus the muted technical detail line.
+ */
+export const EnabledTestAllFailed403: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: {
+      sent: 0,
+      gone: 0,
+      total: 2,
+      configured: true,
+      failures: [
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ],
+    },
+  },
+}
+
+/**
+ * Partial failure: one of two devices got the test, the other was rejected with
+ * a 403. Success count plus a secondary re-subscribe line and the detail line.
+ */
+export const EnabledTestPartialFailure: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: {
+      sent: 1,
+      gone: 0,
+      total: 2,
+      configured: true,
+      failures: [
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ],
+    },
+  },
+}
+
+/**
+ * All devices rejected with HTTP 401 — the server's own VAPID credentials are
+ * wrong (a server-side misconfiguration, not something the user can fix).
+ */
+export const EnabledTestAllFailed401: Story = {
+  args: {
+    status: 'enabled',
+    sendTestResult: {
+      sent: 0,
+      gone: 0,
+      total: 1,
+      configured: true,
+      failures: [
+        {
+          statusCode: 401,
+          message: 'HTTP 401 — Unauthorized WebPush Registration',
+        },
+      ],
+    },
   },
 }
 
