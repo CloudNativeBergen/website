@@ -50,8 +50,9 @@ interface SpeakerRow {
  * - HUB: one `message_received` notification per non-muted recipient, with a
  *   PER-RECIPIENT link (organizers → /admin, speakers → /cfp). Web push rides
  *   along inside `createNotifications` (category `messages`).
- * - EMAIL: only to non-muted recipients whose effective email pref is ON
- *   (override 'on', or 'default' + speaker.messagingEmailDefault).
+ * - EMAIL: to non-muted recipients whose effective email pref is ON: override
+ *   'on', or 'default' + speaker-level default. The speaker-level default is
+ *   ENABLED unless `messagingEmailDefault` is explicitly false (M4).
  * - SLACK: only when the author is NOT an organizer (speaker-authored).
  */
 export async function notifyNewMessage({
@@ -107,15 +108,17 @@ export async function notifyNewMessage({
       }))
       await createNotifications(items)
 
-      // EMAIL: opt-in only.
+      // EMAIL: on unless the recipient opted out (speaker default or override).
       const emailRecipients: MessageEmailRecipient[] = []
       for (const id of active) {
         const sp = speakers.get(id)
         if (!sp?.email) continue
         const override = prefs.get(id)?.emailOverride ?? 'default'
+        // ABSENT-MEANS-ENABLED (M4): only an explicit `false` on the speaker
+        // doc disables the default-path email; 'off'/mute still win above.
         const wantsEmail =
           override === 'on' ||
-          (override === 'default' && sp.messagingEmailDefault === true)
+          (override === 'default' && sp.messagingEmailDefault !== false)
         if (!wantsEmail) continue
         emailRecipients.push({
           email: sp.email,

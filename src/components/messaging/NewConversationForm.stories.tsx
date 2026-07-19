@@ -77,3 +77,26 @@ export const OrganizerFormDark: Story = {
   args: { basePath: '/admin/messages', requireRecipient: true },
   parameters: { dark: true },
 }
+
+/**
+ * Organizer flow with a KNOWN target (e.g. opened from a speaker-scoped admin
+ * surface): the picker is replaced by a fixed recipient chip.
+ */
+export const FixedRecipient: Story = {
+  args: {
+    basePath: '/admin/messages',
+    fixedRecipient: { _id: 'speaker-1', name: 'Åsa Berg' },
+  },
+}
+
+/**
+ * Proposal-thread mode (used by the admin SendMessageModal): no picker, no
+ * subject — the message goes straight into the proposal's conversation.
+ */
+export const ProposalThread: Story = {
+  args: {
+    basePath: '/admin/messages',
+    proposalId: 'proposal-1',
+    navigateOnCreate: false,
+  },
+}

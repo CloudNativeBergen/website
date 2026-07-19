@@ -4,7 +4,8 @@
  * Unit tests for the messaging fan-out (src/lib/messaging/notify.ts):
  * - HUB items are per-recipient (organizer → /admin link, speaker → /cfp link);
  * - muted recipients are excluded from every channel;
- * - EMAIL fires only for recipients whose effective email pref is ON;
+ * - EMAIL fires for recipients whose effective email pref is ON (M4: the
+ *   speaker-level default is ENABLED unless explicitly false);
  * - SLACK fires only when the author is NOT an organizer;
  * - the fan-out NEVER throws (never-fail contract).
  *
@@ -169,9 +170,9 @@ describe('muting — excluded from every channel', () => {
   })
 })
 
-describe('EMAIL — opt-in only', () => {
+describe('EMAIL — on by default, explicit opt-out wins', () => {
   it('emails only recipients whose effective pref is ON', async () => {
-    // sp-2 has messagingEmailDefault true (default→on); org-1 does not.
+    // sp-2 has messagingEmailDefault true; org-1 is EXPLICITLY false (opt-out).
     await notifyNewMessage({
       conversation: proposalConv,
       message,
@@ -210,7 +211,50 @@ describe('EMAIL — opt-in only', () => {
     ])
   })
 
-  it('sends no email when nobody is opted in', async () => {
+  it('emails a recipient whose speaker doc has NO messagingEmailDefault field (absent = enabled)', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
+      // No messagingEmailDefault on sp-2: M4 absent-means-enabled.
+      { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
+      {
+        _id: 'org-1',
+        name: 'Olga',
+        email: 'olga@x.no',
+        messagingEmailDefault: false,
+      },
+    ])
+
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference,
+    })
+
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    const [recipients] = emailMock.mock.calls[0]
+    expect(recipients.map((r: { email: string }) => r.email)).toEqual([
+      'bob@x.no',
+    ])
+  })
+
+  it("respects a per-conversation 'off' override even when the speaker default is on", async () => {
+    prefsMock.mockResolvedValue(
+      new Map([['sp-2', { muted: false, emailOverride: 'off' }]]),
+    )
+
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference,
+    })
+
+    // sp-2 default-on is overridden off; org-1 remains explicitly opted out.
+    expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('sends no email when every recipient has explicitly opted out', async () => {
     fetchMock.mockResolvedValue([
       {
         _id: 'sp-1',

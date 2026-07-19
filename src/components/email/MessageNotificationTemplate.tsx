@@ -13,6 +13,8 @@ export interface MessageNotificationTemplateProps {
   subject: string
   excerpt: string
   replyUrl: string
+  /** Absolute link to the recipient's notification preferences (cfp profile). */
+  preferencesUrl?: string
   eventName: string
   eventLocation: string
   eventDate: string
@@ -30,6 +32,7 @@ export function MessageNotificationTemplate({
   subject,
   excerpt,
   replyUrl,
+  preferencesUrl,
   eventName,
   eventLocation,
   eventDate,
@@ -65,8 +68,21 @@ export function MessageNotificationTemplate({
         </div>
 
         <EmailText size="14px" color="#64748B">
+          Prefer email? Replying to this email reaches the organizers by email,
+          while replying in the app keeps the whole conversation in one place.
+        </EmailText>
+
+        <EmailText size="14px" color="#64748B">
           You can manage message emails for this conversation from its
-          notification settings.
+          notification settings.{' '}
+          {preferencesUrl && (
+            <a
+              href={preferencesUrl}
+              style={{ color: '#2563EB', textDecoration: 'underline' }}
+            >
+              Manage notification preferences
+            </a>
+          )}
         </EmailText>
       </>
     ),

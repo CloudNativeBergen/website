@@ -73,7 +73,25 @@ import {
 } from '@/lib/proposal/server'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { getFeaturedTalks } from '@/lib/featured/sanity'
+import {
+  ensureProposalConversation,
+  getConversationById,
+  addMessage,
+} from '@/lib/messaging/sanity'
+import { notifyNewMessage } from '@/lib/messaging/notify'
 import '@/lib/events/registry'
+
+/**
+ * The organizer-initiated decision actions whose `comment` is relayed to the
+ * speaker (mirrors the email notification handler's action gate). Their comment
+ * is ALSO posted into the proposal's message thread (messaging M4).
+ */
+const COMMENT_RELAY_ACTIONS: readonly Action[] = [
+  Action.accept,
+  Action.reject,
+  Action.waitlist,
+  Action.remind,
+]
 
 /**
  * Helper function to delete an attachment and its associated file asset
@@ -740,6 +758,49 @@ export const proposalRouter = router({
         eventBus.publish(statusChangeEvent).catch((error) => {
           console.error('Failed to publish status change event:', error)
         })
+
+        // Messaging M4: an organizer decision comment also lands in the
+        // proposal's message thread, so the speaker keeps it with the rest of
+        // the conversation. Guarded never-fail: the status change above is
+        // already committed, so a messaging failure must not fail the action.
+        // NOTE: the speaker intentionally receives BOTH the status notification
+        // and a new-message notification (accepted by the maintainer).
+        const trimmedComment = comment?.trim()
+        if (
+          ctx.speaker.isOrganizer &&
+          trimmedComment &&
+          COMMENT_RELAY_ACTIONS.includes(action)
+        ) {
+          try {
+            const conversationId = await ensureProposalConversation({
+              conferenceId: conference._id,
+              proposalId: id,
+              proposalTitle: proposal.title ?? 'Proposal',
+              createdById: ctx.speaker._id,
+            })
+            const conversation = await getConversationById(conversationId)
+            if (conversation) {
+              const message = await addMessage({
+                conversationId,
+                authorId: ctx.speaker._id,
+                body: trimmedComment,
+              })
+              // Never throws; fans out hub/email (no proposal actions, so no
+              // feedback loop with this procedure).
+              await notifyNewMessage({
+                conversation,
+                message,
+                authorId: ctx.speaker._id,
+                conference,
+              })
+            }
+          } catch (error) {
+            console.error(
+              'Failed to mirror decision comment into the proposal thread:',
+              error,
+            )
+          }
+        }
 
         return { proposalStatus: updatedProposal.status }
       } catch (error) {

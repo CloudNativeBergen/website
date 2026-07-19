@@ -68,7 +68,7 @@ export function SpeakerCombobox({
         <ComboboxInput
           id={id}
           aria-invalid={invalid}
-          className={`block w-full rounded-lg border bg-white py-2 pr-10 pl-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus-visible:ring-1 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 ${
+          className={`block min-h-[44px] w-full rounded-lg border bg-white py-2 pr-10 pl-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus-visible:ring-1 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 ${
             invalid
               ? 'border-red-400 focus:border-red-500 focus-visible:ring-red-500 dark:border-red-500'
               : 'border-gray-300 focus:border-brand-cloud-blue focus-visible:ring-brand-cloud-blue dark:border-gray-600'
@@ -102,7 +102,7 @@ export function SpeakerCombobox({
               <ComboboxOption
                 key={speaker._id}
                 value={speaker}
-                className="group relative cursor-default px-3 py-2 pr-9 text-gray-900 select-none data-focus:bg-brand-cloud-blue data-focus:text-white dark:text-white"
+                className="group relative flex min-h-[44px] cursor-default flex-col justify-center px-3 py-2 pr-9 text-gray-900 select-none data-focus:bg-brand-cloud-blue data-focus:text-white dark:text-white"
               >
                 <span className="block truncate font-normal group-data-selected:font-semibold">
                   {speaker.name}

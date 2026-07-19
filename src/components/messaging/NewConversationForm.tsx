@@ -3,14 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
+import { errorCode } from '@/lib/messaging/trpc'
 import { SpeakerCombobox, type SpeakerOption } from './SpeakerCombobox'
 
 const MAX_SUBJECT = 200
 const MAX_BODY = 5000
-
-function errorCode(error: unknown): string | undefined {
-  return (error as { data?: { code?: string } } | null)?.data?.code
-}
 
 export interface NewConversationFormProps {
   /**
@@ -24,6 +21,28 @@ export interface NewConversationFormProps {
    * general threads are implicitly about themselves.
    */
   requireRecipient?: boolean
+  /**
+   * Organizer flow with a KNOWN target (e.g. a speaker-scoped admin surface):
+   * the picker is hidden and this speaker is sent as `recipientSpeakerId`.
+   * Takes precedence over `requireRecipient`.
+   */
+  fixedRecipient?: SpeakerOption
+  /**
+   * Post the first message into the PROPOSAL's thread instead of starting a
+   * general thread (`message.send { proposalId, body }`). The thread's subject
+   * is the proposal title, so the subject field and picker are hidden.
+   */
+  proposalId?: string
+  /**
+   * Navigate to the created thread on success (default). Callers embedding the
+   * form in their own success flow (modal + toast) pass `false`.
+   */
+  navigateOnCreate?: boolean
+  /**
+   * Autofocus the first relevant field on mount (subject, or the message body
+   * in proposal mode). Used by modal/sheet mounts so they open ready to type.
+   */
+  autoFocusFirstField?: boolean
   /** Optional callback after a thread is created (before navigation). */
   onCreated?: (conversationId: string) => void
   /** Optional cancel handler (e.g. to collapse the form). */
@@ -31,13 +50,19 @@ export interface NewConversationFormProps {
 }
 
 /**
- * Starts a general (non-proposal) conversation: a subject plus a first message.
- * Organizers additionally pick the recipient speaker the thread is about
- * (`recipientSpeakerId`). On success it navigates to the newly created thread.
+ * Starts a conversation: a subject plus a first message. Organizers either
+ * pick the recipient speaker the thread is about (`requireRecipient`) or have
+ * one preset (`fixedRecipient`); with a `proposalId` the message goes to the
+ * proposal's own thread instead. On success it navigates to the new thread
+ * unless `navigateOnCreate` is false.
  */
 export function NewConversationForm({
   basePath,
   requireRecipient = false,
+  fixedRecipient,
+  proposalId,
+  navigateOnCreate = true,
+  autoFocusFirstField = false,
   onCreated,
   onCancel,
 }: NewConversationFormProps) {
@@ -47,32 +72,56 @@ export function NewConversationForm({
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
 
+  const isProposalThread = Boolean(proposalId)
+  const showPicker = requireRecipient && !fixedRecipient && !isProposalThread
+
   const sendMutation = api.message.send.useMutation({
     onSuccess: ({ conversationId }) => {
       utils.message.listConversations.invalidate()
+      if (isProposalThread) {
+        // A proposal mount usually renders the thread on the same page —
+        // refresh it so the new message appears without a manual reload.
+        utils.message.getConversation.invalidate({ id: conversationId })
+        utils.message.listMessages.invalidate({ conversationId })
+      }
       onCreated?.(conversationId)
-      router.push(`${basePath}/${conversationId}`)
+      if (navigateOnCreate) {
+        router.push(`${basePath}/${conversationId}`)
+      }
     },
   })
 
   // The recipient is only ever unresolvable when the organizer picked one; the
   // server returns NOT_FOUND, which we surface inline against the picker.
-  const recipientNotFound = errorCode(sendMutation.error) === 'NOT_FOUND'
+  const recipientNotFound =
+    showPicker && errorCode(sendMutation.error) === 'NOT_FOUND'
+
+  // A stale NOT_FOUND must not stick to a NEW selection: picking a different
+  // speaker resets the mutation so the inline error clears.
+  const handleRecipientChange = (speaker: SpeakerOption | null) => {
+    if (sendMutation.isError) sendMutation.reset()
+    setRecipient(speaker)
+  }
 
   const canSubmit =
-    subject.trim().length > 0 &&
     body.trim().length > 0 &&
-    (!requireRecipient || recipient !== null) &&
+    (isProposalThread || subject.trim().length > 0) &&
+    (!showPicker || recipient !== null) &&
     !sendMutation.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
+    if (isProposalThread) {
+      sendMutation.mutate({ proposalId, body: body.trim() })
+      return
+    }
+    const recipientId = fixedRecipient?._id ?? recipient?._id
     sendMutation.mutate({
       subject: subject.trim(),
       body: body.trim(),
-      ...(requireRecipient && recipient
-        ? { recipientSpeakerId: recipient._id }
+      ...(fixedRecipient || requireRecipient
+        ? { recipientSpeakerId: recipientId }
         : {}),
     })
   }
@@ -82,7 +131,7 @@ export function NewConversationForm({
       onSubmit={handleSubmit}
       className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
     >
-      {requireRecipient && (
+      {showPicker && (
         <div>
           <label
             htmlFor="new-conversation-recipient"
@@ -93,7 +142,7 @@ export function NewConversationForm({
           <SpeakerCombobox
             id="new-conversation-recipient"
             value={recipient}
-            onChange={setRecipient}
+            onChange={handleRecipientChange}
             invalid={recipientNotFound}
           />
           {recipientNotFound && (
@@ -107,23 +156,37 @@ export function NewConversationForm({
         </div>
       )}
 
-      <div>
-        <label
-          htmlFor="new-conversation-subject"
-          className="block text-sm font-medium text-gray-900 dark:text-white"
-        >
-          Subject
-        </label>
-        <input
-          id="new-conversation-subject"
-          type="text"
-          value={subject}
-          maxLength={MAX_SUBJECT}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="What's this about?"
-          className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
-        />
-      </div>
+      {fixedRecipient && !isProposalThread && (
+        <div>
+          <span className="block text-sm font-medium text-gray-900 dark:text-white">
+            To
+          </span>
+          <p className="mt-1 inline-flex rounded-full bg-brand-sky-mist px-3 py-1 text-sm text-brand-slate-gray dark:bg-gray-700 dark:text-gray-300">
+            {fixedRecipient.name}
+          </p>
+        </div>
+      )}
+
+      {!isProposalThread && (
+        <div>
+          <label
+            htmlFor="new-conversation-subject"
+            className="block text-sm font-medium text-gray-900 dark:text-white"
+          >
+            Subject
+          </label>
+          <input
+            id="new-conversation-subject"
+            type="text"
+            value={subject}
+            maxLength={MAX_SUBJECT}
+            autoFocus={autoFocusFirstField}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="What's this about?"
+            className="mt-1 block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+          />
+        </div>
+      )}
 
       <div>
         <label
@@ -137,6 +200,7 @@ export function NewConversationForm({
           value={body}
           maxLength={MAX_BODY}
           rows={4}
+          autoFocus={autoFocusFirstField && isProposalThread}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write your first message…"
           className="mt-1 block w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
@@ -145,16 +209,19 @@ export function NewConversationForm({
 
       {sendMutation.isError && !recipientNotFound && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          Couldn&apos;t start the conversation. Please try again.
+          Couldn&apos;t{' '}
+          {isProposalThread ? 'send the message' : 'start the conversation'}.
+          Please try again.
         </p>
       )}
 
-      <div className="flex justify-end gap-2">
+      {/* Mobile: stacked, full-width, 44px touch targets; sm+: inline row. */}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-300 dark:hover:bg-gray-800"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue sm:w-auto dark:text-gray-300 dark:hover:bg-gray-800"
           >
             Cancel
           </button>
@@ -162,9 +229,15 @@ export function NewConversationForm({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex items-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:bg-blue-600 dark:hover:bg-blue-500"
         >
-          {sendMutation.isPending ? 'Starting…' : 'Start conversation'}
+          {isProposalThread
+            ? sendMutation.isPending
+              ? 'Sending…'
+              : 'Send message'
+            : sendMutation.isPending
+              ? 'Starting…'
+              : 'Start conversation'}
         </button>
       </div>
     </form>

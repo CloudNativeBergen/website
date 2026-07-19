@@ -11,7 +11,7 @@ import {
   MapPinIcon,
   ExclamationTriangleIcon,
   HeartIcon,
-  EnvelopeIcon,
+  ChatBubbleLeftRightIcon,
   PencilIcon,
   EyeIcon,
   ArrowUturnLeftIcon,
@@ -24,7 +24,7 @@ import { ProposalStatusBadge } from '@/lib/proposal/ui'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
-import { SpeakerEmailModal } from './SpeakerEmailModal'
+import { SendMessageModal } from './SendMessageModal'
 import { ProposalManagementModal } from './ProposalManagementModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { useRouter } from 'next/navigation'
@@ -34,8 +34,6 @@ import { Conference } from '@/lib/conference/types'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
-  domain?: string
-  fromEmail: string
   conference: Conference
 }
 
@@ -61,23 +59,11 @@ const MENU_ACCENT: Record<NonNullable<ActionColor>, string> = {
   yellow: 'text-yellow-500',
 }
 
-export function AdminActionBar({
-  proposal,
-  domain,
-  fromEmail,
-  conference,
-}: AdminActionBarProps) {
+export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const router = useRouter()
-  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showMessageModal, setShowMessageModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
-  const [speakersWithEmail, setSpeakersWithEmail] = useState<
-    {
-      id: string
-      name: string
-      email: string
-    }[]
-  >([])
   const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
 
   const speakers = extractSpeakersFromProposal(proposal)
@@ -90,20 +76,9 @@ export function AdminActionBar({
     window.dispatchEvent(event)
   }
 
-  const handleEmailSpeakers = useCallback(() => {
-    const speakersWithValidEmail = speakers
-      .filter((speaker) => speaker.email)
-      .map((speaker) => ({
-        id: speaker._id,
-        name: speaker.name,
-        email: speaker.email,
-      }))
-
-    if (speakersWithValidEmail.length > 0) {
-      setSpeakersWithEmail(speakersWithValidEmail)
-      setShowEmailModal(true)
-    }
-  }, [speakers])
+  const handleMessageSpeakers = useCallback(() => {
+    setShowMessageModal(true)
+  }, [])
 
   const handleEditProposal = () => {
     setShowEditModal(true)
@@ -156,12 +131,7 @@ export function AdminActionBar({
           break
         case 'm':
           event.preventDefault()
-          if (
-            speakers.length > 0 &&
-            speakers.some((speaker) => speaker.email)
-          ) {
-            handleEmailSpeakers()
-          }
+          handleMessageSpeakers()
           break
         case 's':
           // Note: CMD+S will trigger save in edit modal if it's open
@@ -172,7 +142,7 @@ export function AdminActionBar({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [speakers, handleEmailSpeakers, handlePreviewSpeaker])
+  }, [speakers, handleMessageSpeakers, handlePreviewSpeaker])
   const {
     isSeasonedSpeaker,
     isNewSpeaker,
@@ -207,18 +177,14 @@ export function AdminActionBar({
           },
         ]
       : []),
-    ...(speakers.length > 0 && speakers.some((speaker) => speaker.email)
-      ? [
-          {
-            key: 'email',
-            label: 'Email',
-            icon: EnvelopeIcon,
-            color: 'blue' as const,
-            onClick: handleEmailSpeakers,
-            title: 'Email speaker (⌘M)',
-          },
-        ]
-      : []),
+    {
+      key: 'message',
+      label: 'Message',
+      icon: ChatBubbleLeftRightIcon,
+      color: 'blue' as const,
+      onClick: handleMessageSpeakers,
+      title: 'Send message to speaker(s) (⌘M)',
+    },
     ...(canApprove
       ? [
           {
@@ -431,17 +397,11 @@ export function AdminActionBar({
         )}
       </div>
 
-      {showEmailModal && speakersWithEmail.length > 0 && (
-        <SpeakerEmailModal
-          isOpen={showEmailModal}
-          onClose={() => {
-            setShowEmailModal(false)
-            setSpeakersWithEmail([])
-          }}
-          proposal={proposal}
-          speakers={speakersWithEmail}
-          domain={domain}
-          fromEmail={fromEmail}
+      {showMessageModal && (
+        <SendMessageModal
+          proposalId={proposal._id}
+          proposalTitle={proposal.title}
+          onClose={() => setShowMessageModal(false)}
         />
       )}
 

@@ -363,17 +363,17 @@ export default defineType({
         )
       },
     }),
-    // Messaging (M1). Opt-IN by default: when true, the speaker receives an email
-    // for new conversation messages whose per-conversation override is 'default'.
-    // Absent/unset means false (no email unless the speaker opts in, or a
-    // conversation override forces 'on'). Additive/optional — no migration.
+    // Messaging emails (M4 flipped M1's opt-in to opt-OUT): the speaker
+    // receives an email for new conversation messages whose per-conversation
+    // override is 'default' unless this field is EXPLICITLY false. Absent/unset
+    // means ENABLED, so all existing speaker docs are covered — no migration.
     defineField({
       name: 'messagingEmailDefault',
       title: 'Messaging Email (default)',
       type: 'boolean',
       description:
-        'Default email delivery for new conversation messages. Off by default; per-conversation overrides can force on/off.',
-      initialValue: false,
+        'Default email delivery for new conversation messages. ON by default (absent counts as on); only an explicit off disables it. Per-conversation overrides can still force on/off.',
+      initialValue: true,
     }),
   ],
   preview: {

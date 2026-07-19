@@ -123,9 +123,10 @@ export interface Speaker extends SpeakerBase {
    */
   pushPreferences?: PushPreferences
   /**
-   * Messaging email opt-in (M1). When true, the speaker is emailed for new
-   * conversation messages whose per-conversation override is 'default'. Absent
-   * means FALSE (email opt-in only). Additive/optional; no migration required.
+   * Messaging email default (M4 flipped this to ON by default). The speaker is
+   * emailed for new conversation messages whose per-conversation override is
+   * 'default' unless this is EXPLICITLY false. Absent means ENABLED — covers
+   * all existing speaker docs with no migration.
    */
   messagingEmailDefault?: boolean
 }
