@@ -118,11 +118,13 @@ export async function notifyNewMessage({
     // FIRST-CONTACT detection (S9c): a SPEAKER recipient gets a warmer subject +
     // body ONLY when this is the thread's FIRST message AND an organizer authored
     // it (an organizer reaching out). Cheap count() — one message ⇒ the one we
-    // just added ⇒ first. Only needed when an organizer authored (otherwise no
-    // speaker recipient qualifies for the warmer variant, and the org-contact
-    // copy keeps the standard form regardless).
+    // just added ⇒ first. Only the warmer SPEAKER-recipient variant consumes it,
+    // so skip the read entirely unless an organizer authored AND at least one
+    // recipient is a non-organizer (speaker) — on an organizer→organizer-only
+    // fan-out nothing could ever read `isFirstContact` (V1-r3a).
     let isFirstContact = false
-    if (authorIsOrganizer) {
+    const hasSpeakerRecipient = recipientIds.some((id) => !organizerSet.has(id))
+    if (authorIsOrganizer && hasSpeakerRecipient) {
       const messageCount = await clientReadUncached.fetch<number>(
         `count(*[_type == "message" && conversation._ref == $conversationId])`,
         { conversationId: conversation._id },

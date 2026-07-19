@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { MessagesInbox } from '@/components/messaging'
 
 export const metadata: Metadata = {
@@ -18,7 +19,11 @@ export default function CfpMessagesPage() {
         </p>
       </div>
 
-      <MessagesInbox audience="speaker" allowNew />
+      {/* MessagesInbox reads `?view=` via useSearchParams — needs a Suspense
+          boundary so this page can still statically render its shell. */}
+      <Suspense>
+        <MessagesInbox audience="speaker" allowNew />
+      </Suspense>
     </div>
   )
 }

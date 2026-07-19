@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import type {
   ConversationListItem,
   ConversationView,
+  ConversationViewCounts,
 } from '@/lib/messaging/types'
 import { ConversationList } from './ConversationList'
 import { NewConversationForm } from './NewConversationForm'
@@ -14,11 +16,17 @@ import { NewConversationForm } from './NewConversationForm'
 /** Page size for the inbox (mirrors the server keyset page). */
 const PAGE_SIZE = 20
 
+/** The id of the list container, targeted by every tab's `aria-controls`. */
+const PANEL_ID = 'messages-conversation-panel'
+/** Deterministic per-tab id so the tabpanel can be `aria-labelledby` the tab. */
+const tabId = (view: ConversationView) => `messages-tab-${view}`
+
 /** Organizer inbox tabs. `all` is deliberately omitted from the UI (kept as a
  *  server capability); `active` is the default landing view. */
 const ORGANIZER_TABS: { view: ConversationView; label: string }[] = [
   { view: 'active', label: 'Active' },
   { view: 'needs-reply', label: 'Needs reply' },
+  { view: 'unassigned', label: 'Unassigned' },
   { view: 'mine', label: 'Mine' },
   { view: 'resolved', label: 'Resolved' },
   { view: 'archived', label: 'Archived' },
@@ -31,6 +39,30 @@ const SPEAKER_TABS: { view: ConversationView; label: string }[] = [
   { view: 'archived', label: 'Archived' },
 ]
 
+/** The count-badge value for a tab (undefined ⇒ no badge; zero is omitted). */
+function countForView(
+  view: ConversationView,
+  counts: ConversationViewCounts | undefined,
+): number | undefined {
+  if (!counts) return undefined
+  switch (view) {
+    case 'active':
+      return counts.active
+    case 'needs-reply':
+      return counts.needsReply
+    case 'unassigned':
+      return counts.unassigned
+    case 'mine':
+      return counts.mine
+    case 'resolved':
+      return counts.resolved
+    case 'archived':
+      return counts.archived
+    default:
+      return undefined
+  }
+}
+
 export interface MessagesInboxProps {
   /** The viewer's audience — drives per-row links and the inbox base path. */
   audience: 'speaker' | 'organizer'
@@ -38,41 +70,63 @@ export interface MessagesInboxProps {
   allowNew?: boolean
 }
 
+/** A small count badge shown after a tab label; omitted when the count is 0. */
+function TabCount({ count, active }: { count?: number; active: boolean }) {
+  if (!count || count <= 0) return null
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold ${
+        active
+          ? 'bg-white/25 text-white'
+          : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+      }`}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
 /**
  * Organizer view tabs: a horizontally scrollable row (no wrap, scrollbar hidden)
- * so the five tabs never crowd or reflow at 393px. Each tab is a 44px target and
- * exposes its selected state via `aria-current`.
+ * so the tabs never crowd or reflow at 393px. Each tab is a 44px target, exposes
+ * its selected state via `aria-selected`, and carries a per-view count badge.
  */
 function OrganizerViewTabs({
   view,
+  counts,
   onChange,
 }: {
   view: ConversationView
+  counts: ConversationViewCounts | undefined
   onChange: (view: ConversationView) => void
 }) {
   return (
     <div
       role="tablist"
       aria-label="Filter conversations"
-      className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1"
+      className="no-scrollbar flex flex-1 gap-1 overflow-x-auto"
     >
       {ORGANIZER_TABS.map((tab) => {
         const active = tab.view === view
+        const count = countForView(tab.view, counts)
         return (
           <button
             key={tab.view}
+            id={tabId(tab.view)}
             type="button"
             role="tab"
             aria-selected={active}
-            aria-current={active ? 'page' : undefined}
+            aria-controls={PANEL_ID}
             onClick={() => onChange(tab.view)}
-            className={`inline-flex min-h-[44px] shrink-0 items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue ${
+            className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue ${
               active
                 ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
                 : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
             }`}
           >
             {tab.label}
+            <TabCount count={count} active={active} />
           </button>
         )
       })}
@@ -102,10 +156,11 @@ function SpeakerViewToggle({
         return (
           <button
             key={tab.view}
+            id={tabId(tab.view)}
             type="button"
             role="tab"
             aria-selected={active}
-            aria-current={active ? 'page' : undefined}
+            aria-controls={PANEL_ID}
             onClick={() => onChange(tab.view)}
             className={`inline-flex min-h-[44px] items-center rounded-md px-4 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue ${
               active
@@ -125,9 +180,11 @@ function SpeakerViewToggle({
  * Inbox container for both audiences: loads the caller's conversations and
  * renders {@link ConversationList}. A view tab bar (organizer) / toggle
  * (speaker) drives the `listConversations` `view` input — switching views swaps
- * the query key so each view fetches fresh. When `allowNew` is set a
- * {@link NewConversationForm} opens a general thread — speakers with the
- * organizers; organizers with a chosen recipient speaker.
+ * the query key so each view fetches fresh. The selected view is persisted in
+ * the `?view=` query string (V1i) so back-navigation restores it; the default
+ * `active` omits the param. When `allowNew` is set a {@link NewConversationForm}
+ * opens a general thread — speakers with the organizers; organizers with a
+ * chosen recipient speaker.
  */
 export function MessagesInbox({
   audience,
@@ -136,11 +193,57 @@ export function MessagesInbox({
   const isOrganizer = audience === 'organizer'
   const basePath = isOrganizer ? '/admin/messages' : '/cfp/messages'
   const [showNew, setShowNew] = useState(false)
-  const [view, setView] = useState<ConversationView>('active')
+
+  // The selected view is persisted in the URL (`?view=`) so it survives
+  // back/forward navigation. Local state drives the immediate switch; the URL is
+  // written alongside, and an effect syncs the state back when the URL changes
+  // out from under us (browser back/forward). Any value not valid for this
+  // audience falls back to `active`.
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const tabs = isOrganizer ? ORGANIZER_TABS : SPEAKER_TABS
+  const paramView = searchParams.get('view')
+  const urlView: ConversationView =
+    paramView && tabs.some((t) => t.view === paramView)
+      ? (paramView as ConversationView)
+      : 'active'
+  const [view, setLocalView] = useState<ConversationView>(urlView)
+
+  // Restore the view from the URL when it changes independently of a tab click
+  // (browser back/forward). Adjusting state DURING render — React's endorsed
+  // "you might not need an effect" pattern — keeps the switch in sync without an
+  // effect's extra commit; a tab click sets both local state and the URL, so the
+  // two agree and this branch is a no-op.
+  const [prevUrlView, setPrevUrlView] = useState<ConversationView>(urlView)
+  if (urlView !== prevUrlView) {
+    setPrevUrlView(urlView)
+    setLocalView(urlView)
+  }
+
+  const setView = useCallback(
+    (next: ConversationView) => {
+      setLocalView(next)
+      const params = new URLSearchParams(searchParams.toString())
+      // Default `active` is the canonical no-param state.
+      if (next === 'active') params.delete('view')
+      else params.set('view', next)
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams],
+  )
+
   // The viewer's own speaker id drives the rows' "You: " snippet prefix.
   const { data: session } = useSession()
   const callerId = session?.speaker?._id
   const utils = api.useUtils()
+
+  // Per-view conversation counts for the tab badges (one bounded round trip,
+  // fetched alongside the first inbox page, not polled hot).
+  const { data: viewCounts } = api.message.viewCounts.useQuery(undefined, {
+    staleTime: 30_000,
+  })
 
   const {
     data,
@@ -192,20 +295,29 @@ export function MessagesInbox({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* SINGLE-ROW toolbar (V1b): the view tabs flex and scroll; the compact
+          "New" button is pinned to the right and never wraps below them. */}
+      <div className="flex items-center gap-2">
         {isOrganizer ? (
-          <OrganizerViewTabs view={view} onChange={setView} />
+          <OrganizerViewTabs
+            view={view}
+            counts={viewCounts}
+            onChange={setView}
+          />
         ) : (
-          <SpeakerViewToggle view={view} onChange={setView} />
+          <div className="min-w-0 flex-1">
+            <SpeakerViewToggle view={view} onChange={setView} />
+          </div>
         )}
         {allowNew && !showNew && (
           <button
             type="button"
             onClick={() => setShowNew(true)}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500"
+            className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500"
           >
             <PlusIcon className="h-4 w-4" aria-hidden="true" />
-            New conversation
+            <span className="hidden sm:inline">New conversation</span>
+            <span className="sm:hidden">New</span>
           </button>
         )}
       </div>
@@ -225,12 +337,16 @@ export function MessagesInbox({
         items={items}
         isOrganizer={isOrganizer}
         callerId={callerId}
+        view={view}
         isLoading={isLoading}
         isError={isError}
         hasMore={hasNextPage}
         onShowMore={() => fetchNextPage()}
         isLoadingMore={isFetchingNextPage}
         onUnarchive={isArchivedView ? handleUnarchive : undefined}
+        onNewConversation={allowNew ? () => setShowNew(true) : undefined}
+        panelId={PANEL_ID}
+        labelledById={tabId(view)}
       />
     </div>
   )

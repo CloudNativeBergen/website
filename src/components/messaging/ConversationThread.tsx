@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import {
   ArchiveBoxArrowDownIcon,
@@ -61,6 +62,15 @@ export interface ConversationThreadViewProps {
   messages: DisplayMessage[]
   isLoading?: boolean
   isError?: boolean
+  /**
+   * The conversation genuinely doesn't exist or the viewer can't access it
+   * (server NOT_FOUND, not a transport failure). Distinguished from `isError` so
+   * the empty/error state can be HONEST (V1e): a permanent "no access" message
+   * with a Back-to-Messages CTA, rather than the retry copy a flaky network gets.
+   */
+  isNotFound?: boolean
+  /** Audience-aware href of the Messages inbox, for the NOT_FOUND Back CTA (V1e). */
+  backHref?: string
   /** A full previous page implies older messages remain. */
   hasMore?: boolean
   onShowMore?: () => void
@@ -129,6 +139,13 @@ export interface ConversationThreadViewProps {
   globallyArchived?: boolean
   /** Organizer-only: set/clear the GLOBAL archive. */
   onSetGlobalArchived?: (archived: boolean) => void
+  /**
+   * Name of the organizer who globally archived the thread (deref of
+   * `archivedBy`). When present alongside `globallyArchived`, the organizer
+   * header shows an "Archived for everyone by X" banner with an adjacent
+   * Unarchive affordance (V1f).
+   */
+  archivedByName?: string
   /** True while any organizer ticketing mutation is in flight (disables them). */
   isSavingTicket?: boolean
 }
@@ -219,22 +236,34 @@ function EmailOverrideSelect({
   emailOverride,
   onSetEmailOverride,
   disabled,
+  muted = false,
 }: {
   emailOverride: EmailOverride
   onSetEmailOverride?: (override: EmailOverride) => void
   disabled?: boolean
+  /**
+   * When the conversation is muted, mute dominates every channel — email
+   * included — so the select is disabled with an explaining tooltip (V1g).
+   */
+  muted?: boolean
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+    <label
+      className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+      title={muted ? 'Muted — no notifications of any kind' : undefined}
+    >
       <span>Emails</span>
       <select
         value={emailOverride}
-        disabled={disabled || !onSetEmailOverride}
+        disabled={disabled || muted || !onSetEmailOverride}
         onChange={(e) => onSetEmailOverride?.(e.target.value as EmailOverride)}
         aria-label="Email notifications for this conversation"
         className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-brand-cloud-blue focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
       >
-        <option value="default">Default</option>
+        {/* The effective global default (audience-dependent, and a per-user
+            toggle) isn't cheaply reachable client-side, so the label points at
+            the profile rather than asserting on/off here (V1g). */}
+        <option value="default">Default (see profile)</option>
         <option value="on">Always</option>
         <option value="off">Never</option>
       </select>
@@ -272,6 +301,7 @@ function PreferencesBar({
         emailOverride={emailOverride}
         onSetEmailOverride={onSetEmailOverride}
         disabled={disabled}
+        muted={muted}
       />
       {onArchiveForMe && (
         // Icon-only so the three-control bar (Mute + Emails + Archive) stays
@@ -430,6 +460,7 @@ function OrganizerThreadControls({
                 emailOverride={preference.emailOverride}
                 onSetEmailOverride={onSetEmailOverride}
                 disabled={prefDisabled}
+                muted={preference.muted}
               />
             </div>
           )}
@@ -438,7 +469,12 @@ function OrganizerThreadControls({
             {onArchiveForMe && (
               <button
                 type="button"
-                onClick={onArchiveForMe}
+                // Close the overflow sheet after the archive action (V1-r1); the
+                // Assign section deliberately stays open for multi-select.
+                onClick={() => {
+                  onArchiveForMe()
+                  setMenuOpen(false)
+                }}
                 disabled={prefDisabled}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
               >
@@ -452,7 +488,11 @@ function OrganizerThreadControls({
             {onSetGlobalArchived && (
               <button
                 type="button"
-                onClick={() => onSetGlobalArchived(!globallyArchived)}
+                // Close the sheet after toggling the global archive (V1-r1).
+                onClick={() => {
+                  onSetGlobalArchived(!globallyArchived)
+                  setMenuOpen(false)
+                }}
                 disabled={ticketDisabled}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
               >
@@ -488,6 +528,8 @@ export function ConversationThreadView({
   messages,
   isLoading = false,
   isError = false,
+  isNotFound = false,
+  backHref,
   hasMore = false,
   onShowMore,
   isLoadingMore = false,
@@ -512,6 +554,7 @@ export function ConversationThreadView({
   onSetAssignee,
   globallyArchived = false,
   onSetGlobalArchived,
+  archivedByName,
   isSavingTicket = false,
 }: ConversationThreadViewProps) {
   const [draft, setDraft] = useState('')
@@ -695,6 +738,57 @@ export function ConversationThreadView({
         </div>
       )}
 
+      {/* ARCHIVED-FOR-EVERYONE banner (V1f, organizer): a subtle audit line with
+          an adjacent Unarchive affordance when the thread is globally archived. */}
+      {onSetStatus && globallyArchived && (
+        <div className="mt-3 flex shrink-0 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <ArchiveBoxArrowDownIcon
+              className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
+              aria-hidden="true"
+            />
+            <span
+              className="truncate"
+              title={
+                archivedByName
+                  ? `Archived for everyone by ${archivedByName}`
+                  : undefined
+              }
+            >
+              {archivedByName
+                ? `Archived for everyone by ${archivedByName}`
+                : 'Archived for everyone'}
+            </span>
+          </span>
+          {onSetGlobalArchived && (
+            <button
+              type="button"
+              onClick={() => onSetGlobalArchived(false)}
+              disabled={isSavingTicket || readOnly}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-semibold text-brand-cloud-blue transition hover:bg-brand-cloud-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-400/10"
+            >
+              <ArchiveBoxXMarkIcon className="h-4 w-4" aria-hidden="true" />
+              Unarchive
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* SPEAKER resolved note (V1h): a closed thread reopens on reply. Shown for
+          the speaker audience only (no organizer ticketing controls). */}
+      {!onSetStatus && status === 'resolved' && (
+        <div className="mt-3 flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+          <CheckCircleIcon
+            className="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
+            aria-hidden="true"
+          />
+          <span>
+            The organizers marked this conversation closed — replying reopens
+            it.
+          </span>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -704,6 +798,28 @@ export function ConversationThreadView({
       >
         {isLoading ? (
           <MessageSkeleton />
+        ) : isNotFound ? (
+          // HONEST NOT_FOUND (V1e): a permanent no-access state, not a transient
+          // load failure — offer a way back to the inbox instead of a retry.
+          <div
+            role="alert"
+            className="flex flex-col items-center justify-center gap-2 py-10 text-center"
+          >
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              This conversation doesn&apos;t exist or you don&apos;t have
+              access.
+            </p>
+            {backHref && (
+              <Link
+                href={backHref}
+                prefetch={false}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-brand-cloud-blue transition hover:bg-brand-cloud-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-blue-300 dark:hover:bg-blue-400/10"
+              >
+                <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+                Back to Messages
+              </Link>
+            )}
+          </div>
         ) : isError ? (
           <div
             role="alert"
@@ -757,7 +873,8 @@ export function ConversationThreadView({
           </p>
         </div>
       ) : (
-        !isError && (
+        !isError &&
+        !isNotFound && (
           <div
             className={`border-t border-gray-200 pt-3 dark:border-gray-700 ${
               fillHeight
@@ -910,6 +1027,10 @@ export function ConversationThread({
   // than a working composer whose sends would fail.
   const messagesNotFound = errorCode(messagesQuery.error) === 'NOT_FOUND'
   const notFoundIsEmpty = messagesNotFound && !!proposalId
+  // A bare-conversationId NOT_FOUND (no proposal to auto-create) is a genuine
+  // "doesn't exist / no access" — surface it honestly (V1e), distinct from a
+  // transport failure which keeps the retry copy.
+  const isConversationNotFound = messagesNotFound && !notFoundIsEmpty
 
   const participants = conversationQuery.data?.participants
   const participantById = useMemo(() => {
@@ -1098,7 +1219,12 @@ export function ConversationThread({
     <ConversationThreadView
       messages={messages}
       isLoading={messagesQuery.isLoading && !notFoundIsEmpty}
-      isError={messagesQuery.isError && !notFoundIsEmpty}
+      // Transport error only — a NOT_FOUND routes to the honest not-found state.
+      isError={
+        messagesQuery.isError && !notFoundIsEmpty && !isConversationNotFound
+      }
+      isNotFound={isConversationNotFound}
+      backHref={isOrganizer ? '/admin/messages' : '/cfp/messages'}
       hasMore={messagesQuery.hasNextPage}
       onShowMore={() => messagesQuery.fetchNextPage()}
       isLoadingMore={messagesQuery.isFetchingNextPage}
@@ -1145,6 +1271,7 @@ export function ConversationThread({
       assignedTo={conversation?.assignedTo}
       organizers={organizers}
       globallyArchived={globallyArchived}
+      archivedByName={conversation?.archivedBy?.name}
       isSavingTicket={isSavingTicket}
       onSetStatus={
         isOrganizer && conversationExists && convId

@@ -385,3 +385,116 @@ export const FillHeightLongThread: Story = {
     </div>
   ),
 }
+
+/**
+ * HONEST NOT_FOUND (V1e): a bare-conversationId thread the viewer can't see (or
+ * that doesn't exist) shows a permanent no-access message with a Back-to-Messages
+ * CTA — never the transient "couldn't load / retry" copy, and no composer.
+ */
+export const NotFound: Story = {
+  args: {
+    messages: [],
+    isNotFound: true,
+    backHref: '/cfp/messages',
+  },
+}
+
+export const NotFoundDark: Story = {
+  args: {
+    messages: [],
+    isNotFound: true,
+    backHref: '/cfp/messages',
+  },
+  parameters: { dark: true },
+}
+
+/**
+ * ARCHIVED-FOR-EVERYONE banner (V1f): an organizer thread that is globally
+ * archived shows a subtle "Archived for everyone by X" audit line with an
+ * adjacent Unarchive affordance.
+ */
+export const ArchivedForEveryoneBanner: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    status: 'open',
+    onSetStatus: fn(),
+    organizers,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    onSetAssignee: fn(),
+    globallyArchived: true,
+    archivedByName: 'Grace Hopper',
+    onSetGlobalArchived: fn(),
+    onArchiveForMe: fn(),
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+export const ArchivedForEveryoneBannerDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    status: 'open',
+    onSetStatus: fn(),
+    organizers,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    onSetAssignee: fn(),
+    globallyArchived: true,
+    archivedByName: 'Grace Hopper',
+    onSetGlobalArchived: fn(),
+    onArchiveForMe: fn(),
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/**
+ * SPEAKER RESOLVED NOTE (V1h): a closed thread shows a one-line note explaining
+ * that replying reopens it (speaker audience — no organizer ticketing controls).
+ */
+export const SpeakerResolvedNote: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    status: 'resolved',
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+export const SpeakerResolvedNoteDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    status: 'resolved',
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/**
+ * MUTED STATE (V1g): while muted, mute dominates every channel — the Emails
+ * select is disabled (tooltip: "Muted — no notifications of any kind") and the
+ * Default option reads "Default (see profile)".
+ */
+export const MutedEmailsDisabled: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: { muted: true, emailOverride: 'default' },
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}

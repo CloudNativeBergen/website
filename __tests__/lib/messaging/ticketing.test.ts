@@ -436,7 +436,9 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
     // The projection coalesces an absent status to 'open'.
     const [query] = readMock.fetch.mock.calls[0]
     expect(query).toContain('"status": coalesce(status, \'open\')')
-    expect(query).toContain('"assignedTo": assignedTo->{ _id, name }')
+    expect(query).toContain(
+      '"assignedTo": assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) }',
+    )
   })
 })
 
@@ -559,6 +561,7 @@ describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
     readMock.fetch.mockResolvedValueOnce({
       active: 3,
       needsReply: 2,
+      unassigned: 6,
       mine: 1,
       resolved: 4,
       archived: 5,
@@ -571,6 +574,7 @@ describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
     expect(counts).toEqual({
       active: 3,
       needsReply: 2,
+      unassigned: 6,
       mine: 1,
       resolved: 4,
       archived: 5,
@@ -579,11 +583,14 @@ describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
     // ONE object projection with a count() per view.
     expect(query).toContain('"active": count(')
     expect(query).toContain('"needsReply": count(')
+    expect(query).toContain('"unassigned": count(')
     expect(query).toContain('"mine": count(')
     expect(query).toContain('"resolved": count(')
     expect(query).toContain('"archived": count(')
-    // Reuses the shared predicates (needs-reply binds organizerIds).
+    // Reuses the shared predicates (needs-reply binds organizerIds; unassigned
+    // filters on an absent assignee).
     expect(query).toContain('assignedTo._ref == $speakerId')
+    expect(query).toContain('!defined(assignedTo)')
     expect(query).toContain('in $organizerIds)')
     expect(params.organizerIds).toEqual(['org-1', 'org-2'])
   })

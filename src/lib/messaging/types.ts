@@ -25,6 +25,7 @@ export type ConversationStatus = 'open' | 'resolved'
  * - `active`      — status open (or absent) AND NOT globally archived AND NOT
  *                   per-user archived;
  * - `needs-reply` — active AND the last message's author is not an organizer;
+ * - `unassigned`  — active AND no organizer is assigned to follow up;
  * - `mine`        — active AND assigned to the caller;
  * - `resolved`    — status resolved AND not archived (neither global nor per-user);
  * - `archived`    — globally OR per-user archived;
@@ -37,7 +38,13 @@ export type ConversationStatus = 'open' | 'resolved'
  * - `all`      — everything.
  */
 export type ConversationView =
-  'active' | 'needs-reply' | 'mine' | 'resolved' | 'archived' | 'all'
+  | 'active'
+  | 'needs-reply'
+  | 'unassigned'
+  | 'mine'
+  | 'resolved'
+  | 'archived'
+  | 'all'
 
 /** The views a non-organizer (speaker) is allowed to request. */
 export const SPEAKER_ALLOWED_VIEWS: ConversationView[] = [
@@ -129,6 +136,12 @@ export interface ConversationCounterpart {
 export interface ConversationAssignee {
   _id: string
   name: string
+  /**
+   * The organizer's avatar URL when available (house
+   * `coalesce(image.asset->url, imageURL)` pattern); undefined falls back to
+   * initials in the assignee badge (S12 / V1k).
+   */
+  image?: string
 }
 
 /** A conversation as listed in an inbox. */
@@ -183,6 +196,13 @@ export interface ConversationListItem {
    * globally OR per-user archived; for a speaker, per-user archived only.
    */
   archived?: boolean
+  /**
+   * Whether the CALLER has muted this conversation (their per-user preference).
+   * Projected so the inbox row can surface a mute glyph (V1g) — a muted thread
+   * still appears in the list, it just receives no notifications on any channel.
+   * Absent/false when unmuted.
+   */
+  muted?: boolean
 }
 
 /**
@@ -194,6 +214,7 @@ export interface ConversationViewCounts {
   active: number
   archived: number
   needsReply?: number
+  unassigned?: number
   mine?: number
   resolved?: number
 }

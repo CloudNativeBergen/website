@@ -17,6 +17,8 @@ let unreadState: { data: number | undefined; isSuccess: boolean } = {
   data: 0,
   isSuccess: true,
 }
+// The `notification.list` (limit 1) query the bell reads for the toast title.
+let listState: { data: { title: string }[] | undefined } = { data: undefined }
 let sessionState: { data: { isImpersonating?: boolean } | null } = {
   data: { isImpersonating: false },
 }
@@ -39,12 +41,16 @@ vi.mock('@/lib/trpc/client', () => ({
       unreadCount: {
         useQuery: () => unreadState,
       },
+      list: {
+        useQuery: () => listState,
+      },
     },
   },
 }))
 
 beforeEach(() => {
   unreadState = { data: 0, isSuccess: true }
+  listState = { data: undefined }
   sessionState = { data: { isImpersonating: false } }
   showNotification.mockClear()
 })
@@ -104,5 +110,30 @@ describe('NotificationBell — toast bridge', () => {
     unreadState = { data: 7, isSuccess: true }
     rerender(<NotificationBell />)
     expect(showNotification).not.toHaveBeenCalled()
+  })
+
+  it('carries the newest notification title when one is available (V1l)', () => {
+    listState = { data: [{ title: 'Direct message from Ola Organizer' }] }
+    unreadState = { data: 0, isSuccess: true }
+    const { rerender } = render(<NotificationBell />)
+    unreadState = { data: 1, isSuccess: true }
+    rerender(<NotificationBell />)
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Direct message from Ola Organizer',
+        message: 'You have 1 new notification.',
+      }),
+    )
+  })
+
+  it('falls back to the generic title when no newest title is available', () => {
+    listState = { data: [] }
+    unreadState = { data: 1, isSuccess: true }
+    const { rerender } = render(<NotificationBell />)
+    unreadState = { data: 3, isSuccess: true }
+    rerender(<NotificationBell />)
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'You have new notifications' }),
+    )
   })
 })
