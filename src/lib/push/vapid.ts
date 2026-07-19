@@ -40,23 +40,46 @@ export function isPushConfigured(): boolean {
 }
 
 let configured = false
+let configError: string | null = null
+
+/**
+ * The reason VAPID configuration FAILED (malformed subject/keys), or null when
+ * configuration succeeded or hasn't been attempted. `setVapidDetails` throws
+ * synchronously on e.g. a bare-email VAPID_SUBJECT (must be a URL or mailto:)
+ * or a wrong-length key — surfacing the message here lets the push test button
+ * and the admin self-check page explain the misconfiguration instead of a
+ * generic "internal error".
+ */
+export function getWebPushConfigError(): string | null {
+  return configError
+}
 
 /**
  * Lazily apply the VAPID details to the shared `web-push` client exactly once.
- * Returns the configured client, or `null` when keys are missing (so callers
- * can no-op instead of throwing in an unconfigured environment).
+ * Returns the configured client, or `null` when keys are missing OR when the
+ * configured values are MALFORMED (so callers can no-op instead of throwing) —
+ * in the malformed case {@link getWebPushConfigError} carries the reason.
  */
 export function getConfiguredWebPush(): typeof webpush | null {
   if (!isPushConfigured()) {
     return null
   }
+  if (configError) {
+    return null
+  }
   if (!configured) {
-    webpush.setVapidDetails(
-      getVapidSubject(),
-      getVapidPublicKey(),
-      getVapidPrivateKey(),
-    )
-    configured = true
+    try {
+      webpush.setVapidDetails(
+        getVapidSubject(),
+        getVapidPublicKey(),
+        getVapidPrivateKey(),
+      )
+      configured = true
+    } catch (error) {
+      configError = error instanceof Error ? error.message : String(error)
+      console.error('[push] VAPID configuration is invalid:', configError)
+      return null
+    }
   }
   return webpush
 }

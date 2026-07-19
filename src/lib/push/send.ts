@@ -1,5 +1,9 @@
 import 'server-only'
-import { getConfiguredWebPush, isPushConfigured } from './vapid'
+import {
+  getConfiguredWebPush,
+  getWebPushConfigError,
+  isPushConfigured,
+} from './vapid'
 import { getSpeakerPushState, prunePushSubscription } from './sanity'
 import { isValidPushEndpoint } from './validate'
 import type {
@@ -81,7 +85,17 @@ export async function sendPush(
 ): Promise<PushSendResult> {
   const client = getConfiguredWebPush()
   if (!client) {
-    return { ok: false, gone: false, errorMessage: 'VAPID keys not configured' }
+    // Distinguish "no keys" from "keys present but MALFORMED" (bad subject /
+    // wrong-length key) — the latter previously threw out of this function and
+    // surfaced as an unexplained 'internal error' on the test button.
+    const configError = getWebPushConfigError()
+    return {
+      ok: false,
+      gone: false,
+      errorMessage: configError
+        ? `VAPID configuration invalid: ${configError}`
+        : 'VAPID keys not configured',
+    }
   }
 
   try {
