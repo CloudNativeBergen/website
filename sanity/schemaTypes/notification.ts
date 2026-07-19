@@ -26,6 +26,10 @@ export default defineType({
       title: 'Recipient',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion;
+      // retention prunes notifications anyway, so a dangling recipient ref on a
+      // not-yet-purged doc is tolerated.
+      weak: true,
       description: 'The speaker who receives this notification.',
       validation: (Rule) => Rule.required(),
     }),
@@ -87,6 +91,8 @@ export default defineType({
       title: 'Actor',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion.
+      weak: true,
       description:
         'The speaker whose action triggered this notification. Omitted for system-generated notifications.',
     }),

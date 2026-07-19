@@ -47,6 +47,9 @@ import {
   markNotificationsReadByLinks,
   markAllRead,
   deleteNotificationsOlderThan,
+  deleteMessageNotificationsFor,
+  getOrganizerSpeakerIds,
+  clearOrganizerSpeakerIdsCache,
 } from '@/lib/notification/sanity'
 import type {
   MessageNotificationInput,
@@ -86,6 +89,9 @@ const input = (
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The organizer id set is cached in module scope; clear it so cache-sensitive
+  // tests (and the fresh-fetch assumptions of others) don't leak across tests.
+  clearOrganizerSpeakerIdsCache()
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -342,6 +348,55 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(pushItems[0].notificationType).toBe('message_received')
     expect(pushItems[0].title).toBe('2 new messages — A question')
     expect(pushItems[0].recipientId).toBe('sp-1')
+    // B10: a stable per-conversation tag so successive pushes REPLACE on-device.
+    expect(pushItems[0].tag).toBe('msg:conversation.gen-1')
+  })
+
+  it('gives a grapheme-safe title when an emoji straddles the 200-char cap (B6)', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+    // Long subject whose emoji lands on the title cap; a naive slice(0,200)
+    // would keep the emoji's high surrogate alone (�).
+    const subject = `${'x'.repeat(178)}😀tail`
+    await upsertMessageNotifications([msgInput({ authorName: 'A', subject })])
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    const title = ops.set.title as string
+    expect(title.length).toBeLessThanOrEqual(200)
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(title)).toBe(false)
+  })
+
+  it('isolates a failing chunk: other recipients still commit and get pushed (B11)', async () => {
+    // 15 recipients → two chunks (10 + 5). Make the FIRST chunk's commit reject;
+    // the second must still commit, and push fires only for its recipients.
+    readMock.fetch.mockResolvedValue([]) // all brand-new
+    const tx = installTransaction()
+    tx.commit.mockReset()
+    tx.commit
+      .mockRejectedValueOnce(new Error('bad recipient ref'))
+      .mockResolvedValue({})
+
+    const items = Array.from({ length: 15 }, (_, i) =>
+      msgInput({ recipientId: `sp-${i}` }),
+    )
+    await upsertMessageNotifications(items)
+
+    // Two transactions attempted (two chunks).
+    expect(writeMock.transaction).toHaveBeenCalledTimes(2)
+    expect(tx.commit).toHaveBeenCalledTimes(2)
+    // The failed chunk is logged.
+    expect(console.error).toHaveBeenCalled()
+
+    // Push fired ONCE, only for the committed chunk's 5 recipients.
+    expect(pushMock).toHaveBeenCalledTimes(1)
+    const [pushItems] = pushMock.mock.calls[0] as [NotificationInput[]]
+    expect(pushItems).toHaveLength(5)
+    const pushedIds = pushItems.map((p) => p.recipientId).sort()
+    expect(pushedIds).toEqual(
+      ['sp-10', 'sp-11', 'sp-12', 'sp-13', 'sp-14'].sort(),
+    )
   })
 
   it('is a no-op (no read, no transaction) for an empty list', async () => {
@@ -670,6 +725,17 @@ describe('deleteNotificationsOlderThan — batched retention cleanup', () => {
     expect(cutoff).toBeLessThanOrEqual(after)
   })
 
+  it('EXCLUDES unread message notifications from the purge (B2)', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    await deleteNotificationsOlderThan(90)
+    const [query] = readMock.fetch.mock.calls[0]
+    // An unread collapsed message notification is the only store of message
+    // unread state, so it must outlive the retention horizon.
+    expect(query).toContain(
+      '!(notificationType == "message_received" && !defined(readAt))',
+    )
+  })
+
   it('is a no-op (no transaction) when nothing is expired', async () => {
     readMock.fetch.mockResolvedValueOnce([])
     const tx = installTransaction()
@@ -727,5 +793,105 @@ describe('deleteNotificationsOlderThan — batched retention cleanup', () => {
     await expect(deleteNotificationsOlderThan(90)).rejects.toThrow(
       'sanity down',
     )
+  })
+})
+
+describe('deleteMessageNotificationsFor — access-loss cleanup (B3)', () => {
+  it('deletes a speaker message notifications matched by proposal-thread links', async () => {
+    readMock.fetch.mockResolvedValue(['notif-msg-1'])
+    const tx = installTransaction()
+
+    const count = await deleteMessageNotificationsFor({
+      proposalIds: ['prop-1'],
+      speakerId: 'sp-7',
+    })
+
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('notificationType == "message_received"')
+    expect(query).toContain('link in $links')
+    expect(params).toEqual({
+      speakerId: 'sp-7',
+      links: [
+        '/admin/proposals/prop-1#messages',
+        '/cfp/proposal/prop-1#messages',
+      ],
+    })
+    expect(tx.delete).toHaveBeenCalledWith('notif-msg-1')
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(count).toBe(1)
+  })
+
+  it('builds general-thread links from conversationIds', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await deleteMessageNotificationsFor({
+      conversationIds: ['conversation.gen-1'],
+      speakerId: 'sp-7',
+    })
+    const [, params] = readMock.fetch.mock.calls[0]
+    expect((params as { links: string[] }).links).toEqual([
+      '/admin/messages/conversation.gen-1',
+      '/cfp/messages/conversation.gen-1',
+    ])
+  })
+
+  it('is a no-op (no fetch, no write) when no threads are given', async () => {
+    const tx = installTransaction()
+    const count = await deleteMessageNotificationsFor({ speakerId: 'sp-7' })
+    expect(count).toBe(0)
+    expect(readMock.fetch).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('returns 0 and writes nothing when nothing matches', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+    const count = await deleteMessageNotificationsFor({
+      proposalIds: ['prop-1'],
+      speakerId: 'sp-7',
+    })
+    expect(count).toBe(0)
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.delete).not.toHaveBeenCalled()
+  })
+
+  it('NEVER throws when the fetch fails — swallows, logs, returns 0', async () => {
+    readMock.fetch.mockRejectedValue(new Error('sanity down'))
+    const count = await deleteMessageNotificationsFor({
+      proposalIds: ['prop-1'],
+      speakerId: 'sp-7',
+    })
+    expect(count).toBe(0)
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
+describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () => {
+  it('bounds the fetch to [0...200] and caches within the TTL (ONE read for two calls)', async () => {
+    readMock.fetch.mockResolvedValue(['org-1', 'org-2'])
+
+    const first = await getOrganizerSpeakerIds()
+    const second = await getOrganizerSpeakerIds()
+
+    expect(first).toEqual(['org-1', 'org-2'])
+    expect(second).toEqual(['org-1', 'org-2'])
+    // Cached: only one underlying read despite two calls.
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    const [query] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('isOrganizer == true')
+    expect(query).toContain('[0...200]')
+  })
+
+  it('re-fetches after the cache is cleared', async () => {
+    readMock.fetch.mockResolvedValue(['org-1'])
+    await getOrganizerSpeakerIds()
+    clearOrganizerSpeakerIdsCache()
+    await getOrganizerSpeakerIds()
+    expect(readMock.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('coalesces a null fetch to an empty array', async () => {
+    readMock.fetch.mockResolvedValue(null)
+    expect(await getOrganizerSpeakerIds()).toEqual([])
   })
 })

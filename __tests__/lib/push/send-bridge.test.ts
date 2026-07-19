@@ -145,6 +145,22 @@ describe('sendPushForNotifications', () => {
     })
   })
 
+  it('threads a stable tag into the payload so repeat pushes replace on-device (B10)', async () => {
+    mockGetState.mockResolvedValue(state())
+    await sendPushForNotifications([
+      item({ notificationType: 'message_received', tag: 'msg:conv-1' }),
+    ])
+    const [, body] = sendNotification.mock.calls[0]
+    expect(JSON.parse(body as string).tag).toBe('msg:conv-1')
+  })
+
+  it('omits tag entirely for items without one (one-shot types keep stacking)', async () => {
+    mockGetState.mockResolvedValue(state())
+    await sendPushForNotifications([item()])
+    const [, body] = sendNotification.mock.calls[0]
+    expect('tag' in JSON.parse(body as string)).toBe(false)
+  })
+
   it('falls back to an empty body and root url when message/link are absent', async () => {
     mockGetState.mockResolvedValue(state())
     await sendPushForNotifications([

@@ -42,8 +42,10 @@ import {
   setConversationPreference,
   getConversationPreferencesFor,
   listConversationsForSpeaker,
+  listMessages,
   speakerExists,
 } from '@/lib/messaging/sanity'
+import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
 import type { ConversationWithContext } from '@/lib/messaging/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
@@ -351,15 +353,49 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
     ).toBe(0)
 
     // The unread query is scoped to the caller, the conference, message_received,
-    // unread only, and projects coalesce(count, 1) so a pre-collapse
-    // per-message document still counts as 1.
+    // unread only, and — crucially — to THIS page's conversations via
+    // `link in $pageLinks` (both audience variants per row). It projects
+    // coalesce(count, 1) so a pre-collapse per-message document still counts as 1.
     const [query, params] = readMock.fetch.mock.calls[1]
     expect(query).toContain('recipient._ref == $speakerId')
     expect(query).toContain('conference._ref == $conferenceId')
     expect(query).toContain('notificationType == "message_received"')
     expect(query).toContain('!defined(readAt)')
     expect(query).toContain('coalesce(count, 1)')
-    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
+    expect(query).toContain('link in $pageLinks')
+    // No fixed [0...N] cap — the fetch is bounded by the page's link set.
+    expect(query).not.toContain('[0...500]')
+    expect(params).toEqual({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      pageLinks: [
+        '/admin/proposals/prop-1#messages',
+        '/cfp/proposal/prop-1#messages',
+        '/admin/messages/conversation.gen-1',
+        '/cfp/messages/conversation.gen-1',
+      ],
+    })
+  })
+
+  it('counts unread beyond any fixed cap now the fetch is page-scoped (B4)', async () => {
+    // A caller with far more than the old 500-doc cap of conference-wide unread
+    // notifications still gets correct per-row counts: the fetch returns only
+    // this page's links, so nothing is truncated away.
+    readMock.fetch
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce([
+        { link: '/cfp/proposal/prop-1#messages', count: 999 },
+      ])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+
+    expect(
+      result.find((r) => r._id === 'conversation.proposal.prop-1')!.unreadCount,
+    ).toBe(999)
   })
 
   it('sums MIXED collapsed and legacy per-message docs for the same conversation', async () => {
@@ -606,5 +642,161 @@ describe('getConversationPreferencesFor — batched, normalized', () => {
     ])
     expect(map.get('sp-1')).toEqual({ muted: true, emailOverride: 'on' })
     expect(map.get('sp-2')).toEqual({ muted: false, emailOverride: 'default' })
+  })
+})
+
+describe('listMessages — compound keyset cursor (B5)', () => {
+  it('omits the cursor clause and orders by (createdAt desc, _id desc) with no cursor', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await listMessages({ conversationId: 'conversation.gen-1' })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('order(createdAt desc, _id desc)')
+    expect(query).not.toContain('createdAt < $before')
+    expect(params).toEqual({ conversationId: 'conversation.gen-1' })
+  })
+
+  it('uses the simple strict-less-than predicate when only `before` is given', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await listMessages({
+      conversationId: 'conversation.gen-1',
+      before: '2026-01-02T00:00:00.000Z',
+    })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('createdAt < $before')
+    expect(query).not.toContain('$beforeId')
+    expect(params).toEqual({
+      conversationId: 'conversation.gen-1',
+      before: '2026-01-02T00:00:00.000Z',
+    })
+  })
+
+  it('uses the compound (createdAt, _id) predicate so equal-timestamp rows are not skipped', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await listMessages({
+      conversationId: 'conversation.gen-1',
+      before: '2026-01-02T00:00:00.000Z',
+      beforeId: 'message.abc',
+    })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain(
+      '(createdAt < $before || (createdAt == $before && _id < $beforeId))',
+    )
+    expect(params).toEqual({
+      conversationId: 'conversation.gen-1',
+      before: '2026-01-02T00:00:00.000Z',
+      beforeId: 'message.abc',
+    })
+  })
+})
+
+describe('listConversationsForSpeaker — compound keyset cursor (B5)', () => {
+  it('uses the compound (lastMessageAt, _id) predicate when `beforeId` is given', async () => {
+    readMock.fetch.mockResolvedValueOnce([]) // empty page → no unread fetch
+    await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+      before: '2026-01-02T00:00:00.000Z',
+      beforeId: 'conversation.gen-1',
+    })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('order(lastMessageAt desc, _id desc)')
+    expect(query).toContain(
+      '(lastMessageAt < $before || (lastMessageAt == $before && _id < $beforeId))',
+    )
+    expect(params).toEqual({
+      conferenceId: 'conf-1',
+      before: '2026-01-02T00:00:00.000Z',
+      beforeId: 'conversation.gen-1',
+    })
+  })
+})
+
+describe('listConversationsForSpeaker — empty-excerpt lastMessage (B8)', () => {
+  it('returns lastMessage null when the body trims to an empty excerpt', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce([
+        {
+          _id: 'conversation.gen-1',
+          conversationType: 'general' as const,
+          subject: 'Q',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          lastMessageAt: '2026-01-01T00:00:00.000Z',
+          lastMessage: {
+            authorId: 'org-1',
+            authorName: 'Ola',
+            authorImage: null,
+            body: '   \n  ', // whitespace only → empty excerpt
+          },
+          speakerSideName: 'Sub',
+          speakerSideImage: null,
+        },
+      ])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    expect(result[0].lastMessage).toBeNull()
+  })
+})
+
+describe('listConversationsForSpeaker — grapheme-safe excerpt (B6)', () => {
+  it('does not split an emoji straddling the 120-char cap into a lone surrogate', async () => {
+    // 119 ASCII chars then a 2-code-unit emoji: a naive slice(0,120) would keep
+    // only the emoji's high surrogate → �. The grapheme-safe cut drops the whole
+    // emoji instead.
+    const body = `${'a'.repeat(119)}😀 tail`
+    readMock.fetch
+      .mockResolvedValueOnce([
+        {
+          _id: 'conversation.gen-1',
+          conversationType: 'general' as const,
+          subject: 'Q',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          lastMessageAt: '2026-01-01T00:00:00.000Z',
+          lastMessage: {
+            authorId: 'org-1',
+            authorName: 'Ola',
+            authorImage: null,
+            body,
+          },
+          speakerSideName: 'Sub',
+          speakerSideImage: null,
+        },
+      ])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    const excerpt = result[0].lastMessage!.excerpt
+    expect(excerpt).not.toContain('�')
+    // No lone surrogate at the boundary.
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(excerpt)).toBe(false)
+    expect(excerpt.endsWith('…')).toBe(true)
+  })
+})
+
+describe('truncateToGraphemeBoundary (B6)', () => {
+  it('returns the input unchanged when it already fits', () => {
+    expect(truncateToGraphemeBoundary('hello', 10)).toBe('hello')
+  })
+
+  it('never emits a lone surrogate when an emoji straddles the cap', () => {
+    const out = truncateToGraphemeBoundary('ab😀cd', 3) // cap lands inside 😀
+    expect(out).toBe('ab')
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out)).toBe(false)
+  })
+
+  it('keeps a whole emoji when the cap lands exactly after it', () => {
+    // 'a' + 😀 (2 code units) = length 3; cap 3 keeps both.
+    expect(truncateToGraphemeBoundary('a😀bc', 3)).toBe('a😀')
   })
 })

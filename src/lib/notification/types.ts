@@ -37,6 +37,15 @@ export interface NotificationInput {
   actorId?: string
   /** Weakly referenced proposal (talk) id, if the notification relates to one. */
   relatedProposalId?: string
+  /**
+   * Optional stable push `tag`. When set, successive web pushes carrying the
+   * same tag REPLACE each other on the device (the SW passes it to
+   * `showNotification`) instead of stacking. Used by the collapsed
+   * `message_received` upsert to keep one lock-screen notification per thread,
+   * mirroring the single collapsed hub item. Absent for one-shot event types
+   * (they intentionally stack).
+   */
+  tag?: string
 }
 
 /**

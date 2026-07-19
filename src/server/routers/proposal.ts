@@ -51,6 +51,7 @@ import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
   createNotifications,
   getOrganizerSpeakerIds,
+  deleteMessageNotificationsFor,
 } from '@/lib/notification/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { ProposalInput, ProposalExisting } from '@/lib/proposal/types'
@@ -582,6 +583,16 @@ export const proposalRouter = router({
         }
 
         await transaction.commit()
+
+        // The removed speaker loses access to the proposal's message thread;
+        // delete their collapsed message notifications so they don't linger as
+        // permanent phantom unread (the bell counts them, but their deep link
+        // now 403/404s and they can never open the thread to clear it).
+        // Never-fail: cleanup must not fail the (committed) removal.
+        await deleteMessageNotificationsFor({
+          proposalIds: [input.proposalId],
+          speakerId: input.speakerId,
+        })
 
         return { success: true }
       } catch (error) {

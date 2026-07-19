@@ -12,6 +12,7 @@ import {
   getConversationPreferencesFor,
   conversationLinkPath,
 } from './sanity'
+import { truncateToGraphemeBoundary } from './links'
 import { sendMessageEmails, type MessageEmailRecipient } from './email'
 import type { ConversationWithContext, Message } from './types'
 
@@ -21,7 +22,11 @@ const EXCERPT_LENGTH = 140
 /** A single-line excerpt of a message body, capped and ellipsised. */
 export function messageExcerpt(body: string, max = EXCERPT_LENGTH): string {
   const flat = body.replace(/\s+/g, ' ').trim()
-  return flat.length > max ? `${flat.slice(0, max).trimEnd()}…` : flat
+  // Grapheme-safe cut so an emoji straddling the cap can't leave a lone
+  // surrogate (�) at the boundary of the notification/email excerpt.
+  return flat.length > max
+    ? `${truncateToGraphemeBoundary(flat, max).trimEnd()}…`
+    : flat
 }
 
 function absoluteLink(
