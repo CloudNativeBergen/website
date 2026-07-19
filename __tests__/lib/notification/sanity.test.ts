@@ -29,9 +29,18 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// The push bridge is mocked so the collapse-upsert tests can assert it fires
+// with the computed (count-aware) titles without touching VAPID config.
+vi.mock('@/lib/push/send', () => ({
+  sendPushForNotifications: vi.fn(async () => {}),
+}))
+
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { sendPushForNotifications } from '@/lib/push/send'
 import {
   createNotifications,
+  upsertMessageNotifications,
+  messageNotificationId,
   getNotificationsForSpeaker,
   getUnreadCount,
   markNotificationsRead,
@@ -39,19 +48,24 @@ import {
   markAllRead,
   deleteNotificationsOlderThan,
 } from '@/lib/notification/sanity'
-import type { NotificationInput } from '@/lib/notification/types'
+import type {
+  MessageNotificationInput,
+  NotificationInput,
+} from '@/lib/notification/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const writeMock = clientWrite as unknown as { transaction: LooseMock }
 const readMock = clientReadUncached as unknown as { fetch: LooseMock }
+const pushMock = sendPushForNotifications as unknown as LooseMock
 
 /**
- * A chainable Sanity transaction mock. `create` and `patch` return the same
- * object; `commit` is configurable per test.
+ * A chainable Sanity transaction mock. `create`, `createIfNotExists` and
+ * `patch` return the same object; `commit` is configurable per test.
  */
 function installTransaction(commit: () => Promise<unknown> = async () => ({})) {
   const tx = {
     create: vi.fn((_doc?: unknown) => tx),
+    createIfNotExists: vi.fn((_doc?: unknown) => tx),
     patch: vi.fn((_id?: string, _ops?: unknown) => tx),
     delete: vi.fn((_id?: string) => tx),
     commit: vi.fn(commit),
@@ -150,6 +164,231 @@ describe('createNotifications — single-transaction fan-out', () => {
   })
 })
 
+const msgInput = (
+  overrides: Partial<MessageNotificationInput> = {},
+): MessageNotificationInput => ({
+  recipientId: 'sp-1',
+  conversationId: 'conversation.gen-1',
+  conferenceId: 'conf-1',
+  authorName: 'Alice',
+  subject: 'A question',
+  message: 'hey there',
+  link: '/cfp/messages/conversation.gen-1',
+  actorId: 'actor-1',
+  ...overrides,
+})
+
+const MSG_ID = 'notification.message.conversation.gen-1.sp-1'
+
+describe('upsertMessageNotifications — per-conversation collapse (M5)', () => {
+  it('derives the deterministic per-(conversation, recipient) id', () => {
+    expect(messageNotificationId('conversation.gen-1', 'sp-1')).toBe(MSG_ID)
+  })
+
+  it('NEW: seeds count 1 via createIfNotExists and patches the same values', async () => {
+    readMock.fetch.mockResolvedValue([]) // no existing docs
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput()])
+
+    // ONE batched read of the collapse state for all target ids.
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('_id in $ids')
+    expect(query).toContain('readAt')
+    expect(query).toContain('count')
+    expect(params).toEqual({ ids: [MSG_ID] })
+
+    // ONE transaction: createIfNotExists + patch on the deterministic id.
+    expect(writeMock.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.createIfNotExists).toHaveBeenCalledTimes(1)
+    const base = tx.createIfNotExists.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >
+    expect(base._id).toBe(MSG_ID)
+    expect(base._type).toBe('notification')
+    expect(base.notificationType).toBe('message_received')
+    expect(base.count).toBe(1)
+    expect(base.recipient).toEqual({ _type: 'reference', _ref: 'sp-1' })
+    expect(base.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+
+    expect(tx.patch).toHaveBeenCalledTimes(1)
+    const [patchId, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown>; unset: string[] },
+    ]
+    expect(patchId).toBe(MSG_ID)
+    expect(ops.unset).toEqual(['readAt'])
+    expect(ops.set.count).toBe(1)
+    expect(ops.set.title).toBe('New message from Alice — A question')
+    expect(ops.set.message).toBe('hey there')
+    expect(ops.set.link).toBe('/cfp/messages/conversation.gen-1')
+    expect(ops.set.actor).toEqual({ _type: 'reference', _ref: 'actor-1' })
+    expect(typeof ops.set.createdAt).toBe('string')
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('UNREAD existing: increments count and switches to the N-messages title', async () => {
+    readMock.fetch.mockResolvedValue([{ _id: MSG_ID, readAt: null, count: 2 }])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput()])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown>; unset: string[] },
+    ]
+    expect(ops.set.count).toBe(3)
+    expect(ops.set.title).toBe('3 new messages — A question')
+    // Re-surfaced: readAt is unset and createdAt bumped even when incrementing.
+    expect(ops.unset).toEqual(['readAt'])
+    expect(typeof ops.set.createdAt).toBe('string')
+  })
+
+  it('UNREAD existing WITHOUT a count field: treats it as 1 and increments to 2', async () => {
+    readMock.fetch.mockResolvedValue([{ _id: MSG_ID, readAt: null }])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput()])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.count).toBe(2)
+    expect(ops.set.title).toBe('2 new messages — A question')
+  })
+
+  it('READ existing: resets to count 1, re-unreads, and bumps createdAt', async () => {
+    readMock.fetch.mockResolvedValue([
+      { _id: MSG_ID, readAt: '2026-07-01T00:00:00.000Z', count: 5 },
+    ])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput()])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown>; unset: string[] },
+    ]
+    expect(ops.set.count).toBe(1)
+    expect(ops.set.title).toBe('New message from Alice — A question')
+    expect(ops.unset).toEqual(['readAt'])
+    expect(typeof ops.set.createdAt).toBe('string')
+  })
+
+  it('BATCH: many recipients → ONE read (all ids) and ONE transaction (pair per recipient)', async () => {
+    const otherId = 'notification.message.conversation.gen-1.sp-2'
+    readMock.fetch.mockResolvedValue([{ _id: otherId, readAt: null, count: 4 }])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([
+      msgInput({ recipientId: 'sp-1' }),
+      msgInput({
+        recipientId: 'sp-2',
+        link: '/admin/messages/conversation.gen-1',
+      }),
+    ])
+
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    expect(readMock.fetch.mock.calls[0][1]).toEqual({
+      ids: [MSG_ID, otherId],
+    })
+    expect(writeMock.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.createIfNotExists).toHaveBeenCalledTimes(2)
+    expect(tx.patch).toHaveBeenCalledTimes(2)
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+
+    // Per-recipient state: sp-1 is new (count 1), sp-2 accumulates (count 5).
+    const bySetId = new Map(
+      (tx.patch.mock.calls as [string, { set: Record<string, unknown> }][]).map(
+        ([id, ops]) => [id, ops.set],
+      ),
+    )
+    expect(bySetId.get(MSG_ID)?.count).toBe(1)
+    expect(bySetId.get(otherId)?.count).toBe(5)
+    expect(bySetId.get(otherId)?.title).toBe('5 new messages — A question')
+  })
+
+  it('sets a WEAK relatedProposal reference only when provided', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([
+      msgInput({ relatedProposalId: 'prop-1' }),
+    ])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.relatedProposal).toEqual({
+      _type: 'reference',
+      _ref: 'prop-1',
+      _weak: true,
+    })
+  })
+
+  it('bridges to web push with the computed (count-aware) title', async () => {
+    readMock.fetch.mockResolvedValue([{ _id: MSG_ID, readAt: null, count: 1 }])
+    installTransaction()
+
+    await upsertMessageNotifications([msgInput()])
+
+    expect(pushMock).toHaveBeenCalledTimes(1)
+    const [pushItems] = pushMock.mock.calls[0] as [NotificationInput[]]
+    expect(pushItems).toHaveLength(1)
+    expect(pushItems[0].notificationType).toBe('message_received')
+    expect(pushItems[0].title).toBe('2 new messages — A question')
+    expect(pushItems[0].recipientId).toBe('sp-1')
+  })
+
+  it('is a no-op (no read, no transaction) for an empty list', async () => {
+    const tx = installTransaction()
+    await upsertMessageNotifications([])
+    expect(readMock.fetch).not.toHaveBeenCalled()
+    expect(writeMock.transaction).not.toHaveBeenCalled()
+    expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('NEVER throws when the commit fails — swallows, logs, and skips push', async () => {
+    readMock.fetch.mockResolvedValue([])
+    installTransaction(async () => {
+      throw new Error('sanity down')
+    })
+
+    await expect(
+      upsertMessageNotifications([msgInput()]),
+    ).resolves.toBeUndefined()
+    expect(console.error).toHaveBeenCalled()
+    expect(pushMock).not.toHaveBeenCalled()
+  })
+
+  it('NEVER throws when the batched read fails', async () => {
+    readMock.fetch.mockRejectedValue(new Error('sanity down'))
+    const tx = installTransaction()
+
+    await expect(
+      upsertMessageNotifications([msgInput()]),
+    ).resolves.toBeUndefined()
+    expect(tx.commit).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalled()
+  })
+
+  it('NEVER throws when the push bridge rejects (already committed)', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+    pushMock.mockRejectedValue(new Error('push down'))
+
+    await expect(
+      upsertMessageNotifications([msgInput()]),
+    ).resolves.toBeUndefined()
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
 describe('markNotificationsRead — recipient security guard', () => {
   it('patches ONLY recipient-owned ids (drops a foreign id) and returns the owned count', async () => {
     // The client asked to mark two ids read; the ownership fetch confirms only
@@ -225,6 +464,24 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
     })
     expect(tx.commit).toHaveBeenCalledTimes(1)
     expect(count).toBe(2)
+  })
+
+  it('clears a COLLAPSED message notification too — matching is by link, id-agnostic (M5)', async () => {
+    // A collapsed doc carries the same audience deep link as the per-message
+    // docs did, so opening the thread auto-clears it through the same query.
+    const collapsedId = 'notification.message.conversation.gen-1.sp-1'
+    readMock.fetch.mockResolvedValue([collapsedId])
+    const tx = installTransaction()
+
+    const count = await markNotificationsReadByLinks({
+      speakerId: 'sp-1',
+      links: ['/cfp/messages/conversation.gen-1'],
+    })
+
+    expect(tx.patch).toHaveBeenCalledWith(collapsedId, {
+      set: { readAt: expect.any(String) },
+    })
+    expect(count).toBe(1)
   })
 
   it('returns 0 and writes nothing when no unread notification matches a link', async () => {

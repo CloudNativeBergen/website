@@ -4,6 +4,8 @@
  * Design:
  * - Notifications are fanned out PER RECIPIENT (one document each), so read
  *   state is per-user and reads are a simple recipient filter.
+ * - EXCEPTION (M5): `message_received` collapses to ONE persistent document per
+ *   (recipient, conversation) — see `upsertMessageNotifications`.
  * - A fan-out writes all recipients in ONE transaction.
  * - `createNotifications` NEVER throws into the caller: a failed notification
  *   must not fail the business mutation that produced it (see its doc).
@@ -14,7 +16,11 @@
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { sendPushForNotifications } from '@/lib/push/send'
-import type { NotificationInput, NotificationItem } from './types'
+import type {
+  MessageNotificationInput,
+  NotificationInput,
+  NotificationItem,
+} from './types'
 
 /**
  * Persist one `notification` document per input, all in a SINGLE
@@ -82,6 +88,164 @@ export async function createNotifications(
   } catch (error) {
     // Never propagate — see the contract above.
     console.error('Failed to create notifications:', error)
+  }
+}
+
+/**
+ * Deterministic id for the SINGLE collapsed message notification a recipient
+ * holds per conversation (M5 collapse model — see `sanity/schemaTypes/notification.ts`).
+ */
+export function messageNotificationId(
+  conversationId: string,
+  recipientId: string,
+): string {
+  return `notification.message.${conversationId}.${recipientId}`
+}
+
+/** Schema cap on `notification.title` (Rule.max(200)). */
+const NOTIFICATION_TITLE_MAX = 200
+
+/**
+ * Title copy for a collapsed message notification: a single unread message
+ * names its author; an accumulated pile leads with the count (the latest
+ * author still appears via the excerpt/actor line).
+ */
+function messageNotificationTitle(
+  count: number,
+  authorName: string,
+  subject: string,
+): string {
+  const title =
+    count > 1
+      ? `${count} new messages — ${subject}`
+      : `New message from ${authorName} — ${subject}`
+  return title.slice(0, NOTIFICATION_TITLE_MAX)
+}
+
+/**
+ * Collapse-aware writer for `message_received` (M5): each recipient keeps ONE
+ * persistent notification per conversation (deterministic id via
+ * {@link messageNotificationId}) which every new message re-surfaces instead of
+ * stacking a new document.
+ *
+ * Mechanics — ONE batched read, then ONE transaction:
+ * - the current `{readAt, count}` of every target id is fetched in a single
+ *   GROQ query;
+ * - per recipient the transaction chains `createIfNotExists` (base doc,
+ *   count 1) and a `patch` that bumps `createdAt` to now (bubbling the item to
+ *   the top of the createdAt-desc inbox), UNSETS `readAt` (re-unread), refreshes
+ *   title/message/link/actor to the latest message, and sets
+ *   `count = (existing && unread ? existing.count || 1 : 0) + 1` — unread
+ *   accumulates, read-or-new resets to 1.
+ *
+ * Web push rides along exactly as in {@link createNotifications} (category
+ * `messages`), one push per recipient per message.
+ *
+ * CONTRACT: NEVER throws into the caller's flow — identical envelope to
+ * {@link createNotifications}. Non-message notification types are unaffected
+ * and keep using `createNotifications`.
+ */
+export async function upsertMessageNotifications(
+  items: MessageNotificationInput[],
+): Promise<void> {
+  if (items.length === 0) {
+    return
+  }
+
+  try {
+    const ids = items.map((item) =>
+      messageNotificationId(item.conversationId, item.recipientId),
+    )
+
+    // ONE batched read: the collapse state of every target document.
+    const existingRows = await clientReadUncached.fetch<
+      { _id: string; readAt?: string | null; count?: number | null }[]
+    >(`*[_type == "notification" && _id in $ids]{ _id, readAt, count }`, {
+      ids,
+    })
+    const existingById = new Map(
+      (existingRows ?? []).map((row) => [row._id, row]),
+    )
+
+    const now = new Date().toISOString()
+    const tx = clientWrite.transaction()
+    const pushItems: NotificationInput[] = []
+
+    for (const item of items) {
+      const id = messageNotificationId(item.conversationId, item.recipientId)
+      const existing = existingById.get(id)
+      // Unread accumulates; a read (or brand-new) document resets to 1.
+      const count =
+        (existing && !existing.readAt ? (existing.count ?? 1) : 0) + 1
+      const title = messageNotificationTitle(
+        count,
+        item.authorName,
+        item.subject,
+      )
+
+      const set: Record<string, unknown> = {
+        // Bubbles the collapsed item back to the top of the inbox.
+        createdAt: now,
+        title,
+        count,
+      }
+      if (item.message) {
+        set.message = item.message
+      }
+      if (item.link) {
+        set.link = item.link
+      }
+      if (item.actorId) {
+        set.actor = createReference(item.actorId)
+      }
+      if (item.relatedProposalId) {
+        // Weak reference so a later proposal deletion doesn't orphan-block.
+        set.relatedProposal = {
+          ...createReference(item.relatedProposalId),
+          _weak: true,
+        }
+      }
+
+      tx.createIfNotExists({
+        _id: id,
+        _type: 'notification',
+        recipient: createReference(item.recipientId),
+        conference: createReference(item.conferenceId),
+        notificationType: 'message_received',
+        title,
+        count: 1,
+        createdAt: now,
+      }).patch(id, { set, unset: ['readAt'] })
+
+      pushItems.push({
+        recipientId: item.recipientId,
+        conferenceId: item.conferenceId,
+        notificationType: 'message_received',
+        title,
+        ...(item.message ? { message: item.message } : {}),
+        ...(item.link ? { link: item.link } : {}),
+        ...(item.actorId ? { actorId: item.actorId } : {}),
+        ...(item.relatedProposalId
+          ? { relatedProposalId: item.relatedProposalId }
+          : {}),
+      })
+    }
+
+    await tx.commit()
+
+    // Same isolated push bridge as `createNotifications`: a push failure can
+    // neither fail the (already committed) upsert nor the business mutation.
+    try {
+      await sendPushForNotifications(pushItems)
+    } catch (pushError) {
+      console.error(
+        'Failed to send web push for message notifications:',
+        pushError,
+      )
+    }
+  } catch (error) {
+    // Never propagate — see the contract above.
+    console.error('Failed to upsert message notifications:', error)
   }
 }
 

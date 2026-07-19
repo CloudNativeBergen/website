@@ -146,4 +146,24 @@ describe('NotificationList', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByText(/read-only/i)).toBeInTheDocument()
   })
+
+  it('renders the "View all messages" footer link when messagesHref is provided', () => {
+    renderList({ messagesHref: '/cfp/messages' })
+    const link = screen.getByRole('link', { name: /view all messages/i })
+    expect(link).toHaveAttribute('href', '/cfp/messages')
+  })
+
+  it('does NOT render the messages footer link when messagesHref is absent', () => {
+    renderList()
+    expect(
+      screen.queryByRole('link', { name: /view all messages/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('fires onMessagesClick (popover close) when the footer link is activated', () => {
+    const onMessagesClick = vi.fn()
+    renderList({ messagesHref: '/admin/messages', onMessagesClick })
+    fireEvent.click(screen.getByRole('link', { name: /view all messages/i }))
+    expect(onMessagesClick).toHaveBeenCalledOnce()
+  })
 })

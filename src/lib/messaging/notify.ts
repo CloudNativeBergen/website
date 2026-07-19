@@ -1,11 +1,11 @@
 import 'server-only'
 import {
-  createNotifications,
+  upsertMessageNotifications,
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { notifyNewSpeakerMessage } from '@/lib/slack/notify'
-import type { NotificationInput } from '@/lib/notification/types'
+import type { MessageNotificationInput } from '@/lib/notification/types'
 import type { Conference } from '@/lib/conference/types'
 import {
   resolveRecipients,
@@ -47,9 +47,11 @@ interface SpeakerRow {
  * caught and logged — it must never fail the (already committed) message write.
  *
  * Channels:
- * - HUB: one `message_received` notification per non-muted recipient, with a
- *   PER-RECIPIENT link (organizers → /admin, speakers → /cfp). Web push rides
- *   along inside `createNotifications` (category `messages`).
+ * - HUB: ONE collapsed `message_received` notification per (non-muted
+ *   recipient, conversation) — every new message re-surfaces it via
+ *   `upsertMessageNotifications` (M5) with a PER-RECIPIENT link (organizers →
+ *   /admin, speakers → /cfp). Web push rides along inside the upsert
+ *   (category `messages`).
  * - EMAIL: to non-muted recipients whose effective email pref is ON: override
  *   'on', or 'default' + speaker-level default. The speaker-level default is
  *   ENABLED unless `messagingEmailDefault` is explicitly false (M4).
@@ -93,12 +95,15 @@ export async function notifyNewMessage({
       // Muted participants get NO notifications on any channel.
       const active = recipientIds.filter((id) => !prefs.get(id)?.muted)
 
-      // HUB (+ push): per-recipient link by audience.
-      const items: NotificationInput[] = active.map((id) => ({
+      // HUB (+ push): the per-conversation collapse upsert derives the title
+      // from the accumulated unread count; we pass the raw ingredients and the
+      // per-recipient audience link.
+      const items: MessageNotificationInput[] = active.map((id) => ({
         recipientId: id,
+        conversationId: conversation._id,
         conferenceId: conversation.conferenceId,
-        notificationType: 'message_received',
-        title: `New message from ${authorName}`,
+        authorName,
+        subject: conversation.subject,
         message: excerpt,
         link: conversationLinkPath(conversation, organizerSet.has(id)),
         actorId: authorId,
@@ -106,7 +111,7 @@ export async function notifyNewMessage({
           ? { relatedProposalId: conversation.proposalId }
           : {}),
       }))
-      await createNotifications(items)
+      await upsertMessageNotifications(items)
 
       // EMAIL: on unless the recipient opted out (speaker default or override).
       const emailRecipients: MessageEmailRecipient[] = []

@@ -269,16 +269,22 @@ export async function listConversationsForSpeaker({
 
   // ONE extra read (bounded [0...500] — plenty above any realistic unread count,
   // and the 90-day retention caps the universe): the caller's unread
-  // message_received notification links for
-  // this conference. Counted in JS per conversation below.
-  const unreadLinks = await clientReadUncached.fetch<(string | null)[]>(
-    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500].link`,
+  // message_received notifications for this conference. Since M5 a collapsed
+  // notification represents `count` unread messages (absent = 1, which also
+  // covers pre-collapse per-message documents), so we SUM `coalesce(count, 1)`
+  // per link in JS rather than counting documents.
+  const unreadRows = await clientReadUncached.fetch<
+    { link: string | null; count: number }[]
+  >(
+    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500]{ link, "count": coalesce(count, 1) }`,
     { speakerId, conferenceId },
     { cache: 'no-store' },
   )
   const linkCounts = new Map<string, number>()
-  for (const link of unreadLinks ?? []) {
-    if (link) linkCounts.set(link, (linkCounts.get(link) ?? 0) + 1)
+  for (const row of unreadRows ?? []) {
+    if (row.link) {
+      linkCounts.set(row.link, (linkCounts.get(row.link) ?? 0) + row.count)
+    }
   }
 
   return rows.map((row) => {

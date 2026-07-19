@@ -7,6 +7,14 @@ import { defineField, defineType } from 'sanity'
  *
  * NOTE: distinct from the ephemeral toast system (`NotificationProvider` /
  * `NotificationToast`). This is the durable notification hub.
+ *
+ * COLLAPSE MODEL (message_received, M5): instead of one document per message,
+ * the hub keeps ONE persistent document per (recipient, conversation) with a
+ * deterministic id (`notification.message.<conversationId>.<recipientId>`).
+ * Every new message re-surfaces that document: `createdAt` is bumped, `readAt`
+ * is unset, and `count` tracks how many unread messages it represents (unread
+ * accumulates; a read document resets to 1). Other notification types remain
+ * one-document-per-event.
  */
 export default defineType({
   name: 'notification',
@@ -90,6 +98,14 @@ export default defineType({
       // Weak so deleting the proposal does not orphan-block or fail the delete;
       // the notification simply ends up with a dangling reference.
       weak: true,
+    }),
+    defineField({
+      name: 'count',
+      title: 'Count',
+      type: 'number',
+      description:
+        'How many unread messages this collapsed notification represents; absent = 1. Only used by the message_received collapse model.',
+      validation: (Rule) => Rule.min(1).integer(),
     }),
     defineField({
       name: 'readAt',

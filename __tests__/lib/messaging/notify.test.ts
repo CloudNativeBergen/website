@@ -2,7 +2,9 @@
  * @vitest-environment node
  *
  * Unit tests for the messaging fan-out (src/lib/messaging/notify.ts):
- * - HUB items are per-recipient (organizer → /admin link, speaker → /cfp link);
+ * - HUB items are per-recipient COLLAPSE-UPSERT inputs (M5): one per
+ *   (recipient, conversation) with an audience link (organizer → /admin,
+ *   speaker → /cfp) and the raw title ingredients (authorName + subject);
  * - muted recipients are excluded from every channel;
  * - EMAIL fires for recipients whose effective email pref is ON (M4: the
  *   speaker-level default is ENABLED unless explicitly false);
@@ -15,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/notification/sanity', () => ({
-  createNotifications: vi.fn(async () => {}),
+  upsertMessageNotifications: vi.fn(async () => {}),
   getOrganizerSpeakerIds: vi.fn(async () => ['org-1']),
 }))
 
@@ -41,7 +43,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
 })
 
 import {
-  createNotifications,
+  upsertMessageNotifications,
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
@@ -49,12 +51,12 @@ import { getConversationPreferencesFor } from '@/lib/messaging/sanity'
 import { sendMessageEmails } from '@/lib/messaging/email'
 import { notifyNewSpeakerMessage } from '@/lib/slack/notify'
 import { notifyNewMessage } from '@/lib/messaging/notify'
-import type { NotificationInput } from '@/lib/notification/types'
+import type { MessageNotificationInput } from '@/lib/notification/types'
 import type { ConversationWithContext, Message } from '@/lib/messaging/types'
 import type { Conference } from '@/lib/conference/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
-const createMock = createNotifications as unknown as LooseMock
+const upsertMock = upsertMessageNotifications as unknown as LooseMock
 const organizersMock = getOrganizerSpeakerIds as unknown as LooseMock
 const fetchMock = (clientReadUncached as unknown as { fetch: LooseMock }).fetch
 const prefsMock = getConversationPreferencesFor as unknown as LooseMock
@@ -110,10 +112,10 @@ const speakerRows = [
   },
 ]
 
-const lastItems = (): NotificationInput[] =>
-  createMock.mock.calls[
-    createMock.mock.calls.length - 1
-  ][0] as NotificationInput[]
+const lastItems = (): MessageNotificationInput[] =>
+  upsertMock.mock.calls[
+    upsertMock.mock.calls.length - 1
+  ][0] as MessageNotificationInput[]
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -124,8 +126,8 @@ beforeEach(() => {
   emailMock.mockResolvedValue(1)
 })
 
-describe('HUB fan-out — per-recipient links, actor excluded', () => {
-  it('emits message_received to each recipient with an audience-specific link', async () => {
+describe('HUB fan-out — per-recipient collapse-upsert inputs, actor excluded', () => {
+  it('upserts one collapsed item per recipient with an audience-specific link', async () => {
     await notifyNewMessage({
       conversation: proposalConv,
       message,
@@ -133,7 +135,7 @@ describe('HUB fan-out — per-recipient links, actor excluded', () => {
       conference,
     })
 
-    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(upsertMock).toHaveBeenCalledTimes(1)
     const items = lastItems()
     // Author (sp-1) excluded; recipients are org-1 and sp-2.
     expect(items.map((i) => i.recipientId).sort()).toEqual(['org-1', 'sp-2'])
@@ -143,8 +145,11 @@ describe('HUB fan-out — per-recipient links, actor excluded', () => {
     expect(byId['sp-2'].link).toBe('/cfp/proposal/prop-1#messages')
 
     for (const item of items) {
-      expect(item.notificationType).toBe('message_received')
-      expect(item.title).toBe('New message from Alice')
+      // The collapse writer derives the title from the accumulated count, so
+      // the fan-out passes the raw ingredients + the conversation identity.
+      expect(item.conversationId).toBe('conversation.proposal.prop-1')
+      expect(item.authorName).toBe('Alice')
+      expect(item.subject).toBe('My Talk')
       expect(item.actorId).toBe('sp-1')
       expect(item.relatedProposalId).toBe('prop-1')
       expect(item.message).toContain('Hello there')
@@ -325,7 +330,7 @@ describe('never-fail contract', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(createMock).not.toHaveBeenCalled()
+    expect(upsertMock).not.toHaveBeenCalled()
     expect(console.error).toHaveBeenCalled()
   })
 })

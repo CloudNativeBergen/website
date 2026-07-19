@@ -13,6 +13,18 @@ const minutesAgo = (m: number) =>
 
 const makeItems = (): NotificationItem[] => [
   {
+    // A COLLAPSED message notification (M5): one persistent item per
+    // conversation whose title carries the accumulated unread count.
+    id: 'notification.message.conversation.proposal.p1.sp-1',
+    type: 'message_received',
+    title: '3 new messages — Scaling Kubernetes to 10,000 nodes',
+    message: 'Sounds great — let’s lock in the demo cluster size today.',
+    link: '/cfp/proposal/p1#messages',
+    readAt: null,
+    createdAt: minutesAgo(1),
+    actor: { _id: 'a3', name: 'Maria Jensen' },
+  },
+  {
     id: '1',
     type: 'proposal_status_changed',
     title: 'Your proposal was accepted',
@@ -81,12 +93,16 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+// Also carries the audience-aware "View all messages" footer quick link
+// (present when `messagesHref` is provided; the Empty story shows it absent).
 export const UnreadAndRead: Story = {
   args: {
     // Placeholder for typing; the render below rebuilds items at render time so
     // the relative-time labels are stable.
     items: [],
-    unreadCount: 2,
+    unreadCount: 3,
+    messagesHref: '/cfp/messages',
+    onMessagesClick: fn(),
   },
   render: (args) => <NotificationList {...args} items={makeItems()} />,
 }

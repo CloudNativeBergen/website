@@ -37,6 +37,18 @@ export interface NotificationListProps {
    * still navigates; the container is responsible for not marking read.
    */
   readOnly?: boolean
+  /**
+   * Audience-aware href of the Messages inbox (/admin/messages or
+   * /cfp/messages). When provided, a "View all messages" quick link is rendered
+   * as a footer; omitted → no footer. Kept as a prop so this component stays
+   * presentational (the container derives the audience from the session).
+   */
+  messagesHref?: string
+  /**
+   * Fired when the messages quick link is activated — the container closes the
+   * popover (same flow as item clicks); navigation is handled by the `<Link>`.
+   */
+  onMessagesClick?: () => void
 }
 
 function SkeletonRow() {
@@ -191,6 +203,8 @@ export function NotificationList({
   hasMore = false,
   isLoadingMore = false,
   readOnly = false,
+  messagesHref,
+  onMessagesClick,
 }: NotificationListProps) {
   return (
     // `role="region"` makes the aria-label an actual named landmark — on a
@@ -250,6 +264,20 @@ export function NotificationList({
           </>
         )}
       </div>
+
+      {messagesHref && (
+        <div className="border-t border-gray-200 dark:border-gray-800">
+          <Link
+            href={messagesHref}
+            prefetch={false}
+            onClick={onMessagesClick}
+            // min-h-11 keeps the tap target ≥44px.
+            className="flex min-h-11 items-center justify-center px-4 py-3 text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60"
+          >
+            View all messages &rarr;
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

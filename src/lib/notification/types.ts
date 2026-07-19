@@ -39,6 +39,34 @@ export interface NotificationInput {
   relatedProposalId?: string
 }
 
+/**
+ * The write-side shape for the COLLAPSED message notification upsert (M5).
+ * One of these is produced per recipient of a new message;
+ * `upsertMessageNotifications` folds each into the recipient's single
+ * per-conversation `notification` document (deterministic id
+ * `notification.message.<conversationId>.<recipientId>`) instead of creating a
+ * new document per message. The title is derived from the accumulated unread
+ * count, so callers pass the raw ingredients (author name + subject) rather
+ * than a pre-built title.
+ */
+export interface MessageNotificationInput {
+  recipientId: string
+  conversationId: string
+  conferenceId: string
+  /** Display name of the latest message's author. */
+  authorName: string
+  /** Conversation subject (proposal threads default this to the talk title). */
+  subject: string
+  /** Excerpt of the latest message body. */
+  message?: string
+  /** App-relative deep link to the conversation for THIS recipient's audience. */
+  link?: string
+  /** Speaker whose message triggered this. */
+  actorId?: string
+  /** Weakly referenced proposal (talk) id, for proposal threads. */
+  relatedProposalId?: string
+}
+
 /** The actor sub-object projected for the client. */
 export interface NotificationActor {
   _id: string
