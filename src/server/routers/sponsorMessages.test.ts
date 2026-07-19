@@ -128,7 +128,10 @@ describe('sponsorMessages.send — token + validation', () => {
     expect(ensureMock).toHaveBeenCalledOnce()
     expect(addMessageMock).toHaveBeenCalledOnce()
     expect(addMessageMock.mock.calls[0][0]).toMatchObject({
-      sponsorAuthor: { sponsorForConferenceId: 'sfc-1', authorName: 'Dana Diaz' },
+      sponsorAuthor: {
+        sponsorForConferenceId: 'sfc-1',
+        authorName: 'Dana Diaz',
+      },
     })
     expect(res.message.fromSponsor).toBe(true)
   })
