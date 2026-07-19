@@ -152,7 +152,9 @@ export function NewConversationForm({
               role="alert"
               className="mt-1 text-xs text-red-600 dark:text-red-400"
             >
-              Speaker not found. Pick another speaker.
+              This person can&apos;t receive messages: they have no proposal in
+              this conference and aren&apos;t an organizer. If that looks wrong,
+              check the conference&apos;s organizer list in settings.
             </p>
           )}
         </div>
