@@ -13,6 +13,11 @@ export {
   NewConversationForm,
   type NewConversationFormProps,
 } from './NewConversationForm'
+export {
+  SpeakerCombobox,
+  type SpeakerComboboxProps,
+  type SpeakerOption,
+} from './SpeakerCombobox'
 export { MessagesInbox, type MessagesInboxProps } from './MessagesInbox'
 export {
   ProposalMessagesSection,

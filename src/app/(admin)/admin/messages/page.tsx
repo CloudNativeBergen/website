@@ -18,7 +18,7 @@ export default function AdminMessagesPage() {
         </p>
       </div>
 
-      <MessagesInbox audience="organizer" />
+      <MessagesInbox audience="organizer" allowNew />
     </div>
   )
 }

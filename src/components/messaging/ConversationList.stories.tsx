@@ -6,7 +6,9 @@ import type { ConversationListItem } from '@/lib/messaging/types'
 const minutesAgo = (m: number) =>
   new Date(Date.now() - m * 60_000).toISOString()
 
-const makeItems = (): ConversationListItem[] => [
+const makeItems = (
+  unread: [number, number, number] = [0, 0, 0],
+): ConversationListItem[] => [
   {
     _id: 'conversation.proposal.talk-1',
     conversationType: 'proposal',
@@ -15,7 +17,7 @@ const makeItems = (): ConversationListItem[] => [
     proposalTitle: 'Scaling Kubernetes to 10,000 nodes',
     createdAt: minutesAgo(60 * 24 * 3),
     lastMessageAt: minutesAgo(24),
-    unreadCount: 0,
+    unreadCount: unread[0],
   },
   {
     _id: 'conversation.abc123',
@@ -23,7 +25,7 @@ const makeItems = (): ConversationListItem[] => [
     subject: 'Question about speaker travel',
     createdAt: minutesAgo(60 * 24 * 2),
     lastMessageAt: minutesAgo(60 * 5),
-    unreadCount: 0,
+    unreadCount: unread[1],
   },
   {
     _id: 'conversation.proposal.talk-2',
@@ -33,7 +35,7 @@ const makeItems = (): ConversationListItem[] => [
     proposalTitle: 'Designing for Failure',
     createdAt: minutesAgo(60 * 24 * 10),
     lastMessageAt: minutesAgo(60 * 24 * 4),
-    unreadCount: 0,
+    unreadCount: unread[2],
   },
 ]
 
@@ -86,4 +88,23 @@ export const SpeakerInboxDark: Story = {
   args: { items: [], isOrganizer: false },
   parameters: { dark: true },
   render: (args) => <ConversationList {...args} items={makeItems()} />,
+}
+
+/**
+ * Mixed read/unread — unread rows carry a blue count pill and a bolded subject;
+ * read rows are unadorned. The last count exceeds 9 to show the `9+` cap.
+ */
+export const UnreadMixed: Story = {
+  args: { items: [], isOrganizer: true },
+  render: (args) => (
+    <ConversationList {...args} items={makeItems([3, 0, 12])} />
+  ),
+}
+
+export const UnreadMixedDark: Story = {
+  args: { items: [], isOrganizer: true },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationList {...args} items={makeItems([3, 0, 12])} />
+  ),
 }
