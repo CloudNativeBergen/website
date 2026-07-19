@@ -23,6 +23,65 @@ const trackWith = (
   ],
 })
 
+describe('ServiceEditSheet rename mode', () => {
+  const renameProps = {
+    trackIndex: 0,
+    talkIndex: 0,
+    track: trackWith('11:00', '11:30'),
+    mode: 'rename' as const,
+  }
+
+  it('disables Save while the title is empty and never dispatches an empty rename', () => {
+    const dispatch = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <ServiceEditSheet
+        {...renameProps}
+        talk={{ ...session, placeholder: '' }}
+        dispatch={dispatch}
+        onClose={onClose}
+      />,
+    )
+
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+
+    // Even a forced click must not commit an empty title or close the sheet.
+    fireEvent.click(save)
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('enables Save once the title has non-whitespace text and commits it trimmed', () => {
+    const dispatch = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <ServiceEditSheet
+        {...renameProps}
+        talk={{ ...session, placeholder: '' }}
+        dispatch={dispatch}
+        onClose={onClose}
+      />,
+    )
+
+    const input = screen.getByLabelText('Session title')
+    const save = screen.getByRole('button', { name: 'Save' })
+
+    // Whitespace-only keeps it disabled…
+    fireEvent.change(input, { target: { value: '   ' } })
+    expect(save).toBeDisabled()
+
+    // …real text enables it, and the committed title is trimmed.
+    fireEvent.change(input, { target: { value: '  Lunch  ' } })
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'renameService', title: 'Lunch' }),
+    )
+    expect(onClose).toHaveBeenCalled()
+  })
+})
+
 describe('ServiceEditSheet duration mode', () => {
   it('filters options to the surrounding gap and keeps a non-standard current duration selectable', () => {
     render(

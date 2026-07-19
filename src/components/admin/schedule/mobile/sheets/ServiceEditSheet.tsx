@@ -127,6 +127,7 @@ export function ServiceEditSheet({
           <button
             type="button"
             onClick={saveRename}
+            disabled={!renameValue.trim()}
             className={`flex-1 ${PRIMARY_BUTTON}`}
           >
             Save
