@@ -27,6 +27,34 @@ describe('ModalShell — standard header', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('applies `ariaLabel` to the panel as the dialog name when `title` is omitted', () => {
+    render(
+      <ModalShell isOpen onClose={vi.fn()} ariaLabel="Receipt: hotel.jpg">
+        <p>viewer body</p>
+      </ModalShell>,
+    )
+    // No standard title header, so the dialog takes its name from aria-label.
+    expect(
+      screen.getByRole('dialog', { name: 'Receipt: hotel.jpg' }),
+    ).toBeInTheDocument()
+  })
+
+  it('ignores `ariaLabel` when `title` is set (title wins via aria-labelledby)', () => {
+    render(
+      <ModalShell
+        isOpen
+        onClose={vi.fn()}
+        title="Real title"
+        ariaLabel="ignored label"
+      >
+        <p>body</p>
+      </ModalShell>,
+    )
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAccessibleName('Real title')
+    expect(dialog).not.toHaveAttribute('aria-label')
+  })
+
   it('renders the house header (title, subtitle, icon, close button) and wires aria-labelledby', () => {
     render(
       <ModalShell

@@ -32,6 +32,13 @@ interface ModalShellProps {
   title?: React.ReactNode
   /** Optional supporting line under the title (only rendered with `title`). */
   subtitle?: React.ReactNode
+  /**
+   * Accessible name for the dialog when no standard `title` header is used
+   * (e.g. a viewer with a custom toolbar). Applied as `aria-label` on the
+   * DialogPanel so the dialog always has a name. Ignored when `title` is set —
+   * `title` already wires `aria-labelledby` via `DialogTitle`.
+   */
+  ariaLabel?: string
   /** Optional leading icon for the standard header (only rendered with `title`). */
   icon?: React.ReactNode
   /**
@@ -87,6 +94,7 @@ export function ModalShell({
   title,
   subtitle,
   icon,
+  ariaLabel,
   presentation = 'sheet',
   confirmOnDirtyClose = false,
   isDirty = false,
@@ -129,6 +137,7 @@ export function ModalShell({
     <Transition appear show={isOpen}>
       <Dialog
         as="div"
+        aria-label={title ? undefined : ariaLabel}
         className={`relative z-50 ${theme === 'dark' ? 'dark' : ''}`}
         onClose={handleClose}
       >

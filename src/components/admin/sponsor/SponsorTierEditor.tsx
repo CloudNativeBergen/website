@@ -1,22 +1,15 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
 import { useTheme } from 'next-themes'
 import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
-  XMarkIcon,
   TagIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
+import { ModalShell } from '@/components/ModalShell'
 import { StarIcon } from '@heroicons/react/20/solid'
 import { CheckIcon } from '@heroicons/react/16/solid'
 import { Dropdown } from '@/components/Form'
@@ -51,7 +44,6 @@ function SponsorTierModal({
   onSave,
   onDelete,
 }: SponsorTierModalProps) {
-  const { theme } = useTheme()
   const { showNotification } = useNotification()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [formData, setFormData] = useState<SponsorTierInput>({
@@ -300,411 +292,356 @@ function SponsorTierModal({
 
   return (
     <>
-      <Transition appear show={isOpen}>
-        <Dialog
-          as="div"
-          className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
-          onClose={onClose}
-        >
-          <TransitionChild
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black/50" />
-          </TransitionChild>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <TransitionChild
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
+      <ModalShell
+        isOpen={isOpen}
+        onClose={onClose}
+        size="4xl"
+        title={tier ? 'Edit Sponsor Tier' : 'Create Sponsor Tier'}
+        icon={<TagIcon className="h-5 w-5" />}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="title"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
               >
-                <DialogPanel className="w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all dark:bg-gray-900">
-                  <div className="flex items-center justify-between">
-                    <DialogTitle
-                      as="h3"
-                      className="text-lg leading-6 font-medium text-gray-900 dark:text-white"
-                    >
-                      {tier ? 'Edit Sponsor Tier' : 'Create Sponsor Tier'}
-                    </DialogTitle>
-                    <button
-                      onClick={onClose}
-                      disabled={isLoading}
-                      className="cursor-pointer rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 disabled:opacity-50 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
-                    >
-                      <span className="sr-only">Close</span>
-                      <XMarkIcon className="h-6 w-6" />
-                    </button>
-                  </div>
+                Title *
+              </label>
+              <div className="mt-2">
+                <input
+                  type="text"
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                  required
+                  disabled={isLoading}
+                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                  placeholder="e.g., Gold, Silver, Bronze"
+                />
+              </div>
+            </div>
 
-                  <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="title"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Title *
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            id="title"
-                            value={formData.title}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                title: e.target.value,
-                              }))
-                            }
-                            required
-                            disabled={isLoading}
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                            placeholder="e.g., Gold, Silver, Bronze"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label
-                          htmlFor="tagline"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Tagline *
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            id="tagline"
-                            value={formData.tagline}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                tagline: e.target.value,
-                              }))
-                            }
-                            required
-                            disabled={isLoading}
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                            placeholder="e.g., Premium partnership opportunity"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                      <div>
-                        <Dropdown
-                          name="tierType"
-                          label="Tier Type"
-                          options={
-                            new Map([
-                              ['standard', 'Standard'],
-                              ['special', 'Special'],
-                              ['addon', 'Add-on'],
-                            ])
-                          }
-                          value={formData.tierType}
-                          setValue={(val) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              tierType: val as 'standard' | 'special' | 'addon',
-                            }))
-                          }
-                          disabled={isLoading}
-                        />
-                      </div>
-
-                      <div>
-                        <label
-                          htmlFor="max_quantity"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Capacity
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="number"
-                            id="max_quantity"
-                            value={formData.maxQuantity ?? ''}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                maxQuantity: e.target.value
-                                  ? parseInt(e.target.value)
-                                  : undefined,
-                              }))
-                            }
-                            min="1"
-                            disabled={isLoading}
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                            placeholder="Unlimited"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-end">
-                        <div className="flex gap-3">
-                          <div className="flex h-6 shrink-0 items-center">
-                            <div className="group grid size-4 grid-cols-1">
-                              <input
-                                id="sold_out"
-                                type="checkbox"
-                                checked={formData.soldOut}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    soldOut: e.target.checked,
-                                  }))
-                                }
-                                disabled={isLoading}
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                              />
-                              <svg
-                                fill="none"
-                                viewBox="0 0 14 14"
-                                className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25 dark:group-has-disabled:stroke-white/25"
-                              >
-                                <path
-                                  d="M3 8L6 11L11 3.5"
-                                  strokeWidth={2}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="opacity-0 group-has-checked:opacity-100"
-                                />
-                              </svg>
-                            </div>
-                          </div>
-                          <div className="text-sm/6">
-                            <label
-                              htmlFor="sold_out"
-                              className="font-medium whitespace-nowrap text-gray-900 dark:text-white"
-                            >
-                              Sold Out
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-end">
-                        <div className="flex gap-3">
-                          <div className="flex h-6 shrink-0 items-center">
-                            <div className="group grid size-4 grid-cols-1">
-                              <input
-                                id="most_popular"
-                                type="checkbox"
-                                checked={formData.mostPopular}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    mostPopular: e.target.checked,
-                                  }))
-                                }
-                                disabled={isLoading}
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                              />
-                              <CheckIcon className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 group-has-checked:opacity-100 group-has-disabled:stroke-gray-950/25 dark:group-has-disabled:stroke-white/25" />
-                            </div>
-                          </div>
-                          <div className="text-sm/6">
-                            <label
-                              htmlFor="most_popular"
-                              className="font-medium whitespace-nowrap text-gray-900 dark:text-white"
-                            >
-                              Most Popular
-                              <StarIcon className="ml-1 inline h-4 w-4 text-yellow-400" />
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Pricing
-                        </label>
-                        <button
-                          type="button"
-                          onClick={addPrice}
-                          disabled={isLoading}
-                          className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
-                        >
-                          <PlusIcon className="mr-1.5 h-3 w-3" />
-                          Add Price
-                        </button>
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {formData.price?.map((price, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center space-x-3"
-                          >
-                            <div className="w-40">
-                              <input
-                                type="number"
-                                value={price.amount}
-                                onChange={(e) =>
-                                  updatePrice(
-                                    index,
-                                    'amount',
-                                    parseFloat(e.target.value) || 0,
-                                  )
-                                }
-                                min="0"
-                                step="0.01"
-                                disabled={isLoading}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                                placeholder="Amount"
-                              />
-                            </div>
-                            <div className="w-24">
-                              <CurrencySelect
-                                value={price.currency}
-                                setValue={(val) =>
-                                  updatePrice(index, 'currency', val)
-                                }
-                                disabled={isLoading}
-                                name={`currency-${index}`}
-                              />
-                            </div>
-                            {formData.price && formData.price.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removePrice(index)}
-                                disabled={isLoading}
-                                className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        )) || []}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Perks & Benefits
-                        </label>
-                        <button
-                          type="button"
-                          onClick={addPerk}
-                          disabled={isLoading}
-                          className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
-                        >
-                          <PlusIcon className="mr-1.5 h-3 w-3" />
-                          Add Perk
-                        </button>
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        {formData.perks?.map((perk, index) => (
-                          <div
-                            key={index}
-                            className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-                          >
-                            <div>
-                              <input
-                                type="text"
-                                value={perk.label}
-                                onChange={(e) =>
-                                  updatePerk(index, 'label', e.target.value)
-                                }
-                                onPaste={(e) => handlePerkPaste(e, index)}
-                                disabled={isLoading}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                                placeholder="Perk title (paste multi-line to bulk add)"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <div className="flex space-x-2">
-                                <input
-                                  type="text"
-                                  value={perk.description}
-                                  onChange={(e) =>
-                                    updatePerk(
-                                      index,
-                                      'description',
-                                      e.target.value,
-                                    )
-                                  }
-                                  onPaste={(e) => handlePerkPaste(e, index)}
-                                  disabled={isLoading}
-                                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                                  placeholder="Perk description"
-                                />
-                                {formData.perks &&
-                                  formData.perks.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => removePerk(index)}
-                                      disabled={isLoading}
-                                      className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
-                                    >
-                                      <TrashIcon className="h-4 w-4" />
-                                    </button>
-                                  )}
-                              </div>
-                            </div>
-                          </div>
-                        )) || []}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between pt-4">
-                      <div>
-                        {tier && onDelete && (
-                          <button
-                            type="button"
-                            onClick={handleDelete}
-                            disabled={isLoading}
-                            className="inline-flex cursor-pointer items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:bg-red-500 dark:shadow-none dark:focus-visible:outline-red-500"
-                          >
-                            <ExclamationTriangleIcon className="mr-1.5 h-4 w-4" />
-                            {deleteMutation.isPending
-                              ? 'Deleting...'
-                              : 'Delete Tier'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex space-x-3">
-                        <button
-                          type="button"
-                          onClick={onClose}
-                          disabled={isLoading}
-                          className="cursor-pointer text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
-                        >
-                          {createMutation.isPending || updateMutation.isPending
-                            ? 'Saving...'
-                            : tier
-                              ? 'Update Tier'
-                              : 'Create Tier'}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </DialogPanel>
-              </TransitionChild>
+            <div>
+              <label
+                htmlFor="tagline"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+              >
+                Tagline *
+              </label>
+              <div className="mt-2">
+                <input
+                  type="text"
+                  id="tagline"
+                  value={formData.tagline}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      tagline: e.target.value,
+                    }))
+                  }
+                  required
+                  disabled={isLoading}
+                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                  placeholder="e.g., Premium partnership opportunity"
+                />
+              </div>
             </div>
           </div>
-        </Dialog>
-      </Transition>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <Dropdown
+                name="tierType"
+                label="Tier Type"
+                options={
+                  new Map([
+                    ['standard', 'Standard'],
+                    ['special', 'Special'],
+                    ['addon', 'Add-on'],
+                  ])
+                }
+                value={formData.tierType}
+                setValue={(val) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    tierType: val as 'standard' | 'special' | 'addon',
+                  }))
+                }
+                disabled={isLoading}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="max_quantity"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+              >
+                Capacity
+              </label>
+              <div className="mt-2">
+                <input
+                  type="number"
+                  id="max_quantity"
+                  value={formData.maxQuantity ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      maxQuantity: e.target.value
+                        ? parseInt(e.target.value)
+                        : undefined,
+                    }))
+                  }
+                  min="1"
+                  disabled={isLoading}
+                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                  placeholder="Unlimited"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <div className="flex gap-3">
+                <div className="flex h-6 shrink-0 items-center">
+                  <div className="group grid size-4 grid-cols-1">
+                    <input
+                      id="sold_out"
+                      type="checkbox"
+                      checked={formData.soldOut}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          soldOut: e.target.checked,
+                        }))
+                      }
+                      disabled={isLoading}
+                      className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
+                    />
+                    <svg
+                      fill="none"
+                      viewBox="0 0 14 14"
+                      className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25 dark:group-has-disabled:stroke-white/25"
+                    >
+                      <path
+                        d="M3 8L6 11L11 3.5"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-0 group-has-checked:opacity-100"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                <div className="text-sm/6">
+                  <label
+                    htmlFor="sold_out"
+                    className="font-medium whitespace-nowrap text-gray-900 dark:text-white"
+                  >
+                    Sold Out
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <div className="flex gap-3">
+                <div className="flex h-6 shrink-0 items-center">
+                  <div className="group grid size-4 grid-cols-1">
+                    <input
+                      id="most_popular"
+                      type="checkbox"
+                      checked={formData.mostPopular}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          mostPopular: e.target.checked,
+                        }))
+                      }
+                      disabled={isLoading}
+                      className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
+                    />
+                    <CheckIcon className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 group-has-checked:opacity-100 group-has-disabled:stroke-gray-950/25 dark:group-has-disabled:stroke-white/25" />
+                  </div>
+                </div>
+                <div className="text-sm/6">
+                  <label
+                    htmlFor="most_popular"
+                    className="font-medium whitespace-nowrap text-gray-900 dark:text-white"
+                  >
+                    Most Popular
+                    <StarIcon className="ml-1 inline h-4 w-4 text-yellow-400" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+                Pricing
+              </label>
+              <button
+                type="button"
+                onClick={addPrice}
+                disabled={isLoading}
+                className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+              >
+                <PlusIcon className="mr-1.5 h-3 w-3" />
+                Add Price
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {formData.price?.map((price, index) => (
+                <div key={index} className="flex items-center space-x-3">
+                  <div className="w-40">
+                    <input
+                      type="number"
+                      value={price.amount}
+                      onChange={(e) =>
+                        updatePrice(
+                          index,
+                          'amount',
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
+                      min="0"
+                      step="0.01"
+                      disabled={isLoading}
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                      placeholder="Amount"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <CurrencySelect
+                      value={price.currency}
+                      setValue={(val) => updatePrice(index, 'currency', val)}
+                      disabled={isLoading}
+                      name={`currency-${index}`}
+                    />
+                  </div>
+                  {formData.price && formData.price.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePrice(index)}
+                      disabled={isLoading}
+                      className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )) || []}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+                Perks & Benefits
+              </label>
+              <button
+                type="button"
+                onClick={addPerk}
+                disabled={isLoading}
+                className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+              >
+                <PlusIcon className="mr-1.5 h-3 w-3" />
+                Add Perk
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {formData.perks?.map((perk, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                >
+                  <div>
+                    <input
+                      type="text"
+                      value={perk.label}
+                      onChange={(e) =>
+                        updatePerk(index, 'label', e.target.value)
+                      }
+                      onPaste={(e) => handlePerkPaste(e, index)}
+                      disabled={isLoading}
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                      placeholder="Perk title (paste multi-line to bulk add)"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={perk.description}
+                        onChange={(e) =>
+                          updatePerk(index, 'description', e.target.value)
+                        }
+                        onPaste={(e) => handlePerkPaste(e, index)}
+                        disabled={isLoading}
+                        className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                        placeholder="Perk description"
+                      />
+                      {formData.perks && formData.perks.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePerk(index)}
+                          disabled={isLoading}
+                          className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )) || []}
+            </div>
+          </div>
+
+          <div className="flex justify-between pt-4">
+            <div>
+              {tier && onDelete && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isLoading}
+                  className="inline-flex cursor-pointer items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:bg-red-500 dark:shadow-none dark:focus-visible:outline-red-500"
+                >
+                  <ExclamationTriangleIcon className="mr-1.5 h-4 w-4" />
+                  {deleteMutation.isPending ? 'Deleting...' : 'Delete Tier'}
+                </button>
+              )}
+            </div>
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isLoading}
+                className="cursor-pointer text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+              >
+                {createMutation.isPending || updateMutation.isPending
+                  ? 'Saving...'
+                  : tier
+                    ? 'Update Tier'
+                    : 'Create Tier'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </ModalShell>
 
       <ConfirmationModal
         isOpen={showDeleteConfirm}

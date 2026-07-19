@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Button } from '@/components/Button'
+import { ModalShell } from '@/components/ModalShell'
 import type {
   ProposalWithWorkshopData,
   WorkshopSignupExisting,
@@ -31,7 +31,6 @@ import {
   UserIcon,
   MapPinIcon,
   ExclamationTriangleIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid'
 
@@ -70,13 +69,6 @@ export default function WorkshopCard({
   )
   const [operatingSystem, setOperatingSystem] =
     useState<OperatingSystem>('macos')
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
 
   const actuallySignedUp =
     isSignedUp || hasConfirmedSignup(workshop._id, userSignups)
@@ -135,28 +127,16 @@ export default function WorkshopCard({
     }
   }
 
-  const modalContent = showSignupModal && (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-      onClick={() => setShowSignupModal(false)}
+  const modalContent = (
+    <ModalShell
+      isOpen={showSignupModal}
+      onClose={() => setShowSignupModal(false)}
+      size="md"
+      title={workshop.title}
+      subtitle="Complete your registration"
+      icon={<AcademicCapIcon className="h-5 w-5" />}
     >
-      <div
-        className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-2xl dark:bg-gray-800"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          onClick={() => setShowSignupModal(false)}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          aria-label="Close"
-        >
-          <XMarkIcon className="h-6 w-6" />
-        </button>
-
-        <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-          Complete Your Registration
-        </h3>
-
+      <div>
         <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -271,15 +251,12 @@ export default function WorkshopCard({
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 
   return (
     <>
-      {mounted &&
-        showSignupModal &&
-        typeof window !== 'undefined' &&
-        createPortal(modalContent, document.body)}
+      {modalContent}
 
       <div className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md dark:bg-gray-800 dark:hover:shadow-lg">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">

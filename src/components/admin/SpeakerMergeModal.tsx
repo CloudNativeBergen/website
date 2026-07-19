@@ -264,7 +264,7 @@ export function SpeakerMergeModal({
                   <Button
                     variant="primary"
                     onClick={() => setIsConfirmOpen(true)}
-                    className="bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600"
+                    className="!bg-red-600 hover:!bg-red-500 focus-visible:!outline-red-600 dark:!bg-red-700 dark:hover:!bg-red-600"
                   >
                     Merge and delete duplicate
                   </Button>
