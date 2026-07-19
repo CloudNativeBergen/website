@@ -9,6 +9,9 @@ import {
   ListMessagesSchema,
   SendMessageSchema,
   SetPreferenceSchema,
+  SetStatusSchema,
+  SetAssigneeSchema,
+  SetArchivedSchema,
   parseMessageCursor,
 } from '@/server/schemas/message'
 import {
@@ -22,10 +25,18 @@ import {
   createGeneralConversation,
   getProposalForConversation,
   setConversationPreference,
+  setConversationStatus,
+  setConversationAssignee,
+  setConversationArchived,
   canAccessConversation,
 } from '@/lib/messaging/sanity'
+import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
-import type { ConversationWithContext } from '@/lib/messaging/types'
+import { SPEAKER_ALLOWED_VIEWS } from '@/lib/messaging/types'
+import type {
+  AccessSpeaker,
+  ConversationWithContext,
+} from '@/lib/messaging/types'
 
 /**
  * Per-speaker sliding-window throttle for `message.send` (batch A / A2). Sending
@@ -93,6 +104,31 @@ async function speakerHasStandingInConference(
 }
 
 /**
+ * Load a conversation for an ORGANIZER-ONLY management mutation (status /
+ * assignee / archive). Collapses absent, non-organizer, and inaccessible into a
+ * single NOT_FOUND — no existence oracle, and the ticketing capability itself is
+ * not revealed to a non-organizer participant (A3 semantics). `isOrganizer`
+ * already implies `canAccessConversation`, but both are asserted per the design.
+ */
+async function loadManageableConversation(
+  conversationId: string,
+  speaker: AccessSpeaker,
+): Promise<ConversationWithContext> {
+  const conversation = await getConversationById(conversationId)
+  if (
+    !conversation ||
+    speaker.isOrganizer !== true ||
+    !canAccessConversation(conversation, speaker)
+  ) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Conversation not found',
+    })
+  }
+  return conversation
+}
+
+/**
  * Speaker↔organizer messaging (M1). Every procedure derives the actor from
  * `ctx.speaker` and the conference from the domain; a client can never target
  * another user or another conference. Read/write access to a conversation is
@@ -104,15 +140,27 @@ export const messageRouter = router({
     .input(ListConversationsSchema)
     .query(async ({ ctx, input }) => {
       const conferenceId = await resolveConferenceId()
+      const isOrganizer = ctx.speaker.isOrganizer === true
+      const view = input.view ?? 'active'
+      // A non-organizer may only use the speaker-appropriate views; the
+      // organizer-only views (needs-reply / mine / resolved) carry organizer
+      // semantics, so reject them for a speaker rather than silently coercing.
+      if (!isOrganizer && !SPEAKER_ALLOWED_VIEWS.includes(view)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `View '${view}' is not available`,
+        })
+      }
       // The cursor is EITHER a plain ISO datetime (legacy) or `<iso>~<_id>`
       // (compound keyset); split it so exact-timestamp ties page correctly.
       const { before, beforeId } = parseMessageCursor(input.cursor)
       return listConversationsForSpeaker({
         speakerId: ctx.speaker._id,
-        isOrganizer: ctx.speaker.isOrganizer === true,
+        isOrganizer,
         conferenceId,
         before,
         beforeId,
+        view,
       })
     }),
 
@@ -338,6 +386,66 @@ export const messageRouter = router({
         speakerId: ctx.speaker._id,
         muted: input.muted,
         emailOverride: input.emailOverride,
+        // Per-user archive (all participants, speakers included) rides this
+        // existing procedure.
+        archived: input.archived,
       })
+    }),
+
+  /**
+   * Organizer-only: set a conversation's ticketing status ('open' | 'resolved').
+   * A resolved thread drops out of the organizer `active`/`needs-reply` views.
+   */
+  setStatus: protectedProcedure
+    .input(SetStatusSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await loadManageableConversation(
+        input.conversationId,
+        ctx.speaker,
+      )
+      await setConversationStatus(conversation._id, input.status)
+      return { conversationId: conversation._id, status: input.status }
+    }),
+
+  /**
+   * Organizer-only: (re)assign or unassign the responsible organizer. A non-null
+   * assignee MUST be an organizer (validated against the organizer id set);
+   * `null` unassigns.
+   */
+  setAssignee: protectedProcedure
+    .input(SetAssigneeSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await loadManageableConversation(
+        input.conversationId,
+        ctx.speaker,
+      )
+      if (input.assigneeId !== null) {
+        const organizerIds = await getOrganizerSpeakerIds()
+        if (!organizerIds.includes(input.assigneeId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Assignee must be an organizer',
+          })
+        }
+      }
+      await setConversationAssignee(conversation._id, input.assigneeId)
+      return { conversationId: conversation._id, assigneeId: input.assigneeId }
+    }),
+
+  /**
+   * Organizer-only: set/unset the GLOBAL organizer archive. Archiving hides the
+   * thread from organizer views until a NEW message auto-resurfaces it (timestamp
+   * semantics); speakers keep seeing it (their archive is per-user via
+   * setPreference).
+   */
+  setArchived: protectedProcedure
+    .input(SetArchivedSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await loadManageableConversation(
+        input.conversationId,
+        ctx.speaker,
+      )
+      await setConversationArchived(conversation._id, input.archived)
+      return { conversationId: conversation._id, archived: input.archived }
     }),
 })

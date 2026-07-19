@@ -12,6 +12,9 @@ export type NotificationType =
   | 'proposal_comment'
   // Speaker↔organizer conversation message (messaging M1).
   | 'message_received'
+  // A stale, unanswered speaker↔organizer thread (ticketing stale-nudge cron).
+  // Rendered generically by the hub (title/message/actor); no dedicated icon.
+  | 'message_stale'
   | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'

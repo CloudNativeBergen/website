@@ -517,8 +517,10 @@ describe('listConversationsForSpeaker — Who/What metadata (M6)', () => {
     )
     expect(query).toContain('proposal->speakers[0]->name')
     expect(query).toContain('subjectSpeaker->name')
-    // Organizer path never needs the organizer id set.
-    expect(getOrganizerSpeakerIds).not.toHaveBeenCalled()
+    // Ticketing: the organizer path now resolves the organizer id set up front
+    // to derive each row's `needsReply` (last author not an organizer). It is
+    // cached, so the second batch reuses it — called exactly once here.
+    expect(getOrganizerSpeakerIds).toHaveBeenCalledTimes(1)
   })
 
   it('SPEAKER audience: an organizer last-author becomes the counterpart; otherwise the Organizers label', async () => {
@@ -704,8 +706,11 @@ describe('listConversationsForSpeaker — compound keyset cursor (B5)', () => {
     expect(query).toContain(
       '(lastMessageAt < $before || (lastMessageAt == $before && _id < $beforeId))',
     )
+    // `speakerId` is now ALWAYS bound (the default 'active' view's correlated
+    // per-user-archive probe and the `mine` view both key off it).
     expect(params).toEqual({
       conferenceId: 'conf-1',
+      speakerId: 'org-1',
       before: '2026-01-02T00:00:00.000Z',
       beforeId: 'conversation.gen-1',
     })
