@@ -113,16 +113,25 @@ const NOTIFICATION_TITLE_MAX = 200
  * Title copy for a collapsed message notification: a single unread message
  * names its author; an accumulated pile leads with the count (the latest
  * author still appears via the excerpt/actor line).
+ *
+ * DIRECT variant (S10c): when the recipient IS the conversation's subject
+ * speaker (an organizer-initiated thread addressed to them), the single-message
+ * title reads "Direct message from <author> — <subject>" to visually distinguish
+ * a personal outreach from an org-broadcast thread. The collapsed count form is
+ * unchanged (the count already conveys the pile).
  */
 function messageNotificationTitle(
   count: number,
   authorName: string,
   subject: string,
+  isDirect: boolean,
 ): string {
   const title =
     count > 1
       ? `${count} new messages — ${subject}`
-      : `New message from ${authorName} — ${subject}`
+      : isDirect
+        ? `Direct message from ${authorName} — ${subject}`
+        : `New message from ${authorName} — ${subject}`
   // Grapheme-safe cut (an emoji in the author name or subject can straddle the
   // 200-char cap) so the stored title never ends in a lone surrogate (�).
   return truncateToGraphemeBoundary(title, NOTIFICATION_TITLE_MAX)
@@ -183,11 +192,20 @@ export async function upsertMessageNotifications(
       // Unread accumulates; a read (or brand-new) document resets to 1.
       const count =
         (existing && !existing.readAt ? (existing.count ?? 1) : 0) + 1
+      // DIRECT when THIS recipient is the thread's subject speaker (S10c).
+      const isDirect =
+        item.subjectSpeakerId != null &&
+        item.subjectSpeakerId === item.recipientId
       return {
         item,
         id,
         count,
-        title: messageNotificationTitle(count, item.authorName, item.subject),
+        title: messageNotificationTitle(
+          count,
+          item.authorName,
+          item.subject,
+          isDirect,
+        ),
       }
     })
 

@@ -47,13 +47,12 @@ vi.mock('@/lib/conference/state', () => ({
   isWithdrawalCutoffActive: vi.fn(),
 }))
 
-// Messaging M4: the action procedure mirrors organizer decision comments into
-// the proposal thread. Mock the messaging boundary; only the three functions
-// the proposal router uses need real stubs (the message router's other imports
-// from this module are never invoked in these tests).
+// Messaging M4/S2: the action procedure mirrors organizer decision comments into
+// the proposal thread (addMessage only — the decision status rail is the single
+// delivery, so notifyNewMessage is deliberately NOT called). Mock the messaging
+// boundary.
 vi.mock('@/lib/messaging/sanity', () => ({
   ensureProposalConversation: vi.fn(),
-  getConversationById: vi.fn(),
   addMessage: vi.fn(),
 }))
 
@@ -79,11 +78,7 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
-import {
-  ensureProposalConversation,
-  getConversationById,
-  addMessage,
-} from '@/lib/messaging/sanity'
+import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import {
   Status,
@@ -682,24 +677,11 @@ describe('proposal router', () => {
   describe('action — decision comment mirrored to proposal thread (M4)', () => {
     beforeEach(() => {
       vi.mocked(ensureProposalConversation).mockClear()
-      vi.mocked(getConversationById).mockClear()
       vi.mocked(addMessage).mockClear()
       vi.mocked(notifyNewMessage).mockClear()
     })
 
     const conversationId = 'conversation.proposal.proposal-1'
-    const conversation = {
-      _id: conversationId,
-      conferenceId: 'conf-1',
-      conversationType: 'proposal',
-      proposalId: 'proposal-1',
-      proposalTitle: 'My Talk',
-      proposalSpeakerIds: [regularSpeaker._id],
-      createdById: adminSpeaker._id,
-      subject: 'My Talk',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      lastMessageAt: '2026-01-01T00:00:00.000Z',
-    }
     const createdMessage = {
       _id: 'message.1',
       conversationId,
@@ -718,12 +700,11 @@ describe('proposal router', () => {
         err: null,
       })
       vi.mocked(ensureProposalConversation).mockResolvedValue(conversationId)
-      vi.mocked(getConversationById).mockResolvedValue(conversation as any)
       vi.mocked(addMessage).mockResolvedValue(createdMessage as any)
       vi.mocked(notifyNewMessage).mockResolvedValue(undefined)
     }
 
-    it('posts an organizer accept comment as a message and fans out', async () => {
+    it('posts an organizer accept comment as a message but does NOT fan out (S2 decision rail)', async () => {
       mockAcceptFlow()
 
       const caller = createAdminCaller()
@@ -745,13 +726,11 @@ describe('proposal router', () => {
         authorId: adminSpeaker._id,
         body: 'Congrats — see you in Bergen!',
       })
-      expect(notifyNewMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversation,
-          message: createdMessage,
-          authorId: adminSpeaker._id,
-        }),
-      )
+      // S2: the decision status rail (proposal_status_changed notification +
+      // decision email, both carrying this comment) is the single delivery — the
+      // message-thread fan-out must NOT fire, or the speaker would be
+      // double-notified for one organizer action.
+      expect(notifyNewMessage).not.toHaveBeenCalled()
     })
 
     it('never fails the action when the messaging write throws', async () => {

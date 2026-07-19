@@ -85,3 +85,28 @@ export function conversationLinkPath(
     ? `/admin/messages/${conversation._id}`
     : `/cfp/messages/${conversation._id}`
 }
+
+/**
+ * The app-relative deep link used in NEW-MESSAGE EMAILS (S8). Unlike
+ * {@link conversationLinkPath} (the HUB/PUSH contract, which deep-links proposal
+ * threads to the proposal page `#messages` fragment), email links ALWAYS point at
+ * the dedicated thread pages:
+ *
+ * - organizer → `/admin/messages/<conversationId>`
+ * - speaker   → `/cfp/messages/<conversationId>`
+ *
+ * WHY email differs: a message email is frequently opened while logged out, and
+ * the auth redirect drops the URL fragment — so a proposal-thread email pointing
+ * at `/cfp/proposal/<id>#messages` landed the speaker atop the proposal EDIT
+ * form with the `#messages` anchor gone. The thread pages render proposal threads
+ * fine by `conversationId`, and the C9 audience redirects cover a wrong-audience
+ * link, so both audiences get a stable, fragment-free destination.
+ */
+export function conversationEmailLinkPath(
+  conversation: Pick<ConversationWithContext, '_id'>,
+  isOrganizer: boolean,
+): string {
+  return isOrganizer
+    ? `/admin/messages/${conversation._id}`
+    : `/cfp/messages/${conversation._id}`
+}

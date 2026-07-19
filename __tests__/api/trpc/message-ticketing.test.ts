@@ -38,6 +38,7 @@ vi.mock('@/lib/sanity/client', () => ({
 
 vi.mock('@/lib/notification/sanity', () => ({
   getOrganizerSpeakerIds: vi.fn(async () => [] as string[]),
+  createNotifications: vi.fn(async () => {}),
 }))
 
 vi.mock('@/lib/messaging/sanity', async (importActual) => {
@@ -51,6 +52,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
       emailOverride: 'default',
     })),
     listConversationsForSpeaker: vi.fn(async () => []),
+    getConversationViewCounts: vi.fn(async () => ({ active: 0, archived: 0 })),
     setConversationPreference: vi.fn(async () => ({
       muted: false,
       emailOverride: 'default',
@@ -64,21 +66,27 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
 import {
   getConversationById,
   listConversationsForSpeaker,
+  getConversationViewCounts,
   setConversationStatus,
   setConversationAssignee,
   setConversationArchived,
   setConversationPreference,
 } from '@/lib/messaging/sanity'
-import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  getOrganizerSpeakerIds,
+  createNotifications,
+} from '@/lib/notification/sanity'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const getById = getConversationById as unknown as LooseMock
 const listConvs = listConversationsForSpeaker as unknown as LooseMock
+const viewCounts = getConversationViewCounts as unknown as LooseMock
 const setStatus = setConversationStatus as unknown as LooseMock
 const setAssignee = setConversationAssignee as unknown as LooseMock
 const setArchived = setConversationArchived as unknown as LooseMock
 const setPref = setConversationPreference as unknown as LooseMock
 const orgIds = getOrganizerSpeakerIds as unknown as LooseMock
+const createNotifs = createNotifications as unknown as LooseMock
 
 const speaker1 = speakers[0]._id // not an organizer
 const organizerId = speakers.find((s) => s.isOrganizer)!._id
@@ -164,8 +172,8 @@ describe('setStatus — organizer only', () => {
   })
 })
 
-describe('setAssignee — organizer validation', () => {
-  it('assigns when the target is an organizer', async () => {
+describe('setAssignee — organizer validation + assign notify (S4)', () => {
+  it('assigns to a DIFFERENT organizer and notifies them (S4)', async () => {
     getById.mockResolvedValue(proposalConv)
     orgIds.mockResolvedValue([organizerId, 'org-2'])
     const caller = createAdminCaller()
@@ -174,6 +182,31 @@ describe('setAssignee — organizer validation', () => {
       assigneeId: 'org-2',
     })
     expect(setAssignee).toHaveBeenCalledWith(proposalConv._id, 'org-2')
+    // One hub notification to the NEW assignee.
+    expect(createNotifs).toHaveBeenCalledTimes(1)
+    const [items] = createNotifs.mock.calls[0]
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      recipientId: 'org-2',
+      conferenceId: 'conf-1',
+      notificationType: 'conversation_assigned',
+      title: 'Assigned to you: T',
+      link: '/admin/proposals/prop-1#messages',
+      actorId: organizerId,
+      relatedProposalId: 'prop-1',
+    })
+  })
+
+  it('does NOT notify on self-assign (S4)', async () => {
+    getById.mockResolvedValue(proposalConv)
+    orgIds.mockResolvedValue([organizerId])
+    const caller = createAdminCaller()
+    await caller.message.setAssignee({
+      conversationId: proposalConv._id,
+      assigneeId: organizerId, // the caller assigns to themselves
+    })
+    expect(setAssignee).toHaveBeenCalledWith(proposalConv._id, organizerId)
+    expect(createNotifs).not.toHaveBeenCalled()
   })
 
   it('rejects a non-organizer assignee with BAD_REQUEST', async () => {
@@ -187,9 +220,10 @@ describe('setAssignee — organizer validation', () => {
       }),
     ).rejects.toThrow(/BAD_REQUEST|organizer/)
     expect(setAssignee).not.toHaveBeenCalled()
+    expect(createNotifs).not.toHaveBeenCalled()
   })
 
-  it('allows unassigning (null) without an organizer check', async () => {
+  it('allows unassigning (null) without an organizer check and does NOT notify', async () => {
     getById.mockResolvedValue(proposalConv)
     const caller = createAdminCaller()
     await caller.message.setAssignee({
@@ -198,18 +232,24 @@ describe('setAssignee — organizer validation', () => {
     })
     expect(orgIds).not.toHaveBeenCalled()
     expect(setAssignee).toHaveBeenCalledWith(proposalConv._id, null)
+    expect(createNotifs).not.toHaveBeenCalled()
   })
 })
 
 describe('setArchived — organizer only (global archive)', () => {
-  it('lets an organizer archive globally', async () => {
+  it('lets an organizer archive globally, recording the archiver (S6)', async () => {
     getById.mockResolvedValue(proposalConv)
     const caller = createAdminCaller()
     await caller.message.setArchived({
       conversationId: proposalConv._id,
       archived: true,
     })
-    expect(setArchived).toHaveBeenCalledWith(proposalConv._id, true)
+    // S6: the caller's id is passed so the data layer records archivedBy.
+    expect(setArchived).toHaveBeenCalledWith(
+      proposalConv._id,
+      true,
+      organizerId,
+    )
   })
 
   it('denies a non-organizer with NOT_FOUND', async () => {
@@ -222,6 +262,40 @@ describe('setArchived — organizer only (global archive)', () => {
       }),
     ).rejects.toThrow(/NOT_FOUND|not found/)
     expect(setArchived).not.toHaveBeenCalled()
+  })
+})
+
+describe('viewCounts — audience-scoped tab counts (S7)', () => {
+  it('returns organizer counts for an organizer caller', async () => {
+    viewCounts.mockResolvedValue({
+      active: 3,
+      needsReply: 2,
+      mine: 1,
+      resolved: 4,
+      archived: 5,
+    })
+    const caller = createAdminCaller()
+    const result = await caller.message.viewCounts()
+    expect(result).toEqual({
+      active: 3,
+      needsReply: 2,
+      mine: 1,
+      resolved: 4,
+      archived: 5,
+    })
+    expect(viewCounts).toHaveBeenCalledWith(
+      expect.objectContaining({ isOrganizer: true, conferenceId: 'conf-1' }),
+    )
+  })
+
+  it('passes isOrganizer=false for a speaker caller', async () => {
+    viewCounts.mockResolvedValue({ active: 2, archived: 1 })
+    const caller = createAuthenticatedCaller(speaker1)
+    const result = await caller.message.viewCounts()
+    expect(result).toEqual({ active: 2, archived: 1 })
+    expect(viewCounts).toHaveBeenCalledWith(
+      expect.objectContaining({ isOrganizer: false, speakerId: speaker1 }),
+    )
   })
 })
 

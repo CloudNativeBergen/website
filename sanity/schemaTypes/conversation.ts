@@ -143,6 +143,19 @@ export default defineType({
         'GLOBAL organizer archive. TIMESTAMP SEMANTICS: a conversation is globally archived IFF archivedAt >= lastMessageAt. A new message bumps lastMessageAt past archivedAt, so the thread AUTO-RESURFACES with zero fan-out writes. Speakers ignore this field (global archive is an organizer-side hide); a speaker archives via their own conversationPreference.archivedAt.',
     }),
     defineField({
+      name: 'archivedBy',
+      title: 'Archived By',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion; a
+      // dangling archiver ref is tolerated (mirrors assignedTo/createdBy).
+      weak: true,
+      description:
+        'The organizer who set the GLOBAL archive (audit trail). Set alongside archivedAt and unset together with it; meaningful only while archivedAt is set. Written by the server, not editable in Studio.',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'lastStaleNudgeAt',
       title: 'Last Stale Nudge At',
       type: 'datetime',

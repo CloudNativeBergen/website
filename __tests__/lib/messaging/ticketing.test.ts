@@ -36,6 +36,9 @@ import {
   setConversationAssignee,
   setConversationArchived,
   setConversationPreference,
+  getConversationViewCounts,
+  getConversationById,
+  addMessage,
 } from '@/lib/messaging/sanity'
 
 type LooseMock = ReturnType<typeof vi.fn>
@@ -469,19 +472,138 @@ describe('setConversationAssignee', () => {
 })
 
 describe('setConversationArchived — global archive timestamp semantics', () => {
-  it('stamps archivedAt = now when archiving', async () => {
+  it('stamps archivedAt = now AND records archivedBy when archiving (S6)', async () => {
     const patch = installPatch()
-    await setConversationArchived('conversation.gen-1', true)
-    const arg = patch.set.mock.calls[0][0] as { archivedAt: string }
+    await setConversationArchived('conversation.gen-1', true, 'org-7')
+    const arg = patch.set.mock.calls[0][0] as {
+      archivedAt: string
+      archivedBy: { _ref: string; _weak: boolean }
+    }
     expect(typeof arg.archivedAt).toBe('string')
+    // Weak archiver ref for the audit trail (GDPR-safe like the other refs).
+    expect(arg.archivedBy).toEqual({
+      _type: 'reference',
+      _ref: 'org-7',
+      _weak: true,
+    })
     expect(patch.unset).not.toHaveBeenCalled()
   })
 
-  it('unsets archivedAt when un-archiving', async () => {
+  it('unsets archivedAt AND archivedBy together when un-archiving (S6)', async () => {
     const patch = installPatch()
-    await setConversationArchived('conversation.gen-1', false)
-    expect(patch.unset).toHaveBeenCalledWith(['archivedAt'])
+    await setConversationArchived('conversation.gen-1', false, 'org-7')
+    expect(patch.unset).toHaveBeenCalledWith(['archivedAt', 'archivedBy'])
     expect(patch.set).not.toHaveBeenCalled()
+  })
+})
+
+describe('addMessage — reopen-on-reply (S3)', () => {
+  it('folds status:open into the conversation patch when reopen=true', async () => {
+    const { patchBuilder } = installTransaction()
+    await addMessage({
+      conversationId: 'conversation.gen-1',
+      authorId: 'sp-1',
+      body: 'follow up',
+      reopen: true,
+    })
+    const arg = patchBuilder.set.mock.calls[0][0] as {
+      lastMessageAt: string
+      status?: string
+    }
+    expect(typeof arg.lastMessageAt).toBe('string')
+    expect(arg.status).toBe('open')
+  })
+
+  it('only bumps lastMessageAt when reopen is not set', async () => {
+    const { patchBuilder } = installTransaction()
+    await addMessage({
+      conversationId: 'conversation.gen-1',
+      authorId: 'org-1',
+      body: 'reply',
+    })
+    const arg = patchBuilder.set.mock.calls[0][0] as {
+      lastMessageAt: string
+      status?: string
+    }
+    expect(typeof arg.lastMessageAt).toBe('string')
+    expect(arg.status).toBeUndefined()
+  })
+})
+
+describe('getConversationById — archivedBy projection (S6)', () => {
+  it('projects archivedBy (id + name) for the audit line', async () => {
+    readMock.fetch.mockResolvedValueOnce({
+      _id: 'conversation.gen-1',
+      conferenceId: 'conf-1',
+      conversationType: 'general',
+      proposalSpeakerIds: [],
+      createdById: 'sp-1',
+      subject: 'Q',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastMessageAt: '2026-02-01T00:00:00.000Z',
+      status: 'open',
+      assignedTo: null,
+      archivedAt: '2026-02-02T00:00:00.000Z',
+      archivedBy: { _id: 'org-2', name: 'Ola' },
+    })
+    const conv = await getConversationById('conversation.gen-1')
+    expect(conv?.archivedBy).toEqual({ _id: 'org-2', name: 'Ola' })
+    const [query] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('"archivedBy": archivedBy->{ _id, name }')
+  })
+})
+
+describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
+  it('organizer: counts every tab, reusing the view predicates, binding organizerIds', async () => {
+    vi.mocked(getOrganizerSpeakerIds).mockResolvedValueOnce(['org-1', 'org-2'])
+    readMock.fetch.mockResolvedValueOnce({
+      active: 3,
+      needsReply: 2,
+      mine: 1,
+      resolved: 4,
+      archived: 5,
+    })
+    const counts = await getConversationViewCounts({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+    expect(counts).toEqual({
+      active: 3,
+      needsReply: 2,
+      mine: 1,
+      resolved: 4,
+      archived: 5,
+    })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    // ONE object projection with a count() per view.
+    expect(query).toContain('"active": count(')
+    expect(query).toContain('"needsReply": count(')
+    expect(query).toContain('"mine": count(')
+    expect(query).toContain('"resolved": count(')
+    expect(query).toContain('"archived": count(')
+    // Reuses the shared predicates (needs-reply binds organizerIds).
+    expect(query).toContain('assignedTo._ref == $speakerId')
+    expect(query).toContain('in $organizerIds)')
+    expect(params.organizerIds).toEqual(['org-1', 'org-2'])
+  })
+
+  it('speaker: only active + archived, scoped, no organizer-only tabs', async () => {
+    readMock.fetch.mockResolvedValueOnce({ active: 2, archived: 1 })
+    const counts = await getConversationViewCounts({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+    expect(counts).toEqual({ active: 2, archived: 1 })
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('"active": count(')
+    expect(query).toContain('"archived": count(')
+    expect(query).not.toContain('"needsReply": count(')
+    expect(query).not.toContain('"mine": count(')
+    // Access scope applied; needs-reply org binding never introduced.
+    expect(query).toContain('createdBy._ref == $speakerId')
+    expect(params.organizerIds).toBeUndefined()
   })
 })
 

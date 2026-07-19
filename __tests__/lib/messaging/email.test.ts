@@ -78,6 +78,33 @@ describe('sendMessageEmails — bounded concurrency (A8)', () => {
     expect(maxInFlight).toBeGreaterThan(1)
   })
 
+  it('uses a warmer FIRST-CONTACT subject for a first-contact recipient (S9c)', async () => {
+    sendMock.mockResolvedValue({ error: null })
+    await sendMessageEmails(
+      [
+        {
+          email: 'bob@x.no',
+          name: 'Bob',
+          replyUrl: 'https://cndn.no/cfp/messages/c1',
+          isOrganizer: false,
+          firstContact: true,
+        },
+      ],
+      context,
+    )
+    const [payload] = sendMock.mock.calls[0]
+    expect(payload.subject).toBe(
+      'The CNDN organizers started a conversation with you — "S"',
+    )
+  })
+
+  it('uses the standard subject when firstContact is not set', async () => {
+    sendMock.mockResolvedValue({ error: null })
+    await sendMessageEmails(recipients(1), context)
+    const [payload] = sendMock.mock.calls[0]
+    expect(payload.subject).toBe('New message about "S"')
+  })
+
   it('never throws; counts only successes and logs per-recipient failures', async () => {
     sendMock
       .mockResolvedValueOnce({ error: null }) // ok

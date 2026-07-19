@@ -251,6 +251,49 @@ describe('keyset cursor threading (F3)', () => {
   })
 })
 
+describe('send — reopen-on-reply (S3)', () => {
+  const resolvedOwnConv: ConversationWithContext = {
+    ...ownProposalConv,
+    status: 'resolved',
+  }
+
+  it('a NON-organizer replying to a resolved thread reopens it (reopen=true)', async () => {
+    getById.mockResolvedValue(resolvedOwnConv)
+    const caller = createAuthenticatedCaller(speaker1)
+    await caller.message.send({
+      conversationId: resolvedOwnConv._id,
+      body: 'follow up',
+    })
+    expect(addMsg).toHaveBeenCalledWith(
+      expect.objectContaining({ reopen: true }),
+    )
+  })
+
+  it('an ORGANIZER replying to a resolved thread does NOT reopen it (reopen=false)', async () => {
+    getById.mockResolvedValue(resolvedOwnConv)
+    const caller = createAdminCaller()
+    await caller.message.send({
+      conversationId: resolvedOwnConv._id,
+      body: 'answer',
+    })
+    expect(addMsg).toHaveBeenCalledWith(
+      expect.objectContaining({ reopen: false }),
+    )
+  })
+
+  it('a NON-organizer replying to an OPEN thread does not reopen (reopen=false)', async () => {
+    getById.mockResolvedValue(ownProposalConv) // status undefined → open
+    const caller = createAuthenticatedCaller(speaker1)
+    await caller.message.send({
+      conversationId: ownProposalConv._id,
+      body: 'hi again',
+    })
+    expect(addMsg).toHaveBeenCalledWith(
+      expect.objectContaining({ reopen: false }),
+    )
+  })
+})
+
 describe('send — conversation creation', () => {
   it('auto-creates the proposal thread (deterministic id) and is idempotent', async () => {
     getProposal.mockResolvedValue({

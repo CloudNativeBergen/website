@@ -13,10 +13,18 @@ export interface MessageEmailRecipient {
   replyUrl: string
   /**
    * Whether THIS recipient is an organizer. Drives the audience-correct body
-   * copy (organizers reach the speaker + fellow organizers; speakers reach the
-   * organizers) so the wording matches the per-recipient `replyUrl` surface.
+   * copy (S9a: an organizer's replies land in the CFP inbox; a speaker's replies
+   * reach the organizers' shared inbox) so the wording matches the per-recipient
+   * `replyUrl` surface.
    */
   isOrganizer: boolean
+  /**
+   * Whether this is a SPEAKER being reached out to for the FIRST time in a
+   * thread (S9c). Only ever true for a speaker recipient on a thread's first
+   * message; drives a warmer subject + body. Organizer recipients and the
+   * org-contact copy keep the standard form.
+   */
+  firstContact?: boolean
 }
 
 /**
@@ -39,10 +47,15 @@ async function sendOne(
 ): Promise<boolean> {
   try {
     await retryWithBackoff(async () => {
+      // FIRST-CONTACT (S9c): a warmer subject when the organizers open a thread
+      // with a speaker; every other email keeps the standard subject.
+      const emailSubject = recipient.firstContact
+        ? `The ${conference.title} organizers started a conversation with you — "${subject}"`
+        : `New message about "${subject}"`
       const result = await resend.emails.send({
         from: `${conference.organizer} <${conference.cfpEmail}>`,
         to: [recipient.email],
-        subject: `New message about "${subject}"`,
+        subject: emailSubject,
         react: React.createElement(MessageNotificationTemplate, {
           recipientName: recipient.name,
           authorName,
@@ -51,6 +64,7 @@ async function sendOne(
           replyUrl: recipient.replyUrl,
           // Audience-correct copy for THIS recipient (matches their replyUrl).
           isOrganizer: recipient.isOrganizer,
+          firstContact: recipient.firstContact ?? false,
           // Settings live on the cfp profile for BOTH audiences; anchor at the
           // notification section so the link matches the in-app gear (A9).
           preferencesUrl: conference.domains?.[0]

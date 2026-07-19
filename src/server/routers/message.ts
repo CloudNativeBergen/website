@@ -28,9 +28,17 @@ import {
   setConversationStatus,
   setConversationAssignee,
   setConversationArchived,
+  getConversationViewCounts,
   canAccessConversation,
 } from '@/lib/messaging/sanity'
-import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  getOrganizerSpeakerIds,
+  createNotifications,
+} from '@/lib/notification/sanity'
+import {
+  conversationLinkPath,
+  truncateToGraphemeBoundary,
+} from '@/lib/messaging/links'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import { SPEAKER_ALLOWED_VIEWS } from '@/lib/messaging/types'
 import type {
@@ -163,6 +171,22 @@ export const messageRouter = router({
         view,
       })
     }),
+
+  /**
+   * Conversation COUNTS per inbox tab for the caller's audience (S7). Organizers
+   * get every tab ({ active, needsReply, mine, resolved, archived }); speakers
+   * get { active, archived }. ONE bounded GROQ round trip over this conference's
+   * conversation set, reusing the same predicates the list views apply — meant to
+   * accompany the first inbox page, not to be polled hot.
+   */
+  viewCounts: protectedProcedure.query(async ({ ctx }) => {
+    const conferenceId = await resolveConferenceId()
+    return getConversationViewCounts({
+      speakerId: ctx.speaker._id,
+      isOrganizer: ctx.speaker.isOrganizer === true,
+      conferenceId,
+    })
+  }),
 
   /** A single conversation + participants + the caller's own preference. */
   getConversation: protectedProcedure
@@ -346,10 +370,18 @@ export const messageRouter = router({
         })
       }
 
+      // REOPEN-ON-REPLY (S3): a NON-organizer replying to a resolved thread
+      // reopens it, atomically with the message write, so the follow-up
+      // re-enters the organizer needs-reply queue. `conversation.status` is
+      // coalesced ('open' when absent) by `getConversationById`. An organizer
+      // reply to a resolved thread does NOT reopen it.
+      const reopen = !isOrganizer && conversation.status === 'resolved'
+
       const message = await addMessage({
         conversationId: conversation._id,
         authorId: actorId,
         body: input.body,
+        reopen,
       })
 
       // Detach the fan-out from the response path (A8): the message is already
@@ -429,6 +461,31 @@ export const messageRouter = router({
         }
       }
       await setConversationAssignee(conversation._id, input.assigneeId)
+
+      // ASSIGN NOTIFY (S4): tell the NEW assignee they own this thread — but not
+      // when unassigning (null) or self-assigning (an organizer picking up their
+      // own thread doesn't need a notification about their own action).
+      // `createNotifications` is never-fail, so a failed notify can't fail the
+      // (already committed) assignment. The link is the ADMIN thread (assignees
+      // are always organizers). The push category maps to `messages` (S4).
+      if (input.assigneeId !== null && input.assigneeId !== ctx.speaker._id) {
+        await createNotifications([
+          {
+            recipientId: input.assigneeId,
+            conferenceId: conversation.conferenceId,
+            notificationType: 'conversation_assigned',
+            title: truncateToGraphemeBoundary(
+              `Assigned to you: ${conversation.subject}`,
+              200,
+            ),
+            link: conversationLinkPath(conversation, true),
+            actorId: ctx.speaker._id,
+            ...(conversation.proposalId
+              ? { relatedProposalId: conversation.proposalId }
+              : {}),
+          },
+        ])
+      }
       return { conversationId: conversation._id, assigneeId: input.assigneeId }
     }),
 
@@ -445,7 +502,12 @@ export const messageRouter = router({
         input.conversationId,
         ctx.speaker,
       )
-      await setConversationArchived(conversation._id, input.archived)
+      // Record WHO archived (S6) for the "Archived by X" audit line.
+      await setConversationArchived(
+        conversation._id,
+        input.archived,
+        ctx.speaker._id,
+      )
       return { conversationId: conversation._id, archived: input.archived }
     }),
 })

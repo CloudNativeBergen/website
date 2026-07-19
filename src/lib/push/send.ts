@@ -146,6 +146,10 @@ export async function sendPush(
  *        notifications both carry this type)
  *   - `cospeaker_response`       → `coSpeakerInvites`
  *   - `message_received`         → `messages`
+ *   - `message_stale`            → `messages` (S5 — a stale-thread nudge is a
+ *        messaging event; it previously fell through to `otherUpdates`)
+ *   - `conversation_assigned`    → `messages` (S4 — a follow-up assignment is a
+ *        messaging event)
  *   - everything else            → `otherUpdates`
  *       (`proposal_submitted`, `travel_support_update`, `sponsor_activity`,
  *        `gallery_tagged`, `schedule_update`, `proposal_comment`, `system`)
@@ -163,6 +167,8 @@ export function pushCategoryForNotificationType(
     case 'cospeaker_response':
       return 'coSpeakerInvites'
     case 'message_received':
+    case 'message_stale':
+    case 'conversation_assigned':
       return 'messages'
     default:
       return 'otherUpdates'
