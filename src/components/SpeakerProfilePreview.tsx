@@ -46,7 +46,7 @@ export default function SpeakerProfilePreview({
       onClose={onClose}
       size="5xl"
       padded={false}
-      className="flex max-h-[90vh] transform flex-col overflow-hidden bg-brand-glacier-white text-left align-middle transition-all"
+      className="flex max-h-[90dvh] transform flex-col overflow-hidden bg-brand-glacier-white text-left align-middle transition-all"
     >
       <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
         <DialogTitle

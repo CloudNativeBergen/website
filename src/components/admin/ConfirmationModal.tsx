@@ -92,11 +92,22 @@ export function ConfirmationModal({
         </div>
       </div>
       {children && <div className="mt-4 text-left">{children}</div>}
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:gap-4">
+      {/* Cancel first in DOM; flex-col-reverse stacks the destructive primary
+          on top on mobile, sm:flex-row + justify-end puts Cancel left / primary
+          right on desktop (mirrors SendMessageModal's footer). */}
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-4">
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={isLoading}
+          className="font-space-grotesk w-full justify-center rounded-xl border-brand-frosted-steel px-4 py-3 text-sm font-semibold text-brand-slate-gray transition-all duration-200 hover:bg-brand-sky-mist disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          {cancelButtonText}
+        </Button>
         <Button
           onClick={onConfirm}
           disabled={isLoading || confirmDisabled}
-          className={`font-space-grotesk w-full justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:flex-1`}
+          className={`font-space-grotesk w-full justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto`}
         >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
@@ -106,14 +117,6 @@ export function ConfirmationModal({
           ) : (
             confirmButtonText
           )}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={isLoading}
-          className="font-space-grotesk w-full justify-center rounded-xl border-brand-frosted-steel px-4 py-3 text-sm font-semibold text-brand-slate-gray transition-all duration-200 hover:bg-brand-sky-mist disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:flex-1 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-        >
-          {cancelButtonText}
         </Button>
       </div>
     </ModalShell>

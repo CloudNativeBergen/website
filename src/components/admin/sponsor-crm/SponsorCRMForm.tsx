@@ -262,7 +262,7 @@ export function SponsorCRMForm({
                 leaveFrom="opacity-100 translate-y-0 sm:scale-100"
                 leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
               >
-                <DialogPanel className="relative flex max-h-[85vh] w-full max-w-3xl transform flex-col overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
+                <DialogPanel className="relative flex max-h-[85dvh] w-full max-w-3xl transform flex-col overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
                   <div className="shrink-0 border-b border-gray-200 p-6 dark:border-gray-700">
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 text-left">
@@ -319,8 +319,9 @@ export function SponsorCRMForm({
                           </span>
                         )}
                         <button
+                          type="button"
                           onClick={handleClose}
-                          className="cursor-pointer rounded-md text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:text-gray-500 dark:hover:text-gray-400"
+                          className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:text-gray-500 dark:hover:text-gray-400"
                         >
                           <span className="sr-only">Close</span>
                           <XMarkIcon className="h-6 w-6" />
@@ -329,7 +330,7 @@ export function SponsorCRMForm({
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-6">
+                  <div className="flex-1 overflow-y-auto overscroll-contain p-6">
                     <div className="min-h-100 text-left">
                       {view === 'contacts' && sponsor ? (
                         <SponsorContactEditor

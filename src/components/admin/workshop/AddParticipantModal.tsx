@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
@@ -41,19 +41,32 @@ export function AddParticipantModal({
 }: AddParticipantModalProps) {
   const [formData, setFormData] =
     useState<ParticipantFormData>(DEFAULT_PARTICIPANT)
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  // Reset the form each time the modal opens. Because a successful submit is
+  // signalled by the parent closing the modal (isOpen -> false), resetting on
+  // open — rather than synchronously after onSubmit — means a failed parent
+  // mutation keeps the modal open with everything the user typed intact.
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset form on open
+      setFormData(DEFAULT_PARTICIPANT)
+      setValidationError(null)
+    }
+  }, [isOpen])
 
   const handleClose = () => {
-    setFormData(DEFAULT_PARTICIPANT)
+    setValidationError(null)
     onClose()
   }
 
   const handleSubmit = () => {
     if (!formData.userName || !formData.userEmail) {
-      alert('Please fill in all required fields')
+      setValidationError('Please fill in both name and email.')
       return
     }
+    setValidationError(null)
     onSubmit(formData)
-    setFormData(DEFAULT_PARTICIPANT)
   }
 
   return (
@@ -178,6 +191,12 @@ export function AddParticipantModal({
             />
           </div>
         </div>
+
+        {validationError && (
+          <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {validationError}
+          </p>
+        )}
 
         <div className="mt-6 flex justify-end gap-3">
           <AdminButton

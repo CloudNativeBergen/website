@@ -109,7 +109,7 @@ export function ImportHistoricSponsorsButton({
             <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
           </TransitionChild>
 
-          <div className="fixed inset-0 flex items-center justify-center p-4">
+          <div className="fixed inset-0 flex items-center justify-center overflow-y-auto p-4">
             <TransitionChild
               as={Fragment}
               enter="ease-out duration-300"
@@ -119,14 +119,15 @@ export function ImportHistoricSponsorsButton({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="mx-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+              <DialogPanel className="mx-auto max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
                 <div className="flex items-start justify-between">
                   <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
                     Import Historic Sponsors
                   </DialogTitle>
                   <button
+                    type="button"
                     onClick={() => setIsOpen(false)}
-                    className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700"
+                    className="flex h-11 w-11 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700"
                   >
                     <XMarkIcon className="h-5 w-5" />
                   </button>

@@ -95,6 +95,28 @@ export const WithTicketUrl: Story = {
   },
 }
 
+export const WithTemplateSelector: Story = {
+  args: {
+    title: 'Send Sponsor Email',
+    contextInfo: 'Sponsor: TechGiant Corp • Gold tier',
+    templateSelector: () => (
+      <select className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+        <option>Choose a template…</option>
+        <option>Welcome sponsor</option>
+        <option>Contract follow-up</option>
+      </select>
+    ),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'With a template selector. The From/Template row stacks vertically below sm (flex-col sm:flex-row) so the dropdown stays usable at 393px.',
+      },
+    },
+  },
+}
+
 export const WithInitialValues: Story = {
   args: {
     title: 'Follow Up Email',
