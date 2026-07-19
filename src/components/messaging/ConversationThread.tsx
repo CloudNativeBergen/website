@@ -360,10 +360,14 @@ export function ConversationThreadView({
     <div
       role="region"
       aria-label={subject ? `Conversation: ${subject}` : 'Conversation'}
-      className={fillHeight ? 'flex min-h-0 flex-1 flex-col' : 'flex flex-col'}
+      // fillHeight sizes to CONTENT and only SHRINKS (list scrolls) when the
+      // thread exceeds the viewport — never grows, so a short thread keeps the
+      // composer right under the last message instead of pinned to the bottom
+      // of a stretched card.
+      className={fillHeight ? 'flex min-h-0 flex-col' : 'flex flex-col'}
     >
       {(subject || onSetMuted) && (
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
           {subject ? (
             <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-white">
               {subject}
@@ -387,7 +391,7 @@ export function ConversationThreadView({
         ref={scrollRef}
         onScroll={handleScroll}
         className={`space-y-3 overflow-y-auto overscroll-contain py-4 ${
-          fillHeight ? 'min-h-0 flex-1' : 'max-h-[60vh] min-h-[8rem]'
+          fillHeight ? 'min-h-[8rem] shrink' : 'max-h-[60vh] min-h-[8rem]'
         }`}
       >
         {isLoading ? (
