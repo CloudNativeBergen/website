@@ -128,6 +128,46 @@ describe('PushNotificationSettingsView test-send feedback', () => {
     expect(screen.getByText('403 — VapidPkHashMismatch')).toBeInTheDocument()
   })
 
+  it('all failed AND some pruned: the rejection copy KEEPS the expired-subscriptions note', () => {
+    renderWithResult({
+      sent: 0,
+      gone: 1,
+      total: 3,
+      configured: true,
+      failures: [
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ],
+    })
+    // The actionable rejection copy is still shown …
+    expect(
+      screen.getByText(/turn notifications off and on again/i),
+    ).toBeInTheDocument()
+    // … and the pruning note is no longer dropped (regression #534).
+    expect(
+      screen.getByText(/Removed 1 expired subscription\b/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText('403 — VapidPkHashMismatch')).toBeInTheDocument()
+  })
+
+  it('partial success AND some pruned: success count, pruning note, and rejection copy', () => {
+    renderWithResult({
+      sent: 1,
+      gone: 2,
+      total: 4,
+      configured: true,
+      failures: [
+        { statusCode: 403, message: 'HTTP 403 — VapidPkHashMismatch' },
+      ],
+    })
+    expect(screen.getByText(/Sent to 1 device/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Removed 2 expired subscriptions/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/turn notifications off and on again/i),
+    ).toBeInTheDocument()
+  })
+
   it('every device failed with NO diagnostics: generic retry hint, no detail line', () => {
     renderWithResult({
       sent: 0,

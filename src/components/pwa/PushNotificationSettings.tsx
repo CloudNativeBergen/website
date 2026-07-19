@@ -238,14 +238,23 @@ function testFeedback(
 
   const failures = result.failures ?? []
   const detail = failureDetailLine(failures)
+  // The pruned-subscriptions note, reused by every branch where devices went
+  // away (leading space so it appends cleanly after the preceding sentence).
+  const expiredNote =
+    result.gone > 0
+      ? ` Removed ${result.gone} expired subscription${
+          result.gone === 1 ? '' : 's'
+        }.`
+      : ''
 
   if (result.sent === 0) {
     if (failures.length > 0) {
       // Live devices exist but the push service REJECTED the send — the
       // diagnosable case (usually a 403 VAPID mismatch). Give the actionable fix
       // plus the technical detail line for a maintainer reading a screenshot.
+      // Any devices pruned alongside the rejection are still reported.
       return {
-        text: failureCopy(dominantFailure(failures)),
+        text: `${failureCopy(dominantFailure(failures))}${expiredNote}`,
         tone: 'warn',
         detail,
       }
@@ -269,25 +278,19 @@ function testFeedback(
 
   const devices = `${result.sent} device${result.sent === 1 ? '' : 's'}`
   const base = `Sent to ${devices} — check for the notification.`
-  const expired =
-    result.gone > 0
-      ? ` Removed ${result.gone} expired subscription${
-          result.gone === 1 ? '' : 's'
-        }.`
-      : ''
 
   if (failures.length > 0) {
     // Partial: some devices got it, others were rejected. Deliver the success
     // count AND a secondary actionable line for the failing devices.
     return {
-      text: `${base}${expired} ${failureCopy(dominantFailure(failures))}`,
+      text: `${base}${expiredNote} ${failureCopy(dominantFailure(failures))}`,
       tone: 'warn',
       detail,
     }
   }
 
   return {
-    text: base + expired,
+    text: base + expiredNote,
     tone: 'success',
   }
 }
