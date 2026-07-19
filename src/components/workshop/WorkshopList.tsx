@@ -44,14 +44,12 @@ export default function WorkshopList({
   })
 
   const { data: signupsData, refetch: refetchSignups } =
-    api.workshop.getMySignups.useQuery(
-      {
-        userWorkOSId: userWorkOSId || '',
-      },
-      {
-        enabled: !!userWorkOSId,
-      },
-    )
+    api.workshop.getMySignups.useQuery(undefined, {
+      // Identity is resolved server-side from the WorkOS session; this gate is
+      // purely a client-side UX guard so the query doesn't fire before the page
+      // has established the signed-in user.
+      enabled: !!userWorkOSId,
+    })
 
   const signupMutation = api.workshop.signup.useMutation({
     onSuccess: (data) => {
@@ -121,10 +119,9 @@ export default function WorkshopList({
     }
 
     try {
+      // Identity (userWorkOSId/userEmail/userName) is intentionally NOT sent:
+      // the server binds the signup to the authenticated WorkOS session.
       await signupMutation.mutateAsync({
-        userEmail,
-        userName,
-        userWorkOSId,
         experienceLevel,
         operatingSystem,
         workshop: { _type: 'reference', _ref: workshopId },
