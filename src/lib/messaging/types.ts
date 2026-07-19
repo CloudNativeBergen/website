@@ -78,6 +78,17 @@ export interface ConversationWithContext {
   subject: string
   createdAt: string
   lastMessageAt: string
+  /**
+   * Ticketing state, projected so the organizer thread header can render its
+   * Resolve/Reopen, Assign and global-archive controls without a second
+   * round-trip. `status` is coalesced (absent ⇒ `'open'`); `assignedTo` is the
+   * dereffed organizer (null when unassigned); `archivedAt` is the GLOBAL archive
+   * timestamp (globally archived iff `archivedAt >= lastMessageAt`). All optional
+   * so the pre-ticketing shape still satisfies the type.
+   */
+  status?: ConversationStatus
+  assignedTo?: ConversationAssignee | null
+  archivedAt?: string | null
 }
 
 /** The newest message of a conversation, summarized for an inbox row (M6). */

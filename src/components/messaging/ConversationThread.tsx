@@ -10,8 +10,13 @@ import {
 } from 'react'
 import { useSession } from 'next-auth/react'
 import {
+  ArchiveBoxArrowDownIcon,
+  ArchiveBoxXMarkIcon,
+  ArrowUturnLeftIcon,
   BellIcon,
   BellSlashIcon,
+  CheckCircleIcon,
+  EllipsisHorizontalIcon,
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
@@ -21,8 +26,11 @@ import {
 } from '@/lib/messaging/links'
 import { errorCode } from '@/lib/messaging/trpc'
 import { formatRelativeTime } from '@/lib/notification/format'
+import { ModalShell } from '@/components/ModalShell'
 import type {
+  ConversationAssignee,
   ConversationPreference,
+  ConversationStatus,
   EmailOverride,
 } from '@/lib/messaging/types'
 
@@ -98,6 +106,31 @@ export interface ConversationThreadViewProps {
   onSetMuted?: (muted: boolean) => void
   onSetEmailOverride?: (override: EmailOverride) => void
   isSavingPreference?: boolean
+  /**
+   * Per-user "Archive for me" (ALL participants, T2d). When provided the prefs
+   * bar / overflow gains an Archive action that hides the thread from the
+   * caller's inbox until a new message resurfaces it (un-archiving lives on the
+   * Archived-view rows). Gated by `readOnly` like the other preference controls.
+   */
+  onArchiveForMe?: () => void
+  // --- Organizer ticketing controls (T2c). Each is rendered only when its
+  // handler is provided, so the speaker view (which passes none) is unchanged.
+  /** Current ticketing status; drives the Resolve/Reopen toggle label. */
+  status?: ConversationStatus
+  /** Organizer-only: flip the thread between open and resolved. */
+  onSetStatus?: (status: ConversationStatus) => void
+  /** The organizer picker options for the Assign menu (`{ _id, name }`). */
+  organizers?: ConversationAssignee[]
+  /** The currently-assigned organizer (null when unassigned). */
+  assignedTo?: ConversationAssignee | null
+  /** Organizer-only: (re)assign or unassign (`null`) the follow-up owner. */
+  onSetAssignee?: (assigneeId: string | null) => void
+  /** Whether the thread is GLOBALLY archived (organizer archive state). */
+  globallyArchived?: boolean
+  /** Organizer-only: set/clear the GLOBAL archive. */
+  onSetGlobalArchived?: (archived: boolean) => void
+  /** True while any organizer ticketing mutation is in flight (disables them). */
+  isSavingTicket?: boolean
 }
 
 function MessageSkeleton() {
@@ -150,55 +183,298 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
   )
 }
 
+/** The shared icon-button styling used by the header preference/ticketing actions. */
+const HEADER_BUTTON_CLASS =
+  'inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800'
+
+function MuteButton({
+  muted,
+  onSetMuted,
+  disabled,
+}: {
+  muted: boolean
+  onSetMuted: (muted: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSetMuted(!muted)}
+      disabled={disabled}
+      aria-pressed={muted}
+      title={muted ? 'Muted — click to unmute' : 'Mute this conversation'}
+      className={HEADER_BUTTON_CLASS}
+    >
+      {muted ? (
+        <BellSlashIcon className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <BellIcon className="h-4 w-4" aria-hidden="true" />
+      )}
+      {muted ? 'Muted' : 'Mute'}
+    </button>
+  )
+}
+
+function EmailOverrideSelect({
+  emailOverride,
+  onSetEmailOverride,
+  disabled,
+}: {
+  emailOverride: EmailOverride
+  onSetEmailOverride?: (override: EmailOverride) => void
+  disabled?: boolean
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+      <span>Emails</span>
+      <select
+        value={emailOverride}
+        disabled={disabled || !onSetEmailOverride}
+        onChange={(e) => onSetEmailOverride?.(e.target.value as EmailOverride)}
+        aria-label="Email notifications for this conversation"
+        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-brand-cloud-blue focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
+      >
+        <option value="default">Default</option>
+        <option value="on">Always</option>
+        <option value="off">Never</option>
+      </select>
+    </label>
+  )
+}
+
+/**
+ * SPEAKER preference bar: Mute + Emails, plus the per-user "Archive" action
+ * (T2d) when `onArchiveForMe` is provided. Every control is blocked under
+ * `readOnly` (impersonation).
+ */
 function PreferencesBar({
   preference,
   onSetMuted,
   onSetEmailOverride,
+  onArchiveForMe,
   isSavingPreference,
   readOnly = false,
 }: {
   preference: ConversationPreference
   onSetMuted: (muted: boolean) => void
   onSetEmailOverride?: (override: EmailOverride) => void
+  onArchiveForMe?: () => void
   isSavingPreference?: boolean
   /** Impersonation: render the controls but block every mutation. */
   readOnly?: boolean
 }) {
   const { muted, emailOverride } = preference
+  const disabled = isSavingPreference || readOnly
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
+      <MuteButton muted={muted} onSetMuted={onSetMuted} disabled={disabled} />
+      <EmailOverrideSelect
+        emailOverride={emailOverride}
+        onSetEmailOverride={onSetEmailOverride}
+        disabled={disabled}
+      />
+      {onArchiveForMe && (
+        // Icon-only so the three-control bar (Mute + Emails + Archive) stays
+        // compact enough at 393px to leave the thread subject room in the header.
+        <button
+          type="button"
+          onClick={onArchiveForMe}
+          disabled={disabled}
+          title="Archive this conversation"
+          aria-label="Archive this conversation"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          <ArchiveBoxArrowDownIcon className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * ORGANIZER thread controls (T2c): a visible Resolve/Reopen toggle and Mute
+ * button, with the lower-frequency actions (Assign, Emails, per-user Archive,
+ * global Archive) tucked into an overflow "…" menu so the header never crowds or
+ * wraps at 393px. Every mutation is blocked under `readOnly` (impersonation).
+ */
+function OrganizerThreadControls({
+  status,
+  onSetStatus,
+  preference,
+  onSetMuted,
+  onSetEmailOverride,
+  onArchiveForMe,
+  organizers = [],
+  assignedTo,
+  onSetAssignee,
+  globallyArchived = false,
+  onSetGlobalArchived,
+  isSavingPreference = false,
+  isSavingTicket = false,
+  readOnly = false,
+}: {
+  status?: ConversationStatus
+  onSetStatus: (status: ConversationStatus) => void
+  preference?: ConversationPreference
+  onSetMuted?: (muted: boolean) => void
+  onSetEmailOverride?: (override: EmailOverride) => void
+  onArchiveForMe?: () => void
+  organizers?: ConversationAssignee[]
+  assignedTo?: ConversationAssignee | null
+  onSetAssignee?: (assigneeId: string | null) => void
+  globallyArchived?: boolean
+  onSetGlobalArchived?: (archived: boolean) => void
+  isSavingPreference?: boolean
+  isSavingTicket?: boolean
+  readOnly?: boolean
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const resolved = status === 'resolved'
+  const ticketDisabled = isSavingTicket || readOnly
+  const prefDisabled = isSavingPreference || readOnly
+  const currentAssigneeId = assignedTo?._id ?? null
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Primary organizer action: Resolve / Reopen. */}
       <button
         type="button"
-        onClick={() => onSetMuted(!muted)}
-        disabled={isSavingPreference || readOnly}
-        aria-pressed={muted}
-        title={muted ? 'Muted — click to unmute' : 'Mute this conversation'}
-        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+        onClick={() => onSetStatus(resolved ? 'open' : 'resolved')}
+        disabled={ticketDisabled}
+        aria-pressed={resolved}
+        title={resolved ? 'Reopen this conversation' : 'Mark as resolved'}
+        className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 ${
+          resolved
+            ? 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+            : 'bg-green-600 text-white hover:bg-green-500'
+        }`}
       >
-        {muted ? (
-          <BellSlashIcon className="h-4 w-4" aria-hidden="true" />
+        {resolved ? (
+          <ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
         ) : (
-          <BellIcon className="h-4 w-4" aria-hidden="true" />
+          <CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
         )}
-        {muted ? 'Muted' : 'Mute'}
+        {resolved ? 'Reopen' : 'Resolve'}
       </button>
 
-      <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-        <span>Emails</span>
-        <select
-          value={emailOverride}
-          disabled={isSavingPreference || readOnly || !onSetEmailOverride}
-          onChange={(e) =>
-            onSetEmailOverride?.(e.target.value as EmailOverride)
-          }
-          aria-label="Email notifications for this conversation"
-          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-brand-cloud-blue focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
-        >
-          <option value="default">Default</option>
-          <option value="on">Always</option>
-          <option value="off">Never</option>
-        </select>
-      </label>
+      {onSetMuted && preference && (
+        <MuteButton
+          muted={preference.muted}
+          onSetMuted={onSetMuted}
+          disabled={prefDisabled}
+        />
+      )}
+
+      <button
+        type="button"
+        onClick={() => setMenuOpen(true)}
+        title="More actions"
+        aria-label="More conversation actions"
+        aria-haspopup="dialog"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-gray-300 dark:hover:bg-gray-800"
+      >
+        <EllipsisHorizontalIcon className="h-5 w-5" aria-hidden="true" />
+      </button>
+
+      <ModalShell
+        isOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        size="sm"
+        title="Conversation options"
+      >
+        <div className="space-y-5">
+          {/* Assign menu: Unassigned + every organizer. */}
+          {onSetAssignee && (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                Assign to
+              </p>
+              <div className="-mx-1 flex flex-col">
+                {[{ _id: null, name: 'Unassigned' }, ...organizers].map(
+                  (option) => {
+                    const selected = currentAssigneeId === option._id
+                    return (
+                      <button
+                        key={option._id ?? 'unassigned'}
+                        type="button"
+                        onClick={() => onSetAssignee(option._id)}
+                        disabled={ticketDisabled}
+                        aria-pressed={selected}
+                        className={`flex min-h-[44px] items-center justify-between rounded-lg px-3 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 ${
+                          selected
+                            ? 'bg-brand-cloud-blue/10 font-semibold text-brand-cloud-blue dark:bg-blue-400/10 dark:text-blue-300'
+                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <span className="truncate">{option.name}</span>
+                        {selected && (
+                          <CheckCircleIcon
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
+                    )
+                  },
+                )}
+              </div>
+            </div>
+          )}
+
+          {onSetMuted && preference && onSetEmailOverride && (
+            <div>
+              <p className="mb-1.5 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+                Notifications
+              </p>
+              <EmailOverrideSelect
+                emailOverride={preference.emailOverride}
+                onSetEmailOverride={onSetEmailOverride}
+                disabled={prefDisabled}
+              />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1 border-t border-gray-200 pt-4 dark:border-gray-700">
+            {onArchiveForMe && (
+              <button
+                type="button"
+                onClick={onArchiveForMe}
+                disabled={prefDisabled}
+                className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <ArchiveBoxArrowDownIcon
+                  className="h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                />
+                Archive for me
+              </button>
+            )}
+            {onSetGlobalArchived && (
+              <button
+                type="button"
+                onClick={() => onSetGlobalArchived(!globallyArchived)}
+                disabled={ticketDisabled}
+                className="flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {globallyArchived ? (
+                  <ArchiveBoxXMarkIcon
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ArchiveBoxArrowDownIcon
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  />
+                )}
+                {globallyArchived
+                  ? 'Unarchive for everyone'
+                  : 'Archive for everyone'}
+              </button>
+            )}
+          </div>
+        </div>
+      </ModalShell>
     </div>
   )
 }
@@ -228,6 +504,15 @@ export function ConversationThreadView({
   onSetMuted,
   onSetEmailOverride,
   isSavingPreference = false,
+  onArchiveForMe,
+  status,
+  onSetStatus,
+  organizers,
+  assignedTo,
+  onSetAssignee,
+  globallyArchived = false,
+  onSetGlobalArchived,
+  isSavingTicket = false,
 }: ConversationThreadViewProps) {
   const [draft, setDraft] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -366,23 +651,46 @@ export function ConversationThreadView({
       // of a stretched card.
       className={fillHeight ? 'flex min-h-0 flex-col' : 'flex flex-col'}
     >
-      {(subject || onSetMuted) && (
+      {(subject || onSetMuted || onSetStatus) && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
           {subject ? (
-            <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+            <h2 className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-white">
               {subject}
             </h2>
           ) : (
             <span />
           )}
-          {onSetMuted && preference && (
-            <PreferencesBar
+          {/* ORGANIZER (onSetStatus present) → the ticketing control cluster with
+              an overflow menu; SPEAKER → the lighter Mute/Emails/Archive bar. */}
+          {onSetStatus ? (
+            <OrganizerThreadControls
+              status={status}
+              onSetStatus={onSetStatus}
               preference={preference}
               onSetMuted={onSetMuted}
               onSetEmailOverride={onSetEmailOverride}
+              onArchiveForMe={onArchiveForMe}
+              organizers={organizers}
+              assignedTo={assignedTo}
+              onSetAssignee={onSetAssignee}
+              globallyArchived={globallyArchived}
+              onSetGlobalArchived={onSetGlobalArchived}
               isSavingPreference={isSavingPreference}
+              isSavingTicket={isSavingTicket}
               readOnly={readOnly}
             />
+          ) : (
+            onSetMuted &&
+            preference && (
+              <PreferencesBar
+                preference={preference}
+                onSetMuted={onSetMuted}
+                onSetEmailOverride={onSetEmailOverride}
+                onArchiveForMe={onArchiveForMe}
+                isSavingPreference={isSavingPreference}
+                readOnly={readOnly}
+              />
+            )
           )}
         </div>
       )}
@@ -733,6 +1041,44 @@ export function ConversationThread({
     onSuccess: invalidate,
   })
 
+  // ORGANIZER ticketing (T2c/T2e): status / assignee / global-archive. These are
+  // organizer-only capabilities, so the queries/mutations are gated on
+  // `isOrganizer` — a speaker container never fetches organizers or calls them.
+  const isOrganizer = audience === 'organizer'
+  const statusMutation = api.message.setStatus.useMutation({
+    onSuccess: invalidate,
+  })
+  const assigneeMutation = api.message.setAssignee.useMutation({
+    onSuccess: invalidate,
+  })
+  const archivedMutation = api.message.setArchived.useMutation({
+    onSuccess: invalidate,
+  })
+  // The organizer picker for the Assign menu — the cheapest existing organizer
+  // list the codebase offers (also used by the sponsor CRM assignee picker).
+  // Fetched only for an organizer viewing an EXISTING conversation.
+  const organizersQuery = api.sponsor.crm.listOrganizers.useQuery(undefined, {
+    enabled: isOrganizer && conversationExists,
+    staleTime: 5 * 60_000,
+  })
+  const organizers = useMemo(
+    () =>
+      (organizersQuery.data ?? []).map((o) => ({ _id: o._id, name: o.name })),
+    [organizersQuery.data],
+  )
+  const isSavingTicket =
+    statusMutation.isPending ||
+    assigneeMutation.isPending ||
+    archivedMutation.isPending
+
+  // Globally archived IFF archivedAt >= lastMessageAt (a newer message
+  // auto-resurfaces it — the same timestamp rule the data layer applies).
+  // `conversation` is resolved above (shared with the mark-read wiring).
+  const globallyArchived =
+    !!conversation?.archivedAt &&
+    !!conversation.lastMessageAt &&
+    conversation.archivedAt >= conversation.lastMessageAt
+
   const handleSend = (body: string) => {
     // A not-yet-created proposal thread must be opened via `proposalId`; once it
     // exists (or for a real conversation id) post directly to the conversation.
@@ -782,6 +1128,45 @@ export function ConversationThread({
           : undefined
       }
       isSavingPreference={preferenceMutation.isPending}
+      // Per-user "Archive for me" (ALL participants) — rides setPreference. Only
+      // offered once the conversation exists (nothing to archive before then).
+      onArchiveForMe={
+        conversationExists && convId
+          ? () =>
+              preferenceMutation.mutate({
+                conversationId: convId,
+                archived: true,
+              })
+          : undefined
+      }
+      // ORGANIZER ticketing controls — passed only for an organizer viewing an
+      // existing conversation, so a speaker container never wires them.
+      status={conversation?.status}
+      assignedTo={conversation?.assignedTo}
+      organizers={organizers}
+      globallyArchived={globallyArchived}
+      isSavingTicket={isSavingTicket}
+      onSetStatus={
+        isOrganizer && conversationExists && convId
+          ? (nextStatus) =>
+              statusMutation.mutate({
+                conversationId: convId,
+                status: nextStatus,
+              })
+          : undefined
+      }
+      onSetAssignee={
+        isOrganizer && conversationExists && convId
+          ? (assigneeId) =>
+              assigneeMutation.mutate({ conversationId: convId, assigneeId })
+          : undefined
+      }
+      onSetGlobalArchived={
+        isOrganizer && conversationExists && convId
+          ? (archived) =>
+              archivedMutation.mutate({ conversationId: convId, archived })
+          : undefined
+      }
     />
   )
 }

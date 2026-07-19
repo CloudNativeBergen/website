@@ -642,6 +642,12 @@ export async function getOrganizerSpeakerIds(): Promise<string[]> {
   if (organizerCache && organizerCache.expiresAt > now) {
     return organizerCache.ids
   }
+  // ONLY successes are cached (R2): the `await` throws on a failed read BEFORE
+  // the cache assignment below, so a transient Sanity failure is never poisoned
+  // into the cache as an empty organizer set (which would, e.g., vacuously empty
+  // the needs-reply view or misroute stale nudges for a full TTL). A genuinely
+  // empty result (`null`/`[]` — a conference with no organizers yet) IS a
+  // success and is cached normally.
   const ids = await clientReadUncached.fetch<string[]>(
     `*[_type == "speaker" && isOrganizer == true][0...${ORGANIZER_FETCH_LIMIT}]._id`,
   )

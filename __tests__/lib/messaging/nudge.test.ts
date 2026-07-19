@@ -31,6 +31,9 @@ import {
   staleConversationCutoff,
   STALE_AFTER_DAYS,
 } from '@/lib/messaging/nudge'
+// The nudge selection MUST use the SAME last-author projection as the inbox
+// needs-reply filter (single home — R1).
+import { LAST_AUTHOR_REF } from '@/lib/messaging/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
@@ -105,6 +108,17 @@ describe('selection GROQ encodes the stale policy', () => {
     expect(query).toContain('in $organizerIds)')
     expect(params.organizerIds).toEqual(['org-1', 'org-2'])
     expect(typeof params.cutoff).toBe('string')
+  })
+
+  it('uses the SHARED LAST_AUTHOR_REF projection (single home, R1)', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    await nudgeStaleConversations()
+    const [query] = readMock.fetch.mock.calls[0]
+    // The exact exported string appears (both in `defined(...)` and the
+    // `!(... in $organizerIds)` clauses), proving the nudge never re-declares a
+    // divergent copy.
+    expect(query).toContain(LAST_AUTHOR_REF)
+    expect(query.split(LAST_AUTHOR_REF).length - 1).toBe(2)
   })
 
   it('no-ops (no notifications, no writes) when nothing is stale', async () => {

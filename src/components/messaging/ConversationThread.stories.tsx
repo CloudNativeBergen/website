@@ -61,6 +61,13 @@ const defaultPreference: ConversationPreference = {
   emailOverride: 'default',
 }
 
+/** Organizer picker options for the Assign menu. */
+const organizers = [
+  { _id: 'org-1', name: 'Ola Organizer' },
+  { _id: 'org-2', name: 'Grace Hopper' },
+  { _id: 'org-3', name: 'Linus Berg' },
+]
+
 const meta = {
   title: 'Components/Messaging/ConversationThread',
   component: ConversationThreadView,
@@ -75,6 +82,9 @@ const meta = {
     onSetEmailOverride: fn(),
     emptyText: 'Start the conversation with the organizers.',
   },
+  // NOTE: the organizer ticketing handlers (onSetStatus/onSetAssignee/…) are set
+  // PER-STORY, not on `meta`, so the existing speaker-facing stories keep their
+  // Mute/Emails bar unchanged.
   decorators: [
     // `.dark` is applied at the OUTERMOST node (via `parameters.dark`) so every
     // `dark:` variant inside the card activates for the dark capture.
@@ -232,6 +242,99 @@ export const ReadOnlyImpersonation: Story = {
     preference: defaultPreference,
     readOnly: true,
   },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/**
+ * ORGANIZER thread header (T2c): a visible green Resolve button + Mute, with the
+ * lower-frequency actions (Assign, Emails, per-user & global Archive) behind the
+ * overflow "…" menu so the header never crowds at 393px. Assigned to Ola.
+ */
+export const OrganizerControls: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+    status: 'open',
+    onSetStatus: fn(),
+    organizers,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    onSetAssignee: fn(),
+    globallyArchived: false,
+    onSetGlobalArchived: fn(),
+    onArchiveForMe: fn(),
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+export const OrganizerControlsDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+    status: 'open',
+    onSetStatus: fn(),
+    organizers,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    onSetAssignee: fn(),
+    globallyArchived: false,
+    onSetGlobalArchived: fn(),
+    onArchiveForMe: fn(),
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/** A RESOLVED organizer thread — the primary button flips to "Reopen". */
+export const OrganizerControlsResolved: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    status: 'resolved',
+    onSetStatus: fn(),
+    organizers,
+    assignedTo: null,
+    onSetAssignee: fn(),
+    globallyArchived: false,
+    onSetGlobalArchived: fn(),
+    onArchiveForMe: fn(),
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/**
+ * SPEAKER thread header with the per-user Archive affordance (T2d): Archive joins
+ * the existing Mute / Emails bar. No organizer ticketing controls.
+ */
+export const SpeakerArchiveAffordance: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    onArchiveForMe: fn(),
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+export const SpeakerArchiveAffordanceDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    onArchiveForMe: fn(),
+  },
+  parameters: { dark: true },
   render: (args) => (
     <ConversationThreadView {...args} messages={makeMessages()} />
   ),

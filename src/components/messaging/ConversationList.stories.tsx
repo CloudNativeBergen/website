@@ -111,6 +111,73 @@ const makeLongItems = (): ConversationListItem[] => [
   },
 ]
 
+/**
+ * ORGANIZER rows carrying the ticketing metadata (T2b): a needs-reply amber dot,
+ * a gray Resolved chip, and an assignee avatar+initial at the row's trailing
+ * edge. Row 1 needs a reply and is assigned; row 2 is resolved; row 3 is a plain
+ * assigned thread.
+ */
+const makeOrganizerItems = (): ConversationListItem[] => [
+  {
+    _id: 'conversation.proposal.talk-1',
+    conversationType: 'proposal',
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    proposalId: 'talk-1',
+    proposalTitle: 'Scaling Kubernetes to 10,000 nodes',
+    createdAt: minutesAgo(60 * 24 * 3),
+    lastMessageAt: minutesAgo(24),
+    unreadCount: 2,
+    lastMessage: {
+      authorId: 'speaker-1',
+      authorName: 'Kari Nordmann',
+      excerpt: 'Any update on the review? Happy to tweak the abstract.',
+    },
+    counterpart: { name: 'Kari Nordmann' },
+    status: 'open',
+    needsReply: true,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    archived: false,
+  },
+  {
+    _id: 'conversation.abc123',
+    conversationType: 'general',
+    subject: 'Question about speaker travel',
+    createdAt: minutesAgo(60 * 24 * 2),
+    lastMessageAt: minutesAgo(60 * 5),
+    unreadCount: 0,
+    lastMessage: {
+      authorId: 'org-2',
+      authorName: 'Grace Hopper',
+      excerpt: 'Sorted — reimbursement is on its way. Closing this out.',
+    },
+    counterpart: { name: 'Grace Hopper' },
+    status: 'resolved',
+    needsReply: false,
+    assignedTo: null,
+    archived: false,
+  },
+  {
+    _id: 'conversation.proposal.talk-2',
+    conversationType: 'proposal',
+    subject: 'Designing for Failure',
+    proposalId: 'talk-2',
+    proposalTitle: 'Designing for Failure',
+    createdAt: minutesAgo(60 * 24 * 10),
+    lastMessageAt: minutesAgo(60 * 24 * 4),
+    unreadCount: 0,
+    lastMessage: {
+      authorId: 'org-1',
+      authorName: 'Ola Organizer',
+      excerpt: 'Thanks! Could you keep the demo under ten minutes?',
+    },
+    counterpart: { name: 'Åsa Berg' },
+    status: 'open',
+    needsReply: false,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    archived: false,
+  },
+]
+
 const meta = {
   title: 'Components/Messaging/ConversationList',
   component: ConversationList,
@@ -203,4 +270,66 @@ export const LongContentDark: Story = {
   args: { items: [], isOrganizer: false, callerId: CALLER_ID },
   parameters: { dark: true },
   render: (args) => <ConversationList {...args} items={makeLongItems()} />,
+}
+
+/**
+ * Organizer rows with ticketing metadata (T2b): needs-reply amber dot + assignee
+ * avatar (row 1), Resolved chip (row 2), assigned but not needing a reply (row 3).
+ */
+export const OrganizerTicketing: Story = {
+  args: { items: [], isOrganizer: true },
+  render: (args) => <ConversationList {...args} items={makeOrganizerItems()} />,
+}
+
+export const OrganizerTicketingDark: Story = {
+  args: { items: [], isOrganizer: true },
+  parameters: { dark: true },
+  render: (args) => <ConversationList {...args} items={makeOrganizerItems()} />,
+}
+
+/**
+ * Speaker rows only ever surface the Resolved chip (their signal the matter is
+ * closed) — no needs-reply dot, no assignee.
+ */
+export const SpeakerResolvedChip: Story = {
+  args: { items: [], isOrganizer: false, callerId: CALLER_ID },
+  render: (args) => (
+    <ConversationList
+      {...args}
+      items={makeOrganizerItems().map((item) => ({ ...item }))}
+    />
+  ),
+}
+
+/**
+ * Archived view: every row shows a trailing Unarchive button (T2d). Shown for
+ * the organizer audience (rows also carry the assignee avatar).
+ */
+export const ArchivedWithUnarchive: Story = {
+  args: {
+    items: [],
+    isOrganizer: true,
+    onUnarchive: () => {},
+  },
+  render: (args) => (
+    <ConversationList
+      {...args}
+      items={makeOrganizerItems().map((item) => ({ ...item, archived: true }))}
+    />
+  ),
+}
+
+export const ArchivedWithUnarchiveDark: Story = {
+  args: {
+    items: [],
+    isOrganizer: true,
+    onUnarchive: () => {},
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationList
+      {...args}
+      items={makeOrganizerItems().map((item) => ({ ...item, archived: true }))}
+    />
+  ),
 }

@@ -137,6 +137,10 @@ describe('inbox views — ORGANIZER GROQ predicates', () => {
     expect(query).toContain("coalesce(status, 'open') != 'resolved'")
     // The last-message author must not be in the organizer set.
     expect(query).toContain('in $organizerIds)')
+    // R2 guard: with an empty organizer set `x in []` is false, so the negation
+    // would vacuously match EVERY thread. The `count(...) > 0` gate prevents the
+    // needs-reply view flooding on a misconfigured/transiently-empty org set.
+    expect(query).toContain('count($organizerIds) > 0')
     expect(params.organizerIds).toEqual(['org-1', 'org-2'])
   })
 
@@ -298,6 +302,20 @@ describe('derived needsReply (ORGANIZER audience)', () => {
       view: 'all',
     })
     expect(noMsg.needsReply).toBe(false)
+  })
+
+  it('is FALSE for an ORGANIZER when the organizer set is empty (R2 guard)', async () => {
+    // A misconfigured conference (or a transient organizer-fetch that resolves
+    // empty) must NOT flag every thread as needing a reply — nobody can reply.
+    vi.mocked(getOrganizerSpeakerIds).mockResolvedValue([])
+    readMock.fetch.mockResolvedValueOnce([orgRow({})]).mockResolvedValueOnce([])
+    const [row] = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+      view: 'all',
+    })
+    expect(row.needsReply).toBe(false)
   })
 
   it('is always false for a SPEAKER caller', async () => {

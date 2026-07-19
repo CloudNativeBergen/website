@@ -6,6 +6,10 @@ import {
 } from '@/lib/notification/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 import { conversationLinkPath } from './links'
+// Single home for the last-author projection (R1): sharing the exact string with
+// the inbox `needs-reply` filter guarantees the nudge selection and the inbox can
+// never disagree on which thread's ball is in the organizers' court.
+import { LAST_AUTHOR_REF } from './sanity'
 
 /**
  * Server-only stale-thread nudge for speaker↔organizer messaging (ticketing).
@@ -69,11 +73,6 @@ interface StaleConversation {
   assignedToId?: string | null
   lastMessageAt: string
 }
-
-// The newest message's author (null for a message-less thread). Same shape used
-// by the inbox `needs-reply` filter.
-const LAST_AUTHOR_REF =
-  '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
 
 /**
  * Emit stale-thread nudges. See the module CONTRACT — this never throws.
