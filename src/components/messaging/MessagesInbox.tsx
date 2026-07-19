@@ -26,6 +26,7 @@ const tabId = (view: ConversationView) => `messages-tab-${view}`
 const ORGANIZER_TABS: { view: ConversationView; label: string }[] = [
   { view: 'active', label: 'Active' },
   { view: 'needs-reply', label: 'Needs reply' },
+  { view: 'my-teams', label: 'My teams' },
   { view: 'unassigned', label: 'Unassigned' },
   { view: 'mine', label: 'Mine' },
   { view: 'resolved', label: 'Resolved' },
@@ -50,6 +51,8 @@ function countForView(
       return counts.active
     case 'needs-reply':
       return counts.needsReply
+    case 'my-teams':
+      return counts.myTeams
     case 'unassigned':
       return counts.unassigned
     case 'mine':
@@ -96,10 +99,13 @@ function OrganizerViewTabs({
   view,
   counts,
   onChange,
+  tabs,
 }: {
   view: ConversationView
   counts: ConversationViewCounts | undefined
   onChange: (view: ConversationView) => void
+  /** The visible organizer tabs — `My teams` is dropped when no team is configured. */
+  tabs: { view: ConversationView; label: string }[]
 }) {
   return (
     <div
@@ -107,7 +113,7 @@ function OrganizerViewTabs({
       aria-label="Filter conversations"
       className="no-scrollbar flex flex-1 gap-1 overflow-x-auto"
     >
-      {ORGANIZER_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = tab.view === view
         const count = countForView(tab.view, counts)
         return (
@@ -202,7 +208,35 @@ export function MessagesInbox({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const tabs = isOrganizer ? ORGANIZER_TABS : SPEAKER_TABS
+
+  // TEAMS-3 soft lens: the caller's teams + every configured team (key/title).
+  // Organizer-only — speakers never see the team surfaces. When NO team is
+  // configured conference-wide the `My teams` tab is an inert lens, so it (and
+  // the per-row team chips) are hidden entirely rather than cluttering the UI.
+  const { data: teamLens } = api.message.teamLens.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    enabled: isOrganizer,
+  })
+  const teamsConfigured = (teamLens?.teams.length ?? 0) > 0
+
+  // Drop the `My teams` tab when no team is configured (inert-lens hide). The
+  // same filtered list drives URL-view validation below, so a stale
+  // `?view=my-teams` correctly falls back to `active` on a team-less conference.
+  const organizerTabs = teamsConfigured
+    ? ORGANIZER_TABS
+    : ORGANIZER_TABS.filter((t) => t.view !== 'my-teams')
+
+  // Routing-team TITLES for the per-row chips (L2): a sponsor thread → `sponsors`
+  // team title, everything else → `cfp` team title. Undefined ⇒ no chips.
+  const routingTeamTitles =
+    isOrganizer && teamsConfigured
+      ? {
+          sponsors: teamLens?.teams.find((t) => t.key === 'sponsors')?.title,
+          cfp: teamLens?.teams.find((t) => t.key === 'cfp')?.title,
+        }
+      : undefined
+
+  const tabs = isOrganizer ? organizerTabs : SPEAKER_TABS
   const paramView = searchParams.get('view')
   const urlView: ConversationView =
     paramView && tabs.some((t) => t.view === paramView)
@@ -306,6 +340,7 @@ export function MessagesInbox({
             view={view}
             counts={viewCounts}
             onChange={setView}
+            tabs={organizerTabs}
           />
         ) : (
           <div className="min-w-0 flex-1">
@@ -341,6 +376,7 @@ export function MessagesInbox({
         isOrganizer={isOrganizer}
         callerId={callerId}
         view={view}
+        routingTeamTitles={routingTeamTitles}
         isLoading={isLoading}
         isError={isError}
         hasMore={hasNextPage}

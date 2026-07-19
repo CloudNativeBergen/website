@@ -45,6 +45,11 @@ const mockOrganizers = [
   { _id: 'org-3', name: 'Carol Williams', email: 'carol@example.com' },
 ]
 
+const mockTeams = [
+  { key: 'sponsors', title: 'Sales' },
+  { key: 'cfp', title: 'Programme' },
+]
+
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMFilterBar',
   component: SponsorCRMFilterBar,
@@ -69,6 +74,8 @@ const meta = {
     organizers: mockOrganizers,
     assignedToFilter: undefined,
     onSetOrganizer: fn(),
+    teams: mockTeams,
+    onSetTeam: fn(),
     tagsFilter: [],
     onToggleTag: fn(),
     onClearAllFilters: fn(),
@@ -115,6 +122,16 @@ export const WithOwnerFilter: Story = {
 export const WithUnassignedFilter: Story = {
   args: {
     assignedToFilter: 'unassigned',
+  },
+}
+
+/**
+ * TEAMS-3 (L3): the Owner dropdown gains a "Teams" option group; selecting a
+ * team filters owners to that team's members. Shown as an active Team pill here.
+ */
+export const WithTeamFilter: Story = {
+  args: {
+    teamFilter: 'sponsors',
   },
 }
 

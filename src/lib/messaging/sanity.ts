@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import { getViewerTeamKeys } from '@/lib/teams'
 import type {
   AccessSpeaker,
   ConversationListItem,
@@ -166,7 +167,12 @@ export const SPEAKER_SCOPE_PREDICATE =
 export function rawViewPredicate(
   view: ConversationView,
   isOrganizer: boolean,
-): { predicate: string; needsOrganizerIds: boolean } {
+): {
+  predicate: string
+  needsOrganizerIds: boolean
+  /** True only for `my-teams`: the caller binds `$myTeamKeys` for this view. */
+  needsMyTeamKeys?: boolean
+} {
   if (!isOrganizer) {
     // Speakers: only their OWN preference archive hides a thread. Global archive
     // and status are organizer-side concepts a speaker never filters on.
@@ -185,6 +191,18 @@ export function rawViewPredicate(
       return {
         predicate: `${active} && ${NEEDS_REPLY}`,
         needsOrganizerIds: true,
+      }
+    case 'my-teams':
+      // The thread's ROUTING team must be one of the caller's teams: a sponsor
+      // thread maps to `sponsors`, everything else to `cfp` (the TEAMS-2 map).
+      // INERT when the caller is on no team — `count($myTeamKeys) == 0` then
+      // matches every active thread, so the lens is a soft filter that never
+      // hides a thread the caller would otherwise see. `$myTeamKeys` is bound by
+      // the caller (see needsMyTeamKeys).
+      return {
+        predicate: `${active} && (count($myTeamKeys) == 0 || (conversationType == "sponsor" && "sponsors" in $myTeamKeys) || (conversationType != "sponsor" && "cfp" in $myTeamKeys))`,
+        needsOrganizerIds: false,
+        needsMyTeamKeys: true,
       }
     case 'unassigned':
       return {
@@ -221,11 +239,19 @@ export function rawViewPredicate(
 function buildViewPredicate(
   view: ConversationView,
   isOrganizer: boolean,
-): { predicate: string; needsOrganizerIds: boolean } {
-  const { predicate, needsOrganizerIds } = rawViewPredicate(view, isOrganizer)
+): {
+  predicate: string
+  needsOrganizerIds: boolean
+  needsMyTeamKeys?: boolean
+} {
+  const { predicate, needsOrganizerIds, needsMyTeamKeys } = rawViewPredicate(
+    view,
+    isOrganizer,
+  )
   return {
     predicate: predicate ? ` && ${predicate}` : '',
     needsOrganizerIds,
+    needsMyTeamKeys,
   }
 }
 
@@ -668,12 +694,18 @@ export async function listConversationsForSpeaker({
     ? await getOrganizerSpeakerIds()
     : null
 
-  const { predicate: viewPredicate, needsOrganizerIds } = buildViewPredicate(
-    view,
-    isOrganizer,
-  )
+  const {
+    predicate: viewPredicate,
+    needsOrganizerIds,
+    needsMyTeamKeys,
+  } = buildViewPredicate(view, isOrganizer)
   if (needsOrganizerIds) {
     params.organizerIds = organizerIdsUpFront ?? []
+  }
+  // `my-teams` (organizer-only) filters on the caller's team keys; an empty set
+  // makes the view inert (matches every active thread) — see rawViewPredicate.
+  if (needsMyTeamKeys) {
+    params.myTeamKeys = await getViewerTeamKeys(conferenceId, speakerId)
   }
 
   // `lastMessage` is a correlated subquery (newest message per conversation) so
@@ -976,12 +1008,21 @@ export async function getConversationViewCounts({
 
   // Build one `count()` field per relevant view from the shared predicates.
   const views: ConversationView[] = isOrganizer
-    ? ['active', 'needs-reply', 'unassigned', 'mine', 'resolved', 'archived']
+    ? [
+        'active',
+        'needs-reply',
+        'my-teams',
+        'unassigned',
+        'mine',
+        'resolved',
+        'archived',
+      ]
     : ['active', 'archived']
   // Stable field keys (the enum's hyphenated names aren't valid identifiers).
   const KEY: Record<string, keyof ConversationViewCounts> = {
     active: 'active',
     'needs-reply': 'needsReply',
+    'my-teams': 'myTeams',
     unassigned: 'unassigned',
     mine: 'mine',
     resolved: 'resolved',
@@ -990,8 +1031,14 @@ export async function getConversationViewCounts({
 
   const fields: string[] = []
   for (const view of views) {
-    const { predicate, needsOrganizerIds } = rawViewPredicate(view, isOrganizer)
+    const { predicate, needsOrganizerIds, needsMyTeamKeys } = rawViewPredicate(
+      view,
+      isOrganizer,
+    )
     if (needsOrganizerIds) params.organizerIds = await getOrganizerSpeakerIds()
+    if (needsMyTeamKeys) {
+      params.myTeamKeys = await getViewerTeamKeys(conferenceId, speakerId)
+    }
     const filter = predicate ? ` && ${predicate}` : ''
     fields.push(`"${KEY[view]}": count(*[${base}${scope}${filter}])`)
   }
@@ -1006,6 +1053,7 @@ export async function getConversationViewCounts({
   }
   if (isOrganizer) {
     counts.needsReply = result?.needsReply ?? 0
+    counts.myTeams = result?.myTeams ?? 0
     counts.unassigned = result?.unassigned ?? 0
     counts.mine = result?.mine ?? 0
     counts.resolved = result?.resolved ?? 0

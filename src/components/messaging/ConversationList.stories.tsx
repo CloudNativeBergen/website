@@ -485,3 +485,33 @@ export const SponsorThreadRowDark: Story = {
   parameters: { dark: true },
   render: (args) => <ConversationList {...args} items={makeSponsorItems()} />,
 }
+
+/**
+ * TEAMS-3 (L2): per-row TEAM chips. With teams configured, the amber sponsor row
+ * chip shows the sponsors-team TITLE ('Sales' — MERGED with, not duplicating,
+ * the "Sponsor" chip) and non-sponsor rows gain an indigo cfp-team chip
+ * ('Programme') beside the gray Proposal type chip. `routingTeamTitles` drives it;
+ * omitting it falls back to today's bare "Sponsor" chip.
+ */
+const TEAM_TITLES = { sponsors: 'Sales', cfp: 'Programme' }
+
+export const TeamChips: Story = {
+  args: {
+    items: [],
+    isOrganizer: true,
+    view: 'active',
+    routingTeamTitles: TEAM_TITLES,
+  },
+  render: (args) => <ConversationList {...args} items={makeSponsorItems()} />,
+}
+
+export const TeamChipsDark: Story = {
+  args: {
+    items: [],
+    isOrganizer: true,
+    view: 'active',
+    routingTeamTitles: TEAM_TITLES,
+  },
+  parameters: { dark: true },
+  render: (args) => <ConversationList {...args} items={makeSponsorItems()} />,
+}

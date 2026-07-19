@@ -18,5 +18,11 @@ export {
   resolveTeamEmailIdentity,
 } from './resolve'
 export { resolveRoutedOrganizerIds } from './routing'
+export {
+  getViewerTeamLens,
+  getViewerTeamKeys,
+  type ViewerTeamLens,
+} from './viewer'
 export { formatTeamSummary } from './format'
+export { teamMembersForKey } from './members'
 export { TEAM_KEY_PATTERN, isValidTeamKey, countTeamKey } from './validation'

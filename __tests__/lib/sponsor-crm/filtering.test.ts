@@ -72,4 +72,28 @@ describe('listSponsorsForConference filtering', () => {
       expect.objectContaining({ assignedTo: 'user-1' }),
     )
   })
+
+  it('should apply the team assignedToIds filter (L3)', async () => {
+    mockFetch.mockResolvedValue([])
+    await listSponsorsForConference('conf-123', {
+      assignedToIds: ['user-1', 'user-2'],
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('&& assignedTo._ref in $assignedToIds'),
+      expect.objectContaining({ assignedToIds: ['user-1', 'user-2'] }),
+    )
+  })
+
+  it('should prefer the team filter over a bare assignedTo when both are set', async () => {
+    mockFetch.mockResolvedValue([])
+    await listSponsorsForConference('conf-123', {
+      assignedTo: 'user-1',
+      assignedToIds: ['user-2', 'user-3'],
+    })
+
+    const [query] = mockFetch.mock.calls[0]
+    expect(query).toContain('&& assignedTo._ref in $assignedToIds')
+    expect(query).not.toContain('&& assignedTo._ref == $assignedTo')
+  })
 })

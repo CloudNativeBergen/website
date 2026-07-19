@@ -18,6 +18,10 @@ import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
 import { getAllTravelSupport } from '@/lib/travel-support/sanity'
 import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
+import { getConferenceTeams } from '@/lib/teams'
+import { getConversationViewCounts } from '@/lib/messaging/sanity'
+import { getVolunteersByConference } from '@/lib/volunteer/sanity'
+import { VolunteerStatus } from '@/lib/volunteer/types'
 import { getAuthSession } from '@/lib/auth'
 import { clientWrite } from '@/lib/sanity/client'
 import {
@@ -37,6 +41,8 @@ import type {
   TravelSupportData,
   ScheduleStatusData,
   QuickAction,
+  MyAreasData,
+  MyAreaCard,
 } from '@/lib/dashboard/data-types'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 
@@ -47,6 +53,113 @@ async function requireOrganizer(): Promise<void> {
   if (!session?.speaker?.isOrganizer) {
     throw new Error('Unauthorized: organizer access required')
   }
+}
+
+// --- My Areas (TEAMS-3, L4) ---
+
+/**
+ * The viewer's "My areas": one card per team the CURRENT organizer belongs to,
+ * each with a couple of needs-attention counts that deep-link to the filtered
+ * surface. A SOFT LENS — read-only convenience scoped to the viewer's teams, no
+ * access implications (docs/ORGANIZER_TEAMS.md).
+ *
+ * COST: gated on membership so only the teams the viewer is actually on trigger
+ * a read, and every count reuses an EXISTING source (no new aggregate query):
+ *  - `cfp`        → `getConversationViewCounts` (one bounded GROQ; needs-reply +
+ *                   unassigned inbox threads),
+ *  - `sponsors`   → `listSponsorsForConference({ unassignedOnly })` length,
+ *  - `volunteers` → `getVolunteersByConference` filtered to PENDING.
+ * A viewer on none of these well-known teams still gets a titled card (no
+ * metrics). Returns `{ areas: [] }` when the viewer is on no team at all.
+ */
+export async function fetchMyAreasData(
+  conferenceId: string,
+): Promise<MyAreasData> {
+  await requireOrganizer()
+  const session = await getAuthSession()
+  const speakerId = session?.speaker?._id
+  if (!speakerId) return { areas: [] }
+
+  const teams = await getConferenceTeams(conferenceId)
+  const myTeams = teams.filter((t) => t.members.includes(speakerId))
+  if (myTeams.length === 0) return { areas: [] }
+
+  const myKeys = new Set(myTeams.map((t) => t.key))
+
+  // Fetch each area's source ONCE, and only when the viewer is on that team.
+  const viewCounts = myKeys.has('cfp')
+    ? await getConversationViewCounts({
+        speakerId,
+        isOrganizer: true,
+        conferenceId,
+      })
+    : null
+
+  let unassignedSponsors = 0
+  if (myKeys.has('sponsors')) {
+    const { sponsors } = await listSponsorsForConference(conferenceId, {
+      unassignedOnly: true,
+    })
+    unassignedSponsors = sponsors?.length ?? 0
+  }
+
+  let pendingVolunteers = 0
+  if (myKeys.has('volunteers')) {
+    const { volunteers } = await getVolunteersByConference(conferenceId)
+    pendingVolunteers = volunteers.filter(
+      (v) => v.status === VolunteerStatus.PENDING,
+    ).length
+  }
+
+  const areas: MyAreaCard[] = myTeams.map((team) => {
+    switch (team.key) {
+      case 'cfp':
+        return {
+          key: team.key,
+          title: team.title,
+          metrics: [
+            {
+              label: 'Needs reply',
+              count: viewCounts?.needsReply ?? 0,
+              href: '/admin/messages?view=needs-reply',
+            },
+            {
+              label: 'Unassigned',
+              count: viewCounts?.unassigned ?? 0,
+              href: '/admin/messages?view=unassigned',
+            },
+          ],
+        }
+      case 'sponsors':
+        return {
+          key: team.key,
+          title: team.title,
+          metrics: [
+            {
+              label: 'Unassigned sponsors',
+              count: unassignedSponsors,
+              href: '/admin/sponsors/crm?assignedTo=unassigned',
+            },
+          ],
+        }
+      case 'volunteers':
+        return {
+          key: team.key,
+          title: team.title,
+          metrics: [
+            {
+              label: 'Pending volunteers',
+              count: pendingVolunteers,
+              href: '/admin/volunteers',
+            },
+          ],
+        }
+      default:
+        return { key: team.key, title: team.title, metrics: [] }
+    }
+  })
+
+  return { areas }
 }
 
 // --- Sponsor Pipeline ---

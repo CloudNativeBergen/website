@@ -27,9 +27,14 @@ const colorStyles: Record<AdminButtonColor, string> = {
 }
 
 const variantStyles: Record<Exclude<AdminButtonVariant, 'primary'>, string> = {
+  // Dark-mode classes matter: `secondary`/`ghost` are the default footer buttons
+  // of admin modals that render on a dark surface (AnnounceModal,
+  // EditConferenceCard, …). Without them the light `bg-white`/`text-gray-700`
+  // pair sat on a dark panel as an illegible white-on-light chip.
   secondary:
-    'bg-white text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50',
-  ghost: 'text-gray-700 hover:bg-gray-100',
+    'bg-white text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-white/10 dark:text-gray-100 dark:ring-white/15 dark:hover:bg-white/20',
+  ghost:
+    'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-white/10',
 }
 
 const sizeStyles: Record<AdminButtonSize, string> = {

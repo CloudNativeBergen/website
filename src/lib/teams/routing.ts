@@ -26,13 +26,22 @@ import type { TeamKey } from './types'
  * never the intent, so it collapses to all. (A failure of the organizer fetch
  * itself surfaces to the caller's existing never-fail envelope, exactly as it
  * does today.)
+ *
+ * FALLBACK REUSE: a caller that has ALREADY fetched the full organizer set (for
+ * classification, or once before a loop) may pass it as `allOrganizerIds` to
+ * reuse as the team-else-all fallback, avoiding a duplicate
+ * {@link getOrganizerSpeakerIds} read. It is only a hoist of the SAME set — the
+ * absent/empty/failed-team behaviour is identical whether it is passed or
+ * fetched here.
  */
 export async function resolveRoutedOrganizerIds({
   conferenceId,
   teamKey,
+  allOrganizerIds,
 }: {
   conferenceId: string
   teamKey: TeamKey
+  allOrganizerIds?: string[]
 }): Promise<string[]> {
   try {
     const teams = await getConferenceTeams(conferenceId)
@@ -46,5 +55,5 @@ export async function resolveRoutedOrganizerIds({
       error,
     )
   }
-  return getOrganizerSpeakerIds()
+  return allOrganizerIds ?? getOrganizerSpeakerIds()
 }

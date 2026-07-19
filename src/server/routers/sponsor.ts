@@ -667,6 +667,7 @@ export const sponsorRouter = router({
             status,
             invoiceStatus,
             assignedTo,
+            assignedToIds: input?.assignedToIds,
             unassignedOnly: input?.unassignedOnly,
             tags: input?.tags,
             tiers: input?.tiers,

@@ -122,6 +122,10 @@ export async function notifyNewMessage({
     const routedOrganizerIds = await resolveRoutedOrganizerIds({
       conferenceId: conversation.conferenceId,
       teamKey: 'cfp',
+      // Reuse the full organizer set already fetched above for classification
+      // as the team-else-all fallback, so the no-team path does not read the
+      // organizer set a second time.
+      allOrganizerIds: organizerIds,
     })
     const recipientIds = resolveRecipients(
       conversation,

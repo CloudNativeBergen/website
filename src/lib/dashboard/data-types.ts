@@ -129,3 +129,30 @@ export interface ProposalPipelineData {
   acceptanceRate: number
   pendingDecisions: number
 }
+
+/**
+ * TEAMS-3 (L4) — "My areas". One needs-attention metric on a team card, deep
+ * linking to the filtered surface (inbox view / CRM owner / volunteers page).
+ */
+export interface MyAreaMetric {
+  label: string
+  count: number
+  href: string
+}
+
+/** A team the viewer belongs to, with its compact needs-attention metrics. */
+export interface MyAreaCard {
+  key: string
+  title: string
+  metrics: MyAreaMetric[]
+}
+
+/**
+ * The viewer's team areas. `areas` is empty when the viewer is on no team (the
+ * widget then renders its inert empty state). Counts reuse EXISTING sources
+ * (message viewCounts, the sponsor list's unassigned filter, the volunteer
+ * list) — at most one read per area the viewer actually belongs to.
+ */
+export interface MyAreasData {
+  areas: MyAreaCard[]
+}
