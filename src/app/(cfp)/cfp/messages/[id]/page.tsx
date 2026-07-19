@@ -33,7 +33,7 @@ export default async function CfpConversationPage({
         <BackLink fallbackUrl="/cfp/messages">Back to Messages</BackLink>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <ConversationThread conversationId={id} audience="speaker" fillHeight />
       </div>
     </div>

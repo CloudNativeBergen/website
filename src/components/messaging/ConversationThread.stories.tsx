@@ -236,3 +236,49 @@ export const ReadOnlyImpersonation: Story = {
     <ConversationThreadView {...args} messages={makeMessages()} />
   ),
 }
+
+/**
+ * The standalone thread page layout (fillHeight) with a SHORT thread: the card
+ * must size to its content — composer directly under the last message — and
+ * NOT stretch to fill the viewport-height container (the maintainer-reported
+ * "unnecessarily high" regression). The wrapper mimics the message pages'
+ * h-[100dvh] column at a fixed capture height.
+ */
+export const FillHeightShortThread: Story = {
+  args: {
+    messages: [],
+    subject: 'Test',
+    preference: defaultPreference,
+    fillHeight: true,
+  },
+  render: (args) => (
+    <div className="flex h-[760px] flex-col">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <ConversationThreadView
+          {...args}
+          messages={makeMessages().slice(0, 2)}
+        />
+      </div>
+    </div>
+  ),
+}
+
+/**
+ * fillHeight with a LONG thread: the card shrinks to the container, the list
+ * scrolls (opens pinned to newest) and the composer stays pinned at the bottom.
+ */
+export const FillHeightLongThread: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+    fillHeight: true,
+  },
+  render: (args) => (
+    <div className="flex h-[760px] flex-col">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <ConversationThreadView {...args} messages={makeLongHistory()} />
+      </div>
+    </div>
+  ),
+}
