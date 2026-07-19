@@ -267,10 +267,12 @@ export async function listConversationsForSpeaker({
   const rows = results ?? []
   if (rows.length === 0) return []
 
-  // ONE extra read: the caller's unread message_received notification links for
+  // ONE extra read (bounded [0...500] — plenty above any realistic unread count,
+  // and the 90-day retention caps the universe): the caller's unread
+  // message_received notification links for
   // this conference. Counted in JS per conversation below.
   const unreadLinks = await clientReadUncached.fetch<(string | null)[]>(
-    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)].link`,
+    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500].link`,
     { speakerId, conferenceId },
     { cache: 'no-store' },
   )
