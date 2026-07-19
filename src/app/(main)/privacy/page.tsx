@@ -206,6 +206,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               in to push notifications and removed when you turn
                               them off
                             </li>
+                            <li>
+                              • Per-category push notification preferences
+                              (whether you receive proposal decisions, talk
+                              confirmations, co-speaker invites, messages, and
+                              other updates), stored on your speaker profile
+                            </li>
                           </ul>
                         </div>
                       </div>
@@ -378,6 +384,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>
                           • <strong>Conversation preferences:</strong> Your
                           per-conversation mute and email delivery settings
+                        </li>
+                        <li>
+                          • <strong>Message email default:</strong> Your
+                          account-level default for whether new message
+                          conversations also email you
                         </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">
