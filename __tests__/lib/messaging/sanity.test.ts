@@ -28,6 +28,7 @@ vi.mock('@/lib/notification/sanity', () => ({
 vi.mock('nanoid', () => ({ nanoid: () => 'FIXED' }))
 
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
 import {
   proposalConversationId,
   conversationPreferenceId,
@@ -414,6 +415,137 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
     })
     expect(result).toEqual([])
     expect(readMock.fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('listConversationsForSpeaker — Who/What metadata (M6)', () => {
+  const proposalRow = {
+    _id: 'conversation.proposal.prop-1',
+    conversationType: 'proposal' as const,
+    subject: 'My Talk',
+    proposalId: 'prop-1',
+    proposalTitle: 'My Talk',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastMessageAt: '2026-01-02T00:00:00.000Z',
+    lastMessage: {
+      authorId: 'sp-1',
+      authorName: 'Kari Speaker',
+      authorImage: 'https://img/kari.jpg',
+      body: 'Short update',
+    },
+    speakerSideName: 'Kari Speaker',
+    speakerSideImage: 'https://img/kari.jpg',
+  }
+  const generalRow = {
+    _id: 'conversation.gen-1',
+    conversationType: 'general' as const,
+    subject: 'Q',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastMessageAt: '2026-01-01T00:00:00.000Z',
+    lastMessage: {
+      authorId: 'org-1',
+      authorName: 'Ola Organizer',
+      authorImage: 'https://img/ola.jpg',
+      body: 'An answer',
+    },
+    speakerSideName: 'Sub Ject',
+    speakerSideImage: null,
+  }
+
+  it('ORGANIZER audience: the counterpart is the pre-resolved speaker side (no organizer-id fetch)', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce([proposalRow, generalRow])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    expect(result[0].counterpart).toEqual({
+      name: 'Kari Speaker',
+      image: 'https://img/kari.jpg',
+    })
+    // General thread: subject speaker (image absent → undefined).
+    expect(result[1].counterpart).toEqual({
+      name: 'Sub Ject',
+      image: undefined,
+    })
+    // The projection resolves the speaker side inside the ONE page query,
+    // using the house coalesce(image.asset->url, imageURL) speaker-image
+    // pattern on each dereferenced side.
+    const [query] = readMock.fetch.mock.calls[0]
+    expect(query).toContain(
+      'coalesce(author->image.asset->url, author->imageURL)',
+    )
+    expect(query).toContain('proposal->speakers[0]->name')
+    expect(query).toContain('subjectSpeaker->name')
+    // Organizer path never needs the organizer id set.
+    expect(getOrganizerSpeakerIds).not.toHaveBeenCalled()
+  })
+
+  it('SPEAKER audience: an organizer last-author becomes the counterpart; otherwise the Organizers label', async () => {
+    vi.mocked(getOrganizerSpeakerIds).mockResolvedValueOnce(['org-1'])
+    readMock.fetch
+      .mockResolvedValueOnce([proposalRow, generalRow])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+
+    // Proposal row: last author sp-1 is NOT an organizer → collective label,
+    // deliberately without an image.
+    expect(result[0].counterpart).toEqual({ name: 'Organizers' })
+    // General row: last author org-1 IS an organizer → their name + image.
+    expect(result[1].counterpart).toEqual({
+      name: 'Ola Organizer',
+      image: 'https://img/ola.jpg',
+    })
+  })
+
+  it('maps lastMessage to an author + excerpt, ellipsizing bodies over 120 chars', async () => {
+    const longBody = 'A'.repeat(150)
+    readMock.fetch
+      .mockResolvedValueOnce([
+        {
+          ...proposalRow,
+          lastMessage: { ...proposalRow.lastMessage, body: longBody },
+        },
+        generalRow,
+      ])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    expect(result[0].lastMessage).toEqual({
+      authorId: 'sp-1',
+      authorName: 'Kari Speaker',
+      excerpt: `${'A'.repeat(120)}…`,
+    })
+    // Short bodies pass through untouched.
+    expect(result[1].lastMessage?.excerpt).toBe('An answer')
+  })
+
+  it('returns lastMessage null for a conversation with no messages yet', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce([{ ...generalRow, lastMessage: null }])
+      .mockResolvedValueOnce([])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    expect(result[0].lastMessage).toBeNull()
   })
 })
 

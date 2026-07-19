@@ -196,11 +196,7 @@ describe('NewConversationForm — fixed recipient (organizer, known target)', ()
 describe('NewConversationForm — proposal thread mode', () => {
   it('hides picker and subject, sends { proposalId, body }', () => {
     render(
-      <NewConversationForm
-        basePath="/admin/messages"
-        proposalId="prop-1"
-        navigateOnCreate={false}
-      />,
+      <NewConversationForm basePath="/admin/messages" proposalId="prop-1" />,
     )
     expect(screen.queryByTestId('pick-speaker')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Subject')).not.toBeInTheDocument()
@@ -216,13 +212,12 @@ describe('NewConversationForm — proposal thread mode', () => {
     })
   })
 
-  it('does not navigate on success when navigateOnCreate is false, but invalidates the thread', () => {
+  it('does not navigate on success BY DEFAULT, but invalidates the thread', () => {
     const onCreated = vi.fn()
     render(
       <NewConversationForm
         basePath="/admin/messages"
         proposalId="prop-1"
-        navigateOnCreate={false}
         onCreated={onCreated}
       />,
     )
@@ -242,8 +237,16 @@ describe('NewConversationForm — proposal thread mode', () => {
     })
   })
 
-  it('still navigates by default in the general flow', () => {
+  // Navigation is explicit opt-in: an embedded mount (modal + proposalId) must
+  // never be one forgotten prop away from an unwanted route change.
+  it('does NOT navigate by default in the general flow either', () => {
     render(<NewConversationForm basePath="/cfp/messages" />)
+    mutationOptions?.onSuccess?.({ conversationId: 'conversation.abc' })
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('navigates to the created thread when navigateOnCreate is set', () => {
+    render(<NewConversationForm basePath="/cfp/messages" navigateOnCreate />)
     mutationOptions?.onSuccess?.({ conversationId: 'conversation.abc' })
     expect(routerPush).toHaveBeenCalledWith('/cfp/messages/conversation.abc')
   })

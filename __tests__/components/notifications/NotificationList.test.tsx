@@ -166,4 +166,27 @@ describe('NotificationList', () => {
     fireEvent.click(screen.getByRole('link', { name: /view all messages/i }))
     expect(onMessagesClick).toHaveBeenCalledOnce()
   })
+
+  it('renders the header settings gear when settingsHref is provided', () => {
+    renderList({ settingsHref: '/cfp/profile#notification-settings' })
+    const gear = screen.getByRole('link', { name: 'Notification settings' })
+    expect(gear).toHaveAttribute('href', '/cfp/profile#notification-settings')
+  })
+
+  it('does NOT render the settings gear when settingsHref is absent', () => {
+    renderList()
+    expect(
+      screen.queryByRole('link', { name: 'Notification settings' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('fires onSettingsClick (popover close) when the gear is activated', () => {
+    const onSettingsClick = vi.fn()
+    renderList({
+      settingsHref: '/cfp/profile#notification-settings',
+      onSettingsClick,
+    })
+    fireEvent.click(screen.getByRole('link', { name: 'Notification settings' }))
+    expect(onSettingsClick).toHaveBeenCalledOnce()
+  })
 })

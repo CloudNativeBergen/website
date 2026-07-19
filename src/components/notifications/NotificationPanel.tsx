@@ -36,14 +36,28 @@ export function NotificationPanel({
   onClose,
 }: NotificationPanelProps) {
   const utils = api.useUtils()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const isImpersonating = session?.isImpersonating === true
 
   // Audience-aware Messages inbox quick link (T-QUICKLINK): organizers land in
   // the admin inbox, speakers in the CFP inbox. Passed down as a plain href so
   // NotificationList stays presentational.
-  const messagesHref =
-    session?.speaker?.isOrganizer === true ? '/admin/messages' : '/cfp/messages'
+  //
+  // Until the session resolves the audience is UNKNOWN — an organizer would
+  // briefly get (and could click) the speaker link. Both hrefs are therefore
+  // withheld while loading; the presentational props already handle absence, so
+  // the quick link and settings gear simply don't render until then.
+  const sessionReady = status !== 'loading' && !!session
+  const messagesHref = sessionReady
+    ? session.speaker?.isOrganizer === true
+      ? '/admin/messages'
+      : '/cfp/messages'
+    : undefined
+  // Organizers are speakers too — everyone's notification/messaging settings
+  // live on the CFP profile page, anchored at #notification-settings.
+  const settingsHref = sessionReady
+    ? '/cfp/profile#notification-settings'
+    : undefined
 
   const {
     data,
@@ -105,6 +119,8 @@ export function NotificationPanel({
       readOnly={isImpersonating}
       messagesHref={messagesHref}
       onMessagesClick={onClose}
+      settingsHref={settingsHref}
+      onSettingsClick={onClose}
     />
   )
 }

@@ -93,8 +93,9 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-// Also carries the audience-aware "View all messages" footer quick link
-// (present when `messagesHref` is provided; the Empty story shows it absent).
+// Also carries the audience-aware "View all messages" footer quick link and
+// the header settings gear (both present only when their href prop is
+// provided; the Empty story shows them absent).
 export const UnreadAndRead: Story = {
   args: {
     // Placeholder for typing; the render below rebuilds items at render time so
@@ -103,6 +104,8 @@ export const UnreadAndRead: Story = {
     unreadCount: 3,
     messagesHref: '/cfp/messages',
     onMessagesClick: fn(),
+    settingsHref: '/cfp/profile#notification-settings',
+    onSettingsClick: fn(),
   },
   render: (args) => <NotificationList {...args} items={makeItems()} />,
 }

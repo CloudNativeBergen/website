@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { ConversationList } from './ConversationList'
@@ -29,6 +30,9 @@ export function MessagesInbox({
   const isOrganizer = audience === 'organizer'
   const basePath = isOrganizer ? '/admin/messages' : '/cfp/messages'
   const [showNew, setShowNew] = useState(false)
+  // The viewer's own speaker id drives the rows' "You: " snippet prefix.
+  const { data: session } = useSession()
+  const callerId = session?.speaker?._id
 
   const {
     data,
@@ -59,6 +63,9 @@ export function MessagesInbox({
             <NewConversationForm
               basePath={basePath}
               requireRecipient={isOrganizer}
+              // The standalone inbox owns no success flow of its own — opt in
+              // to navigating to the created thread (no longer the default).
+              navigateOnCreate
               onCancel={() => setShowNew(false)}
             />
           ) : (
@@ -79,6 +86,7 @@ export function MessagesInbox({
       <ConversationList
         items={items}
         isOrganizer={isOrganizer}
+        callerId={callerId}
         isLoading={isLoading}
         isError={isError}
         hasMore={hasNextPage}

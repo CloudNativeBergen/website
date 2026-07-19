@@ -1,9 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
+import {
+  ChatBubbleLeftRightIcon,
+  UserGroupIcon,
+} from '@heroicons/react/24/outline'
 import { conversationLinkPath } from '@/lib/messaging/links'
 import { formatRelativeTime } from '@/lib/notification/format'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import type { ConversationListItem } from '@/lib/messaging/types'
 
 export interface ConversationListProps {
@@ -14,6 +19,12 @@ export interface ConversationListProps {
    * speakers → /cfp) via the shared {@link conversationLinkPath} contract.
    */
   isOrganizer: boolean
+  /**
+   * The viewer's own speaker id — rows whose last message they authored get a
+   * "You: " snippet prefix. Optional so the list renders before the session
+   * resolves (no prefix until it does).
+   */
+  callerId?: string
   isLoading?: boolean
   isError?: boolean
   hasMore?: boolean
@@ -23,9 +34,12 @@ export interface ConversationListProps {
 
 function SkeletonRow() {
   return (
-    <div className="flex flex-col gap-2 px-4 py-3">
-      <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-      <div className="h-3 w-1/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+    <div className="flex gap-3 px-4 py-3">
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-3 w-1/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+      </div>
     </div>
   )
 }
@@ -39,13 +53,42 @@ function conversationTitle(item: ConversationListItem): string {
 }
 
 /**
+ * WHO: the row avatar. A counterpart with an image gets the photo (initials
+ * fallback on load failure); a named counterpart without one gets initials; the
+ * collective 'Organizers' counterpart (speaker audience, no single person) gets
+ * a neutral group glyph — initials would wrongly suggest a person.
+ */
+function RowAvatar({ item }: { item: ConversationListItem }) {
+  const { name, image } = item.counterpart
+  return (
+    <span
+      aria-hidden="true"
+      className="mt-0.5 h-10 w-10 shrink-0 overflow-hidden rounded-full"
+    >
+      {image ? (
+        <SpeakerAvatarImage src={image} name={name} size={40} />
+      ) : name === 'Organizers' ? (
+        <span className="flex h-full w-full items-center justify-center bg-gray-100 dark:bg-gray-700">
+          <UserGroupIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+        </span>
+      ) : (
+        <MissingAvatar name={name} size={40} />
+      )}
+    </span>
+  )
+}
+
+/**
  * Presentational inbox: one row per conversation linking to its thread for the
- * given audience. Pure — the container supplies data and pagination handlers so
- * this renders without tRPC in Storybook and tests.
+ * given audience. Each row reads Who (counterpart avatar + name) / What
+ * (subject, snippet) / When (relative time) at a glance. Pure — the container
+ * supplies data and pagination handlers so this renders without tRPC in
+ * Storybook and tests.
  */
 export function ConversationList({
   items,
   isOrganizer,
+  callerId,
   isLoading = false,
   isError = false,
   hasMore = false,
@@ -90,39 +133,64 @@ export function ConversationList({
         <>
           {items.map((item) => {
             const isUnread = item.unreadCount > 0
+            const isOwnLastMessage =
+              !!callerId && item.lastMessage?.authorId === callerId
             return (
               <Link
                 key={item._id}
                 href={conversationLinkPath(item, isOrganizer)}
                 prefetch={false}
-                className="flex items-baseline justify-between gap-3 px-4 py-3 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60"
+                className="flex gap-3 px-4 py-3 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60"
               >
+                <RowAvatar item={item} />
                 <span className="min-w-0 flex-1">
-                  <span
-                    className={`block truncate text-sm text-gray-900 dark:text-white ${
-                      isUnread ? 'font-bold' : 'font-semibold'
-                    }`}
-                  >
-                    {conversationTitle(item)}
-                  </span>
-                  {item.conversationType === 'proposal' && (
-                    <span className="mt-0.5 block text-xs text-gray-400 dark:text-gray-500">
-                      Proposal thread
+                  {/* WHO + WHEN: counterpart name, unread pill, relative time. */}
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                      {item.counterpart.name}
                     </span>
-                  )}
-                </span>
-                <span className="flex shrink-0 items-baseline gap-2">
-                  {isUnread && (
+                    <span className="flex shrink-0 items-baseline gap-2">
+                      {isUnread && (
+                        <span
+                          aria-label={`${item.unreadCount} unread`}
+                          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-cloud-blue px-1.5 text-[11px] leading-none font-semibold text-white dark:bg-blue-600"
+                        >
+                          {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatRelativeTime(item.lastMessageAt)}
+                      </span>
+                    </span>
+                  </span>
+                  {/* WHAT: subject (the talk title for proposal threads — the
+                      chip marks the type instead of repeating it). */}
+                  <span className="mt-0.5 flex items-center gap-2">
                     <span
-                      aria-label={`${item.unreadCount} unread`}
-                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-cloud-blue px-1.5 text-[11px] leading-none font-semibold text-white dark:bg-blue-600"
+                      className={`truncate text-sm text-gray-900 dark:text-white ${
+                        isUnread ? 'font-bold' : 'font-semibold'
+                      }`}
                     >
-                      {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                      {conversationTitle(item)}
+                    </span>
+                    {item.conversationType === 'proposal' && (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                        Proposal
+                      </span>
+                    )}
+                  </span>
+                  {/* Snippet: one truncated line; "You: " when the viewer wrote
+                      the last message. */}
+                  {item.lastMessage && (
+                    <span className="mt-0.5 block truncate text-sm text-gray-500 dark:text-gray-400">
+                      {isOwnLastMessage && (
+                        <span className="font-medium text-gray-600 dark:text-gray-300">
+                          You:{' '}
+                        </span>
+                      )}
+                      {item.lastMessage.excerpt}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {formatRelativeTime(item.lastMessageAt)}
-                  </span>
                 </span>
               </Link>
             )

@@ -43,6 +43,27 @@ export interface ConversationWithContext {
   lastMessageAt: string
 }
 
+/** The newest message of a conversation, summarized for an inbox row (M6). */
+export interface ConversationLastMessage {
+  authorId: string
+  authorName: string
+  /** First ~120 chars of the message body (ellipsized when longer). */
+  excerpt: string
+}
+
+/**
+ * Who the conversation is "with" from the viewer's perspective (M6):
+ * - ORGANIZER audience → the speaker side (proposal → first proposal speaker;
+ *   general → subject speaker, else the creator);
+ * - SPEAKER audience → the last message's author when that author is an
+ *   organizer; otherwise the collective `'Organizers'` label with no image
+ *   (no single counterpart exists on the organizer side).
+ */
+export interface ConversationCounterpart {
+  name: string
+  image?: string
+}
+
 /** A conversation as listed in an inbox. */
 export interface ConversationListItem {
   _id: string
@@ -58,6 +79,10 @@ export interface ConversationListItem {
    * received one).
    */
   unreadCount: number
+  /** Newest message summary; null for a conversation with no messages yet. */
+  lastMessage: ConversationLastMessage | null
+  /** Audience-aware "who" for the row (see {@link ConversationCounterpart}). */
+  counterpart: ConversationCounterpart
 }
 
 /** A single message in a thread. */

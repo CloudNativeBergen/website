@@ -16,6 +16,12 @@ const items: ConversationListItem[] = [
     createdAt: new Date('2026-07-15T10:00:00Z').toISOString(),
     lastMessageAt: new Date('2026-07-18T10:00:00Z').toISOString(),
     unreadCount: 0,
+    lastMessage: {
+      authorId: 'speaker-me',
+      authorName: 'Kari Nordmann',
+      excerpt: 'I have updated the abstract.',
+    },
+    counterpart: { name: 'Kari Nordmann' },
   },
   {
     _id: 'conversation.abc123',
@@ -24,6 +30,12 @@ const items: ConversationListItem[] = [
     createdAt: new Date('2026-07-15T10:00:00Z').toISOString(),
     lastMessageAt: new Date('2026-07-18T09:00:00Z').toISOString(),
     unreadCount: 0,
+    lastMessage: {
+      authorId: 'organizer-1',
+      authorName: 'Ola Organizer',
+      excerpt: 'We cover flights booked before June.',
+    },
+    counterpart: { name: 'Ola Organizer' },
   },
 ]
 
@@ -93,5 +105,51 @@ describe('ConversationList', () => {
   it('keeps a read row subject at semibold (not bold)', () => {
     render(<ConversationList items={items} isOrganizer={false} />)
     expect(screen.getByText('Scaling Kubernetes')).toHaveClass('font-semibold')
+  })
+
+  // --- Who/What/When metadata (M6) ---
+
+  it('renders the counterpart name and the last-message snippet per row', () => {
+    render(<ConversationList items={items} isOrganizer={false} />)
+    expect(screen.getByText('Kari Nordmann')).toBeInTheDocument()
+    expect(screen.getByText('Ola Organizer')).toBeInTheDocument()
+    expect(screen.getByText(/updated the abstract/)).toBeInTheDocument()
+    expect(screen.getByText(/flights booked before June/)).toBeInTheDocument()
+  })
+
+  it('prefixes the snippet with "You:" only on rows whose last message the caller wrote', () => {
+    render(
+      <ConversationList
+        items={items}
+        isOrganizer={false}
+        callerId="speaker-me"
+      />,
+    )
+    // Row 1's last message is the caller's; row 2's is not.
+    const row1 = linkFor('Scaling Kubernetes')
+    const row2 = linkFor('Travel question')
+    expect(row1).toHaveTextContent('You:')
+    expect(row2?.textContent).not.toContain('You:')
+  })
+
+  it('shows no "You:" prefix at all without a callerId', () => {
+    render(<ConversationList items={items} isOrganizer={false} />)
+    expect(screen.queryByText('You:')).not.toBeInTheDocument()
+  })
+
+  it('marks proposal threads with a "Proposal" chip and leaves general threads unmarked', () => {
+    render(<ConversationList items={items} isOrganizer={false} />)
+    expect(screen.getAllByText('Proposal')).toHaveLength(1)
+    expect(linkFor('Scaling Kubernetes')).toHaveTextContent('Proposal')
+    expect(linkFor('Travel question')?.textContent).not.toContain('Proposal')
+  })
+
+  it('renders a row without a snippet line when the conversation has no messages', () => {
+    const empty: ConversationListItem[] = [
+      { ...items[1], lastMessage: null, counterpart: { name: 'Organizers' } },
+    ]
+    render(<ConversationList items={empty} isOrganizer={false} />)
+    expect(screen.getByText('Travel question')).toBeInTheDocument()
+    expect(screen.queryByText(/flights booked/)).not.toBeInTheDocument()
   })
 })
