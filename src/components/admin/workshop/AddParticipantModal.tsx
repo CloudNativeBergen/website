@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { UserPlusIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { Dropdown } from '@/components/Form'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -74,28 +73,11 @@ export function AddParticipantModal({
       isOpen={isOpen}
       onClose={handleClose}
       size="lg"
-      padded={false}
-      className="relative overflow-hidden px-4 pt-5 pb-4 sm:p-6"
+      title={`Add Participant to ${workshopTitle}`}
+      icon={<UserPlusIcon className="h-5 w-5" />}
     >
-      <div className="absolute top-0 right-0 pt-4 pr-4">
-        <button
-          type="button"
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
-          onClick={handleClose}
-        >
-          <span className="sr-only">Close</span>
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
       <div>
-        <DialogTitle
-          as="h3"
-          className="mb-4 text-lg leading-6 font-semibold text-gray-900 dark:text-white"
-        >
-          Add Participant to {workshopTitle}
-        </DialogTitle>
-
-        <div className="mt-4 space-y-4">
+        <div className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Name *

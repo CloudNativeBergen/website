@@ -8,6 +8,12 @@ import {
   MagnifyingGlassPlusIcon,
 } from '@heroicons/react/24/outline'
 import { ExpenseReceipt } from '@/lib/travel-support/types'
+import { formatDate } from '@/lib/time'
+import { ModalShell } from '@/components/ModalShell'
+
+// Shared classes for the toolbar controls — 44×44 minimum tap target.
+const controlButton =
+  'inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800'
 
 interface ReceiptViewerProps {
   receipt: ExpenseReceipt
@@ -43,21 +49,37 @@ export function ReceiptViewer({
     document.body.removeChild(link)
   }
 
+  const label = receipt.filename || `Receipt ${receiptIndex + 1}`
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="relative flex h-full max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-2xl dark:bg-gray-900">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {receipt.filename || `Receipt ${receiptIndex + 1}`}
+    <ModalShell
+      isOpen
+      onClose={onClose}
+      size="4xl"
+      // A document/image viewer wants the same full-height centered card at every
+      // width — a bottom-sheet would crop the receipt and fight the zoom/scroll —
+      // so it opts out of the default mobile sheet presentation.
+      presentation="centered"
+      padded={false}
+      ariaLabel={`Receipt: ${label}`}
+      className="overflow-hidden"
+    >
+      <div className="flex h-[85vh] flex-col">
+        {/* Custom 5-control toolbar (title + zoom out/in + download + close) — too
+          many actions for the shell's standard single-close header, so the
+          dialog takes its accessible name from `ariaLabel` above instead. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <h3 className="min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-white">
+            {label}
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
             {isImage && (
               <>
                 <button
                   onClick={handleZoomOut}
                   disabled={zoom <= 50}
-                  className="rounded-md p-2 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                  className={controlButton}
+                  aria-label="Zoom out"
                   title="Zoom out"
                 >
                   <MagnifyingGlassMinusIcon className="h-5 w-5" />
@@ -68,24 +90,27 @@ export function ReceiptViewer({
                 <button
                   onClick={handleZoomIn}
                   disabled={zoom >= 200}
-                  className="rounded-md p-2 text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                  className={controlButton}
+                  aria-label="Zoom in"
                   title="Zoom in"
                 >
                   <MagnifyingGlassPlusIcon className="h-5 w-5" />
                 </button>
-                <div className="mx-2 h-6 w-px bg-gray-300 dark:bg-gray-600" />
+                <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
               </>
             )}
             <button
               onClick={handleDownload}
-              className="rounded-md p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              className={controlButton}
+              aria-label="Download receipt"
               title="Download receipt"
             >
               <ArrowDownTrayIcon className="h-5 w-5" />
             </button>
             <button
               onClick={onClose}
-              className="rounded-md p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              className={controlButton}
+              aria-label="Close"
               title="Close"
             >
               <XMarkIcon className="h-5 w-5" />
@@ -99,7 +124,7 @@ export function ReceiptViewer({
             <div className="flex min-h-full items-center justify-center">
               <img
                 src={fileUrl}
-                alt={receipt.filename || `Receipt ${receiptIndex + 1}`}
+                alt={label}
                 className="max-h-full max-w-full rounded-lg shadow-lg transition-transform duration-200"
                 style={{ transform: `scale(${zoom / 100})` }}
               />
@@ -107,19 +132,19 @@ export function ReceiptViewer({
           ) : (
             <iframe
               src={fileUrl}
-              title={receipt.filename || `Receipt ${receiptIndex + 1}`}
+              title={label}
               className="h-full w-full rounded-lg shadow-lg"
             />
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+        <div className="shrink-0 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Uploaded on {new Date(receipt.uploadedAt).toLocaleDateString()}
+            Uploaded on {formatDate(receipt.uploadedAt)}
           </p>
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }

@@ -3,14 +3,6 @@
 import { formatDateSafe } from '@/lib/time'
 
 import { useState, useEffect } from 'react'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
-import { useTheme } from 'next-themes'
 import { api } from '@/lib/trpc/client'
 import { isLocalhostClient } from '@/lib/environment/localhost'
 import type { BadgeType } from '@/lib/badge/types'
@@ -25,7 +17,9 @@ import {
   TrashIcon,
   ClipboardDocumentIcon,
   ArrowDownTrayIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline'
+import { ModalShell } from '@/components/ModalShell'
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
@@ -64,7 +58,6 @@ export function BadgeManagementClient({
   initialBadges,
 }: BadgeManagementClientProps) {
   const { showNotification } = useNotification()
-  const { theme } = useTheme()
   const [activeTab, setActiveTab] = useState<TabView>('issue')
   const [badgeType, setBadgeType] = useState<BadgeType>('speaker')
   const [searchQuery, setSearchQuery] = useState('')
@@ -706,111 +699,70 @@ export function BadgeManagementClient({
           />
 
           {/* Badge Preview Modal */}
-          <Transition appear show={showPreview}>
-            <Dialog
-              as="div"
-              className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
-              onClose={() => setShowPreview(false)}
-            >
-              <TransitionChild
-                enter="ease-out duration-300"
-                enterFrom="opacity-0"
-                enterTo="opacity-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
-              >
-                <div className="fixed inset-0 bg-black/50" />
-              </TransitionChild>
+          <ModalShell
+            isOpen={showPreview}
+            onClose={() => setShowPreview(false)}
+            size="2xl"
+            title={`Badge Preview - ${badgeType === 'speaker' ? 'Speaker' : 'Organizer'}`}
+            icon={<IdentificationIcon className="h-5 w-5" />}
+          >
+            <div className="max-h-[calc(85dvh-200px)] overflow-y-auto sm:max-h-[calc(90vh-200px)]">
+              <div className="bg-brand-mist/50 mb-6 rounded-lg p-4 dark:bg-gray-800/50">
+                <p className="text-sm text-brand-slate-gray dark:text-gray-400">
+                  This preview shows how the badge will look. You can use this
+                  to adjust the design in{' '}
+                  <code className="bg-brand-mist rounded px-2 py-1 font-mono text-xs dark:bg-gray-700">
+                    /src/lib/badge/svg.ts
+                  </code>{' '}
+                  before issuing badges.
+                </p>
+              </div>
 
-              <div className="fixed inset-0 overflow-y-auto">
-                <div className="flex min-h-full items-center justify-center p-4">
-                  <TransitionChild
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0 scale-95"
-                    enterTo="opacity-100 scale-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100 scale-100"
-                    leaveTo="opacity-0 scale-95"
-                  >
-                    <DialogPanel className="max-h-[90vh] w-full max-w-2xl transform overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white p-6 shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
-                      <div className="mb-6 flex items-start justify-between">
-                        <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-                          Badge Preview -{' '}
-                          {badgeType === 'speaker' ? 'Speaker' : 'Organizer'}
-                        </DialogTitle>
-                        <button
-                          type="button"
-                          className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                          onClick={() => setShowPreview(false)}
-                          aria-label="Close"
-                        >
-                          <XMarkIcon className="h-6 w-6" />
-                        </button>
-                      </div>
-
-                      <div className="max-h-[calc(90vh-200px)] overflow-y-auto">
-                        <div className="bg-brand-mist/50 mb-6 rounded-lg p-4 dark:bg-gray-800/50">
-                          <p className="text-sm text-brand-slate-gray dark:text-gray-400">
-                            This preview shows how the badge will look. You can
-                            use this to adjust the design in{' '}
-                            <code className="bg-brand-mist rounded px-2 py-1 font-mono text-xs dark:bg-gray-700">
-                              /src/lib/badge/svg.ts
-                            </code>{' '}
-                            before issuing badges.
-                          </p>
-                        </div>
-
-                        <div className="flex justify-center">
-                          <div
-                            className="inline-block rounded-xl border border-brand-frosted-steel bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800"
-                            style={{ width: '100%', maxWidth: '400px' }}
-                          >
-                            <div
-                              style={{
-                                width: '100%',
-                                height: 'auto',
-                                aspectRatio: '1/1',
-                              }}
-                              dangerouslySetInnerHTML={{
-                                __html: previewSvg || '',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 flex justify-end gap-3 border-t border-brand-frosted-steel pt-4 dark:border-gray-700">
-                        <button
-                          onClick={() => {
-                            if (!previewSvg) return
-                            const blob = new Blob([previewSvg], {
-                              type: 'image/svg+xml',
-                            })
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `badge-preview-${badgeType}.svg`
-                            a.click()
-                            URL.revokeObjectURL(url)
-                          }}
-                          className="bg-brand-mist rounded-lg px-4 py-2 text-sm font-medium text-brand-slate-gray transition-colors hover:bg-brand-frosted-steel dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                        >
-                          Download Preview
-                        </button>
-                        <button
-                          onClick={() => setShowPreview(false)}
-                          className="bg-brand-aqua dark:hover:bg-brand-aqua rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue dark:bg-brand-cloud-blue"
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </DialogPanel>
-                  </TransitionChild>
+              <div className="flex justify-center">
+                <div
+                  className="inline-block rounded-xl border border-brand-frosted-steel bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  style={{ width: '100%', maxWidth: '400px' }}
+                >
+                  <div
+                    style={{
+                      width: '100%',
+                      height: 'auto',
+                      aspectRatio: '1/1',
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: previewSvg || '',
+                    }}
+                  />
                 </div>
               </div>
-            </Dialog>
-          </Transition>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-brand-frosted-steel pt-4 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  if (!previewSvg) return
+                  const blob = new Blob([previewSvg], {
+                    type: 'image/svg+xml',
+                  })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `badge-preview-${badgeType}.svg`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="bg-brand-mist rounded-lg px-4 py-2 text-sm font-medium text-brand-slate-gray transition-colors hover:bg-brand-frosted-steel dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                Download Preview
+              </button>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="bg-brand-aqua dark:hover:bg-brand-aqua rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue dark:bg-brand-cloud-blue"
+              >
+                Close
+              </button>
+            </div>
+          </ModalShell>
 
           {/* Badge Preview Modal */}
           {selectedBadge && (

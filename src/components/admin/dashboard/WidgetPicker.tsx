@@ -3,8 +3,12 @@
 import { useState, useMemo } from 'react'
 import { WIDGET_REGISTRY } from '@/lib/dashboard/widget-registry'
 import type { WidgetMetadata } from '@/lib/dashboard/widget-metadata'
-import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import {
+  MagnifyingGlassIcon,
+  Squares2X2Icon,
+} from '@heroicons/react/24/outline'
 import * as HeroIcons from '@heroicons/react/24/outline'
+import { ModalShell } from '@/components/ModalShell'
 
 interface WidgetPickerProps {
   onSelect: (widgetType: string) => void
@@ -106,29 +110,18 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="animate-in fade-in zoom-in-95 w-full max-w-4xl rounded-xl bg-white shadow-2xl duration-200 dark:bg-gray-800">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 bg-linear-to-r from-gray-50 to-white px-6 py-5 dark:border-gray-700 dark:from-gray-800 dark:to-gray-800">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              ✨ Add a Widget
-            </h2>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Choose from {widgets.length} powerful widgets to customize your
-              dashboard
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-
+    <ModalShell
+      isOpen
+      onClose={onClose}
+      size="4xl"
+      padded={false}
+      title="Add widget"
+      subtitle={`Choose from ${widgets.length} widgets to customize your dashboard`}
+      icon={<Squares2X2Icon className="h-5 w-5" />}
+    >
+      <div className="flex min-h-0 flex-col">
         {/* Search and Filters */}
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div className="shrink-0 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <div className="mb-3 flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-900">
             <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
             <input
@@ -140,7 +133,7 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedCategory(null)}
               className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
@@ -173,7 +166,7 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
         </div>
 
         {/* Widget Grid */}
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+        <div className="max-h-[60vh] min-h-0 overflow-y-auto px-6 py-5">
           {CATEGORY_ORDER.map((category) => {
             const categoryWidgets = groupedWidgets[category]
             if (!categoryWidgets || categoryWidgets.length === 0) return null
@@ -244,6 +237,6 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
           )}
         </div>
       </div>
-    </div>
+    </ModalShell>
   )
 }
