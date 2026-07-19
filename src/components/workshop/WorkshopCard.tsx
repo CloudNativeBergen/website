@@ -84,6 +84,11 @@ export default function WorkshopCard({
   } = getWorkshopDateTime(workshop)
 
   const handleSignupClick = () => {
+    // Reset the selections on every open so a previously cancelled signup's
+    // choices don't silently carry over into a fresh attempt.
+    setExperienceLevel('intermediate' as ExperienceLevel)
+    setOperatingSystem('macos')
+    setError(null)
     setShowSignupModal(true)
   }
 

@@ -8,6 +8,7 @@ import {
   MagnifyingGlassPlusIcon,
 } from '@heroicons/react/24/outline'
 import { ExpenseReceipt } from '@/lib/travel-support/types'
+import { formatDate } from '@/lib/time'
 import { ModalShell } from '@/components/ModalShell'
 
 // Shared classes for the toolbar controls — 44×44 minimum tap target.
@@ -140,7 +141,7 @@ export function ReceiptViewer({
         {/* Footer */}
         <div className="shrink-0 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Uploaded on {new Date(receipt.uploadedAt).toLocaleDateString()}
+            Uploaded on {formatDate(receipt.uploadedAt)}
           </p>
         </div>
       </div>
