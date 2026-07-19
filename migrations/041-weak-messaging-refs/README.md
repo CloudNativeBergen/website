@@ -1,8 +1,13 @@
 # Migration 041: Weaken messaging / notification speaker references
 
-## ⚠️ NOT RUN — maintainer decision required
+## ✅ APPLIED to production (2026-07-19)
 
-This migration is committed but **has not been run against any dataset**. Running
+This migration was run against the `production` dataset on 2026-07-19 (maintainer-authorized;
+GitHub Actions run 29679682997: backup → dry-run → apply, 1 transaction committed).
+Note: `conversation.assignedTo` postdates this migration and has never had strong refs,
+so no follow-up backfill is needed for it.
+
+Original run instructions kept below for other datasets. Running
 it is a deliberate maintainer action via the
 [`Run Sanity Migration`](../../.github/workflows/run-migration.yml) workflow
 after review.
