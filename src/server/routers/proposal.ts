@@ -79,6 +79,7 @@ import {
   addMessage,
 } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import '@/lib/events/registry'
 
 /**
@@ -786,13 +787,17 @@ export const proposalRouter = router({
                 body: trimmedComment,
               })
               // Never throws; fans out hub/email (no proposal actions, so no
-              // feedback loop with this procedure).
-              await notifyNewMessage({
-                conversation,
-                message,
-                authorId: ctx.speaker._id,
-                conference,
-              })
+              // feedback loop with this procedure). Detached from the response
+              // path (A8) so the fan-out can't hang the decision action; the
+              // message is already committed above.
+              runAfterResponse(() =>
+                notifyNewMessage({
+                  conversation,
+                  message,
+                  authorId: ctx.speaker._id,
+                  conference,
+                }),
+              )
             }
           } catch (error) {
             console.error(

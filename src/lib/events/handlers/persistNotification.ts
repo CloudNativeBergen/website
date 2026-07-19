@@ -107,7 +107,13 @@ export async function handlePersistNotification(
         message: event.metadata.comment || undefined,
         actorId,
         relatedProposalId: proposalId,
-        link: `/cfp/proposal/${proposalId}`,
+        // When the decision carries a comment it is ALSO relayed into the
+        // proposal's message thread; point the status notification at the same
+        // #messages anchor as the message notification so the two bell rows lead
+        // to the same place instead of diverging (batch A / A7).
+        link: event.metadata.comment
+          ? `/cfp/proposal/${proposalId}#messages`
+          : `/cfp/proposal/${proposalId}`,
       })
     }
     await createNotifications(items)

@@ -51,6 +51,20 @@ describe('Slack client', () => {
     blocks: [{ type: 'section', text: { type: 'mrkdwn', text: 'Hello' } }],
   }
 
+  describe('escapeMrkdwn (A1)', () => {
+    it('escapes &, < and > and neutralizes link/mention injection', async () => {
+      const { escapeMrkdwn } = await import('@/lib/slack/client')
+      expect(escapeMrkdwn('a & b')).toBe('a &amp; b')
+      expect(escapeMrkdwn('<!channel>')).toBe('&lt;!channel&gt;')
+      expect(escapeMrkdwn('<https://evil|Label>')).toBe(
+        '&lt;https://evil|Label&gt;',
+      )
+      // `&` is escaped first, so introduced entities are not double-escaped.
+      expect(escapeMrkdwn('<a>')).toBe('&lt;a&gt;')
+      expect(escapeMrkdwn('plain text')).toBe('plain text')
+    })
+  })
+
   describe('development mode', () => {
     it('should log to console instead of sending', async () => {
       setEnv({ nodeEnv: 'development' })

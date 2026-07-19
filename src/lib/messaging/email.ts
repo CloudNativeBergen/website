@@ -1,11 +1,6 @@
 import 'server-only'
 import React from 'react'
-import {
-  resend,
-  retryWithBackoff,
-  delay,
-  EMAIL_CONFIG,
-} from '@/lib/email/config'
+import { resend, retryWithBackoff } from '@/lib/email/config'
 import { MessageNotificationTemplate } from '@/components/email/MessageNotificationTemplate'
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
@@ -48,9 +43,10 @@ async function sendOne(
           subject,
           excerpt,
           replyUrl: recipient.replyUrl,
-          // Same domain source as the deep link; profile hosts the settings.
+          // Settings live on the cfp profile for BOTH audiences; anchor at the
+          // notification section so the link matches the in-app gear (A9).
           preferencesUrl: conference.domains?.[0]
-            ? `https://${conference.domains[0]}/cfp/profile`
+            ? `https://${conference.domains[0]}/cfp/profile#notification-settings`
             : undefined,
           eventName: conference.title,
           eventLocation: `${conference.city}, ${conference.country}`,
@@ -75,10 +71,17 @@ async function sendOne(
   }
 }
 
+/** How many recipient emails to have in flight at once (A8). */
+const EMAIL_CONCURRENCY = 3
+
 /**
- * Send new-message emails to several recipients, sequentially with the shared
- * rate-limit delay between sends (mirrors the other email senders). Never
- * throws; returns how many were delivered.
+ * Send new-message emails to several recipients with BOUNDED CONCURRENCY (A8):
+ * a fixed pool of at most {@link EMAIL_CONCURRENCY} in-flight sends instead of a
+ * serial loop with a per-recipient delay, so a large recipient set no longer
+ * turns into a multi-second Send-button hang. `sendOne` never throws and
+ * `retryWithBackoff` absorbs Resend rate-limits (429), so no artificial spacing
+ * is needed. Per-recipient failures are logged inside `sendOne`; this function
+ * never throws and returns how many were delivered.
  */
 export async function sendMessageEmails(
   recipients: MessageEmailRecipient[],
@@ -90,10 +93,22 @@ export async function sendMessageEmails(
   },
 ): Promise<number> {
   let sent = 0
-  for (let i = 0; i < recipients.length; i++) {
-    if (i > 0) await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
-    const ok = await sendOne(recipients[i], context)
-    if (ok) sent++
+  let cursor = 0
+
+  async function worker(): Promise<void> {
+    while (cursor < recipients.length) {
+      const index = cursor++
+      const ok = await sendOne(recipients[index], context)
+      if (ok) sent++
+    }
   }
+
+  const workers = Array.from(
+    { length: Math.min(EMAIL_CONCURRENCY, recipients.length) },
+    () => worker(),
+  )
+  // `sendOne` is never-fail, but allSettled guarantees one worker's rejection
+  // can never abandon the others (never-fail contract).
+  await Promise.allSettled(workers)
   return sent
 }

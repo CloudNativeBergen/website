@@ -10,11 +10,15 @@ const mockPostSlackMessage = vi.fn() as MockedFunction<
   typeof import('@/lib/slack/client').postSlackMessage
 >
 
-vi.mock('@/lib/slack/client', () => ({
-  postSlackMessage: (
-    ...args: Parameters<typeof import('@/lib/slack/client').postSlackMessage>
-  ) => mockPostSlackMessage(...args),
-}))
+vi.mock('@/lib/slack/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/slack/client')>()
+  return {
+    ...actual, // keep the real escapeMrkdwn (A1)
+    postSlackMessage: (
+      ...args: Parameters<typeof import('@/lib/slack/client').postSlackMessage>
+    ) => mockPostSlackMessage(...args),
+  }
+})
 
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeaker: vi
@@ -179,6 +183,33 @@ describe('Slack notifications', () => {
 
       const [, options] = mockPostSlackMessage.mock.calls[0]
       expect(options).toEqual({ channel: undefined })
+    })
+  })
+
+  describe('notifyNewSpeakerMessage — mrkdwn injection escaping (A1)', () => {
+    it('escapes &, < and > in speaker-controlled fields', async () => {
+      const { notifyNewSpeakerMessage } = await import('@/lib/slack/notify')
+
+      await notifyNewSpeakerMessage(
+        {
+          authorName: '<!channel> Mallory & co',
+          subject: '<https://evil.example|CNCF Payroll>',
+          excerpt: 'wire money to <https://evil.example|here> & now',
+          adminPath: '/admin/proposals/p1#messages',
+        },
+        createMockConference(),
+      )
+
+      const [message] = mockPostSlackMessage.mock.calls[0]
+      const rendered = JSON.stringify(message.blocks)
+
+      // No raw control sequences survive: no link syntax, no broadcast mention.
+      expect(rendered).not.toContain('<!channel>')
+      expect(rendered).not.toContain('<https://evil.example|')
+      // The dangerous characters are entity-escaped instead.
+      expect(rendered).toContain('&lt;!channel&gt;')
+      expect(rendered).toContain('Mallory &amp; co')
+      expect(rendered).toContain('&lt;https://evil.example|CNCF Payroll&gt;')
     })
   })
 

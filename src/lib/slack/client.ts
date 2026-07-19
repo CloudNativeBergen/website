@@ -1,3 +1,17 @@
+/**
+ * Escape the three characters Slack treats as control characters inside a
+ * `mrkdwn` text field — `&`, `<`, `>` — per Slack's formatting guidance
+ * (https://api.slack.com/reference/surfaces/formatting#escaping). MUST be
+ * applied to EVERY user-controlled string interpolated into an `mrkdwn` field,
+ * otherwise a value like `<https://evil|CNCF Payroll>` renders as a phishing
+ * link and `<!channel>` broadcasts to the whole workspace (batch A / A1).
+ *
+ * `&` is replaced first so the entities we introduce are not double-escaped.
+ */
+export function escapeMrkdwn(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export type SlackBlock = {
   type: string
   text?: {
