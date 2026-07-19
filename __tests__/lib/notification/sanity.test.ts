@@ -923,7 +923,7 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
     // Cached: only one underlying read despite two calls.
     expect(readMock.fetch).toHaveBeenCalledTimes(1)
     const [query] = readMock.fetch.mock.calls[0]
-    expect(query).toContain('isOrganizer == true')
+    expect(query).toContain('_id in *[_type == "conference"].organizers[]._ref')
     expect(query).toContain('[0...200]')
   })
 

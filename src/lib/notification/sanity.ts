@@ -649,10 +649,17 @@ let organizerCache: { ids: string[]; expiresAt: number } | null = null
 
 /**
  * The `_id`s of every organizer speaker (bounded to
- * [0...{@link ORGANIZER_FETCH_LIMIT}]). `isOrganizer` is GLOBAL (an organizer of
- * one edition is an organizer everywhere); the conference scoping happens
- * implicitly because the created notification carries the conference ref. Cached
- * per instance for {@link ORGANIZER_CACHE_TTL_MS} (see the note above). The
+ * [0...{@link ORGANIZER_FETCH_LIMIT}]). THE CANONICAL ORGANIZER DEFINITION is
+ * membership in ANY conference's `organizers[]` array — the same rule the auth
+ * session and the admin speaker picker derive `isOrganizer` from
+ * (src/lib/speaker/sanity.ts). The speaker schema has NO stored `isOrganizer`
+ * field: an earlier version of this query tested `isOrganizer == true`, which
+ * matched NOTHING in production — silently emptying the messaging fan-out's
+ * organizer recipients, needs-reply, standing checks, and assignee validation
+ * while organizers could still browse /admin via the session's DERIVED flag.
+ * Organizer-of-one-edition = organizer everywhere (matches auth). Conference
+ * scoping happens implicitly because the created notification carries the
+ * conference ref. Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}. The
  * returned array is treated as read-only by callers (they wrap it in a Set).
  */
 export async function getOrganizerSpeakerIds(): Promise<string[]> {
@@ -667,7 +674,7 @@ export async function getOrganizerSpeakerIds(): Promise<string[]> {
   // empty result (`null`/`[]` — a conference with no organizers yet) IS a
   // success and is cached normally.
   const ids = await clientReadUncached.fetch<string[]>(
-    `*[_type == "speaker" && isOrganizer == true][0...${ORGANIZER_FETCH_LIMIT}]._id`,
+    `*[_type == "speaker" && _id in *[_type == "conference"].organizers[]._ref][0...${ORGANIZER_FETCH_LIMIT}]._id`,
   )
   const resolved = ids || []
   organizerCache = { ids: resolved, expiresAt: now + ORGANIZER_CACHE_TTL_MS }

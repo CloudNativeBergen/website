@@ -94,19 +94,23 @@ function claimSendSlot(speakerId: string): boolean {
 
 /**
  * Does `speakerId` have standing in `conferenceId` — a proposal (talk) in that
- * conference OR the organizer flag? This MUST match the population the admin
+ * conference OR organizer status? This MUST match the population the admin
  * speaker picker offers (`speaker.admin.search` = confirmed/accepted speakers ∪
  * organizers): a stricter server check rejects recipients the UI legitimately
- * suggests — the prod bug where an autocompleted organizer (no talk this
- * edition) failed with "Speaker not found". Cross-conference targeting stays
- * blocked: a talk-less non-organizer from another edition has no standing here.
+ * suggests. THE ORGANIZER CLAUSE USES THE CANONICAL DEFINITION — membership in
+ * a conference's `organizers[]` array, the same rule the session and the picker
+ * derive from. (The speaker schema has NO stored `isOrganizer` field: a prior
+ * version tested `isOrganizer == true`, which matches nothing in production and
+ * kept rejecting picker-offered organizers with "Speaker not found".)
+ * Cross-conference targeting stays blocked: a talk-less non-organizer from
+ * another edition has no standing here.
  */
 async function speakerHasStandingInConference(
   speakerId: string,
   conferenceId: string,
 ): Promise<boolean> {
   const id = await clientReadUncached.fetch<string | null>(
-    `*[_type == "speaker" && _id == $speakerId && (isOrganizer == true || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
+    `*[_type == "speaker" && _id == $speakerId && (_id in *[_type == "conference"].organizers[]._ref || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
     { speakerId, conferenceId },
     { cache: 'no-store' },
   )

@@ -437,7 +437,9 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
     // (speaker.admin.search) offers them, and a narrower server check regressed
     // into "Speaker not found" for autocompleted organizers in prod.
     const standingQuery = standingFetch.mock.calls[0][0] as string
-    expect(standingQuery).toContain('isOrganizer == true')
+    expect(standingQuery).toContain(
+      '_id in *[_type == "conference"].organizers[]._ref',
+    )
     expect(standingQuery).toContain('conference._ref == $conferenceId')
 
     expect(standingFetch).toHaveBeenCalledWith(
