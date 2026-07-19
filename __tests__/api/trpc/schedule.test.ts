@@ -47,6 +47,7 @@ function baseCtx(): Context {
     session: null,
     speaker: undefined,
     user: undefined,
+    workosUser: null,
     ipAddress: '',
   }
 }

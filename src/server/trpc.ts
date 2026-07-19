@@ -2,13 +2,70 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { AppEnvironment } from '@/lib/environment/config'
 import { structuredErrorData, type StructuredErrorData } from './errors'
+
+/**
+ * Identity of an authenticated WorkOS AuthKit user, projected from the sealed
+ * `wos-session` cookie. This is a SEPARATE auth system from the NextAuth
+ * (GitHub/LinkedIn) `session` above: NextAuth backs speakers/organizers on
+ * `/cfp` and `/admin`, whereas WorkOS backs workshop attendees on `/workshop`.
+ * Workshop signup authorization keys on this, never on client-supplied input.
+ */
+export interface WorkshopUserIdentity {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+}
+
+/**
+ * Resolve the WorkOS attendee identity for a tRPC request from the sealed
+ * `wos-session` cookie.
+ *
+ * Why not `withAuth()`: `withAuth()` reads the session out of a request header
+ * that the AuthKit MIDDLEWARE injects, and the middleware matcher only covers
+ * `/workshop*` — it does NOT run for `/api/trpc`, so `withAuth()` throws there.
+ * Instead we call `authkit(req)`, a public AuthKit helper that reads and unseals
+ * the `wos-session` cookie directly (via `getSessionFromCookie`). That cookie is
+ * encrypted+signed server-side with `WORKOS_COOKIE_PASSWORD`, so a client cannot
+ * forge it — it is a trustworthy, cookie-based server session, exactly the
+ * source authorization should bind to.
+ *
+ * We first cheaply check the cookie is present so the vast majority of tRPC
+ * calls (NextAuth admin/cfp/sponsor/message traffic, which carries no WorkOS
+ * cookie) skip AuthKit entirely. Any failure resolves to `null` (never throws),
+ * so a procedure's own guard decides (UNAUTHORIZED for workshop signup/cancel).
+ */
+async function resolveWorkshopUser(
+  req: NextRequest,
+): Promise<WorkshopUserIdentity | null> {
+  if (AppEnvironment.isTestMode) return null
+  const cookieName = process.env.WORKOS_COOKIE_NAME || 'wos-session'
+  if (!req.cookies.get(cookieName)) return null
+  try {
+    const { authkit } = await import('@workos-inc/authkit-nextjs')
+    const { session } = await authkit(req)
+    const user = session.user
+    if (!user?.id) return null
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    }
+  } catch {
+    return null
+  }
+}
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession({
     url: opts.req.url,
     headers: opts.req.headers,
   })
+
+  const workosUser = await resolveWorkshopUser(opts.req)
 
   // Extract IP address from headers
   const forwardedFor = opts.req.headers.get('x-forwarded-for')
@@ -26,6 +83,7 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
     session,
     speaker: session?.speaker,
     user: session?.user,
+    workosUser,
     ipAddress,
   }
 }

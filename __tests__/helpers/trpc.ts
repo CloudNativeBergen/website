@@ -19,7 +19,31 @@ export function createAnonymousCaller() {
     session: null,
     speaker: undefined,
     user: undefined,
+    workosUser: null,
     ipAddress: '',
+  })
+}
+
+/**
+ * A caller authenticated as a WorkOS AuthKit workshop attendee (NOT a NextAuth
+ * speaker). Mirrors what `createTRPCContext` derives from the sealed
+ * `wos-session` cookie, so workshop-router authz can be exercised directly.
+ */
+export function createWorkshopCaller(
+  workosUser?: Partial<import('@/server/trpc').WorkshopUserIdentity>,
+) {
+  return createCaller({
+    req: mockReq(),
+    session: null,
+    speaker: undefined,
+    user: undefined,
+    workosUser: {
+      id: workosUser?.id ?? 'workos-user-1',
+      email: workosUser?.email ?? 'attendee@example.com',
+      firstName: workosUser?.firstName ?? 'Test',
+      lastName: workosUser?.lastName ?? 'Attendee',
+    },
+    ipAddress: '127.0.0.1',
   })
 }
 
@@ -48,6 +72,7 @@ export function createAuthenticatedCaller(speakerId?: string) {
       name: speaker.name!,
       picture: 'https://example.com/avatar.jpg',
     },
+    workosUser: null,
     ipAddress: '127.0.0.1',
   })
 }

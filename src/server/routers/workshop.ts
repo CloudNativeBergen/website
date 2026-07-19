@@ -4,6 +4,8 @@ import {
   publicProcedure,
   adminProcedure,
   resolveConferenceId,
+  type Context,
+  type WorkshopUserIdentity,
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
@@ -12,7 +14,7 @@ import {
   workshopListInputSchema,
   workshopAvailabilitySchema,
   workshopSignupInputSchema,
-  workshopSignupsByUserSchema,
+  workshopSignupClientInputSchema,
   workshopSignupsByWorkshopSchema,
   cancelWorkshopSignupSchema,
   confirmWorkshopSignupSchema,
@@ -39,6 +41,31 @@ import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
+
+/**
+ * Return the authenticated WorkOS attendee for a self-service workshop action,
+ * or throw UNAUTHORIZED. The identity comes exclusively from the sealed WorkOS
+ * session cookie (see `resolveWorkshopUser` in trpc.ts) — it is NEVER taken from
+ * client input, which is what an attacker previously spoofed.
+ */
+function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
+  const user = ctx.workosUser
+  if (!user?.id) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be signed in to manage workshop signups',
+    })
+  }
+  return user
+}
+
+/** Display name for a signup doc, mirroring the workshop page's fallback order. */
+function workshopUserName(user: WorkshopUserIdentity): string {
+  if (user.firstName && user.lastName) {
+    return `${user.firstName} ${user.lastName}`
+  }
+  return user.firstName || user.lastName || user.email
+}
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -108,59 +135,57 @@ export const workshopRouter = router({
       }
     }),
 
-  getMySignups: publicProcedure
-    .input(workshopSignupsByUserSchema)
-    .query(async ({ input, ctx }) => {
-      try {
-        const sessionUser = ctx.session?.user as
-          { id?: string; sub?: string } | undefined
-        const userWorkOSId =
-          input.userWorkOSId || sessionUser?.id || sessionUser?.sub
+  getMySignups: publicProcedure.query(async ({ ctx }) => {
+    try {
+      // Identity is taken ONLY from the WorkOS session — never from client
+      // input — so a caller cannot read another attendee's signups. No session
+      // → no signups (rather than an error, since the workshop page renders
+      // this list optimistically).
+      const userWorkOSId = ctx.workosUser?.id
 
-        const conferenceId = await resolveConferenceId()
-
-        if (!userWorkOSId) {
-          return {
-            success: true,
-            data: [],
-            count: 0,
-          }
-        }
-
-        const signups = await getWorkshopSignups(
-          userWorkOSId,
-          conferenceId,
-          'status' in input && typeof input.status === 'string'
-            ? input.status
-            : undefined,
-        )
-
+      if (!userWorkOSId) {
         return {
           success: true,
-          data: signups,
-          count: signups.length,
+          data: [],
+          count: 0,
         }
-      } catch (error) {
-        if (error instanceof TRPCError) throw error
-
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch user signups',
-          cause: error,
-        })
       }
-    }),
+
+      const conferenceId = await resolveConferenceId()
+
+      const signups = await getWorkshopSignups(
+        userWorkOSId,
+        conferenceId,
+        undefined,
+      )
+
+      return {
+        success: true,
+        data: signups,
+        count: signups.length,
+      }
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch user signups',
+        cause: error,
+      })
+    }
+  }),
 
   signup: publicProcedure
-    .input(workshopSignupInputSchema)
-    .mutation(async ({ input }) => {
+    .input(workshopSignupClientInputSchema)
+    .mutation(async ({ input, ctx }) => {
       try {
-        if (!input.userWorkOSId || !input.userEmail || !input.userName) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'User information is required',
-          })
-        }
+        // Bind the signup to the authenticated WorkOS session. The id/email come
+        // from the sealed session cookie (authoritative); the client no longer
+        // sends — and cannot spoof — any identity.
+        const actor = requireWorkshopUser(ctx)
+        const userWorkOSId = actor.id
+        const userEmail = actor.email
+        const userName = workshopUserName(actor)
 
         const { conference } = await getConferenceForCurrentDomain({})
 
@@ -205,7 +230,7 @@ export const workshopRouter = router({
         }
 
         const existingSignups = await getWorkshopSignups(
-          input.userWorkOSId,
+          userWorkOSId,
           input.conference._ref,
           undefined,
         )
@@ -225,7 +250,14 @@ export const workshopRouter = router({
         const isWaitlist = !capacity || capacity.available <= 0
 
         const signup = await createWorkshopSignup({
-          ...input,
+          userWorkOSId,
+          userEmail,
+          userName,
+          experienceLevel: input.experienceLevel,
+          operatingSystem: input.operatingSystem,
+          workshop: input.workshop,
+          conference: input.conference,
+          notes: input.notes,
           status: isWaitlist
             ? WorkshopSignupStatus.WAITLIST
             : WorkshopSignupStatus.CONFIRMED,
@@ -264,8 +296,10 @@ export const workshopRouter = router({
 
   cancelSignup: publicProcedure
     .input(cancelWorkshopSignupSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
+        const actor = requireWorkshopUser(ctx)
+
         const signups = await getAllWorkshopSignups({
           signupIds: [input.signupId],
         })
@@ -274,6 +308,16 @@ export const workshopRouter = router({
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Signup not found',
+          })
+        }
+
+        // Ownership check: a caller may only cancel their OWN signup. Previously
+        // any authenticated caller could cancel ANY signup id, evicting other
+        // attendees' seats.
+        if (signups[0].userWorkOSId !== actor.id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You can only cancel your own workshop signup',
           })
         }
 
