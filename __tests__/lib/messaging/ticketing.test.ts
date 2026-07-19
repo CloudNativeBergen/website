@@ -28,6 +28,12 @@ vi.mock('@/lib/notification/sanity', () => ({
   getOrganizerSpeakerIds: vi.fn(async () => [] as string[]),
 }))
 
+// The `my-teams` view count binds the caller's team keys; stub the resolver so
+// the shared clientReadUncached mock isn't consumed by a teams read here.
+vi.mock('@/lib/teams', () => ({
+  getViewerTeamKeys: vi.fn(async () => [] as string[]),
+}))
+
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
 import {
@@ -574,6 +580,8 @@ describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
     expect(counts).toEqual({
       active: 3,
       needsReply: 2,
+      // `my-teams` count: the mocked fetch omits it ⇒ coalesced to 0.
+      myTeams: 0,
       unassigned: 6,
       mine: 1,
       resolved: 4,
@@ -583,6 +591,7 @@ describe('getConversationViewCounts — one GROQ round trip (S7)', () => {
     // ONE object projection with a count() per view.
     expect(query).toContain('"active": count(')
     expect(query).toContain('"needsReply": count(')
+    expect(query).toContain('"myTeams": count(')
     expect(query).toContain('"unassigned": count(')
     expect(query).toContain('"mine": count(')
     expect(query).toContain('"resolved": count(')

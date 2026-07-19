@@ -10,6 +10,7 @@ import { ReviewProgressWidget } from '@/components/admin/dashboard/widgets/Revie
 import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
 import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
 import { ScheduleBuilderStatusWidget } from '@/components/admin/dashboard/widgets/ScheduleBuilderStatusWidget'
+import { MyAreasWidget } from '@/components/admin/dashboard/widgets/MyAreasWidget'
 import type { Conference } from '@/lib/conference/types'
 import type { Widget } from '@/lib/dashboard/types'
 
@@ -61,6 +62,8 @@ export function renderWidgetContent(
       return <WorkshopCapacityWidget conference={conference} />
     case 'schedule-builder':
       return <ScheduleBuilderStatusWidget conference={conference} />
+    case 'my-areas':
+      return <MyAreasWidget conference={conference} config={config} />
     default:
       return (
         <div className="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">

@@ -31,6 +31,10 @@ export type ConversationStatus = 'open' | 'resolved'
  * - `active`      — status open (or absent) AND NOT globally archived AND NOT
  *                   per-user archived;
  * - `needs-reply` — active AND the last message's author is not an organizer;
+ * - `my-teams`    — active AND the thread's ROUTING team (sponsor thread →
+ *                   `sponsors`, everything else → `cfp`) is one of the caller's
+ *                   teams. INERT when the caller belongs to no team (shows every
+ *                   active thread) — a soft lens, never an access gate (TEAMS-3);
  * - `unassigned`  — active AND no organizer is assigned to follow up;
  * - `mine`        — active AND assigned to the caller;
  * - `resolved`    — status resolved AND not archived (neither global nor per-user);
@@ -46,6 +50,7 @@ export type ConversationStatus = 'open' | 'resolved'
 export type ConversationView =
   | 'active'
   | 'needs-reply'
+  | 'my-teams'
   | 'unassigned'
   | 'mine'
   | 'resolved'
@@ -297,6 +302,7 @@ export interface ConversationViewCounts {
   active: number
   archived: number
   needsReply?: number
+  myTeams?: number
   unassigned?: number
   mine?: number
   resolved?: number

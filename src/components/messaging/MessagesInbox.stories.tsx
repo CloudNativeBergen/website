@@ -81,9 +81,15 @@ const makeItems = (): ConversationListItem[] => [
  * BUILDER, invoked per request, so `minutesAgo` timestamps are computed after
  * `mockDateBeforeEach` has pinned the clock — calling `makeItems()` at module
  * load would freeze them against the real wall clock instead. */
+type TeamLens = {
+  teams: { key: string; title: string }[]
+  myTeamKeys: string[]
+}
+
 const conversationHandlers = (
   getItems: () => ConversationListItem[],
   counts?: ConversationViewCounts,
+  teamLens?: TeamLens,
 ) => [
   http.get('/api/trpc/:procs', ({ params }) =>
     HttpResponse.json(
@@ -94,7 +100,9 @@ const conversationHandlers = (
             ? { result: { data: getItems() } }
             : proc === 'message.viewCounts'
               ? { result: { data: counts ?? null } }
-              : { result: { data: null } },
+              : proc === 'message.teamLens'
+                ? { result: { data: teamLens ?? null } }
+                : { result: { data: null } },
         ),
     ),
   ),
@@ -104,10 +112,20 @@ const conversationHandlers = (
 const ORGANIZER_COUNTS: ConversationViewCounts = {
   active: 8,
   needsReply: 3,
+  myTeams: 4,
   unassigned: 2,
   mine: 1,
   resolved: 12,
   archived: 5,
+}
+
+/** A configured team lens: the viewer is on the CFP team. */
+const TEAM_LENS: TeamLens = {
+  teams: [
+    { key: 'cfp', title: 'Programme' },
+    { key: 'sponsors', title: 'Sales' },
+  ],
+  myTeamKeys: ['cfp'],
 }
 
 /** Organizer inbox rows carrying ticketing metadata so the row affordances show
@@ -233,6 +251,40 @@ export const OrganizerPopulatedDark: Story = {
     dark: true,
     msw: {
       handlers: conversationHandlers(makeOrganizerItems, ORGANIZER_COUNTS),
+    },
+  },
+}
+
+/**
+ * TEAMS-3 (L1 + L2): with a team lens configured, the organizer tab bar gains a
+ * "My teams" tab (with its count) between "Needs reply" and "Unassigned", and the
+ * rows carry the indigo cfp-team chip ('Programme'). The tab is hidden entirely
+ * when no team is configured (the other organizer stories, whose teamLens is
+ * null).
+ */
+export const OrganizerWithTeams: Story = {
+  args: { audience: 'organizer', allowNew: true },
+  parameters: {
+    msw: {
+      handlers: conversationHandlers(
+        makeOrganizerItems,
+        ORGANIZER_COUNTS,
+        TEAM_LENS,
+      ),
+    },
+  },
+}
+
+export const OrganizerWithTeamsDark: Story = {
+  args: { audience: 'organizer', allowNew: true },
+  parameters: {
+    dark: true,
+    msw: {
+      handlers: conversationHandlers(
+        makeOrganizerItems,
+        ORGANIZER_COUNTS,
+        TEAM_LENS,
+      ),
     },
   },
 }

@@ -144,3 +144,35 @@ export const ModalFooterExample: Story = {
     </div>
   ),
 }
+
+/**
+ * Rider proof (TEAMS-3): the `secondary` and `ghost` variants inside a DARK-mode
+ * modal surface. Before the dark-mode classes landed, `secondary` rendered as an
+ * illegible white-on-light chip on the dark panel; it must now read clearly.
+ */
+export const DarkModalFooter: Story = {
+  parameters: { backgrounds: { default: 'dark' } },
+  render: () => (
+    <div className="dark">
+      <div className="w-96 rounded-xl bg-gray-800 p-6 shadow-xl">
+        <h3 className="mb-1 text-base font-semibold text-white">
+          Announce to participants
+        </h3>
+        <p className="mb-4 text-sm text-gray-400">
+          Secondary and ghost buttons must stay legible on this dark panel.
+        </p>
+        <div className="flex justify-end gap-3 border-t border-gray-700 pt-4">
+          <AdminButton variant="ghost" size="md">
+            Reset
+          </AdminButton>
+          <AdminButton variant="secondary" size="md">
+            Cancel
+          </AdminButton>
+          <AdminButton color="blue" size="md">
+            Send
+          </AdminButton>
+        </div>
+      </div>
+    </div>
+  ),
+}

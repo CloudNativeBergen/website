@@ -36,6 +36,7 @@ import {
   FunnelIcon,
 } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
+import { teamMembersForKey } from '@/lib/teams/members'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
 import { SponsorDeleteModal } from '@/components/admin/sponsor-crm/SponsorDeleteModal'
@@ -119,6 +120,19 @@ export function SponsorCRMPipeline({
     () => searchParams.get('assignedTo') || undefined,
     [searchParams],
   )
+  // TEAMS-3 (L3): the configured teams and the selected `team=<key>` filter. A
+  // team filter resolves to its member id set (server matches assignee ∈ set);
+  // it is mutually exclusive with the per-owner/unassigned assignedTo filter.
+  const teams = useMemo(() => conference.teams ?? [], [conference.teams])
+  const hasTeams = teams.length > 0
+  const teamFilter = useMemo(
+    () => searchParams.get('team') || undefined,
+    [searchParams],
+  )
+  const teamMemberIds = useMemo(
+    () => teamMembersForKey(teams, teamFilter),
+    [teams, teamFilter],
+  )
   const tagsFilter = useMemo(
     () =>
       (searchParams.get('tags')?.split(',').filter(Boolean) ||
@@ -141,9 +155,14 @@ export function SponsorCRMPipeline({
   // Fetch with filters
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery(
     {
+      // A team filter (assignedToIds) takes precedence and clears the per-owner
+      // assignedTo — the two are mutually exclusive at the URL level too.
       assignedTo:
-        assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
-      unassignedOnly: assignedToFilter === 'unassigned',
+        teamMemberIds || assignedToFilter === 'unassigned'
+          ? undefined
+          : assignedToFilter,
+      assignedToIds: teamMemberIds,
+      unassignedOnly: !teamMemberIds && assignedToFilter === 'unassigned',
       tags: tagsFilter.length > 0 ? tagsFilter : undefined,
       tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
       searchQuery:
@@ -299,7 +318,9 @@ export function SponsorCRMPipeline({
     if (hasDefaultedRef.current) return
     if (!session?.speaker?._id) return
 
-    if (!searchParams.has('assignedTo')) {
+    // Don't default to "my sponsors" when a team filter is already active — the
+    // team is the intended owner lens for this visit.
+    if (!searchParams.has('assignedTo') && !searchParams.has('team')) {
       const params = new URLSearchParams(searchParams.toString())
       params.set('assignedTo', session.speaker._id)
       router.replace(`?${params.toString()}`, { scroll: false })
@@ -350,6 +371,7 @@ export function SponsorCRMPipeline({
   }, [
     tiersFilter.length,
     assignedToFilter,
+    teamFilter,
     tagsFilter.length,
     currentView,
     handleClearSelection,
@@ -418,9 +440,27 @@ export function SponsorCRMPipeline({
 
   const setOrganizerFilter = useCallback(
     (organizerId: string | null) => {
-      updateFilters('assignedTo', organizerId)
+      // Selecting an owner / Unassigned / All clears any active team filter
+      // (mutually exclusive owner axis).
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('team')
+      if (organizerId) params.set('assignedTo', organizerId)
+      else params.delete('assignedTo')
+      router.push(`?${params.toString()}`, { scroll: false })
     },
-    [updateFilters],
+    [router, searchParams],
+  )
+
+  const setTeamFilter = useCallback(
+    (teamKey: string | null) => {
+      // Selecting a team clears the per-owner assignedTo (and vice versa).
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('assignedTo')
+      if (teamKey) params.set('team', teamKey)
+      else params.delete('team')
+      router.push(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
   )
 
   const toggleTagFilter = useCallback(
@@ -444,6 +484,7 @@ export function SponsorCRMPipeline({
   const activeFilterCount =
     tiersFilter.length +
     (assignedToFilter ? 1 : 0) +
+    (teamFilter ? 1 : 0) +
     tagsFilter.length +
     (needsFollowUpFilter ? 1 : 0)
 
@@ -647,13 +688,13 @@ export function SponsorCRMPipeline({
 
             <FilterDropdown
               label="Owner"
-              activeCount={assignedToFilter ? 1 : 0}
+              activeCount={assignedToFilter || teamFilter ? 1 : 0}
               position="left"
               size="sm"
             >
               <FilterOption
                 onClick={() => setOrganizerFilter(null)}
-                checked={!assignedToFilter}
+                checked={!assignedToFilter && !teamFilter}
                 type="radio"
               >
                 All Owners
@@ -665,6 +706,26 @@ export function SponsorCRMPipeline({
               >
                 Unassigned
               </FilterOption>
+              {/* TEAMS-3 (L3): a Teams option group — selecting a team filters
+                  owners to its member set. Hidden when no team is configured. */}
+              {hasTeams && (
+                <>
+                  <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                  <div className="px-3 py-1 text-[10px] font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500">
+                    Teams
+                  </div>
+                  {teams.map((team) => (
+                    <FilterOption
+                      key={`team-${team.key}`}
+                      onClick={() => setTeamFilter(team.key)}
+                      checked={teamFilter === team.key}
+                      type="radio"
+                    >
+                      {team.title}
+                    </FilterOption>
+                  ))}
+                </>
+              )}
               <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
               {organizers.map((organizer) => (
                 <FilterOption
@@ -806,6 +867,17 @@ export function SponsorCRMPipeline({
               />
             )}
 
+            {/* Team pill (L3) */}
+            {teamFilter && (
+              <FilterPill
+                label={
+                  teams.find((t) => t.key === teamFilter)?.title || teamFilter
+                }
+                category="Team"
+                onRemove={() => setTeamFilter(null)}
+              />
+            )}
+
             {/* Tag pills */}
             {tagsFilter.map((tag) => {
               const tagDef = TAGS.find((t) => t.value === tag)
@@ -873,11 +945,23 @@ export function SponsorCRMPipeline({
             options: [
               { value: '', label: 'All' },
               { value: 'unassigned', label: 'Unassigned' },
+              // TEAMS-3 (L3): team options carry a `team:` prefix so the shared
+              // single-select owner group can route them apart from organizers.
+              ...(hasTeams
+                ? teams.map((t) => ({
+                    value: `team:${t.key}`,
+                    label: `Team: ${t.title}`,
+                  }))
+                : []),
               ...organizers.map((org) => ({ value: org._id, label: org.name })),
             ],
-            selected: [assignedToFilter ?? ''],
-            onChange: (value) =>
-              setOrganizerFilter(value === '' ? null : value),
+            selected: [
+              teamFilter ? `team:${teamFilter}` : (assignedToFilter ?? ''),
+            ],
+            onChange: (value) => {
+              if (value.startsWith('team:')) setTeamFilter(value.slice(5))
+              else setOrganizerFilter(value === '' ? null : value)
+            },
             multi: false,
           },
           {

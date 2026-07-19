@@ -216,6 +216,12 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         title: 'Recent Activity',
         position: { row: 12, col: 6, rowSpan: 4, colSpan: 6 },
       },
+      {
+        id: 'my-areas',
+        type: 'my-areas',
+        title: 'My Areas',
+        position: { row: 16, col: 0, rowSpan: 2, colSpan: 4 },
+      },
     ],
   },
 }

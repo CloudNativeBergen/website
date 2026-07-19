@@ -206,6 +206,11 @@ export const SponsorCRMFilterSchema = z.object({
   status: z.array(z.string()).optional(),
   invoiceStatus: z.array(z.string()).optional(),
   assignedTo: z.string().optional(),
+  // TEAMS-3 (L3): filter to a TEAM — assignee is any of the team's member ids.
+  // The client resolves the selected team key to its member set and sends it
+  // here; empty/absent means no team filter. Mutually exclusive with
+  // assignedTo/unassignedOnly on the client (team clears them and vice versa).
+  assignedToIds: z.array(z.string()).optional(),
   myAssignedOnly: z.boolean().optional(),
   unassignedOnly: z.boolean().optional(),
   tags: z.array(z.string()).optional(),

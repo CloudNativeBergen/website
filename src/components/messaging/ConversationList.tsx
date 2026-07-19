@@ -16,6 +16,10 @@ import type {
   ConversationListItem,
   ConversationView,
 } from '@/lib/messaging/types'
+import {
+  deriveThreadTeamChip,
+  type RoutingTeamTitles,
+} from '@/lib/messaging/threadTeam'
 
 export interface ConversationListProps {
   /** Conversations, newest activity first. Ignored while `isLoading`. */
@@ -62,6 +66,13 @@ export interface ConversationListProps {
   panelId?: string
   /** The id of the currently-selected tab, for the tabpanel's `aria-labelledby`. */
   labelledById?: string
+  /**
+   * TEAMS-3 (L2): resolved routing-team TITLES ({ sponsors, cfp }) for the
+   * per-row team chip. Supplied only for the organizer audience when teams are
+   * configured; `undefined` suppresses chips (no teams configured / speaker
+   * audience), leaving the standalone "Sponsor" chip as today.
+   */
+  routingTeamTitles?: RoutingTeamTitles
 }
 
 /**
@@ -78,6 +89,8 @@ function emptyStateFor(
     switch (view) {
       case 'needs-reply':
         return { headline: 'Nothing needs a reply 🎉' }
+      case 'my-teams':
+        return { headline: 'Nothing active for your teams' }
       case 'unassigned':
         return { headline: 'No unassigned conversations' }
       case 'mine':
@@ -194,6 +207,7 @@ export function ConversationList({
   onNewConversation,
   panelId,
   labelledById,
+  routingTeamTitles,
 }: ConversationListProps) {
   return (
     <div
@@ -273,6 +287,16 @@ export function ConversationList({
             // the viewer gets a brand-blue left edge and a "Direct" chip so it
             // reads distinctly from the organizer broadcast threads.
             const isDirect = item.direct === true
+            // TEAMS-3 (L2): the row's team chip, derived from the thread's
+            // routing team (sponsor → sponsors, else cfp). Organizer-only, and
+            // only when teams are configured (routingTeamTitles set). For a
+            // sponsor row the chip MERGES with — rather than duplicates — the
+            // amber Sponsor chip: the single amber chip shows the team title
+            // (fallback 'Sponsor'). A non-sponsor routed thread gets a quiet
+            // indigo team chip alongside the orthogonal gray 'Proposal' type chip.
+            const teamChip = isOrganizer
+              ? deriveThreadTeamChip(item.conversationType, routingTeamTitles)
+              : null
             return (
               // A `relative` row wrapper so the Unarchive ACTION can be a sibling
               // overlay of the row link rather than a <button> nested inside an
@@ -354,13 +378,25 @@ export function ConversationList({
                         </span>
                       )}
                       {/* SPONSOR thread chip (G2b) — mirrors the Proposal chip,
-                          amber to match the sponsor bubble/badge. The counterpart
-                          is the sponsor company name (server-resolved). */}
+                          amber to match the sponsor bubble/badge. When teams are
+                          configured (L2) this SAME chip shows the sponsors-team
+                          title instead of the bare 'Sponsor', so the team chip
+                          and the Sponsor chip never both appear. */}
                       {item.conversationType === 'sponsor' && (
                         <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                          Sponsor
+                          {teamChip?.label ?? 'Sponsor'}
                         </span>
                       )}
+                      {/* Non-sponsor routed thread's team chip (L2): the cfp-team
+                          title, indigo so it reads as a TEAM facet distinct from
+                          the gray 'Proposal' type chip. Hidden when the cfp team
+                          is unnamed/absent (teamChip null). */}
+                      {item.conversationType !== 'sponsor' &&
+                        teamChip?.tone === 'team' && (
+                          <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                            {teamChip.label}
+                          </span>
+                        )}
                       {isResolved && (
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                           {isOrganizer ? 'Resolved' : 'Closed by organizers'}

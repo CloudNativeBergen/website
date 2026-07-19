@@ -9,8 +9,8 @@ import {
 const registryEntries = Object.entries(WIDGET_REGISTRY)
 
 describe('Widget Registry', () => {
-  it('contains exactly 12 registered widget types', () => {
-    expect(registryEntries).toHaveLength(12)
+  it('contains exactly 13 registered widget types', () => {
+    expect(registryEntries).toHaveLength(13)
   })
 
   it('getWidgetMetadata returns metadata for registered types', () => {

@@ -140,6 +140,10 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
                 conversation.conversationType === 'sponsor'
                   ? 'sponsors'
                   : 'cfp',
+              // Reuse the organizer set fetched once before the loop as the
+              // team-else-all fallback, so each unassigned conversation does not
+              // re-read it.
+              allOrganizerIds: organizerIds,
             })
         if (recipientIds.length === 0) continue
 

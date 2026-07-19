@@ -56,6 +56,7 @@ export const ListConversationsSchema = z.object({
     .enum([
       'active',
       'needs-reply',
+      'my-teams',
       'unassigned',
       'mine',
       'resolved',

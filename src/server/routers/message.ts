@@ -48,6 +48,7 @@ import {
   truncateToGraphemeBoundary,
 } from '@/lib/messaging/links'
 import { notifyNewMessage, notifySponsorMessage } from '@/lib/messaging/notify'
+import { getViewerTeamLens } from '@/lib/teams'
 import { SPEAKER_ALLOWED_VIEWS } from '@/lib/messaging/types'
 import type {
   AccessSpeaker,
@@ -198,6 +199,18 @@ export const messageRouter = router({
       isOrganizer: ctx.speaker.isOrganizer === true,
       conferenceId,
     })
+  }),
+
+  /**
+   * The caller's TEAM LENS (TEAMS-3): every configured team's key + title, plus
+   * the keys of the teams the caller belongs to. Powers the inbox `My teams` tab
+   * visibility (hidden when no team is configured) and the per-row team chips.
+   * A soft lens — this is read-only convenience, never an access gate. One
+   * per-instance-cached teams read; cache it on the client.
+   */
+  teamLens: protectedProcedure.query(async ({ ctx }) => {
+    const conferenceId = await resolveConferenceId()
+    return getViewerTeamLens(conferenceId, ctx.speaker._id)
   }),
 
   /**

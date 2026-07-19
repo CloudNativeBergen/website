@@ -43,6 +43,12 @@ export interface SponsorCRMFilterBarProps {
   assignedToFilter?: string
   /** Callback to set organizer filter */
   onSetOrganizer: (organizerId: string | null) => void
+  /** TEAMS-3 (L3): configured teams; when present an owner "Teams" group is shown. */
+  teams?: { key: string; title: string }[]
+  /** Currently selected team key (mutually exclusive with assignedToFilter). */
+  teamFilter?: string
+  /** Callback to set the team filter (null clears it). */
+  onSetTeam?: (teamKey: string | null) => void
   /** Currently selected tags */
   tagsFilter: SponsorTag[]
   /** Callback to toggle a tag filter */
@@ -72,6 +78,9 @@ export function SponsorCRMFilterBar({
   organizers,
   assignedToFilter,
   onSetOrganizer,
+  teams,
+  teamFilter,
+  onSetTeam,
   tagsFilter,
   onToggleTag,
   onClearAllFilters,
@@ -81,8 +90,12 @@ export function SponsorCRMFilterBar({
   isMobileSearchOpen = false,
   onToggleMobileSearch,
 }: SponsorCRMFilterBarProps) {
+  const hasTeams = !!teams && teams.length > 0
   const activeFilterCount =
-    tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
+    tiersFilter.length +
+    (assignedToFilter ? 1 : 0) +
+    (teamFilter ? 1 : 0) +
+    tagsFilter.length
 
   return (
     <div className="shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -157,13 +170,26 @@ export function SponsorCRMFilterBar({
               options: [
                 { value: '', label: 'All Owners' },
                 { value: 'unassigned', label: 'Unassigned' },
+                // TEAMS-3 (L3): team options carry a `team:` prefix so the shared
+                // single-select owner group routes them apart from organizers.
+                ...(hasTeams
+                  ? teams!.map((t) => ({
+                      value: `team:${t.key}`,
+                      label: `Team: ${t.title}`,
+                    }))
+                  : []),
                 ...organizers.map((organizer) => ({
                   value: organizer._id,
                   label: organizer.name,
                 })),
               ],
-              selected: [assignedToFilter ?? ''],
-              onChange: (value) => onSetOrganizer(value === '' ? null : value),
+              selected: [
+                teamFilter ? `team:${teamFilter}` : (assignedToFilter ?? ''),
+              ],
+              onChange: (value) => {
+                if (value.startsWith('team:')) onSetTeam?.(value.slice(5))
+                else onSetOrganizer(value === '' ? null : value)
+              },
               multi: false,
             },
             {
@@ -254,6 +280,17 @@ export function SponsorCRMFilterBar({
               }
               category="Owner"
               onRemove={() => onSetOrganizer(null)}
+            />
+          )}
+
+          {/* Team pill (L3) */}
+          {teamFilter && (
+            <FilterPill
+              label={
+                teams?.find((t) => t.key === teamFilter)?.title || teamFilter
+              }
+              category="Team"
+              onRemove={() => onSetTeam?.(null)}
             />
           )}
 

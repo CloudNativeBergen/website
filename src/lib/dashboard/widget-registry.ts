@@ -785,6 +785,48 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
 })
 
 /**
+ * My Areas Widget (TEAMS-3, L4)
+ * Per-team needs-attention counts for the teams the viewer belongs to.
+ */
+export const MY_AREAS_WIDGET = defineWidget({
+  type: 'my-areas',
+  displayName: 'My Areas',
+  description:
+    "Needs-attention counts for the teams you're on, deep-linked to each surface",
+  category: 'operations',
+  icon: 'UserGroupIcon',
+  constraints: {
+    minCols: 3,
+    maxCols: 6,
+    minRows: 2,
+    maxRows: 4,
+    prefersLandscape: true,
+  },
+  defaultSize: {
+    name: 'small',
+    colSpan: 3,
+    rowSpan: 2,
+    description: 'Compact team areas',
+  },
+  availableSizes: [
+    { name: 'compact', colSpan: 3, rowSpan: 2 },
+    { name: 'small', colSpan: 4, rowSpan: 2 },
+    { name: 'wide', colSpan: 6, rowSpan: 2 },
+  ],
+  tags: ['teams', 'triage', 'operations'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: false,
+  },
+})
+
+/**
  * Widget Registry
  * Maps widget types to their metadata
  */
@@ -801,6 +843,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'workshop-capacity': WORKSHOP_CAPACITY_WIDGET,
   'travel-support': TRAVEL_SUPPORT_WIDGET,
   'recent-activity': RECENT_ACTIVITY_WIDGET,
+  'my-areas': MY_AREAS_WIDGET,
 }
 
 /**

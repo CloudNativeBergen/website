@@ -39,6 +39,9 @@ vi.mock('@/lib/trpc/client', () => ({
       viewCounts: {
         useQuery: () => ({ data: undefined }),
       },
+      teamLens: {
+        useQuery: () => ({ data: undefined }),
+      },
       listConversations: {
         useInfiniteQuery: (input: { view: string }) => {
           listInputs.push(input)

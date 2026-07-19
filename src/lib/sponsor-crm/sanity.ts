@@ -402,6 +402,8 @@ export async function listSponsorsForConference(
     status?: string[]
     invoiceStatus?: string[]
     assignedTo?: string
+    /** TEAMS-3 (L3): match sponsors whose assignee is any of these ids (a team's members). */
+    assignedToIds?: string[]
     unassignedOnly?: boolean
     tags?: string[]
     tiers?: string[]
@@ -422,6 +424,10 @@ export async function listSponsorsForConference(
     }
     if (filters?.unassignedOnly) {
       filterQuery += ` && !defined(assignedTo)`
+    } else if (filters?.assignedToIds) {
+      // TEAM filter (L3): assignee ∈ the team's member set. Defined-but-empty
+      // (a member-less team) correctly matches nothing (`in []`).
+      filterQuery += ` && assignedTo._ref in $assignedToIds`
     } else if (filters?.assignedTo) {
       filterQuery += ` && assignedTo._ref == $assignedTo`
     }
@@ -449,6 +455,7 @@ export async function listSponsorsForConference(
         statuses: filters?.status,
         invoiceStatuses: filters?.invoiceStatus,
         assignedTo: filters?.assignedTo,
+        assignedToIds: filters?.assignedToIds,
         tags: filters?.tags,
         tierIds: filters?.tiers,
         searchTerm: filters?.searchQuery
