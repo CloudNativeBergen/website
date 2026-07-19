@@ -91,7 +91,18 @@ const ADMIN_LINKS: MenuLink[] = [
  */
 function speakerLinksFor(isOrganizer: boolean): MenuLink[] {
   if (isOrganizer) return SPEAKER_LINKS
-  return [SPEAKER_LINKS[0], SPEAKER_MESSAGES_LINK, ...SPEAKER_LINKS.slice(1)]
+  // Anchor the insertion to the dashboard entry by href (not a positional
+  // splice) so a future reorder of SPEAKER_LINKS can't silently move Messages
+  // after the wrong item.
+  const dashboardIndex = SPEAKER_LINKS.findIndex(
+    (link) => link.href === '/cfp/list',
+  )
+  const insertAt = dashboardIndex === -1 ? 0 : dashboardIndex + 1
+  return [
+    ...SPEAKER_LINKS.slice(0, insertAt),
+    SPEAKER_MESSAGES_LINK,
+    ...SPEAKER_LINKS.slice(insertAt),
+  ]
 }
 
 /** Maps a NextAuth provider id to its display name and brand icon. */

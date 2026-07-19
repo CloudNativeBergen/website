@@ -454,8 +454,23 @@ export async function deleteProposal(
         { cache: 'no-store' },
       )) ?? []
 
-    // Deletion ORDER matters for strong references: a message strongly refs its
-    // conversation, so messages must go before conversations; the proposal is
+    // Per-conversation preference docs STRONGLY reference their conversation
+    // (like messages do), so they must also be deleted before the conversations
+    // or the conversation delete 409s for any thread a participant ever muted.
+    // (Found by the messaging retention job, which orders the same way.)
+    let preferenceIds: string[] = []
+    if (conversationIds.length > 0) {
+      preferenceIds =
+        (await clientRead.fetch<string[]>(
+          groq`*[_type == "conversationPreference" && conversation._ref in $conversationIds]._id`,
+          { conversationIds },
+          { cache: 'no-store' },
+        )) ?? []
+    }
+
+    // Deletion ORDER matters for strong references: messages AND preference
+    // docs strongly ref their conversation, so both go before conversations;
+    // the proposal is
     // deleted LAST, together with the co-speaker invitations / reviews that
     // strongly ref it (Sanity resolves intra-transaction constraints, so those
     // may share the final transaction). Everything else is weak-ref or
@@ -464,6 +479,9 @@ export async function deleteProposal(
     // large thread — a mid-way failure surfaces an error and leaves a partially
     // cascaded thread, which a retry finishes.
     for (const chunk of chunkArray(messageIds, PROPOSAL_DELETE_CHUNK_SIZE)) {
+      await commitDeletes(chunk)
+    }
+    for (const chunk of chunkArray(preferenceIds, PROPOSAL_DELETE_CHUNK_SIZE)) {
       await commitDeletes(chunk)
     }
     for (const chunk of chunkArray(

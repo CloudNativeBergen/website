@@ -122,6 +122,9 @@ describe('deleteProposal', () => {
       .mockResolvedValueOnce(['msg-1', 'msg-2'])
       // message notification ids (matched by proposal-thread link)
       .mockResolvedValueOnce(['notif-msg-1'])
+      // conversationPreference ids (strong conversation refs — must precede
+      // the conversation deletes)
+      .mockResolvedValueOnce(['pref-1'])
 
     const { err } = await deleteProposal('proposal-1')
 
@@ -139,13 +142,20 @@ describe('deleteProposal', () => {
       ],
     })
 
-    // Four transactions: messages, conversation, message-notification, then the
-    // cascade dependents + proposal.
-    expect(mockTransaction).toHaveBeenCalledTimes(4)
+    // The preference lookup targets the thread's conversations.
+    const prefCall = mockFetch.mock.calls[4]
+    expect(prefCall[0]).toContain('_type == "conversationPreference"')
+    expect(prefCall[0]).toContain('conversation._ref in $conversationIds')
+
+    // Five transactions: messages, preferences, conversation,
+    // message-notification, then the cascade dependents + proposal. Preferences
+    // strongly ref their conversation, so they must be deleted BEFORE it.
+    expect(mockTransaction).toHaveBeenCalledTimes(5)
     const deleted = mockTxDelete.mock.calls.map((call) => call[0])
     expect(deleted).toEqual([
       'msg-1',
       'msg-2',
+      'pref-1',
       'conversation.proposal.proposal-1',
       'notif-msg-1',
       'review-1',
