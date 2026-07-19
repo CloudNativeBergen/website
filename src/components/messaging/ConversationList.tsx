@@ -88,28 +88,45 @@ export function ConversationList({
         </div>
       ) : (
         <>
-          {items.map((item) => (
-            <Link
-              key={item._id}
-              href={conversationLinkPath(item, isOrganizer)}
-              prefetch={false}
-              className="flex items-baseline justify-between gap-3 px-4 py-3 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">
-                  {conversationTitle(item)}
-                </span>
-                {item.conversationType === 'proposal' && (
-                  <span className="mt-0.5 block text-xs text-gray-400 dark:text-gray-500">
-                    Proposal thread
+          {items.map((item) => {
+            const isUnread = item.unreadCount > 0
+            return (
+              <Link
+                key={item._id}
+                href={conversationLinkPath(item, isOrganizer)}
+                prefetch={false}
+                className="flex items-baseline justify-between gap-3 px-4 py-3 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60"
+              >
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={`block truncate text-sm text-gray-900 dark:text-white ${
+                      isUnread ? 'font-bold' : 'font-semibold'
+                    }`}
+                  >
+                    {conversationTitle(item)}
                   </span>
-                )}
-              </span>
-              <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">
-                {formatRelativeTime(item.lastMessageAt)}
-              </span>
-            </Link>
-          ))}
+                  {item.conversationType === 'proposal' && (
+                    <span className="mt-0.5 block text-xs text-gray-400 dark:text-gray-500">
+                      Proposal thread
+                    </span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-baseline gap-2">
+                  {isUnread && (
+                    <span
+                      aria-label={`${item.unreadCount} unread`}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-cloud-blue px-1.5 text-[11px] leading-none font-semibold text-white dark:bg-blue-600"
+                    >
+                      {item.unreadCount > 9 ? '9+' : item.unreadCount}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {formatRelativeTime(item.lastMessageAt)}
+                  </span>
+                </span>
+              </Link>
+            )
+          })}
           {hasMore && (
             <div className="p-2">
               <button

@@ -3,9 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
+import { SpeakerCombobox, type SpeakerOption } from './SpeakerCombobox'
 
 const MAX_SUBJECT = 200
 const MAX_BODY = 5000
+
+function errorCode(error: unknown): string | undefined {
+  return (error as { data?: { code?: string } } | null)?.data?.code
+}
 
 export interface NewConversationFormProps {
   /**
@@ -13,6 +18,12 @@ export interface NewConversationFormProps {
    * (e.g. `/cfp/messages`). The created conversation id is appended.
    */
   basePath: string
+  /**
+   * When true (organizer flow), a speaker picker is shown and a recipient is
+   * required — the created thread's subject speaker. Speakers omit this: their
+   * general threads are implicitly about themselves.
+   */
+  requireRecipient?: boolean
   /** Optional callback after a thread is created (before navigation). */
   onCreated?: (conversationId: string) => void
   /** Optional cancel handler (e.g. to collapse the form). */
@@ -21,15 +32,18 @@ export interface NewConversationFormProps {
 
 /**
  * Starts a general (non-proposal) conversation: a subject plus a first message.
- * On success it navigates to the newly created thread.
+ * Organizers additionally pick the recipient speaker the thread is about
+ * (`recipientSpeakerId`). On success it navigates to the newly created thread.
  */
 export function NewConversationForm({
   basePath,
+  requireRecipient = false,
   onCreated,
   onCancel,
 }: NewConversationFormProps) {
   const router = useRouter()
   const utils = api.useUtils()
+  const [recipient, setRecipient] = useState<SpeakerOption | null>(null)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
 
@@ -41,15 +55,26 @@ export function NewConversationForm({
     },
   })
 
+  // The recipient is only ever unresolvable when the organizer picked one; the
+  // server returns NOT_FOUND, which we surface inline against the picker.
+  const recipientNotFound = errorCode(sendMutation.error) === 'NOT_FOUND'
+
   const canSubmit =
     subject.trim().length > 0 &&
     body.trim().length > 0 &&
+    (!requireRecipient || recipient !== null) &&
     !sendMutation.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
-    sendMutation.mutate({ subject: subject.trim(), body: body.trim() })
+    sendMutation.mutate({
+      subject: subject.trim(),
+      body: body.trim(),
+      ...(requireRecipient && recipient
+        ? { recipientSpeakerId: recipient._id }
+        : {}),
+    })
   }
 
   return (
@@ -57,6 +82,31 @@ export function NewConversationForm({
       onSubmit={handleSubmit}
       className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
     >
+      {requireRecipient && (
+        <div>
+          <label
+            htmlFor="new-conversation-recipient"
+            className="block text-sm font-medium text-gray-900 dark:text-white"
+          >
+            Speaker
+          </label>
+          <SpeakerCombobox
+            id="new-conversation-recipient"
+            value={recipient}
+            onChange={setRecipient}
+            invalid={recipientNotFound}
+          />
+          {recipientNotFound && (
+            <p
+              role="alert"
+              className="mt-1 text-xs text-red-600 dark:text-red-400"
+            >
+              Speaker not found. Pick another speaker.
+            </p>
+          )}
+        </div>
+      )}
+
       <div>
         <label
           htmlFor="new-conversation-subject"
@@ -93,7 +143,7 @@ export function NewConversationForm({
         />
       </div>
 
-      {sendMutation.isError && (
+      {sendMutation.isError && !recipientNotFound && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           Couldn&apos;t start the conversation. Please try again.
         </p>

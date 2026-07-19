@@ -18,8 +18,9 @@ export interface MessagesInboxProps {
 
 /**
  * Inbox container for both audiences: loads the caller's conversations and
- * renders {@link ConversationList}. Speakers additionally get a
- * {@link NewConversationForm} to open a general thread with the organizers.
+ * renders {@link ConversationList}. When `allowNew` is set a
+ * {@link NewConversationForm} opens a general thread — speakers with the
+ * organizers; organizers with a chosen recipient speaker.
  */
 export function MessagesInbox({
   audience,
@@ -57,6 +58,7 @@ export function MessagesInbox({
           {showNew ? (
             <NewConversationForm
               basePath={basePath}
+              requireRecipient={isOrganizer}
               onCancel={() => setShowNew(false)}
             />
           ) : (

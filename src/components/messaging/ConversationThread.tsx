@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import {
   BellIcon,
@@ -8,7 +8,10 @@ import {
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
-import { proposalConversationId } from '@/lib/messaging/links'
+import {
+  conversationLinkPath,
+  proposalConversationId,
+} from '@/lib/messaging/links'
 import { formatRelativeTime } from '@/lib/notification/format'
 import type {
   ConversationPreference,
@@ -411,6 +414,60 @@ export function ConversationThread({
       }
     })
   }, [pages, participantById, meId])
+
+  // AUTO-MARK-READ: opening a thread clears its `message_received` notifications
+  // for the bell. We mark BOTH audience link variants (a recipient only ever
+  // received one) and only once the messages have actually loaded — never on an
+  // error/empty state. It fires once per mount and again on regained focus.
+  const markReadMutation = api.notification.markReadByLink.useMutation({
+    onSuccess: () => {
+      utils.notification.unreadCount.invalidate()
+      utils.notification.list.invalidate()
+    },
+  })
+  const markReadMutate = markReadMutation.mutate
+  const conversation = conversationQuery.data?.conversation
+  const messagesLoaded = messagesQuery.isSuccess
+  const markReadLinks = useMemo(
+    () =>
+      conversation
+        ? [
+            conversationLinkPath(conversation, true),
+            conversationLinkPath(conversation, false),
+          ]
+        : null,
+    [conversation],
+  )
+
+  // Guarded so a re-render can't re-fire within the same mount/focus; the focus
+  // listener resets the guard so a regained tab re-marks any newly-read items.
+  const markedKeyRef = useRef<string | null>(null)
+  const markRead = useCallback(() => {
+    if (!markReadLinks || !messagesLoaded) return
+    const key = markReadLinks.join('|')
+    if (markedKeyRef.current === key) return
+    markedKeyRef.current = key
+    markReadMutate({ links: markReadLinks })
+  }, [markReadLinks, messagesLoaded, markReadMutate])
+
+  useEffect(() => {
+    markRead()
+  }, [markRead])
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') {
+        markedKeyRef.current = null
+        markRead()
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [markRead])
 
   const invalidate = () => {
     if (convId) {

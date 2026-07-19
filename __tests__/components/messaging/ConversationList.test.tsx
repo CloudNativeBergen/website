@@ -69,4 +69,29 @@ describe('ConversationList', () => {
       screen.getByRole('region', { name: 'Conversations' }),
     ).toBeInTheDocument()
   })
+
+  it('hides the unread pill when a conversation has no unread messages', () => {
+    render(<ConversationList items={items} isOrganizer={false} />)
+    expect(screen.queryByLabelText(/unread/i)).not.toBeInTheDocument()
+  })
+
+  it('renders a blue unread pill and bolds the subject when unread', () => {
+    const unread: ConversationListItem[] = [{ ...items[0], unreadCount: 3 }]
+    render(<ConversationList items={unread} isOrganizer={false} />)
+    const pill = screen.getByLabelText('3 unread')
+    expect(pill).toHaveTextContent('3')
+    // Subject is bolded for an unread row.
+    expect(screen.getByText('Scaling Kubernetes')).toHaveClass('font-bold')
+  })
+
+  it('caps the unread pill at 9+', () => {
+    const unread: ConversationListItem[] = [{ ...items[0], unreadCount: 25 }]
+    render(<ConversationList items={unread} isOrganizer={false} />)
+    expect(screen.getByLabelText('25 unread')).toHaveTextContent('9+')
+  })
+
+  it('keeps a read row subject at semibold (not bold)', () => {
+    render(<ConversationList items={items} isOrganizer={false} />)
+    expect(screen.getByText('Scaling Kubernetes')).toHaveClass('font-semibold')
+  })
 })
