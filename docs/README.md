@@ -215,3 +215,5 @@ The frontend component (`src/components/Schedule.tsx`) fetches the relevant sche
 ## Additional Documentation
 
 - **[Query Parameters for Proposal Filters](./QUERY_PARAMETERS.md)** - Guide to using URL query parameters for filtering proposals in the admin interface
+- **[Messaging System Architecture](./MESSAGING_SYSTEM.md)** - Speaker↔organizer conversations: data model, deterministic ids, channel/link contracts, lifecycle, and security
+- **[Messaging UX Flows & Decision Log](./MESSAGING_UX.md)** - Messaging surfaces, user flows, the archive/mute precedence table, and the maintainer decision log

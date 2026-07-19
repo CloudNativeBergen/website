@@ -68,4 +68,4 @@ The persistent notification hub (`src/lib/notification/*`, `src/server/routers/n
 - **Bus-handler vs router-inline:** emit from a domain **bus handler** when multiple call sites raise the same event or the emit is cross-cutting; emit **inline in the router/mutation** only when the notification is a one-off tightly coupled to that single mutation.
 - **Retention:** notifications older than **90 days are hard-deleted** by a daily cron — **including unread ones**. The hub is not an archive; anything that must persist longer belongs in its own record.
 
-See `docs/ADMIN_NOTIFICATION_SYSTEM.md` for the ephemeral toast system it is often confused with.
+See `docs/ADMIN_NOTIFICATION_SYSTEM.md` for the ephemeral toast system it is often confused with, and `docs/MESSAGING_SYSTEM.md` / `docs/MESSAGING_UX.md` for the speaker↔organizer messaging that rides this hub (note: unread `message_received` notifications are the one type EXEMPT from the 90-day purge).
