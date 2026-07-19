@@ -113,6 +113,22 @@ export const updateWorkshopCapacitySchema = z.object({
     .max(500, 'Capacity too large'),
 })
 
+/** Owner/organizer composing a broadcast announcement to confirmed participants. */
+export const workshopAnnounceSchema = z.object({
+  workshopId: z.string().min(1, 'Workshop ID is required'),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Announcement message is required')
+    .max(2000, 'Announcement must be 2000 characters or fewer'),
+})
+
+/** Public read of a workshop's announcements, bounded to [0...50], newest first. */
+export const workshopAnnouncementsQuerySchema = z.object({
+  workshopId: z.string().min(1, 'Workshop ID is required'),
+  limit: z.number().int().min(0).max(50).optional().default(50),
+})
+
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>
 
 export const WorkshopSignupIdSchema = z.object({

@@ -8,9 +8,11 @@ import {
   SignupDetailsModal,
   AddParticipantModal,
   EditCapacityModal,
+  AnnounceModal,
 } from '@/components/admin/workshop'
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import type {
   WorkshopSignupStatus,
   ProposalWithWorkshopData,
@@ -39,6 +41,13 @@ interface EditCapacityModalState {
   currentSignups: number
 }
 
+interface AnnounceModalState {
+  isOpen: boolean
+  workshopId: string
+  workshopTitle: string
+  confirmedCount: number
+}
+
 interface WorkshopsClientPageProps {
   conferenceId: string
   initialWorkshops: ProposalWithWorkshopData[]
@@ -49,6 +58,13 @@ export function WorkshopsClientPage({
   initialWorkshops,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
+  const { showNotification } = useNotification()
+  const [announceModal, setAnnounceModal] = useState<AnnounceModalState>({
+    isOpen: false,
+    workshopId: '',
+    workshopTitle: '',
+    confirmedCount: 0,
+  })
   const [signupModal, setSignupModal] = useState<SignupModalState>({
     isOpen: false,
     workshopId: '',
@@ -146,6 +162,27 @@ export function WorkshopsClientPage({
     },
   })
 
+  const announceMutation = api.workshop.announce.useMutation({
+    onSuccess: (result) => {
+      setAnnounceModal((prev) => ({ ...prev, isOpen: false }))
+      showNotification({
+        type: result.failed > 0 ? 'warning' : 'success',
+        title: 'Announcement sent',
+        message:
+          result.failed > 0
+            ? `${result.sent} sent, ${result.failed} failed of ${result.recipientCount} confirmed participants.`
+            : `Emailed ${result.sent} confirmed participant${result.sent === 1 ? '' : 's'}.`,
+      })
+    },
+    onError: (error) => {
+      showNotification({
+        type: 'error',
+        title: 'Could not send announcement',
+        message: error.message,
+      })
+    },
+  })
+
   const signups = useMemo(() => signupsData?.data || [], [signupsData?.data])
 
   const signupsByWorkshop = useMemo(() => {
@@ -202,6 +239,13 @@ export function WorkshopsClientPage({
     updateCapacityMutation.mutate({
       workshopId: editCapacityModal.workshopId,
       capacity,
+    })
+  }
+
+  const handleAnnounce = (body: string) => {
+    announceMutation.mutate({
+      workshopId: announceModal.workshopId,
+      body,
     })
   }
 
@@ -314,6 +358,14 @@ export function WorkshopsClientPage({
                     currentSignups: confirmedCount,
                   })
                 }}
+                onAnnounce={() =>
+                  setAnnounceModal({
+                    isOpen: true,
+                    workshopId: workshop._id,
+                    workshopTitle: workshop.title,
+                    confirmedCount,
+                  })
+                }
               />
             )
           })
@@ -352,6 +404,15 @@ export function WorkshopsClientPage({
         currentSignups={editCapacityModal.currentSignups}
         onSubmit={handleUpdateCapacity}
         isSubmitting={updateCapacityMutation.isPending}
+      />
+
+      <AnnounceModal
+        isOpen={announceModal.isOpen}
+        onClose={() => setAnnounceModal({ ...announceModal, isOpen: false })}
+        workshopTitle={announceModal.workshopTitle}
+        confirmedCount={announceModal.confirmedCount}
+        onSubmit={handleAnnounce}
+        isSubmitting={announceMutation.isPending}
       />
     </div>
   )

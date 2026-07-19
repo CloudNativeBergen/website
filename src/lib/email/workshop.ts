@@ -250,3 +250,125 @@ export async function sendWorkshopSignupInstructions({
     }
   }
 }
+
+export interface WorkshopAnnouncementEmailRequest {
+  userEmail: string
+  userName: string
+  conference?: Conference
+  workshopTitle: string
+  /** Display name of the owner/organizer who wrote the announcement. */
+  authorName: string
+  /** Raw announcement text (owner-authored). MUST be HTML-escaped before embed. */
+  body: string
+}
+
+/**
+ * Escape HTML-significant characters so an announcement's free-text body cannot
+ * inject markup into the email. Newlines are converted to <br> AFTER escaping so
+ * the participant sees the same line breaks the author typed.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * Send ONE announcement email to ONE confirmed workshop participant. This is the
+ * attendee-facing counterpart to `sendBasicWorkshopConfirmation` (raw-HTML,
+ * Resend, retry-with-backoff) — deliberately NOT the speaker-audience messaging
+ * BaseEmailTemplate, since recipients are workshop attendees. Returns an
+ * `EmailResult` and never throws; the caller fans out with bounded concurrency
+ * and tolerates per-recipient failures.
+ */
+export async function sendWorkshopAnnouncementEmail({
+  userEmail,
+  userName,
+  conference,
+  workshopTitle,
+  authorName,
+  body,
+}: WorkshopAnnouncementEmailRequest): Promise<
+  EmailResult<{ emailId: string }>
+> {
+  try {
+    const fromEmail = conference?.contactEmail
+      ? `${conference.organizer} <${conference.contactEmail}>`
+      : conference?.domains?.[0]
+        ? `${conference.organizer} <contact@${conference.domains[0]}>`
+        : 'Cloud Native Days <contact@cloudnativedays.org>'
+
+    const contactEmail =
+      conference?.contactEmail || 'contact@cloudnativedays.org'
+
+    const subject = `Workshop Update: ${workshopTitle}`
+    const safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>')
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #F9FAFB; color: #334155;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F9FAFB; padding: 40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                <tr>
+                  <td style="padding: 40px;">
+                    <h2 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 700; color: #1D4ED8;">Workshop Update</h2>
+                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #64748B;">${escapeHtml(workshopTitle)}</p>
+                    <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${escapeHtml(userName)},</p>
+                    <div style="background-color: #F1F5F9; border-left: 4px solid #1D4ED8; padding: 16px 20px; margin: 0 0 24px 0; border-radius: 4px;">
+                      <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">${safeBody}</p>
+                    </div>
+                    <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 20px; color: #64748B;">— ${escapeHtml(authorName)}</p>
+                    <p style="margin: 24px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
+                    <p style="margin: 16px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${escapeHtml(conference?.organizer || 'Cloud Native Days')}</strong></p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${escapeHtml(conference?.organizer || 'Cloud Native Days')}. You are receiving this because you are a confirmed participant of this workshop.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `
+
+    const emailResult = await retryWithBackoff(async () => {
+      const result = await resend.emails.send({
+        from: fromEmail,
+        to: [userEmail],
+        subject,
+        html,
+      })
+
+      if (result.error) {
+        throw new Error(`Failed to send email: ${result.error.message}`)
+      }
+
+      return result
+    })
+
+    return {
+      data: {
+        emailId: emailResult.data?.id || '',
+      },
+    }
+  } catch (error) {
+    console.error('Error sending workshop announcement email:', error)
+    return {
+      error: createEmailError('Failed to send announcement email', 500),
+    }
+  }
+}

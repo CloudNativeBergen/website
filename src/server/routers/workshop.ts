@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   router,
   publicProcedure,
+  protectedProcedure,
   adminProcedure,
   resolveConferenceId,
   type Context,
@@ -23,6 +24,8 @@ import {
   batchConfirmSignupsSchema,
   batchCancelSignupsSchema,
   WorkshopSignupIdSchema,
+  workshopAnnounceSchema,
+  workshopAnnouncementsQuerySchema,
 } from '@/server/schemas/workshop'
 import {
   checkWorkshopCapacity,
@@ -41,6 +44,16 @@ import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
+import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  getWorkshopForAnnouncement,
+  getConfirmedAnnouncementRecipients,
+  createWorkshopAnnouncement,
+  getWorkshopAnnouncements,
+  sendAnnouncementToConfirmedParticipants,
+  isWorkshopFormat,
+} from '@/lib/workshop/announcements'
+import { consumeAnnouncementRateLimit } from '@/lib/workshop/announcementRateLimit'
 
 /**
  * Return the authenticated WorkOS attendee for a self-service workshop action,
@@ -94,6 +107,131 @@ export const workshopRouter = router({
       })
     }
   }),
+
+  // Public read of a workshop's broadcast announcements, newest first. Bounded
+  // [0...50] by the schema. Author name is projected through a WEAK ref, so it
+  // may be null if the authoring speaker was erased (GDPR).
+  announcements: publicProcedure
+    .input(workshopAnnouncementsQuerySchema)
+    .query(async ({ input }) => {
+      try {
+        const announcements = await getWorkshopAnnouncements(
+          input.workshopId,
+          input.limit,
+        )
+        return {
+          success: true,
+          data: announcements,
+          count: announcements.length,
+        }
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch workshop announcements',
+          cause: error,
+        })
+      }
+    }),
+
+  // Compose + broadcast an announcement to a workshop's CONFIRMED participants.
+  // One-way only (no threads/replies): recipients are WorkOS attendees, not
+  // speakers, so there is no identity to attribute a reply to.
+  announce: protectedProcedure
+    .input(workshopAnnounceSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const conferenceId = await resolveConferenceId()
+        const workshop = await getWorkshopForAnnouncement(input.workshopId)
+
+        // Multi-tenant isolation: the workshop must live in the caller's
+        // resolved conference, and must actually be a workshop-format talk.
+        if (!workshop || workshop.conferenceId !== conferenceId) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Workshop not found for this conference',
+          })
+        }
+        if (!isWorkshopFormat(workshop.format)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Referenced talk is not a workshop',
+          })
+        }
+
+        // Authorization: the caller must OWN the workshop (be one of its
+        // speakers) OR be an organizer. Organizer = membership in any
+        // conference's organizers[] (the canonical getOrganizerSpeakerIds
+        // definition); there is NO stored isOrganizer field on speaker docs.
+        const speakerId = ctx.speaker._id
+        const isOwner = workshop.speakerIds.includes(speakerId)
+        const isOrganizer = isOwner
+          ? false
+          : (await getOrganizerSpeakerIds()).includes(speakerId)
+
+        if (!isOwner && !isOrganizer) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'Only the workshop owner or an organizer can send announcements',
+          })
+        }
+
+        // Rate limit: 3 announcements per workshop per hour (best-effort,
+        // per-instance). Guards against an accidental double/triple send.
+        const rateLimit = consumeAnnouncementRateLimit(input.workshopId)
+        if (!rateLimit.allowed) {
+          const minutes = Math.max(1, Math.ceil(rateLimit.retryAfterMs / 60000))
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `Announcement limit reached for this workshop. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+          })
+        }
+
+        const announcement = await createWorkshopAnnouncement({
+          workshopId: input.workshopId,
+          conferenceId,
+          authorId: speakerId,
+          body: input.body,
+        })
+
+        // Fan out one email per confirmed participant (bounded concurrency,
+        // never-fail per recipient). Failures are counted, not thrown: the
+        // announcement is already persisted and visible on the page.
+        const recipients = await getConfirmedAnnouncementRecipients(
+          input.workshopId,
+        )
+        const { conference } = await getConferenceForCurrentDomain({})
+        const { sent, failed } = await sendAnnouncementToConfirmedParticipants({
+          conference: conference || undefined,
+          workshopTitle: workshop.title,
+          authorName: ctx.speaker.name,
+          body: input.body,
+          recipients,
+        })
+
+        revalidateTag('content:workshops', 'default')
+
+        return {
+          success: true,
+          data: {
+            ...announcement,
+            authorName: ctx.speaker.name,
+          },
+          recipientCount: recipients.length,
+          sent,
+          failed,
+          message: `Announcement sent to ${sent} of ${recipients.length} confirmed participant${recipients.length === 1 ? '' : 's'}`,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to send workshop announcement',
+          cause: error,
+        })
+      }
+    }),
 
   getAvailability: publicProcedure
     .input(workshopAvailabilitySchema)
