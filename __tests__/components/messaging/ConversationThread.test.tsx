@@ -61,14 +61,102 @@ describe('ConversationThreadView', () => {
     ).toBeInTheDocument()
   })
 
-  it('calls onSend with the trimmed body and clears the composer', () => {
+  it('calls onSend with the trimmed body but keeps the draft until success', () => {
+    // The composer must NOT clear optimistically — a failed send would then
+    // silently discard the text. It clears only when sendResetKey advances.
     const onSend = vi.fn()
-    renderView({ onSend })
+    const { rerender } = renderView({ onSend, sendResetKey: 0 })
     const textarea = screen.getByLabelText(/write a message/i)
     fireEvent.change(textarea, { target: { value: '  Hello there  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSend).toHaveBeenCalledWith('Hello there')
+    // Draft preserved (success not yet signalled).
+    expect((textarea as HTMLTextAreaElement).value).toBe('  Hello there  ')
+
+    // Container signals success by advancing sendResetKey → composer clears.
+    rerender(
+      <ConversationThreadView
+        messages={messages}
+        emptyText="Start the conversation with the organizers."
+        onSend={onSend}
+        sendResetKey={1}
+      />,
+    )
     expect((textarea as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('surfaces a send error with a Retry that keeps the failed draft (C2)', () => {
+    const onSend = vi.fn()
+    renderView({ onSend, sendError: true })
+    const textarea = screen.getByLabelText(/write a message/i)
+    fireEvent.change(textarea, { target: { value: 'important reply' } })
+
+    // The inline error is announced and the draft is preserved.
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t send/i)
+    expect((textarea as HTMLTextAreaElement).value).toBe('important reply')
+
+    // Retry re-submits the same preserved text.
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(onSend).toHaveBeenCalledWith('important reply')
+    expect((textarea as HTMLTextAreaElement).value).toBe('important reply')
+  })
+
+  it('fires onSend only once for a rapid double-activation (C6)', () => {
+    const onSend = vi.fn()
+    renderView({ onSend })
+    const textarea = screen.getByLabelText(/write a message/i)
+    fireEvent.change(textarea, { target: { value: 'no dupes' } })
+    const sendButton = screen.getByRole('button', { name: 'Send' })
+    fireEvent.click(sendButton)
+    fireEvent.click(sendButton)
+    expect(onSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders read-only notice and disables prefs while impersonating (C1)', () => {
+    const onSend = vi.fn()
+    const onSetMuted = vi.fn()
+    renderView({ onSend, onSetMuted, preference, readOnly: true })
+
+    // Composer is replaced by a subtle notice — no textarea to post as them.
+    expect(screen.queryByLabelText(/write a message/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/read-only while impersonating/i),
+    ).toBeInTheDocument()
+
+    // The preferences bar is present but its mutations are disabled.
+    const muteButton = screen.getByRole('button', { name: /mute/i })
+    expect(muteButton).toBeDisabled()
+    fireEvent.click(muteButton)
+    expect(onSetMuted).not.toHaveBeenCalled()
+  })
+
+  it('exposes a polite live region for newly appended messages (C7)', () => {
+    const { container, rerender } = renderView()
+    const live = container.querySelector('[aria-live="polite"]')
+    expect(live).toBeInTheDocument()
+    // Nothing announced on the initial render (no spam).
+    expect(live).toHaveTextContent('')
+
+    // A new message from someone else is announced politely.
+    const withNew: DisplayMessage[] = [
+      ...messages,
+      {
+        id: 'm3',
+        authorName: 'Program Committee',
+        isOrganizer: true,
+        isOwn: false,
+        body: 'One more thing…',
+        createdAt: new Date().toISOString(),
+      },
+    ]
+    rerender(
+      <ConversationThreadView
+        messages={withNew}
+        emptyText="Start the conversation with the organizers."
+        onSend={vi.fn()}
+      />,
+    )
+    expect(live).toHaveTextContent('New message from Program Committee')
   })
 
   it('disables Send when the composer is empty or whitespace', () => {

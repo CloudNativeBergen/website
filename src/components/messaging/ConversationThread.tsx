@@ -57,6 +57,29 @@ export interface ConversationThreadViewProps {
   /** Send a (trimmed, non-empty) message body. */
   onSend: (body: string) => void
   isSending?: boolean
+  /**
+   * True when the most recent send FAILED. The composer keeps the failed draft,
+   * an inline error is shown above it, and a Retry affordance re-submits.
+   */
+  sendError?: boolean
+  /**
+   * Advances (via the container) on every SUCCESSFUL send. The composer clears
+   * its draft only when this changes — never optimistically — so a failed send
+   * can't silently discard the text.
+   */
+  sendResetKey?: number
+  /**
+   * Fill the parent's height (standalone thread page): the message list flexes
+   * and the composer is pinned to the bottom. Default `false` keeps the normal
+   * flow used by the proposal `#messages` embed.
+   */
+  fillHeight?: boolean
+  /**
+   * Impersonation read-only mode: the composer is replaced by a subtle notice
+   * and the preferences bar is disabled, so an admin viewing as a speaker can't
+   * post or mutate preferences as them.
+   */
+  readOnly?: boolean
   /** Reports composer focus so the container can pause polling while typing. */
   onComposingChange?: (composing: boolean) => void
   /**
@@ -125,11 +148,14 @@ function PreferencesBar({
   onSetMuted,
   onSetEmailOverride,
   isSavingPreference,
+  readOnly = false,
 }: {
   preference: ConversationPreference
   onSetMuted: (muted: boolean) => void
   onSetEmailOverride?: (override: EmailOverride) => void
   isSavingPreference?: boolean
+  /** Impersonation: render the controls but block every mutation. */
+  readOnly?: boolean
 }) {
   const { muted, emailOverride } = preference
   return (
@@ -137,7 +163,7 @@ function PreferencesBar({
       <button
         type="button"
         onClick={() => onSetMuted(!muted)}
-        disabled={isSavingPreference}
+        disabled={isSavingPreference || readOnly}
         aria-pressed={muted}
         title={muted ? 'Muted — click to unmute' : 'Mute this conversation'}
         className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -154,7 +180,7 @@ function PreferencesBar({
         <span>Emails</span>
         <select
           value={emailOverride}
-          disabled={isSavingPreference || !onSetEmailOverride}
+          disabled={isSavingPreference || readOnly || !onSetEmailOverride}
           onChange={(e) =>
             onSetEmailOverride?.(e.target.value as EmailOverride)
           }
@@ -186,6 +212,10 @@ export function ConversationThreadView({
   subject,
   onSend,
   isSending = false,
+  sendError = false,
+  sendResetKey,
+  fillHeight = false,
+  readOnly = false,
   onComposingChange,
   preference,
   onSetMuted,
@@ -195,12 +225,36 @@ export function ConversationThreadView({
   const [draft, setDraft] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Synchronous in-flight guard: `isSending` reflects the PREVIOUS render, so a
+  // fast double-activation would slip through before it flips. This ref blocks
+  // the second fire immediately and is released when the send settles (a
+  // `sendResetKey` advance on success, or `sendError` flipping true on failure).
+  const sendingRef = useRef(false)
+
   const submit = () => {
     const body = draft.trim()
-    if (!body || isSending) return
+    if (!body || isSending || sendingRef.current) return
+    sendingRef.current = true
     onSend(body)
-    setDraft('')
   }
+
+  // Clear the composer ONLY after a send succeeds (the container advances
+  // `sendResetKey`); skipped on the initial mount so an in-progress draft is
+  // never wiped on first render.
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    setDraft('')
+    sendingRef.current = false
+  }, [sendResetKey])
+
+  // A failed send releases the guard so the preserved draft can be retried.
+  useEffect(() => {
+    if (sendError) sendingRef.current = false
+  }, [sendError])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -209,11 +263,69 @@ export function ConversationThreadView({
     }
   }
 
+  // Scroll management + a polite live region for newly appended messages.
+  // Newest-at-bottom means an incoming message changes the LAST id; a
+  // "Show earlier messages" load prepends and leaves the last id untouched.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const nearBottomRef = useRef(true)
+  const lastIdRef = useRef<string | null>(null)
+  const hadMessagesRef = useRef(false)
+  const [liveMessage, setLiveMessage] = useState('')
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    // Within ~80px of the bottom counts as "following the conversation".
+    nearBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (messages.length === 0) {
+      hadMessagesRef.current = false
+      lastIdRef.current = null
+      return
+    }
+    const last = messages[messages.length - 1]
+    const prevLastId = lastIdRef.current
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+    if (!hadMessagesRef.current) {
+      // Initial load: jump straight to the newest message (no animation).
+      if (el) el.scrollTop = el.scrollHeight
+    } else if (last.id !== prevLastId) {
+      // A genuinely new message arrived. Only follow it if the reader is
+      // already near the bottom — don't yank them up mid-history-read.
+      if (el && nearBottomRef.current) {
+        if (typeof el.scrollTo === 'function') {
+          el.scrollTo({
+            top: el.scrollHeight,
+            behavior: prefersReduced ? 'auto' : 'smooth',
+          })
+        } else {
+          el.scrollTop = el.scrollHeight
+        }
+      }
+      // Announce it politely (skip the viewer's own outgoing messages). This
+      // derives an assistive-tech announcement from an incoming-message event —
+      // a legitimate effect→state sync, not render-derived state.
+      if (!last.isOwn) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setLiveMessage(`New message from ${last.authorName}`)
+      }
+    }
+    hadMessagesRef.current = true
+    lastIdRef.current = last.id
+  }, [messages])
+
   return (
     <div
       role="region"
       aria-label={subject ? `Conversation: ${subject}` : 'Conversation'}
-      className="flex flex-col"
+      className={fillHeight ? 'flex min-h-0 flex-1 flex-col' : 'flex flex-col'}
     >
       {(subject || onSetMuted) && (
         <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
@@ -230,12 +342,19 @@ export function ConversationThreadView({
               onSetMuted={onSetMuted}
               onSetEmailOverride={onSetEmailOverride}
               isSavingPreference={isSavingPreference}
+              readOnly={readOnly}
             />
           )}
         </div>
       )}
 
-      <div className="max-h-[60vh] min-h-[8rem] space-y-3 overflow-y-auto py-4">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className={`space-y-3 overflow-y-auto overscroll-contain py-4 ${
+          fillHeight ? 'min-h-0 flex-1' : 'max-h-[60vh] min-h-[8rem]'
+        }`}
+      >
         {isLoading ? (
           <MessageSkeleton />
         ) : isError ? (
@@ -277,38 +396,78 @@ export function ConversationThreadView({
         )}
       </div>
 
-      <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
-        <label htmlFor="message-composer" className="sr-only">
-          Write a message
-        </label>
-        <textarea
-          id="message-composer"
-          ref={textareaRef}
-          value={draft}
-          maxLength={MAX_BODY}
-          rows={3}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => onComposingChange?.(true)}
-          onBlur={() => onComposingChange?.(false)}
-          placeholder="Write a message…"
-          className="block w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
-        />
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-gray-400 dark:text-gray-500">
-            {draft.length}/{MAX_BODY} · ⌘/Ctrl+Enter to send
-          </span>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={draft.trim().length === 0 || isSending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
-          >
-            <PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
-            {isSending ? 'Sending…' : 'Send'}
-          </button>
-        </div>
+      {/* Polite live region: announces newly appended messages to screen
+          readers without stealing focus. Empty on initial load (no spam). */}
+      <div aria-live="polite" className="sr-only">
+        {liveMessage}
       </div>
+
+      {readOnly ? (
+        <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+          <p className="rounded-lg bg-gray-50 px-3 py-2.5 text-center text-xs text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+            You&apos;re viewing this conversation as the speaker. Messaging is
+            read-only while impersonating.
+          </p>
+        </div>
+      ) : (
+        !isError && (
+          <div
+            className={`border-t border-gray-200 pt-3 dark:border-gray-700 ${
+              fillHeight
+                ? 'shrink-0 pb-[max(0.25rem,env(safe-area-inset-bottom))]'
+                : ''
+            }`}
+          >
+            {sendError && (
+              <div
+                role="alert"
+                className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-red-300/60 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-400/30 dark:bg-red-900/20 dark:text-red-300"
+              >
+                <span>
+                  Couldn&apos;t send your message. Your text is saved.
+                </span>
+                <button
+                  type="button"
+                  onClick={submit}
+                  className="shrink-0 rounded-md px-2 py-1 font-semibold text-red-700 underline-offset-2 transition hover:bg-red-100 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-red-300 dark:hover:bg-red-900/40"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            <label htmlFor="message-composer" className="sr-only">
+              Write a message
+            </label>
+            <textarea
+              id="message-composer"
+              ref={textareaRef}
+              value={draft}
+              maxLength={MAX_BODY}
+              rows={3}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => onComposingChange?.(true)}
+              onBlur={() => onComposingChange?.(false)}
+              placeholder="Write a message…"
+              className="block w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-cloud-blue focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500"
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {draft.length}/{MAX_BODY} · ⌘/Ctrl+Enter to send
+              </span>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={draft.trim().length === 0 || isSending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
+                {isSending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        )
+      )}
     </div>
   )
 }
@@ -327,6 +486,11 @@ export interface ConversationThreadProps {
   proposalId?: string
   /** The viewer's audience — only affects the empty-state wording. */
   audience: 'speaker' | 'organizer'
+  /**
+   * Fill the parent's height (standalone thread pages) so the composer pins to
+   * the bottom above the mobile keyboard. Left `false` for the proposal embed.
+   */
+  fillHeight?: boolean
 }
 
 /**
@@ -343,9 +507,15 @@ export function ConversationThread({
   conversationId,
   proposalId,
   audience,
+  fillHeight = false,
 }: ConversationThreadProps) {
   const { data: session } = useSession()
   const meId = session?.speaker?._id
+  // IMPERSONATION: while an admin views as a speaker, every query/mutation is
+  // scoped to the SPEAKER. Marking their notifications read or posting/mutating
+  // preferences as them would corrupt their real state, so the thread goes
+  // read-only (mirrors NotificationPanel).
+  const isImpersonating = session?.isImpersonating === true
   const utils = api.useUtils()
   const [isComposing, setIsComposing] = useState(false)
 
@@ -381,7 +551,15 @@ export function ConversationThread({
       initialCursor: undefined,
     },
   )
+  // NOT_FOUND means "no such conversation OR you can't access it" (the server
+  // no longer distinguishes non-participants). Treat it as a startable empty
+  // thread ONLY in the proposal auto-create context — the first send with a
+  // `proposalId` materialises the conversation. For a bare `conversationId`
+  // there is nothing to create, so a not-found there is a real error (e.g. a
+  // non-participant following a handed link) and must surface as such rather
+  // than a working composer whose sends would fail.
   const messagesNotFound = errorCode(messagesQuery.error) === 'NOT_FOUND'
+  const notFoundIsEmpty = messagesNotFound && !!proposalId
 
   const participants = conversationQuery.data?.participants
   const participantById = useMemo(() => {
@@ -440,16 +618,41 @@ export function ConversationThread({
   // listener resets the guard so a regained tab re-marks any newly-read items.
   const markedKeyRef = useRef<string | null>(null)
   const markRead = useCallback(() => {
-    if (!markReadLinks || !messagesLoaded) return
+    // Never mark read while impersonating — it would destroy the speaker's
+    // real unread state (their inbox is what these queries are scoped to).
+    if (!markReadLinks || !messagesLoaded || isImpersonating) return
     const key = markReadLinks.join('|')
     if (markedKeyRef.current === key) return
     markedKeyRef.current = key
     markReadMutate({ links: markReadLinks })
-  }, [markReadLinks, messagesLoaded, markReadMutate])
+  }, [markReadLinks, messagesLoaded, markReadMutate, isImpersonating])
 
   useEffect(() => {
     markRead()
   }, [markRead])
+
+  // A message arriving via the 20s poll while the thread is open + visible is
+  // rendered on screen but its bell notification would stay unread until the
+  // tab blurs/refocuses (markRead fires once per key). Re-mark when the newest
+  // message id advances while the document is visible so the bell stays honest.
+  const newestMessageId = messages[messages.length - 1]?.id
+  const prevNewestIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const prev = prevNewestIdRef.current
+    prevNewestIdRef.current = newestMessageId
+    // Only on a genuine advance (not the initial load, which the effect above
+    // already handles) and only when the reader can actually see it.
+    if (!newestMessageId || prev === undefined || prev === newestMessageId) {
+      return
+    }
+    if (
+      typeof document === 'undefined' ||
+      document.visibilityState === 'visible'
+    ) {
+      markedKeyRef.current = null
+      markRead()
+    }
+  }, [newestMessageId, markRead])
 
   useEffect(() => {
     const onFocus = () => {
@@ -474,7 +677,16 @@ export function ConversationThread({
     utils.message.listConversations.invalidate()
   }
 
-  const sendMutation = api.message.send.useMutation({ onSuccess: invalidate })
+  // Advances on every successful send; the presentational view watches this to
+  // clear the composer ONLY on success (never optimistically), so a failed send
+  // keeps the drafted text instead of silently discarding it.
+  const [sendSuccessKey, setSendSuccessKey] = useState(0)
+  const sendMutation = api.message.send.useMutation({
+    onSuccess: () => {
+      setSendSuccessKey((k) => k + 1)
+      invalidate()
+    },
+  })
   const preferenceMutation = api.message.setPreference.useMutation({
     onSuccess: invalidate,
   })
@@ -497,8 +709,8 @@ export function ConversationThread({
   return (
     <ConversationThreadView
       messages={messages}
-      isLoading={messagesQuery.isLoading && !messagesNotFound}
-      isError={messagesQuery.isError && !messagesNotFound}
+      isLoading={messagesQuery.isLoading && !notFoundIsEmpty}
+      isError={messagesQuery.isError && !notFoundIsEmpty}
       hasMore={messagesQuery.hasNextPage}
       onShowMore={() => messagesQuery.fetchNextPage()}
       isLoadingMore={messagesQuery.isFetchingNextPage}
@@ -506,6 +718,10 @@ export function ConversationThread({
       subject={conversationQuery.data?.conversation.subject}
       onSend={handleSend}
       isSending={sendMutation.isPending}
+      sendError={sendMutation.isError}
+      sendResetKey={sendSuccessKey}
+      fillHeight={fillHeight}
+      readOnly={isImpersonating}
       onComposingChange={setIsComposing}
       preference={conversationQuery.data?.preference}
       onSetMuted={
