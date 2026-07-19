@@ -1,4 +1,5 @@
 import { formats } from '../../src/lib/proposal/types'
+import { isValidTeamKey, countTeamKey } from '../../src/lib/teams/validation'
 import { defineField, defineType } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
@@ -561,6 +562,129 @@ export default defineType({
       type: 'array',
       fieldset: 'communication',
       of: [{ type: 'string' }],
+    }),
+    defineField({
+      name: 'teams',
+      title: 'Organizer Teams',
+      type: 'array',
+      fieldset: 'communication',
+      description:
+        'Optional sub-teams of organizers used as a SOFT LENS for routing notifications and outbound mail — never an access-control boundary. When no teams are defined, all organizers receive everything (today’s behaviour). Well-known keys: cfp, sponsors, volunteers, workshops (additional keys are allowed).',
+      of: [
+        {
+          type: 'object',
+          name: 'organizerTeam',
+          fields: [
+            defineField({
+              name: 'key',
+              title: 'Key',
+              type: 'string',
+              description:
+                'Stable lowercase kebab-case identifier (e.g. "cfp", "sponsors"). Used by notification routing; must be unique within this list.',
+              validation: (Rule) =>
+                Rule.required().custom((value, context) => {
+                  if (typeof value !== 'string' || value.length === 0) {
+                    return 'Key is required'
+                  }
+                  if (!isValidTeamKey(value)) {
+                    return 'Key must be lowercase kebab-case (letters, numbers and single hyphens)'
+                  }
+                  // Uniqueness within the array. Cross-field validation is done
+                  // by counting siblings on the parent document; Sanity has no
+                  // built-in per-field array-unique rule.
+                  const teams = (
+                    context?.document as { teams?: Array<{ key?: string }> }
+                  )?.teams
+                  if (countTeamKey(teams, value) > 1) {
+                    return `Duplicate team key "${value}" — keys must be unique`
+                  }
+                  return true
+                }),
+            }),
+            defineField({
+              name: 'title',
+              title: 'Title',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'members',
+              title: 'Members',
+              type: 'array',
+              description:
+                'Organizers on this team. Filtered to this conference’s organizers; membership is documented as a subset of organizers but not enforced cross-field.',
+              of: [
+                {
+                  type: 'reference',
+                  to: [{ type: 'speaker' }],
+                  options: {
+                    // Mirror sponsorForConference.assignedTo’s conference-scoped
+                    // organizer filter, but scope to THIS conference document’s
+                    // own _id (strip the drafts. prefix so it matches the
+                    // published organizers[] refs).
+                    filter: ({ document }: { document: { _id?: string } }) => {
+                      const id = document?._id?.replace(/^drafts\./, '')
+                      if (!id) {
+                        return {
+                          filter:
+                            '_id in *[_type == "conference"].organizers[]._ref',
+                        }
+                      }
+                      return {
+                        filter:
+                          '_id in *[_type == "conference" && _id == $conferenceId][0].organizers[]._ref',
+                        params: { conferenceId: id },
+                      }
+                    },
+                  },
+                },
+              ],
+              validation: (Rule) => Rule.required().min(1).unique(),
+            }),
+            defineField({
+              name: 'slackChannel',
+              title: 'Slack Channel',
+              type: 'string',
+              description:
+                'Overrides the conference-level channel for this team’s notifications; falls back to cfpNotificationChannel / salesNotificationChannel per event kind.',
+            }),
+            defineField({
+              name: 'emailIdentity',
+              title: 'Email Identity',
+              type: 'array',
+              of: [{ type: 'string' }],
+              options: {
+                list: [
+                  { title: 'Contact Email', value: 'contactEmail' },
+                  { title: 'CFP Email', value: 'cfpEmail' },
+                  { title: 'Sponsor Email', value: 'sponsorEmail' },
+                ],
+              },
+              description:
+                'Which conference email identity this team’s outbound mail uses. Falls back to the conference default when unset.',
+            }),
+          ],
+          preview: {
+            select: {
+              title: 'title',
+              key: 'key',
+              members: 'members',
+            },
+            prepare(selection) {
+              const { title, key, members } = selection as {
+                title?: string
+                key?: string
+                members?: unknown[]
+              }
+              const count = Array.isArray(members) ? members.length : 0
+              return {
+                title: title || key || 'Team',
+                subtitle: `${key ? `${key} · ` : ''}${count} member${count === 1 ? '' : 's'}`,
+              }
+            },
+          },
+        },
+      ],
     }),
 
     // === Content & Announcements ===

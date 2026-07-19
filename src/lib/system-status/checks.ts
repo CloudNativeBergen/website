@@ -254,6 +254,31 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
     ),
   )
 
+  // ---- CONFERENCE -----------------------------------------------------------
+  const teamCount = Array.isArray(conference.teams)
+    ? conference.teams.length
+    : 0
+  checks.push(
+    teamCount > 0
+      ? {
+          id: 'conference.teams',
+          group: 'conference',
+          label: 'Organizer teams',
+          status: 'ok',
+          value: `${teamCount} team${teamCount === 1 ? '' : 's'} configured`,
+          detail:
+            'Notifications and outbound mail can be routed per team; a soft lens, never access control',
+        }
+      : {
+          id: 'conference.teams',
+          group: 'conference',
+          label: 'Organizer teams',
+          status: 'off',
+          value: 'no teams',
+          detail: 'All organizers receive everything (today’s behaviour)',
+        },
+  )
+
   // ---- AUTH -----------------------------------------------------------------
   const providerNames = providerMap.map((p) => p.name).join(', ')
   checks.push(

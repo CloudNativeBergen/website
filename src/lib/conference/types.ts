@@ -5,6 +5,7 @@ import { Topic } from '@/lib/topic/types'
 import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import type { OrganizerTeam } from '@/lib/teams/types'
 
 export interface CrmActivityThreshold {
   _key?: string
@@ -140,6 +141,13 @@ export interface Conference {
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
   socialLinks?: string[]
+  /**
+   * Optional organizer sub-teams — a SOFT routing lens, never access control.
+   * Absent = today’s behaviour (all organizers receive everything). `members`
+   * are speaker `_id`s when fetched via the normalized conference projection or
+   * {@link import('@/lib/teams').getConferenceTeams}. See docs/ORGANIZER_TEAMS.md.
+   */
+  teams?: OrganizerTeam[]
   organizers: Speaker[]
   featuredSpeakers?: SpeakerWithTalks[]
   featuredTalks?: ProposalExisting[]

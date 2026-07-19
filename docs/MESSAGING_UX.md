@@ -151,3 +151,5 @@ layered on the notification hub rather than an extension of `conversation`.
   link contracts, lifecycle, security.
 - **`ADMIN_NOTIFICATION_SYSTEM.md`** — the ephemeral toast system (not the hub).
 - **`AGENTS.md` → "In-app notifications"** — the hub rules messaging inherits.
+- **`ORGANIZER_TEAMS.md`** — the organizer-teams soft lens (routing / defaults /
+  filters, never access control) that the messaging fan-out will route through.
