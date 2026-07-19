@@ -133,6 +133,38 @@ describe('status change — speakers minus actor, gated by shouldNotify', () => 
     expect(lastItems()[0].message).toBe('Not a fit this year')
   })
 
+  it('links to the #messages anchor when a decision comment is present (A7)', async () => {
+    // A commented decision is ALSO relayed into the proposal thread, so the
+    // status notification points at the same #messages anchor as the message
+    // notification (they must not lead to two seemingly different places).
+    await handlePersistNotification(
+      makeEvent(
+        {
+          action: Action.accept,
+          newStatus: Status.accepted,
+          speakers: [
+            { _id: 'sp-1' },
+          ] as unknown as ProposalStatusChangeEvent['speakers'],
+        },
+        { comment: 'See you in Bergen!' },
+      ),
+    )
+    expect(lastItems()[0].link).toBe('/cfp/proposal/prop-1#messages')
+  })
+
+  it('links to the bare proposal when there is no comment (A7)', async () => {
+    await handlePersistNotification(
+      makeEvent({
+        action: Action.accept,
+        newStatus: Status.accepted,
+        speakers: [
+          { _id: 'sp-1' },
+        ] as unknown as ProposalStatusChangeEvent['speakers'],
+      }),
+    )
+    expect(lastItems()[0].link).toBe('/cfp/proposal/prop-1')
+  })
+
   it('does NOT notify when shouldNotify is false', async () => {
     await handlePersistNotification(
       makeEvent(

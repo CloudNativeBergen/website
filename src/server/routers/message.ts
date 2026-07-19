@@ -1,6 +1,8 @@
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, resolveConferenceId } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { clientReadUncached } from '@/lib/sanity/client'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import {
   ListConversationsSchema,
   GetConversationSchema,
@@ -20,10 +22,72 @@ import {
   getProposalForConversation,
   setConversationPreference,
   canAccessConversation,
-  speakerExists,
 } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import type { ConversationWithContext } from '@/lib/messaging/types'
+
+/**
+ * Per-speaker sliding-window throttle for `message.send` (batch A / A2). Sending
+ * fans out to Slack (one post) and to N organizer emails, so an unthrottled
+ * loop amplifies. Allow a burst of {@link SEND_MAX_IN_WINDOW} sends per
+ * {@link SEND_WINDOW_MS}, then reject with TOO_MANY_REQUESTS.
+ *
+ * Lives in module memory, so on serverless it is PER-INSTANCE only — a burst
+ * spread across instances sees a higher effective ceiling. That's acceptable:
+ * this caps accidental/abusive hammering on a single instance while the email
+ * and Slack providers rate-limit further downstream (same caveat as push.ts's
+ * claimTestCooldown). The map is size-capped so it can never grow without bound.
+ */
+const SEND_WINDOW_MS = 60_000
+const SEND_MAX_IN_WINDOW = 10
+const MAX_RATE_ENTRIES = 10_000
+const recentSendsBySpeaker = new Map<string, number[]>()
+
+/**
+ * Record a send for `speakerId` and report whether it is allowed right now.
+ * Returns false when the speaker already made {@link SEND_MAX_IN_WINDOW} sends
+ * within the trailing {@link SEND_WINDOW_MS}; otherwise stamps now and allows.
+ */
+function claimSendSlot(speakerId: string): boolean {
+  const now = Date.now()
+  const cutoff = now - SEND_WINDOW_MS
+  const recent = (recentSendsBySpeaker.get(speakerId) ?? []).filter(
+    (t) => t > cutoff,
+  )
+  // Re-insert at the tail so the just-active speaker is the most-recent entry
+  // (eviction below always targets the genuinely oldest key).
+  recentSendsBySpeaker.delete(speakerId)
+  if (recent.length >= SEND_MAX_IN_WINDOW) {
+    recentSendsBySpeaker.set(speakerId, recent)
+    return false
+  }
+  recent.push(now)
+  if (recentSendsBySpeaker.size >= MAX_RATE_ENTRIES) {
+    const oldest = recentSendsBySpeaker.keys().next().value
+    if (oldest !== undefined) recentSendsBySpeaker.delete(oldest)
+  }
+  recentSendsBySpeaker.set(speakerId, recent)
+  return true
+}
+
+/**
+ * Does `speakerId` have standing in `conferenceId` — i.e. at least one proposal
+ * (talk) in that conference? An organizer-initiated general thread must target a
+ * speaker who belongs to the CURRENT conference, not merely one who exists in
+ * some conference (batch A / A5). Cheapest correct check: a single existence
+ * probe rather than loading proposals.
+ */
+async function speakerHasStandingInConference(
+  speakerId: string,
+  conferenceId: string,
+): Promise<boolean> {
+  const id = await clientReadUncached.fetch<string | null>(
+    `*[_type == "talk" && conference._ref == $conferenceId && $speakerId in speakers[]._ref][0]._id`,
+    { speakerId, conferenceId },
+    { cache: 'no-store' },
+  )
+  return Boolean(id)
+}
 
 /**
  * Speaker↔organizer messaging (M1). Every procedure derives the actor from
@@ -50,14 +114,14 @@ export const messageRouter = router({
     .input(GetConversationSchema)
     .query(async ({ ctx, input }) => {
       const conversation = await getConversationById(input.id)
-      if (!conversation) {
+      // Return NOT_FOUND for both "absent" and "access denied" so that, with
+      // deterministic proposal-thread ids, the response never reveals whether a
+      // thread the caller can't see exists (batch A / A3).
+      if (!conversation || !canAccessConversation(conversation, ctx.speaker)) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Conversation not found',
         })
-      }
-      if (!canAccessConversation(conversation, ctx.speaker)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
       }
       const [participants, preference] = await Promise.all([
         getConversationParticipants(conversation),
@@ -71,14 +135,12 @@ export const messageRouter = router({
     .input(ListMessagesSchema)
     .query(async ({ ctx, input }) => {
       const conversation = await getConversationById(input.conversationId)
-      if (!conversation) {
+      // NOT_FOUND for absent OR inaccessible — no existence oracle (A3).
+      if (!conversation || !canAccessConversation(conversation, ctx.speaker)) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Conversation not found',
         })
-      }
-      if (!canAccessConversation(conversation, ctx.speaker)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
       }
       return listMessages({
         conversationId: conversation._id,
@@ -124,14 +186,19 @@ export const messageRouter = router({
 
       if (input.conversationId) {
         const existing = await getConversationById(input.conversationId)
-        if (!existing) {
+        // Collapse absent / wrong-conference / inaccessible into a single
+        // NOT_FOUND: no existence oracle (A3), and a conversation from another
+        // conference must never be posted to on this domain — that would stamp
+        // the message with wrong-domain email/Slack links (batch A / A4).
+        if (
+          !existing ||
+          existing.conferenceId !== conferenceId ||
+          !canAccessConversation(existing, ctx.speaker)
+        ) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Conversation not found',
           })
-        }
-        if (!canAccessConversation(existing, ctx.speaker)) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
         }
         conversation = existing
       } else if (input.proposalId) {
@@ -172,10 +239,18 @@ export const messageRouter = router({
                 'recipientSpeakerId is required when an organizer starts a general conversation',
             })
           }
-          if (!(await speakerExists(input.recipientSpeakerId))) {
+          // The recipient must have standing in THIS conference (a proposal in
+          // it), not merely exist in some conference (batch A / A5).
+          if (
+            !(await speakerHasStandingInConference(
+              input.recipientSpeakerId,
+              conferenceId,
+            ))
+          ) {
             throw new TRPCError({
               code: 'NOT_FOUND',
-              message: 'recipientSpeakerId does not resolve to a speaker',
+              message:
+                'recipientSpeakerId does not resolve to a speaker in this conference',
             })
           }
           subjectSpeakerId = input.recipientSpeakerId
@@ -202,20 +277,35 @@ export const messageRouter = router({
         })
       }
 
+      // Throttle only genuine sends (after authz/validation), since only a
+      // committed message triggers the Slack + N-email amplification (A2).
+      if (!claimSendSlot(actorId)) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message:
+            'You are sending messages too quickly. Please wait a moment and try again.',
+        })
+      }
+
       const message = await addMessage({
         conversationId: conversation._id,
         authorId: actorId,
         body: input.body,
       })
 
-      // Fan-out is fire-and-forget within the request: it never throws, and a
-      // failure must not fail the (committed) message write.
-      await notifyNewMessage({
-        conversation,
-        message,
-        authorId: actorId,
-        conference,
-      })
+      // Detach the fan-out from the response path (A8): the message is already
+      // committed and returned below; the (never-fail) Slack/email/hub fan-out
+      // runs AFTER the response so a large recipient set can't hang the Send
+      // button. `runAfterResponse` uses Next's `after()` in a request scope and
+      // falls back to a self-catching detachment elsewhere.
+      runAfterResponse(() =>
+        notifyNewMessage({
+          conversation,
+          message,
+          authorId: actorId,
+          conference,
+        }),
+      )
 
       return { conversationId: conversation._id, message }
     }),
@@ -225,14 +315,12 @@ export const messageRouter = router({
     .input(SetPreferenceSchema)
     .mutation(async ({ ctx, input }) => {
       const conversation = await getConversationById(input.conversationId)
-      if (!conversation) {
+      // NOT_FOUND for absent OR inaccessible — no existence oracle (A3).
+      if (!conversation || !canAccessConversation(conversation, ctx.speaker)) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Conversation not found',
         })
-      }
-      if (!canAccessConversation(conversation, ctx.speaker)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
       }
       return setConversationPreference({
         conversationId: conversation._id,

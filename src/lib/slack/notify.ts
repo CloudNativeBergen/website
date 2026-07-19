@@ -6,6 +6,7 @@ import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
 import {
   postSlackMessage,
+  escapeMrkdwn,
   type SlackBlock,
   type SlackMessage,
 } from '@/lib/slack/client'
@@ -117,11 +118,11 @@ function createProposalInfoBlocks(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Title:*\n${proposal.title}`,
+          text: `*Title:*\n${escapeMrkdwn(proposal.title)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Speaker:*\n${speakerNames}`,
+          text: `*Speaker:*\n${escapeMrkdwn(speakerNames)}`,
         },
       ],
     },
@@ -177,7 +178,7 @@ export async function notifyProposalStatusChange(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Reason:*\n${reason.trim()}`,
+        text: `*Reason:*\n${escapeMrkdwn(reason.trim())}`,
       },
     })
   }
@@ -258,11 +259,11 @@ export async function notifyNewSpeakerMessage(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*From:*\n${authorName}`,
+          text: `*From:*\n${escapeMrkdwn(authorName)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Subject:*\n${subject}`,
+          text: `*Subject:*\n${escapeMrkdwn(subject)}`,
         },
       ],
     },
@@ -270,7 +271,7 @@ export async function notifyNewSpeakerMessage(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Message:*\n${excerpt}`,
+        text: `*Message:*\n${escapeMrkdwn(excerpt)}`,
       },
     },
   ]
@@ -304,7 +305,7 @@ export async function notifyNewVolunteer(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Conference:* ${conference.title}`,
+        text: `*Conference:* ${escapeMrkdwn(conference.title)}`,
       },
     },
     {
@@ -312,11 +313,11 @@ export async function notifyNewVolunteer(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Name:*\n${volunteer.name}`,
+          text: `*Name:*\n${escapeMrkdwn(volunteer.name)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Email:*\n${volunteer.email}`,
+          text: `*Email:*\n${escapeMrkdwn(volunteer.email)}`,
         },
       ],
     },
@@ -325,11 +326,11 @@ export async function notifyNewVolunteer(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Phone:*\n${volunteer.phone}`,
+          text: `*Phone:*\n${escapeMrkdwn(volunteer.phone)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Occupation:*\n${volunteer.occupation.charAt(0).toUpperCase() + volunteer.occupation.slice(1)}`,
+          text: `*Occupation:*\n${escapeMrkdwn(volunteer.occupation.charAt(0).toUpperCase() + volunteer.occupation.slice(1))}`,
         },
       ],
     },
@@ -341,28 +342,28 @@ export async function notifyNewVolunteer(
   if (volunteer.availability) {
     detailFields.push({
       type: 'mrkdwn',
-      text: `*Availability:*\n${volunteer.availability}`,
+      text: `*Availability:*\n${escapeMrkdwn(volunteer.availability)}`,
     })
   }
 
   if (volunteer.preferredTasks && volunteer.preferredTasks.length > 0) {
     detailFields.push({
       type: 'mrkdwn',
-      text: `*Preferred Tasks:*\n${volunteer.preferredTasks.join(', ')}`,
+      text: `*Preferred Tasks:*\n${escapeMrkdwn(volunteer.preferredTasks.join(', '))}`,
     })
   }
 
   if (volunteer.tshirtSize) {
     detailFields.push({
       type: 'mrkdwn',
-      text: `*T-Shirt Size:*\n${volunteer.tshirtSize}`,
+      text: `*T-Shirt Size:*\n${escapeMrkdwn(volunteer.tshirtSize)}`,
     })
   }
 
   if (volunteer.dietaryRestrictions) {
     detailFields.push({
       type: 'mrkdwn',
-      text: `*Dietary Restrictions:*\n${volunteer.dietaryRestrictions}`,
+      text: `*Dietary Restrictions:*\n${escapeMrkdwn(volunteer.dietaryRestrictions)}`,
     })
   }
 
@@ -379,7 +380,7 @@ export async function notifyNewVolunteer(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Other Information:*\n${volunteer.otherInfo}`,
+        text: `*Other Information:*\n${escapeMrkdwn(volunteer.otherInfo)}`,
       },
     })
   }
@@ -428,11 +429,11 @@ export async function notifySponsorRegistrationComplete(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Sponsor:*\n${sponsorName}`,
+          text: `*Sponsor:*\n${escapeMrkdwn(sponsorName)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Tier:*\n${tierTitle || 'Not set'}`,
+          text: `*Tier:*\n${tierTitle ? escapeMrkdwn(tierTitle) : 'Not set'}`,
         },
       ],
     },
@@ -494,11 +495,11 @@ export async function notifySponsorContractSigned(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Sponsor:*\n${sponsorName}`,
+          text: `*Sponsor:*\n${escapeMrkdwn(sponsorName)}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Tier:*\n${tierTitle || 'Not set'}`,
+          text: `*Tier:*\n${tierTitle ? escapeMrkdwn(tierTitle) : 'Not set'}`,
         },
       ],
     },
@@ -507,7 +508,10 @@ export async function notifySponsorContractSigned(
   if (signerName || valueStr) {
     const fields: Array<{ type: string; text: string }> = []
     if (signerName) {
-      fields.push({ type: 'mrkdwn', text: `*Signed by:*\n${signerName}` })
+      fields.push({
+        type: 'mrkdwn',
+        text: `*Signed by:*\n${escapeMrkdwn(signerName)}`,
+      })
     }
     if (valueStr) {
       fields.push({

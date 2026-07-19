@@ -24,6 +24,20 @@ describe('SendMessageSchema', () => {
     ).toBe(false)
   })
 
+  it('rejects a whitespace-only body after trimming (A6)', () => {
+    expect(SendMessageSchema.safeParse({ body: ' ' }).success).toBe(false)
+    expect(SendMessageSchema.safeParse({ body: '\n\n' }).success).toBe(false)
+    expect(SendMessageSchema.safeParse({ body: '  \t \n ' }).success).toBe(
+      false,
+    )
+  })
+
+  it('trims surrounding whitespace but preserves interior whitespace (A6)', () => {
+    const parsed = SendMessageSchema.safeParse({ body: '  a  b  ' })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.body).toBe('a  b')
+  })
+
   it('caps the subject at 200 chars', () => {
     expect(
       SendMessageSchema.safeParse({ subject: 'x'.repeat(200), body: 'hi' })

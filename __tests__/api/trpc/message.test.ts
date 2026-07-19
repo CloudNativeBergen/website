@@ -10,7 +10,7 @@
  * The data layer is mocked (IO functions only); the pure authz helper runs for
  * real so the FORBIDDEN paths exercise the true rule.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   createAuthenticatedCaller,
   createAdminCaller,
@@ -28,6 +28,11 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 vi.mock('@/lib/messaging/notify', () => ({
   notifyNewMessage: vi.fn(async () => {}),
+}))
+
+// The organizer-standing check (A5) probes the sanity read client directly.
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: { fetch: vi.fn(async () => null) },
 }))
 
 vi.mock('@/lib/messaging/sanity', async (importActual) => {
@@ -53,7 +58,6 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
       async () => 'conversation.proposal.prop-1',
     ),
     createGeneralConversation: vi.fn(async () => 'conversation.gen-1'),
-    speakerExists: vi.fn(async () => true),
     getProposalForConversation: vi.fn(),
     setConversationPreference: vi.fn(async () => ({
       muted: true,
@@ -68,9 +72,9 @@ import {
   ensureProposalConversation,
   createGeneralConversation,
   getProposalForConversation,
-  speakerExists,
   addMessage,
 } from '@/lib/messaging/sanity'
+import { clientReadUncached } from '@/lib/sanity/client'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 
 type LooseMock = ReturnType<typeof vi.fn>
@@ -79,7 +83,8 @@ const listConvs = listConversationsForSpeaker as unknown as LooseMock
 const ensureProposal = ensureProposalConversation as unknown as LooseMock
 const createGeneral = createGeneralConversation as unknown as LooseMock
 const getProposal = getProposalForConversation as unknown as LooseMock
-const speakerExistsMock = speakerExists as unknown as LooseMock
+const standingFetch = (clientReadUncached as unknown as { fetch: LooseMock })
+  .fetch
 const addMsg = addMessage as unknown as LooseMock
 const notifyMock = notifyNewMessage as unknown as LooseMock
 
@@ -110,25 +115,28 @@ beforeEach(() => {
 })
 
 describe('authorization', () => {
-  it('blocks a non-participant speaker from getConversation (FORBIDDEN)', async () => {
+  // A3: a non-participant is denied with NOT_FOUND (not FORBIDDEN) so the
+  // deterministic proposal-thread id can't be used as an existence oracle. The
+  // denial itself is still asserted — addMessage never runs on the send path.
+  it('denies a non-participant speaker on getConversation with NOT_FOUND (A3)', async () => {
     getById.mockResolvedValue(strangerProposalConv)
     const caller = createAuthenticatedCaller(speaker1)
     await expect(
       caller.message.getConversation({ id: 'conversation.proposal.prop-1' }),
-    ).rejects.toThrow(/FORBIDDEN|Access denied/)
+    ).rejects.toThrow(/NOT_FOUND|not found/)
   })
 
-  it('blocks a non-participant speaker from listMessages (FORBIDDEN)', async () => {
+  it('denies a non-participant speaker on listMessages with NOT_FOUND (A3)', async () => {
     getById.mockResolvedValue(strangerProposalConv)
     const caller = createAuthenticatedCaller(speaker1)
     await expect(
       caller.message.listMessages({
         conversationId: 'conversation.proposal.prop-1',
       }),
-    ).rejects.toThrow(/FORBIDDEN|Access denied/)
+    ).rejects.toThrow(/NOT_FOUND|not found/)
   })
 
-  it('blocks a non-participant speaker from sending to an existing thread', async () => {
+  it('denies a non-participant sending to an existing thread with NOT_FOUND (A3)', async () => {
     getById.mockResolvedValue(strangerProposalConv)
     const caller = createAuthenticatedCaller(speaker1)
     await expect(
@@ -136,7 +144,24 @@ describe('authorization', () => {
         conversationId: 'conversation.proposal.prop-1',
         body: 'hi',
       }),
-    ).rejects.toThrow(/FORBIDDEN|Access denied/)
+    ).rejects.toThrow(/NOT_FOUND|not found/)
+    expect(addMsg).not.toHaveBeenCalled()
+  })
+
+  it('denies a cross-conference conversation with NOT_FOUND on a mismatched domain (A4)', async () => {
+    // Organizer would otherwise pass the access check, so the conference guard
+    // is what rejects: the conversation belongs to conf-2, the domain is conf-1.
+    getById.mockResolvedValue({
+      ...strangerProposalConv,
+      conferenceId: 'conf-2',
+    })
+    const caller = createAdminCaller()
+    await expect(
+      caller.message.send({
+        conversationId: 'conversation.proposal.prop-1',
+        body: 'hi',
+      }),
+    ).rejects.toThrow(/NOT_FOUND|not found/)
     expect(addMsg).not.toHaveBeenCalled()
   })
 
@@ -297,8 +322,9 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
     expect(createGeneral).not.toHaveBeenCalled()
   })
 
-  it('404s when the organizer recipientSpeakerId does not resolve to a speaker', async () => {
-    speakerExistsMock.mockResolvedValue(false)
+  it('404s when the organizer recipient has NO standing in this conference (A5)', async () => {
+    // Speaker exists somewhere but has no proposal in the current conference.
+    standingFetch.mockResolvedValue(null)
     const caller = createAdminCaller()
     await expect(
       caller.message.send({
@@ -306,12 +332,13 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
         recipientSpeakerId: 'ghost',
         body: 'hi',
       }),
-    ).rejects.toThrow(/NOT_FOUND|does not resolve/)
+    ).rejects.toThrow(/NOT_FOUND|in this conference/)
     expect(createGeneral).not.toHaveBeenCalled()
   })
 
-  it('creates an organizer general thread that persists the subjectSpeaker', async () => {
-    speakerExistsMock.mockResolvedValue(true)
+  it('creates an organizer general thread when the recipient HAS standing (A5)', async () => {
+    // A proposal id comes back → the recipient belongs to this conference.
+    standingFetch.mockResolvedValue('talk-1')
     getById.mockResolvedValue(organizerGeneralConv)
     const caller = createAdminCaller()
 
@@ -321,12 +348,61 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
       body: 'hi',
     })
 
-    expect(speakerExistsMock).toHaveBeenCalledWith('sp-target')
+    expect(standingFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      { speakerId: 'sp-target', conferenceId: 'conf-1' },
+      expect.anything(),
+    )
     expect(createGeneral).toHaveBeenCalledWith(
       expect.objectContaining({ subjectSpeakerId: 'sp-target' }),
     )
     expect(result.conversationId).toBe('conversation.gen-1')
     expect(addMsg).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('send — per-speaker rate limit (A2)', () => {
+  // A dedicated speaker (Alice) so the module-level sliding window is not
+  // polluted by — and does not pollute — the other send tests.
+  const aliceId = 'c3a7f9e0-9e8d-4e4b-9e8f-2a4b6d8f9e8d'
+  const aliceConv: ConversationWithContext = {
+    _id: 'conversation.gen-alice',
+    conferenceId: 'conf-1',
+    conversationType: 'general',
+    proposalSpeakerIds: [],
+    createdById: aliceId,
+    subject: 'Q',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastMessageAt: '2026-01-01T00:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-01T00:00:00.000Z'))
+    createGeneral.mockResolvedValue('conversation.gen-alice')
+    getById.mockResolvedValue(aliceConv)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('allows a burst of 10, rejects the 11th, then allows again after the window', async () => {
+    const caller = createAuthenticatedCaller(aliceId)
+    const send = () => caller.message.send({ subject: 'Q', body: 'hi' })
+
+    for (let i = 0; i < 10; i++) {
+      await expect(send()).resolves.toMatchObject({
+        conversationId: 'conversation.gen-alice',
+      })
+    }
+    await expect(send()).rejects.toThrow(/TOO_MANY_REQUESTS|too quickly/)
+
+    // Advance past the 60s window → the burst budget refills.
+    vi.setSystemTime(new Date('2026-05-01T00:01:01.000Z'))
+    await expect(send()).resolves.toMatchObject({
+      conversationId: 'conversation.gen-alice',
+    })
   })
 })
 
@@ -341,7 +417,7 @@ describe('setPreference', () => {
     expect(result).toEqual({ muted: true, emailOverride: 'default' })
   })
 
-  it('blocks a non-participant from setting a preference', async () => {
+  it('denies a non-participant setting a preference with NOT_FOUND (A3)', async () => {
     getById.mockResolvedValue(strangerProposalConv)
     const caller = createAuthenticatedCaller(speaker1)
     await expect(
@@ -349,6 +425,6 @@ describe('setPreference', () => {
         conversationId: 'conversation.proposal.prop-1',
         muted: true,
       }),
-    ).rejects.toThrow(/FORBIDDEN|Access denied/)
+    ).rejects.toThrow(/NOT_FOUND|not found/)
   })
 })

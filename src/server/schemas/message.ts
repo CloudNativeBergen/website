@@ -41,7 +41,10 @@ export const SendMessageSchema = z.object({
   proposalId: z.string().min(1).max(200).optional(),
   subject: z.string().min(1).max(200).optional(),
   recipientSpeakerId: z.string().min(1).max(200).optional(),
-  body: z.string().min(1).max(5000),
+  // Trim BEFORE the non-empty check so a whitespace-only body (' ', '\n\n')
+  // can never fan out empty content; interior whitespace is preserved and the
+  // 5000-char cap still applies (batch A / A6).
+  body: z.string().trim().min(1).max(5000),
 })
 
 export const SetPreferenceSchema = z
