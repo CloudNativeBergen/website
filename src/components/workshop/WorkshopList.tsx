@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import WorkshopCard from './WorkshopCard'
+import WorkshopAnnouncementsSection from './WorkshopAnnouncementsSection'
 import type {
   ProposalWithWorkshopData,
   ExperienceLevel,
@@ -282,6 +283,9 @@ export default function WorkshopList({
                     userSignup ? () => handleCancel(userSignup._id) : undefined
                   }
                   isSignedUp={true}
+                  announcements={
+                    <WorkshopAnnouncementsSection workshopId={workshop._id} />
+                  }
                 />
               )
             })}
@@ -312,6 +316,9 @@ export default function WorkshopList({
                   isLoading={signupMutation.isPending}
                   hasTimeConflict={hasConflict}
                   conflictingWorkshopTitle={conflictingWorkshop?.title}
+                  announcements={
+                    <WorkshopAnnouncementsSection workshopId={workshop._id} />
+                  }
                 />
               )
             })}
@@ -341,6 +348,9 @@ export default function WorkshopList({
                   }
                   isFull={true}
                   isSignedUp={!!userSignup}
+                  announcements={
+                    <WorkshopAnnouncementsSection workshopId={workshop._id} />
+                  }
                 />
               )
             })}

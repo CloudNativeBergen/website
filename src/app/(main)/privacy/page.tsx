@@ -321,6 +321,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           confirmations, waitlist updates, and workshop-related
                           announcements
                         </li>
+                        <li>
+                          • <strong>Workshop Announcements:</strong> Broadcast
+                          messages from a workshop owner or organizer to
+                          confirmed participants — we store the message text,
+                          its author, and when it was sent, and display it on
+                          the workshop page
+                        </li>
                       </ul>
                     </div>
 

@@ -48,6 +48,12 @@ interface WorkshopCardProps {
   isLoading?: boolean
   hasTimeConflict?: boolean
   conflictingWorkshopTitle?: string
+  /**
+   * Optional 'Announcements' block rendered inside the card. Passed as a slot
+   * (rather than fetched here) so WorkshopCard stays decoupled from tRPC and
+   * trivially renderable in isolation; the data wrapper lives at the list level.
+   */
+  announcements?: React.ReactNode
 }
 
 export default function WorkshopCard({
@@ -60,6 +66,7 @@ export default function WorkshopCard({
   isLoading: externalLoading = false,
   hasTimeConflict = false,
   conflictingWorkshopTitle,
+  announcements,
 }: WorkshopCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -497,6 +504,8 @@ export default function WorkshopCard({
             {error}
           </div>
         )}
+
+        {announcements}
 
         {hasTimeConflict && !actuallySignedUp && (
           <div className="mb-4 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
