@@ -150,9 +150,13 @@ describe('resolveRecipients — excludes the actor', () => {
     ])
   })
   it('drops an organizer author from a general thread fan-out', () => {
-    expect(resolveRecipients(generalConv, 'org-1', ['org-1', 'org-2'])).toEqual(
-      ['sp-9', 'org-2'].sort((a, b) => a.localeCompare(b)),
-    )
+    // Order-insensitive (like the sibling cases): the G2a read flip resolves ids
+    // in PARTY order (speakers, then the expanded organizers group) rather than
+    // the legacy organizers-first SEED order. The RECIPIENT SET is unchanged —
+    // only the iteration order moved — so we compare sorted sets.
+    expect(
+      resolveRecipients(generalConv, 'org-1', ['org-1', 'org-2']).sort(),
+    ).toEqual(['sp-9', 'org-2'].sort())
   })
   it('organizer-initiated general thread → subjectSpeaker ∪ other organizers (author excluded, de-duplicated)', () => {
     // org-1 authored → excluded; the subject sp-7 and the other organizer remain.

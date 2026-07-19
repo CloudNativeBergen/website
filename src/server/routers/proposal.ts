@@ -74,7 +74,11 @@ import {
 } from '@/lib/proposal/server'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { getFeaturedTalks } from '@/lib/featured/sanity'
-import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
+import {
+  ensureProposalConversation,
+  addMessage,
+  syncProposalConversationParticipants,
+} from '@/lib/messaging/sanity'
 import '@/lib/events/registry'
 
 /**
@@ -589,6 +593,16 @@ export const proposalRouter = router({
           speakerId: input.speakerId,
         })
 
+        // SNAPSHOT SYNC (G2a): the read path now prefers the conversation's
+        // participants[], so re-derive it from the proposal's REMAINING speakers
+        // — otherwise the removed co-speaker would linger as a thread member (and
+        // a stale snapshot could keep granting them access). Never-fail / no-op
+        // when the proposal has no thread yet.
+        await syncProposalConversationParticipants(
+          input.proposalId,
+          speakerIds.filter((id) => id !== input.speakerId),
+        )
+
         return { success: true }
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -974,6 +988,16 @@ export const proposalRouter = router({
               code: 'NOT_FOUND',
               message: 'Proposal not found',
             })
+          }
+
+          // SNAPSHOT SYNC (G2a): an admin speaker swap also changes who is on the
+          // proposal, so keep any existing thread's participants[] in step with
+          // the new set — the read path prefers participants[], and G2a must not
+          // introduce a new divergence for organizer-side speaker edits. Only
+          // when speakers were part of this update. Never-fail / no-op without a
+          // thread.
+          if (speakers && speakers.length > 0) {
+            await syncProposalConversationParticipants(input.id, speakers)
           }
 
           return proposal
@@ -1825,6 +1849,18 @@ export const proposalRouter = router({
             )
 
             await transaction.commit()
+
+            // SNAPSHOT SYNC (G2a): keep the proposal thread's participants[] in
+            // step with the newly-accepted co-speaker so the flipped read path
+            // grants them thread access (and fans messages out to them). The new
+            // speaker set mirrors the append above. Never-fail / no-op without a
+            // thread.
+            await syncProposalConversationParticipants(
+              proposalId,
+              speakerIds.includes(ctx.speaker._id)
+                ? speakerIds
+                : [...speakerIds, ctx.speaker._id],
+            )
           } else {
             // Mark declined (including the optional reason) in one patch
             await clientWrite
