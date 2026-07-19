@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
+import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -36,9 +37,26 @@ export async function GET(request: NextRequest) {
       `Deleted ${deleted} notifications older than ${NOTIFICATION_RETENTION_DAYS} days`,
     )
 
+    // Messaging retention runs on the SAME daily trigger, AFTER the notification
+    // cleanup: a conference's messages, conversations, per-conversation
+    // preferences and message notifications are purged 24 months after it ends.
+    // Ordered after the notification pass so the 90-day hub cleanup has already
+    // removed aged-out message notifications; whatever remains for a fully
+    // expired conference is swept here.
+    const messaging = await deleteExpiredMessagingData()
+
+    console.log(
+      `Messaging retention: purged ${messaging.conferences} expired conference(s) —` +
+        ` messages=${messaging.messages}` +
+        ` conversations=${messaging.conversations}` +
+        ` preferences=${messaging.preferences}` +
+        ` notifications=${messaging.notifications}`,
+    )
+
     return NextResponse.json({
       success: true,
       deleted,
+      messaging,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)
