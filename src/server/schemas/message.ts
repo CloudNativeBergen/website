@@ -49,6 +49,12 @@ const cursor = z
 
 export const ListConversationsSchema = z.object({
   cursor,
+  // Inbox view. ORGANIZERS may use any; the router rejects the organizer-only
+  // views (`needs-reply` | `mine` | `resolved`) for a non-organizer. Defaults to
+  // `active` in the data layer when omitted.
+  view: z
+    .enum(['active', 'needs-reply', 'mine', 'resolved', 'archived', 'all'])
+    .optional(),
 })
 
 export const GetConversationSchema = z.object({
@@ -88,7 +94,38 @@ export const SetPreferenceSchema = z
     conversationId: z.string().min(1).max(200),
     muted: z.boolean().optional(),
     emailOverride: z.enum(['default', 'on', 'off']).optional(),
+    // Per-user archive for this participant (the speaker/all-participant archive
+    // rides this existing procedure). true archives, false un-archives.
+    archived: z.boolean().optional(),
   })
-  .refine((v) => v.muted !== undefined || v.emailOverride !== undefined, {
-    message: 'Provide at least one of muted or emailOverride',
-  })
+  .refine(
+    (v) =>
+      v.muted !== undefined ||
+      v.emailOverride !== undefined ||
+      v.archived !== undefined,
+    {
+      message: 'Provide at least one of muted, emailOverride, or archived',
+    },
+  )
+
+/** Organizer-only: set a conversation's ticketing status. */
+export const SetStatusSchema = z.object({
+  conversationId: z.string().min(1).max(200),
+  status: z.enum(['open', 'resolved']),
+})
+
+/**
+ * Organizer-only: (re)assign or unassign the responsible organizer. `null`
+ * unassigns; a non-null id must resolve to an organizer (validated in the
+ * router against the organizer id set).
+ */
+export const SetAssigneeSchema = z.object({
+  conversationId: z.string().min(1).max(200),
+  assigneeId: z.string().min(1).max(200).nullable(),
+})
+
+/** Organizer-only: set/unset the GLOBAL organizer archive for a conversation. */
+export const SetArchivedSchema = z.object({
+  conversationId: z.string().min(1).max(200),
+  archived: z.boolean(),
+})

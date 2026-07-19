@@ -8,6 +8,8 @@ import type {
   ConversationListItem,
   ConversationParticipant,
   ConversationPreference,
+  ConversationStatus,
+  ConversationView,
   ConversationWithContext,
   EmailOverride,
   Message,
@@ -62,6 +64,99 @@ const CONVERSATION_PROJECTION = `{
   createdAt,
   lastMessageAt
 }`
+
+// ---------------------------------------------------------------------------
+// Inbox view filtering (GROQ predicates applied BEFORE pagination)
+// ---------------------------------------------------------------------------
+//
+// Every view filter is folded into the base `*[...]` predicate, ANDed in BEFORE
+// the `| order(...) [0...PAGE_SIZE]` slice. This is deliberate: per-user archive
+// lives in a SEPARATE preference document, so excluding archived rows only after
+// the slice would silently shrink pages. The correlated preference subquery
+// below keeps the exclusion in the predicate where it belongs.
+
+/**
+ * Correlated per-user-archive probe. The deterministic preference doc
+ * `convpref.<conversationId>.<callerId>` archives this thread FOR THE CALLER iff
+ * its `archivedAt >= the conversation's lastMessageAt` — the same timestamp rule
+ * as the global archive, so a newer message auto-resurfaces it with no extra
+ * write. `^._id` / `^.lastMessageAt` reach out to the conversation being
+ * filtered; `$speakerId` is the caller. `count()` is 0 or 1 (the id is unique).
+ */
+const PREF_ARCHIVED_SUBQUERY =
+  "*[_id == 'convpref.' + ^._id + '.' + $speakerId && defined(archivedAt) && archivedAt >= ^.lastMessageAt]"
+const NOT_USER_ARCHIVED = `count(${PREF_ARCHIVED_SUBQUERY}) == 0`
+const USER_ARCHIVED = `count(${PREF_ARCHIVED_SUBQUERY}) > 0`
+
+const STATUS_OPEN = "coalesce(status, 'open') == 'open'"
+const STATUS_RESOLVED = "coalesce(status, 'open') == 'resolved'"
+const STATUS_NOT_RESOLVED = "coalesce(status, 'open') != 'resolved'"
+// Global archive: archived iff archivedAt >= lastMessageAt; a newer message
+// pushes lastMessageAt past archivedAt → no longer archived (auto-resurface).
+const NOT_GLOBALLY_ARCHIVED =
+  '(!defined(archivedAt) || archivedAt < lastMessageAt)'
+const GLOBALLY_ARCHIVED = '(defined(archivedAt) && archivedAt >= lastMessageAt)'
+// The newest message's author (null when the thread has no messages yet).
+const LAST_AUTHOR_REF =
+  '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
+// Needs an organizer reply: not resolved AND a message exists whose author is
+// not an organizer. Uses $organizerIds — bound only for the `needs-reply` view.
+const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && defined(${LAST_AUTHOR_REF}) && !(${LAST_AUTHOR_REF} in $organizerIds)`
+
+/**
+ * Build the GROQ predicate fragment (leading ` && ...`, or empty for `all`) for
+ * an inbox `view`, plus whether it references `$organizerIds` (only
+ * `needs-reply` does). See {@link ConversationView} for the full semantics; the
+ * ORGANIZER `active` set — status open AND not globally archived AND not
+ * per-user archived — is the shared base of the organizer-only views.
+ */
+function buildViewPredicate(
+  view: ConversationView,
+  isOrganizer: boolean,
+): { predicate: string; needsOrganizerIds: boolean } {
+  if (!isOrganizer) {
+    // Speakers: only their OWN preference archive hides a thread. Global archive
+    // and status are organizer-side concepts a speaker never filters on.
+    switch (view) {
+      case 'archived':
+        return { predicate: ` && ${USER_ARCHIVED}`, needsOrganizerIds: false }
+      case 'all':
+        return { predicate: '', needsOrganizerIds: false }
+      default: // 'active'
+        return {
+          predicate: ` && ${NOT_USER_ARCHIVED}`,
+          needsOrganizerIds: false,
+        }
+    }
+  }
+  const active = `${STATUS_OPEN} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`
+  switch (view) {
+    case 'needs-reply':
+      return {
+        predicate: ` && ${active} && ${NEEDS_REPLY}`,
+        needsOrganizerIds: true,
+      }
+    case 'mine':
+      return {
+        predicate: ` && ${active} && assignedTo._ref == $speakerId`,
+        needsOrganizerIds: false,
+      }
+    case 'resolved':
+      return {
+        predicate: ` && ${STATUS_RESOLVED} && ${NOT_GLOBALLY_ARCHIVED} && ${NOT_USER_ARCHIVED}`,
+        needsOrganizerIds: false,
+      }
+    case 'archived':
+      return {
+        predicate: ` && (${GLOBALLY_ARCHIVED} || ${USER_ARCHIVED})`,
+        needsOrganizerIds: false,
+      }
+    case 'all':
+      return { predicate: '', needsOrganizerIds: false }
+    default: // 'active'
+      return { predicate: ` && ${active}`, needsOrganizerIds: false }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (authz + recipient resolution). Server-derived ids only.
@@ -251,14 +346,19 @@ export async function listConversationsForSpeaker({
   conferenceId,
   before,
   beforeId,
+  view = 'active',
 }: {
   speakerId: string
   isOrganizer: boolean
   conferenceId: string
   before?: string
   beforeId?: string
+  view?: ConversationView
 }): Promise<ConversationListItem[]> {
-  const params: Record<string, unknown> = { conferenceId }
+  // `$speakerId` is ALWAYS bound now: besides the non-organizer access scope, it
+  // keys the correlated per-user-archive probe (organizers archive per-user too)
+  // and the `mine` view. An unused binding (e.g. the `all` view) is harmless.
+  const params: Record<string, unknown> = { conferenceId, speakerId }
   let cursor = ''
   if (before) {
     // Compound keyset cursor: order by (lastMessageAt desc, _id desc) so rows
@@ -280,14 +380,30 @@ export async function listConversationsForSpeaker({
   if (!isOrganizer) {
     scope =
       ' && (createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
-    params.speakerId = speakerId
+  }
+
+  // Resolve the organizer id set UP FRONT for organizers: the `needs-reply`
+  // view's GROQ filter needs it as a param, and every organizer row derives
+  // `needsReply` in JS from it. It is cached (getOrganizerSpeakerIds), so the
+  // second-batch reuse below costs nothing. Speakers resolve it in the second
+  // batch (their counterpart rendering needs it) and never filter on needsReply.
+  const organizerIdsUpFront = isOrganizer
+    ? await getOrganizerSpeakerIds()
+    : null
+
+  const { predicate: viewPredicate, needsOrganizerIds } = buildViewPredicate(
+    view,
+    isOrganizer,
+  )
+  if (needsOrganizerIds) {
+    params.organizerIds = organizerIdsUpFront ?? []
   }
 
   // `lastMessage` is a correlated subquery (newest message per conversation) so
   // the whole page stays ONE fetch; `speakerSide*` pre-resolves the speaker-side
   // counterpart (organizer audience) via the house
   // `coalesce(image.asset->url, imageURL)` speaker-image pattern.
-  const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}] | order(lastMessageAt desc, _id desc) [0...${PAGE_SIZE}] {
+  const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}${viewPredicate}] | order(lastMessageAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     conversationType,
     subject,
@@ -295,6 +411,9 @@ export async function listConversationsForSpeaker({
     "proposalTitle": proposal->title,
     createdAt,
     lastMessageAt,
+    "status": coalesce(status, 'open'),
+    "assignedTo": assignedTo->{ _id, name },
+    archivedAt,
     "lastMessage": *[_type == "message" && conversation._ref == ^._id] | order(createdAt desc) [0] {
       "authorId": author._ref,
       "authorName": author->name,
@@ -338,19 +457,44 @@ export async function listConversationsForSpeaker({
     conversationLinkPath(row, true),
     conversationLinkPath(row, false),
   ])
-  const [unreadRows, organizerIds] = await Promise.all([
+  // The caller's OWN preference docs for exactly this page's conversations,
+  // fetched by their deterministic ids (`convpref.<convId>.<callerId>`). Used to
+  // derive the DISPLAY `archived` boolean per row (the correlated subquery above
+  // does the pre-pagination FILTERING; this cheap page-scoped read supplies the
+  // per-user archive timestamp for the returned rows). Runs in the SAME parallel
+  // batch as the unread fetch.
+  const prefIds = rows.map((row) =>
+    conversationPreferenceId(row._id, speakerId),
+  )
+  const [unreadRows, prefRows, organizerIds] = await Promise.all([
     clientReadUncached.fetch<{ link: string | null; count: number }[]>(
       `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $pageLinks]{ link, "count": coalesce(count, 1) }`,
       { speakerId, conferenceId, pageLinks },
       { cache: 'no-store' },
     ),
-    isOrganizer ? Promise.resolve<string[]>([]) : getOrganizerSpeakerIds(),
+    clientReadUncached.fetch<
+      { conversationId: string | null; archivedAt: string | null }[]
+    >(
+      `*[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt }`,
+      { prefIds },
+      { cache: 'no-store' },
+    ),
+    isOrganizer
+      ? Promise.resolve<string[]>(organizerIdsUpFront ?? [])
+      : getOrganizerSpeakerIds(),
   ])
   const organizerSet = new Set(organizerIds)
   const linkCounts = new Map<string, number>()
   for (const row of unreadRows ?? []) {
     if (row.link) {
       linkCounts.set(row.link, (linkCounts.get(row.link) ?? 0) + row.count)
+    }
+  }
+  // Per-user archive timestamp keyed by conversation id (null archivedAt ignored).
+  const prefArchivedAt = new Map<string, string>()
+  for (const pref of prefRows ?? []) {
+    if (pref.conversationId && pref.archivedAt) {
+      prefArchivedAt.set(pref.conversationId, pref.archivedAt)
     }
   }
 
@@ -363,6 +507,25 @@ export async function listConversationsForSpeaker({
     // return no lastMessage at all so the row renders without a blank snippet
     // line, rather than an object carrying an empty string.
     const excerpt = row.lastMessage ? excerptOf(row.lastMessage.body ?? '') : ''
+    // Timestamp archive semantics (both audiences): archived iff the archive
+    // stamp is at least as recent as the last message; a newer message
+    // auto-resurfaces the thread. A speaker sees ONLY their per-user archive; an
+    // organizer sees the global archive OR their own per-user archive.
+    const userArchiveStamp = prefArchivedAt.get(row._id)
+    const userArchived =
+      userArchiveStamp != null && userArchiveStamp >= row.lastMessageAt
+    const globallyArchived =
+      row.archivedAt != null && row.archivedAt >= row.lastMessageAt
+    const archived = isOrganizer
+      ? globallyArchived || userArchived
+      : userArchived
+    // needs-reply is an ORGANIZER concept: last message from a non-organizer and
+    // not resolved. Always false for a speaker caller.
+    const needsReply =
+      isOrganizer &&
+      row.status !== 'resolved' &&
+      row.lastMessage != null &&
+      !organizerSet.has(row.lastMessage.authorId)
     return {
       _id: row._id,
       conversationType: row.conversationType,
@@ -381,6 +544,12 @@ export async function listConversationsForSpeaker({
             }
           : null,
       counterpart: resolveCounterpart(row, isOrganizer, organizerSet),
+      status: row.status,
+      assignedTo: row.assignedTo
+        ? { _id: row.assignedTo._id, name: row.assignedTo.name }
+        : null,
+      needsReply,
+      archived,
     }
   })
 }
@@ -388,7 +557,12 @@ export async function listConversationsForSpeaker({
 /** A raw inbox row as projected by GROQ, before counterpart/excerpt mapping. */
 type RawConversationRow = Omit<
   ConversationListItem,
-  'unreadCount' | 'lastMessage' | 'counterpart'
+  | 'unreadCount'
+  | 'lastMessage'
+  | 'counterpart'
+  | 'assignedTo'
+  | 'needsReply'
+  | 'archived'
 > & {
   lastMessage: {
     authorId: string
@@ -398,6 +572,11 @@ type RawConversationRow = Omit<
   } | null
   speakerSideName: string | null
   speakerSideImage: string | null
+  // GROQ coalesces `status` to 'open'; `assignedTo`/`archivedAt` are null when
+  // unset (or, for a weak assignee ref, when the speaker was erased).
+  status: ConversationStatus
+  assignedTo: { _id: string; name: string } | null
+  archivedAt: string | null
 }
 
 /** Inbox snippet length — roughly two lines of a mobile row. */
@@ -596,6 +775,58 @@ export async function addMessage({
 }
 
 // ---------------------------------------------------------------------------
+// Ticketing mutations (organizer-side thread state). Authz is enforced by the
+// router BEFORE any of these run; they are pure writes.
+// ---------------------------------------------------------------------------
+
+/** Set a conversation's ticketing status ('open' | 'resolved'). */
+export async function setConversationStatus(
+  conversationId: string,
+  status: ConversationStatus,
+): Promise<void> {
+  await clientWrite.patch(conversationId).set({ status }).commit()
+}
+
+/**
+ * Assign (or, with `assigneeId === null`, unassign) the organizer responsible
+ * for a conversation. The assignee ref is WEAK so erasing a speaker (GDPR)
+ * doesn't orphan-block their deletion — consistent with the schema.
+ */
+export async function setConversationAssignee(
+  conversationId: string,
+  assigneeId: string | null,
+): Promise<void> {
+  if (assigneeId === null) {
+    await clientWrite.patch(conversationId).unset(['assignedTo']).commit()
+    return
+  }
+  await clientWrite
+    .patch(conversationId)
+    .set({ assignedTo: { ...createReference(assigneeId), _weak: true } })
+    .commit()
+}
+
+/**
+ * Set/clear the GLOBAL organizer archive. Archiving stamps `archivedAt = now`;
+ * because a thread is globally archived IFF `archivedAt >= lastMessageAt`, a
+ * later message auto-resurfaces it with no further write. Unarchiving simply
+ * unsets the field.
+ */
+export async function setConversationArchived(
+  conversationId: string,
+  archived: boolean,
+): Promise<void> {
+  if (archived) {
+    await clientWrite
+      .patch(conversationId)
+      .set({ archivedAt: new Date().toISOString() })
+      .commit()
+    return
+  }
+  await clientWrite.patch(conversationId).unset(['archivedAt']).commit()
+}
+
+// ---------------------------------------------------------------------------
 // Preferences (doc-per-pair; no array RMW)
 // ---------------------------------------------------------------------------
 
@@ -667,16 +898,26 @@ export async function setConversationPreference({
   speakerId,
   muted,
   emailOverride,
+  archived,
 }: {
   conversationId: string
   speakerId: string
   muted?: boolean
   emailOverride?: EmailOverride
+  archived?: boolean
 }): Promise<ConversationPreference> {
   const id = conversationPreferenceId(conversationId, speakerId)
   const set: Record<string, unknown> = {}
+  const unset: string[] = []
   if (muted !== undefined) set.muted = muted
   if (emailOverride !== undefined) set.emailOverride = emailOverride
+  // PER-USER archive: same timestamp semantics as the global archive — stamp
+  // `archivedAt = now` to archive (a later message auto-resurfaces it), unset to
+  // un-archive.
+  if (archived !== undefined) {
+    if (archived) set.archivedAt = new Date().toISOString()
+    else unset.push('archivedAt')
+  }
 
   const tx = clientWrite.transaction().createIfNotExists({
     _id: id,
@@ -686,8 +927,13 @@ export async function setConversationPreference({
     muted: false,
     emailOverride: 'default',
   })
-  if (Object.keys(set).length > 0) {
-    tx.patch(id, (patch) => patch.set(set))
+  if (Object.keys(set).length > 0 || unset.length > 0) {
+    tx.patch(id, (patch) => {
+      let next = patch
+      if (Object.keys(set).length > 0) next = next.set(set)
+      if (unset.length > 0) next = next.unset(unset)
+      return next
+    })
   }
   await tx.commit()
 

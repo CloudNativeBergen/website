@@ -104,6 +104,53 @@ export default defineType({
       validation: (Rule) => Rule.required(),
       initialValue: () => new Date().toISOString(),
     }),
+    defineField({
+      name: 'status',
+      title: 'Status',
+      type: 'string',
+      description:
+        'Ticketing state for the ORGANIZER audience. ABSENT MEANS OPEN — pre-ticketing threads carry no status and every read coalesces undefined to "open", so existing documents need no migration.',
+      options: {
+        list: [
+          { title: 'Open', value: 'open' },
+          { title: 'Resolved', value: 'resolved' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'open',
+    }),
+    defineField({
+      name: 'assignedTo',
+      title: 'Assigned To',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion; a
+      // dangling assignee ref is tolerated (mirrors createdBy/subjectSpeaker).
+      weak: true,
+      description: 'Organizer responsible for following up.',
+      // Restrict the Studio picker to organizers. `isOrganizer` is global, so
+      // (unlike sponsorForConference.assignedTo) this deliberately skips the
+      // per-conference filtering — the router validates the assignee instead.
+      options: {
+        filter: '_id in *[_type == "conference"].organizers[]._ref',
+      },
+    }),
+    defineField({
+      name: 'archivedAt',
+      title: 'Archived At',
+      type: 'datetime',
+      description:
+        'GLOBAL organizer archive. TIMESTAMP SEMANTICS: a conversation is globally archived IFF archivedAt >= lastMessageAt. A new message bumps lastMessageAt past archivedAt, so the thread AUTO-RESURFACES with zero fan-out writes. Speakers ignore this field (global archive is an organizer-side hide); a speaker archives via their own conversationPreference.archivedAt.',
+    }),
+    defineField({
+      name: 'lastStaleNudgeAt',
+      title: 'Last Stale Nudge At',
+      type: 'datetime',
+      description:
+        'Bookkeeping for the stale-thread cron: when a stale-nudge notification was last emitted for this thread. A nudge fires again only once a NEWER message arrives (lastStaleNudgeAt < lastMessageAt), so a thread is never nudged twice for the same trailing message.',
+      readOnly: true,
+      hidden: true,
+    }),
   ],
   preview: {
     select: {

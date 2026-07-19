@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
+import { nudgeStaleConversations } from '@/lib/messaging/nudge'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -53,10 +54,24 @@ export async function GET(request: NextRequest) {
         ` notifications=${messaging.notifications}`,
     )
 
+    // Stale-thread nudge runs LAST on the same daily trigger: open threads whose
+    // last message is from a non-organizer and which have gone quiet for 3+ days
+    // get one hub notification (to the assignee, else all organizers). This
+    // never throws — a failure only zeroes its summary and is logged.
+    const staleNudge = await nudgeStaleConversations()
+
+    console.log(
+      `Stale nudge: scanned=${staleNudge.scanned}` +
+        ` nudged=${staleNudge.nudged}` +
+        ` notifications=${staleNudge.notifications}` +
+        ` failed=${staleNudge.failed}`,
+    )
+
     return NextResponse.json({
       success: true,
       deleted,
       messaging,
+      staleNudge,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)

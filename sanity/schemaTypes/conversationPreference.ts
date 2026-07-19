@@ -53,6 +53,13 @@ export default defineType({
       },
       initialValue: 'default',
     }),
+    defineField({
+      name: 'archivedAt',
+      title: 'Archived At',
+      type: 'datetime',
+      description:
+        'PER-USER archive for this participant. Same TIMESTAMP SEMANTICS as conversation.archivedAt: archived IFF archivedAt >= the conversation lastMessageAt, so a new message auto-resurfaces the thread for this participant with no extra write. This is the ONLY archive that hides a thread from a SPEAKER; organizers additionally honor the global conversation.archivedAt.',
+    }),
   ],
   preview: {
     select: {

@@ -9,6 +9,43 @@
 
 export type ConversationType = 'proposal' | 'general'
 
+/**
+ * Ticketing status of a thread for the ORGANIZER audience. `'open'` is the
+ * default AND the meaning of an ABSENT `status` field — every read coalesces
+ * undefined to `'open'`, so pre-ticketing threads need no migration.
+ */
+export type ConversationStatus = 'open' | 'resolved'
+
+/**
+ * The inbox views a caller can request. ORGANIZERS may use all of them;
+ * SPEAKERS are restricted to `'active' | 'archived' | 'all'` (the router rejects
+ * the organizer-only views for a non-organizer).
+ *
+ * ORGANIZER semantics:
+ * - `active`      — status open (or absent) AND NOT globally archived AND NOT
+ *                   per-user archived;
+ * - `needs-reply` — active AND the last message's author is not an organizer;
+ * - `mine`        — active AND assigned to the caller;
+ * - `resolved`    — status resolved AND not archived (neither global nor per-user);
+ * - `archived`    — globally OR per-user archived;
+ * - `all`         — every conversation, no status/archive filter.
+ *
+ * SPEAKER semantics (global archive is an organizer-side hide, so speakers keep
+ * seeing globally-archived threads and only their OWN preference archive hides):
+ * - `active`   — NOT per-user archived;
+ * - `archived` — per-user archived;
+ * - `all`      — everything.
+ */
+export type ConversationView =
+  'active' | 'needs-reply' | 'mine' | 'resolved' | 'archived' | 'all'
+
+/** The views a non-organizer (speaker) is allowed to request. */
+export const SPEAKER_ALLOWED_VIEWS: ConversationView[] = [
+  'active',
+  'archived',
+  'all',
+]
+
 /** Per-conversation email delivery override. */
 export type EmailOverride = 'default' | 'on' | 'off'
 
@@ -64,6 +101,12 @@ export interface ConversationCounterpart {
   image?: string
 }
 
+/** The organizer assigned to follow up a thread (deref of `assignedTo`). */
+export interface ConversationAssignee {
+  _id: string
+  name: string
+}
+
 /** A conversation as listed in an inbox. */
 export interface ConversationListItem {
   _id: string
@@ -83,6 +126,25 @@ export interface ConversationListItem {
   lastMessage: ConversationLastMessage | null
   /** Audience-aware "who" for the row (see {@link ConversationCounterpart}). */
   counterpart: ConversationCounterpart
+  // NOTE: the ticketing fields below are ALWAYS populated by the data layer
+  // (`listConversationsForSpeaker`). They are declared optional ONLY so that
+  // pre-ticketing fixtures/stories (owned by the T2 UI work) still satisfy the
+  // type; runtime rows always carry them.
+  /** Ticketing status, coalesced so an absent field reads as `'open'`. */
+  status?: ConversationStatus
+  /** The organizer responsible for follow-up; null when unassigned. */
+  assignedTo?: ConversationAssignee | null
+  /**
+   * Whether this thread needs an organizer reply (ORGANIZER audience only): its
+   * last message is from a non-organizer AND status is not resolved. Always
+   * false for a speaker caller (needs-reply is an organizer-side concept).
+   */
+  needsReply?: boolean
+  /**
+   * Whether this thread is archived FOR THE CALLER's audience: for an organizer,
+   * globally OR per-user archived; for a speaker, per-user archived only.
+   */
+  archived?: boolean
 }
 
 /** A single message in a thread. */
