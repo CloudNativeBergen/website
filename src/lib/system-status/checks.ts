@@ -700,17 +700,31 @@ async function pushSubscriptionCount(): Promise<SystemCheck> {
   const meta = {
     id: 'push.subscriptions',
     group: 'push' as const,
-    label: 'Active subscriptions',
+    label: 'Stored subscriptions',
   }
   try {
-    const count = await clientReadUncached.fetch<number>(
-      `count(*[_type == "speaker"].pushSubscriptions[])`,
+    // Subscriptions + how many speakers hold them. HONESTY NOTE baked into the
+    // detail: dead subscriptions are only pruned when a real send gets a
+    // 404/410 back from the push service — during any period when sends fail
+    // earlier (e.g. an invalid VAPID config), stale device rows accumulate
+    // unpruned, so this number can far exceed live devices.
+    const stats = await clientReadUncached.fetch<{
+      total: number
+      speakers: number
+    }>(
+      `{
+        "total": count(*[_type == "speaker"].pushSubscriptions[]),
+        "speakers": count(*[_type == "speaker" && count(pushSubscriptions) > 0])
+      }`,
     )
+    const total = stats?.total ?? 0
+    const speakers = stats?.speakers ?? 0
     return {
       ...meta,
       status: 'ok',
-      value: String(count ?? 0),
-      detail: 'Registered devices across all speakers',
+      value: `${total} across ${speakers} speaker${speakers === 1 ? '' : 's'}`,
+      detail:
+        'Includes stale devices — rows are only pruned when a delivered send returns 404/410, so periods of failing sends inflate this count',
     }
   } catch (err) {
     return { ...meta, status: 'warn', value: 'unknown', detail: errMsg(err) }
