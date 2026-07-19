@@ -12,6 +12,7 @@ import {
   conversationLinkPath,
   proposalConversationId,
 } from '@/lib/messaging/links'
+import { errorCode } from '@/lib/messaging/trpc'
 import { formatRelativeTime } from '@/lib/notification/format'
 import type {
   ConversationPreference,
@@ -315,10 +316,6 @@ export function ConversationThreadView({
 // ---------------------------------------------------------------------------
 // Container (wires the presentational view to the `message` tRPC router)
 // ---------------------------------------------------------------------------
-
-function errorCode(error: unknown): string | undefined {
-  return (error as { data?: { code?: string } } | null)?.data?.code
-}
 
 export interface ConversationThreadProps {
   /** An existing conversation id (general threads, inbox routes). */

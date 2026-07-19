@@ -65,6 +65,11 @@ export function MessageNotificationTemplate({
         </div>
 
         <EmailText size="14px" color="#64748B">
+          Prefer email? Replying to this email reaches the organizers by email,
+          while replying in the app keeps the whole conversation in one place.
+        </EmailText>
+
+        <EmailText size="14px" color="#64748B">
           You can manage message emails for this conversation from its
           notification settings.
         </EmailText>

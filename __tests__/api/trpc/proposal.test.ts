@@ -47,6 +47,20 @@ vi.mock('@/lib/conference/state', () => ({
   isWithdrawalCutoffActive: vi.fn(),
 }))
 
+// Messaging M4: the action procedure mirrors organizer decision comments into
+// the proposal thread. Mock the messaging boundary; only the three functions
+// the proposal router uses need real stubs (the message router's other imports
+// from this module are never invoked in these tests).
+vi.mock('@/lib/messaging/sanity', () => ({
+  ensureProposalConversation: vi.fn(),
+  getConversationById: vi.fn(),
+  addMessage: vi.fn(),
+}))
+
+vi.mock('@/lib/messaging/notify', () => ({
+  notifyNewMessage: vi.fn(),
+}))
+
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TRPCError } from '@trpc/server'
 import {
@@ -65,6 +79,12 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
+import {
+  ensureProposalConversation,
+  getConversationById,
+  addMessage,
+} from '@/lib/messaging/sanity'
+import { notifyNewMessage } from '@/lib/messaging/notify'
 import {
   Status,
   Action,
@@ -656,6 +676,137 @@ describe('proposal router', () => {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to delete proposal',
       })
+    })
+  })
+
+  describe('action — decision comment mirrored to proposal thread (M4)', () => {
+    beforeEach(() => {
+      vi.mocked(ensureProposalConversation).mockClear()
+      vi.mocked(getConversationById).mockClear()
+      vi.mocked(addMessage).mockClear()
+      vi.mocked(notifyNewMessage).mockClear()
+    })
+
+    const conversationId = 'conversation.proposal.proposal-1'
+    const conversation = {
+      _id: conversationId,
+      conferenceId: 'conf-1',
+      conversationType: 'proposal',
+      proposalId: 'proposal-1',
+      proposalTitle: 'My Talk',
+      proposalSpeakerIds: [regularSpeaker._id],
+      createdById: adminSpeaker._id,
+      subject: 'My Talk',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastMessageAt: '2026-01-01T00:00:00.000Z',
+    }
+    const createdMessage = {
+      _id: 'message.1',
+      conversationId,
+      authorId: adminSpeaker._id,
+      body: 'Congrats — see you in Bergen!',
+      createdAt: '2026-01-02T00:00:00.000Z',
+    }
+
+    function mockAcceptFlow() {
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.accepted } as any,
+        err: null,
+      })
+      vi.mocked(ensureProposalConversation).mockResolvedValue(conversationId)
+      vi.mocked(getConversationById).mockResolvedValue(conversation as any)
+      vi.mocked(addMessage).mockResolvedValue(createdMessage as any)
+      vi.mocked(notifyNewMessage).mockResolvedValue(undefined)
+    }
+
+    it('posts an organizer accept comment as a message and fans out', async () => {
+      mockAcceptFlow()
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.accept,
+        comment: 'Congrats — see you in Bergen!',
+      })
+
+      expect(result.proposalStatus).toBe(Status.accepted)
+      expect(ensureProposalConversation).toHaveBeenCalledWith({
+        conferenceId: 'conf-1',
+        proposalId: 'proposal-1',
+        proposalTitle: 'My Talk',
+        createdById: adminSpeaker._id,
+      })
+      expect(addMessage).toHaveBeenCalledWith({
+        conversationId,
+        authorId: adminSpeaker._id,
+        body: 'Congrats — see you in Bergen!',
+      })
+      expect(notifyNewMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversation,
+          message: createdMessage,
+          authorId: adminSpeaker._id,
+        }),
+      )
+    })
+
+    it('never fails the action when the messaging write throws', async () => {
+      mockAcceptFlow()
+      vi.mocked(ensureProposalConversation).mockRejectedValue(
+        new Error('sanity down'),
+      )
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.accept,
+        comment: 'Congrats!',
+      })
+
+      // The (already committed) status change wins; messaging failure is logged.
+      expect(result.proposalStatus).toBe(Status.accepted)
+      expect(addMessage).not.toHaveBeenCalled()
+      expect(notifyNewMessage).not.toHaveBeenCalled()
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to mirror decision comment into the proposal thread:',
+        expect.any(Error),
+      )
+    })
+
+    it('does not post to the thread when the comment is absent', async () => {
+      mockAcceptFlow()
+
+      const caller = createAdminCaller()
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.accept,
+      })
+
+      expect(result.proposalStatus).toBe(Status.accepted)
+      expect(ensureProposalConversation).not.toHaveBeenCalled()
+      expect(addMessage).not.toHaveBeenCalled()
+      expect(notifyNewMessage).not.toHaveBeenCalled()
+    })
+
+    it('does not post to the thread when the comment is only whitespace', async () => {
+      mockAcceptFlow()
+
+      const caller = createAdminCaller()
+      await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.accept,
+        comment: '   ',
+      })
+
+      expect(ensureProposalConversation).not.toHaveBeenCalled()
+      expect(addMessage).not.toHaveBeenCalled()
     })
   })
 

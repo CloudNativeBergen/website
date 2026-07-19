@@ -74,12 +74,7 @@ export default async function ProposalDetailPage({
                   </div>
                 </div>
               </div>
-              <AdminActionBar
-                proposal={proposal}
-                domain={domain}
-                fromEmail={conference.cfpEmail}
-                conference={conference}
-              />
+              <AdminActionBar proposal={proposal} conference={conference} />
             </div>
 
             <ProposalDetail proposal={proposal} />
