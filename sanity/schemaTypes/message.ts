@@ -44,6 +44,14 @@ export default defineType({
       validation: (Rule) => Rule.required(),
       initialValue: () => new Date().toISOString(),
     }),
+    defineField({
+      name: 'authorParty',
+      title: 'Author (party)',
+      type: 'conversationParticipant',
+      description:
+        'The GENERAL party representation of the author (messaging party model, G1). Dual-written next to the legacy `author` ref; only speaker parties are produced in G1. NOT yet the read source — `author` still drives fan-out and previews; the read path flips in G2. Written by the server, not edited in Studio.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

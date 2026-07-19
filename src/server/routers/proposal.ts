@@ -789,6 +789,9 @@ export const proposalRouter = router({
               proposalId: id,
               proposalTitle: proposal.title ?? 'Proposal',
               createdById: ctx.speaker._id,
+              // Party model (G1): the proposal's current speakers seed the
+              // dual-written participants[] (see ensureProposalConversation).
+              proposalSpeakerIds: extractSpeakerIds(proposal.speakers),
             })
             await addMessage({
               conversationId,

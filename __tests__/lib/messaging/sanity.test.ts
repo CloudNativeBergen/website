@@ -254,6 +254,9 @@ describe('ensureProposalConversation — race-safe createIfNotExists', () => {
       proposalId: 'prop-1',
       proposalTitle: 'My Talk',
       createdById: 'sp-1',
+      // Party model (G1): `proposalSpeakerIds` is now a required arg (the
+      // proposal's current speakers seed the dual-written participants[]).
+      proposalSpeakerIds: ['sp-1', 'sp-2'],
     })
 
     expect(id).toBe('conversation.proposal.prop-1')
@@ -267,6 +270,22 @@ describe('ensureProposalConversation — race-safe createIfNotExists', () => {
       _ref: 'prop-1',
       _weak: true,
     })
+    // Party model (G1) dual-write ADDITION: participants[] carries a speaker
+    // party per proposal speaker (weak ref) then the organizers group, each with
+    // a _key. The legacy fields above are unchanged.
+    expect(doc.participants).toEqual([
+      {
+        _key: 'FIXED',
+        partyType: 'speaker',
+        speaker: { _type: 'reference', _ref: 'sp-1', _weak: true },
+      },
+      {
+        _key: 'FIXED',
+        partyType: 'speaker',
+        speaker: { _type: 'reference', _ref: 'sp-2', _weak: true },
+      },
+      { _key: 'FIXED', partyType: 'group', group: 'organizers' },
+    ])
   })
 })
 

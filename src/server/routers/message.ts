@@ -325,6 +325,9 @@ export const messageRouter = router({
           proposalId: input.proposalId,
           proposalTitle: proposal.title ?? 'Proposal',
           createdById: actorId,
+          // Party model (G1): the proposal's current speakers seed the
+          // dual-written `participants[]` (see ensureProposalConversation).
+          proposalSpeakerIds: proposal.speakerIds,
         })
         const created = await getConversationById(id)
         if (!created) {
