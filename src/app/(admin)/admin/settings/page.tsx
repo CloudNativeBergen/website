@@ -233,10 +233,12 @@ function FieldRow({
           href={value as string}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="flex min-w-0 items-start text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
-          {value as string}
-          <LinkIcon className="ml-1 h-3 w-3" />
+          {/* Same overflow class as the 'links' case: an unbreakable URL must
+              break rather than widen the row past the viewport. */}
+          <span className="min-w-0 break-all">{value as string}</span>
+          <LinkIcon className="mt-1 ml-1 h-3 w-3 shrink-0" />
         </a>
       ) : (
         'Not set'
