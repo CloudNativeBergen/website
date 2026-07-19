@@ -39,6 +39,23 @@ const makeMessages = (): DisplayMessage[] => [
   },
 ]
 
+// A long back-and-forth history, oldest-first, for verifying that the thread
+// opens scrolled to the NEWEST message rather than the top.
+const makeLongHistory = (): DisplayMessage[] =>
+  Array.from({ length: 24 }, (_, i) => {
+    const organizer = i % 2 === 0
+    return {
+      id: `h${i}`,
+      authorName: organizer ? 'Program Committee' : 'Åsa Berg',
+      isOrganizer: organizer,
+      isOwn: !organizer,
+      body: organizer
+        ? `Follow-up point ${i + 1}: could you clarify the section on autoscaling and node pools?`
+        : `Reply ${i + 1}: sure — I have updated the abstract and outline accordingly.`,
+      createdAt: minutesAgo((24 - i) * 15),
+    }
+  })
+
 const defaultPreference: ConversationPreference = {
   muted: false,
   emailOverride: 'default',
@@ -143,4 +160,79 @@ export const EmptyDark: Story = {
     onSetMuted: undefined,
   },
   parameters: { dark: true },
+}
+
+/**
+ * The last send failed: an inline error sits above the composer, the drafted
+ * text is preserved in the textarea, and a Retry affordance re-submits it.
+ */
+export const SendError: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+    sendError: true,
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/** Dark theme, send-error state. */
+export const SendErrorDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+    sendError: true,
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
+}
+
+/**
+ * A long history: the scroll container should open pinned to the NEWEST message
+ * (bottom), not the oldest (top).
+ */
+export const LongHistory: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeLongHistory()} />
+  ),
+}
+
+/** Dark theme, long history (scroll-to-newest verification). */
+export const LongHistoryDark: Story = {
+  args: {
+    messages: [],
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    preference: defaultPreference,
+  },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeLongHistory()} />
+  ),
+}
+
+/**
+ * Impersonation read-only mode: the composer is replaced by a subtle notice and
+ * the preferences bar is disabled — an admin viewing as a speaker cannot post
+ * or mutate preferences as them.
+ */
+export const ReadOnlyImpersonation: Story = {
+  args: {
+    messages: [],
+    subject: 'Travel reimbursement question',
+    preference: defaultPreference,
+    readOnly: true,
+  },
+  render: (args) => (
+    <ConversationThreadView {...args} messages={makeMessages()} />
+  ),
 }

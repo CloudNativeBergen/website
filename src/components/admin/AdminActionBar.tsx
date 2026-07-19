@@ -110,7 +110,12 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
+  const anyModalOpen = showMessageModal || showEditModal || showPreviewModal
   useEffect(() => {
+    // Suppress the bar's global shortcuts while any of its modals is open, so
+    // ⌘E/⌘P/⌘M can't stack a second focus-trapped modal on top of the first.
+    if (anyModalOpen) return
+
     const handleKeyDown = (event: KeyboardEvent) => {
       // Check if Cmd (Mac) or Ctrl (Windows/Linux) is pressed
       const isCmdOrCtrl = event.metaKey || event.ctrlKey
@@ -142,7 +147,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [speakers, handleMessageSpeakers, handlePreviewSpeaker])
+  }, [speakers, handleMessageSpeakers, handlePreviewSpeaker, anyModalOpen])
   const {
     isSeasonedSpeaker,
     isNewSpeaker,
