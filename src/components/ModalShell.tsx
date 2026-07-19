@@ -208,7 +208,7 @@ export function ModalShell({
                 <div
                   className={`${padded ? 'p-6' : ''} ${
                     isSheet
-                      ? `flex-1 overflow-y-auto overscroll-contain sm:overflow-visible${
+                      ? `flex-1 overflow-y-auto overscroll-contain sm:overflow-visible ${
                           padded
                             ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6'
                             : ''
