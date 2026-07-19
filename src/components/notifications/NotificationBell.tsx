@@ -26,6 +26,21 @@ export function NotificationBell() {
   })
   const unreadCount = data ?? 0
 
+  // The newest notification's title, for the rising-count toast (V1l). A small
+  // dedicated query (one row) polled on the SAME cadence as the count — the
+  // cheapest correct source; the panel's own list query is a separate key that
+  // only exists while the panel is open, so we don't rely on it. When no title
+  // is available the toast falls back to the generic copy below.
+  const { data: latest } = api.notification.list.useQuery(
+    { limit: 1 },
+    {
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+      staleTime: 10_000,
+    },
+  )
+  const newestTitle = latest?.[0]?.title
+
   // Bridge a rising unread count to the ephemeral toast system so a live
   // notification surfaces even when the bell is closed. `useNotificationSafe`
   // returns `undefined` (rather than throwing) if the toast provider isn't
@@ -53,14 +68,16 @@ export function NotificationBell() {
       const delta = unreadCount - prev
       notify?.showNotification({
         type: 'info',
-        title: 'You have new notifications',
+        // Carry the newest notification's own title when we have it (V1l), so the
+        // toast previews the actual event; fall back to the generic headline.
+        title: newestTitle || 'You have new notifications',
         message:
           delta === 1
             ? 'You have 1 new notification.'
             : `You have ${delta} new notifications.`,
       })
     }
-  }, [isSuccess, unreadCount, isImpersonating, notify])
+  }, [isSuccess, unreadCount, isImpersonating, notify, newestTitle])
 
   const hasUnread = unreadCount > 0
   const badgeLabel = unreadCount > 9 ? '9+' : String(unreadCount)

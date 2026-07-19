@@ -333,3 +333,116 @@ export const ArchivedWithUnarchiveDark: Story = {
     />
   ),
 }
+
+/**
+ * DIRECT-THREAD IDENTITY (V1a): rows the viewer is personally addressed on
+ * (`direct: true`) carry a brand-blue left edge and a "Direct" chip so they read
+ * distinctly from the organizer-broadcast threads (rows 2 & 3 here).
+ */
+const makeDirectItems = (): ConversationListItem[] =>
+  makeOrganizerItems().map((item, i) =>
+    i === 0
+      ? {
+          ...item,
+          direct: true,
+          assignedTo: {
+            _id: 'org-1',
+            name: 'Ola Organizer',
+            image: '/images/default-avatar.png',
+          },
+        }
+      : item,
+  )
+
+export const DirectVsBroadcast: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  render: (args) => <ConversationList {...args} items={makeDirectItems()} />,
+}
+
+export const DirectVsBroadcastDark: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  parameters: { dark: true },
+  render: (args) => <ConversationList {...args} items={makeDirectItems()} />,
+}
+
+/**
+ * STATE VISIBILITY (V1g): a muted row shows a small bell-slash glyph beside the
+ * time; the assignee avatar (V1k) uses the organizer's photo when available.
+ */
+export const MutedAndAssigneePhoto: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  render: (args) => (
+    <ConversationList
+      {...args}
+      items={makeOrganizerItems().map((item, i) =>
+        i === 0
+          ? {
+              ...item,
+              muted: true,
+              assignedTo: {
+                _id: 'org-1',
+                name: 'Ola Organizer',
+                image: '/images/default-avatar.png',
+              },
+            }
+          : item,
+      )}
+    />
+  ),
+}
+
+export const MutedAndAssigneePhotoDark: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  parameters: { dark: true },
+  render: (args) => (
+    <ConversationList
+      {...args}
+      items={makeOrganizerItems().map((item, i) =>
+        i === 0
+          ? {
+              ...item,
+              muted: true,
+              assignedTo: {
+                _id: 'org-1',
+                name: 'Ola Organizer',
+                image: '/images/default-avatar.png',
+              },
+            }
+          : item,
+      )}
+    />
+  ),
+}
+
+/** PER-VIEW EMPTY STATE (V1d): the organizer needs-reply view's tailored copy. */
+export const EmptyNeedsReply: Story = {
+  args: { items: [], isOrganizer: true, view: 'needs-reply' },
+}
+
+/** PER-VIEW EMPTY STATE (V1d): the organizer unassigned view. */
+export const EmptyUnassigned: Story = {
+  args: { items: [], isOrganizer: true, view: 'unassigned' },
+}
+
+/**
+ * SPEAKER ADOPTION PITCH (V1d rider): the speaker Active-view empty state is a
+ * marketing surface — a headline, a pitch line, and the New conversation CTA.
+ */
+export const SpeakerEmptyPitch: Story = {
+  args: {
+    items: [],
+    isOrganizer: false,
+    view: 'active',
+    onNewConversation: () => {},
+  },
+}
+
+export const SpeakerEmptyPitchDark: Story = {
+  args: {
+    items: [],
+    isOrganizer: false,
+    view: 'active',
+    onNewConversation: () => {},
+  },
+  parameters: { dark: true },
+}

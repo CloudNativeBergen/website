@@ -5,7 +5,10 @@ import type { Session } from 'next-auth'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { MessagesInbox } from '@/components/messaging'
-import type { ConversationListItem } from '@/lib/messaging/types'
+import type {
+  ConversationListItem,
+  ConversationViewCounts,
+} from '@/lib/messaging/types'
 import type { Speaker } from '@/lib/speaker/types'
 
 // Renders the REAL MessagesInbox container (not just its presentational
@@ -78,7 +81,10 @@ const makeItems = (): ConversationListItem[] => [
  * BUILDER, invoked per request, so `minutesAgo` timestamps are computed after
  * `mockDateBeforeEach` has pinned the clock — calling `makeItems()` at module
  * load would freeze them against the real wall clock instead. */
-const conversationHandlers = (getItems: () => ConversationListItem[]) => [
+const conversationHandlers = (
+  getItems: () => ConversationListItem[],
+  counts?: ConversationViewCounts,
+) => [
   http.get('/api/trpc/:procs', ({ params }) =>
     HttpResponse.json(
       String(params.procs)
@@ -86,11 +92,23 @@ const conversationHandlers = (getItems: () => ConversationListItem[]) => [
         .map((proc) =>
           proc === 'message.listConversations'
             ? { result: { data: getItems() } }
-            : { result: { data: null } },
+            : proc === 'message.viewCounts'
+              ? { result: { data: counts ?? null } }
+              : { result: { data: null } },
         ),
     ),
   ),
 ]
+
+/** Representative organizer tab counts for the badge story. */
+const ORGANIZER_COUNTS: ConversationViewCounts = {
+  active: 8,
+  needsReply: 3,
+  unassigned: 2,
+  mine: 1,
+  resolved: 12,
+  archived: 5,
+}
 
 /** Organizer inbox rows carrying ticketing metadata so the row affordances show
  *  alongside the tab bar. */
@@ -197,19 +215,38 @@ export const SpeakerPopulated: Story = {
   parameters: { msw: { handlers: conversationHandlers(makeItems) } },
 }
 
-/** Organizer inbox — the full view tab bar (Active / Needs reply / Mine /
- *  Resolved / Archived) sits above rows with ticketing metadata. */
+/** Organizer inbox — the single-row toolbar (V1b): the full view tab bar
+ *  (Active / Needs reply / Unassigned / Mine / Resolved / Archived) with per-tab
+ *  count badges (V1c) scrolls beside the pinned compact New button. */
 export const OrganizerPopulated: Story = {
-  args: { audience: 'organizer' },
-  parameters: { msw: { handlers: conversationHandlers(makeOrganizerItems) } },
+  args: { audience: 'organizer', allowNew: true },
+  parameters: {
+    msw: {
+      handlers: conversationHandlers(makeOrganizerItems, ORGANIZER_COUNTS),
+    },
+  },
 }
 
 export const OrganizerPopulatedDark: Story = {
-  args: { audience: 'organizer' },
+  args: { audience: 'organizer', allowNew: true },
   parameters: {
     dark: true,
-    msw: { handlers: conversationHandlers(makeOrganizerItems) },
+    msw: {
+      handlers: conversationHandlers(makeOrganizerItems, ORGANIZER_COUNTS),
+    },
   },
+}
+
+/** Speaker Active-view empty state — the adoption pitch + New conversation CTA
+ *  (V1d rider); a marketing surface that must look good at 393px. */
+export const SpeakerEmptyPitch: Story = {
+  args: { audience: 'speaker', allowNew: true },
+  parameters: { msw: { handlers: conversationHandlers(() => []) } },
+}
+
+export const SpeakerEmptyPitchDark: Story = {
+  args: { audience: 'speaker', allowNew: true },
+  parameters: { dark: true, msw: { handlers: conversationHandlers(() => []) } },
 }
 
 /** Speaker inbox — the subtle Active / Archived toggle (not a full tab bar). */

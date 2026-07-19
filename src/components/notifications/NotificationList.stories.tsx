@@ -25,6 +25,20 @@ const makeItems = (): NotificationItem[] => [
     actor: { _id: 'a3', name: 'Maria Jensen' },
   },
   {
+    // DIRECT-THREAD IDENTITY on the hub (V1a): a collapsed message notification
+    // for an organizer-initiated thread that personally addresses the recipient
+    // — the "Direct message" title carries the distinction, so the panel needs
+    // no extra styling; this row verifies it renders and reads well.
+    id: 'notification.message.conversation.gen-42.sp-1',
+    type: 'message_received',
+    title: 'Direct message from Ola Organizer',
+    message: 'Quick question about your travel dates before we book.',
+    link: '/cfp/messages/conversation.gen-42',
+    readAt: null,
+    createdAt: minutesAgo(2),
+    actor: { _id: 'a4', name: 'Ola Organizer' },
+  },
+  {
     id: '1',
     type: 'proposal_status_changed',
     title: 'Your proposal was accepted',

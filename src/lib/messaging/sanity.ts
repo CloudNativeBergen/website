@@ -160,6 +160,11 @@ export function rawViewPredicate(
         predicate: `${active} && ${NEEDS_REPLY}`,
         needsOrganizerIds: true,
       }
+    case 'unassigned':
+      return {
+        predicate: `${active} && !defined(assignedTo)`,
+        needsOrganizerIds: false,
+      }
     case 'mine':
       return {
         predicate: `${active} && assignedTo._ref == $speakerId`,
@@ -452,7 +457,7 @@ export async function listConversationsForSpeaker({
     createdAt,
     lastMessageAt,
     "status": coalesce(status, 'open'),
-    "assignedTo": assignedTo->{ _id, name },
+    "assignedTo": assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) },
     archivedAt,
     "lastMessage": *[_type == "message" && conversation._ref == ^._id] | order(createdAt desc) [0] {
       "authorId": author._ref,
@@ -513,9 +518,13 @@ export async function listConversationsForSpeaker({
       { cache: 'no-store' },
     ),
     clientReadUncached.fetch<
-      { conversationId: string | null; archivedAt: string | null }[]
+      {
+        conversationId: string | null
+        archivedAt: string | null
+        muted: boolean | null
+      }[]
     >(
-      `*[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt }`,
+      `*[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt, muted }`,
       { prefIds },
       { cache: 'no-store' },
     ),
@@ -532,9 +541,14 @@ export async function listConversationsForSpeaker({
   }
   // Per-user archive timestamp keyed by conversation id (null archivedAt ignored).
   const prefArchivedAt = new Map<string, string>()
+  // The caller's mute preference keyed by conversation id (V1g row mute glyph).
+  const prefMuted = new Map<string, boolean>()
   for (const pref of prefRows ?? []) {
     if (pref.conversationId && pref.archivedAt) {
       prefArchivedAt.set(pref.conversationId, pref.archivedAt)
+    }
+    if (pref.conversationId && pref.muted) {
+      prefMuted.set(pref.conversationId, true)
     }
   }
 
@@ -598,10 +612,15 @@ export async function listConversationsForSpeaker({
       counterpart: resolveCounterpart(row, isOrganizer, organizerSet),
       status: row.status,
       assignedTo: row.assignedTo
-        ? { _id: row.assignedTo._id, name: row.assignedTo.name }
+        ? {
+            _id: row.assignedTo._id,
+            name: row.assignedTo.name,
+            image: row.assignedTo.image ?? undefined,
+          }
         : null,
       needsReply,
       archived,
+      muted: prefMuted.get(row._id) ?? false,
       direct,
     }
   })
@@ -631,6 +650,7 @@ type RawConversationRow = Omit<
   | 'assignedTo'
   | 'needsReply'
   | 'archived'
+  | 'muted'
   | 'subjectSpeakerId'
   | 'direct'
 > & {
@@ -647,7 +667,7 @@ type RawConversationRow = Omit<
   // GROQ coalesces `status` to 'open'; `assignedTo`/`archivedAt` are null when
   // unset (or, for a weak assignee ref, when the speaker was erased).
   status: ConversationStatus
-  assignedTo: { _id: string; name: string } | null
+  assignedTo: { _id: string; name: string; image: string | null } | null
   archivedAt: string | null
 }
 
@@ -718,12 +738,13 @@ export async function getConversationViewCounts({
 
   // Build one `count()` field per relevant view from the shared predicates.
   const views: ConversationView[] = isOrganizer
-    ? ['active', 'needs-reply', 'mine', 'resolved', 'archived']
+    ? ['active', 'needs-reply', 'unassigned', 'mine', 'resolved', 'archived']
     : ['active', 'archived']
   // Stable field keys (the enum's hyphenated names aren't valid identifiers).
   const KEY: Record<string, keyof ConversationViewCounts> = {
     active: 'active',
     'needs-reply': 'needsReply',
+    unassigned: 'unassigned',
     mine: 'mine',
     resolved: 'resolved',
     archived: 'archived',
@@ -747,6 +768,7 @@ export async function getConversationViewCounts({
   }
   if (isOrganizer) {
     counts.needsReply = result?.needsReply ?? 0
+    counts.unassigned = result?.unassigned ?? 0
     counts.mine = result?.mine ?? 0
     counts.resolved = result?.resolved ?? 0
   }
@@ -971,18 +993,27 @@ export async function setConversationAssignee(
  * BOTH fields together (a cleared archive has no archiver). The `archiverId` ref
  * is WEAK so erasing a speaker (GDPR) doesn't orphan-block their deletion —
  * consistent with the other speaker refs on this doc.
+ *
+ * `archiverId` is required only when ARCHIVING (it records `archivedBy` for the
+ * "Archived for everyone by X" audit line, V1f); it is IGNORED — and may be
+ * omitted — when unarchiving, which clears both fields (V1-r3b). A cleared
+ * archive has no archiver, so there is nothing to attribute.
  */
 export async function setConversationArchived(
   conversationId: string,
   archived: boolean,
-  archiverId: string,
+  archiverId?: string,
 ): Promise<void> {
   if (archived) {
     await clientWrite
       .patch(conversationId)
       .set({
         archivedAt: new Date().toISOString(),
-        archivedBy: { ...createReference(archiverId), _weak: true },
+        // Attribute the archive when we know who did it; the ref is WEAK so a
+        // later GDPR erase of that organizer never orphan-blocks this doc.
+        ...(archiverId
+          ? { archivedBy: { ...createReference(archiverId), _weak: true } }
+          : {}),
       })
       .commit()
     return

@@ -284,7 +284,7 @@ describe('ConversationThread — auto-mark-read', () => {
 })
 
 describe('ConversationThread — not-found scoping (C5)', () => {
-  it('shows the error state (no composer) for a not-found conversationId', () => {
+  it('shows the honest not-found state (no composer) for a not-found conversationId', () => {
     getConversationResult = { data: undefined, error: NOT_FOUND }
     listMessagesResult = notFoundMessages()
 
@@ -295,7 +295,14 @@ describe('ConversationThread — not-found scoping (C5)', () => {
       />,
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load/i)
+    // V1e: a bare-conversationId NOT_FOUND is a permanent no-access state with a
+    // Back-to-Messages CTA, distinct from the transient "couldn't load" retry.
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /doesn.t exist or you don.t have access/i,
+    )
+    expect(
+      screen.getByRole('link', { name: /back to messages/i }),
+    ).toHaveAttribute('href', '/cfp/messages')
     expect(screen.queryByLabelText(/write a message/i)).not.toBeInTheDocument()
   })
 

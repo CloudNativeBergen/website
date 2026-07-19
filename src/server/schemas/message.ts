@@ -50,10 +50,18 @@ const cursor = z
 export const ListConversationsSchema = z.object({
   cursor,
   // Inbox view. ORGANIZERS may use any; the router rejects the organizer-only
-  // views (`needs-reply` | `mine` | `resolved`) for a non-organizer. Defaults to
-  // `active` in the data layer when omitted.
+  // views (`needs-reply` | `unassigned` | `mine` | `resolved`) for a
+  // non-organizer. Defaults to `active` in the data layer when omitted.
   view: z
-    .enum(['active', 'needs-reply', 'mine', 'resolved', 'archived', 'all'])
+    .enum([
+      'active',
+      'needs-reply',
+      'unassigned',
+      'mine',
+      'resolved',
+      'archived',
+      'all',
+    ])
     .optional(),
 })
 

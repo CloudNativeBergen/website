@@ -13,6 +13,15 @@ vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { speaker: { _id: 'me' } } }),
 }))
 
+// The inbox persists the view in `?view=` (V1i). Local state still drives the
+// immediate switch, so a static searchParams + a no-op router are enough here.
+const routerReplace = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: routerReplace }),
+  usePathname: () => '/admin/messages',
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 // Capture every `view` the inbox query is called with, plus the mutation calls.
 const listInputs: Array<{ view: string }> = []
 const setArchivedMutate = vi.fn()
@@ -27,6 +36,9 @@ vi.mock('@/lib/trpc/client', () => ({
       message: { listConversations: { invalidate: listInvalidate } },
     }),
     message: {
+      viewCounts: {
+        useQuery: () => ({ data: undefined }),
+      },
       listConversations: {
         useInfiniteQuery: (input: { view: string }) => {
           listInputs.push(input)
@@ -76,6 +88,7 @@ beforeEach(() => {
   setArchivedMutate.mockClear()
   setPreferenceMutate.mockClear()
   listInvalidate.mockClear()
+  routerReplace.mockClear()
   infiniteResult = pageOf([])
 })
 
@@ -90,6 +103,9 @@ describe('MessagesInbox — view tabs (T2a)', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
     expect(listInputs.at(-1)).toEqual({ view: 'needs-reply' })
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Unassigned' }))
+    expect(listInputs.at(-1)).toEqual({ view: 'unassigned' })
+
     fireEvent.click(screen.getByRole('tab', { name: 'Mine' }))
     expect(listInputs.at(-1)).toEqual({ view: 'mine' })
 
@@ -97,11 +113,27 @@ describe('MessagesInbox — view tabs (T2a)', () => {
     expect(listInputs.at(-1)).toEqual({ view: 'resolved' })
   })
 
+  it('persists the selected view in the URL query string (V1i)', () => {
+    render(<MessagesInbox audience="organizer" />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages?view=needs-reply',
+      expect.objectContaining({ scroll: false }),
+    )
+    // Returning to the default view drops the param entirely.
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages',
+      expect.objectContaining({ scroll: false }),
+    )
+  })
+
   it('organizers get the full tab bar; the "All" view is omitted from the UI', () => {
     render(<MessagesInbox audience="organizer" />)
     for (const label of [
       'Active',
       'Needs reply',
+      'Unassigned',
       'Mine',
       'Resolved',
       'Archived',
