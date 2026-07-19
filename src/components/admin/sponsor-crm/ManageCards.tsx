@@ -5,6 +5,7 @@ import {
   UserGroupIcon,
   PhotoIcon,
   ClockIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -90,6 +91,14 @@ export function ManageCards({ sponsor, hasLogo, onOpen }: ManageCardsProps) {
       label: 'History',
       icon: ClockIcon,
       status: activityCount > 0 ? `${activityCount} events` : 'View activity',
+      dot: null,
+    },
+    {
+      // Sponsor↔organizer message thread (messaging G2b).
+      view: 'messages',
+      label: 'Messages',
+      icon: ChatBubbleLeftRightIcon,
+      status: 'Open thread',
       dot: null,
     },
   ]

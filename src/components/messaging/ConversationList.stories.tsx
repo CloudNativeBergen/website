@@ -446,3 +446,42 @@ export const SpeakerEmptyPitchDark: Story = {
   },
   parameters: { dark: true },
 }
+
+/**
+ * SPONSOR THREADS in the organizer inbox (messaging G2b): a sponsor row carries
+ * an amber "Sponsor" chip (mirroring the Proposal chip) and its counterpart is
+ * the sponsor company name (initials avatar — sponsor logos are inline SVG, not
+ * a URL). Shown alongside a proposal and a general row so the chip reads
+ * distinctly.
+ */
+const makeSponsorItems = (): ConversationListItem[] => [
+  {
+    _id: 'conversation.sponsor.sfc-1',
+    conversationType: 'sponsor',
+    subject: 'Acme Corp',
+    createdAt: minutesAgo(60 * 24 * 2),
+    lastMessageAt: minutesAgo(15),
+    unreadCount: 2,
+    lastMessage: {
+      authorId: '',
+      authorName: 'Dana Diaz',
+      excerpt: 'Could you confirm the booth dimensions for our stand?',
+    },
+    counterpart: { name: 'Acme Corp' },
+    status: 'open',
+    needsReply: true,
+    archived: false,
+  },
+  ...makeOrganizerItems().slice(0, 2),
+]
+
+export const SponsorThreadRow: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  render: (args) => <ConversationList {...args} items={makeSponsorItems()} />,
+}
+
+export const SponsorThreadRowDark: Story = {
+  args: { items: [], isOrganizer: true, view: 'active' },
+  parameters: { dark: true },
+  render: (args) => <ConversationList {...args} items={makeSponsorItems()} />,
+}

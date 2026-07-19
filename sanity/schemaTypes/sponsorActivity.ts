@@ -26,6 +26,8 @@ export default defineType({
           { title: 'Email', value: 'email' },
           { title: 'Call', value: 'call' },
           { title: 'Meeting', value: 'meeting' },
+          // A sponsor↔organizer thread message was posted (messaging G2b).
+          { title: 'Message', value: 'message' },
         ],
         layout: 'dropdown',
       },

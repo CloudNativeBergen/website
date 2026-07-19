@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { SponsorRegistrationLogoUpload } from '@/components/sponsor/SponsorRegistrationLogoUpload'
+import { SponsorPortalMessages } from '@/components/sponsor/SponsorPortalMessages'
 import { formatNumber } from '@/lib/format'
 import { nanoid } from 'nanoid'
 
@@ -157,6 +158,7 @@ export function SponsorPortal({ token }: { token: string }) {
   if (submitted || sponsor?.registrationComplete) {
     return (
       <PortalStatusDashboard
+        token={token}
         sponsorName={sponsor?.sponsorName}
         conferenceName={sponsor?.conferenceName}
         tierTitle={sponsor?.tierTitle}
@@ -651,11 +653,29 @@ export function SponsorPortal({ token }: { token: string }) {
           </div>
         </div>
       </form>
+
+      {/* Messages: a collapsed-by-default disclosure below the form so it doesn't
+          distract from the primary registration task (messaging G2b). */}
+      <details
+        id="messages"
+        className="mt-8 rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+      >
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-900 select-none dark:text-white">
+          Message the organizers
+        </summary>
+        <div className="border-t border-gray-200 p-4 dark:border-gray-700">
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Have a question before you finish? Send the organizers a message.
+          </p>
+          <SponsorPortalMessages token={token} />
+        </div>
+      </details>
     </div>
   )
 }
 
 function PortalStatusDashboard({
+  token,
   sponsorName,
   conferenceName,
   tierTitle,
@@ -667,6 +687,7 @@ function PortalStatusDashboard({
   contractValue,
   contractCurrency,
 }: {
+  token: string
   sponsorName?: string
   conferenceName?: string
   tierTitle?: string | null
@@ -791,6 +812,20 @@ function PortalStatusDashboard({
           </div>
         </div>
       )}
+
+      {/* Messages: a proper card in the status dashboard (messaging G2b). */}
+      <section
+        id="messages"
+        className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800"
+      >
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Messages
+        </h2>
+        <p className="mt-1 mb-4 text-sm text-gray-600 dark:text-gray-400">
+          Questions about your sponsorship? Message the organizers here.
+        </p>
+        <SponsorPortalMessages token={token} />
+      </section>
     </div>
   )
 }

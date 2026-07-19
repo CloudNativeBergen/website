@@ -23,6 +23,7 @@ import {
   listMessages,
   addMessage,
   ensureProposalConversation,
+  ensureSponsorConversation,
   createGeneralConversation,
   getProposalForConversation,
   setConversationPreference,
@@ -34,6 +35,11 @@ import {
   canAccessConversation,
 } from '@/lib/messaging/sanity'
 import {
+  getSponsorFanoutContext,
+  type SponsorFanoutContext,
+} from '@/lib/messaging/sponsor'
+import { z } from 'zod'
+import {
   getOrganizerSpeakerIds,
   createNotifications,
 } from '@/lib/notification/sanity'
@@ -41,7 +47,7 @@ import {
   conversationLinkPath,
   truncateToGraphemeBoundary,
 } from '@/lib/messaging/links'
-import { notifyNewMessage } from '@/lib/messaging/notify'
+import { notifyNewMessage, notifySponsorMessage } from '@/lib/messaging/notify'
 import { SPEAKER_ALLOWED_VIEWS } from '@/lib/messaging/types'
 import type {
   AccessSpeaker,
@@ -416,16 +422,69 @@ export const messageRouter = router({
       // runs AFTER the response so a large recipient set can't hang the Send
       // button. `runAfterResponse` uses Next's `after()` in a request scope and
       // falls back to a self-catching detachment elsewhere.
-      runAfterResponse(() =>
-        notifyNewMessage({
-          conversation,
-          message,
-          authorId: actorId,
-          conference,
-        }),
-      )
+      //
+      // SPONSOR threads (G2b) route to the sponsor fan-out instead of the speaker
+      // one: this actor is an ORGANIZER (only organizers can access a sponsor
+      // thread via a session), so it is the organizer-authored direction —
+      // email every contact person, hub the other organizers, NO Slack.
+      if (conversation.conversationType === 'sponsor') {
+        const sfcId = conversation.participants?.find(
+          (p) => p.partyType === 'sponsor',
+        )?.sponsorForConferenceId
+        runAfterResponse(async () => {
+          const sfc = sfcId ? await getSponsorFanoutContext(sfcId) : null
+          if (!sfc) return
+          await notifySponsorMessage({
+            conversation,
+            message,
+            sfc,
+            authorOrganizerId: actorId,
+          })
+        })
+      } else {
+        runAfterResponse(() =>
+          notifyNewMessage({
+            conversation,
+            message,
+            authorId: actorId,
+            conference,
+          }),
+        )
+      }
 
       return { conversationId: conversation._id, message }
+    }),
+
+  /**
+   * Organizer-only: ensure the SINGLE sponsor↔organizer thread for a
+   * `sponsorForConference` exists and return its id (messaging G2b). Lets an
+   * organizer OPEN (and thereby start) the thread from the sponsor CRM before the
+   * sponsor has posted anything — the thread is created with the acting organizer
+   * as `createdBy` (org-initiated). Idempotent: a second call returns the same
+   * deterministic id. The sfc MUST belong to the current-domain conference
+   * (multi-tenant isolation).
+   */
+  ensureSponsorThread: protectedProcedure
+    .input(z.object({ sponsorForConferenceId: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.speaker.isOrganizer !== true) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
+      }
+      const conferenceId = await resolveConferenceId()
+      const sfc: SponsorFanoutContext | null = await getSponsorFanoutContext(
+        input.sponsorForConferenceId,
+      )
+      // Collapse absent + wrong-conference into NOT_FOUND (no cross-tenant probe).
+      if (!sfc || !sfc.conference || sfc.conference._id !== conferenceId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Sponsor not found' })
+      }
+      const conversationId = await ensureSponsorConversation({
+        conferenceId,
+        sponsorForConferenceId: input.sponsorForConferenceId,
+        sponsorName: sfc.sponsorName,
+        createdById: ctx.speaker._id,
+      })
+      return { conversationId }
     }),
 
   /** Set the caller's mute / email preference for a conversation. Authz-checked. */

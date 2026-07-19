@@ -7,7 +7,13 @@
  * id) — see `canAccessConversation` / `resolveRecipients` in `./sanity`.
  */
 
-export type ConversationType = 'proposal' | 'general'
+/**
+ * The thread shapes. `proposal` / `general` are the original speaker↔organizer
+ * shapes; `sponsor` (G2b) is a sponsor↔organizer thread — one per
+ * `sponsorForConference`, whose non-organizer side is a `sponsor` participant
+ * party (no speaker doc) reached only via the portal token, never a session.
+ */
+export type ConversationType = 'proposal' | 'general' | 'sponsor'
 
 /**
  * Ticketing status of a thread for the ORGANIZER audience. `'open'` is the
@@ -300,9 +306,26 @@ export interface ConversationViewCounts {
 export interface Message {
   _id: string
   conversationId: string
+  /**
+   * The author speaker `_ref` (empty string for a SPONSOR-authored message,
+   * which has no speaker doc — see {@link authorName}/{@link authorSponsorId}).
+   */
   authorId: string
   body: string
   createdAt: string
+  /**
+   * Display-name snapshot for a SPONSOR-authored message (the contact person the
+   * portal sender picked). Undefined for speaker/organizer authors — the thread
+   * derives their name from the `authorId` speaker ref (G2b).
+   */
+  authorName?: string
+  /**
+   * The `sponsorForConference` id when this message was authored from the sponsor
+   * portal (its `authorParty` is a `sponsor` party). Undefined for
+   * speaker/organizer authors. Lets the thread render a "(Sponsor)" badge and
+   * suppress the speaker-avatar lookup (G2b).
+   */
+  authorSponsorId?: string
 }
 
 /** A participant sub-object projected for a conversation view. */

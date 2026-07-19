@@ -25,6 +25,20 @@ export function proposalConversationId(proposalId: string): string {
 }
 
 /**
+ * Deterministic id for the SINGLE sponsor↔organizer conversation attached to a
+ * `sponsorForConference` (messaging G2b). EXTENDS the id scheme alongside
+ * {@link proposalConversationId} (`conversation.proposal.<proposalId>`): a
+ * sponsor thread is `conversation.sponsor.<sfcId>`, created via
+ * `createIfNotExists` so the portal-send and organizer-send paths converge on
+ * one document (the maintainer-locked "one thread per sponsorForConference" UI).
+ * The model stays multi-thread-general — this is the only id a sponsor thread
+ * ever gets, so there is no special-casing beyond deriving THIS id.
+ */
+export function sponsorConversationId(sfcId: string): string {
+  return `conversation.sponsor.${sfcId}`
+}
+
+/**
  * The longest prefix of `text` that is at most `max` UTF-16 code units long AND
  * ends on a grapheme-cluster boundary, so truncation never splits a multi-code-
  * unit cluster (emoji, flags, combined sequences) into a lone surrogate — which
@@ -68,6 +82,11 @@ export function truncateToGraphemeBoundary(text: string, max: number): string {
  * - proposal + speaker   → `/cfp/proposal/<proposalId>#messages`
  * - general  + organizer → `/admin/messages/<conversationId>`
  * - general  + speaker   → `/cfp/messages/<conversationId>`
+ * - sponsor  + (either)  → `/admin/messages/<conversationId>` — a sponsor thread
+ *   has NO speaker/CFP surface (the sponsor side is token-authed via the portal,
+ *   never a session), so BOTH audience variants point at the admin thread. The
+ *   only in-app consumer is the organizer hub/inbox; the sponsor reaches the
+ *   thread through the portal, not this path (G2b).
  */
 export function conversationLinkPath(
   conversation: Pick<
@@ -80,6 +99,10 @@ export function conversationLinkPath(
     return isOrganizer
       ? `/admin/proposals/${conversation.proposalId}#messages`
       : `/cfp/proposal/${conversation.proposalId}#messages`
+  }
+  // Sponsor threads are organizer-surface only (no speaker/CFP route).
+  if (conversation.conversationType === 'sponsor') {
+    return `/admin/messages/${conversation._id}`
   }
   return isOrganizer
     ? `/admin/messages/${conversation._id}`

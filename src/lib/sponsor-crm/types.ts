@@ -28,6 +28,8 @@ export type ActivityType =
   | 'signature_status_change'
   | 'registration_complete'
   | 'contract_reminder_sent'
+  // A sponsor↔organizer thread message (messaging G2b).
+  | 'message'
 
 export type SponsorTag =
   | 'warm-lead'

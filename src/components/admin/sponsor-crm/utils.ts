@@ -18,6 +18,7 @@ import {
   DocumentCheckIcon,
   PencilIcon,
   ChatBubbleLeftIcon,
+  ChatBubbleLeftRightIcon,
   PhoneIcon,
   CalendarIcon,
   FireIcon,
@@ -84,6 +85,8 @@ export function getActivityIcon(type: ActivityType) {
       return CheckCircleIcon
     case 'contract_reminder_sent':
       return BellAlertIcon
+    case 'message':
+      return ChatBubbleLeftRightIcon
   }
 }
 
@@ -111,6 +114,8 @@ export function getActivityColor(type: ActivityType): string {
       return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/20'
     case 'contract_reminder_sent':
       return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
+    case 'message':
+      return 'text-sky-600 bg-sky-100 dark:text-sky-400 dark:bg-sky-900/20'
   }
 }
 

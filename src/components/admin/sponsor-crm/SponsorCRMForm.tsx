@@ -31,8 +31,16 @@ import { SponsorContractView } from './SponsorContractView'
 import { SponsorPipelineView } from './SponsorPipelineView'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
+import { SponsorMessagesPanel } from './SponsorMessagesPanel'
 
-type FormView = 'pipeline' | 'contacts' | 'logo' | 'history' | 'contract'
+type FormView =
+  | 'pipeline'
+  | 'contacts'
+  | 'logo'
+  | 'history'
+  | 'contract'
+  // The sponsor↔organizer message thread (messaging G2b).
+  | 'messages'
 
 interface SponsorCRMFormProps {
   conferenceId: string
@@ -233,6 +241,7 @@ export function SponsorCRMForm({
     contacts: 'Contacts & billing',
     logo: 'Logo',
     history: 'History',
+    messages: 'Messages',
   }
 
   return (
@@ -370,6 +379,12 @@ export function SponsorCRMForm({
                             utils.sponsor.crm.list.invalidate()
                             utils.sponsor.crm.healthViolations.invalidate()
                           }}
+                        />
+                      ) : view === 'messages' && sponsor ? (
+                        // Sponsor↔organizer thread (messaging G2b): ensured on
+                        // open, then embedded for the organizer audience.
+                        <SponsorMessagesPanel
+                          sponsorForConferenceId={sponsor._id}
                         />
                       ) : (
                         <SponsorPipelineView

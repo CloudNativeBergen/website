@@ -4,7 +4,10 @@ import {
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { notifyNewSpeakerMessage } from '@/lib/slack/notify'
+import {
+  notifyNewSpeakerMessage,
+  notifySponsorMessage as notifySponsorMessageSlack,
+} from '@/lib/slack/notify'
 import type { MessageNotificationInput } from '@/lib/notification/types'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -18,6 +21,10 @@ import {
   ORGANIZERS_LABEL,
 } from './links'
 import { sendMessageEmails, type MessageEmailRecipient } from './email'
+import { sendSponsorMessageEmails } from './sponsorEmail'
+import { createSponsorActivity } from '@/lib/sponsor-crm/activity'
+import { buildPortalUrl } from '@/lib/sponsor-crm/registration'
+import type { SponsorFanoutContext } from './sponsor'
 import type { ConversationWithContext, Message } from './types'
 
 /** How many characters of the message body ride into the notification/email. */
@@ -242,5 +249,161 @@ export async function notifyNewMessage({
     }
   } catch (error) {
     console.error('Failed to fan out new-message notifications:', error)
+  }
+}
+
+/**
+ * Fan a new SPONSOR-thread message out (messaging G2b). A sibling of
+ * {@link notifyNewMessage} — the sponsor thread's channel matrix differs enough
+ * (no speaker emails, sponsor-side emails via `sponsorEmail`, Slack on the SALES
+ * channel, a sponsorActivity row) that it is its own orchestrator rather than a
+ * branch inside the speaker fan-out — but it REUSES the same primitives
+ * (`upsertMessageNotifications`, bounded-concurrency email, `createSponsorActivity`).
+ *
+ * Direction is decided by `authorOrganizerId`:
+ *
+ * SPONSOR-authored (`authorOrganizerId` undefined):
+ * - HUB (+push): one collapsed `message_received` per organizer, title
+ *   "New message from <authorName> (Sponsor) — <subject>", admin deep link.
+ * - SLACK: the SALES channel ("💬 New sponsor message").
+ * - sponsorActivity: a `message` row (system-authored).
+ * - NO speaker emails, NO contact emails.
+ *
+ * ORGANIZER-authored (`authorOrganizerId` set):
+ * - EMAIL: every contact person, from the conference `sponsorEmail`, deep-linked
+ *   to the sponsor PORTAL (`#messages`) — the sponsor's only messaging surface.
+ * - HUB (+push): the OTHER organizers (the author is excluded, mirroring the
+ *   actor-exclusion of the speaker fan-out).
+ * - sponsorActivity: a `message` row attributed to the acting organizer.
+ * - NO Slack.
+ *
+ * PREFERENCES: `conversationPreference` (mute / email override) applies to the
+ * ORGANIZER participants exactly as in {@link notifyNewMessage}. SPONSORS have no
+ * preference documents (no speaker id to key one on) — they always receive the
+ * email; documented here as the deliberate asymmetry.
+ *
+ * HUB-ROUTING NOTE: organizer hub notifications currently go to ALL organizers.
+ * When the sponsors TEAM lands (TEAMS-2) this fan-out should route to that team
+ * instead of the whole organizer set — see the recipient resolution below.
+ *
+ * NEVER-FAIL: every channel is wrapped so a failure can't fail the (already
+ * committed) message write, identical to {@link notifyNewMessage}.
+ */
+export async function notifySponsorMessage({
+  conversation,
+  message,
+  sfc,
+  authorOrganizerId,
+}: {
+  conversation: ConversationWithContext
+  message: Message
+  sfc: SponsorFanoutContext
+  /** The acting organizer id for an ORG-authored message; undefined ⇒ sponsor. */
+  authorOrganizerId?: string
+}): Promise<void> {
+  try {
+    const conference = sfc.conference
+    if (!conference) return
+    const excerpt = messageExcerpt(message.body)
+    const subject = conversation.subject
+    const adminLink = conversationLinkPath(conversation, true)
+
+    // TEAMS-2: replace `getOrganizerSpeakerIds()` with the sponsors-team members.
+    const organizerIds = await getOrganizerSpeakerIds()
+
+    if (authorOrganizerId === undefined) {
+      // ---- SPONSOR-authored ------------------------------------------------
+      const authorName = message.authorName ?? sfc.sponsorName
+      // HUB (+push) to ALL organizers. Sponsor authors have no speaker id, so
+      // there is no actor to exclude and no `actorId` on the input. The
+      // "(Sponsor)" suffix on the author name yields the required title
+      // "New message from <authorName> (Sponsor) — <subject>".
+      const items: MessageNotificationInput[] = organizerIds.map((id) => ({
+        recipientId: id,
+        conversationId: conversation._id,
+        conferenceId: conversation.conferenceId,
+        authorName: `${authorName} (Sponsor)`,
+        subject,
+        message: excerpt,
+        link: adminLink,
+      }))
+      await upsertMessageNotifications(items)
+
+      // SLACK: sales channel.
+      await notifySponsorMessageSlack(
+        {
+          authorName,
+          sponsorName: sfc.sponsorName,
+          excerpt,
+          adminPath: adminLink,
+        },
+        conference,
+      )
+
+      // sponsorActivity: a `message` row (system-authored — no organizer acted).
+      await createSponsorActivity(
+        sfc.sfcId,
+        'message',
+        `Sponsor message from ${authorName}: ${excerpt}`,
+        'system',
+      )
+      return
+    }
+
+    // ---- ORGANIZER-authored ------------------------------------------------
+    // Resolve the acting organizer's display name for the hub title + activity.
+    const authorRow = await clientReadUncached.fetch<{ name?: string } | null>(
+      `*[_type == "speaker" && _id == $id][0]{ name }`,
+      { id: authorOrganizerId },
+      { cache: 'no-store' },
+    )
+    const authorName = authorRow?.name ?? 'Organizer'
+
+    // EMAIL every contact person from the `sponsorEmail` from-address, linking to
+    // the sponsor portal (`#messages`). Sponsors have no preferences → all get it.
+    if (sfc.contactPersons.length > 0 && sfc.registrationToken) {
+      const domain = conference.domains?.[0]
+      const portalUrl = domain
+        ? `${buildPortalUrl(`https://${domain}`, sfc.registrationToken)}#messages`
+        : `${buildPortalUrl('', sfc.registrationToken)}#messages`
+      await sendSponsorMessageEmails(
+        sfc.contactPersons.map((c) => ({ email: c.email, name: c.name })),
+        { authorName, subject, excerpt, portalUrl, conference },
+      )
+    }
+
+    // HUB (+push) to the OTHER organizers (exclude the author — actor exclusion),
+    // respecting each recipient's mute preference.
+    const otherOrganizerIds = organizerIds.filter(
+      (id) => id !== authorOrganizerId,
+    )
+    if (otherOrganizerIds.length > 0) {
+      const prefs = await getConversationPreferencesFor(
+        conversation._id,
+        otherOrganizerIds,
+      )
+      const active = otherOrganizerIds.filter((id) => !prefs.get(id)?.muted)
+      const items: MessageNotificationInput[] = active.map((id) => ({
+        recipientId: id,
+        conversationId: conversation._id,
+        conferenceId: conversation.conferenceId,
+        authorName,
+        subject,
+        message: excerpt,
+        link: adminLink,
+        actorId: authorOrganizerId,
+      }))
+      await upsertMessageNotifications(items)
+    }
+
+    // sponsorActivity attributed to the acting organizer.
+    await createSponsorActivity(
+      sfc.sfcId,
+      'message',
+      `Reply from ${authorName}: ${excerpt}`,
+      authorOrganizerId,
+    )
+  } catch (error) {
+    console.error('Failed to fan out sponsor-message notifications:', error)
   }
 }

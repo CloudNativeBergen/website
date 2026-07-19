@@ -18,6 +18,7 @@ import { notificationRouter } from './routers/notification'
 import { pushRouter } from './routers/push'
 import { messageRouter } from './routers/message'
 import { conferenceRouter } from './routers/conference'
+import { sponsorMessagesRouter } from './routers/sponsorMessages'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -39,6 +40,7 @@ export const appRouter = router({
   push: pushRouter,
   message: messageRouter,
   conference: conferenceRouter,
+  sponsorMessages: sponsorMessagesRouter,
 })
 
 export type AppRouter = typeof appRouter

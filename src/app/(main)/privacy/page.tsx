@@ -397,6 +397,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           account-level default for whether new message
                           conversations also email you
                         </li>
+                        <li>
+                          • <strong>Sponsor messages:</strong> If you are a
+                          sponsor contact, the text you write in your sponsor
+                          portal thread with the organizers, along with the
+                          contact name you send it under and the timestamp
+                        </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-sky-100 p-2 dark:bg-sky-800/30">
                         <p className="text-xs text-sky-800 dark:text-sky-200">
@@ -404,8 +410,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           thread are visible to that proposal&apos;s speakers
                           and all conference organizers; messages in a general
                           thread are visible to their author and all conference
-                          organizers. <strong>Purpose:</strong> Coordinating
-                          proposals and conference logistics.{' '}
+                          organizers; messages in a sponsor portal thread are
+                          visible to that sponsor&apos;s contacts (via the
+                          portal link) and all conference organizers.{' '}
+                          <strong>Purpose:</strong> Coordinating proposals,
+                          sponsorships and conference logistics.{' '}
                           <strong>Legal Basis:</strong> Legitimate interest in
                           conference coordination. Messages and conversations
                           are retained for 24 months after the conference ends,

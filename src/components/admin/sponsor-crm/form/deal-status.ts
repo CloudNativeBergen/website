@@ -24,7 +24,13 @@ export interface DealStatusFormData {
 }
 
 /** Sub-views the header CTA / Manage cards can open (never the main pipeline). */
-export type SponsorSubView = 'contract' | 'contacts' | 'logo' | 'history'
+export type SponsorSubView =
+  | 'contract'
+  | 'contacts'
+  | 'logo'
+  | 'history'
+  // The sponsor↔organizer message thread (messaging G2b).
+  | 'messages'
 
 /**
  * Project the staged form + persisted sponsor into the shape the state-machine

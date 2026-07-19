@@ -27,8 +27,16 @@ export default defineType({
       // messages are immortal, so a dangling author ref is tolerated (it simply
       // no longer resolves to a speaker).
       weak: true,
-      description: 'The speaker (or organizer) who wrote this message.',
-      validation: (Rule) => Rule.required(),
+      description:
+        'The speaker (or organizer) who wrote this message. OPTIONAL as of G2b: a SPONSOR-authored message (portal side) has no speaker doc — it carries `authorParty = { sponsor }` plus an `authorName` snapshot instead, with this ref unset. Speaker/organizer authors still always set it.',
+    }),
+    defineField({
+      name: 'authorName',
+      title: 'Author Name (snapshot)',
+      type: 'string',
+      description:
+        'Display-name SNAPSHOT of the author, written for SPONSOR-authored messages where there is no `author` speaker doc to dereference (the contact person the portal sender picked). Unset for speaker/organizer authors — the thread derives their name from the `author` ref. Written by the server, not edited in Studio.',
+      readOnly: true,
     }),
     defineField({
       name: 'body',
@@ -57,15 +65,17 @@ export default defineType({
     select: {
       body: 'body',
       author: 'author.name',
+      authorName: 'authorName',
       createdAt: 'createdAt',
     },
-    prepare({ body, author, createdAt }) {
+    prepare({ body, author, authorName, createdAt }) {
       const when = createdAt
         ? new Date(createdAt).toLocaleString()
         : 'Unknown date'
       return {
         title: body ? String(body).slice(0, 80) : 'Message',
-        subtitle: `By ${author || 'Unknown'} · ${when}`,
+        // `authorName` snapshot covers sponsor authors (no `author` ref).
+        subtitle: `By ${author || authorName || 'Unknown'} · ${when}`,
       }
     },
   },

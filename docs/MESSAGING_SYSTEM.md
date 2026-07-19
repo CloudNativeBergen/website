@@ -116,11 +116,12 @@ per-user. Messaging uses two of its types:
 
 ### Deterministic-id schemes
 
-| Id                                                    | Purpose                        | Race safety                                        |
-| ----------------------------------------------------- | ------------------------------ | -------------------------------------------------- |
-| `conversation.proposal.<proposalId>`                  | The single proposal thread     | `createIfNotExists` — concurrent starters converge |
-| `convpref.<conversationId>.<speakerId>`               | One preference per participant | doc-per-pair, no array RMW                         |
-| `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item     | `createIfNotExists` + patch                        |
+| Id                                                    | Purpose                         | Race safety                                        |
+| ----------------------------------------------------- | ------------------------------- | -------------------------------------------------- |
+| `conversation.proposal.<proposalId>`                  | The single proposal thread      | `createIfNotExists` — concurrent starters converge |
+| `conversation.sponsor.<sfcId>`                        | The single sponsor thread (G2b) | `createIfNotExists` — portal + organizer converge  |
+| `convpref.<conversationId>.<speakerId>`               | One preference per participant  | doc-per-pair, no array RMW                         |
+| `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item      | `createIfNotExists` + patch                        |
 
 `conversation.<nanoid>` (general threads) and `message.<nanoid>` are random —
 there is nothing to converge on.
@@ -459,6 +460,72 @@ Multi-tenant isolation and no-oracle authorization are the two pillars.
   a speaker who messaged before the schema change can still be an erasure trap on
   those pre-existing strong refs. The 24-month purge is the documented retention
   window.
+
+## Sponsor threads (party model, G2b)
+
+A **third thread shape**, `conversationType: 'sponsor'`, extends the two speaker
+shapes with a **sponsor↔organizer** thread. It reuses the whole machinery
+(deterministic id, `participants[]` party model, hub/push/email/Slack fan-out,
+`ConversationThread`) with these sponsor-specific rules. **Maintainer-locked:**
+there is **one thread per `sponsorForConference`** as a UI guarantee — the model
+stays multi-thread-general, and the single thread is simply the only id a sponsor
+ever gets (`conversation.sponsor.<sfcId>`). No special-casing beyond deriving that
+id.
+
+- **Id scheme.** `conversation.sponsor.<sfcId>` (`sponsorConversationId` in
+  `links.ts`), created via `ensureSponsorConversation` with `createIfNotExists`, so
+  the portal-send and organizer-send paths converge on one document.
+- **Participants.** `[{ sponsor: <sfcId> }, { group: 'organizers' }]`, written
+  directly at creation (the sponsor party id is not expressible from the legacy
+  fields, so `participants[]` is authoritative — `deriveParties` returns only the
+  organizers group for a hypothetical participants-less sponsor doc).
+- **Author model.** ORGANIZER authors keep the legacy `author` speaker ref +
+  speaker `authorParty`. SPONSOR authors have **no speaker doc**: the message
+  carries `authorParty = { sponsor }` + an `authorName` **string snapshot** (the
+  contact person the portal sender picked) with `author` UNSET. The thread render
+  shows `authorName` + a "Sponsor" badge for these.
+- **Schema requiredness relaxations.** `conversation.createdBy` and
+  `message.author` were **required → optional** (documented in the schema files) —
+  a portal-initiated sponsor thread has no speaker creator, and a sponsor-authored
+  message has no speaker author. An **organizer-initiated** thread still records the
+  acting organizer as `createdBy` (the audit trail names a human when one exists).
+  `message.authorName` was **added**. `conversation.conversationType` gained
+  `'sponsor'`; `sponsorActivity.activityType` gained `'message'`.
+- **Authorization.** The sponsor side is authed **only** by the portal token
+  (`validateSponsorMessagingToken`, per-request GROQ on `registrationToken`) — never
+  a speaker/organizer session. A SPEAKER accesses a sponsor thread **iff** organizer
+  (the existing `canAccessConversation` short-circuit). Speaker-audience inbox
+  queries never return sponsor threads: `SPEAKER_SCOPE_PREDICATE` keys on
+  `createdBy`/`subjectSpeaker`/`proposal->speakers` (a sponsor thread has none) and
+  **also** carries an explicit `conversationType != "sponsor"` guard as
+  defence-in-depth. The organizer inbox has no type restriction, so it **includes**
+  sponsor threads (amber "Sponsor" chip, counterpart = sponsor company name).
+- **Portal API (public, token-authed, rate-limited).** `sponsorMessages.list
+{ token }` → validate → thread messages + contact-person names for the author
+  picker. `sponsorMessages.send { token, body, authorName }` → validate + rate limit
+  - body 1..5000 trimmed + `authorName` **STRICT-matched** to a contact person →
+    `ensureSponsorConversation` → `addMessage` (sponsor author) → fan-out. **No
+    conversation id is accepted from the client — the token IS the thread selector.**
+    Rate limits (module-Map, per-token, per-instance): validate **30/min**, send
+    **5/min**.
+
+### Sponsor fan-out matrix (`notifySponsorMessage`)
+
+A sibling of `notifyNewMessage` (integrated, not forked — reuses
+`upsertMessageNotifications`, bounded-concurrency email, `createSponsorActivity`).
+
+| Author        | Hub (+push)                                                                                   | Email                                                                                                                                 | Slack                                                                 | Activity                     |
+| ------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------- |
+| **Sponsor**   | ALL organizers, title `New message from <name> (Sponsor) — <subject>`, `/admin/messages/<id>` | — (no speaker/contact emails)                                                                                                         | **sales** channel (`sendSalesNotification`, "💬 New sponsor message") | `message` (system)           |
+| **Organizer** | the OTHER organizers (author excluded, mute-respected)                                        | ALL `contactPersons` via `sponsorEmail` from-address, deep-linked to the portal (`buildPortalUrl` + `#messages`), bounded concurrency | — (no Slack)                                                          | `message` (acting organizer) |
+
+**Preferences.** `conversationPreference` (mute/email) applies to the ORGANIZER
+participants exactly as for speaker threads. **Sponsors have no preference
+documents** (no speaker id to key one on) — they always receive the email.
+
+**Hub routing note.** Sponsor hub notifications currently route to **ALL
+organizers**. When the sponsors TEAM lands (**TEAMS-2**) this should route to that
+team instead of the whole organizer set (noted inline in `notify.ts`).
 
 ## Related documents
 
