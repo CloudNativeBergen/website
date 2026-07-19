@@ -11,6 +11,12 @@ export interface MessageEmailRecipient {
   name: string
   /** Absolute deep link into the thread for THIS recipient's surface. */
   replyUrl: string
+  /**
+   * Whether THIS recipient is an organizer. Drives the audience-correct body
+   * copy (organizers reach the speaker + fellow organizers; speakers reach the
+   * organizers) so the wording matches the per-recipient `replyUrl` surface.
+   */
+  isOrganizer: boolean
 }
 
 /**
@@ -43,6 +49,8 @@ async function sendOne(
           subject,
           excerpt,
           replyUrl: recipient.replyUrl,
+          // Audience-correct copy for THIS recipient (matches their replyUrl).
+          isOrganizer: recipient.isOrganizer,
           // Settings live on the cfp profile for BOTH audiences; anchor at the
           // notification section so the link matches the in-app gear (A9).
           preferencesUrl: conference.domains?.[0]

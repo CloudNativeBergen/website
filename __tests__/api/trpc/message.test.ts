@@ -69,6 +69,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
 import {
   getConversationById,
   listConversationsForSpeaker,
+  listMessages,
   ensureProposalConversation,
   createGeneralConversation,
   getProposalForConversation,
@@ -80,6 +81,7 @@ import { notifyNewMessage } from '@/lib/messaging/notify'
 type LooseMock = ReturnType<typeof vi.fn>
 const getById = getConversationById as unknown as LooseMock
 const listConvs = listConversationsForSpeaker as unknown as LooseMock
+const listMsgs = listMessages as unknown as LooseMock
 const ensureProposal = ensureProposalConversation as unknown as LooseMock
 const createGeneral = createGeneralConversation as unknown as LooseMock
 const getProposal = getProposalForConversation as unknown as LooseMock
@@ -206,6 +208,46 @@ describe('listConversations — scope by role', () => {
     const caller = createAdminCaller()
     await caller.message.listConversations({})
     expect(listConvs.mock.calls[0][0]).toMatchObject({ isOrganizer: true })
+  })
+})
+
+describe('keyset cursor threading (F3)', () => {
+  const iso = '2026-05-01T12:00:00.000Z'
+
+  it('splits a compound listMessages cursor into before + beforeId', async () => {
+    getById.mockResolvedValue(ownProposalConv)
+    const caller = createAuthenticatedCaller(speaker1)
+    await caller.message.listMessages({
+      conversationId: 'conversation.proposal.prop-1',
+      cursor: `${iso}~message.42`,
+    })
+    expect(listMsgs.mock.calls[0][0]).toMatchObject({
+      conversationId: 'conversation.proposal.prop-1',
+      before: iso,
+      beforeId: 'message.42',
+    })
+  })
+
+  it('threads a legacy plain-datetime listMessages cursor as before only', async () => {
+    getById.mockResolvedValue(ownProposalConv)
+    const caller = createAuthenticatedCaller(speaker1)
+    await caller.message.listMessages({
+      conversationId: 'conversation.proposal.prop-1',
+      cursor: iso,
+    })
+    expect(listMsgs.mock.calls[0][0]).toMatchObject({
+      before: iso,
+      beforeId: undefined,
+    })
+  })
+
+  it('splits a compound listConversations cursor into before + beforeId', async () => {
+    const caller = createAdminCaller()
+    await caller.message.listConversations({ cursor: `${iso}~conversation.9` })
+    expect(listConvs.mock.calls[0][0]).toMatchObject({
+      before: iso,
+      beforeId: 'conversation.9',
+    })
   })
 })
 

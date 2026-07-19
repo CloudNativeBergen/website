@@ -91,6 +91,8 @@ describe('deleteProposal', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('references($proposalId)'),
       { proposalId: 'proposal-1' },
+      // Mutation-path reads bypass the Next data cache (no-store).
+      { cache: 'no-store' },
     )
     // With no thread, everything collapses into the single final transaction:
     // the cascade dependents + the proposal itself.

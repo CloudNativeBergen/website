@@ -133,6 +133,7 @@ export async function notifyNewMessage({
         emailRecipients.push({
           email: sp.email,
           name: sp.name ?? 'there',
+          isOrganizer: organizerSet.has(id),
           replyUrl: absoluteLink(
             conversation,
             organizerSet.has(id),

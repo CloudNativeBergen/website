@@ -1,6 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useSession } from 'next-auth/react'
 import {
   BellIcon,
@@ -271,6 +278,8 @@ export function ConversationThreadView({
   const lastIdRef = useRef<string | null>(null)
   const hadMessagesRef = useRef(false)
   const [liveMessage, setLiveMessage] = useState('')
+  // Monotonic counter that re-announces back-to-back messages (see below).
+  const liveNonceRef = useRef(0)
 
   const handleScroll = () => {
     const el = scrollRef.current
@@ -280,8 +289,22 @@ export function ConversationThreadView({
       el.scrollHeight - el.scrollTop - el.clientHeight < 80
   }
 
-  useEffect(() => {
+  // INITIAL positioning runs in a LAYOUT effect (before paint) so a long thread
+  // never flashes its top for a frame before jumping to the newest message.
+  // This is a client component ('use client') so useLayoutEffect never executes
+  // on the server — no SSR hydration warning path is reachable.
+  useLayoutEffect(() => {
+    if (hadMessagesRef.current || messages.length === 0) return
     const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+    hadMessagesRef.current = true
+    lastIdRef.current = messages[messages.length - 1].id
+  }, [messages])
+
+  // Subsequent follow-scrolls + a polite announcement for genuinely NEW
+  // messages. The initial jump is handled by the layout effect above; this
+  // passive effect only reacts to later arrivals (and resets on an empty list).
+  useEffect(() => {
     if (messages.length === 0) {
       hadMessagesRef.current = false
       lastIdRef.current = null
@@ -289,14 +312,18 @@ export function ConversationThreadView({
     }
     const last = messages[messages.length - 1]
     const prevLastId = lastIdRef.current
-    const prefersReduced =
-      typeof window !== 'undefined' &&
-      !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-
+    // First population is fully owned by the layout effect (it recorded the id);
+    // nothing to follow or announce yet.
     if (!hadMessagesRef.current) {
-      // Initial load: jump straight to the newest message (no animation).
-      if (el) el.scrollTop = el.scrollHeight
-    } else if (last.id !== prevLastId) {
+      hadMessagesRef.current = true
+      lastIdRef.current = last.id
+      return
+    }
+    if (last.id !== prevLastId) {
+      const el = scrollRef.current
+      const prefersReduced =
+        typeof window !== 'undefined' &&
+        !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
       // A genuinely new message arrived. Only follow it if the reader is
       // already near the bottom — don't yank them up mid-history-read.
       if (el && nearBottomRef.current) {
@@ -313,11 +340,16 @@ export function ConversationThreadView({
       // derives an assistive-tech announcement from an incoming-message event —
       // a legitimate effect→state sync, not render-derived state.
       if (!last.isOwn) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setLiveMessage(`New message from ${last.authorName}`)
+        // Two messages in a row from the SAME author produce an identical
+        // phrase; a plain setState would be a no-op and the second would never
+        // be announced. Append a per-event count of zero-width spaces (U+200B —
+        // invisible and silent to assistive tech) so the live region's text
+        // genuinely changes and re-fires each time.
+        liveNonceRef.current += 1
+        const nonce = '\u200B'.repeat((liveNonceRef.current % 2) + 1)
+        setLiveMessage(`New message from ${last.authorName}${nonce}`)
       }
     }
-    hadMessagesRef.current = true
     lastIdRef.current = last.id
   }, [messages])
 
@@ -544,10 +576,13 @@ export function ConversationThread({
       // Pause polling while the composer is focused so a refetch can't yank
       // scroll/state out from under someone mid-message.
       refetchInterval: isComposing ? false : 20_000,
-      getNextPageParam: (lastPage) =>
-        lastPage.length === PAGE_SIZE
-          ? lastPage[lastPage.length - 1]?.createdAt
-          : undefined,
+      getNextPageParam: (lastPage) => {
+        if (lastPage.length !== PAGE_SIZE) return undefined
+        const last = lastPage[lastPage.length - 1]
+        // Compound keyset cursor `<createdAt>~<_id>` so messages sharing an
+        // exact `createdAt` page without skips (server splits it).
+        return last ? `${last.createdAt}~${last._id}` : undefined
+      },
       initialCursor: undefined,
     },
   )

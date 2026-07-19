@@ -79,6 +79,16 @@ export const SignedInSpeaker: Story = {
   play: async ({ canvasElement }) => {
     await openMenu(canvasElement)
     await expect(screen.getByText('My Dashboard')).toBeVisible()
+    // The new-proposal form is labelled clearly (not "My Proposals").
+    await expect(screen.getByText('Submit New Proposal')).toBeVisible()
+    await expect(screen.queryByText('My Proposals')).not.toBeInTheDocument()
+    // Exactly one Messages entry, pointing at the speaker inbox.
+    const messages = screen.getAllByText('Messages')
+    await expect(messages).toHaveLength(1)
+    await expect(messages[0].closest('a')).toHaveAttribute(
+      'href',
+      '/cfp/messages',
+    )
     await expect(screen.getByText('View public profile')).toBeVisible()
     await expect(screen.getByText('Signed in with GitHub')).toBeVisible()
     await expect(screen.getByText('Sign Out')).toBeVisible()
@@ -107,6 +117,14 @@ export const Organizer: Story = {
     await expect(screen.getByText('Admin')).toBeVisible()
     await expect(screen.getByText('Admin Dashboard')).toBeVisible()
     await expect(screen.getByText('Speakers')).toBeVisible()
+    // Organizers see exactly ONE Messages entry — in the Admin section, linking
+    // to the admin inbox (isOrganizer wins; it is dropped from speaker links).
+    const messages = screen.getAllByText('Messages')
+    await expect(messages).toHaveLength(1)
+    await expect(messages[0].closest('a')).toHaveAttribute(
+      'href',
+      '/admin/messages',
+    )
     await expect(screen.getByText('Signed in with LinkedIn')).toBeVisible()
   },
 }
