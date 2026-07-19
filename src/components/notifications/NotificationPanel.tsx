@@ -39,6 +39,12 @@ export function NotificationPanel({
   const { data: session } = useSession()
   const isImpersonating = session?.isImpersonating === true
 
+  // Audience-aware Messages inbox quick link (T-QUICKLINK): organizers land in
+  // the admin inbox, speakers in the CFP inbox. Passed down as a plain href so
+  // NotificationList stays presentational.
+  const messagesHref =
+    session?.speaker?.isOrganizer === true ? '/admin/messages' : '/cfp/messages'
+
   const {
     data,
     isLoading,
@@ -97,6 +103,8 @@ export function NotificationPanel({
       hasMore={hasNextPage}
       isLoadingMore={isFetchingNextPage}
       readOnly={isImpersonating}
+      messagesHref={messagesHref}
+      onMessagesClick={onClose}
     />
   )
 }

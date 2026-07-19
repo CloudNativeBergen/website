@@ -328,13 +328,13 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
     },
   ]
 
-  it('counts a speaker unread message_received notifications matching the /cfp link variant', async () => {
+  it('SUMS a speaker unread message counts matching the /cfp link variant (collapsed doc)', async () => {
     readMock.fetch
       .mockResolvedValueOnce(rows) // conversations page
+      // ONE collapsed notification representing 2 unread messages (M5).
       .mockResolvedValueOnce([
-        '/cfp/proposal/prop-1#messages',
-        '/cfp/proposal/prop-1#messages',
-      ]) // caller's unread message links
+        { link: '/cfp/proposal/prop-1#messages', count: 2 },
+      ])
 
     const result = await listConversationsForSpeaker({
       speakerId: 'sp-1',
@@ -350,19 +350,45 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
     ).toBe(0)
 
     // The unread query is scoped to the caller, the conference, message_received,
-    // and unread only (read notifications are never fetched, so never counted).
+    // unread only, and projects coalesce(count, 1) so a pre-collapse
+    // per-message document still counts as 1.
     const [query, params] = readMock.fetch.mock.calls[1]
     expect(query).toContain('recipient._ref == $speakerId')
     expect(query).toContain('conference._ref == $conferenceId')
     expect(query).toContain('notificationType == "message_received"')
     expect(query).toContain('!defined(readAt)')
+    expect(query).toContain('coalesce(count, 1)')
     expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
   })
 
-  it('counts an organizer unread notifications matching the /admin link variant', async () => {
+  it('sums MIXED collapsed and legacy per-message docs for the same conversation', async () => {
     readMock.fetch
       .mockResolvedValueOnce(rows)
-      .mockResolvedValueOnce(['/admin/messages/conversation.gen-1'])
+      // A collapsed doc (count 3) plus two legacy per-message docs (GROQ
+      // coalesce projects their absent count as 1 each) → 5 total.
+      .mockResolvedValueOnce([
+        { link: '/cfp/proposal/prop-1#messages', count: 3 },
+        { link: '/cfp/proposal/prop-1#messages', count: 1 },
+        { link: '/cfp/proposal/prop-1#messages', count: 1 },
+      ])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+
+    expect(
+      result.find((r) => r._id === 'conversation.proposal.prop-1')!.unreadCount,
+    ).toBe(5)
+  })
+
+  it('sums an organizer unread counts matching the /admin link variant', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce([
+        { link: '/admin/messages/conversation.gen-1', count: 1 },
+      ])
 
     const result = await listConversationsForSpeaker({
       speakerId: 'org-1',
