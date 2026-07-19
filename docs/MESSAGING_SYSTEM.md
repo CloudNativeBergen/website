@@ -395,13 +395,13 @@ already gone), and the nudge runs last and never throws.
   conference whose `endDate` is more than `RETENTION_MONTHS` (24) months in the
   past. The privacy page documents this window.
 - **Deletion order (strong refs first).** Per conference the delete runs
-  `messages → conversationPreferences → conversations → message_received
-notifications`. Both messages **and** preferences strong-ref the conversation, so
-  both must precede it or the conversation delete 409s. Notifications carry no
-  stored ref and are matched by the conversation's deep link (**both** audience
-  variants). Deletes are chunked (`DELETE_CHUNK_SIZE = 100`) under Sanity's
-  per-transaction ceiling; each conference is isolated (`MAX_CONFERENCES_PER_RUN =
-50`) so one edition's failure never blocks the rest.
+  `messages → conversationPreferences → conversations → message_received notifications`.
+  Both messages **and** preferences strong-ref the conversation, so both must
+  precede it or the conversation delete 409s. Notifications carry no stored ref
+  and are matched by the conversation's deep link (**both** audience variants).
+  Deletes are chunked (`DELETE_CHUNK_SIZE = 100`) under Sanity's per-transaction
+  ceiling; each conference is isolated (`MAX_CONFERENCES_PER_RUN = 50`) so one
+  edition's failure never blocks the rest.
 - **Proposal-delete cascade** (`deleteProposal`, `src/lib/proposal/data/sanity.ts`).
   `conversation` and `notification` are **non-blocking types** (weak refs) so an
   active thread never blocks a proposal delete. The cascade removes, in the same

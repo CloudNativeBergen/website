@@ -150,6 +150,7 @@ export function CoSpeakerResponseTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      showMessagesLink
       customContent={customContent}
     />
   )

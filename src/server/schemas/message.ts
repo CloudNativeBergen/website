@@ -129,3 +129,13 @@ export const SetArchivedSchema = z.object({
   conversationId: z.string().min(1).max(200),
   archived: z.boolean(),
 })
+
+/**
+ * Unread message counts keyed by proposal id (speaker-journey badges, V2b). The
+ * caller supplies the proposal ids currently on screen; the router only ever
+ * reads the caller's OWN notifications, so arbitrary ids leak nothing. The set is
+ * capped to keep the underlying `link in $links` bounded.
+ */
+export const UnreadByProposalIdsSchema = z.object({
+  proposalIds: z.array(z.string().min(1).max(200)).max(200),
+})

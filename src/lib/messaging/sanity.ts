@@ -1106,3 +1106,68 @@ export async function setConversationPreference({
 
   return getConversationPreference(conversationId, speakerId)
 }
+
+/**
+ * Unread message counts for a set of proposal threads, keyed by `proposalId`,
+ * for ONE caller (the speaker journey badge, V2b). Proposal threads deep-link to
+ * a deterministic per-audience path (`/cfp/proposal/<id>#messages` for a speaker,
+ * `/admin/proposals/<id>#messages` for an organizer) and unread state lives in
+ * the caller's own `message_received` notifications (M5-collapsed: each carries
+ * `count` unread messages, absent = 1). So we build BOTH audience link variants
+ * for every requested proposal and run ONE bounded GROQ over the caller's unread
+ * message notifications, summing `coalesce(count, 1)` per link back onto its
+ * proposal.
+ *
+ * COST: exactly one round trip regardless of how many proposals are asked about
+ * (zero proposals → no fetch). Reads ONLY the caller's own notifications
+ * (`recipient._ref == $speakerId`), so a client naming arbitrary proposal ids can
+ * never learn another user's unread state — no IDOR. The id set is de-duped and
+ * capped so the `link in $links` set stays bounded.
+ */
+export async function getUnreadCountsByProposalIds({
+  speakerId,
+  conferenceId,
+  proposalIds,
+}: {
+  speakerId: string
+  conferenceId: string
+  proposalIds: string[]
+}): Promise<Record<string, number>> {
+  const ids = Array.from(new Set(proposalIds)).slice(0, 200)
+  if (ids.length === 0) return {}
+  // Map each audience link variant back to its proposal; the caller only ever
+  // received one variant, so matching both is simplest and correct.
+  const linkToProposal = new Map<string, string>()
+  for (const id of ids) {
+    linkToProposal.set(
+      conversationLinkPath(
+        { _id: '', conversationType: 'proposal', proposalId: id },
+        false,
+      ),
+      id,
+    )
+    linkToProposal.set(
+      conversationLinkPath(
+        { _id: '', conversationType: 'proposal', proposalId: id },
+        true,
+      ),
+      id,
+    )
+  }
+  const links = Array.from(linkToProposal.keys())
+  const rows = await clientReadUncached.fetch<
+    { link: string | null; count: number }[]
+  >(
+    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $links]{ link, "count": coalesce(count, 1) }`,
+    { speakerId, conferenceId, links },
+    { cache: 'no-store' },
+  )
+  const counts: Record<string, number> = {}
+  for (const row of rows ?? []) {
+    if (!row.link) continue
+    const proposalId = linkToProposal.get(row.link)
+    if (!proposalId) continue
+    counts[proposalId] = (counts[proposalId] ?? 0) + row.count
+  }
+  return counts
+}

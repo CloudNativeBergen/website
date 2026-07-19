@@ -138,6 +138,7 @@ export function CoSpeakerInvitationTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      showMessagesLink
       customContent={customContent}
     />
   )

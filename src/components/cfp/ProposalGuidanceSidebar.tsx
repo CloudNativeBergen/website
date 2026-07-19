@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
 import { formats } from '@/lib/proposal/types'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -140,7 +141,15 @@ export function ProposalGuidanceSidebar({
               className="text-brand-cloud-blue hover:underline dark:text-blue-400"
             >
               {conference.cfpEmail}
-            </a>
+            </a>{' '}
+            or{' '}
+            <Link
+              href="/cfp/messages"
+              className="text-brand-cloud-blue hover:underline dark:text-blue-400"
+            >
+              message us directly
+            </Link>
+            .
           </p>
         </div>
       )}

@@ -87,6 +87,7 @@ export function ProposalAcceptTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      showMessagesLink
       footer={footer}
     >
       {congratsText}

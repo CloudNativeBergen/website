@@ -78,6 +78,12 @@ export interface SpeakerInput extends SpeakerBase {
    * this field when a new image was actually uploaded.
    */
   image?: string
+  /**
+   * Messaging email default (M4). Writable from the profile page's autosaving
+   * "Message emails" toggle (V2a). Absent means ENABLED. Mirrors the read-model
+   * {@link Speaker.messagingEmailDefault}.
+   */
+  messagingEmailDefault?: boolean
 }
 
 export interface Speaker extends SpeakerBase {

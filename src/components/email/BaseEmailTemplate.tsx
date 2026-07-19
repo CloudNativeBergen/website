@@ -14,10 +14,28 @@ interface BaseEmailTemplateProps {
   children?: React.ReactNode
   footer?: React.ReactNode
   unsubscribeUrl?: string
+  /**
+   * When true, append ONE muted line pointing speakers at the on-site Messages
+   * inbox (adoption, V2e). Opt-in per template so it only rides speaker-facing
+   * transactional emails (proposal decisions, co-speaker) and never sponsor /
+   * contract / attendee mail. The URL is derived from `eventUrl` so no call site
+   * needs to build it: this line is defined ONCE here, not per template.
+   */
+  showMessagesLink?: boolean
   customContent?: {
     heading?: string
     body?: React.ReactNode
   }
+}
+
+/**
+ * The conference Messages inbox URL, derived from the template's `eventUrl`
+ * (which is sometimes a bare domain, sometimes `https://domain`, occasionally
+ * with a trailing slash). Normalise all three to `https://<domain>/cfp/messages`.
+ */
+function messagesUrlFromEventUrl(eventUrl: string): string {
+  const domain = eventUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  return `https://${domain}/cfp/messages`
 }
 
 export function BaseEmailTemplate({
@@ -33,6 +51,7 @@ export function BaseEmailTemplate({
   children,
   footer,
   unsubscribeUrl,
+  showMessagesLink,
   customContent,
 }: BaseEmailTemplateProps) {
   if (!speakerName && !customContent) {
@@ -268,6 +287,31 @@ export function BaseEmailTemplate({
                     </p>
                   </div>
                 </>
+              )}
+
+              {/* Adoption line (V2e): rendered regardless of a custom footer so
+                  the decision templates (which supply their own footer) get it
+                  too. Speaker-facing templates opt in via `showMessagesLink`. */}
+              {showMessagesLink && (
+                <p
+                  style={{
+                    fontSize: '13px',
+                    color: '#94A3B8',
+                    textAlign: 'center' as const,
+                    marginTop: '16px',
+                    marginBottom: '0',
+                    lineHeight: '1.5',
+                  }}
+                >
+                  You can reach the organizers anytime via{' '}
+                  <a
+                    href={messagesUrlFromEventUrl(eventUrl)}
+                    style={{ color: '#64748B', textDecoration: 'underline' }}
+                  >
+                    Messages
+                  </a>{' '}
+                  on the site.
+                </p>
               )}
             </td>
           </tr>

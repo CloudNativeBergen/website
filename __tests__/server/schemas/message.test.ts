@@ -9,6 +9,7 @@ import {
   GetConversationSchema,
   ListMessagesSchema,
   ListConversationsSchema,
+  UnreadByProposalIdsSchema,
   parseMessageCursor,
 } from '@/server/schemas/message'
 
@@ -144,5 +145,27 @@ describe('keyset cursor (F3)', () => {
       before: iso,
       beforeId: 'message.abc-123',
     })
+  })
+})
+
+describe('UnreadByProposalIdsSchema (V2b)', () => {
+  it('accepts an empty or populated id list', () => {
+    expect(
+      UnreadByProposalIdsSchema.safeParse({ proposalIds: [] }).success,
+    ).toBe(true)
+    expect(
+      UnreadByProposalIdsSchema.safeParse({ proposalIds: ['a', 'b'] }).success,
+    ).toBe(true)
+  })
+
+  it('rejects empty-string ids and lists over the cap', () => {
+    expect(
+      UnreadByProposalIdsSchema.safeParse({ proposalIds: [''] }).success,
+    ).toBe(false)
+    expect(
+      UnreadByProposalIdsSchema.safeParse({
+        proposalIds: Array.from({ length: 201 }, (_, i) => `p${i}`),
+      }).success,
+    ).toBe(false)
   })
 })

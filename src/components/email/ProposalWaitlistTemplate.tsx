@@ -84,6 +84,7 @@ export function ProposalWaitlistTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      showMessagesLink
       footer={footer}
     >
       {waitlistText}
