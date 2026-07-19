@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { SponsorAddModal } from './SponsorAddModal'
 import type { SponsorTierExisting } from '@/lib/sponsor/types'
 import { withPortalTheme } from '@/lib/storybook'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 // Renders the REAL SponsorAddModal (not the previous static mock shell that
 // duplicated the markup and drifted from production). It sits on the shared
@@ -95,7 +96,16 @@ const meta = {
     onSponsorAdded: fn(),
     onSponsorUpdated: fn(),
   },
-  decorators: [withPortalTheme],
+  decorators: [
+    withPortalTheme,
+    // The real component surfaces submit errors via useNotification (batch C),
+    // so the story must provide the NotificationProvider context.
+    (Story) => (
+      <NotificationProvider>
+        <Story />
+      </NotificationProvider>
+    ),
+  ],
   tags: ['autodocs'],
 } satisfies Meta<typeof SponsorAddModal>
 
