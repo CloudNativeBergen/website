@@ -1,11 +1,16 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
+import { buildSystemChecks } from '@/lib/system-status/checks'
 import {
   ErrorDisplay,
   WorkshopRegistrationSettings,
   AdminPageHeader,
 } from '@/components/admin'
+import {
+  SystemStatusSection,
+  SelfCheckPanel,
+} from '@/components/admin/system-status'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
   CalendarIcon,
@@ -21,6 +26,9 @@ import {
   LinkIcon,
   EnvelopeIcon,
   Cog6ToothIcon,
+  PencilSquareIcon,
+  ServerStackIcon,
+  BeakerIcon,
 } from '@heroicons/react/24/outline'
 
 interface NamedItem {
@@ -34,22 +42,48 @@ function isValidFormat(key: string): key is Format {
   return Object.values(Format).includes(key as Format)
 }
 
+/**
+ * Sanity Studio deep-link (v3 intent URL) for the conference document. Returns
+ * null when NEXT_PUBLIC_STUDIO_URL is unset so the "Edit in Studio" affordance
+ * simply isn't rendered.
+ */
+function studioEditUrl(conferenceId: string | undefined): string | null {
+  const base = process.env.NEXT_PUBLIC_STUDIO_URL
+  if (!base || !conferenceId) return null
+  return `${base.replace(/\/$/, '')}/intent/edit/id=${conferenceId};type=conference`
+}
+
 function InfoCard({
   title,
   children,
   icon: Icon,
+  editUrl,
 }: {
   title: string
   children: React.ReactNode
   icon: React.ComponentType<{ className?: string }>
+  editUrl?: string | null
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center">
-        <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-          {title}
-        </h3>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center">
+          <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            {title}
+          </h3>
+        </div>
+        {editUrl && (
+          <a
+            href={editUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            <PencilSquareIcon className="h-4 w-4" />
+            Edit in Studio
+          </a>
+        )}
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -234,6 +268,56 @@ function FieldRow({
   )
 }
 
+function SectionNav() {
+  const items = [
+    { href: '#configuration', label: 'Configuration' },
+    { href: '#system-status', label: 'System status' },
+    { href: '#self-check', label: 'Self-check' },
+  ]
+  return (
+    <nav className="sticky top-0 z-10 -mx-4 mb-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        {items.map((item) => (
+          <li key={item.href}>
+            <a
+              href={item.href}
+              className="font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+function SectionHeading({
+  id,
+  icon: Icon,
+  title,
+  description,
+}: {
+  id: string
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+}) {
+  return (
+    <div id={id} className="scroll-mt-16">
+      <div className="flex items-center gap-2">
+        <Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          {title}
+        </h2>
+      </div>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        {description}
+      </p>
+    </div>
+  )
+}
+
 export default async function AdminSettings() {
   const { conference, error } = await getConferenceForCurrentDomain({
     organizers: true,
@@ -258,6 +342,9 @@ export default async function AdminSettings() {
     )
   }
 
+  const editUrl = studioEditUrl(conference._id)
+  const systemChecks = await buildSystemChecks(conference)
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -271,173 +358,251 @@ export default async function AdminSettings() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <InfoCard title="Basic Information" icon={InformationCircleIcon}>
-          <FieldRow label="Title" value={conference.title} />
-          <FieldRow label="Organizer" value={conference.organizer} />
-          <FieldRow label="City" value={conference.city} />
-          <FieldRow label="Country" value={conference.country} />
-          <FieldRow label="Tagline" value={conference.tagline} />
-          <FieldRow label="Description" value={conference.description} />
-        </InfoCard>
+      <SectionNav />
 
-        <InfoCard title="Venue Information" icon={MapPinIcon}>
-          <FieldRow label="Venue Name" value={conference.venueName} />
-          <FieldRow label="Venue Address" value={conference.venueAddress} />
-        </InfoCard>
-
-        <InfoCard title="Dates & Timeline" icon={CalendarIcon}>
-          <FieldRow
-            label="Start Date"
-            value={conference.startDate}
-            type="date"
-          />
-          <FieldRow label="End Date" value={conference.endDate} type="date" />
-          <FieldRow
-            label="CFP Start Date"
-            value={conference.cfpStartDate}
-            type="date"
-          />
-          <FieldRow
-            label="CFP End Date"
-            value={conference.cfpEndDate}
-            type="date"
-          />
-          <FieldRow
-            label="CFP Notify Date"
-            value={conference.cfpNotifyDate}
-            type="date"
-          />
-          <FieldRow
-            label="Program Release Date"
-            value={conference.programDate}
-            type="date"
-          />
-        </InfoCard>
-
-        <InfoCard title="Configuration" icon={DocumentTextIcon}>
-          <FieldRow
-            label="Registration Enabled"
-            value={conference.registrationEnabled}
-            type="boolean"
-          />
-          <FieldRow
-            label="Registration Link"
-            value={conference.registrationLink}
-            type="url"
-          />
-          <FieldRow
-            label="Contact Email"
-            value={conference.contactEmail}
-            type="email"
-          />
-        </InfoCard>
-
-        <WorkshopRegistrationSettings
-          workshopRegistrationStart={conference.workshopRegistrationStart}
-          workshopRegistrationEnd={conference.workshopRegistrationEnd}
+      {/* ---- TIER 1: Conference configuration ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="configuration"
+          icon={DocumentTextIcon}
+          title="Conference configuration"
+          description="Content managed in Sanity for this conference."
         />
 
-        <InfoCard title="Domain Configuration" icon={GlobeAltIcon}>
-          <FieldRow label="Domains" value={conference.domains} type="array" />
-          <FieldRow
-            label="Social Links"
-            value={conference.socialLinks}
-            type="links"
-          />
-        </InfoCard>
-
-        <InfoCard title="External Integrations" icon={LinkIcon}>
-          <FieldRow
-            label="Checkin Customer ID"
-            value={conference.checkinCustomerId}
-          />
-          <FieldRow
-            label="Checkin Event ID"
-            value={conference.checkinEventId}
-          />
-        </InfoCard>
-
-        <InfoCard title="Content Configuration" icon={TagIcon}>
-          <FieldRow
-            label="Available Formats"
-            value={conference.formats}
-            type="formats"
-          />
-          <FieldRow
-            label="Available Topics"
-            value={conference.topics}
-            type="array"
-          />
-          <FieldRow label="Features" value={conference.features} type="array" />
-        </InfoCard>
-
-        <InfoCard title="Team" icon={UserGroupIcon}>
-          <FieldRow
-            label="Organizers"
-            value={conference.organizers?.map((org) => org.name)}
-            type="team"
-          />
-        </InfoCard>
-
-        {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
-          <InfoCard title="Sponsorship Tiers" icon={CurrencyDollarIcon}>
-            {conference.sponsorTiers.map((tier, idx) => (
-              <div
-                key={idx}
-                className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {tier.title}
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    {tier.soldOut && (
-                      <StatusBadge label="Sold Out" color="red" />
-                    )}
-                    {tier.mostPopular && (
-                      <StatusBadge label="Popular" color="green" />
-                    )}
-                  </div>
-                </div>
-                <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                  {tier.tagline}
-                </p>
-                {tier.price && tier.price.length > 0 && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {tier.price.map((price, pidx) => (
-                      <span key={pidx}>
-                        {price.amount} {price.currency}
-                        {pidx < tier.price!.length - 1 && ', '}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <InfoCard
+            title="Basic Information"
+            icon={InformationCircleIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow label="Title" value={conference.title} />
+            <FieldRow label="Organizer" value={conference.organizer} />
+            <FieldRow label="City" value={conference.city} />
+            <FieldRow label="Country" value={conference.country} />
+            <FieldRow label="Tagline" value={conference.tagline} />
+            <FieldRow label="Description" value={conference.description} />
           </InfoCard>
-        )}
 
-        {conference.sponsors && conference.sponsors.length > 0 && (
-          <InfoCard title="Current Sponsors" icon={CurrencyDollarIcon}>
+          <InfoCard
+            title="Venue Information"
+            icon={MapPinIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow label="Venue Name" value={conference.venueName} />
+            <FieldRow label="Venue Address" value={conference.venueAddress} />
+          </InfoCard>
+
+          <InfoCard
+            title="Dates & Timeline"
+            icon={CalendarIcon}
+            editUrl={editUrl}
+          >
             <FieldRow
-              label="Sponsors"
-              value={conference.sponsors.map(
-                (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
-              )}
+              label="Start Date"
+              value={conference.startDate}
+              type="date"
+            />
+            <FieldRow label="End Date" value={conference.endDate} type="date" />
+            <FieldRow
+              label="CFP Start Date"
+              value={conference.cfpStartDate}
+              type="date"
+            />
+            <FieldRow
+              label="CFP End Date"
+              value={conference.cfpEndDate}
+              type="date"
+            />
+            <FieldRow
+              label="CFP Notify Date"
+              value={conference.cfpNotifyDate}
+              type="date"
+            />
+            <FieldRow
+              label="Program Release Date"
+              value={conference.programDate}
+              type="date"
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="Configuration"
+            icon={DocumentTextIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow
+              label="Registration Enabled"
+              value={conference.registrationEnabled}
+              type="boolean"
+            />
+            <FieldRow
+              label="Registration Link"
+              value={conference.registrationLink}
+              type="url"
+            />
+            <FieldRow
+              label="Contact Email"
+              value={conference.contactEmail}
+              type="email"
+            />
+          </InfoCard>
+
+          <WorkshopRegistrationSettings
+            workshopRegistrationStart={conference.workshopRegistrationStart}
+            workshopRegistrationEnd={conference.workshopRegistrationEnd}
+          />
+
+          <InfoCard
+            title="Domain Configuration"
+            icon={GlobeAltIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow label="Domains" value={conference.domains} type="array" />
+            <FieldRow
+              label="Social Links"
+              value={conference.socialLinks}
+              type="links"
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="External Integrations"
+            icon={LinkIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow
+              label="Checkin Customer ID"
+              value={conference.checkinCustomerId}
+            />
+            <FieldRow
+              label="Checkin Event ID"
+              value={conference.checkinEventId}
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="Content Configuration"
+            icon={TagIcon}
+            editUrl={editUrl}
+          >
+            <FieldRow
+              label="Available Formats"
+              value={conference.formats}
+              type="formats"
+            />
+            <FieldRow
+              label="Available Topics"
+              value={conference.topics}
+              type="array"
+            />
+            <FieldRow
+              label="Features"
+              value={conference.features}
               type="array"
             />
           </InfoCard>
-        )}
 
-        {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
-          <InfoCard title="Vanity Metrics" icon={ChartPieIcon}>
-            {conference.vanityMetrics.map((metric, idx) => (
-              <FieldRow key={idx} label={metric.label} value={metric.value} />
-            ))}
+          <InfoCard title="Team" icon={UserGroupIcon} editUrl={editUrl}>
+            <FieldRow
+              label="Organizers"
+              value={conference.organizers?.map((org) => org.name)}
+              type="team"
+            />
           </InfoCard>
-        )}
-      </div>
+
+          {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
+            <InfoCard
+              title="Sponsorship Tiers"
+              icon={CurrencyDollarIcon}
+              editUrl={editUrl}
+            >
+              {conference.sponsorTiers.map((tier, idx) => (
+                <div
+                  key={idx}
+                  className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {tier.title}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      {tier.soldOut && (
+                        <StatusBadge label="Sold Out" color="red" />
+                      )}
+                      {tier.mostPopular && (
+                        <StatusBadge label="Popular" color="green" />
+                      )}
+                    </div>
+                  </div>
+                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    {tier.tagline}
+                  </p>
+                  {tier.price && tier.price.length > 0 && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {tier.price.map((price, pidx) => (
+                        <span key={pidx}>
+                          {price.amount} {price.currency}
+                          {pidx < tier.price!.length - 1 && ', '}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </InfoCard>
+          )}
+
+          {conference.sponsors && conference.sponsors.length > 0 && (
+            <InfoCard
+              title="Current Sponsors"
+              icon={CurrencyDollarIcon}
+              editUrl={editUrl}
+            >
+              <FieldRow
+                label="Sponsors"
+                value={conference.sponsors.map(
+                  (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
+                )}
+                type="array"
+              />
+            </InfoCard>
+          )}
+
+          {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
+            <InfoCard
+              title="Vanity Metrics"
+              icon={ChartPieIcon}
+              editUrl={editUrl}
+            >
+              {conference.vanityMetrics.map((metric, idx) => (
+                <FieldRow key={idx} label={metric.label} value={metric.value} />
+              ))}
+            </InfoCard>
+          )}
+        </div>
+      </section>
+
+      {/* ---- TIER 2: System status ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="system-status"
+          icon={ServerStackIcon}
+          title="System status"
+          description="Environment configuration and live integration health. Secrets are shown only as a sha256 fingerprint and length — never their value."
+        />
+        <SystemStatusSection checks={systemChecks} />
+      </section>
+
+      {/* ---- Self-check probes ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="self-check"
+          icon={BeakerIcon}
+          title="Self-check"
+          description="Actively exercise an integration end to end. These deliver real messages, so they are rate-limited."
+        />
+        <SelfCheckPanel />
+      </section>
     </div>
   )
 }
