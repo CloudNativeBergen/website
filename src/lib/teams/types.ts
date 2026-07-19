@@ -72,7 +72,8 @@ export interface ConferenceTeamsConfig {
  * Arbitrary ADDITIONAL keys are allowed; this constant is the routing map’s
  * anchor, not an allow-list.
  *
- * @public consumed by the TEAMS-2 routing map (not yet wired in this change).
+ * @public consumed by the TEAMS-2 routing map (wired via
+ * {@link import('./routing').resolveRoutedOrganizerIds}).
  */
 export const WELL_KNOWN_TEAM_KEYS = [
   'cfp',

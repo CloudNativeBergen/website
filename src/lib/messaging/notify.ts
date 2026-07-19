@@ -3,6 +3,7 @@ import {
   upsertMessageNotifications,
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import { clientReadUncached } from '@/lib/sanity/client'
 import {
   notifyNewSpeakerMessage,
@@ -104,10 +105,29 @@ export async function notifyNewMessage({
   conference: Conference
 }): Promise<void> {
   try {
+    // ACCESS vs ROUTING split (TEAMS-2). `organizerSet` is the FULL organizer
+    // set and is used ONLY to CLASSIFY identities — whether the author is an
+    // organizer, whether a recipient is an organizer (audience-dependent email
+    // default + link variant), whether any recipient is a speaker. That is an
+    // access/participant question and MUST stay the whole organizer set.
     const organizerIds = await getOrganizerSpeakerIds()
     const organizerSet = new Set(organizerIds)
     const authorIsOrganizer = organizerSet.has(authorId)
-    const recipientIds = resolveRecipients(conversation, authorId, organizerIds)
+    // ROUTING: the `organizers` group party is expanded for NOTIFICATION
+    // RECIPIENTS through the `cfp` team (proposal + general speaker threads) —
+    // all organizers when it is not configured. Speaker participants are
+    // `speaker` parties and are unaffected by this; only WHICH organizers get
+    // the fan-out narrows. Every routed id is a real organizer, so the
+    // classification above still resolves it correctly.
+    const routedOrganizerIds = await resolveRoutedOrganizerIds({
+      conferenceId: conversation.conferenceId,
+      teamKey: 'cfp',
+    })
+    const recipientIds = resolveRecipients(
+      conversation,
+      authorId,
+      routedOrganizerIds,
+    )
     const excerpt = messageExcerpt(message.body)
 
     // One read for every speaker we need to name / email (author + recipients).
@@ -282,9 +302,9 @@ export async function notifyNewMessage({
  * preference documents (no speaker id to key one on) — they always receive the
  * email; documented here as the deliberate asymmetry.
  *
- * HUB-ROUTING NOTE: organizer hub notifications currently go to ALL organizers.
- * When the sponsors TEAM lands (TEAMS-2) this fan-out should route to that team
- * instead of the whole organizer set — see the recipient resolution below.
+ * HUB-ROUTING (TEAMS-2): organizer hub notifications route to the `sponsors`
+ * team (via {@link resolveRoutedOrganizerIds}), falling back to ALL organizers
+ * when that team is not configured — see the recipient resolution below.
  *
  * NEVER-FAIL: every channel is wrapped so a failure can't fail the (already
  * committed) message write, identical to {@link notifyNewMessage}.
@@ -308,8 +328,15 @@ export async function notifySponsorMessage({
     const subject = conversation.subject
     const adminLink = conversationLinkPath(conversation, true)
 
-    // TEAMS-2: replace `getOrganizerSpeakerIds()` with the sponsors-team members.
-    const organizerIds = await getOrganizerSpeakerIds()
+    // TEAMS-2: sponsor-thread message fan-out routes to the `sponsors` team
+    // (all organizers when it is not configured — the shared fallback). This is
+    // a PURE recipient set here (author exclusion is applied below via
+    // `authorOrganizerId`), so unlike the speaker fan-out there is no
+    // classification use to keep on the full organizer set.
+    const organizerIds = await resolveRoutedOrganizerIds({
+      conferenceId: conversation.conferenceId,
+      teamKey: 'sponsors',
+    })
 
     if (authorOrganizerId === undefined) {
       // ---- SPONSOR-authored ------------------------------------------------

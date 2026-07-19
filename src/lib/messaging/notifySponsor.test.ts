@@ -9,6 +9,15 @@ vi.mock('@/lib/notification/sanity', () => ({
   getOrganizerSpeakerIds: () => getOrganizerSpeakerIdsMock(),
 }))
 
+// TEAMS-2: the sponsor fan-out routes its organizer recipients through
+// `resolveRoutedOrganizerIds({ teamKey: 'sponsors' })`. Mock the teams SOURCE so
+// the REAL helper runs: default [] proves the ABSENT-MEANS-TODAY fallback (all
+// organizers), and a per-test override exercises members-only routing.
+const getConferenceTeamsMock = vi.fn().mockResolvedValue([])
+vi.mock('@/lib/teams/sanity', () => ({
+  getConferenceTeams: (...a: unknown[]) => getConferenceTeamsMock(...a),
+}))
+
 const slackMock = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/slack/notify', () => ({
   notifyNewSpeakerMessage: vi.fn(),
@@ -164,5 +173,51 @@ describe('notifySponsorMessage — ORGANIZER-authored', () => {
 
     // NO Slack on an organizer reply.
     expect(slackMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('notifySponsorMessage — sponsors TEAM configured (TEAMS-2 routing)', () => {
+  // A sponsors team that is a strict SUBSET of the organizers (only org-2).
+  beforeEach(() => {
+    getConferenceTeamsMock.mockResolvedValue([
+      { key: 'sponsors', title: 'Sponsors', members: ['org-2'] },
+    ])
+  })
+
+  it('SPONSOR-authored: hubs the sponsors TEAM members only (org-1 excluded)', async () => {
+    const message: Message = {
+      _id: 'message.3',
+      conversationId: conversation._id,
+      authorId: '',
+      body: 'Booth question.',
+      createdAt: '2026-07-01T10:00:00Z',
+      authorName: 'Dana Diaz',
+      authorSponsorId: SFC,
+    }
+    await notifySponsorMessage({ conversation, message, sfc })
+
+    const items = upsertMock.mock.calls[0][0] as { recipientId: string }[]
+    expect(items.map((i) => i.recipientId)).toEqual(['org-2'])
+  })
+
+  it('ORGANIZER-authored: team routing AND actor exclusion compose', async () => {
+    const message: Message = {
+      _id: 'message.4',
+      conversationId: conversation._id,
+      authorId: 'org-2',
+      body: 'Reply from a sponsors-team organizer.',
+      createdAt: '2026-07-01T11:00:00Z',
+    }
+    // Author org-2 is the only team member, so after actor exclusion there is
+    // nobody left to hub — proving the two rules compose (team ∩ not-actor = ∅).
+    await notifySponsorMessage({
+      conversation,
+      message,
+      sfc,
+      authorOrganizerId: 'org-2',
+    })
+    expect(upsertMock).not.toHaveBeenCalled()
+    // The sponsor email to contacts is unaffected by organizer routing.
+    expect(sponsorEmailMock).toHaveBeenCalledOnce()
   })
 })

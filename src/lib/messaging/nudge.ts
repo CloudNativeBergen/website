@@ -4,6 +4,7 @@ import {
   createNotifications,
   getOrganizerSpeakerIds,
 } from '@/lib/notification/sanity'
+import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
 import { conversationLinkPath } from './links'
 // Single home for the last-author projection (R1): sharing the exact string with
@@ -16,9 +17,12 @@ import { LAST_AUTHOR_REF } from './sanity'
  *
  * POLICY: a conversation that is still OPEN, whose LAST message is from a
  * non-organizer (so the ball is in the organizers' court), and which has seen no
- * new activity for {@link STALE_AFTER_DAYS} days gets ONE hub notification —
- * routed to the assigned organizer when set, otherwise to every organizer — with
- * a deep link to the admin thread. The conversation's `lastStaleNudgeAt` is then
+ * new activity for {@link STALE_AFTER_DAYS} days gets ONE hub notification. It is
+ * routed down the TEAMS-2 chain (each step falling through to the next): the
+ * assigned organizer when set → else the thread's team (`sponsors` for a sponsor
+ * thread, `cfp` otherwise) → else every organizer (the team-else-all fallback of
+ * {@link resolveRoutedOrganizerIds}). A deep link to the admin thread rides
+ * along. The conversation's `lastStaleNudgeAt` is then
  * stamped so it is not nudged again until a NEWER message arrives
  * (`lastStaleNudgeAt < lastMessageAt` re-arms it); a globally-archived thread is
  * never nudged.
@@ -46,7 +50,7 @@ export interface StaleNudgeSummary {
   scanned: number
   /** Conversations for which a notification was emitted AND stamped. */
   nudged: number
-  /** Total hub notifications created (assignee → 1; unassigned → N organizers). */
+  /** Total hub notifications created (assignee → 1; unassigned → team-or-N organizers). */
   notifications: number
   /** Conversations whose nudge failed and were isolated (logged, skipped). */
   failed: number
@@ -66,7 +70,7 @@ export function staleConversationCutoff(now: Date = new Date()): string {
 /** A stale conversation row, projected with what a nudge needs. */
 interface StaleConversation {
   _id: string
-  conversationType: 'proposal' | 'general'
+  conversationType: 'proposal' | 'general' | 'sponsor'
   subject: string | null
   conferenceId: string | null
   proposalId?: string | null
@@ -123,12 +127,20 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
         // notification requires a conference ref); skip without stamping.
         if (!conversation.conferenceId) continue
 
-        // Route to the assignee when set, else to every organizer. If nobody can
-        // be notified (no assignee AND no organizers), skip without stamping so
-        // the thread is retried once organizers exist.
+        // Route down the TEAMS-2 chain: the assignee when set → else the
+        // thread's team (`sponsors` for a sponsor thread, `cfp` otherwise) →
+        // else every organizer (the team-else-all fallback). If nobody can be
+        // notified (no assignee AND no team AND no organizers), skip without
+        // stamping so the thread is retried once organizers exist.
         const recipientIds = conversation.assignedToId
           ? [conversation.assignedToId]
-          : organizerIds
+          : await resolveRoutedOrganizerIds({
+              conferenceId: conversation.conferenceId,
+              teamKey:
+                conversation.conversationType === 'sponsor'
+                  ? 'sponsors'
+                  : 'cfp',
+            })
         if (recipientIds.length === 0) continue
 
         const link = conversationLinkPath(
