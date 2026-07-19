@@ -26,7 +26,7 @@ vi.mock('@/lib/sanity/helpers', () => ({
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { transaction: vi.fn(), create: vi.fn() },
+  clientWrite: { transaction: vi.fn(), create: vi.fn(), patch: vi.fn() },
   clientReadUncached: { fetch: vi.fn() },
 }))
 
@@ -38,12 +38,16 @@ vi.mock('@/lib/notification/sanity', () => ({
 // deterministic ('FIXED').
 vi.mock('nanoid', () => ({ nanoid: () => 'FIXED' }))
 
-import { clientWrite } from '@/lib/sanity/client'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import {
   resolveParticipants,
+  resolveParticipantIds,
+  resolveRecipients,
+  canAccessConversation,
   ensureProposalConversation,
   createGeneralConversation,
   addMessage,
+  syncProposalConversationParticipants,
 } from '@/lib/messaging/sanity'
 import {
   validateConversationParticipant,
@@ -55,6 +59,7 @@ type LooseMock = ReturnType<typeof vi.fn>
 const writeMock = clientWrite as unknown as {
   transaction: LooseMock
   create: LooseMock
+  patch: LooseMock
 }
 
 function installTransaction() {
@@ -213,6 +218,163 @@ describe('resolveParticipants — legacy-derived === dual-written, every shape',
       participants: stored,
     }
     expect(resolveParticipants(conv)).toBe(stored)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 1b. READ FLIP (G2a) — the flipped authz/recipient reads over participants[]
+//     are equivalent to the legacy derive, for every thread shape.
+// ---------------------------------------------------------------------------
+
+describe('READ FLIP (G2a): resolveParticipantIds / resolveRecipients / canAccessConversation', () => {
+  const ORGS = ['org-1', 'org-2']
+
+  const speakerPartyIds = (parties: ConversationParty[]): string[] =>
+    parties.flatMap((p) => (p.partyType === 'speaker' ? [p.speakerId] : []))
+
+  for (const shape of SHAPES) {
+    describe(shape.name, () => {
+      const dualWritten = { ...shape.legacy, participants: shape.expected }
+
+      it('resolveParticipantIds: dual-written === legacy-derived, organizers expanded to the live ids', () => {
+        const fromStored = resolveParticipantIds(dualWritten, ORGS).sort()
+        const fromLegacy = resolveParticipantIds(shape.legacy, ORGS).sort()
+        expect(fromStored).toEqual(fromLegacy)
+        // The `organizers` group party expands to the caller-supplied id set.
+        expect(fromStored).toEqual(expect.arrayContaining(ORGS))
+      })
+
+      it('resolveRecipients: dual-written === legacy-derived (actor excluded)', () => {
+        const actor = ORGS[0]
+        expect(resolveRecipients(dualWritten, actor, ORGS).sort()).toEqual(
+          resolveRecipients(shape.legacy, actor, ORGS).sort(),
+        )
+        expect(resolveRecipients(dualWritten, actor, ORGS)).not.toContain(actor)
+      })
+
+      it('canAccessConversation: identical verdict for every member speaker and a stranger', () => {
+        for (const id of [...speakerPartyIds(shape.expected), 'stranger-xyz']) {
+          const speaker = { _id: id }
+          expect(canAccessConversation(dualWritten, speaker)).toBe(
+            canAccessConversation(shape.legacy, speaker),
+          )
+        }
+        // An organizer always has access (short-circuits before party membership).
+        expect(
+          canAccessConversation(dualWritten, { _id: 'o-x', isOrganizer: true }),
+        ).toBe(true)
+      })
+    })
+  }
+
+  it('resolveParticipantIds SKIPS a sponsor party (G2b) — it carries no speaker id', () => {
+    const conv = {
+      conversationType: 'general' as const,
+      proposalSpeakerIds: [],
+      createdById: 'sp-9',
+      participants: [
+        { partyType: 'speaker', speakerId: 'sp-9' },
+        { partyType: 'sponsor', sponsorForConferenceId: 'sfc-1' },
+        ORG,
+      ] as ConversationParty[],
+    }
+    expect(resolveParticipantIds(conv, ['org-1']).sort()).toEqual([
+      'org-1',
+      'sp-9',
+    ])
+  })
+
+  it('PREFERS a stored participants[] over STALE legacy proposal fields (the snapshot-sync motivation)', () => {
+    // A proposal thread whose stored participants[] (sp-1, sp-3) has diverged
+    // from the legacy proposalSpeakerIds snapshot (sp-1, sp-2): the flipped read
+    // follows participants[], which is exactly why co-speaker changes MUST resync
+    // participants[] (Task 3). sp-3 is granted; sp-2 (only in the stale legacy
+    // field) is denied.
+    const conv = {
+      conversationType: 'proposal' as const,
+      proposalSpeakerIds: ['sp-1', 'sp-2'],
+      createdById: 'sp-1',
+      participants: [
+        { partyType: 'speaker', speakerId: 'sp-1' },
+        { partyType: 'speaker', speakerId: 'sp-3' },
+        ORG,
+      ] as ConversationParty[],
+    }
+    expect(canAccessConversation(conv, { _id: 'sp-3' })).toBe(true)
+    expect(canAccessConversation(conv, { _id: 'sp-2' })).toBe(false)
+    expect(resolveParticipantIds(conv, ['org-1']).sort()).toEqual([
+      'org-1',
+      'sp-1',
+      'sp-3',
+    ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 1c. SNAPSHOT SYNC (G2a) — co-speaker add/remove resyncs the thread's
+//     participants[]; no-op without a thread; never-fail.
+// ---------------------------------------------------------------------------
+
+describe('syncProposalConversationParticipants — co-speaker add/remove resync', () => {
+  const readMock = clientReadUncached as unknown as { fetch: LooseMock }
+
+  function installPatch(commit: () => Promise<unknown> = async () => ({})) {
+    const patch = {
+      set: vi.fn((_ops?: unknown) => patch),
+      commit: vi.fn(commit),
+    }
+    writeMock.patch.mockReturnValue(patch)
+    return patch
+  }
+
+  it('ADD direction: patches participants[] up to the new speaker set + organizers', async () => {
+    readMock.fetch.mockResolvedValueOnce('conversation.proposal.prop-1')
+    const patch = installPatch()
+
+    await syncProposalConversationParticipants('prop-1', ['sp-1', 'sp-2'])
+
+    // Only PATCHES an existing thread (probe first, no createIfNotExists).
+    expect(writeMock.patch).toHaveBeenCalledWith('conversation.proposal.prop-1')
+    expect(patch.set).toHaveBeenCalledWith({
+      participants: [
+        storedSpeaker('sp-1'),
+        storedSpeaker('sp-2'),
+        storedOrganizersGroup,
+      ],
+    })
+    expect(patch.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('REMOVE direction: patches participants[] down to the remaining speakers + organizers', async () => {
+    readMock.fetch.mockResolvedValueOnce('conversation.proposal.prop-1')
+    const patch = installPatch()
+
+    await syncProposalConversationParticipants('prop-1', ['sp-1'])
+
+    expect(patch.set).toHaveBeenCalledWith({
+      participants: [storedSpeaker('sp-1'), storedOrganizersGroup],
+    })
+  })
+
+  it('NO-OP when the proposal has no thread yet (never conjures one)', async () => {
+    readMock.fetch.mockResolvedValueOnce(null)
+    const patch = installPatch()
+
+    await syncProposalConversationParticipants('prop-x', ['sp-1'])
+
+    expect(writeMock.patch).not.toHaveBeenCalled()
+    expect(patch.commit).not.toHaveBeenCalled()
+  })
+
+  it('NEVER-FAIL: swallows a patch/commit failure (must not fail the co-speaker mutation)', async () => {
+    readMock.fetch.mockResolvedValueOnce('conversation.proposal.prop-1')
+    installPatch(async () => {
+      throw new Error('boom')
+    })
+
+    await expect(
+      syncProposalConversationParticipants('prop-1', ['sp-1']),
+    ).resolves.toBeUndefined()
   })
 })
 

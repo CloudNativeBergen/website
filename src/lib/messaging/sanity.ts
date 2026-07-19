@@ -129,6 +129,18 @@ const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && defin
  * ONE string so the inbox list and the view-count projection (S7) apply the
  * IDENTICAL scope — the tab badges can never count threads the list wouldn't
  * show. Binds `$speakerId`.
+ *
+ * G2a DECISION — KEPT on the legacy fields (NOT flipped to `participants[]`).
+ * This GROQ predicate keys on `createdBy`/`subjectSpeaker`/`proposal->speakers`,
+ * which stay correct: dual-write + migration 043 keep `createdBy`/
+ * `subjectSpeaker` in sync, and `proposal->speakers[]._ref` is the LIVE source
+ * (dereferenced per query). A `participants[]`-based predicate would (a) be a
+ * snapshot that could diverge for proposal speaker changes made through paths
+ * G2a does not sync (e.g. an admin proposal edit), and (b) be unable to express
+ * the derive-fallback the JS resolver provides for a participants-less doc — so
+ * it could not match legacy semantics exactly. Correctness over purity: the
+ * predicate keeps reading the live legacy fields; the JS authz/recipient path
+ * (which CAN express the fallback) is the one that flipped.
  */
 export const SPEAKER_SCOPE_PREDICATE =
   '(createdBy._ref == $speakerId || subjectSpeaker._ref == $speakerId || $speakerId in proposal->speakers[]._ref)'
@@ -215,12 +227,20 @@ function buildViewPredicate(
 // ---------------------------------------------------------------------------
 
 /**
- * Every participant of a conversation:
+ * Every participant of a conversation, as concrete speaker ids:
  * - proposal thread → the proposal's speakers ∪ organizers;
  * - general thread  → the creator ∪ subjectSpeaker ∪ organizers.
  * De-duplicated (a speaker who is also an organizer appears once). A general
  * thread's `subjectSpeaker` is the speaker an organizer targeted; it is absent
  * on speaker-created threads (where the creator IS the subject).
+ *
+ * READ FLIP (G2a): the id set is now expanded from the PARTY list
+ * ({@link resolveParticipants}: dual-written `participants[]` preferred, legacy
+ * derive as the safety-net fallback) rather than re-read straight off the legacy
+ * fields. The `organizers` group expands via the caller-supplied `organizerIds`
+ * at the SAME point the legacy logic seeded them, so WHO resolves is unchanged.
+ * A `sponsor` party (reserved for G2b) carries no speaker id and is skipped by
+ * the speaker system.
  */
 export function resolveParticipantIds(
   conversation: Pick<
@@ -229,29 +249,44 @@ export function resolveParticipantIds(
     | 'proposalSpeakerIds'
     | 'createdById'
     | 'subjectSpeakerId'
+    | 'participants'
   >,
   organizerIds: string[],
 ): string[] {
-  const ids = new Set<string>(organizerIds)
-  if (conversation.conversationType === 'proposal') {
-    for (const id of conversation.proposalSpeakerIds) ids.add(id)
-  } else {
-    ids.add(conversation.createdById)
-    if (conversation.subjectSpeakerId) ids.add(conversation.subjectSpeakerId)
+  const ids = new Set<string>()
+  for (const party of resolveParticipants(conversation)) {
+    if (party.partyType === 'speaker') {
+      ids.add(party.speakerId)
+    } else if (
+      party.partyType === 'group' &&
+      party.group === ORGANIZERS_GROUP
+    ) {
+      for (const id of organizerIds) ids.add(id)
+    }
   }
   return Array.from(ids)
 }
 
 // ---------------------------------------------------------------------------
-// Party model (G1): the GENERAL participant representation.
+// Party model (G1 representation, G2a read flip).
 //
 // A conversation's participants are expressed as a list of PARTIES (speaker /
-// sponsor / group). G1 introduces this representation and DUAL-WRITES it (below)
-// alongside the legacy createdBy/subjectSpeaker/proposal fields; the read path
-// is UNCHANGED (canAccessConversation / resolveRecipients / the GROQ scope
-// predicates all keep their legacy logic). The read path flips to prefer
-// participants[] in G2 (with the sponsor branch), after migration 043 backfills
-// existing documents.
+// sponsor / group). G1 introduced this representation and DUAL-WRITES it (below)
+// alongside the legacy createdBy/subjectSpeaker/proposal fields; migration 043
+// backfilled every existing document.
+//
+// G2a FLIPS the participant/authz READS onto {@link resolveParticipants}:
+// `canAccessConversation`, `resolveParticipantIds` (⇒ `resolveRecipients`,
+// `getConversationParticipants`) now prefer the stored `participants[]` and only
+// DERIVE from the legacy fields as a safety-net fallback. The legacy fields and
+// their projection are RETAINED (never removed) — they remain the fallback and
+// still back the GROQ scope predicates, which stay on the legacy fields on
+// purpose (they key on the LIVE `proposal->speakers[]`, and dual-write + 043
+// keep them correct; a participants[]-based predicate could not express the
+// derive fallback and would diverge for speaker edits G2a does not sync). The
+// proposal thread's `participants[]` snapshot is kept in step with the live
+// speaker set by {@link syncProposalConversationParticipants} on co-speaker
+// add/remove. The `sponsor` party branch is exercised by SPONSOR features (G2b).
 // ---------------------------------------------------------------------------
 
 /**
@@ -405,6 +440,7 @@ export function resolveRecipients(
     | 'proposalSpeakerIds'
     | 'createdById'
     | 'subjectSpeakerId'
+    | 'participants'
   >,
   actorId: string,
   organizerIds: string[],
@@ -420,6 +456,15 @@ export function resolveRecipients(
  * - a proposal thread where the speaker is on the proposal; OR
  * - a general thread the speaker created OR is the subject speaker of (an
  *   organizer-initiated general thread targets a `subjectSpeaker`).
+ *
+ * READ FLIP (G2a): a non-organizer's access is now decided by SPEAKER-party
+ * membership of the resolved party set ({@link resolveParticipants}:
+ * `participants[]` preferred, legacy derive fallback) rather than a direct read
+ * of the legacy fields. For a proposal thread the speaker parties ARE the
+ * proposal speakers; for a general thread they are the creator (+ subject
+ * speaker) — the same set the legacy field checks expressed. Organizer access
+ * still short-circuits on the server-derived `isOrganizer` flag (the
+ * `organizers` group party is never expanded here).
  */
 export function canAccessConversation(
   conversation: Pick<
@@ -428,16 +473,13 @@ export function canAccessConversation(
     | 'proposalSpeakerIds'
     | 'createdById'
     | 'subjectSpeakerId'
+    | 'participants'
   >,
   speaker: AccessSpeaker,
 ): boolean {
   if (speaker.isOrganizer) return true
-  if (conversation.conversationType === 'proposal') {
-    return conversation.proposalSpeakerIds.includes(speaker._id)
-  }
-  return (
-    conversation.createdById === speaker._id ||
-    conversation.subjectSpeakerId === speaker._id
+  return resolveParticipants(conversation).some(
+    (party) => party.partyType === 'speaker' && party.speakerId === speaker._id,
   )
 }
 
@@ -1051,6 +1093,49 @@ export async function ensureProposalConversation({
     })
     .commit()
   return id
+}
+
+/**
+ * SNAPSHOT SYNC (G2a): re-derive a proposal thread's dual-written
+ * `participants[]` from the proposal's CURRENT speaker set and patch it onto the
+ * conversation. Call AFTER a co-speaker add/remove commits so the flipped read
+ * path (which now PREFERS `participants[]`) resolves the LIVE speaker set rather
+ * than the snapshot captured when the thread was first created — the divergence
+ * flagged by the #564 badge.
+ *
+ * NO-OP when the proposal has no conversation thread yet: threads are created
+ * lazily on the first message, so a co-speaker change on a never-messaged
+ * proposal must NOT conjure a thread — we only PATCH an existing doc, never
+ * create one (hence the existence probe rather than `createIfNotExists`).
+ * NEVER-FAIL: a sync failure must never fail the (already committed) co-speaker
+ * mutation, mirroring the `deleteMessageNotificationsFor` cleanup contract.
+ */
+export async function syncProposalConversationParticipants(
+  proposalId: string,
+  proposalSpeakerIds: string[],
+): Promise<void> {
+  try {
+    const id = proposalConversationId(proposalId)
+    const existingId = await clientReadUncached.fetch<string | null>(
+      `*[_type == "conversation" && _id == $id][0]._id`,
+      { id },
+      { cache: 'no-store' },
+    )
+    if (!existingId) return
+    // Re-derive THROUGH the resolver on a participants-less context (derive
+    // branch), so the written array is exactly what the legacy read would yield
+    // for these speakers — the same construction ensureProposalConversation uses.
+    const participants = partiesToStored(
+      resolveParticipants({
+        conversationType: 'proposal',
+        proposalSpeakerIds,
+        createdById: '',
+      }),
+    )
+    await clientWrite.patch(id).set({ participants }).commit()
+  } catch (error) {
+    console.error('Failed to sync proposal conversation participants:', error)
+  }
 }
 
 /**
