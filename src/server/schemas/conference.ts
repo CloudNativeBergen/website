@@ -23,8 +23,8 @@ const dateString = z
 export const UpdateBasicInfoSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
   organizer: z.string().trim().min(1, 'Organizer is required'),
-  city: z.string().trim().optional(),
-  country: z.string().trim().optional(),
+  city: z.string().trim().nullable().optional(),
+  country: z.string().trim().nullable().optional(),
   tagline: z.string().trim().nullable().optional(),
   description: z.string().trim().nullable().optional(),
 })
