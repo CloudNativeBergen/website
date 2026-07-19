@@ -5,7 +5,7 @@ import {
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import { conversationLinkPath } from '@/lib/messaging/links'
+import { conversationLinkPath, ORGANIZERS_LABEL } from '@/lib/messaging/links'
 import { formatRelativeTime } from '@/lib/notification/format'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
@@ -67,7 +67,7 @@ function RowAvatar({ item }: { item: ConversationListItem }) {
     >
       {image ? (
         <SpeakerAvatarImage src={image} name={name} size={40} />
-      ) : name === 'Organizers' ? (
+      ) : name === ORGANIZERS_LABEL ? (
         <span className="flex h-full w-full items-center justify-center bg-gray-100 dark:bg-gray-700">
           <UserGroupIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
         </span>

@@ -272,6 +272,10 @@ async function deliverPushToRecipient(
       // The SW re-sanitises this to a same-origin path; hub links are already
       // app-relative (e.g. /cfp/proposal/<id>). Fall back to the app root.
       url: item.link ?? '/',
+      // Stable per-thread tag (message notifications) → the SW passes it to
+      // showNotification so repeat pushes for the same thread REPLACE the prior
+      // one instead of stacking. Undefined for one-shot types (they stack).
+      ...(item.tag ? { tag: item.tag } : {}),
     }
 
     const results = await Promise.allSettled(

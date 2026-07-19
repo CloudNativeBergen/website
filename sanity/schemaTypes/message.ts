@@ -23,6 +23,10 @@ export default defineType({
       title: 'Author',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion;
+      // messages are immortal, so a dangling author ref is tolerated (it simply
+      // no longer resolves to a speaker).
+      weak: true,
       description: 'The speaker (or organizer) who wrote this message.',
       validation: (Rule) => Rule.required(),
     }),

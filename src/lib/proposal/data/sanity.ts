@@ -8,6 +8,7 @@ import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from '../utils/validation'
 import { Review } from '@/lib/review/types'
+import { conversationLinkPath } from '@/lib/messaging/links'
 import {
   prepareReferenceArray,
   createReference,
@@ -301,6 +302,43 @@ export async function updateProposal(
 const CASCADE_DELETE_TYPES = ['coSpeakerInvitation', 'review']
 
 /**
+ * Types that reference a proposal only WEAKLY and must neither block deletion
+ * nor generally be deleted with it:
+ * - `notification` — a hub notification's `relatedProposal` is weak and is NEVER
+ *   dereferenced by any list projection, so a dangling ref renders harmlessly.
+ *   (The proposal thread's `message_received` notifications ARE cleaned up
+ *   separately below, since they'd otherwise 404 on their deep link.)
+ * - `conversation` — the proposal thread; CASCADE-deleted below along with its
+ *   messages.
+ * Both are excluded from the blocking check so a proposal with an active message
+ * thread and notifications stays deletable.
+ */
+const NON_BLOCKING_TYPES = ['notification', 'conversation']
+
+/** Deletes per transaction when cascading a proposal's thread — keeps each
+ * commit well under Sanity's mutation-per-transaction ceiling. */
+const PROPOSAL_DELETE_CHUNK_SIZE = 100
+
+/** Split `items` into consecutive chunks of at most `size`. */
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
+
+/** Delete a set of document ids in ONE transaction. No-op for an empty set. */
+async function commitDeletes(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  const transaction = clientWrite.transaction()
+  for (const id of ids) {
+    transaction.delete(id)
+  }
+  await transaction.commit()
+}
+
+/**
  * Human readable descriptions for document types that block deletion of a
  * proposal. Any other unexpected referencing type falls back to its raw
  * `_type` name.
@@ -335,8 +373,15 @@ export async function deleteProposal(
 
     const docs = referencingDocs ?? []
 
+    // A GROQ `references()` match includes WEAK refs, so notifications
+    // (weak `relatedProposal`) and the proposal conversation (weak `proposal`)
+    // show up here too. Only STRONG-ref holders that aren't cascade-safe (a
+    // published schedule, a featured-talk conference ref, workshop signups, …)
+    // genuinely block deletion.
     const blocking = docs.filter(
-      (doc) => !CASCADE_DELETE_TYPES.includes(doc._type),
+      (doc) =>
+        !CASCADE_DELETE_TYPES.includes(doc._type) &&
+        !NON_BLOCKING_TYPES.includes(doc._type),
     )
 
     if (blocking.length > 0) {
@@ -354,14 +399,75 @@ export async function deleteProposal(
       }
     }
 
-    // Delete dependent documents (co-speaker invitations and reviews) and
-    // the proposal itself in a single atomic transaction.
-    const transaction = clientWrite.transaction()
-    for (const doc of docs) {
-      transaction.delete(doc._id)
+    // Cascade-safe dependents that reference the proposal (co-speaker
+    // invitations + reviews). Notifications are intentionally KEPT (their weak
+    // ref dangles harmlessly); the message thread is handled just below.
+    const cascadeIds = docs
+      .filter((doc) => CASCADE_DELETE_TYPES.includes(doc._type))
+      .map((doc) => doc._id)
+
+    // Cascade the proposal's message thread: the conversation(s), their
+    // messages, and every participant's collapsed message notification. Fetched
+    // fresh (not filtered from `docs`) because message documents don't reference
+    // the proposal, and message notifications are matched by the proposal-thread
+    // deep link (both audience variants) rather than a stored proposal ref.
+    const conversationIds =
+      (await clientRead.fetch<string[]>(
+        groq`*[_type == "conversation" && proposal._ref == $proposalId]._id`,
+        { proposalId },
+      )) ?? []
+
+    let messageIds: string[] = []
+    if (conversationIds.length > 0) {
+      messageIds =
+        (await clientRead.fetch<string[]>(
+          groq`*[_type == "message" && conversation._ref in $conversationIds]._id`,
+          { conversationIds },
+        )) ?? []
     }
-    transaction.delete(proposalId)
-    await transaction.commit()
+
+    const threadLinkConv = {
+      _id: '',
+      conversationType: 'proposal' as const,
+      proposalId,
+    }
+    const messageLinks = [
+      conversationLinkPath(threadLinkConv, true),
+      conversationLinkPath(threadLinkConv, false),
+    ]
+    const messageNotificationIds =
+      (await clientRead.fetch<string[]>(
+        groq`*[_type == "notification" && notificationType == "message_received" && link in $messageLinks]._id`,
+        { messageLinks },
+      )) ?? []
+
+    // Deletion ORDER matters for strong references: a message strongly refs its
+    // conversation, so messages must go before conversations; the proposal is
+    // deleted LAST, together with the co-speaker invitations / reviews that
+    // strongly ref it (Sanity resolves intra-transaction constraints, so those
+    // may share the final transaction). Everything else is weak-ref or
+    // unreferenced and can be chunked freely. Chunking trades the previous
+    // single-transaction atomicity for staying under the mutation ceiling on a
+    // large thread — a mid-way failure surfaces an error and leaves a partially
+    // cascaded thread, which a retry finishes.
+    for (const chunk of chunkArray(messageIds, PROPOSAL_DELETE_CHUNK_SIZE)) {
+      await commitDeletes(chunk)
+    }
+    for (const chunk of chunkArray(
+      conversationIds,
+      PROPOSAL_DELETE_CHUNK_SIZE,
+    )) {
+      await commitDeletes(chunk)
+    }
+    for (const chunk of chunkArray(
+      messageNotificationIds,
+      PROPOSAL_DELETE_CHUNK_SIZE,
+    )) {
+      await commitDeletes(chunk)
+    }
+    // Final transaction: the cascade dependents (strong refs to the proposal)
+    // and the proposal itself, atomically.
+    await commitDeletes([...cascadeIds, proposalId])
   } catch (error) {
     console.error('Error deleting proposal:', error)
     err = error as Error

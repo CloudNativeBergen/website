@@ -73,11 +73,17 @@ describe('deleteProposal', () => {
   })
 
   it('deletes co-speaker invitations and reviews together with the talk in a single transaction', async () => {
-    mockFetch.mockResolvedValue([
-      { _id: 'invitation-1', _type: 'coSpeakerInvitation' },
-      { _id: 'invitation-2', _type: 'coSpeakerInvitation' },
-      { _id: 'review-1', _type: 'review' },
-    ])
+    mockFetch
+      // referencing docs (cascade-safe only, no thread)
+      .mockResolvedValueOnce([
+        { _id: 'invitation-1', _type: 'coSpeakerInvitation' },
+        { _id: 'invitation-2', _type: 'coSpeakerInvitation' },
+        { _id: 'review-1', _type: 'review' },
+      ])
+      // conversationIds (no thread)
+      .mockResolvedValueOnce([])
+      // messageNotificationIds (no message notifications for the thread)
+      .mockResolvedValueOnce([])
 
     const { err } = await deleteProposal('proposal-1')
 
@@ -86,6 +92,8 @@ describe('deleteProposal', () => {
       expect.stringContaining('references($proposalId)'),
       { proposalId: 'proposal-1' },
     )
+    // With no thread, everything collapses into the single final transaction:
+    // the cascade dependents + the proposal itself.
     expect(mockTransaction).toHaveBeenCalledTimes(1)
     expect(mockTxDelete.mock.calls.map((call) => call[0])).toEqual([
       'invitation-1',
@@ -96,8 +104,79 @@ describe('deleteProposal', () => {
     expect(mockTxCommit).toHaveBeenCalledTimes(1)
   })
 
+  it('cascade-deletes the proposal thread — messages, conversation, and message notifications — keeping other notifications', async () => {
+    mockFetch
+      // referencing docs: a conversation (weak), a message notification (weak),
+      // a non-message notification (weak), and a review (cascade). NONE block.
+      .mockResolvedValueOnce([
+        { _id: 'conversation.proposal.proposal-1', _type: 'conversation' },
+        { _id: 'notif-msg-1', _type: 'notification' },
+        { _id: 'notif-status-1', _type: 'notification' },
+        { _id: 'review-1', _type: 'review' },
+      ])
+      // conversationIds for the proposal
+      .mockResolvedValueOnce(['conversation.proposal.proposal-1'])
+      // messageIds in those conversations
+      .mockResolvedValueOnce(['msg-1', 'msg-2'])
+      // message notification ids (matched by proposal-thread link)
+      .mockResolvedValueOnce(['notif-msg-1'])
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+
+    // The message-notification lookup filters on message_received + link in the
+    // two proposal-thread audience variants.
+    const notifCall = mockFetch.mock.calls[3]
+    expect(notifCall[0]).toContain('notificationType == "message_received"')
+    expect(notifCall[0]).toContain('link in $messageLinks')
+    expect(notifCall[1]).toEqual({
+      messageLinks: [
+        '/admin/proposals/proposal-1#messages',
+        '/cfp/proposal/proposal-1#messages',
+      ],
+    })
+
+    // Four transactions: messages, conversation, message-notification, then the
+    // cascade dependents + proposal.
+    expect(mockTransaction).toHaveBeenCalledTimes(4)
+    const deleted = mockTxDelete.mock.calls.map((call) => call[0])
+    expect(deleted).toEqual([
+      'msg-1',
+      'msg-2',
+      'conversation.proposal.proposal-1',
+      'notif-msg-1',
+      'review-1',
+      'proposal-1',
+    ])
+    // The non-message notification is neither blocking nor deleted (its weak
+    // ref simply dangles).
+    expect(deleted).not.toContain('notif-status-1')
+  })
+
+  it('keeps a non-message notification referencing the proposal without blocking or deleting it', async () => {
+    mockFetch
+      // Only a (weak) notification references the proposal — must NOT block.
+      .mockResolvedValueOnce([{ _id: 'notif-1', _type: 'notification' }])
+      // no conversations
+      .mockResolvedValueOnce([])
+      // no message notifications
+      .mockResolvedValueOnce([])
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeNull()
+    // Only the proposal itself is deleted; the notification is kept.
+    expect(mockTxDelete.mock.calls.map((call) => call[0])).toEqual([
+      'proposal-1',
+    ])
+  })
+
   it('deletes a talk without referencing documents', async () => {
-    mockFetch.mockResolvedValue([])
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce([]) // conversationIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
 
     const { err } = await deleteProposal('proposal-1')
 
@@ -108,7 +187,7 @@ describe('deleteProposal', () => {
   })
 
   it('returns a descriptive error when the talk is placed in a schedule', async () => {
-    mockFetch.mockResolvedValue([{ _id: 'schedule-1', _type: 'schedule' }])
+    mockFetch.mockResolvedValueOnce([{ _id: 'schedule-1', _type: 'schedule' }])
 
     const { err } = await deleteProposal('proposal-1')
 
@@ -120,8 +199,23 @@ describe('deleteProposal', () => {
     expect(mockTxCommit).not.toHaveBeenCalled()
   })
 
+  it('still blocks on a schedule even when a message thread also references the proposal', async () => {
+    mockFetch.mockResolvedValueOnce([
+      { _id: 'conversation.proposal.proposal-1', _type: 'conversation' },
+      { _id: 'schedule-1', _type: 'schedule' },
+    ])
+
+    const { err } = await deleteProposal('proposal-1')
+
+    expect(err).toBeInstanceOf(ProposalDeletionBlockedError)
+    expect(err?.message).toContain('a published schedule')
+    // Blocked before any cascade fetch or delete.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
   it('does not delete invitations or reviews when a blocking reference exists', async () => {
-    mockFetch.mockResolvedValue([
+    mockFetch.mockResolvedValueOnce([
       { _id: 'invitation-1', _type: 'coSpeakerInvitation' },
       { _id: 'review-1', _type: 'review' },
       { _id: 'conference-1', _type: 'conference' },
@@ -136,7 +230,7 @@ describe('deleteProposal', () => {
   })
 
   it('lists every blocking reference type once in the error message', async () => {
-    mockFetch.mockResolvedValue([
+    mockFetch.mockResolvedValueOnce([
       { _id: 'schedule-1', _type: 'schedule' },
       { _id: 'schedule-2', _type: 'schedule' },
       { _id: 'signup-1', _type: 'workshopSignup' },
@@ -150,7 +244,7 @@ describe('deleteProposal', () => {
   })
 
   it('falls back to the raw document type for unknown blocking references', async () => {
-    mockFetch.mockResolvedValue([{ _id: 'other-1', _type: 'someNewType' }])
+    mockFetch.mockResolvedValueOnce([{ _id: 'other-1', _type: 'someNewType' }])
 
     const { err } = await deleteProposal('proposal-1')
 
@@ -169,7 +263,10 @@ describe('deleteProposal', () => {
   })
 
   it('returns the error when the transaction commit fails', async () => {
-    mockFetch.mockResolvedValue([])
+    mockFetch
+      .mockResolvedValueOnce([]) // referencing docs
+      .mockResolvedValueOnce([]) // conversationIds
+      .mockResolvedValueOnce([]) // messageNotificationIds
     const failure = new Error('commit failed')
     mockTxCommit.mockRejectedValue(failure)
 

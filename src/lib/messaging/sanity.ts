@@ -13,7 +13,12 @@ import type {
   Message,
 } from './types'
 import { DEFAULT_CONVERSATION_PREFERENCE } from './types'
-import { proposalConversationId, conversationLinkPath } from './links'
+import {
+  proposalConversationId,
+  conversationLinkPath,
+  truncateToGraphemeBoundary,
+  ORGANIZERS_LABEL,
+} from './links'
 
 // Re-export the client-safe pure helpers so existing server importers keep
 // their `./sanity` import surface (the definitions live in `./links`).
@@ -222,9 +227,13 @@ export async function getConversationParticipants(
  *
  * Each row carries the caller's `unreadCount`: their unread `message_received`
  * notifications for that conversation. Rather than N per-row subqueries we run
- * ONE extra fetch of the caller's unread message links for the conference and
- * count them in JS against each row's two audience link variants (the caller
- * only ever received one variant, so matching both is simplest and correct).
+ * ONE extra fetch of the caller's unread message links and count them in JS
+ * against each row's two audience link variants (the caller only ever received
+ * one variant, so matching both is simplest and correct). That fetch is SCOPED
+ * to the current page's conversations (`link in $pageLinks`, ≤ 2×PAGE_SIZE
+ * links) rather than the whole conference — an unscoped fetch with a fixed cap
+ * silently zeroed page rows for a caller (e.g. an organizer) whose conference-
+ * wide unread count exceeded the cap.
  *
  * Each row also carries Who/What metadata (M6):
  * - `lastMessage`: the newest message's author + a ~120-char excerpt (null for
@@ -241,17 +250,30 @@ export async function listConversationsForSpeaker({
   isOrganizer,
   conferenceId,
   before,
+  beforeId,
 }: {
   speakerId: string
   isOrganizer: boolean
   conferenceId: string
   before?: string
+  beforeId?: string
 }): Promise<ConversationListItem[]> {
   const params: Record<string, unknown> = { conferenceId }
   let cursor = ''
   if (before) {
-    cursor = ' && lastMessageAt < $before'
-    params.before = before
+    // Compound keyset cursor: order by (lastMessageAt desc, _id desc) so rows
+    // that share an exact `lastMessageAt` are totally ordered and none is
+    // skipped at a page boundary. Callers that only pass `before` (no
+    // `beforeId`) keep the original strict-less-than behaviour.
+    if (beforeId) {
+      cursor =
+        ' && (lastMessageAt < $before || (lastMessageAt == $before && _id < $beforeId))'
+      params.before = before
+      params.beforeId = beforeId
+    } else {
+      cursor = ' && lastMessageAt < $before'
+      params.before = before
+    }
   }
 
   let scope = ''
@@ -265,7 +287,7 @@ export async function listConversationsForSpeaker({
   // the whole page stays ONE fetch; `speakerSide*` pre-resolves the speaker-side
   // counterpart (organizer audience) via the house
   // `coalesce(image.asset->url, imageURL)` speaker-image pattern.
-  const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}] | order(lastMessageAt desc) [0...${PAGE_SIZE}] {
+  const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}] | order(lastMessageAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     conversationType,
     subject,
@@ -299,21 +321,27 @@ export async function listConversationsForSpeaker({
   const rows = results ?? []
   if (rows.length === 0) return []
 
-  // ONE extra read (bounded [0...500] — plenty above any realistic unread count,
-  // and the 90-day retention caps the universe): the caller's unread
-  // message_received notifications for this conference. Since M5 a collapsed
-  // notification represents `count` unread messages (absent = 1, which also
-  // covers pre-collapse per-message documents), so we SUM `coalesce(count, 1)`
-  // per link in JS rather than counting documents.
+  // ONE extra read, SCOPED to THIS page's conversations via `link in $pageLinks`
+  // (both audience variants per row → ≤ 2×PAGE_SIZE links). This replaces an
+  // unscoped conference-wide fetch with a fixed [0...500] cap that silently
+  // zeroed page rows once a caller's total unread count crossed the cap
+  // (organizers see EVERY conversation). Since M5 a collapsed notification
+  // represents `count` unread messages (absent = 1, which also covers
+  // pre-collapse per-message documents), so we SUM `coalesce(count, 1)` per link
+  // in JS rather than counting documents.
   //
   // A SPEAKER caller additionally needs the organizer id set to decide whether
   // the last message's author is "an organizer" (their counterpart); organizers
   // don't (their counterpart is the pre-resolved speaker side), so their path
   // stays at two fetches.
+  const pageLinks = rows.flatMap((row) => [
+    conversationLinkPath(row, true),
+    conversationLinkPath(row, false),
+  ])
   const [unreadRows, organizerIds] = await Promise.all([
     clientReadUncached.fetch<{ link: string | null; count: number }[]>(
-      `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt)][0...500]{ link, "count": coalesce(count, 1) }`,
-      { speakerId, conferenceId },
+      `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $pageLinks]{ link, "count": coalesce(count, 1) }`,
+      { speakerId, conferenceId, pageLinks },
       { cache: 'no-store' },
     ),
     isOrganizer ? Promise.resolve<string[]>([]) : getOrganizerSpeakerIds(),
@@ -331,6 +359,10 @@ export async function listConversationsForSpeaker({
     const unreadCount =
       (linkCounts.get(conversationLinkPath(row, true)) ?? 0) +
       (linkCounts.get(conversationLinkPath(row, false)) ?? 0)
+    // A body that trims to nothing (only whitespace) produces an empty excerpt:
+    // return no lastMessage at all so the row renders without a blank snippet
+    // line, rather than an object carrying an empty string.
+    const excerpt = row.lastMessage ? excerptOf(row.lastMessage.body ?? '') : ''
     return {
       _id: row._id,
       conversationType: row.conversationType,
@@ -340,13 +372,14 @@ export async function listConversationsForSpeaker({
       createdAt: row.createdAt,
       lastMessageAt: row.lastMessageAt,
       unreadCount,
-      lastMessage: row.lastMessage
-        ? {
-            authorId: row.lastMessage.authorId,
-            authorName: row.lastMessage.authorName ?? 'Unknown',
-            excerpt: excerptOf(row.lastMessage.body ?? ''),
-          }
-        : null,
+      lastMessage:
+        row.lastMessage && excerpt
+          ? {
+              authorId: row.lastMessage.authorId,
+              authorName: row.lastMessage.authorName ?? 'Unknown',
+              excerpt,
+            }
+          : null,
       counterpart: resolveCounterpart(row, isOrganizer, organizerSet),
     }
   })
@@ -372,9 +405,10 @@ const EXCERPT_LENGTH = 120
 
 function excerptOf(body: string): string {
   const trimmed = body.trim()
-  return trimmed.length > EXCERPT_LENGTH
-    ? `${trimmed.slice(0, EXCERPT_LENGTH).trimEnd()}…`
-    : trimmed
+  if (trimmed.length <= EXCERPT_LENGTH) return trimmed
+  // Grapheme-safe cut so an emoji straddling the cap can't become a lone
+  // surrogate (�) at the boundary.
+  return `${truncateToGraphemeBoundary(trimmed, EXCERPT_LENGTH).trimEnd()}…`
 }
 
 /**
@@ -396,7 +430,7 @@ function resolveCounterpart(
   if (author && organizerSet.has(author.authorId) && author.authorName) {
     return { name: author.authorName, image: author.authorImage ?? undefined }
   }
-  return { name: 'Organizers' }
+  return { name: ORGANIZERS_LABEL }
 }
 
 /**
@@ -406,18 +440,31 @@ function resolveCounterpart(
 export async function listMessages({
   conversationId,
   before,
+  beforeId,
 }: {
   conversationId: string
   before?: string
+  beforeId?: string
 }): Promise<Message[]> {
   const params: Record<string, unknown> = { conversationId }
   let cursor = ''
   if (before) {
-    cursor = ' && createdAt < $before'
-    params.before = before
+    // Compound keyset cursor: order by (createdAt desc, _id desc) so messages
+    // that share an exact `createdAt` (bulk / same-instant writes) are totally
+    // ordered and none is skipped at a page boundary. Callers that only pass
+    // `before` (no `beforeId`) keep the original strict-less-than behaviour.
+    if (beforeId) {
+      cursor =
+        ' && (createdAt < $before || (createdAt == $before && _id < $beforeId))'
+      params.before = before
+      params.beforeId = beforeId
+    } else {
+      cursor = ' && createdAt < $before'
+      params.before = before
+    }
   }
 
-  const query = `*[_type == "message" && conversation._ref == $conversationId${cursor}] | order(createdAt desc) [0...${PAGE_SIZE}] {
+  const query = `*[_type == "message" && conversation._ref == $conversationId${cursor}] | order(createdAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     "conversationId": conversation._ref,
     "authorId": author._ref,

@@ -64,6 +64,9 @@ export default defineType({
       title: 'Created By',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion; a
+      // dangling creator ref is tolerated.
+      weak: true,
       description: 'The speaker who started this conversation.',
       validation: (Rule) => Rule.required(),
     }),
@@ -72,6 +75,8 @@ export default defineType({
       title: 'Subject Speaker',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      // Weak so erasing a speaker (GDPR) doesn't orphan-block their deletion.
+      weak: true,
       description:
         'The speaker a general conversation is ABOUT/with. Set when an ORGANIZER initiates a general thread targeting a speaker; speaker-created threads leave this unset (the creator IS the speaker). Unused for proposal threads.',
     }),
