@@ -62,7 +62,10 @@ const CONVERSATION_PROJECTION = `{
   "subjectSpeakerId": subjectSpeaker._ref,
   subject,
   createdAt,
-  lastMessageAt
+  lastMessageAt,
+  "status": coalesce(status, 'open'),
+  "assignedTo": assignedTo->{ _id, name },
+  archivedAt
 }`
 
 // ---------------------------------------------------------------------------
@@ -97,11 +100,19 @@ const NOT_GLOBALLY_ARCHIVED =
   '(!defined(archivedAt) || archivedAt < lastMessageAt)'
 const GLOBALLY_ARCHIVED = '(defined(archivedAt) && archivedAt >= lastMessageAt)'
 // The newest message's author (null when the thread has no messages yet).
-const LAST_AUTHOR_REF =
+// EXPORTED as the single home for this correlated projection so the stale-nudge
+// job (nudge.ts) imports the SAME string — the last-author ordering can never
+// drift between the inbox needs-reply filter and the nudge selection (R1).
+export const LAST_AUTHOR_REF =
   '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
-// Needs an organizer reply: not resolved AND a message exists whose author is
-// not an organizer. Uses $organizerIds — bound only for the `needs-reply` view.
-const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && defined(${LAST_AUTHOR_REF}) && !(${LAST_AUTHOR_REF} in $organizerIds)`
+// Needs an organizer reply: not resolved AND at least one organizer exists AND a
+// message exists whose author is not an organizer. Uses $organizerIds — bound
+// only for the `needs-reply` view. The `count($organizerIds) > 0` guard is
+// LOAD-BEARING: with an empty organizer set `x in []` is false, so the negation
+// would match EVERY thread vacuously (a misconfigured conference would flood the
+// needs-reply view). No organizers means nobody can reply → needs-reply is empty
+// (mirrors the JS derivation below and the nudge job's routing skip). (R2)
+const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && defined(${LAST_AUTHOR_REF}) && !(${LAST_AUTHOR_REF} in $organizerIds)`
 
 /**
  * Build the GROQ predicate fragment (leading ` && ...`, or empty for `all`) for
@@ -520,9 +531,14 @@ export async function listConversationsForSpeaker({
       ? globallyArchived || userArchived
       : userArchived
     // needs-reply is an ORGANIZER concept: last message from a non-organizer and
-    // not resolved. Always false for a speaker caller.
+    // not resolved. Always false for a speaker caller. The `organizerSet.size > 0`
+    // guard mirrors the GROQ `count($organizerIds) > 0` guard: with NO organizers
+    // (misconfigured conference or a transient organizer-fetch failure)
+    // `!organizerSet.has(...)` is vacuously true, which would flag every thread —
+    // nobody can reply, so needs-reply must be FALSE. (R2)
     const needsReply =
       isOrganizer &&
+      organizerSet.size > 0 &&
       row.status !== 'resolved' &&
       row.lastMessage != null &&
       !organizerSet.has(row.lastMessage.authorId)

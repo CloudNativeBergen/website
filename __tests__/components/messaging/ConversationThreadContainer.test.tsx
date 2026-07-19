@@ -54,6 +54,15 @@ vi.mock('@/lib/trpc/client', () => ({
       listMessages: { useInfiniteQuery: () => listMessagesResult },
       send: { useMutation: () => noopMutation },
       setPreference: { useMutation: () => noopMutation },
+      // T2 organizer ticketing mutations (unused by these mark-read tests).
+      setStatus: { useMutation: () => noopMutation },
+      setAssignee: { useMutation: () => noopMutation },
+      setArchived: { useMutation: () => noopMutation },
+    },
+    sponsor: {
+      crm: {
+        listOrganizers: { useQuery: () => ({ data: [] }) },
+      },
     },
     notification: {
       markReadByLink: {

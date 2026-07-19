@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import {
+  ArchiveBoxXMarkIcon,
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
@@ -30,6 +31,31 @@ export interface ConversationListProps {
   hasMore?: boolean
   onShowMore?: () => void
   isLoadingMore?: boolean
+  /**
+   * Archived-view affordance (all audiences, T2d): when provided, each row shows
+   * a trailing "Unarchive" button that un-archives the conversation for the
+   * caller (organizer → global archive; speaker → their per-user archive) WITHOUT
+   * navigating into the thread. Omitted (the default) in every non-archived view.
+   */
+  onUnarchive?: (item: ConversationListItem) => void
+}
+
+/**
+ * The organizer follow-up owner, as a compact avatar+initial at the row's
+ * trailing edge (organizer audience only). `title` carries the full name for a
+ * hover tooltip; the accessible label spells out the assignment.
+ */
+function AssigneeBadge({ name }: { name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase() || '?'
+  return (
+    <span
+      title={name}
+      aria-label={`Assigned to ${name}`}
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-cloud-blue/10 text-[11px] font-semibold text-brand-cloud-blue dark:bg-blue-400/10 dark:text-blue-300"
+    >
+      {initial}
+    </span>
+  )
 }
 
 function SkeletonRow() {
@@ -94,6 +120,7 @@ export function ConversationList({
   hasMore = false,
   onShowMore,
   isLoadingMore = false,
+  onUnarchive,
 }: ConversationListProps) {
   return (
     <div
@@ -135,6 +162,11 @@ export function ConversationList({
             const isUnread = item.unreadCount > 0
             const isOwnLastMessage =
               !!callerId && item.lastMessage?.authorId === callerId
+            // Organizer-only signals; a speaker never sees needs-reply or the
+            // assignee (both are organizer-side concepts).
+            const showNeedsReply = isOrganizer && item.needsReply === true
+            const isResolved = item.status === 'resolved'
+            const assignee = isOrganizer ? item.assignedTo : null
             return (
               <Link
                 key={item._id}
@@ -164,8 +196,18 @@ export function ConversationList({
                     </span>
                   </span>
                   {/* WHAT: subject (the talk title for proposal threads — the
-                      chip marks the type instead of repeating it). */}
+                      chip marks the type instead of repeating it). A small amber
+                      dot leads the subject when the thread needs an organizer
+                      reply (least-noisy affordance, consistent with the unread
+                      pill); a gray 'Resolved' chip marks a closed thread. */}
                   <span className="mt-0.5 flex items-center gap-2">
+                    {showNeedsReply && (
+                      <span
+                        title="Needs reply"
+                        aria-label="Needs reply"
+                        className="h-2 w-2 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400"
+                      />
+                    )}
                     <span
                       className={`truncate text-sm text-gray-900 dark:text-white ${
                         isUnread ? 'font-bold' : 'font-semibold'
@@ -176,6 +218,11 @@ export function ConversationList({
                     {item.conversationType === 'proposal' && (
                       <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                         Proposal
+                      </span>
+                    )}
+                    {isResolved && (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                        Resolved
                       </span>
                     )}
                   </span>
@@ -192,6 +239,31 @@ export function ConversationList({
                     </span>
                   )}
                 </span>
+                {/* Trailing column: the follow-up owner's avatar (organizer
+                    audience) and, in the archived view, an Unarchive button that
+                    acts WITHOUT navigating into the thread. */}
+                {(assignee || onUnarchive) && (
+                  <span className="flex shrink-0 flex-col items-end justify-center gap-1.5">
+                    {assignee && <AssigneeBadge name={assignee.name} />}
+                    {onUnarchive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onUnarchive(item)
+                        }}
+                        className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-cloud-blue transition hover:bg-brand-cloud-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:text-blue-300 dark:hover:bg-blue-400/10"
+                      >
+                        <ArchiveBoxXMarkIcon
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        />
+                        Unarchive
+                      </button>
+                    )}
+                  </span>
+                )}
               </Link>
             )
           })}

@@ -894,4 +894,18 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
     readMock.fetch.mockResolvedValue(null)
     expect(await getOrganizerSpeakerIds()).toEqual([])
   })
+
+  it('does NOT cache a FAILED fetch as [] — a later call re-reads (R2)', async () => {
+    // A transient read failure must throw and leave the cache EMPTY, so the very
+    // next call re-reads rather than serving a poisoned empty organizer set for a
+    // full TTL (which would vacuously empty the needs-reply view / misroute
+    // nudges).
+    readMock.fetch.mockRejectedValueOnce(new Error('sanity down'))
+    await expect(getOrganizerSpeakerIds()).rejects.toThrow('sanity down')
+
+    readMock.fetch.mockResolvedValueOnce(['org-1'])
+    expect(await getOrganizerSpeakerIds()).toEqual(['org-1'])
+    // Two real reads: the failed one was NOT cached.
+    expect(readMock.fetch).toHaveBeenCalledTimes(2)
+  })
 })

@@ -92,6 +92,49 @@ const conversationHandlers = (getItems: () => ConversationListItem[]) => [
   ),
 ]
 
+/** Organizer inbox rows carrying ticketing metadata so the row affordances show
+ *  alongside the tab bar. */
+const makeOrganizerItems = (): ConversationListItem[] => [
+  {
+    _id: 'conversation.proposal.talk-1',
+    conversationType: 'proposal',
+    subject: 'Scaling Kubernetes to 10,000 nodes',
+    proposalId: 'talk-1',
+    proposalTitle: 'Scaling Kubernetes to 10,000 nodes',
+    createdAt: minutesAgo(60 * 24 * 3),
+    lastMessageAt: minutesAgo(24),
+    unreadCount: 2,
+    lastMessage: {
+      authorId: 'speaker-1',
+      authorName: 'Kari Nordmann',
+      excerpt: 'Any update on the review?',
+    },
+    counterpart: { name: 'Kari Nordmann' },
+    status: 'open',
+    needsReply: true,
+    assignedTo: { _id: 'org-1', name: 'Ola Organizer' },
+    archived: false,
+  },
+  {
+    _id: 'conversation.abc123',
+    conversationType: 'general',
+    subject: 'Question about speaker travel',
+    createdAt: minutesAgo(60 * 24 * 2),
+    lastMessageAt: minutesAgo(60 * 5),
+    unreadCount: 0,
+    lastMessage: {
+      authorId: 'org-2',
+      authorName: 'Grace Hopper',
+      excerpt: 'Sorted — closing this out.',
+    },
+    counterpart: { name: 'Grace Hopper' },
+    status: 'resolved',
+    needsReply: false,
+    assignedTo: null,
+    archived: false,
+  },
+]
+
 const speaker = {
   _id: CALLER_ID,
   name: 'Jane Doe',
@@ -152,6 +195,35 @@ export const OrganizerEmpty: Story = {
 export const SpeakerPopulated: Story = {
   args: { audience: 'speaker' },
   parameters: { msw: { handlers: conversationHandlers(makeItems) } },
+}
+
+/** Organizer inbox — the full view tab bar (Active / Needs reply / Mine /
+ *  Resolved / Archived) sits above rows with ticketing metadata. */
+export const OrganizerPopulated: Story = {
+  args: { audience: 'organizer' },
+  parameters: { msw: { handlers: conversationHandlers(makeOrganizerItems) } },
+}
+
+export const OrganizerPopulatedDark: Story = {
+  args: { audience: 'organizer' },
+  parameters: {
+    dark: true,
+    msw: { handlers: conversationHandlers(makeOrganizerItems) },
+  },
+}
+
+/** Speaker inbox — the subtle Active / Archived toggle (not a full tab bar). */
+export const SpeakerToggle: Story = {
+  args: { audience: 'speaker' },
+  parameters: { msw: { handlers: conversationHandlers(makeItems) } },
+}
+
+export const SpeakerToggleDark: Story = {
+  args: { audience: 'speaker' },
+  parameters: {
+    dark: true,
+    msw: { handlers: conversationHandlers(makeItems) },
+  },
 }
 
 export const SpeakerEmptyDark: Story = {
