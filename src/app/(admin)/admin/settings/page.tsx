@@ -13,6 +13,7 @@ import {
   SelfCheckPanel,
 } from '@/components/admin/system-status'
 import { StatusBadge } from '@/components/StatusBadge'
+import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -59,32 +60,42 @@ function InfoCard({
   children,
   icon: Icon,
   editUrl,
+  action,
 }: {
   title: string
   children: React.ReactNode
   icon: React.ComponentType<{ className?: string }>
   editUrl?: string | null
+  /**
+   * Optional inline edit affordance (an {@link EditConferenceCard} island). When
+   * present it sits beside the Studio deep-link; the card body keeps rendering
+   * the read-only values and refreshes after a save.
+   */
+  action?: React.ReactNode
 }) {
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center">
           <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             {title}
           </h3>
         </div>
-        {editUrl && (
-          <a
-            href={editUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-          >
-            <PencilSquareIcon className="h-4 w-4" />
-            Edit in Studio
-          </a>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {editUrl && (
+            <a
+              href={editUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+              <PencilSquareIcon className="h-4 w-4" />
+              Edit in Studio
+            </a>
+          )}
+          {action}
+        </div>
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -383,6 +394,19 @@ export default async function AdminSettings() {
             title="Basic Information"
             icon={InformationCircleIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="basicInfo"
+                initialValues={{
+                  title: conference.title,
+                  organizer: conference.organizer,
+                  city: conference.city,
+                  country: conference.country,
+                  tagline: conference.tagline,
+                  description: conference.description,
+                }}
+              />
+            }
           >
             <FieldRow label="Title" value={conference.title} />
             <FieldRow label="Organizer" value={conference.organizer} />
@@ -396,6 +420,15 @@ export default async function AdminSettings() {
             title="Venue Information"
             icon={MapPinIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="venue"
+                initialValues={{
+                  venueName: conference.venueName,
+                  venueAddress: conference.venueAddress,
+                }}
+              />
+            }
           >
             <FieldRow label="Venue Name" value={conference.venueName} />
             <FieldRow label="Venue Address" value={conference.venueAddress} />
@@ -405,6 +438,21 @@ export default async function AdminSettings() {
             title="Dates & Timeline"
             icon={CalendarIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="dates"
+                initialValues={{
+                  startDate: conference.startDate,
+                  endDate: conference.endDate,
+                  cfpStartDate: conference.cfpStartDate,
+                  cfpEndDate: conference.cfpEndDate,
+                  cfpNotifyDate: conference.cfpNotifyDate,
+                  programDate: conference.programDate,
+                  travelSupportPaymentDate: conference.travelSupportPaymentDate,
+                  travelSupportBudget: conference.travelSupportBudget,
+                }}
+              />
+            }
           >
             <FieldRow
               label="Start Date"
@@ -432,12 +480,30 @@ export default async function AdminSettings() {
               value={conference.programDate}
               type="date"
             />
+            <FieldRow
+              label="Travel Support Payment Date"
+              value={conference.travelSupportPaymentDate}
+              type="date"
+            />
+            <FieldRow
+              label="Travel Support Budget"
+              value={conference.travelSupportBudget}
+            />
           </InfoCard>
 
           <InfoCard
-            title="Configuration"
+            title="Registration"
             icon={DocumentTextIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="registration"
+                initialValues={{
+                  registrationEnabled: conference.registrationEnabled,
+                  registrationLink: conference.registrationLink,
+                }}
+              />
+            }
           >
             <FieldRow
               label="Registration Enabled"
@@ -449,10 +515,47 @@ export default async function AdminSettings() {
               value={conference.registrationLink}
               type="url"
             />
+          </InfoCard>
+
+          <InfoCard
+            title="Communication"
+            icon={EnvelopeIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="communication"
+                initialValues={{
+                  contactEmail: conference.contactEmail,
+                  cfpEmail: conference.cfpEmail,
+                  sponsorEmail: conference.sponsorEmail,
+                  salesNotificationChannel: conference.salesNotificationChannel,
+                  cfpNotificationChannel: conference.cfpNotificationChannel,
+                }}
+              />
+            }
+          >
             <FieldRow
               label="Contact Email"
               value={conference.contactEmail}
               type="email"
+            />
+            <FieldRow
+              label="CFP Email"
+              value={conference.cfpEmail}
+              type="email"
+            />
+            <FieldRow
+              label="Sponsor Email"
+              value={conference.sponsorEmail}
+              type="email"
+            />
+            <FieldRow
+              label="Sales / Weekly Update Channel"
+              value={conference.salesNotificationChannel}
+            />
+            <FieldRow
+              label="CFP Notification Channel"
+              value={conference.cfpNotificationChannel}
             />
           </InfoCard>
 
@@ -478,6 +581,15 @@ export default async function AdminSettings() {
             title="External Integrations"
             icon={LinkIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="ticketingIds"
+                initialValues={{
+                  checkinCustomerId: conference.checkinCustomerId,
+                  checkinEventId: conference.checkinEventId,
+                }}
+              />
+            }
           >
             <FieldRow
               label="Checkin Customer ID"
@@ -486,6 +598,45 @@ export default async function AdminSettings() {
             <FieldRow
               label="Checkin Event ID"
               value={conference.checkinEventId}
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="CFP & Revenue Goals"
+            icon={CurrencyDollarIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="cfpGoals"
+                initialValues={{
+                  cfpSubmissionGoal: conference.cfpSubmissionGoal,
+                  cfpLightningGoal: conference.cfpLightningGoal,
+                  cfpPresentationGoal: conference.cfpPresentationGoal,
+                  cfpWorkshopGoal: conference.cfpWorkshopGoal,
+                  sponsorRevenueGoal: conference.sponsorRevenueGoal,
+                }}
+              />
+            }
+          >
+            <FieldRow
+              label="CFP Submission Goal"
+              value={conference.cfpSubmissionGoal}
+            />
+            <FieldRow
+              label="Lightning Talk Goal"
+              value={conference.cfpLightningGoal}
+            />
+            <FieldRow
+              label="Presentation Goal"
+              value={conference.cfpPresentationGoal}
+            />
+            <FieldRow
+              label="Workshop Goal"
+              value={conference.cfpWorkshopGoal}
+            />
+            <FieldRow
+              label="Sponsor Revenue Goal"
+              value={conference.sponsorRevenueGoal}
             />
           </InfoCard>
 

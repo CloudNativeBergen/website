@@ -131,6 +131,7 @@ export interface Conference {
   checkinEventId?: number
   ticketCapacity?: number
   ticketTargets?: SalesTargetConfig
+  travelSupportPaymentDate?: string
   travelSupportBudget?: number
   cfpSubmissionGoal?: number
   cfpLightningGoal?: number
