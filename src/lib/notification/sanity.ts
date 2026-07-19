@@ -188,6 +188,52 @@ export async function markNotificationsRead({
   return ownedIds.length
 }
 
+/** The maximum number of distinct links accepted by `markNotificationsReadByLinks`. */
+const MARK_READ_BY_LINKS_LIMIT = 8
+
+/**
+ * Mark every UNREAD notification whose `link` is one of `links` read for
+ * `speakerId`, returning how many were patched. Used to auto-clear a
+ * conversation's message notifications when the recipient opens the thread
+ * (they navigate by the same deep link the notification carries).
+ *
+ * SECURITY: mirrors {@link markNotificationsRead}. The recipient filter
+ * (`recipient._ref == $speakerId`) IS the ownership guard — only the caller's
+ * own notifications are ever fetched and patched, so a foreign link can clear
+ * nothing but the caller's own matching notifications. `links` is bounded to
+ * {@link MARK_READ_BY_LINKS_LIMIT} defensively (the router also caps it).
+ */
+export async function markNotificationsReadByLinks({
+  speakerId,
+  links,
+}: {
+  speakerId: string
+  links: string[]
+}): Promise<number> {
+  const boundedLinks = links.slice(0, MARK_READ_BY_LINKS_LIMIT)
+  if (boundedLinks.length === 0) {
+    return 0
+  }
+
+  const ids = await clientReadUncached.fetch<string[]>(
+    `*[_type == "notification" && recipient._ref == $speakerId && !defined(readAt) && link in $links]._id`,
+    { speakerId, links: boundedLinks },
+  )
+
+  if (!ids || ids.length === 0) {
+    return 0
+  }
+
+  const now = new Date().toISOString()
+  const tx = clientWrite.transaction()
+  for (const id of ids) {
+    tx.patch(id, { set: { readAt: now } })
+  }
+  await tx.commit()
+
+  return ids.length
+}
+
 /** The maximum number of notifications marked read in one `markAllRead` call. */
 const MARK_ALL_READ_LIMIT = 500
 

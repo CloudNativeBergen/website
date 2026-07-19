@@ -15,6 +15,7 @@ const items: ConversationListItem[] = [
     proposalTitle: 'Scaling Kubernetes',
     createdAt: new Date('2026-07-15T10:00:00Z').toISOString(),
     lastMessageAt: new Date('2026-07-18T10:00:00Z').toISOString(),
+    unreadCount: 0,
   },
   {
     _id: 'conversation.abc123',
@@ -22,6 +23,7 @@ const items: ConversationListItem[] = [
     subject: 'Travel question',
     createdAt: new Date('2026-07-15T10:00:00Z').toISOString(),
     lastMessageAt: new Date('2026-07-18T09:00:00Z').toISOString(),
+    unreadCount: 0,
   },
 ]
 

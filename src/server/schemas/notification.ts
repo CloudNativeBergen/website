@@ -23,3 +23,31 @@ export const ListNotificationsSchema = z.object({
 export const MarkReadSchema = z.object({
   ids: z.array(z.string()).min(1).max(100),
 })
+
+/**
+ * Input for `notification.markReadByLink`. Each link is an APP-RELATIVE deep
+ * link (the same `link` a notification carries): it must start with '/' and
+ * must not be an absolute/protocol-relative URL or a backslash path. Bounded to
+ * 8 links; the data layer additionally scopes patches to the caller's own docs.
+ */
+export const MarkReadByLinkSchema = z.object({
+  links: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(300)
+        .refine(
+          (link) =>
+            link.startsWith('/') &&
+            !link.includes('://') &&
+            !link.includes('\\'),
+          {
+            message:
+              'Link must be an app-relative path (start with "/", no scheme or backslash)',
+          },
+        ),
+    )
+    .min(1)
+    .max(8),
+})

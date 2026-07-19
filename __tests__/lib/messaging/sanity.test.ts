@@ -40,6 +40,8 @@ import {
   createGeneralConversation,
   setConversationPreference,
   getConversationPreferencesFor,
+  listConversationsForSpeaker,
+  speakerExists,
 } from '@/lib/messaging/sanity'
 import type { ConversationWithContext } from '@/lib/messaging/types'
 
@@ -85,6 +87,19 @@ const generalConv: ConversationWithContext = {
   lastMessageAt: '2026-01-01T00:00:00.000Z',
 }
 
+// An ORGANIZER-initiated general thread: created by an organizer, ABOUT sp-7.
+const organizerGeneralConv: ConversationWithContext = {
+  _id: 'conversation.gen-2',
+  conferenceId: 'conf-1',
+  conversationType: 'general',
+  proposalSpeakerIds: [],
+  createdById: 'org-1',
+  subjectSpeakerId: 'sp-7',
+  subject: 'About your talk',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastMessageAt: '2026-01-01T00:00:00.000Z',
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -115,6 +130,12 @@ describe('resolveParticipantIds', () => {
       'sp-9',
     ])
   })
+  it('organizer-initiated general thread → creator ∪ subjectSpeaker ∪ organizers, de-duplicated', () => {
+    // org-1 is both creator and organizer → appears once; sp-7 is the subject.
+    expect(
+      resolveParticipantIds(organizerGeneralConv, ['org-1', 'org-2']).sort(),
+    ).toEqual(['org-1', 'org-2', 'sp-7'])
+  })
 })
 
 describe('resolveRecipients — excludes the actor', () => {
@@ -128,6 +149,15 @@ describe('resolveRecipients — excludes the actor', () => {
     expect(resolveRecipients(generalConv, 'org-1', ['org-1', 'org-2'])).toEqual(
       ['sp-9', 'org-2'].sort((a, b) => a.localeCompare(b)),
     )
+  })
+  it('organizer-initiated general thread → subjectSpeaker ∪ other organizers (author excluded, de-duplicated)', () => {
+    // org-1 authored → excluded; the subject sp-7 and the other organizer remain.
+    expect(
+      resolveRecipients(organizerGeneralConv, 'org-1', [
+        'org-1',
+        'org-2',
+      ]).sort(),
+    ).toEqual(['org-2', 'sp-7'])
   })
 })
 
@@ -147,6 +177,16 @@ describe('canAccessConversation — authz matrix', () => {
   it('only the creator can access a general thread', () => {
     expect(canAccessConversation(generalConv, { _id: 'sp-9' })).toBe(true)
     expect(canAccessConversation(generalConv, { _id: 'sp-1' })).toBe(false)
+  })
+  it('the subjectSpeaker of an organizer-initiated general thread can access it; a stranger cannot', () => {
+    // Neither creator nor a proposal-speaker, but the subject → allowed.
+    expect(canAccessConversation(organizerGeneralConv, { _id: 'sp-7' })).toBe(
+      true,
+    )
+    // Some other speaker who is neither creator nor subject → denied.
+    expect(canAccessConversation(organizerGeneralConv, { _id: 'sp-8' })).toBe(
+      false,
+    )
   })
 })
 
@@ -238,6 +278,116 @@ describe('createGeneralConversation', () => {
     expect(doc.conversationType).toBe('general')
     expect(doc.subject).toBe('A question')
     expect('proposal' in doc).toBe(false)
+    // A speaker-created general thread carries NO subjectSpeaker.
+    expect('subjectSpeaker' in doc).toBe(false)
+  })
+
+  it('sets subjectSpeaker when an organizer targets a recipient speaker', async () => {
+    await createGeneralConversation({
+      conferenceId: 'conf-1',
+      createdById: 'org-1',
+      subject: 'About your talk',
+      subjectSpeakerId: 'sp-7',
+    })
+    const doc = writeMock.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.subjectSpeaker).toEqual({ _type: 'reference', _ref: 'sp-7' })
+  })
+})
+
+describe('speakerExists — server-side recipient validation', () => {
+  it('returns true when a speaker doc with the id exists', async () => {
+    readMock.fetch.mockResolvedValue('sp-7')
+    expect(await speakerExists('sp-7')).toBe(true)
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('_type == "speaker"')
+    expect(params).toEqual({ speakerId: 'sp-7' })
+  })
+  it('returns false when no such speaker exists', async () => {
+    readMock.fetch.mockResolvedValue(null)
+    expect(await speakerExists('ghost')).toBe(false)
+  })
+})
+
+describe('listConversationsForSpeaker — unread counts per conversation', () => {
+  const rows = [
+    {
+      _id: 'conversation.proposal.prop-1',
+      conversationType: 'proposal' as const,
+      subject: 'T',
+      proposalId: 'prop-1',
+      proposalTitle: 'T',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastMessageAt: '2026-01-02T00:00:00.000Z',
+    },
+    {
+      _id: 'conversation.gen-1',
+      conversationType: 'general' as const,
+      subject: 'Q',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastMessageAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]
+
+  it('counts a speaker unread message_received notifications matching the /cfp link variant', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce(rows) // conversations page
+      .mockResolvedValueOnce([
+        '/cfp/proposal/prop-1#messages',
+        '/cfp/proposal/prop-1#messages',
+      ]) // caller's unread message links
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+
+    expect(
+      result.find((r) => r._id === 'conversation.proposal.prop-1')!.unreadCount,
+    ).toBe(2)
+    expect(
+      result.find((r) => r._id === 'conversation.gen-1')!.unreadCount,
+    ).toBe(0)
+
+    // The unread query is scoped to the caller, the conference, message_received,
+    // and unread only (read notifications are never fetched, so never counted).
+    const [query, params] = readMock.fetch.mock.calls[1]
+    expect(query).toContain('recipient._ref == $speakerId')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('notificationType == "message_received"')
+    expect(query).toContain('!defined(readAt)')
+    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-1' })
+  })
+
+  it('counts an organizer unread notifications matching the /admin link variant', async () => {
+    readMock.fetch
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce(['/admin/messages/conversation.gen-1'])
+
+    const result = await listConversationsForSpeaker({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+
+    // The general thread's /admin variant matched → 1; the proposal thread → 0.
+    expect(
+      result.find((r) => r._id === 'conversation.gen-1')!.unreadCount,
+    ).toBe(1)
+    expect(
+      result.find((r) => r._id === 'conversation.proposal.prop-1')!.unreadCount,
+    ).toBe(0)
+  })
+
+  it('returns [] and runs NO unread query when the page is empty', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    const result = await listConversationsForSpeaker({
+      speakerId: 'sp-1',
+      isOrganizer: false,
+      conferenceId: 'conf-1',
+    })
+    expect(result).toEqual([])
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -86,7 +86,7 @@ function MessageBubble({ message }: { message: DisplayMessage }) {
   const { isOwn } = message
   return (
     <div className={isOwn ? 'flex justify-end' : 'flex justify-start'}>
-      <div className={isOwn ? 'max-w-[80%]' : 'max-w-[80%]'}>
+      <div className="max-w-[80%]">
         <div
           className={`flex items-baseline gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
         >

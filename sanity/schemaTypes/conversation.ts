@@ -68,6 +68,14 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'subjectSpeaker',
+      title: 'Subject Speaker',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      description:
+        'The speaker a general conversation is ABOUT/with. Set when an ORGANIZER initiates a general thread targeting a speaker; speaker-created threads leave this unset (the creator IS the speaker). Unused for proposal threads.',
+    }),
+    defineField({
       name: 'subject',
       title: 'Subject',
       type: 'string',

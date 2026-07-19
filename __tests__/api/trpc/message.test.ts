@@ -53,6 +53,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
       async () => 'conversation.proposal.prop-1',
     ),
     createGeneralConversation: vi.fn(async () => 'conversation.gen-1'),
+    speakerExists: vi.fn(async () => true),
     getProposalForConversation: vi.fn(),
     setConversationPreference: vi.fn(async () => ({
       muted: true,
@@ -67,6 +68,7 @@ import {
   ensureProposalConversation,
   createGeneralConversation,
   getProposalForConversation,
+  speakerExists,
   addMessage,
 } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
@@ -77,6 +79,7 @@ const listConvs = listConversationsForSpeaker as unknown as LooseMock
 const ensureProposal = ensureProposalConversation as unknown as LooseMock
 const createGeneral = createGeneralConversation as unknown as LooseMock
 const getProposal = getProposalForConversation as unknown as LooseMock
+const speakerExistsMock = speakerExists as unknown as LooseMock
 const addMsg = addMessage as unknown as LooseMock
 const notifyMock = notifyNewMessage as unknown as LooseMock
 
@@ -257,6 +260,73 @@ describe('send — conversation creation', () => {
     await expect(caller.message.send({ body: 'hi' })).rejects.toThrow(
       /BAD_REQUEST|Provide a/,
     )
+  })
+})
+
+describe('send — organizer-initiated general threads (subjectSpeaker)', () => {
+  const organizerGeneralConv: ConversationWithContext = {
+    _id: 'conversation.gen-1',
+    conferenceId: 'conf-1',
+    conversationType: 'general',
+    proposalSpeakerIds: [],
+    createdById: organizerId,
+    subjectSpeakerId: 'sp-target',
+    subject: 'About your talk',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    lastMessageAt: '2026-01-01T00:00:00.000Z',
+  }
+
+  it('FORBIDS a non-organizer who supplies recipientSpeakerId (never honored)', async () => {
+    const caller = createAuthenticatedCaller(speaker1)
+    await expect(
+      caller.message.send({
+        subject: 'Q',
+        recipientSpeakerId: 'sp-target',
+        body: 'hi',
+      }),
+    ).rejects.toThrow(/FORBIDDEN|organizer/)
+    expect(createGeneral).not.toHaveBeenCalled()
+    expect(addMsg).not.toHaveBeenCalled()
+  })
+
+  it('rejects an organizer starting a general thread WITHOUT recipientSpeakerId', async () => {
+    const caller = createAdminCaller()
+    await expect(
+      caller.message.send({ subject: 'Q', body: 'hi' }),
+    ).rejects.toThrow(/BAD_REQUEST|required/)
+    expect(createGeneral).not.toHaveBeenCalled()
+  })
+
+  it('404s when the organizer recipientSpeakerId does not resolve to a speaker', async () => {
+    speakerExistsMock.mockResolvedValue(false)
+    const caller = createAdminCaller()
+    await expect(
+      caller.message.send({
+        subject: 'Q',
+        recipientSpeakerId: 'ghost',
+        body: 'hi',
+      }),
+    ).rejects.toThrow(/NOT_FOUND|does not resolve/)
+    expect(createGeneral).not.toHaveBeenCalled()
+  })
+
+  it('creates an organizer general thread that persists the subjectSpeaker', async () => {
+    speakerExistsMock.mockResolvedValue(true)
+    getById.mockResolvedValue(organizerGeneralConv)
+    const caller = createAdminCaller()
+
+    const result = await caller.message.send({
+      subject: 'About your talk',
+      recipientSpeakerId: 'sp-target',
+      body: 'hi',
+    })
+
+    expect(speakerExistsMock).toHaveBeenCalledWith('sp-target')
+    expect(createGeneral).toHaveBeenCalledWith(
+      expect.objectContaining({ subjectSpeakerId: 'sp-target' }),
+    )
+    expect(result.conversationId).toBe('conversation.gen-1')
+    expect(addMsg).toHaveBeenCalledTimes(1)
   })
 })
 

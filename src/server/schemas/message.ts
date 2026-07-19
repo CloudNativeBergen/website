@@ -25,16 +25,22 @@ export const ListMessagesSchema = z.object({
 })
 
 /**
- * Send a message. Exactly one of two entry points:
+ * Send a message. Exactly one of three entry points:
  * - an existing `conversationId`, OR
  * - a `proposalId` (auto-creates/looks up the proposal thread), OR
  * - a `subject` with no proposalId (starts a general thread).
  * The router enforces the precedence; the body cap mirrors the schema (≤5000).
+ *
+ * `recipientSpeakerId` is the speaker an ORGANIZER-initiated general thread is
+ * about/with. It is ONLY honored for an organizer (the router rejects it with
+ * FORBIDDEN when a non-organizer supplies it) and is REQUIRED when an organizer
+ * starts a general thread. Speaker-started threads must not supply it.
  */
 export const SendMessageSchema = z.object({
   conversationId: z.string().min(1).max(200).optional(),
   proposalId: z.string().min(1).max(200).optional(),
   subject: z.string().min(1).max(200).optional(),
+  recipientSpeakerId: z.string().min(1).max(200).optional(),
   body: z.string().min(1).max(5000),
 })
 

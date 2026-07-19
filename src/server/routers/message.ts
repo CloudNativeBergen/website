@@ -20,6 +20,7 @@ import {
   getProposalForConversation,
   setConversationPreference,
   canAccessConversation,
+  speakerExists,
 } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import type { ConversationWithContext } from '@/lib/messaging/types'
@@ -91,6 +92,10 @@ export const messageRouter = router({
    * - `proposalId`     → look up / create the proposal thread (race-safe id);
    * - `subject` only   → start a general thread.
    * Then adds the message and fires the (never-fail) fan-out.
+   *
+   * `recipientSpeakerId` targets the subject speaker of an ORGANIZER-initiated
+   * general thread: it is FORBIDDEN for a non-organizer, and REQUIRED (and must
+   * resolve to a real speaker) when an organizer starts a general thread.
    */
   send: protectedProcedure
     .input(SendMessageSchema)
@@ -105,6 +110,15 @@ export const messageRouter = router({
       const conferenceId = conference._id
       const actorId = ctx.speaker._id
       const isOrganizer = ctx.speaker.isOrganizer === true
+
+      // `recipientSpeakerId` is an organizer-only capability: a non-organizer
+      // must never be able to name the subject speaker of a thread.
+      if (input.recipientSpeakerId !== undefined && !isOrganizer) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'recipientSpeakerId may only be set by an organizer',
+        })
+      }
 
       let conversation: ConversationWithContext
 
@@ -147,10 +161,30 @@ export const messageRouter = router({
         }
         conversation = created
       } else if (input.subject) {
+        // An organizer-initiated general thread MUST target a real speaker; a
+        // speaker-initiated one is about themselves and takes no recipient.
+        let subjectSpeakerId: string | undefined
+        if (isOrganizer) {
+          if (!input.recipientSpeakerId) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'recipientSpeakerId is required when an organizer starts a general conversation',
+            })
+          }
+          if (!(await speakerExists(input.recipientSpeakerId))) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'recipientSpeakerId does not resolve to a speaker',
+            })
+          }
+          subjectSpeakerId = input.recipientSpeakerId
+        }
         const id = await createGeneralConversation({
           conferenceId,
           createdById: actorId,
           subject: input.subject,
+          subjectSpeakerId,
         })
         const created = await getConversationById(id)
         if (!created) {

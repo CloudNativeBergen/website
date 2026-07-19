@@ -24,6 +24,10 @@ export interface AccessSpeaker {
  *
  * `proposalSpeakerIds` are the speaker `_ref`s on the referenced proposal
  * (empty for general threads). `createdById` is the thread starter.
+ *
+ * `subjectSpeakerId` is the speaker a general conversation is ABOUT/with, set
+ * only when an ORGANIZER initiates the thread; speaker-created threads leave it
+ * unset (the creator IS the subject speaker). Unused for proposal threads.
  */
 export interface ConversationWithContext {
   _id: string
@@ -33,6 +37,7 @@ export interface ConversationWithContext {
   proposalTitle?: string
   proposalSpeakerIds: string[]
   createdById: string
+  subjectSpeakerId?: string
   subject: string
   createdAt: string
   lastMessageAt: string
@@ -47,6 +52,12 @@ export interface ConversationListItem {
   proposalTitle?: string
   createdAt: string
   lastMessageAt: string
+  /**
+   * The caller's unread `message_received` notification count for this
+   * conversation (matches either audience link variant; the caller only ever
+   * received one).
+   */
+  unreadCount: number
 }
 
 /** A single message in a thread. */
