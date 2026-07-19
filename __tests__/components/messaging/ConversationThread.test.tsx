@@ -158,9 +158,10 @@ describe('ConversationThreadView', () => {
     )
     expect(live).toHaveTextContent('New message from Program Committee')
 
-    // Back-to-back message from the SAME author yields an identical phrase; the
-    // live region must still re-announce it (a plain setState would no-op). The
-    // announced text stays the same but the raw content differs (nonce).
+    // Back-to-back message from the SAME author would yield an identical
+    // phrase; the live region must still re-announce it (a plain setState
+    // would no-op). The phrasing alternates so consecutive announcements
+    // differ as real spoken text.
     const afterFirst = live?.textContent
     const withSecond: DisplayMessage[] = [
       ...withNew,
@@ -180,7 +181,7 @@ describe('ConversationThreadView', () => {
         onSend={vi.fn()}
       />,
     )
-    expect(live).toHaveTextContent('New message from Program Committee')
+    expect(live).toHaveTextContent('Another message from Program Committee')
     expect(live?.textContent).not.toBe(afterFirst)
   })
 

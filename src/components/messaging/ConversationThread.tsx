@@ -342,12 +342,15 @@ export function ConversationThreadView({
       if (!last.isOwn) {
         // Two messages in a row from the SAME author produce an identical
         // phrase; a plain setState would be a no-op and the second would never
-        // be announced. Append a per-event count of zero-width spaces (U+200B —
-        // invisible and silent to assistive tech) so the live region's text
-        // genuinely changes and re-fires each time.
+        // be announced. Alternate between two meaningful phrasings so
+        // consecutive announcements always differ as REAL spoken text — no
+        // invisible codepoints, whose handling varies across screen readers.
         liveNonceRef.current += 1
-        const nonce = '\u200B'.repeat((liveNonceRef.current % 2) + 1)
-        setLiveMessage(`New message from ${last.authorName}${nonce}`)
+        setLiveMessage(
+          liveNonceRef.current % 2 === 0
+            ? `Another message from ${last.authorName}`
+            : `New message from ${last.authorName}`,
+        )
       }
     }
     lastIdRef.current = last.id
