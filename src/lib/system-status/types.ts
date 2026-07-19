@@ -10,6 +10,7 @@ export type CheckStatus = 'ok' | 'warn' | 'error' | 'off'
 
 export type CheckGroup =
   | 'sanity'
+  | 'conference'
   | 'email'
   | 'slack'
   | 'push'
@@ -37,6 +38,7 @@ export interface SystemCheck {
 /** Ordered, human-readable labels for each group card. */
 export const CHECK_GROUP_LABELS: Record<CheckGroup, string> = {
   sanity: 'Sanity CMS',
+  conference: 'Conference',
   email: 'Email (Resend)',
   slack: 'Slack',
   push: 'Web Push',
@@ -54,6 +56,7 @@ export const CHECK_GROUP_LABELS: Record<CheckGroup, string> = {
 export const CHECK_GROUP_ORDER: CheckGroup[] = [
   'build',
   'sanity',
+  'conference',
   'auth',
   'email',
   'slack',
@@ -86,6 +89,7 @@ export interface ConferenceForSystemChecks {
   cfpNotificationChannel?: string
   checkinCustomerId?: number
   checkinEventId?: number
+  teams?: Array<{ key?: string }>
 }
 
 /** Group a flat registry into ordered, labelled cards (drops empty groups). */

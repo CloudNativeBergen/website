@@ -94,6 +94,35 @@ describe('collectStaticChecks — status semantics', () => {
   })
 })
 
+describe('collectStaticChecks — organizer teams', () => {
+  it('is off with a helpful detail when no teams are configured', () => {
+    const check = byId(collectStaticChecks(CONFERENCE), 'conference.teams')
+    expect(check.group).toBe('conference')
+    expect(check.status).toBe('off')
+    expect(check.value).toBe('no teams')
+  })
+
+  it('is ok and counts the teams when configured', () => {
+    const check = byId(
+      collectStaticChecks({
+        ...CONFERENCE,
+        teams: [{ key: 'cfp' }, { key: 'sponsors' }],
+      }),
+      'conference.teams',
+    )
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('2 teams configured')
+  })
+
+  it('singularizes a single team', () => {
+    const check = byId(
+      collectStaticChecks({ ...CONFERENCE, teams: [{ key: 'cfp' }] }),
+      'conference.teams',
+    )
+    expect(check.value).toBe('1 team configured')
+  })
+})
+
 describe('collectStaticChecks — paired OAuth provider', () => {
   it('is ok with both id and secret, warns on a partial pair, off when neither', () => {
     vi.stubEnv('AUTH_GITHUB_ID', 'id')

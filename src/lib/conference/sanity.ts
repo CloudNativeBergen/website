@@ -111,6 +111,14 @@ export async function getConferenceForDomain(
   try {
     const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
       ...,
+      teams[]{
+        _key,
+        key,
+        title,
+        slackChannel,
+        emailIdentity,
+        "members": members[]._ref
+      },
       ${
         organizers
           ? `organizers[]->{

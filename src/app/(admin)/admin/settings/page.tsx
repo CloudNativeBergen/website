@@ -2,6 +2,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
 import { buildSystemChecks } from '@/lib/system-status/checks'
+import { formatTeamSummary } from '@/lib/teams'
 import {
   ErrorDisplay,
   WorkshopRegistrationSettings,
@@ -516,6 +517,23 @@ export default async function AdminSettings() {
               value={conference.organizers?.map((org) => org.name)}
               type="team"
             />
+            {conference.teams && conference.teams.length > 0 && (
+              <div className="border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+                <dt className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Teams
+                </dt>
+                <dd className="space-y-1">
+                  {conference.teams.map((team) => (
+                    <div
+                      key={team._key ?? team.key}
+                      className="min-w-0 text-sm break-words text-gray-900 dark:text-white"
+                    >
+                      {formatTeamSummary(team)}
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )}
           </InfoCard>
 
           {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
