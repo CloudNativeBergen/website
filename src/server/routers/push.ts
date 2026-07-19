@@ -249,7 +249,14 @@ export const pushRouter = router({
           `[push] test send task rejected for speaker ${ctx.speaker._id}:`,
           r.reason,
         )
-        failures.push({ statusCode: undefined, message: 'internal error' })
+        // Carry the actual rejection reason to the client (truncated) — the
+        // opaque 'internal error' copy hid a real VAPID misconfiguration once.
+        const reason =
+          r.reason instanceof Error ? r.reason.message : String(r.reason)
+        failures.push({
+          statusCode: undefined,
+          message: reason.slice(0, 200) || 'internal error',
+        })
         continue
       }
       if (r.value.ok) {

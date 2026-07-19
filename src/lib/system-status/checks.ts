@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { isPushConfigured, getVapidPublicKey } from '@/lib/push/vapid'
+import {
+  isPushConfigured,
+  getVapidPublicKey,
+  getConfiguredWebPush,
+  getWebPushConfigError,
+} from '@/lib/push/vapid'
 import { checkinGraphQLClient } from '@/lib/tickets/graphql-client'
 import { providerMap } from '@/lib/auth'
 import type {
@@ -361,15 +366,23 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
 
   // ---- PUSH -----------------------------------------------------------------
   const pushOn = isPushConfigured()
+  // Exercise the REAL web-push configuration: keys can be present but
+  // MALFORMED (bare-email VAPID_SUBJECT, wrong-length key) — setVapidDetails
+  // rejects those synchronously, and until surfaced here that only appeared
+  // as an opaque failure on the push test button.
+  if (pushOn) getConfiguredWebPush()
+  const vapidError = getWebPushConfigError()
   checks.push({
     id: 'push.configured',
     group: 'push',
     label: 'VAPID key pair',
-    status: pushOn ? 'ok' : 'off',
-    value: pushOn ? 'configured' : 'not set',
-    detail: pushOn
-      ? undefined
-      : 'Both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set',
+    status: vapidError ? 'error' : pushOn ? 'ok' : 'off',
+    value: vapidError ? 'invalid' : pushOn ? 'configured' : 'not set',
+    detail: vapidError
+      ? `web-push rejected the configuration: ${vapidError}`
+      : pushOn
+        ? undefined
+        : 'Both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set',
   })
   const vapidPublic = getVapidPublicKey()
   checks.push(
