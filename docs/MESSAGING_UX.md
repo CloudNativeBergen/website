@@ -114,29 +114,34 @@ Maintainer-locked decisions. Dated **2026-07-19** unless a decision predates it.
 | **Slack fires only for speaker-authored messages, mute-independent.**               | Slack is the organizers' "a human is waiting" signal. Organizer-authored messages don't need it (organizers see the hub); and it must survive any individual's mute, so it ignores per-recipient prefs.                                           |
 | **`cfpEmail` reply-fallback is deliberate.**                                        | New-message emails are sent `from: <organizer> <cfpEmail>`, so a speaker who replies **by email** (instead of the in-app button) still reaches the CFP inbox the organizers already watch — a graceful degradation, not a bug.                    |
 
-## Extension roadmap
+## Audience extensions
 
-The model was built with two future audiences in mind. Both generalize the
-current **two-audience** (speaker/organizer) split into a **third participant
-class**; the coupling seams below are the places that hard-code that split today.
+The two-audience (speaker/organizer) model was generalized into a **party model**
+(`conversationParticipant`) so additional participant classes join without
+special-casing. One extension has SHIPPED; one remains future.
 
-### Sponsor company-threads (portal token)
+### Sponsor company-threads (portal token) — SHIPPED (G2b)
 
-A sponsor contact would join threads about their sponsorship the way a speaker
-joins proposal threads. Generalization seams:
+A sponsor contact joins threads about their sponsorship the way a speaker joins
+proposal threads. As built:
 
-- **`conversationType`** — add a `'sponsor'` shape (ref a `sponsor` instead of a
-  `talk`), mirroring the proposal-vs-general branch in `resolveParticipantIds` /
-  `canAccessConversation` / `conversationLinkPath`.
-- **Identity** — sponsors authenticate via a **portal token**, not a `speaker`
-  document, so `ctx.speaker._id` and the organizer id set are not enough; recipient
-  resolution and authz would need a sponsor-participant source.
-- **Links** — `conversationLinkPath` currently returns `/admin` or `/cfp` only; a
-  sponsor audience needs a portal surface (a third branch).
-- **Fan-out** — the "organizer vs speaker" `isOrganizer` boolean threaded through
-  `notify.ts` / `email.ts` becomes a three-way audience.
+- **`conversationType 'sponsor'`** — deterministic `conversation.sponsor.<sfcId>`,
+  participants `[{sponsor}, {group:'organizers'}]`; the branch is handled in
+  `deriveParties` / `canAccessConversation` / `conversationLinkPath`.
+- **Identity** — sponsors authenticate via the **portal token** (public
+  `sponsorMessages.{list,send}`, rate-limited, strict contact-name authorship),
+  never a `speaker` doc; `message.authorParty` + `authorName` snapshot carry the
+  sponsor author (no `author` ref).
+- **Links** — organizers reach sponsor threads in `/admin/messages` (a Sponsor
+  chip); sponsors reply from the portal Messages section (both portal states).
+- **Fan-out** — sponsor-authored → all organizers hub/push (mute-respecting) +
+  sales-channel Slack + a `sponsorActivity` log entry; organizer-authored →
+  all contact persons emailed from `sponsorEmail` with a portal deep link.
 
-### Workshop broadcast rail (WorkOS identity boundary)
+Team routing (TEAMS-2) additionally routes sponsor-thread notifications to the
+`sponsors` team when configured (else all organizers).
+
+### Workshop broadcast rail (WorkOS identity boundary) — future
 
 A one-to-many organizer→attendee broadcast for workshops. The hard boundary is
 **identity**: workshop attendees live behind **WorkOS** (a different identity
