@@ -447,7 +447,9 @@ export function buildEditionDocuments(
         ...(tier.maxQuantity !== undefined
           ? { maxQuantity: tier.maxQuantity }
           : {}),
-        ...(tier.soldOut !== undefined ? { soldOut: tier.soldOut } : {}),
+        // soldOut is OPERATIONAL state (last edition's slots filled), not
+        // structure — a cloned tier always starts available for the new
+        // edition, so it is deliberately NOT copied.
         ...(tier.mostPopular !== undefined
           ? { mostPopular: tier.mostPopular }
           : {}),

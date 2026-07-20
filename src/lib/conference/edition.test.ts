@@ -271,3 +271,33 @@ describe('buildEditionDocuments — clone flag matrix', () => {
     })
   })
 })
+
+describe('cloned tier soldOut policy (SE-5 badge)', () => {
+  it('never copies soldOut onto a cloned tier (operational state, not structure)', () => {
+    let n = 0
+    const docs = buildEditionDocuments(
+      {
+        conference: SOURCE,
+        sponsorTiers: [
+          { _id: 'tier-sold', title: 'Gold', soldOut: true },
+        ] as SourceSponsorTier[],
+        contractTemplates: [],
+      },
+      {
+        title: 'Next',
+        startDate: '2027-01-01',
+        endDate: '2027-01-02',
+        domains: ['2027.cnb.no'],
+        clone: { ...DEFAULT_CLONE_FLAGS, sponsorTiers: true },
+      } as CreateEditionInput,
+      {
+        newConferenceId: 'new-conf',
+        mintId: () => `id-${++n}`,
+        mintKey: () => `key-${++n}`,
+      },
+    )
+    const tier = docs.sponsorTiers[0]
+    expect(tier).toBeDefined()
+    expect(tier).not.toHaveProperty('soldOut')
+  })
+})

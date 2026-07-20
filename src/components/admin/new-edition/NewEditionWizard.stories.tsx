@@ -122,6 +122,8 @@ export const SuccessSummary: Story = {
     })
     await waitFor(() => expect(create).toBeEnabled())
     await userEvent.click(create)
-    await canvas.findByText(/created/i)
+    // Assert the success HEADING specifically — several elements in the
+    // summary contain the word 'created', so a bare text query is ambiguous.
+    await canvas.findByRole('heading', { name: /created/i })
   },
 }
