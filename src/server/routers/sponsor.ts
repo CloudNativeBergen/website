@@ -68,6 +68,7 @@ import {
   logAssignmentChange,
   logSignatureStatusChange,
   createSponsorActivity,
+  updateSponsorActivity,
   deleteSponsorActivity,
 } from '@/lib/sponsor-crm/activity'
 import { createNotifications } from '@/lib/notification/sanity'
@@ -86,6 +87,7 @@ import {
   BulkUpdateSponsorCRMSchema,
   BulkDeleteSponsorCRMSchema,
   CreateSponsorActivitySchema,
+  UpdateSponsorActivitySchema,
   SponsorCRMFilterSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
@@ -1604,6 +1606,27 @@ export const sponsorRouter = router({
           }
 
           return { activityId }
+        }),
+
+      update: adminProcedure
+        .input(UpdateSponsorActivitySchema)
+        .mutation(async ({ input, ctx }) => {
+          const { success, error } = await updateSponsorActivity(
+            input.id,
+            ctx.speaker._id,
+            input.description,
+            input.metadata,
+          )
+
+          if (error || !success) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error?.message || 'Failed to update sponsor activity',
+              cause: error,
+            })
+          }
+
+          return { success: true }
         }),
 
       delete: adminProcedure

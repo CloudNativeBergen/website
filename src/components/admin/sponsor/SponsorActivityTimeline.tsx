@@ -1,11 +1,18 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import Image from 'next/image'
 import Link from 'next/link'
-import type { SponsorActivityExpanded } from '@/lib/sponsor-crm/types'
-import { ArrowPathIcon, UserIcon } from '@heroicons/react/24/outline'
+import type {
+  ActivityType,
+  SponsorActivityExpanded,
+} from '@/lib/sponsor-crm/types'
+import {
+  ArrowPathIcon,
+  PencilSquareIcon,
+  UserIcon,
+} from '@heroicons/react/24/outline'
 import { BoltIcon } from '@heroicons/react/24/solid'
 import { formatDistanceToNow, isToday, isYesterday, format } from 'date-fns'
 import clsx from 'clsx'
@@ -153,12 +160,25 @@ function UserAvatar({
   )
 }
 
+/** Activity types a user authored by hand — the only ones the UI lets you edit. */
+const EDITABLE_ACTIVITY_TYPES: ReadonlySet<ActivityType> = new Set([
+  'note',
+  'call',
+  'meeting',
+  'email',
+])
+
 function ActivityLine({
   activity,
   compact,
+  onSave,
+  isSaving,
 }: {
   activity: SponsorActivityExpanded
   compact?: boolean
+  /** Persist an edited description; omitted in compact/read-only contexts. */
+  onSave?: (activityId: string, description: string) => void
+  isSaving?: boolean
 }) {
   const iconType = useMemo(
     () => getActivityIcon(activity.activityType),
@@ -167,6 +187,68 @@ function ActivityLine({
   const timeAgo = formatDistanceToNow(new Date(activity.createdAt), {
     addSuffix: true,
   })
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(activity.description)
+
+  // Editing is offered only for user-authored types (server re-checks type AND
+  // creator; a non-owner's save is rejected there).
+  const isEditable =
+    !compact && !!onSave && EDITABLE_ACTIVITY_TYPES.has(activity.activityType)
+
+  const startEdit = () => {
+    setDraft(activity.description)
+    setIsEditing(true)
+  }
+  const cancelEdit = () => setIsEditing(false)
+  const saveEdit = () => {
+    const next = draft.trim()
+    if (next.length === 0) return
+    onSave?.(activity._id, next)
+    setIsEditing(false)
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-start gap-2.5 py-1.5">
+        <div
+          className={clsx(
+            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+            getActivityColor(activity.activityType),
+          )}
+        >
+          {React.createElement(iconType, { className: 'h-3 w-3' })}
+        </div>
+        <div className="min-w-0 flex-1">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            aria-label="Edit activity description"
+            className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          />
+          <div className="mt-1.5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={isSaving}
+              className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveEdit}
+              disabled={isSaving || draft.trim().length === 0}
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            >
+              {isSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -197,6 +279,16 @@ function ActivityLine({
           : activity.description}
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
+        {isEditable && (
+          <button
+            type="button"
+            onClick={startEdit}
+            aria-label="Edit activity"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          >
+            <PencilSquareIcon className="h-4 w-4" />
+          </button>
+        )}
         {!compact && (
           <UserAvatar
             name={activity.createdBy?.name ?? 'Automatic'}
@@ -224,12 +316,16 @@ function SponsorCard({
   activities,
   hideSponsorName,
   compact,
+  onSave,
+  isSaving,
 }: {
   sponsorName: string
   sponsorForConferenceId: string
   activities: SponsorActivityExpanded[]
   hideSponsorName: boolean
   compact?: boolean
+  onSave?: (activityId: string, description: string) => void
+  isSaving?: boolean
 }) {
   return (
     <div>
@@ -259,6 +355,8 @@ function SponsorCard({
             key={activity._id}
             activity={activity}
             compact={compact}
+            onSave={onSave}
+            isSaving={isSaving}
           />
         ))}
       </div>
@@ -272,11 +370,22 @@ export function SponsorActivityTimeline({
   showHeaderFooter = true,
   compact = false,
 }: SponsorActivityTimelineProps) {
+  const utils = api.useUtils()
   const { data: activities = [], isLoading } =
     api.sponsor.crm.activities.list.useQuery({
       sponsorForConferenceId,
       limit,
     })
+
+  const updateMutation = api.sponsor.crm.activities.update.useMutation({
+    onSuccess: () => {
+      utils.sponsor.crm.activities.list.invalidate()
+    },
+  })
+
+  const handleSaveEdit = (activityId: string, description: string) => {
+    updateMutation.mutate({ id: activityId, description })
+  }
 
   const grouped = useMemo(() => groupActivities(activities), [activities])
 
@@ -369,6 +478,8 @@ export function SponsorActivityTimeline({
                     activities={group.activities}
                     hideSponsorName={!!sponsorForConferenceId}
                     compact={compact}
+                    onSave={handleSaveEdit}
+                    isSaving={updateMutation.isPending}
                   />
                 ))}
               </div>

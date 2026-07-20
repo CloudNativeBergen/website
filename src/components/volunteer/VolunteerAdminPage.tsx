@@ -17,6 +17,8 @@ import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { EmailModal } from '@/components/admin/EmailModal'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { VolunteerEditModal } from '@/components/volunteer/VolunteerEditModal'
+import { PencilSquareIcon } from '@heroicons/react/24/outline'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
@@ -49,6 +51,7 @@ export default function VolunteerAdminPage() {
   const [deleteVolunteerId, setDeleteVolunteerId] = useState<string | null>(
     null,
   )
+  const [editModalOpen, setEditModalOpen] = useState(false)
 
   const {
     data: volunteers,
@@ -301,9 +304,21 @@ export default function VolunteerAdminPage() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
-            Volunteer Details
-          </h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Volunteer Details
+            </h2>
+            {selectedVolunteer ? (
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <PencilSquareIcon className="h-4 w-4" />
+                Edit Details
+              </button>
+            ) : null}
+          </div>
           {detailsError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
               <p className="text-sm text-red-800 dark:text-red-300">
@@ -546,6 +561,14 @@ export default function VolunteerAdminPage() {
             subject: `Welcome to the ${emailModalVolunteer.conference?.title || 'Conference'} Volunteer Team`,
             message: `Dear ${emailModalVolunteer.name},\n\nWe are delighted to confirm that your application to volunteer at ${emailModalVolunteer.conference?.title || 'our conference'} has been approved!\n\nWe will be in touch soon with more details about volunteer orientation and your specific assignments.\n\nThank you for offering your time and support!`,
           }}
+        />
+      )}
+
+      {selectedVolunteer && (
+        <VolunteerEditModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          volunteer={selectedVolunteer}
         />
       )}
 

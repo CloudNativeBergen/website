@@ -25,6 +25,8 @@ import {
   batchCancelSignupsSchema,
   WorkshopSignupIdSchema,
   workshopAnnounceSchema,
+  workshopUpdateAnnouncementSchema,
+  workshopDeleteAnnouncementSchema,
   workshopAnnouncementsQuerySchema,
 } from '@/server/schemas/workshop'
 import {
@@ -50,6 +52,9 @@ import {
   getConfirmedAnnouncementRecipients,
   createWorkshopAnnouncement,
   getWorkshopAnnouncements,
+  getWorkshopAnnouncementForAuthz,
+  updateWorkshopAnnouncementBody,
+  deleteWorkshopAnnouncement,
   sendAnnouncementToConfirmedParticipants,
   isWorkshopFormat,
 } from '@/lib/workshop/announcements'
@@ -70,6 +75,54 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
     })
   }
   return user
+}
+
+/**
+ * Authorize an announcement edit/delete: the caller must OWN the workshop the
+ * announcement belongs to (be one of its speakers) OR be an organizer — the
+ * SAME rule as `announce`. Also re-checks multi-tenant isolation (the
+ * announcement must live in the caller's resolved conference). Throws
+ * NOT_FOUND / FORBIDDEN; returns nothing on success. Author/createdAt are NOT
+ * consulted — ownership is by the workshop, not the original author.
+ */
+async function authorizeAnnouncementMutation(
+  speakerId: string,
+  announcementId: string,
+): Promise<void> {
+  const conferenceId = await resolveConferenceId()
+  const announcement = await getWorkshopAnnouncementForAuthz(announcementId)
+
+  if (
+    !announcement ||
+    !announcement.workshopId ||
+    announcement.conferenceId !== conferenceId
+  ) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Announcement not found for this conference',
+    })
+  }
+
+  const workshop = await getWorkshopForAnnouncement(announcement.workshopId)
+  if (!workshop || workshop.conferenceId !== conferenceId) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Workshop not found for this conference',
+    })
+  }
+
+  const isOwner = workshop.speakerIds.includes(speakerId)
+  const isOrganizer = isOwner
+    ? false
+    : (await getOrganizerSpeakerIds()).includes(speakerId)
+
+  if (!isOwner && !isOrganizer) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message:
+        'Only the workshop owner or an organizer can manage announcements',
+    })
+  }
 }
 
 /** Display name for a signup doc, mirroring the workshop page's fallback order. */
@@ -228,6 +281,67 @@ export const workshopRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to send workshop announcement',
+          cause: error,
+        })
+      }
+    }),
+
+  // Edit an existing announcement's BODY only. Author + createdAt are immutable
+  // (never sent, never patched). Authz mirrors `announce`: workshop owner ∨
+  // organizer.
+  //
+  // NO RE-EMAIL POLICY: editing does NOT re-send emails. The announcement was
+  // already emailed to confirmed participants when it was created; an edit is a
+  // copy correction that only updates the persisted body (and thus the workshop
+  // page). Re-emailing on every typo fix would spam participants, so it is
+  // deliberately omitted.
+  updateAnnouncement: protectedProcedure
+    .input(workshopUpdateAnnouncementSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await authorizeAnnouncementMutation(
+          ctx.speaker._id,
+          input.announcementId,
+        )
+
+        await updateWorkshopAnnouncementBody(input.announcementId, input.body)
+
+        revalidateTag('content:workshops', 'default')
+
+        return { success: true }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update workshop announcement',
+          cause: error,
+        })
+      }
+    }),
+
+  // Delete an announcement. Authz mirrors `announce`: workshop owner ∨
+  // organizer. No re-email; the announcement simply disappears from the page.
+  deleteAnnouncement: protectedProcedure
+    .input(workshopDeleteAnnouncementSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await authorizeAnnouncementMutation(
+          ctx.speaker._id,
+          input.announcementId,
+        )
+
+        await deleteWorkshopAnnouncement(input.announcementId)
+
+        revalidateTag('content:workshops', 'default')
+
+        return { success: true }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete workshop announcement',
           cause: error,
         })
       }

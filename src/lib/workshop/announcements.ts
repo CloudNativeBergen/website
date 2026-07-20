@@ -111,6 +111,55 @@ export async function createWorkshopAnnouncement(input: {
   }
 }
 
+/** The workshop + author an announcement belongs to — used to authorize edits. */
+export interface AnnouncementForAuthz {
+  _id: string
+  workshopId: string | null
+  authorId: string | null
+  conferenceId: string | null
+}
+
+/**
+ * Fetch the ownership context of a single announcement so the `updateAnnouncement`
+ * / `deleteAnnouncement` mutations can authorize the caller (owner ∨ organizer)
+ * and re-check multi-tenant isolation. Returns null when the id does not exist.
+ */
+export async function getWorkshopAnnouncementForAuthz(
+  announcementId: string,
+): Promise<AnnouncementForAuthz | null> {
+  const query = groq`*[_type == "workshopAnnouncement" && _id == $announcementId][0]{
+    _id,
+    "workshopId": workshop._ref,
+    "authorId": author._ref,
+    "conferenceId": conference._ref
+  }`
+
+  const result = await clientWrite.fetch<AnnouncementForAuthz | null>(query, {
+    announcementId,
+  })
+  return result ?? null
+}
+
+/**
+ * Patch ONLY the body of an announcement. Author + createdAt are immutable and
+ * are never touched here. Editing does NOT re-email participants (see the
+ * mutation JSDoc) — the persisted body just changes, so the workshop page shows
+ * the corrected copy on its next render.
+ */
+export async function updateWorkshopAnnouncementBody(
+  announcementId: string,
+  body: string,
+): Promise<void> {
+  await clientWrite.patch(announcementId).set({ body }).commit()
+}
+
+/** Hard-delete an announcement document. */
+export async function deleteWorkshopAnnouncement(
+  announcementId: string,
+): Promise<void> {
+  await clientWrite.delete(announcementId)
+}
+
 /** Read announcements for a workshop, newest first, bounded to `limit`. */
 export async function getWorkshopAnnouncements(
   workshopId: string,

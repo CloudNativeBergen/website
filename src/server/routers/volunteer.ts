@@ -8,6 +8,7 @@ import {
 import {
   GetVolunteerByIdSchema,
   UpdateVolunteerStatusSchema,
+  UpdateVolunteerDetailsSchema,
   SendVolunteerEmailSchema,
   DeleteVolunteerSchema,
   CreateVolunteerSchema,
@@ -16,6 +17,7 @@ import {
   getVolunteersByConference,
   getVolunteerById,
   updateVolunteerStatus,
+  updateVolunteerDetails,
   deleteVolunteer,
   createVolunteer,
 } from '@/lib/volunteer/sanity'
@@ -221,6 +223,54 @@ export const volunteerRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update volunteer status',
+            cause: error,
+          })
+        }
+      }),
+
+    update: adminProcedure
+      .input(UpdateVolunteerDetailsSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const { volunteer, error: fetchError } = await getVolunteerById(
+            input.volunteerId,
+          )
+
+          if (fetchError) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to fetch volunteer',
+              cause: fetchError,
+            })
+          }
+
+          if (!volunteer) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Volunteer not found',
+            })
+          }
+
+          const { volunteerId, ...details } = input
+          const { success, error } = await updateVolunteerDetails(
+            volunteerId,
+            details,
+          )
+
+          if (error || !success) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to update volunteer details',
+              cause: error,
+            })
+          }
+
+          return { success }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update volunteer details',
             cause: error,
           })
         }

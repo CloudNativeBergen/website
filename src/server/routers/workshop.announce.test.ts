@@ -23,6 +23,9 @@ const getConfirmedRecipientsMock = vi.fn()
 const createAnnouncementMock = vi.fn()
 const getAnnouncementsMock = vi.fn()
 const fanOutMock = vi.fn()
+const getAnnouncementForAuthzMock = vi.fn()
+const updateAnnouncementBodyMock = vi.fn()
+const deleteAnnouncementMock = vi.fn()
 vi.mock('@/lib/workshop/announcements', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/workshop/announcements')>()
@@ -35,6 +38,12 @@ vi.mock('@/lib/workshop/announcements', async (importOriginal) => {
     createWorkshopAnnouncement: (...a: unknown[]) =>
       createAnnouncementMock(...a),
     getWorkshopAnnouncements: (...a: unknown[]) => getAnnouncementsMock(...a),
+    getWorkshopAnnouncementForAuthz: (...a: unknown[]) =>
+      getAnnouncementForAuthzMock(...a),
+    updateWorkshopAnnouncementBody: (...a: unknown[]) =>
+      updateAnnouncementBodyMock(...a),
+    deleteWorkshopAnnouncement: (...a: unknown[]) =>
+      deleteAnnouncementMock(...a),
     sendAnnouncementToConfirmedParticipants: (...a: unknown[]) =>
       fanOutMock(...a),
   }
@@ -89,6 +98,14 @@ beforeEach(() => {
   })
   fanOutMock.mockResolvedValue({ sent: 1, failed: 0 })
   consumeRateLimitMock.mockReturnValue({ allowed: true, retryAfterMs: 0 })
+  getAnnouncementForAuthzMock.mockResolvedValue({
+    _id: 'ann-1',
+    workshopId: 'ws-1',
+    authorId: OWNER_ID,
+    conferenceId: CONFERENCE_ID,
+  })
+  updateAnnouncementBodyMock.mockResolvedValue(undefined)
+  deleteAnnouncementMock.mockResolvedValue(undefined)
 })
 
 describe('workshop.announce — authorization', () => {
@@ -193,5 +210,109 @@ describe('workshop.announcements — public query bounds', () => {
     await expect(
       makeCaller(null).announcements({ workshopId: 'ws-1', limit: 51 }),
     ).rejects.toBeTruthy()
+  })
+})
+
+describe('workshop.updateAnnouncement — authorization + immutability', () => {
+  it('allows the workshop OWNER and patches only the body', async () => {
+    const result = await makeCaller(OWNER_ID).updateAnnouncement({
+      announcementId: 'ann-1',
+      body: 'Corrected copy',
+    })
+    expect(result.success).toBe(true)
+    expect(updateAnnouncementBodyMock).toHaveBeenCalledWith(
+      'ann-1',
+      'Corrected copy',
+    )
+    // Owner is authorized without the organizer lookup.
+    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalled()
+  })
+
+  it('allows an ORGANIZER who is not a workshop speaker', async () => {
+    const result = await makeCaller(ORGANIZER_ID).updateAnnouncement({
+      announcementId: 'ann-1',
+      body: 'Room change',
+    })
+    expect(result.success).toBe(true)
+    expect(getOrganizerSpeakerIdsMock).toHaveBeenCalledOnce()
+  })
+
+  it('rejects an unrelated speaker (FORBIDDEN)', async () => {
+    await expect(
+      makeCaller(STRANGER_ID).updateAnnouncement({
+        announcementId: 'ann-1',
+        body: 'hi',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(updateAnnouncementBodyMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unauthenticated caller', async () => {
+    await expect(
+      makeCaller(null).updateAnnouncement({
+        announcementId: 'ann-1',
+        body: 'hi',
+      }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+
+  it('rejects an announcement in a different conference (multi-tenant)', async () => {
+    getAnnouncementForAuthzMock.mockResolvedValue({
+      _id: 'ann-1',
+      workshopId: 'ws-1',
+      authorId: OWNER_ID,
+      conferenceId: 'conf-OTHER',
+    })
+    await expect(
+      makeCaller(OWNER_ID).updateAnnouncement({
+        announcementId: 'ann-1',
+        body: 'hi',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(updateAnnouncementBodyMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing announcement', async () => {
+    getAnnouncementForAuthzMock.mockResolvedValue(null)
+    await expect(
+      makeCaller(OWNER_ID).updateAnnouncement({
+        announcementId: 'nope',
+        body: 'hi',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('rejects a blank body (validation)', async () => {
+    await expect(
+      makeCaller(OWNER_ID).updateAnnouncement({
+        announcementId: 'ann-1',
+        body: '   ',
+      }),
+    ).rejects.toBeTruthy()
+    expect(updateAnnouncementBodyMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('workshop.deleteAnnouncement — authorization', () => {
+  it('allows the workshop OWNER', async () => {
+    const result = await makeCaller(OWNER_ID).deleteAnnouncement({
+      announcementId: 'ann-1',
+    })
+    expect(result.success).toBe(true)
+    expect(deleteAnnouncementMock).toHaveBeenCalledWith('ann-1')
+  })
+
+  it('allows an ORGANIZER', async () => {
+    const result = await makeCaller(ORGANIZER_ID).deleteAnnouncement({
+      announcementId: 'ann-1',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects an unrelated speaker (FORBIDDEN)', async () => {
+    await expect(
+      makeCaller(STRANGER_ID).deleteAnnouncement({ announcementId: 'ann-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(deleteAnnouncementMock).not.toHaveBeenCalled()
   })
 })

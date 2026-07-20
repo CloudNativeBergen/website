@@ -229,6 +229,70 @@ export async function logBulkEmailSent(
   }
 }
 
+/** Activity types a user authored by hand — the only ones editable/deletable. */
+const USER_AUTHORED_ACTIVITY_TYPES: ActivityType[] = [
+  'note',
+  'call',
+  'meeting',
+  'email',
+]
+
+export async function updateSponsorActivity(
+  activityId: string,
+  userId: string,
+  description: string,
+  metadata?: {
+    oldValue?: string
+    newValue?: string
+    timestamp?: string
+    additionalData?: string
+  },
+): Promise<{ success: boolean; error?: Error }> {
+  try {
+    // Fetch the activity to check its type and creator before editing. Gating
+    // MIRRORS deleteSponsorActivity: only user-authored types, only by their
+    // creator — system-generated audit entries stay immutable.
+    const activity = await clientWrite.fetch<{
+      activityType: ActivityType
+      createdBy?: { _ref: string }
+    }>(
+      `*[_type == "sponsorActivity" && _id == $activityId][0]{ activityType, createdBy }`,
+      {
+        activityId,
+      },
+    )
+
+    if (!activity) {
+      return { success: false, error: new Error('Activity not found') }
+    }
+
+    if (!USER_AUTHORED_ACTIVITY_TYPES.includes(activity.activityType)) {
+      return {
+        success: false,
+        error: new Error(
+          `Cannot edit system-generated activity of type: ${activity.activityType}`,
+        ),
+      }
+    }
+
+    if (activity.createdBy?._ref !== userId) {
+      return {
+        success: false,
+        error: new Error('You can only edit your own activities'),
+      }
+    }
+
+    let patch = clientWrite.patch(activityId).set({ description })
+    if (metadata !== undefined) patch = patch.set({ metadata })
+    await patch.commit()
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to update sponsor activity:', error)
+    return { success: false, error: error as Error }
+  }
+}
+
 export async function deleteSponsorActivity(
   activityId: string,
   userId: string,

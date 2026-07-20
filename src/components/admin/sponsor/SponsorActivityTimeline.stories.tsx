@@ -1,5 +1,51 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { BoltIcon } from '@heroicons/react/24/solid'
+import { http, HttpResponse } from 'msw'
+import { ThemeProvider } from 'next-themes'
+import { within, userEvent, waitFor } from 'storybook/test'
+import { SponsorActivityTimeline } from './SponsorActivityTimeline'
+
+const now = new Date().toISOString()
+
+// A user-authored note (editable) and a system stage_change (locked). Only the
+// note exposes the edit pencil; SE-4's edit affordance is type-gated.
+const editableActivities = [
+  {
+    _id: 'act-note',
+    _createdAt: now,
+    _updatedAt: now,
+    sponsorForConference: {
+      _id: 'sfc-1',
+      sponsor: { _id: 'sp-1', name: 'Tieto Tech Consulting' },
+    },
+    activityType: 'note',
+    description: 'Met at the booth — very interested in the Gold tier.',
+    createdBy: { _id: 'org-1', name: 'Hans K.', email: 'hans@example.com' },
+    createdAt: now,
+  },
+  {
+    _id: 'act-stage',
+    _createdAt: now,
+    _updatedAt: now,
+    sponsorForConference: {
+      _id: 'sfc-1',
+      sponsor: { _id: 'sp-1', name: 'Tieto Tech Consulting' },
+    },
+    activityType: 'stage_change',
+    description: 'Status changed from Prospect to Negotiating',
+    createdBy: null,
+    createdAt: now,
+  },
+]
+
+const editHandlers = [
+  http.get('/api/trpc/sponsor.crm.activities.list', () =>
+    HttpResponse.json({ result: { data: editableActivities } }),
+  ),
+  http.post('/api/trpc/sponsor.crm.activities.update', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+]
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Dashboard/Activity Timeline',
@@ -287,4 +333,66 @@ export const ActivityTimeline: Story = {
       </div>
     </div>
   ),
+}
+
+/**
+ * SE-4 — real component with the inline edit affordance. The play function
+ * opens the editor on the user-authored note so the shoot captures the edit UI.
+ */
+export const EditActivity: Story = {
+  parameters: {
+    layout: 'centered',
+    msw: { handlers: editHandlers },
+  },
+  decorators: [
+    (Story) => (
+      <ThemeProvider attribute="class" forcedTheme="light" enableSystem={false}>
+        <div className="w-[32rem] bg-white p-6">
+          <Story />
+        </div>
+      </ThemeProvider>
+    ),
+  ],
+  render: () => (
+    <SponsorActivityTimeline sponsorForConferenceId="sfc-1" showHeaderFooter />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const editButton = await waitFor(() =>
+      canvas.getByLabelText('Edit activity'),
+    )
+    await userEvent.click(editButton)
+    await canvas.findByLabelText('Edit activity description')
+  },
+}
+
+export const EditActivityDark: Story = {
+  parameters: {
+    layout: 'centered',
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: editHandlers },
+  },
+  decorators: [
+    (Story) => (
+      <ThemeProvider attribute="class" forcedTheme="dark" enableSystem={false}>
+        <div className="dark">
+          <div className="w-[32rem] bg-gray-950 p-6">
+            <Story />
+          </div>
+        </div>
+      </ThemeProvider>
+    ),
+  ],
+  render: () => (
+    <SponsorActivityTimeline sponsorForConferenceId="sfc-1" showHeaderFooter />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const editButton = await waitFor(() =>
+      canvas.getByLabelText('Edit activity'),
+    )
+    await userEvent.click(editButton)
+    await canvas.findByLabelText('Edit activity description')
+  },
 }

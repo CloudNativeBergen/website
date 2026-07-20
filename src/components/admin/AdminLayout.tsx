@@ -14,6 +14,7 @@ import {
   AcademicCapIcon,
   CpuChipIcon,
   EnvelopeIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -36,6 +37,7 @@ const navigation: NavigationSection[] = [
     label: 'People',
     items: [
       { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
+      { name: 'Staff', href: '/admin/staff', icon: IdentificationIcon },
       { name: 'Volunteers', href: '/admin/volunteers', icon: UserGroupIcon },
       { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
     ],

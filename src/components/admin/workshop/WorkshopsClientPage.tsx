@@ -13,10 +13,12 @@ import {
 import type { ParticipantFormData } from '@/components/admin/workshop'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import type {
   WorkshopSignupStatus,
   ProposalWithWorkshopData,
 } from '@/lib/workshop/types'
+import type { WorkshopAnnouncementView } from '@/lib/workshop/announcements'
 import { useQueryClient } from '@tanstack/react-query'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -58,6 +60,7 @@ export function WorkshopsClientPage({
   initialWorkshops,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
+  const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [announceModal, setAnnounceModal] = useState<AnnounceModalState>({
     isOpen: false,
@@ -65,6 +68,8 @@ export function WorkshopsClientPage({
     workshopTitle: '',
     confirmedCount: 0,
   })
+  const [deleteAnnouncementTarget, setDeleteAnnouncementTarget] =
+    useState<WorkshopAnnouncementView | null>(null)
   const [signupModal, setSignupModal] = useState<SignupModalState>({
     isOpen: false,
     workshopId: '',
@@ -162,9 +167,16 @@ export function WorkshopsClientPage({
     },
   })
 
+  const { data: announcementsData } = api.workshop.announcements.useQuery(
+    { workshopId: announceModal.workshopId },
+    { enabled: announceModal.isOpen && !!announceModal.workshopId },
+  )
+
   const announceMutation = api.workshop.announce.useMutation({
     onSuccess: (result) => {
-      setAnnounceModal((prev) => ({ ...prev, isOpen: false }))
+      utils.workshop.announcements.invalidate({
+        workshopId: announceModal.workshopId,
+      })
       showNotification({
         type: result.failed > 0 ? 'warning' : 'success',
         title: 'Announcement sent',
@@ -182,6 +194,49 @@ export function WorkshopsClientPage({
       })
     },
   })
+
+  const updateAnnouncementMutation =
+    api.workshop.updateAnnouncement.useMutation({
+      onSuccess: () => {
+        utils.workshop.announcements.invalidate({
+          workshopId: announceModal.workshopId,
+        })
+        showNotification({
+          type: 'success',
+          title: 'Announcement updated',
+          message: 'The announcement copy was updated (no email was re-sent).',
+        })
+      },
+      onError: (error) => {
+        showNotification({
+          type: 'error',
+          title: 'Could not update announcement',
+          message: error.message,
+        })
+      },
+    })
+
+  const deleteAnnouncementMutation =
+    api.workshop.deleteAnnouncement.useMutation({
+      onSuccess: () => {
+        setDeleteAnnouncementTarget(null)
+        utils.workshop.announcements.invalidate({
+          workshopId: announceModal.workshopId,
+        })
+        showNotification({
+          type: 'success',
+          title: 'Announcement deleted',
+          message: 'The announcement was removed from the workshop page.',
+        })
+      },
+      onError: (error) => {
+        showNotification({
+          type: 'error',
+          title: 'Could not delete announcement',
+          message: error.message,
+        })
+      },
+    })
 
   const signups = useMemo(() => signupsData?.data || [], [signupsData?.data])
 
@@ -413,6 +468,30 @@ export function WorkshopsClientPage({
         confirmedCount={announceModal.confirmedCount}
         onSubmit={handleAnnounce}
         isSubmitting={announceMutation.isPending}
+        announcements={announcementsData?.data ?? []}
+        onEditAnnouncement={(announcementId, body) =>
+          updateAnnouncementMutation.mutate({ announcementId, body })
+        }
+        onDeleteAnnouncement={(announcement) =>
+          setDeleteAnnouncementTarget(announcement)
+        }
+        isEditingAnnouncement={updateAnnouncementMutation.isPending}
+      />
+
+      <ConfirmationModal
+        isOpen={!!deleteAnnouncementTarget}
+        onClose={() => setDeleteAnnouncementTarget(null)}
+        onConfirm={() =>
+          deleteAnnouncementTarget &&
+          deleteAnnouncementMutation.mutate({
+            announcementId: deleteAnnouncementTarget._id,
+          })
+        }
+        isLoading={deleteAnnouncementMutation.isPending}
+        title="Delete announcement"
+        message="Are you sure you want to delete this announcement? It will be removed from the workshop page. Participants who already received the email will not be notified."
+        confirmButtonText="Delete"
+        variant="danger"
       />
     </div>
   )
