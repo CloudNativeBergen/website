@@ -171,7 +171,10 @@ describe('sendPushForNotifications', () => {
     expect('tag' in JSON.parse(body as string)).toBe(false)
   })
 
-  it('falls back to an empty body and root url when message/link are absent', async () => {
+  it('defaults a LINKLESS notification to the /notifications page (empty body too)', async () => {
+    // A notification with no deep link (system/announcement types) must push a
+    // url pointing at the standalone notifications page, so a tap on a closed app
+    // opens somewhere the message is readable — never the bare app root.
     mockGetState.mockResolvedValue(state())
     await sendPushForNotifications([
       item({ message: undefined, link: undefined }),
@@ -180,7 +183,7 @@ describe('sendPushForNotifications', () => {
     expect(JSON.parse(body as string)).toEqual({
       title: 'Your talk was accepted',
       body: '',
-      url: '/',
+      url: '/notifications',
     })
   })
 

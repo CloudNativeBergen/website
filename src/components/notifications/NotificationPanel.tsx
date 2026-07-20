@@ -121,6 +121,13 @@ export function NotificationPanel({
       onMessagesClick={onClose}
       settingsHref={settingsHref}
       onSettingsClick={onClose}
+      // Linkless rows have no deep link, so in the popover they route to the
+      // standalone page where the notification is readable. The route is
+      // audience-agnostic (any signed-in speaker/organizer), so unlike the
+      // messages quick link it needs no session gate.
+      linklessHref="/notifications"
+      viewAllHref="/notifications"
+      onViewAllClick={onClose}
     />
   )
 }

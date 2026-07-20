@@ -61,6 +61,32 @@ export interface NotificationListProps {
    * popover (same flow as item clicks); navigation is handled by the `<Link>`.
    */
   onSettingsClick?: () => void
+  /**
+   * When set, a row that has NO `item.link` renders as a `<Link>` to this href
+   * (the standalone notifications page) instead of an inert `<button>`. A
+   * linkless notification has nowhere to deep-link, so in the cramped popover we
+   * send the click to the full page where it's comfortably readable. The bell
+   * panel passes `/notifications`; the page itself OMITS this so its own linkless
+   * rows stay inert buttons (they're already readable inline on the page).
+   */
+  linklessHref?: string
+  /**
+   * Href of the full notifications page. When set, a "View all notifications"
+   * quick link is rendered in the footer (the popover shows one page, the page
+   * shows all). The bell panel passes `/notifications`; the page omits it.
+   */
+  viewAllHref?: string
+  /**
+   * Fired when the "View all notifications" link is activated — the container
+   * closes the popover (same flow as item clicks); navigation is the `<Link>`.
+   */
+  onViewAllClick?: () => void
+  /**
+   * Drops the inner `max-height`/scroll on the list region so the surrounding
+   * PAGE scrolls as one document instead of a nested scroll area. The bell
+   * popover keeps the default bounded height; the full-page inbox sets this.
+   */
+  disableInnerScroll?: boolean
 }
 
 function SkeletonRow() {
@@ -163,20 +189,30 @@ function ItemBody({ item }: { item: NotificationItem }) {
 const rowClasses =
   'flex w-full gap-3 px-4 py-3 text-left transition hover:bg-gray-50 focus-visible:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60'
 
+// Footer quick link ("View all notifications" / "View all messages").
+// min-h-11 keeps the tap target ≥44px.
+const footerLinkClass =
+  'flex min-h-11 items-center justify-center px-4 py-3 text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60'
+
 function ListItem({
   item,
   onItemClick,
+  linklessHref,
 }: {
   item: NotificationItem
   onItemClick: (item: NotificationItem) => void
+  linklessHref?: string
 }) {
   const unread = !item.readAt
   const wrapperClass = `${rowClasses} ${unread ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`
 
-  if (item.link) {
+  // A linkless row falls back to `linklessHref` (the full notifications page)
+  // when the container supplies one, so it's readable somewhere off the popover.
+  const href = item.link ?? linklessHref
+  if (href) {
     return (
       <Link
-        href={item.link}
+        href={href}
         prefetch={false}
         onClick={() => onItemClick(item)}
         className={wrapperClass}
@@ -219,6 +255,10 @@ export function NotificationList({
   onMessagesClick,
   settingsHref,
   onSettingsClick,
+  linklessHref,
+  viewAllHref,
+  onViewAllClick,
+  disableInnerScroll = false,
 }: NotificationListProps) {
   return (
     // `role="region"` makes the aria-label an actual named landmark — on a
@@ -261,7 +301,11 @@ export function NotificationList({
         </div>
       </div>
 
-      <div className="max-h-[70vh] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800/70">
+      <div
+        className={`divide-y divide-gray-100 dark:divide-gray-800/70 ${
+          disableInnerScroll ? '' : 'max-h-[70vh] overflow-y-auto'
+        }`}
+      >
         {isLoading ? (
           <>
             <SkeletonRow />
@@ -275,7 +319,12 @@ export function NotificationList({
         ) : (
           <>
             {items.map((item) => (
-              <ListItem key={item.id} item={item} onItemClick={onItemClick} />
+              <ListItem
+                key={item.id}
+                item={item}
+                onItemClick={onItemClick}
+                linklessHref={linklessHref}
+              />
             ))}
             {hasMore && (
               <div className="p-2">
@@ -293,17 +342,30 @@ export function NotificationList({
         )}
       </div>
 
-      {messagesHref && (
-        <div className="border-t border-gray-200 dark:border-gray-800">
-          <Link
-            href={messagesHref}
-            prefetch={false}
-            onClick={onMessagesClick}
-            // min-h-11 keeps the tap target ≥44px.
-            className="flex min-h-11 items-center justify-center px-4 py-3 text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60"
-          >
-            View all messages &rarr;
-          </Link>
+      {(viewAllHref || messagesHref) && (
+        // A single footer holding up to two audience-agnostic quick links,
+        // separated by a hairline when both are present.
+        <div className="divide-y divide-gray-100 border-t border-gray-200 dark:divide-gray-800/70 dark:border-gray-800">
+          {viewAllHref && (
+            <Link
+              href={viewAllHref}
+              prefetch={false}
+              onClick={onViewAllClick}
+              className={footerLinkClass}
+            >
+              View all notifications &rarr;
+            </Link>
+          )}
+          {messagesHref && (
+            <Link
+              href={messagesHref}
+              prefetch={false}
+              onClick={onMessagesClick}
+              className={footerLinkClass}
+            >
+              View all messages &rarr;
+            </Link>
+          )}
         </div>
       )}
     </div>

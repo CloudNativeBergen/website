@@ -23,7 +23,7 @@ describe('parsePushPayload', () => {
     const result = parsePushPayload('')
     expect(result.title).toBe('Cloud Native Days')
     expect(result.body).toBe('')
-    expect(result.url).toBe('/')
+    expect(result.url).toBe('/notifications')
     expect(result.tag).toBeUndefined()
   })
 
@@ -31,19 +31,19 @@ describe('parsePushPayload', () => {
     const result = parsePushPayload('just some text')
     expect(result.body).toBe('just some text')
     expect(result.title).toBe('Cloud Native Days')
-    expect(result.url).toBe('/')
+    expect(result.url).toBe('/notifications')
   })
 
-  it('drops an absolute off-origin url in favour of /', () => {
+  it('drops an absolute off-origin url in favour of the notifications page', () => {
     const result = parsePushPayload(
       JSON.stringify({ url: 'https://evil.example/steal' }),
     )
-    expect(result.url).toBe('/')
+    expect(result.url).toBe('/notifications')
   })
 
   it('drops a protocol-relative url', () => {
     const result = parsePushPayload(JSON.stringify({ url: '//evil.example' }))
-    expect(result.url).toBe('/')
+    expect(result.url).toBe('/notifications')
   })
 
   it('drops a backslash-prefixed url that resolves off-origin', () => {
@@ -55,7 +55,9 @@ describe('parsePushPayload', () => {
       '/a\\b',
       '\\\\evil.com',
     ]) {
-      expect(parsePushPayload(JSON.stringify({ url })).url).toBe('/')
+      expect(parsePushPayload(JSON.stringify({ url })).url).toBe(
+        '/notifications',
+      )
     }
   })
 
