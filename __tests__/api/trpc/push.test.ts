@@ -51,6 +51,17 @@ vi.mock('@/lib/push/send', () => ({
     .fn()
     .mockResolvedValue({ ok: true, statusCode: 201, gone: false }),
 }))
+// sendTest now ALSO mirrors the test into the hub (skipPush). Mock both the hub
+// writer and the conference resolver so this suite stays hermetic (no real
+// Sanity) and the never-fail hub write can't interfere with the send assertions.
+vi.mock('@/lib/notification/sanity', () => ({
+  createNotifications: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: vi
+    .fn()
+    .mockResolvedValue({ conference: { _id: 'conf-test' } }),
+}))
 
 const mockAdd = vi.mocked(addPushSubscription)
 const mockRemove = vi.mocked(removePushSubscription)
@@ -202,11 +213,13 @@ describe('push router', () => {
       expect(mockGetState).toHaveBeenCalledWith(speakerA)
       expect(mockSendPush).toHaveBeenCalledTimes(2)
       // Uses the production payload shape: deep link + collapse tag, bypassing
-      // per-category preferences (explicit user action).
+      // per-category preferences (explicit user action). The url is ALIGNED with
+      // the hub item's link (#notification-settings) so push-tap and hub-click
+      // land on the same settings card.
       const [, payload] = mockSendPush.mock.calls[0]
       expect(payload).toMatchObject({
         title: 'Test notification',
-        url: '/cfp/profile',
+        url: '/cfp/profile#notification-settings',
         tag: 'test-notification',
       })
       expect(mockPrune).not.toHaveBeenCalled()

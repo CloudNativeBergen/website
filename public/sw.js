@@ -239,6 +239,16 @@ self.addEventListener('push', (event) => {
   const raw = event.data ? event.data.text() : ''
   const payload = parsePushPayload(raw)
 
+  // Best-effort PWA app-icon badge (Badging API), so the icon reflects "unread
+  // present" even when no tab is open. The SW does not know the exact unread
+  // count, so it shows the generic dot (no-arg setAppBadge); the in-app
+  // AppBadgeSync sets the PRECISE number the next time a tab is focused.
+  // Feature-detected and never throws (the API rejects on unsupported
+  // platforms) — purely additive to the notification display below.
+  if (self.navigator && 'setAppBadge' in self.navigator) {
+    self.navigator.setAppBadge().catch(() => {})
+  }
+
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
@@ -276,6 +286,19 @@ self.addEventListener('notificationclick', (event) => {
         type: 'window',
         includeUncontrolled: true,
       })
+
+      // Tell open page(s) which notification was clicked so the in-app
+      // NotificationClickSync can mark the caller's matching hub notification
+      // read — universally, for EVERY type (message pushes already self-clear on
+      // thread open; this closes the gap for resource-page pushes like proposal
+      // decisions / travel / sponsor / system). We post the ORIGINAL app-relative
+      // `target` (a sanitized "/..." path), which is exactly the notification's
+      // stored `link`, so the client's markReadByLink matches precisely.
+      for (const client of allClients) {
+        if ('postMessage' in client) {
+          client.postMessage({ type: 'notification-click', url: target })
+        }
+      }
 
       // Focus an existing tab already on the target URL if there is one.
       for (const client of allClients) {

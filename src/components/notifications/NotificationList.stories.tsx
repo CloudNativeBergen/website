@@ -39,6 +39,19 @@ const makeItems = (): NotificationItem[] => [
     actor: { _id: 'a4', name: 'Ola Organizer' },
   },
   {
+    // The self-notification written by `push.sendTest` (a `system` type) so a
+    // speaker's "send test" appears in the hub, not just as an OS push. Renders
+    // generically (title/message, no actor) and deep-links to the settings card.
+    id: 'notification.test.sp-1',
+    type: 'system',
+    title: 'Test notification',
+    message: 'Your push, hub, and badge are working.',
+    link: '/cfp/profile#notification-settings',
+    readAt: null,
+    createdAt: minutesAgo(1),
+    actor: null,
+  },
+  {
     id: '1',
     type: 'proposal_status_changed',
     title: 'Your proposal was accepted',

@@ -36,9 +36,16 @@ import type {
  * triggered it (a submitted proposal is still submitted even if the organizer
  * notification write fails). Callers therefore do not (and must not) wrap this
  * in a try/catch expecting to react to failures.
+ *
+ * `options.skipPush` writes the hub document(s) WITHOUT firing the web-push
+ * bridge. Used by `push.sendTest`, which already delivered its OWN direct test
+ * push (bypassing category prefs) and only wants the hub/badge side effect — so
+ * bridging here would deliver a SECOND, duplicate push. Default (unset) keeps
+ * the normal bridge for every other caller.
  */
 export async function createNotifications(
   items: NotificationInput[],
+  options?: { skipPush?: boolean },
 ): Promise<void> {
   if (items.length === 0) {
     return
@@ -84,10 +91,15 @@ export async function createNotifications(
     // never-throw contract: `sendPushForNotifications` never throws, but we also
     // isolate it so that even an unexpected failure can neither fail the
     // (already committed) notification write nor the business mutation.
-    try {
-      await sendPushForNotifications(items)
-    } catch (pushError) {
-      console.error('Failed to send web push for notifications:', pushError)
+    //
+    // `skipPush` suppresses the bridge entirely (see the doc): the test-send
+    // path has already delivered its own direct push and must not double up.
+    if (!options?.skipPush) {
+      try {
+        await sendPushForNotifications(items)
+      } catch (pushError) {
+        console.error('Failed to send web push for notifications:', pushError)
+      }
     }
   } catch (error) {
     // Never propagate — see the contract above.

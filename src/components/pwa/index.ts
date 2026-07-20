@@ -12,6 +12,8 @@ export {
 export { UpdateBanner } from './UpdateBanner'
 export type { UpdateBannerProps } from './UpdateBanner'
 export { ServiceWorkerRegistrar } from './ServiceWorkerRegistrar'
+export { AppBadgeSync } from './AppBadgeSync'
+export { NotificationClickSync } from './NotificationClickSync'
 export { PwaInstallProvider, usePwaInstall } from './PwaInstallProvider'
 export type { InstallPlatform } from './PwaInstallProvider'
 export {
