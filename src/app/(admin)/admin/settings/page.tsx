@@ -339,7 +339,7 @@ function SectionHeading({
 }
 
 export default async function AdminSettings() {
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const { conference, domain, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
     sponsors: true,
@@ -568,6 +568,19 @@ export default async function AdminSettings() {
             title="Domain Configuration"
             icon={GlobeAltIcon}
             editUrl={editUrl}
+            action={
+              <>
+                <EditConferenceCard
+                  fieldset="socialLinks"
+                  initialValues={{ socialLinks: conference.socialLinks }}
+                />
+                <EditConferenceCard
+                  fieldset="domains"
+                  initialValues={{ domains: conference.domains }}
+                  currentDomain={domain}
+                />
+              </>
+            }
           >
             <FieldRow label="Domains" value={conference.domains} type="array" />
             <FieldRow
@@ -644,6 +657,12 @@ export default async function AdminSettings() {
             title="Content Configuration"
             icon={TagIcon}
             editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="features"
+                initialValues={{ features: conference.features }}
+              />
+            }
           >
             <FieldRow
               label="Available Formats"
@@ -745,17 +764,85 @@ export default async function AdminSettings() {
             </InfoCard>
           )}
 
-          {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
-            <InfoCard
-              title="Vanity Metrics"
-              icon={ChartPieIcon}
-              editUrl={editUrl}
-            >
-              {conference.vanityMetrics.map((metric, idx) => (
+          <InfoCard
+            title="Sponsor Benefits"
+            icon={CurrencyDollarIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="sponsorBenefits"
+                initialValues={{ sponsorBenefits: conference.sponsorBenefits }}
+              />
+            }
+          >
+            {conference.sponsorBenefits &&
+            conference.sponsorBenefits.length > 0 ? (
+              conference.sponsorBenefits.map((benefit, idx) => (
+                <FieldRow
+                  key={idx}
+                  label={benefit.title}
+                  value={benefit.description}
+                />
+              ))
+            ) : (
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                None
+              </span>
+            )}
+          </InfoCard>
+
+          <InfoCard
+            title="Sponsorship Page"
+            icon={DocumentTextIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="sponsorshipCustomization"
+                initialValues={
+                  (conference.sponsorshipCustomization ?? {}) as Record<
+                    string,
+                    unknown
+                  >
+                }
+              />
+            }
+          >
+            <FieldRow
+              label="Hero Headline"
+              value={conference.sponsorshipCustomization?.heroHeadline}
+            />
+            <FieldRow
+              label="Philosophy Title"
+              value={conference.sponsorshipCustomization?.philosophyTitle}
+            />
+            <FieldRow
+              label="Prospectus Link"
+              value={conference.sponsorshipCustomization?.prospectusUrl}
+              type="url"
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="Vanity Metrics"
+            icon={ChartPieIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="vanityMetrics"
+                initialValues={{ vanityMetrics: conference.vanityMetrics }}
+              />
+            }
+          >
+            {conference.vanityMetrics && conference.vanityMetrics.length > 0 ? (
+              conference.vanityMetrics.map((metric, idx) => (
                 <FieldRow key={idx} label={metric.label} value={metric.value} />
-              ))}
-            </InfoCard>
-          )}
+              ))
+            ) : (
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                None
+              </span>
+            )}
+          </InfoCard>
         </div>
       </section>
 

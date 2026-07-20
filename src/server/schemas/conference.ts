@@ -1,17 +1,22 @@
 import { z } from 'zod'
+import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
+import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 
 /**
- * Field-scoped conference settings schemas (SE-1a). Each schema mirrors ONE
- * fieldset group of scalar fields from `sanity/schemaTypes/conference.ts` and is
- * consumed by exactly one mutation in `src/server/routers/conference.ts`. Only
- * scalar field groups are covered here; arrays/objects (social links, domains,
- * features, vanity metrics, sponsor benefits, teams, organizers, topics,
- * announcement, logos) are LATER phases and deliberately excluded.
+ * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
+ * ONE fieldset group from `sanity/schemaTypes/conference.ts` and is consumed by
+ * exactly one mutation in `src/server/routers/conference.ts`.
  *
- * UNSET SEMANTICS (shared across every schema): a field left `undefined` is
- * untouched; an explicit `null` unsets the (optional) field. The router's patch
- * builder translates these to Sanity `.set()` / `.unset()` respectively — see
- * `applyConferencePatch`.
+ * SE-1a covered SCALAR field groups. SE-1b adds the array/object groups:
+ * `socialLinks`, `features`, `vanityMetrics`, `sponsorBenefits`,
+ * `sponsorshipCustomization` and the safeguarded `domains`. Still excluded:
+ * teams, organizers, topics, announcement, logos (later phases).
+ *
+ * UNSET SEMANTICS (shared across scalar schemas): a field left `undefined` is
+ * untouched; an explicit `null` unsets the (optional) field. Array schemas set
+ * the WHOLE array (a full replace); the object schema patches field-scoped dot
+ * paths under its parent. The router's patch builder translates these to Sanity
+ * `.set()` / `.unset()` — see `applyConferencePatch`.
  */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -131,4 +136,123 @@ export const UpdateCfpGoalsSchema = z.object({
   cfpPresentationGoal: nonNegativeGoal,
   cfpWorkshopGoal: nonNegativeGoal,
   sponsorRevenueGoal: nonNegativeGoal,
+})
+
+// === Social Links (array of URL strings) ===
+// A full-array replace. Empty list allowed (the field is optional). Every row
+// must be a valid URL — blank rows are a client concern (stripped before send).
+export const UpdateSocialLinksSchema = z.object({
+  socialLinks: z.array(z.string().trim().url('Enter a valid URL')),
+})
+
+// === Features (array of string flags) ===
+// See EditConferenceCard for the "known + freeform" UI. The Sanity schema
+// declares a single known value (`test_feature`) and there are NO runtime
+// consumers, so the server stays permissive: any non-empty flag string, unique,
+// empty list allowed.
+export const UpdateFeaturesSchema = z.object({
+  features: z
+    .array(z.string().trim().min(1, 'Feature flag cannot be empty'))
+    .refine((f) => new Set(f).size === f.length, {
+      message: 'Feature flags must be unique',
+    }),
+})
+
+// === Vanity Metrics (array of {label, value}) ===
+// Both fields required per row; empty list allowed.
+export const UpdateVanityMetricsSchema = z.object({
+  vanityMetrics: z.array(
+    z.object({
+      label: z.string().trim().min(1, 'Label is required'),
+      value: z.string().trim().min(1, 'Value is required'),
+      _key: z.string().optional(),
+    }),
+  ),
+})
+
+// === Sponsor Benefits (array of {title, description, icon?}) ===
+// `icon` is an optional Heroicon key constrained to the shared `HEROICON_OPTIONS`
+// list the public "Why Sponsor" section renders (a `<select>` on the client).
+const HEROICON_VALUES = HEROICON_OPTIONS.map((o) => o.value) as [
+  string,
+  ...string[],
+]
+export const UpdateSponsorBenefitsSchema = z.object({
+  sponsorBenefits: z.array(
+    z.object({
+      title: z.string().trim().min(1, 'Title is required'),
+      description: z.string().trim().min(1, 'Description is required'),
+      icon: z
+        .enum(HEROICON_VALUES)
+        .nullable()
+        .optional()
+        // Treat an empty select as "no icon".
+        .or(z.literal('').transform(() => undefined)),
+      _key: z.string().optional(),
+    }),
+  ),
+})
+
+// === Sponsorship Page Customization (object of string fields) ===
+// Flattened: the mutation patches field-scoped dot paths
+// (`sponsorshipCustomization.<field>`) under a `setIfMissing` parent, so it never
+// clobbers sibling subfields it doesn't know about. Every field optional;
+// `null`/empty unsets that subfield.
+const optionalText = z.string().trim().nullable().optional()
+export const UpdateSponsorshipCustomizationSchema = z.object({
+  heroHeadline: optionalText,
+  heroSubheadline: optionalText,
+  packageSectionTitle: optionalText,
+  addonSectionTitle: optionalText,
+  philosophyTitle: optionalText,
+  philosophyDescription: optionalText,
+  closingQuote: optionalText,
+  closingCtaText: optionalText,
+  prospectusUrl: z
+    .string()
+    .trim()
+    .url('Enter a valid URL')
+    .nullable()
+    .optional(),
+})
+
+// === Domains (SAFEGUARDED array of hostname strings) ===
+// Drives domain→conference routing. Non-empty ALWAYS; each entry a bare,
+// lowercase hostname (scheme/path rejected; dev `:port` allowed); no duplicates.
+// The current-request-host guard lives in the router (it needs the request
+// headers) — see `updateDomains`.
+export const UpdateDomainsSchema = z.object({
+  domains: z
+    .array(z.string())
+    .min(1, 'At least one domain is required')
+    .transform((list) => list.map(normalizeDomain))
+    .superRefine((list, ctx) => {
+      const seen = new Set<string>()
+      list.forEach((entry, i) => {
+        if (entry === '') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Domain cannot be empty',
+            path: [i],
+          })
+          return
+        }
+        if (!isValidDomainEntry(entry)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message:
+              'Enter a bare hostname (no https://, no path), e.g. example.com',
+            path: [i],
+          })
+        }
+        if (seen.has(entry)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Duplicate domain "${entry}"`,
+            path: [i],
+          })
+        }
+        seen.add(entry)
+      })
+    }),
 })
