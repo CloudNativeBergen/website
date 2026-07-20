@@ -48,6 +48,7 @@ export const staffRouter = router({
     .input(StaffCreateSchema)
     .mutation(async ({ input }) => {
       try {
+        const image = imageField(input.image)
         const created = await clientWrite.create({
           _type: 'staff',
           name: input.name,
@@ -55,9 +56,7 @@ export const staffRouter = router({
           link: input.link,
           ...(input.email ? { email: input.email } : {}),
           ...(input.company ? { company: input.company } : {}),
-          ...(imageField(input.image)
-            ? { image: imageField(input.image) }
-            : {}),
+          ...(image ? { image } : {}),
         })
         revalidateTag('content:staff', 'default')
         return { _id: created._id }

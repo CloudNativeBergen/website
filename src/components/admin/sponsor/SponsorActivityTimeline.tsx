@@ -21,6 +21,7 @@ import {
   getActivityColor,
 } from '@/components/admin/sponsor-crm/utils'
 import { SponsorActivityInput } from './SponsorActivityInput'
+import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 
 interface SponsorActivityTimelineProps {
   sponsorForConferenceId?: string
@@ -371,6 +372,7 @@ export function SponsorActivityTimeline({
   compact = false,
 }: SponsorActivityTimelineProps) {
   const utils = api.useUtils()
+  const notify = useNotificationSafe()
   const { data: activities = [], isLoading } =
     api.sponsor.crm.activities.list.useQuery({
       sponsorForConferenceId,
@@ -380,6 +382,15 @@ export function SponsorActivityTimeline({
   const updateMutation = api.sponsor.crm.activities.update.useMutation({
     onSuccess: () => {
       utils.sponsor.crm.activities.list.invalidate()
+    },
+    onError: () => {
+      // The activity may have been deleted underneath the editor; surface a
+      // toast instead of letting the failed save pass silently.
+      notify?.showNotification({
+        type: 'error',
+        title: 'Save failed',
+        message: 'Couldn’t save the change — it may have been deleted.',
+      })
     },
   })
 

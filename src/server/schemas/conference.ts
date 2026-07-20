@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
+import { CLONE_FAMILIES } from '@/lib/conference/edition'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -394,3 +395,92 @@ export const UpdateBrandingLogoSchema = z.object({
 export const SanitizeSvgPreviewSchema = z.object({
   svg: z.string(),
 })
+
+// === SE-5: create-next-edition wizard ====================================
+
+/**
+ * A `domains[]` list for a NEW edition. Non-empty; each a bare, lowercase,
+ * unique hostname (scheme/path rejected). GLOBAL uniqueness — that no OTHER
+ * conference already claims a domain — needs the datastore and is enforced in
+ * the router (`createEdition` / `validateNewDomains`), never here.
+ */
+const NewEditionDomains = z
+  .array(z.string())
+  .min(1, 'At least one domain is required')
+  .transform((list) => list.map(normalizeDomain))
+  .superRefine((list, ctx) => {
+    const seen = new Set<string>()
+    list.forEach((entry, i) => {
+      if (entry === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Domain cannot be empty',
+          path: [i],
+        })
+        return
+      }
+      if (!isValidDomainEntry(entry)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'Enter a bare hostname (no https://, no path), e.g. example.com',
+          path: [i],
+        })
+      }
+      if (seen.has(entry)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate domain "${entry}"`,
+          path: [i],
+        })
+      }
+      seen.add(entry)
+    })
+  })
+
+/** Availability probe for the wizard's Domains step (no writes). */
+export const ValidateNewDomainsSchema = z.object({
+  domains: z.array(z.string()),
+})
+
+const optionalDateString = dateString.nullable().optional()
+
+/** The clone-flag object: one boolean per structural family. */
+const CloneFlagsSchema = z.object(
+  Object.fromEntries(CLONE_FAMILIES.map((f) => [f, z.boolean()])) as Record<
+    (typeof CLONE_FAMILIES)[number],
+    z.ZodBoolean
+  >,
+)
+
+/**
+ * `conference.createEdition` input. `title`, both event dates and a non-empty
+ * `domains` list are required; the organizer name and the CFP/program dates are
+ * optional (blank → the field is simply left unset on the new document). Only
+ * STRUCTURE is cloned, gated by `clone`; content is always empty on a new
+ * edition (see `buildEditionDocuments`).
+ */
+export const CreateEditionSchema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    organizer: z.string().trim().min(1).nullable().optional(),
+    startDate: dateString,
+    endDate: dateString,
+    cfpStartDate: optionalDateString,
+    cfpEndDate: optionalDateString,
+    cfpNotifyDate: optionalDateString,
+    programDate: optionalDateString,
+    domains: NewEditionDomains,
+    clone: CloneFlagsSchema,
+  })
+  .refine((d) => d.endDate >= d.startDate, {
+    message: 'End date must be on or after the start date',
+    path: ['endDate'],
+  })
+  .refine(
+    (d) => !d.cfpStartDate || !d.cfpEndDate || d.cfpEndDate >= d.cfpStartDate,
+    {
+      message: 'CFP end date must be on or after the CFP start date',
+      path: ['cfpEndDate'],
+    },
+  )

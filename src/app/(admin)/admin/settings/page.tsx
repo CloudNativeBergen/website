@@ -40,6 +40,7 @@ import {
   ServerStackIcon,
   BeakerIcon,
   SwatchIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 
 interface NamedItem {
@@ -393,6 +394,14 @@ export default async function AdminSettings() {
             <span className="font-semibold">{conference.title}</span>
           </>
         }
+        actionItems={[
+          {
+            label: 'New edition',
+            href: '/admin/settings/new-edition',
+            icon: <SparklesIcon />,
+            variant: 'secondary',
+          },
+        ]}
       />
 
       <SectionNav />

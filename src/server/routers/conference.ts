@@ -3,12 +3,23 @@ import { revalidateTag } from 'next/cache'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
-import { ensureArrayKeys, createReferenceWithKey } from '@/lib/sanity/helpers'
+import {
+  ensureArrayKeys,
+  createReferenceWithKey,
+  generateKey,
+} from '@/lib/sanity/helpers'
 import { clearConferenceTeamsCache } from '@/lib/teams'
 import {
   CANNOT_REMOVE_CURRENT_DOMAIN,
   domainsWouldStrandHost,
+  normalizeDomain,
 } from '@/lib/conference/domains'
+import {
+  buildEditionDocuments,
+  type SourceConference,
+  type SourceSponsorTier,
+  type SourceContractTemplate,
+} from '@/lib/conference/edition'
 import {
   UpdateBasicInfoSchema,
   UpdateVenueSchema,
@@ -29,6 +40,8 @@ import {
   UpdateAnnouncementSchema,
   UpdateBrandingLogoSchema,
   SanitizeSvgPreviewSchema,
+  CreateEditionSchema,
+  ValidateNewDomainsSchema,
 } from '../schemas/conference'
 import {
   sanitizeSvgUpload,
@@ -39,6 +52,22 @@ import {
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
   'You cannot remove yourself from the organizer team'
+
+/** Prefix for the BAD_REQUEST thrown when a new-edition domain is already taken. */
+export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
+
+/**
+ * Every domain claimed by ANY conference document, normalized. Drives the
+ * wizard's GLOBAL-uniqueness rule: a new edition must never shadow an existing
+ * edition's routing (`getConferenceForDomain` picks the FIRST conference whose
+ * `domains[]` matches the host — a duplicate would silently steal traffic).
+ */
+async function fetchClaimedDomains(): Promise<Set<string>> {
+  const all = await clientReadUncached.fetch<string[] | null>(
+    `*[_type == "conference" && defined(domains)].domains[]`,
+  )
+  return new Set((all ?? []).map(normalizeDomain))
+}
 
 /**
  * Field-scoped conference settings mutations (SE-1a).
@@ -390,5 +419,120 @@ export const conferenceRouter = router({
         throw error
       }
       return applyConferencePatch(conferenceId, { [input.slot]: sanitized })
+    }),
+
+  // === SE-5: create-next-edition wizard ====================================
+
+  /**
+   * Availability probe for the wizard's Domains step. Given the typed hostnames,
+   * returns which are ALREADY claimed by some conference (global uniqueness) and
+   * which are not valid bare hostnames — so the editor can flag them inline
+   * before the maintainer reaches the confirm step. Read-only.
+   */
+  validateNewDomains: adminProcedure
+    .input(ValidateNewDomainsSchema)
+    .query(async ({ input }) => {
+      const claimed = await fetchClaimedDomains()
+      const normalized = input.domains.map(normalizeDomain).filter((d) => d)
+      const taken = Array.from(new Set(normalized)).filter((d) =>
+        claimed.has(d),
+      )
+      return { taken }
+    }),
+
+  /**
+   * Seed a NEW conference edition that clones the CURRENT edition's STRUCTURE
+   * (per the `clone` flags) with fresh dates + domains. The current conference —
+   * resolved from the request domain, exactly like every other mutation — is the
+   * SOURCE and is NEVER modified (no patch/set touches its id).
+   *
+   * DOMAIN VALIDATION: shape/duplicate/hostname come from the schema; here we
+   * add the GLOBAL-uniqueness rule (a domain claimed by any conference is
+   * rejected, BAD_REQUEST naming it) — the server is the authority, the wizard
+   * only mirrors it.
+   *
+   * ATOMICITY: the new conference document and every cloned reference-carrying
+   * document (sponsor tiers, contract templates) are written in ONE Sanity
+   * transaction, which is all-or-nothing. A failure writes NOTHING — there is no
+   * partial-create state to recover, and the wizard is simply re-runnable.
+   *
+   * Returns the new conference `_id` and a per-family clone summary.
+   */
+  createEdition: adminProcedure
+    .input(CreateEditionSchema)
+    .mutation(async ({ input }) => {
+      const sourceId = await resolveConferenceId()
+
+      const [source, sourceTiers, sourceTemplates, claimedDomains] =
+        await Promise.all([
+          clientReadUncached.fetch<SourceConference | null>(
+            `*[_type == "conference" && _id == $id][0]`,
+            { id: sourceId },
+          ),
+          clientReadUncached.fetch<SourceSponsorTier[]>(
+            `*[_type == "sponsorTier" && conference._ref == $id]`,
+            { id: sourceId },
+          ),
+          clientReadUncached.fetch<SourceContractTemplate[]>(
+            `*[_type == "contractTemplate" && conference._ref == $id]`,
+            { id: sourceId },
+          ),
+          fetchClaimedDomains(),
+        ])
+
+      if (!source?._id) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Could not resolve the source conference',
+        })
+      }
+
+      // GLOBAL domain uniqueness — the authority. `input.domains` is already
+      // normalized/validated for shape by the schema.
+      const taken = input.domains.filter((d) => claimedDomains.has(d))
+      if (taken.length > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
+        })
+      }
+
+      const newConferenceId = generateKey('conference')
+      const { conference, sponsorTiers, contractTemplates, summary } =
+        buildEditionDocuments(
+          {
+            conference: source,
+            sponsorTiers: sourceTiers ?? [],
+            contractTemplates: sourceTemplates ?? [],
+          },
+          input,
+          {
+            newConferenceId,
+            mintId: () => generateKey('doc'),
+            mintKey: () => generateKey('key'),
+          },
+        )
+
+      try {
+        let tx = clientWrite.transaction().create(conference)
+        for (const tier of sponsorTiers) tx = tx.create(tier)
+        for (const tpl of contractTemplates) tx = tx.create(tpl)
+        await tx.commit()
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create the new edition',
+          cause: error,
+        })
+      }
+
+      // New edition adds a conference document; bust the shared conferences tag
+      // so domain resolution can see it once its domain actually resolves.
+      revalidateTag('content:conferences', 'default')
+
+      return {
+        conferenceId: newConferenceId,
+        summary: { conference: 1, ...summary },
+      }
     }),
 })
