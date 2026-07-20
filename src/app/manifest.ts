@@ -7,6 +7,12 @@ import type { MetadataRoute } from 'next'
  * stable across tenants so the installed app identity never changes, while the
  * icons resolve per host via the dynamic `/pwa/icon/*` routes (each conference's
  * own `logomarkBright`, with a static fallback).
+ *
+ * `start_url` points at `/launch` (see `src/app/launch/route.ts`): a UI-less
+ * Route Handler that resolves the signed-in role server-side and 307-redirects
+ * to the right home (organizer → `/admin`, speaker → `/cfp/list`, logged-out
+ * attendee → the public `/program`). `id` stays `/` so the installed app
+ * identity is unchanged by this start_url move.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -15,7 +21,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'CND',
     description:
       'Community-driven Kubernetes and Cloud Native conferences in the Nordics.',
-    start_url: '/',
+    start_url: '/launch',
     scope: '/',
     display: 'standalone',
     theme_color: '#1d4ed8',
