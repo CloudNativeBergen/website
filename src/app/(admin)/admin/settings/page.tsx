@@ -13,7 +13,11 @@ import {
   SelfCheckPanel,
 } from '@/components/admin/system-status'
 import { StatusBadge } from '@/components/StatusBadge'
+import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
+import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
+import { TopicsEditor } from '@/components/admin/TopicsEditor'
+import { TeamsEditor } from '@/components/admin/TeamsEditor'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -364,6 +368,14 @@ export default async function AdminSettings() {
 
   const editUrl = studioEditUrl(conference._id)
   const systemChecks = await buildSystemChecks(conference)
+  const session = await getAuthSession()
+  const currentUserId = session?.speaker?._id ?? ''
+  const organizerRows = (conference.organizers ?? []).map((org) => ({
+    _id: org._id,
+    name: org.name,
+    image: org.image,
+    title: org.title,
+  }))
 
   return (
     <div className="space-y-6">
@@ -658,10 +670,19 @@ export default async function AdminSettings() {
             icon={TagIcon}
             editUrl={editUrl}
             action={
-              <EditConferenceCard
-                fieldset="features"
-                initialValues={{ features: conference.features }}
-              />
+              <>
+                <TopicsEditor
+                  selectedTopics={(conference.topics ?? []).map((t) => ({
+                    _id: t._id,
+                    title: t.title,
+                    color: t.color,
+                  }))}
+                />
+                <EditConferenceCard
+                  fieldset="features"
+                  initialValues={{ features: conference.features }}
+                />
+              </>
             }
           >
             <FieldRow
@@ -681,7 +702,57 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          <InfoCard title="Team" icon={UserGroupIcon} editUrl={editUrl}>
+          <InfoCard
+            title="Announcement"
+            icon={DocumentTextIcon}
+            editUrl={editUrl}
+            action={
+              <EditConferenceCard
+                fieldset="announcement"
+                initialValues={{ announcement: conference.announcement }}
+              />
+            }
+          >
+            <FieldRow
+              label="Landing-page banner"
+              value={
+                Array.isArray(conference.announcement) &&
+                conference.announcement.length > 0
+                  ? 'Configured'
+                  : null
+              }
+            />
+          </InfoCard>
+
+          <InfoCard
+            title="Team"
+            icon={UserGroupIcon}
+            editUrl={editUrl}
+            action={
+              <>
+                <OrganizersEditor
+                  organizers={organizerRows}
+                  currentUserId={currentUserId}
+                />
+                <TeamsEditor
+                  teams={(conference.teams ?? []).map((team) => ({
+                    _key: team._key,
+                    key: team.key,
+                    title: team.title,
+                    members: Array.isArray(team.members)
+                      ? (team.members as unknown as string[])
+                      : [],
+                    slackChannel: team.slackChannel,
+                    emailIdentity: team.emailIdentity,
+                  }))}
+                  organizers={organizerRows.map((o) => ({
+                    _id: o._id,
+                    name: o.name,
+                  }))}
+                />
+              </>
+            }
+          >
             <FieldRow
               label="Organizers"
               value={conference.organizers?.map((org) => org.name)}

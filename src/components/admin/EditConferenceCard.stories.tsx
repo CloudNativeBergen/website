@@ -23,7 +23,27 @@ const handlers = [
   http.post('/api/trpc/conference.updateSponsorBenefits', ok),
   http.post('/api/trpc/conference.updateSponsorshipCustomization', ok),
   http.post('/api/trpc/conference.updateDomains', ok),
+  http.post('/api/trpc/conference.updateAnnouncement', ok),
 ]
+
+const announcementInitial = {
+  announcement: [
+    {
+      _type: 'block',
+      _key: 'b1',
+      style: 'h2',
+      children: [{ _type: 'span', _key: 's1', text: 'Tickets are live!' }],
+    },
+    {
+      _type: 'block',
+      _key: 'b2',
+      style: 'normal',
+      children: [
+        { _type: 'span', _key: 's2', text: 'Early-bird pricing ends soon.' },
+      ],
+    },
+  ],
+}
 
 const meta = {
   title: 'Systems/Settings/Admin/EditConferenceCard',
@@ -268,6 +288,24 @@ export const DomainsDangerousDark: Story = {
     fieldset: 'domains',
     initialValues: domainsInitial,
     currentDomain: 'cloudnativebergen.no',
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/** The rich-text Announcement fieldset — the portable-text editor + toolbar. */
+export const RichTextAnnouncement: Story = {
+  args: {
+    fieldset: 'announcement',
+    initialValues: announcementInitial,
+    defaultOpen: true,
+  },
+}
+
+export const RichTextAnnouncementDark: Story = {
+  args: {
+    fieldset: 'announcement',
+    initialValues: announcementInitial,
     defaultOpen: true,
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
