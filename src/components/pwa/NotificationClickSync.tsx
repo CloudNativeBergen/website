@@ -16,8 +16,9 @@ const MARK_READ_PARAM = 'markread'
 
 /**
  * True for an app-relative deep link ("/..."; never "//..." or a backslash
- * trick). Mirrors the SW's `sanitizeNotificationUrl` and the server's
- * `MarkReadByLinkSchema` so we never fire the mutation for a tampered param.
+ * trick). Mirrors — and slightly tightens (it also rejects protocol-relative
+ * "//..." paths) — the SW's `sanitizeNotificationUrl` and the server's
+ * `MarkReadByLinkSchema`, so we never fire the mutation for a tampered param.
  */
 function isAppRelativeLink(value: string): boolean {
   return (

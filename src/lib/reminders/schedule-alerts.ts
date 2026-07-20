@@ -22,7 +22,16 @@ import type { MovedTalk, SlotPlacement } from './types'
  *
  * The track is compared by INDEX, not display title, so renaming a track fires
  * no spurious "moved" alerts for its unchanged talks; only an actual position
- * change (or a date/time change) is a move.
+ * change (or a date/time change) is a move. This is the deliberate trade-off for
+ * the common case: post-placement track RENAMES (typo fixes, sponsor room names)
+ * are frequent and touch a whole track, so silencing them matters most.
+ *
+ * KNOWN LIMITATION: there is no stable track identity to compare on — the save
+ * path regenerates each track `_key` from its index, so index IS position. A
+ * post-placement track INSERT/REORDER therefore shifts the indices of unchanged
+ * talks and can emit "moved" alerts whose copy (time + title) looks unchanged.
+ * That edit is rare once talks are placed; a real fix needs a persisted,
+ * index-independent track id (a schema change), tracked separately.
  */
 export function diffScheduleSlots(
   prior: SlotPlacement[],
