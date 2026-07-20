@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { ReminderConference } from '../types'
 
 // --- Boundary mocks --------------------------------------------------------
-const createNotificationsMock = vi.fn().mockResolvedValue(undefined)
+// `createNotifications` now RESOLVES the number of documents persisted (N2). By
+// default it succeeds (returns the input length); tests override per-call to
+// simulate a silent failure (resolves 0) or a throw.
+const createNotificationsMock = vi
+  .fn()
+  .mockImplementation((items: unknown) =>
+    Promise.resolve(Array.isArray(items) ? items.length : 0),
+  )
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: (...a: unknown[]) => createNotificationsMock(...a),
 }))
@@ -117,6 +124,23 @@ describe('runSpeakerReminders — dedup + re-arming', () => {
     expect(summary.sent).toBe(0)
   })
 
+  it('does NOT stamp a marker when the emit silently persists nothing (N2)', async () => {
+    // createNotifications never throws — a silent failure resolves 0. The runner
+    // must then NOT stamp the dedup marker, so the reminder retries next run.
+    createNotificationsMock.mockResolvedValueOnce(0)
+    const summary = await runSpeakerReminders(CONF, PRE)
+    expect(summary.sent).toBe(0)
+    expect(summary.failed).toBe(1)
+    // No marker transaction committed.
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('stamps exactly once on a successful emit (N2)', async () => {
+    const summary = await runSpeakerReminders(CONF, PRE)
+    expect(summary.sent).toBe(1)
+    expect(commitMock).toHaveBeenCalledTimes(1)
+  })
+
   it('never throws when the candidate read fails', async () => {
     fetchMock.mockImplementationOnce(() =>
       Promise.reject(new Error('read fail')),
@@ -151,7 +175,18 @@ describe('runDayOfAgenda — presenting-today selection + dedup', () => {
     const inputs = createNotificationsMock.mock.calls[0][0]
     expect(inputs[0].recipientId).toBe('s1')
     expect(inputs[0].message).toContain('09:00')
+    // N3: a day-of ping is not a proposal decision — use 'system' (→
+    // otherUpdates) so it survives a proposalDecisions mute.
+    expect(inputs[0].notificationType).toBe('system')
     expect(createIfNotExistsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT stamp the day-of marker when the emit persists nothing (N2)', async () => {
+    createNotificationsMock.mockResolvedValueOnce(0)
+    const summary = await runDayOfAgenda(CONF, DAY)
+    expect(summary.sent).toBe(0)
+    expect(summary.failed).toBe(1)
+    expect(createIfNotExistsMock).not.toHaveBeenCalled()
   })
 
   it('skips a speaker already notified today (marker present)', async () => {

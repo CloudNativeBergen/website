@@ -140,6 +140,31 @@ describe('travel-reminder', () => {
   })
 })
 
+// N3: non-decision prep reminders must NOT ride the `proposalDecisions` push
+// category (mapped from 'proposal_status_changed'). `system` and
+// 'travel_support_update' both map to `otherUpdates` in
+// `pushCategoryForNotificationType`, so a speaker who mutes proposal decisions
+// still receives them. Only confirm-talk (decision-adjacent) stays on
+// 'proposal_status_changed'.
+describe('reminder push categories (N3)', () => {
+  it('keeps confirm-talk on the decision category', () => {
+    expect(reminder('confirm-talk').notificationType).toBe(
+      'proposal_status_changed',
+    )
+  })
+  it('routes upload-slides off the decision category', () => {
+    expect(reminder('upload-slides').notificationType).toBe('system')
+  })
+  it('routes logistics off the decision category', () => {
+    expect(reminder('logistics').notificationType).toBe('system')
+  })
+  it('keeps travel-reminder on its own (non-decision) category', () => {
+    expect(reminder('travel-reminder').notificationType).toBe(
+      'travel_support_update',
+    )
+  })
+})
+
 describe('logistics', () => {
   const r = reminder('logistics')
   it('is due within T-2d for a confirmed speaker', () => {

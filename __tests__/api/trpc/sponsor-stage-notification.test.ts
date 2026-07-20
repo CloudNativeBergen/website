@@ -91,7 +91,7 @@ beforeEach(() => {
     'actor-1',
     'org-2',
   ])
-  vi.mocked(createNotifications).mockResolvedValue(undefined)
+  vi.mocked(createNotifications).mockResolvedValue(1)
 })
 
 afterEach(() => {

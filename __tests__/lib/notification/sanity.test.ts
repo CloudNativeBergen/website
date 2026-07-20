@@ -120,11 +120,21 @@ describe('createNotifications — single-transaction fan-out', () => {
     expect(typeof doc.createdAt).toBe('string')
   })
 
-  it('is a no-op (no transaction) for an empty list', async () => {
+  it('is a no-op (no transaction) for an empty list, returning 0', async () => {
     const tx = installTransaction()
-    await createNotifications([])
+    const persisted = await createNotifications([])
+    expect(persisted).toBe(0)
     expect(writeMock.transaction).not.toHaveBeenCalled()
     expect(tx.commit).not.toHaveBeenCalled()
+  })
+
+  it('returns the number of documents persisted on success (N2)', async () => {
+    installTransaction()
+    const persisted = await createNotifications([
+      input({ recipientId: 'sp-1' }),
+      input({ recipientId: 'sp-2' }),
+    ])
+    expect(persisted).toBe(2)
   })
 
   it('sets optional actor and a WEAK relatedProposal reference only when provided', async () => {
@@ -160,12 +170,14 @@ describe('createNotifications — single-transaction fan-out', () => {
     expect('link' in doc).toBe(false)
   })
 
-  it('NEVER throws when the transaction commit fails — it swallows and logs', async () => {
+  it('NEVER throws when the transaction commit fails — it swallows, logs, and returns 0 (N2)', async () => {
     installTransaction(async () => {
       throw new Error('sanity down')
     })
 
-    await expect(createNotifications([input()])).resolves.toBeUndefined()
+    // Never-throw contract preserved; a caught failure persisted nothing → 0, so
+    // a caller can distinguish a silent failure from a success.
+    await expect(createNotifications([input()])).resolves.toBe(0)
     expect(console.error).toHaveBeenCalled()
   })
 })

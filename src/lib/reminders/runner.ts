@@ -192,17 +192,30 @@ export async function runSpeakerReminders(
           message: item.copy.message,
           link: item.copy.link,
         }
-        await createNotifications([input])
-        await stampReminderLog({
-          id: item.id,
-          key: reminder.key,
-          conferenceId: conference._id,
-          speakerId: item.speakerId,
-          now,
-        })
-        sends += 1
-        result.sent += 1
-        summary.sent += 1
+        // Stamp the dedup marker ONLY when the hub write actually persisted.
+        // `createNotifications` never throws — a silent failure returns 0 — so
+        // stamping unconditionally would mark a failed once-only reminder 'sent'
+        // and permanently suppress it. Gate on the persisted count so a failed
+        // emit retries next run.
+        const persisted = await createNotifications([input])
+        if (persisted > 0) {
+          await stampReminderLog({
+            id: item.id,
+            key: reminder.key,
+            conferenceId: conference._id,
+            speakerId: item.speakerId,
+            now,
+          })
+          sends += 1
+          result.sent += 1
+          summary.sent += 1
+        } else {
+          result.failed += 1
+          summary.failed += 1
+          console.error(
+            `Speaker reminder '${reminder.key}' persisted nothing for speaker ${item.speakerId}; not stamping marker`,
+          )
+        }
       } catch (error) {
         result.failed += 1
         summary.failed += 1
@@ -331,19 +344,32 @@ export async function runDayOfAgenda(
         const input: NotificationInput = {
           recipientId: entry.speakerId,
           conferenceId: conference._id,
-          notificationType: 'proposal_status_changed',
+          // 'system' → push category `otherUpdates`. A day-of agenda ping is NOT
+          // a proposal decision, so it must not be muted by a speaker who turned
+          // off `proposalDecisions` (which 'proposal_status_changed' maps to).
+          notificationType: 'system',
           title: `You're presenting today at ${conference.title || 'the conference'}!`,
           message: `"${entry.talkTitle}" at ${entry.startTime} on ${entry.trackTitle}. Break a leg!`,
           link: '/program',
         }
-        await createNotifications([input])
-        await createDayOfLog({
-          id,
-          conferenceId: conference._id,
-          speakerId: entry.speakerId,
-          now,
-        })
-        summary.sent += 1
+        // Stamp the day-of dedup marker ONLY when the hub write persisted (see
+        // the runSpeakerReminders rationale): a silent failure returns 0, and
+        // stamping anyway would permanently suppress this once-per-day reminder.
+        const persisted = await createNotifications([input])
+        if (persisted > 0) {
+          await createDayOfLog({
+            id,
+            conferenceId: conference._id,
+            speakerId: entry.speakerId,
+            now,
+          })
+          summary.sent += 1
+        } else {
+          summary.failed += 1
+          console.error(
+            `Day-of agenda persisted nothing for speaker ${entry.speakerId}; not stamping marker`,
+          )
+        }
       } catch (error) {
         summary.failed += 1
         console.error(

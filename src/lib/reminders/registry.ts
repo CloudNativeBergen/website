@@ -52,6 +52,12 @@ function talkInStatus(speaker: ReminderSpeaker, status: string) {
  * (a) confirm-talk — an accepted (but not yet confirmed) talk needs the speaker
  * to confirm participation. Due from acceptance onward; re-nudged up to
  * {@link CONFIRM_MAX_SENDS} times, {@link CONFIRM_SPACING_DAYS} days apart.
+ *
+ * PUSH CATEGORY: kept on `proposal_status_changed` (→ `proposalDecisions`)
+ * deliberately — confirming an ACCEPTED talk is decision-adjacent, so it belongs
+ * with a speaker's proposal-decision pushes. The non-decision prep reminders
+ * (upload-slides, logistics, day-of) instead use `system` (→ `otherUpdates`) so
+ * a speaker who mutes proposal decisions still receives them.
  */
 const confirmTalk: Reminder = {
   key: 'confirm-talk',
@@ -76,7 +82,9 @@ const confirmTalk: Reminder = {
  */
 const uploadSlides: Reminder = {
   key: 'upload-slides',
-  notificationType: 'proposal_status_changed',
+  // `system` → push category `otherUpdates`: a slides-upload nudge is not a
+  // proposal decision and must not be muted with `proposalDecisions`.
+  notificationType: 'system',
   maxSends: SLIDES_MAX_SENDS,
   spacingDays: SLIDES_SPACING_DAYS,
   evaluate(speaker, conference, today) {
@@ -160,7 +168,9 @@ const travelReminder: Reminder = {
  */
 const logistics: Reminder = {
   key: 'logistics',
-  notificationType: 'proposal_status_changed',
+  // `system` → push category `otherUpdates`: a venue/arrival/AV note is not a
+  // proposal decision and must not be muted with `proposalDecisions`.
+  notificationType: 'system',
   maxSends: 1,
   spacingDays: 0,
   evaluate(speaker, conference, today) {

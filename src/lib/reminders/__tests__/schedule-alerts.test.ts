@@ -20,7 +20,8 @@ const slot = (
   startTime: string,
   trackTitle: string,
   date = '2026-09-10',
-): SlotPlacement => ({ talkId, date, startTime, trackTitle })
+  trackIndex = 0,
+): SlotPlacement => ({ talkId, date, startTime, trackIndex, trackTitle })
 
 describe('diffScheduleSlots', () => {
   it('detects a time move', () => {
@@ -31,13 +32,23 @@ describe('diffScheduleSlots', () => {
     expect(moved).toHaveLength(1)
     expect(moved[0].to.startTime).toBe('10:00')
   })
-  it('detects a track move', () => {
+  it('detects a track move (different track position)', () => {
     const moved = diffScheduleSlots(
-      [slot('t1', '09:00', 'Track A')],
-      [slot('t1', '09:00', 'Track B')],
+      [slot('t1', '09:00', 'Track A', '2026-09-10', 0)],
+      [slot('t1', '09:00', 'Track B', '2026-09-10', 1)],
     )
     expect(moved).toHaveLength(1)
     expect(moved[0].to.trackTitle).toBe('Track B')
+  })
+  it('ignores a pure track-title RENAME (N4: same position, same time)', () => {
+    // Renaming a track's display title while its position (index), date and
+    // start time are unchanged must NOT fire a spurious "moved" alert.
+    expect(
+      diffScheduleSlots(
+        [slot('t1', '09:00', 'Track A', '2026-09-10', 0)],
+        [slot('t1', '09:00', 'Main Stage', '2026-09-10', 0)],
+      ),
+    ).toEqual([])
   })
   it('detects a date move', () => {
     const moved = diffScheduleSlots(

@@ -59,7 +59,9 @@ function collectPlacements(
   tracks: ConferenceSchedule['tracks'] | undefined,
 ): SlotPlacement[] {
   const placements: SlotPlacement[] = []
-  for (const track of tracks || []) {
+  const trackList = tracks || []
+  for (let trackIndex = 0; trackIndex < trackList.length; trackIndex++) {
+    const track = trackList[trackIndex]
     for (const talk of track.talks || []) {
       if (talk.placeholder) continue
       const talkId = resolveTalkId(talk)
@@ -68,6 +70,7 @@ function collectPlacements(
         talkId,
         date,
         startTime: talk.startTime,
+        trackIndex,
         trackTitle: track.trackTitle,
       })
     }
@@ -88,12 +91,20 @@ interface PriorScheduleSlots {
 
 /**
  * Fetch the CURRENT persisted placements of a schedule day (before it is
- * overwritten), so the save can diff moved talks afterwards. Best-effort: any
- * failure yields an empty set (no false "moved" alerts), never a save failure.
+ * overwritten), so the save can diff moved talks afterwards. Best-effort and
+ * never a save failure.
+ *
+ * RETURN: the placements on success (an empty array for a genuinely empty/new
+ * day), or `null` when the READ ITSELF FAILED. The distinction matters: a failed
+ * read is NOT the same as an empty day. If it silently returned `[]`, the diff
+ * would treat every current talk as "newly placed" and announce NOTHING — so a
+ * real move during a transient read failure would go out unannounced with no
+ * trace. The caller SKIPS the alert pass (and logs) when this is `null`, rather
+ * than diffing against a bogus empty baseline.
  */
 async function fetchPriorPlacements(
   scheduleId: string,
-): Promise<SlotPlacement[]> {
+): Promise<SlotPlacement[] | null> {
   try {
     const doc = await clientWrite.fetch<PriorScheduleSlots | null>(
       `*[_id == $id][0]{
@@ -107,21 +118,26 @@ async function fetchPriorPlacements(
     )
     if (!doc?.date) return []
     const placements: SlotPlacement[] = []
-    for (const track of doc.tracks || []) {
+    const trackList = doc.tracks || []
+    for (let trackIndex = 0; trackIndex < trackList.length; trackIndex++) {
+      const track = trackList[trackIndex]
       for (const slot of track.talks || []) {
         if (!slot.talkId || !slot.startTime) continue
         placements.push({
           talkId: slot.talkId,
           date: doc.date,
           startTime: slot.startTime,
+          trackIndex,
           trackTitle: track.trackTitle || '',
         })
       }
     }
     return placements
   } catch (error) {
+    // Read failure — return the null sentinel so the caller skips (not misfires)
+    // the schedule-change alert pass. Never rethrow: the save must not fail.
     console.error('Failed to read prior schedule placements:', error)
-    return []
+    return null
   }
 }
 
@@ -254,12 +270,23 @@ export async function saveScheduleToSanity(
       // speakers of any talk whose slot actually moved. Never-throw (a failure
       // here must not fail the already-committed save); a run where nothing
       // moved emits nothing.
-      await notifyScheduleChanges({
-        prior: priorPlacements,
-        next: collectPlacements(schedule.date, schedule.tracks),
-        conferenceId: conference._id,
-        actorId: options?.actorId,
-      })
+      //
+      // A `null` prior means the pre-save read FAILED (distinct from an empty
+      // day): diffing against an empty baseline would treat every talk as newly
+      // placed and announce nothing, silently swallowing any real move. Skip the
+      // pass entirely and log so the miss is observable, rather than misfire.
+      if (priorPlacements === null) {
+        console.warn(
+          `Skipping schedule-change alerts for ${schedule._id}: prior placements unavailable (read failed)`,
+        )
+      } else {
+        await notifyScheduleChanges({
+          prior: priorPlacements,
+          next: collectPlacements(schedule.date, schedule.tracks),
+          conferenceId: conference._id,
+          actorId: options?.actorId,
+        })
+      }
     } else {
       // DUPLICATE-DAY GUARD: any payload with `_id: ''` creates a fresh schedule
       // doc and appends it to `conference.schedules`. Two organizers saving the

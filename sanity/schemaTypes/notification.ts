@@ -52,7 +52,8 @@ export default defineType({
             title: 'Proposal Status Changed',
             value: 'proposal_status_changed',
           },
-          // Reserved for future use — no emitter yet.
+          // Reserved, currently unused — superseded by 'message_received'
+          // (decision comments relay via the message thread). No emitter.
           { title: 'Proposal Comment', value: 'proposal_comment' },
           { title: 'Message Received', value: 'message_received' },
           { title: 'Stale Conversation', value: 'message_stale' },
@@ -60,7 +61,8 @@ export default defineType({
           { title: 'Co-Speaker Response', value: 'cospeaker_response' },
           { title: 'Travel Support Update', value: 'travel_support_update' },
           { title: 'Sponsor Activity', value: 'sponsor_activity' },
-          // Reserved for future use — no emitter yet.
+          // Emitted by src/lib/reminders/schedule-alerts.ts when a talk's slot
+          // moves (date/time/track position) on a schedule save.
           { title: 'Schedule Update', value: 'schedule_update' },
           { title: 'Gallery Tagged', value: 'gallery_tagged' },
           { title: 'System', value: 'system' },

@@ -120,7 +120,15 @@ export interface SlotPlacement {
   date: string
   /** Slot start time (HH:mm). */
   startTime: string
-  /** Track the slot sits in. */
+  /**
+   * Zero-based position of the track within the day. This — NOT `trackTitle` —
+   * is the STABLE track identity the move diff compares on: renaming a track
+   * keeps its index (so a rename fires no false "moved" alerts), while moving a
+   * talk to a different track changes its index (a genuine move). `trackTitle`
+   * is display-only (carried for the notification copy).
+   */
+  trackIndex: number
+  /** Display title of the track (for the notification copy). */
   trackTitle: string
 }
 

@@ -61,7 +61,7 @@ const lastItems = (): NotificationInput[] =>
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(createNotifications).mockResolvedValue(undefined)
+  vi.mocked(createNotifications).mockResolvedValue(1)
   vi.mocked(getOrganizerSpeakerIds).mockResolvedValue([
     'org-1',
     'actor-1',

@@ -8,7 +8,10 @@
 export type NotificationType =
   | 'proposal_submitted'
   | 'proposal_status_changed'
-  // Reserved for future use — no emitter yet.
+  // Reserved, currently UNUSED: superseded by `message_received` — proposal
+  // decision comments now relay through the speaker↔organizer message thread
+  // rather than a dedicated notification. Kept for back-compat with any legacy
+  // stored documents; no emitter creates it.
   | 'proposal_comment'
   // Speaker↔organizer conversation message (messaging M1).
   | 'message_received'
@@ -21,7 +24,9 @@ export type NotificationType =
   | 'cospeaker_response'
   | 'travel_support_update'
   | 'sponsor_activity'
-  // Reserved for future use — no emitter yet.
+  // Emitted by `src/lib/reminders/schedule-alerts.ts` when a talk's slot moves
+  // (date/time/track position) on a schedule save. Rendered generically by the
+  // hub.
   | 'schedule_update'
   | 'gallery_tagged'
   | 'system'

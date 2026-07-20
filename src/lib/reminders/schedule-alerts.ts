@@ -15,10 +15,14 @@ import type { MovedTalk, SlotPlacement } from './types'
 
 /**
  * Pure diff: talks present in BOTH the prior and next placement sets whose
- * date, startTime, or trackTitle changed. A talk only in `next` (newly placed)
- * or only in `prior` (removed) is excluded. Last placement wins if a talk id
- * appears more than once in a set (defensive — a valid schedule places a talk
- * once).
+ * date, startTime, or track POSITION (`trackIndex`) changed. A talk only in
+ * `next` (newly placed) or only in `prior` (removed) is excluded. Last placement
+ * wins if a talk id appears more than once in a set (defensive — a valid
+ * schedule places a talk once).
+ *
+ * The track is compared by INDEX, not display title, so renaming a track fires
+ * no spurious "moved" alerts for its unchanged talks; only an actual position
+ * change (or a date/time change) is a move.
  */
 export function diffScheduleSlots(
   prior: SlotPlacement[],
@@ -40,18 +44,20 @@ export function diffScheduleSlots(
     if (
       from.date !== to.date ||
       from.startTime !== to.startTime ||
-      from.trackTitle !== to.trackTitle
+      from.trackIndex !== to.trackIndex
     ) {
       moved.push({
         talkId,
         from: {
           date: from.date,
           startTime: from.startTime,
+          trackIndex: from.trackIndex,
           trackTitle: from.trackTitle,
         },
         to: {
           date: to.date,
           startTime: to.startTime,
+          trackIndex: to.trackIndex,
           trackTitle: to.trackTitle,
         },
       })
