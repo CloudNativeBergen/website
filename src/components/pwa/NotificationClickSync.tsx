@@ -85,14 +85,15 @@ export function NotificationClickSync() {
   // original app-relative link — NOT the current URL — so it matches the stored
   // `link` markReadByLink validates against.
   useEffect(() => {
-    if (!isSignedIn) return
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
     const link = params.get(MARK_READ_PARAM)
     if (link === null) return
 
-    // Strip the param regardless of validity so a junk value can't linger.
+    // Strip the param regardless of validity OR sign-in state so a junk value
+    // (or a param that arrived on a signed-out load) can't linger in the URL and
+    // re-fire on a later reload/share.
     params.delete(MARK_READ_PARAM)
     const query = params.toString()
     const stripped =
@@ -101,7 +102,9 @@ export function NotificationClickSync() {
       window.location.hash
     window.history.replaceState(window.history.state, '', stripped)
 
-    if (isAppRelativeLink(link)) {
+    // Only mark-read for a signed-in caller (markReadByLink is a protected
+    // procedure); a signed-out visitor just gets the param stripped above.
+    if (isSignedIn && isAppRelativeLink(link)) {
       // Recipient-guarded + link-matched + re-validated server-side, so this can
       // only ever clear the CALLER'S OWN notification whose link equals `link`.
       mutate({ links: [link] })

@@ -33,7 +33,7 @@ let priorFetchImpl: () => Promise<unknown> = () =>
 const commitMock = vi.fn().mockResolvedValue({ _rev: 'r2' })
 const setMock = vi.fn(() => ({ commit: commitMock }))
 const ifRevisionIdMock = vi.fn(() => ({ set: setMock }))
-const patchMock = vi.fn((_id: string) => ({ ifRevisionId: ifRevisionIdMock }))
+const patchMock = vi.fn(() => ({ ifRevisionId: ifRevisionIdMock }))
 
 const fetchMock = vi.fn((query: string) => {
   // Target-existence / scope check.

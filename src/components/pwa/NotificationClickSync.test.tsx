@@ -138,7 +138,7 @@ describe('NotificationClickSync', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('does not fire the markread param when signed out', () => {
+  it('does not fire the markread param when signed out, but still strips it', () => {
     mockSession = null
     mockPathname = '/cfp/proposal/1'
     window.history.replaceState(
@@ -148,5 +148,8 @@ describe('NotificationClickSync', () => {
     )
     render(<NotificationClickSync />)
     expect(markReadMutate).not.toHaveBeenCalled()
+    // The param must be stripped even when signed out, so it can't linger and
+    // re-fire on a later authenticated reload/share.
+    expect(window.location.search).not.toContain('markread')
   })
 })
