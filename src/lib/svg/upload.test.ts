@@ -164,6 +164,23 @@ describe('sanitizeSvgUpload', () => {
       expect(r.removed).toContain('<style> element')
       expect(r.removed).toContain('<image> element')
     })
+
+    it('strips an event handler on the ROOT <svg> element', () => {
+      const r = sanitizeSvgUpload(
+        `<svg xmlns="http://www.w3.org/2000/svg" onload="steal()"><rect width="10"/></svg>`,
+      )
+      expect(r.ok).toBe(true)
+      expect(r.svg).not.toMatch(/onload/i)
+      expect(r.removed).toContain('onload event handler')
+    })
+
+    it('strips a dangerous inline style on the ROOT <svg> element', () => {
+      const r = sanitizeSvgUpload(
+        `<svg xmlns="http://www.w3.org/2000/svg" style="background:url(https://evil.example/x)"><rect width="10"/></svg>`,
+      )
+      expect(r.svg).not.toMatch(/evil\.example/)
+      expect(r.removed).toContain('unsafe inline style')
+    })
   })
 })
 

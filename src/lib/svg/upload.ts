@@ -189,6 +189,12 @@ export function sanitizeSvgUpload(
   }
 
   const removed = new Set<string>()
+  // Clean the ROOT <svg>'s own attributes first — cleanElement only visits a
+  // node's CHILDREN, so without this an `onload` / dangerous `style` /
+  // `javascript:` xlink:href placed directly on <svg …> would persist through
+  // the authoritative write gate (a stored-XSS bypass) and the preview would
+  // falsely report nothing removed.
+  cleanAttributes(root, removed)
   cleanElement(root, removed)
 
   if (removed.size === 0) {
