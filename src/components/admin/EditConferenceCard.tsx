@@ -39,8 +39,8 @@ import { useNotification } from './NotificationProvider'
  *
  * SE-1a covered SCALAR fieldsets. SE-1b adds three renderers:
  *   - `string-list`  — an add/remove/reorder list of strings (social links,
- *     features, domains), with per-row URL/hostname validation and an optional
- *     known-value checkbox set (features).
+ *     domains), with per-row URL/hostname validation and an optional
+ *     known-value checkbox set.
  *   - `object-list`  — the same row machinery over multi-column objects (vanity
  *     metrics, sponsor benefits) with text / textarea / select columns.
  *   - a `dangerous` fieldset option — a type-to-confirm gate + red Save,
@@ -63,7 +63,6 @@ export type ConferenceFieldsetKey =
   | 'ticketingIds'
   | 'cfpGoals'
   | 'socialLinks'
-  | 'features'
   | 'vanityMetrics'
   | 'sponsorBenefits'
   | 'sponsorshipCustomization'
@@ -364,24 +363,6 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
       },
     ],
   },
-  features: {
-    title: 'Features',
-    subtitle: 'Experimental feature flags',
-    fields: [
-      {
-        name: 'features',
-        label: 'Features',
-        type: 'string-list',
-        itemType: 'text',
-        itemLabel: 'flag',
-        // Only one known flag exists today (`test_feature`) and nothing reads
-        // the field at runtime, so the UI offers the known toggle plus a free
-        // list for custom/unknown flags.
-        knownValues: [{ value: 'test_feature', title: 'Test Feature' }],
-        description: 'Toggle a known flag, or add a custom flag string.',
-      },
-    ],
-  },
   vanityMetrics: {
     title: 'Vanity Metrics',
     subtitle: 'Landing-page highlight numbers',
@@ -533,7 +514,6 @@ const MUTATION_BY_FIELDSET: Record<
   ticketingIds: 'updateTicketingIds',
   cfpGoals: 'updateCfpGoals',
   socialLinks: 'updateSocialLinks',
-  features: 'updateFeatures',
   vanityMetrics: 'updateVanityMetrics',
   sponsorBenefits: 'updateSponsorBenefits',
   sponsorshipCustomization: 'updateSponsorshipCustomization',

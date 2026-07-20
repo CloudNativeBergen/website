@@ -25,7 +25,12 @@ export type TeamEmailIdentity = 'contactEmail' | 'cfpEmail' | 'sponsorEmail'
  */
 export type TeamSlackKind = 'sales' | 'cfp'
 
-/** A team key. Free-form string; {@link WELL_KNOWN_TEAM_KEYS} are the greenlit ones. */
+/**
+ * A team key. Free-form string. The routing map (`resolveRoutedOrganizerIds`)
+ * consumes a small set of well-known keys — `cfp` (proposal threads / CFP
+ * notifications) and `sponsors` (sponsor threads / sales notifications) — but
+ * arbitrary additional keys are allowed; nothing enforces an allow-list.
+ */
 export type TeamKey = string
 
 /**
@@ -61,23 +66,3 @@ export interface ConferenceTeamsConfig {
   cfpEmail?: string
   sponsorEmail?: string
 }
-
-/**
- * The greenlit, well-known team keys the TEAMS-2 routing map consumes:
- *  - `cfp`        ← proposal threads / CFP notifications
- *  - `sponsors`   ← sponsor threads / sales notifications
- *  - `volunteers` ← volunteer coordination
- *  - `workshops`  ← workshop coordination
- *
- * Arbitrary ADDITIONAL keys are allowed; this constant is the routing map’s
- * anchor, not an allow-list.
- *
- * @public consumed by the TEAMS-2 routing map (wired via
- * {@link import('./routing').resolveRoutedOrganizerIds}).
- */
-export const WELL_KNOWN_TEAM_KEYS = [
-  'cfp',
-  'sponsors',
-  'volunteers',
-  'workshops',
-] as const

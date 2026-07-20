@@ -9,6 +9,14 @@
 
 export const RATE_LIMIT_MAX = 3
 export const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hour
+/**
+ * Hard cap on how many distinct workshops the module Map may track at once, so a
+ * flood of distinct ids can never grow it without bound. Matches the shared
+ * house pattern (`message.send` / `sponsorMessages`); on overflow the genuinely
+ * oldest key is evicted (Map preserves insertion order and each active key is
+ * re-inserted at the tail below).
+ */
+export const MAX_RATE_ENTRIES = 10_000
 
 /** workshopId -> ascending timestamps (ms) of accepted announcements in-window. */
 const buckets = new Map<string, number[]>()
@@ -30,6 +38,9 @@ export function consumeAnnouncementRateLimit(
 ): RateLimitResult {
   const windowStart = now - RATE_LIMIT_WINDOW_MS
   const recent = (buckets.get(workshopId) ?? []).filter((t) => t > windowStart)
+  // Re-insert at the tail so this just-active workshop is the most-recent entry
+  // (the eviction below always targets the genuinely oldest key).
+  buckets.delete(workshopId)
 
   if (recent.length >= RATE_LIMIT_MAX) {
     // Oldest in-window attempt frees a slot once it ages out of the window.
@@ -39,6 +50,10 @@ export function consumeAnnouncementRateLimit(
   }
 
   recent.push(now)
+  if (buckets.size >= MAX_RATE_ENTRIES) {
+    const oldest = buckets.keys().next().value
+    if (oldest !== undefined) buckets.delete(oldest)
+  }
   buckets.set(workshopId, recent)
   return { allowed: true, retryAfterMs: 0 }
 }

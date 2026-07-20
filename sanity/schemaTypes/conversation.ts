@@ -174,7 +174,7 @@ export default defineType({
       type: 'array',
       of: [{ type: 'conversationParticipant' }],
       description:
-        'The GENERAL party representation of this thread (messaging party model, G1). Written ALONGSIDE the legacy createdBy/subjectSpeaker/proposal fields (dual-write): proposal threads → each proposal speaker + the organizers group; general threads → the creator + optional subject speaker + the organizers group. NOT yet the read source in G1 — the legacy fields still drive access, recipients and Studio previews; the read path flips to this array in G2 (after migration 043 backfills it). Written by the server, not edited in Studio.',
+        'The GENERAL party representation of this thread (messaging party model). Written ALONGSIDE the legacy createdBy/subjectSpeaker/proposal fields (dual-write): proposal threads → each proposal speaker + the organizers group; general threads → the creator + optional subject speaker + the organizers group; sponsor threads → the sponsor party + the organizers group. THIS IS THE READ SOURCE for participant/authz/recipient resolution as of G2a: resolveParticipants PREFERS this array (with a derive-from-legacy-fields fallback for a participants-less doc). The inbox VIEW PREDICATES and Studio previews deliberately stay on the legacy fields (a participants[]-based predicate could not express the derive fallback and would diverge for speaker edits G2a does not sync). Written by the server, not edited in Studio.',
       readOnly: true,
     }),
   ],

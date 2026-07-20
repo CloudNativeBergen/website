@@ -300,25 +300,6 @@ describe('conference router — social links', () => {
   })
 })
 
-describe('conference router — features', () => {
-  it('accepts a mix of known and custom flags', async () => {
-    const result = await makeCaller({ isOrganizer: true }).updateFeatures({
-      features: ['test_feature', 'custom_flag'],
-    })
-    expect(result.success).toBe(true)
-    expect(lastSet).toEqual({ features: ['test_feature', 'custom_flag'] })
-  })
-
-  it('rejects duplicate flags', async () => {
-    await expect(
-      makeCaller({ isOrganizer: true }).updateFeatures({
-        features: ['a', 'a'],
-      }),
-    ).rejects.toBeTruthy()
-    expect(commitMock).not.toHaveBeenCalled()
-  })
-})
-
 describe('conference router — vanity metrics', () => {
   it('adds a _key to every row', async () => {
     await makeCaller({ isOrganizer: true }).updateVanityMetrics({

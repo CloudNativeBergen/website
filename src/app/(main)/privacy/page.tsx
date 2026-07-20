@@ -1227,6 +1227,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </tr>
                           <tr>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Reminder Delivery Log
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Speaker reference, reminder type, send count
+                                and timestamps)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Duration of the conference edition
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Operational bookkeeping so a scheduled speaker
+                              reminder is not delivered twice
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
                               Messages
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 (Content, author, timestamps, conversation
@@ -1234,7 +1253,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Until deleted
+                              24 months after conference ends
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">

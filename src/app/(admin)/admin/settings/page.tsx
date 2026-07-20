@@ -709,19 +709,13 @@ export default async function AdminSettings() {
             icon={TagIcon}
             editUrl={editUrl}
             action={
-              <>
-                <TopicsEditor
-                  selectedTopics={(conference.topics ?? []).map((t) => ({
-                    _id: t._id,
-                    title: t.title,
-                    color: t.color,
-                  }))}
-                />
-                <EditConferenceCard
-                  fieldset="features"
-                  initialValues={{ features: conference.features }}
-                />
-              </>
+              <TopicsEditor
+                selectedTopics={(conference.topics ?? []).map((t) => ({
+                  _id: t._id,
+                  title: t.title,
+                  color: t.color,
+                }))}
+              />
             }
           >
             <FieldRow
@@ -732,11 +726,6 @@ export default async function AdminSettings() {
             <FieldRow
               label="Available Topics"
               value={conference.topics}
-              type="array"
-            />
-            <FieldRow
-              label="Features"
-              value={conference.features}
               type="array"
             />
           </InfoCard>

@@ -12,7 +12,7 @@ This project is built using a modern web stack:
 - **Content Management:** [Sanity.io](https://www.sanity.io/)
 - **Authentication:** [Auth.js](https://authjs.dev/) (with LinkedIn and GitHub providers)
 - **Deployment:** [Vercel](https://vercel.com/)
-- **Email Notifications:** [SendGrid](https://sendgrid.com/)
+- **Email Notifications:** [Resend](https://resend.com/)
 
 It's designed as a **multi-tenant** application. This means the same codebase can serve different conferences or events, each potentially hosted on its own subdomain (e.g., `2025.cloudnativedays.no`, `2026.cloudnativedays.no`).
 
@@ -214,6 +214,8 @@ The frontend component (`src/components/Schedule.tsx`) fetches the relevant sche
 
 ## Additional Documentation
 
-- **[Query Parameters for Proposal Filters](./QUERY_PARAMETERS.md)** - Guide to using URL query parameters for filtering proposals in the admin interface
 - **[Messaging System Architecture](./MESSAGING_SYSTEM.md)** - Speaker↔organizer conversations: data model, deterministic ids, channel/link contracts, lifecycle, and security
 - **[Messaging UX Flows & Decision Log](./MESSAGING_UX.md)** - Messaging surfaces, user flows, the archive/mute precedence table, and the maintainer decision log
+- **[Speaker Reminders](./SPEAKER_REMINDERS.md)** - The scheduled speaker-prep reminder engine: registry, dedup markers, the daily cron, the day-of agenda, schedule-change alerts, and retention
+- **[Conference Settings Editing](./CONFERENCE_SETTINGS_EDITING.md)** - Editing a conference in the app (Studio-elimination): field-scoped patches, the fieldset editor, editor islands, guards, and the create-next-edition wizard
+- **[PWA System](./PWA_SYSTEM.md)** - The installable app: manifest, the role-aware `/launch`, the service worker + CACHE_VERSION stamping, the app badge, notification click-to-read, and the notifications page
