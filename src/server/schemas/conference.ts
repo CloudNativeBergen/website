@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
+import { isValidTeamKey } from '@/lib/teams/validation'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -255,4 +256,114 @@ export const UpdateDomainsSchema = z.object({
         seen.add(entry)
       })
     }),
+})
+
+// === SE-2: reference arrays, teams & rich text ===========================
+
+/**
+ * A speaker `_id`. References are stored by the router as
+ * `{ _type: 'reference', _ref: <id>, _key }` — the client only ever sends the
+ * id string, never a whole reference object.
+ */
+const documentId = z.string().trim().min(1, 'An id is required')
+
+/**
+ * Organizers — the CANONICAL organizer set (auth + notification fan-out). A full
+ * replace of the reference array. Non-empty ALWAYS and de-duplicated. The
+ * self-lockout guard (the acting organizer may not remove themselves) needs the
+ * caller identity, so it lives in the router — see `updateOrganizers`.
+ */
+export const UpdateOrganizersSchema = z.object({
+  organizers: z
+    .array(documentId)
+    .min(1, 'At least one organizer is required')
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Organizers must be unique',
+    }),
+})
+
+/**
+ * Topics — the conference's `topics[]` reference array. Mirrors the Sanity
+ * schema's `required().min(1).unique()`: at least one, no duplicates.
+ */
+export const UpdateTopicsSchema = z.object({
+  topics: z
+    .array(documentId)
+    .min(1, 'At least one topic is required')
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Topics must be unique',
+    }),
+})
+
+/** The conference email identities a team's outbound mail may be sent as. */
+const TEAM_EMAIL_IDENTITIES = [
+  'contactEmail',
+  'cfpEmail',
+  'sponsorEmail',
+] as const
+
+/**
+ * Organizer teams — the `teams[]` object array (a SOFT LENS for routing, never
+ * an access boundary — see `src/lib/teams`). Full-array replace. Per team:
+ *   - `key`      lowercase kebab-case, UNIQUE within the list (checked below).
+ *   - `title`    required.
+ *   - `members`  ≥1 speaker ids; the SUBSET-of-organizers rule needs the current
+ *                organizer set, so it is enforced in the router.
+ *   - `slackChannel`  optional free text.
+ *   - `emailIdentity` 0..n of the three conference identities (the UI offers a
+ *                single select, but the field is an array per the Sanity schema).
+ */
+export const UpdateTeamsSchema = z.object({
+  teams: z
+    .array(
+      z.object({
+        key: z
+          .string()
+          .trim()
+          .min(1, 'Key is required')
+          .refine(isValidTeamKey, {
+            message:
+              'Key must be lowercase kebab-case (letters, numbers and single hyphens)',
+          }),
+        title: z.string().trim().min(1, 'Title is required'),
+        members: z
+          .array(documentId)
+          .min(1, 'A team needs at least one member')
+          .refine((ids) => new Set(ids).size === ids.length, {
+            message: 'Team members must be unique',
+          }),
+        slackChannel: z.string().trim().nullable().optional(),
+        emailIdentity: z.array(z.enum(TEAM_EMAIL_IDENTITIES)).optional(),
+        _key: z.string().optional(),
+      }),
+    )
+    .superRefine((teams, ctx) => {
+      const seen = new Set<string>()
+      teams.forEach((team, i) => {
+        if (seen.has(team.key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Duplicate team key "${team.key}" — keys must be unique`,
+            path: [i, 'key'],
+          })
+        }
+        seen.add(team.key)
+      })
+    }),
+})
+
+/**
+ * Announcement — the portable-text `announcement` field shown on the landing
+ * page (see `Hero.tsx`). A full replace; an empty/omitted array UNSETS the field
+ * (`null`) so the announcement banner stops rendering. Blocks are validated
+ * loosely (each carries a `_type`) — the shape is owned by the shared
+ * `PortableTextEditor`, whose schema (h1-h3, strong/em/underline, bullet/number
+ * lists, link) is the source of truth.
+ */
+const PortableTextBlockSchema = z
+  .object({ _type: z.string().min(1) })
+  .catchall(z.unknown())
+
+export const UpdateAnnouncementSchema = z.object({
+  announcement: z.array(PortableTextBlockSchema).nullable(),
 })

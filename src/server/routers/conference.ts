@@ -2,8 +2,9 @@ import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
-import { clientWrite } from '@/lib/sanity/client'
-import { ensureArrayKeys } from '@/lib/sanity/helpers'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { ensureArrayKeys, createReferenceWithKey } from '@/lib/sanity/helpers'
+import { clearConferenceTeamsCache } from '@/lib/teams'
 import {
   CANNOT_REMOVE_CURRENT_DOMAIN,
   domainsWouldStrandHost,
@@ -22,7 +23,15 @@ import {
   UpdateSponsorBenefitsSchema,
   UpdateSponsorshipCustomizationSchema,
   UpdateDomainsSchema,
+  UpdateOrganizersSchema,
+  UpdateTopicsSchema,
+  UpdateTeamsSchema,
+  UpdateAnnouncementSchema,
 } from '../schemas/conference'
+
+/** The message the self-lockout guard rejects a self-removal with. */
+export const CANNOT_REMOVE_SELF_ORGANIZER =
+  'You cannot remove yourself from the organizer team'
 
 /**
  * Field-scoped conference settings mutations (SE-1a).
@@ -219,5 +228,116 @@ export const conferenceRouter = router({
         })
       }
       return applyConferencePatch(conferenceId, { domains: input.domains })
+    }),
+
+  // === SE-2: organizers, topics, teams & announcement ======================
+
+  /**
+   * SAFEGUARDED. `organizers[]` is the CANONICAL organizer set — it drives
+   * `/admin` access and notification fan-out. Removing someone revokes their
+   * admin access on their next session refresh.
+   *
+   * SELF-LOCKOUT GUARD: the acting organizer cannot remove THEMSELVES (they'd
+   * lose their own admin access mid-edit). Removing OTHER organizers is allowed.
+   * The guard binds to the server-derived caller identity (`ctx.speaker._id`),
+   * so a crafted payload cannot bypass it. Non-empty + uniqueness are enforced by
+   * the schema.
+   */
+  updateOrganizers: adminProcedure
+    .input(UpdateOrganizersSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (!input.organizers.includes(ctx.speaker._id)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: CANNOT_REMOVE_SELF_ORGANIZER,
+        })
+      }
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, {
+        organizers: input.organizers.map((id) =>
+          createReferenceWithKey(id, 'organizer'),
+        ),
+      })
+    }),
+
+  updateTopics: adminProcedure
+    .input(UpdateTopicsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, {
+        topics: input.topics.map((id) => createReferenceWithKey(id, 'topic')),
+      })
+    }),
+
+  /**
+   * Organizer teams — a SOFT LENS over the organizer set (routing / mail
+   * defaults), NEVER an access boundary. Full-array replace.
+   *
+   * SUBSET ENFORCEMENT: every team member must be one of THIS conference's
+   * current organizers. The Sanity schema only documents this (Studio filters
+   * the picker); the router ENFORCES it against the live organizer set so a
+   * crafted payload cannot add a non-organizer. Key uniqueness/kebab and
+   * members≥1 come from the schema.
+   *
+   * On success the per-instance teams cache is cleared so routing/lenses observe
+   * the change immediately on this instance (other instances refresh within the
+   * cache TTL).
+   */
+  updateTeams: adminProcedure
+    .input(UpdateTeamsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      const organizerIds = await clientReadUncached.fetch<string[] | null>(
+        `*[_type == "conference" && _id == $id][0].organizers[]._ref`,
+        { id: conferenceId },
+      )
+      const organizerSet = new Set(organizerIds ?? [])
+      for (const team of input.teams) {
+        const strays = team.members.filter((m) => !organizerSet.has(m))
+        if (strays.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Team "${team.title}" has ${strays.length} member${
+              strays.length === 1 ? '' : 's'
+            } who ${strays.length === 1 ? 'is' : 'are'} not an organizer of this conference`,
+          })
+        }
+      }
+      const teams = ensureArrayKeys(
+        input.teams.map((team) => ({
+          _type: 'organizerTeam',
+          key: team.key,
+          title: team.title,
+          members: team.members.map((id) =>
+            createReferenceWithKey(id, 'member'),
+          ),
+          ...(team.slackChannel ? { slackChannel: team.slackChannel } : {}),
+          ...(team.emailIdentity && team.emailIdentity.length > 0
+            ? { emailIdentity: team.emailIdentity }
+            : {}),
+          ...(team._key ? { _key: team._key } : {}),
+        })),
+        'team',
+      )
+      const result = await applyConferencePatch(conferenceId, { teams })
+      // Routing/lenses read a short-TTL per-instance cache; clear it so this
+      // instance reflects the edit without waiting out the TTL.
+      clearConferenceTeamsCache()
+      return result
+    }),
+
+  /**
+   * Announcement rich text (portable text). A full replace; an empty/`null`
+   * array UNSETS the field so the landing-page banner stops rendering (see
+   * `Hero.tsx`).
+   */
+  updateAnnouncement: adminProcedure
+    .input(UpdateAnnouncementSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      const blocks = input.announcement
+      const value =
+        !blocks || blocks.length === 0 ? null : ensureArrayKeys(blocks, 'block')
+      return applyConferencePatch(conferenceId, { announcement: value })
     }),
 })

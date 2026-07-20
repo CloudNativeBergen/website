@@ -13,6 +13,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { PortableTextEditor } from '@/components/PortableTextEditor'
+import type { PortableTextBlock } from '@portabletext/editor'
 import { api } from '@/lib/trpc/client'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { domainServesHost } from '@/lib/conference/domains'
@@ -45,7 +47,10 @@ import { useNotification } from './NotificationProvider'
  *     currently driving the safeguarded Domains editor (also locks the row that
  *     serves the current host).
  *
- * Still read-only for later phases: teams, organizers, topics, announcement,
+ * SE-2 adds a `rich-text` renderer (the portable-text Announcement) wrapping the
+ * shared {@link PortableTextEditor}. Organizers, topics and teams are richer,
+ * data-fetching editors that live in their own components (OrganizersEditor,
+ * TopicsEditor, TeamsEditor) rather than this fieldset table. Still read-only:
  * logos.
  */
 
@@ -63,6 +68,7 @@ export type ConferenceFieldsetKey =
   | 'sponsorBenefits'
   | 'sponsorshipCustomization'
   | 'domains'
+  | 'announcement'
 
 export type EditFieldType =
   | 'text'
@@ -74,6 +80,7 @@ export type EditFieldType =
   | 'boolean'
   | 'string-list'
   | 'object-list'
+  | 'rich-text'
 
 /** A column within an `object-list` row. */
 export interface ObjectListColumn {
@@ -499,6 +506,19 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
       },
     ],
   },
+  announcement: {
+    title: 'Announcement',
+    subtitle: 'Rich-text banner shown on the landing page',
+    fields: [
+      {
+        name: 'announcement',
+        label: 'Announcement',
+        type: 'rich-text',
+        description:
+          'Leave empty to hide the banner. Supports headings, bold/italic, lists and links.',
+      },
+    ],
+  },
 }
 
 const MUTATION_BY_FIELDSET: Record<
@@ -518,9 +538,10 @@ const MUTATION_BY_FIELDSET: Record<
   sponsorBenefits: 'updateSponsorBenefits',
   sponsorshipCustomization: 'updateSponsorshipCustomization',
   domains: 'updateDomains',
+  announcement: 'updateAnnouncement',
 }
 
-type FormValue = string | boolean | string[] | ListRow[]
+type FormValue = string | boolean | string[] | ListRow[] | PortableTextBlock[]
 type FormValues = Record<string, FormValue>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -547,6 +568,8 @@ function toFormValues(
     const v = initial[f.name]
     if (f.type === 'boolean') {
       out[f.name] = Boolean(v)
+    } else if (f.type === 'rich-text') {
+      out[f.name] = Array.isArray(v) ? (v as PortableTextBlock[]) : []
     } else if (f.type === 'string-list') {
       out[f.name] = Array.isArray(v) ? v.map((x) => String(x ?? '')) : []
     } else if (f.type === 'object-list') {
@@ -735,6 +758,7 @@ export function EditConferenceCard({
     const errs: Record<string, string> = {}
     for (const f of fields) {
       if (f.type === 'boolean') continue
+      if (f.type === 'rich-text') continue
       if (f.type === 'string-list') {
         Object.assign(errs, validateStringList(f, values[f.name] as string[]))
         continue
@@ -775,6 +799,12 @@ export function EditConferenceCard({
       const raw = values[f.name]
       if (f.type === 'boolean') {
         payload[f.name] = Boolean(raw)
+        continue
+      }
+      if (f.type === 'rich-text') {
+        const blocks = (raw as PortableTextBlock[]) ?? []
+        // Empty → null so the mutation UNSETS the field (banner stops showing).
+        payload[f.name] = blocks.length > 0 ? blocks : null
         continue
       }
       if (f.type === 'string-list') {
@@ -963,6 +993,30 @@ function EditField({
         errors={rowErrors ?? {}}
         onChange={(rows) => onChange(rows)}
       />
+    )
+  }
+
+  if (field.type === 'rich-text') {
+    return (
+      <div>
+        <PortableTextEditor
+          label={
+            <>
+              {field.label}
+              {field.required ? (
+                <span className="text-red-500" aria-hidden="true">
+                  {' '}
+                  *
+                </span>
+              ) : null}
+            </>
+          }
+          value={(value as PortableTextBlock[]) ?? []}
+          onChange={(blocks) => onChange(blocks)}
+          helpText={field.description}
+          compact
+        />
+      </div>
     )
   }
 
