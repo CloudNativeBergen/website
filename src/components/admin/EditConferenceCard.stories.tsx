@@ -18,7 +18,6 @@ const handlers = [
   http.post('/api/trpc/conference.updateTicketingIds', ok),
   http.post('/api/trpc/conference.updateCfpGoals', ok),
   http.post('/api/trpc/conference.updateSocialLinks', ok),
-  http.post('/api/trpc/conference.updateFeatures', ok),
   http.post('/api/trpc/conference.updateVanityMetrics', ok),
   http.post('/api/trpc/conference.updateSponsorBenefits', ok),
   http.post('/api/trpc/conference.updateSponsorshipCustomization', ok),

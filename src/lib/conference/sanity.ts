@@ -1,5 +1,6 @@
 import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
+import { normalizeDomain } from './domains'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import {
@@ -105,8 +106,16 @@ export async function getConferenceForDomain(
   let conference = {} as Conference
   let error = null
 
+  // Normalize the incoming Host to the SAME canonical form the stored `domains[]`
+  // entries carry (they are trim+lowercased by `normalizeDomain` on write, and
+  // the domains strand-guard matches through the same helper). A raw Host header
+  // can be mixed-case, so matching it verbatim against lowercase stored domains
+  // would miss — lowercasing here makes the routing match and the strand-guard
+  // share one rule (and collapses per-case cache entries onto one).
+  const host = normalizeDomain(domain)
+
   const wildcardSubdomain =
-    domain.split('.').length > 2 ? domain.replace(/^[^.]+/, '*') : domain
+    host.split('.').length > 2 ? host.replace(/^[^.]+/, '*') : host
 
   try {
     const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
@@ -252,7 +261,7 @@ export async function getConferenceForDomain(
 
     // Fetch conference data with caching
     const conferenceData = await fetchConferenceData(
-      domain,
+      host,
       wildcardSubdomain,
       query,
     )
@@ -299,7 +308,7 @@ export async function getConferenceForDomain(
       }
     } else {
       // Conference not found
-      error = new Error('Conference not found for domain: ' + domain)
+      error = new Error('Conference not found for domain: ' + host)
       conference = {} as Conference
 
       // If gallery was requested, fetch unscoped images

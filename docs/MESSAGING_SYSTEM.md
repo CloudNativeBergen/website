@@ -27,13 +27,6 @@ conversationPreference,notification}.ts` (schema) and
 `src/components/messaging/*` (UI). It reuses the notification hub
 (`src/lib/notification/*`) rather than reinventing a delivery store.
 
-> **In flight:** a parallel batch on branch `fix/messaging-ux-server` changes the
-> **email routing** contract (organizer emails default OFF plus one copy to the
-> org contact address, decision-comment mirrors stop notifying, reply-to-resolved
-> reopens, assignee notifications, and stale nudges move to the `messages` push
-> category). This document describes the **post-batch target state** as the
-> contract and marks each such rule **_(landing in `fix/messaging-ux-server`)_**.
-
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
 │                        Messaging System                               │
@@ -68,19 +61,21 @@ speaker, and `notification` is the shared hub document.
 
 ### `conversation` (`sanity/schemaTypes/conversation.ts`)
 
-| Field                         | Notes                                                                                                                                                                                             |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `conference`                  | Required ref. The edition this thread belongs to (tenant scope).                                                                                                                                  |
-| `conversationType`            | `'proposal'` \| `'general'`.                                                                                                                                                                      |
-| `proposal`                    | **Weak** ref to the talk. Required for proposal threads; absent for general.                                                                                                                      |
-| `createdBy`                   | **Weak** ref to the starter. Required.                                                                                                                                                            |
-| `subjectSpeaker`              | **Weak** ref. Set only when an **organizer** starts a general thread targeting a speaker; unset on speaker-created threads (creator IS the subject).                                              |
-| `subject`                     | Stored **explicitly** (proposal threads default it to the talk title at creation) so a thread renders without dereferencing the proposal, and a later title edit never rewrites history. Max 200. |
-| `createdAt` / `lastMessageAt` | `lastMessageAt` is bumped in the **same transaction** that adds a message and drives inbox ordering.                                                                                              |
-| `status`                      | `'open'` \| `'resolved'`. **Absent means open** — every read `coalesce(status, 'open')`, so pre-ticketing threads need no migration.                                                              |
-| `assignedTo`                  | **Weak** ref to the responsible organizer. `null`/absent = unassigned.                                                                                                                            |
-| `archivedAt`                  | Global organizer archive (timestamp semantics — see below).                                                                                                                                       |
-| `lastStaleNudgeAt`            | Cron bookkeeping (hidden, read-only).                                                                                                                                                             |
+| Field                         | Notes                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conference`                  | Required ref. The edition this thread belongs to (tenant scope).                                                                                                                                                                                                                                                                                                  |
+| `conversationType`            | `'proposal'` \| `'general'` \| `'sponsor'` (the sponsor↔organizer party thread, G2b).                                                                                                                                                                                                                                                                             |
+| `proposal`                    | **Weak** ref to the talk. Required for proposal threads; absent for general.                                                                                                                                                                                                                                                                                      |
+| `createdBy`                   | **Weak** ref to the starter. Required for proposal/general; **optional** for sponsor threads (a portal-initiated sponsor thread has no speaker creator; an organizer-initiated one records the acting organizer).                                                                                                                                                 |
+| `subjectSpeaker`              | **Weak** ref. Set only when an **organizer** starts a general thread targeting a speaker; unset on speaker-created threads (creator IS the subject).                                                                                                                                                                                                              |
+| `subject`                     | Stored **explicitly** (proposal threads default it to the talk title at creation) so a thread renders without dereferencing the proposal, and a later title edit never rewrites history. Max 200.                                                                                                                                                                 |
+| `createdAt` / `lastMessageAt` | `lastMessageAt` is bumped in the **same transaction** that adds a message and drives inbox ordering.                                                                                                                                                                                                                                                              |
+| `status`                      | `'open'` \| `'resolved'`. **Absent means open** — every read `coalesce(status, 'open')`, so pre-ticketing threads need no migration.                                                                                                                                                                                                                              |
+| `assignedTo`                  | **Weak** ref to the responsible organizer. `null`/absent = unassigned.                                                                                                                                                                                                                                                                                            |
+| `archivedAt`                  | Global organizer archive (timestamp semantics — see below).                                                                                                                                                                                                                                                                                                       |
+| `archivedBy`                  | **Weak** ref to the organizer who set the global archive (audit trail). Set alongside `archivedAt` and unset with it; server-written, hidden/read-only in Studio.                                                                                                                                                                                                 |
+| `lastStaleNudgeAt`            | Cron bookkeeping (hidden, read-only).                                                                                                                                                                                                                                                                                                                             |
+| `participants[]`              | The **general party representation** (`conversationParticipant[]`): each proposal speaker / creator / subject speaker plus the `organizers` group, and for sponsor threads the `sponsor` party. Dual-written alongside the legacy `createdBy`/`subjectSpeaker`/`proposal` fields; server-written, read-only in Studio. See "Sponsor threads" for the party model. |
 
 ### `message` (created in `src/lib/messaging/sanity.ts`)
 
@@ -239,8 +234,9 @@ admin thread. `lastStaleNudgeAt` is then stamped so the thread is not nudged aga
 A thread with no resolvable conference, or no assignee **and** no organizers, is
 skipped **without** stamping (so it retries once organizers exist). The run is
 capped at `MAX_CONVERSATIONS_PER_RUN` (200), never throws, and isolates each
-thread. _(Post-batch, `message_stale` push moves to the `messages` category —
-landing in `fix/messaging-ux-server`.)_
+thread. The `message_stale` push rides the `messages` category
+(`pushCategoryForNotificationType`), alongside `message_received` and
+`conversation_assigned`.
 
 ## Channel matrix (the delivery contract)
 
@@ -273,17 +269,17 @@ contract.
 Columns are the recipient's per-conversation state. "hub", "push", "email",
 "slack" are the channels.
 
-| Recipient state                                                    | Hub | Push | Email                                                               | Slack                         |
-| ------------------------------------------------------------------ | --- | ---- | ------------------------------------------------------------------- | ----------------------------- |
-| **Actor** (message author)                                         | —   | —    | —                                                                   | see note                      |
-| **Muted** (`preference.muted`)                                     | —   | —    | —                                                                   | n/a                           |
-| Speaker, `emailOverride: default`, `messagingEmailDefault ≠ false` | ✔   | ✔    | ✔                                                                   | n/a                           |
-| Speaker, `emailOverride: off`                                      | ✔   | ✔    | —                                                                   | n/a                           |
-| Speaker, `emailOverride: on`                                       | ✔   | ✔    | ✔                                                                   | n/a                           |
-| **Organizer**, `emailOverride: default`                            | ✔   | ✔    | **—** _(post-batch: off by default; one copy to org-contact email)_ | n/a                           |
-| Organizer, `emailOverride: on`                                     | ✔   | ✔    | ✔                                                                   | n/a                           |
-| **Author is a speaker** (any recipient)                            | —   | —    | —                                                                   | **✔ one post to CFP channel** |
-| **Author is an organizer**                                         | —   | —    | —                                                                   | **—**                         |
+| Recipient state                                                    | Hub | Push | Email                                                              | Slack                         |
+| ------------------------------------------------------------------ | --- | ---- | ------------------------------------------------------------------ | ----------------------------- |
+| **Actor** (message author)                                         | —   | —    | —                                                                  | see note                      |
+| **Muted** (`preference.muted`)                                     | —   | —    | —                                                                  | n/a                           |
+| Speaker, `emailOverride: default`, `messagingEmailDefault ≠ false` | ✔   | ✔    | ✔                                                                  | n/a                           |
+| Speaker, `emailOverride: off`                                      | ✔   | ✔    | —                                                                  | n/a                           |
+| Speaker, `emailOverride: on`                                       | ✔   | ✔    | ✔                                                                  | n/a                           |
+| **Organizer**, `emailOverride: default`                            | ✔   | ✔    | **—** (off by default; one shared copy to the org-contact address) | n/a                           |
+| Organizer, `emailOverride: on`                                     | ✔   | ✔    | ✔                                                                  | n/a                           |
+| **Author is a speaker** (any recipient)                            | —   | —    | —                                                                  | **✔ one post to CFP channel** |
+| **Author is an organizer**                                         | —   | —    | —                                                                  | **—**                         |
 
 Notes on each channel:
 
@@ -302,15 +298,21 @@ Notes on each channel:
   which still appears. Push is also a no-op when VAPID is unconfigured, and prunes
   `404`/`410` (gone) subscriptions.
 - **EMAIL.** Sent to non-muted recipients whose **effective** email pref is ON.
-  For a speaker: `emailOverride === 'on'`, or `'default'` **and**
-  `messagingEmailDefault !== false` (absent-means-on). Delivery is bounded to
-  `EMAIL_CONCURRENCY` (3) in-flight sends via a worker pool (`sendMessageEmails`),
-  each `sendOne` is never-fail and wrapped in `retryWithBackoff` (absorbs Resend
-  429s). The per-recipient `replyUrl` matches that recipient's audience surface,
-  and the body copy is audience-correct (`isOrganizer`). _Post-batch:_ organizer
-  email **defaults OFF**, and a single copy of the notification goes to the
-  conference contact address instead of each organizer — landing in
-  `fix/messaging-ux-server`.
+  The default is **audience-split**: a **speaker** is on unless
+  `emailOverride === 'off'` — `'on'`, or `'default'` **and**
+  `messagingEmailDefault !== false` (absent-means-on) — while an **organizer** is
+  **off by default** and receives a per-recipient email only on an explicit opt-in
+  (`emailOverride === 'on'`, or `'default'` **and** `messagingEmailDefault === true`).
+  Instead of N per-organizer emails, a **speaker-authored** message sends **one
+  shared copy** to the conference `contactEmail` (fallback `cfpEmail`; skipped if
+  neither is set), preserving an email trail without flooding every organizer's
+  inbox. Delivery is bounded to `EMAIL_CONCURRENCY` (3) in-flight sends via a
+  worker pool (`sendMessageEmails`), each `sendOne` is never-fail and wrapped in
+  `retryWithBackoff` (absorbs Resend 429s). The per-recipient `replyUrl`
+  (`absoluteEmailLink` → `conversationEmailLinkPath`) points at the recipient's
+  **standalone thread page** (`/admin/messages/<id>` or `/cfp/messages/<id>`), not
+  the proposal `#messages` fragment, and the body copy is audience-correct
+  (`isOrganizer`).
 - **SLACK.** Fires **only for speaker-authored** messages (`!authorIsOrganizer`),
   one post to the `cfp` team's Slack channel — `resolveTeamSlackChannel({ teamKey:
 'cfp', kind: 'cfp' })`, which falls back to `conference.cfpNotificationChannel`
@@ -378,12 +380,14 @@ isOrganizer)`:
   collapse/replacement**, not the tap target. The push `tag`/`url` mirror the pure
   helper `src/lib/pwa/push-payload.ts` (kept in sync by a test).
 - **Email → thread page.** `MessageNotificationTemplate` renders a "Reply in app"
-  CTA at the per-recipient absolute `replyUrl` (`absoluteLink` →
-  `conversationLinkPath`, audience-correct) plus a "Manage notification
+  CTA at the per-recipient absolute `replyUrl` (`absoluteEmailLink` →
+  `conversationEmailLinkPath`, audience-correct) plus a "Manage notification
   preferences" link at `/cfp/profile#notification-settings` (the same target for
-  both audiences, since settings live on the CFP profile). _Post-batch the email
-  body links to the standalone thread page — landing in
-  `fix/messaging-ux-server`._
+  both audiences, since settings live on the CFP profile). The email body links to
+  the **standalone thread page** (not the proposal `#messages` fragment): a message
+  email is frequently opened logged-out and the auth redirect drops the URL
+  fragment, so the thread page gives both audiences a stable, fragment-free
+  destination (the C9 audience redirect covers a wrong-audience link).
 
 ## Lifecycle
 

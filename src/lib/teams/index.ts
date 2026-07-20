@@ -4,7 +4,6 @@
  * and docs/ORGANIZER_TEAMS.md for the locked design.
  */
 export {
-  WELL_KNOWN_TEAM_KEYS,
   type OrganizerTeam,
   type ConferenceTeamsConfig,
   type TeamKey,

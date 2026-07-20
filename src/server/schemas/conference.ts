@@ -147,19 +147,6 @@ export const UpdateSocialLinksSchema = z.object({
   socialLinks: z.array(z.string().trim().url('Enter a valid URL')),
 })
 
-// === Features (array of string flags) ===
-// See EditConferenceCard for the "known + freeform" UI. The Sanity schema
-// declares a single known value (`test_feature`) and there are NO runtime
-// consumers, so the server stays permissive: any non-empty flag string, unique,
-// empty list allowed.
-export const UpdateFeaturesSchema = z.object({
-  features: z
-    .array(z.string().trim().min(1, 'Feature flag cannot be empty'))
-    .refine((f) => new Set(f).size === f.length, {
-      message: 'Feature flags must be unique',
-    }),
-})
-
 // === Vanity Metrics (array of {label, value}) ===
 // Both fields required per row; empty list allowed.
 export const UpdateVanityMetricsSchema = z.object({

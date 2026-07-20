@@ -29,7 +29,6 @@ import {
   UpdateTicketingIdsSchema,
   UpdateCfpGoalsSchema,
   UpdateSocialLinksSchema,
-  UpdateFeaturesSchema,
   UpdateVanityMetricsSchema,
   UpdateSponsorBenefitsSchema,
   UpdateSponsorshipCustomizationSchema,
@@ -198,13 +197,6 @@ export const conferenceRouter = router({
       return applyConferencePatch(conferenceId, {
         socialLinks: input.socialLinks,
       })
-    }),
-
-  updateFeatures: adminProcedure
-    .input(UpdateFeaturesSchema)
-    .mutation(async ({ input }) => {
-      const conferenceId = await resolveConferenceId()
-      return applyConferencePatch(conferenceId, { features: input.features })
     }),
 
   updateVanityMetrics: adminProcedure
