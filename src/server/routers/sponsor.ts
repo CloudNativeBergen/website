@@ -35,6 +35,7 @@ import {
   reorderSponsorEmailTemplates,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
+import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import {
   buildTemplateVariables,
   suggestTemplateCategory,
@@ -276,6 +277,35 @@ async function assertTierResolvable(
   }
 }
 
+/**
+ * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
+ *
+ * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
+ * AND by sponsors themselves via the public registration portal — the client
+ * `sanitizeSvg` pass is defence-in-depth only and is trivially bypassed by a
+ * crafted request. This is the authoritative gate: a hard rejection (oversize /
+ * non-SVG / entity) becomes a BAD_REQUEST; disallowed content is silently
+ * stripped per policy. Only fields actually PRESENT on `data` are touched, so a
+ * partial update never wipes a slot it didn't mean to.
+ */
+function sanitizeSponsorLogoInput<
+  T extends { logo?: string | null; logoBright?: string | null },
+>(data: T): T {
+  const out = { ...data }
+  try {
+    if ('logo' in data) out.logo = sanitizeSvgFieldOrThrow(data.logo)
+    if ('logoBright' in data) {
+      out.logoBright = sanitizeSvgFieldOrThrow(data.logoBright)
+    }
+  } catch (error) {
+    if (error instanceof SvgSanitizeError) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
+    }
+    throw error
+  }
+  return out
+}
+
 export const sponsorRouter = router({
   list: adminProcedure
     .input(z.object({ query: z.string().optional() }).optional())
@@ -332,7 +362,8 @@ export const sponsorRouter = router({
     .input(SponsorInputSchema)
     .mutation(async ({ input }) => {
       try {
-        const validationErrors = validateSponsor(input)
+        const sanitized = sanitizeSponsorLogoInput(input)
+        const validationErrors = validateSponsor(sanitized)
         if (validationErrors.length > 0) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -341,7 +372,7 @@ export const sponsorRouter = router({
           })
         }
 
-        const { sponsor, error } = await createSponsor(input)
+        const { sponsor, error } = await createSponsor(sanitized)
         if (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -378,7 +409,7 @@ export const sponsorRouter = router({
 
           const mergedData = {
             ...existingSponsor,
-            ...input.data,
+            ...sanitizeSponsorLogoInput(input.data),
           }
           const validationErrors = validateSponsor(mergedData)
           if (validationErrors.length > 0) {

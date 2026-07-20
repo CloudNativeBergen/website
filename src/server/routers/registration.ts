@@ -24,6 +24,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
+import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 
 export const registrationRouter = router({
   validate: publicProcedure
@@ -45,6 +46,32 @@ export const registrationRouter = router({
     .input(RegistrationSubmissionSchema)
     .mutation(async ({ input }) => {
       const { token, ...data } = input
+
+      // Public, token-gated path — the sponsor uploads their own logo, so the
+      // SVG is untrusted. Sanitize SERVER-SIDE (the client pass is bypassable)
+      // before it is stored. A hard rejection surfaces as BAD_REQUEST.
+      try {
+        const logo = sanitizeSvgFieldOrThrow(data.logo)
+        if (!logo) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'A valid company logo (SVG) is required.',
+          })
+        }
+        data.logo = logo
+        if ('logoBright' in data) {
+          data.logoBright =
+            sanitizeSvgFieldOrThrow(data.logoBright) ?? undefined
+        }
+      } catch (svgError) {
+        if (svgError instanceof SvgSanitizeError) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: svgError.message,
+          })
+        }
+        throw svgError
+      }
 
       const { success, sponsorForConferenceId, error } =
         await completeRegistration(token, data as RegistrationSubmission)

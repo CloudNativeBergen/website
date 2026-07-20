@@ -27,7 +27,14 @@ import {
   UpdateTopicsSchema,
   UpdateTeamsSchema,
   UpdateAnnouncementSchema,
+  UpdateBrandingLogoSchema,
+  SanitizeSvgPreviewSchema,
 } from '../schemas/conference'
+import {
+  sanitizeSvgUpload,
+  sanitizeSvgFieldOrThrow,
+  SvgSanitizeError,
+} from '@/lib/svg/upload'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -339,5 +346,49 @@ export const conferenceRouter = router({
       const value =
         !blocks || blocks.length === 0 ? null : ensureArrayKeys(blocks, 'block')
       return applyConferencePatch(conferenceId, { announcement: value })
+    }),
+
+  // === SE-3: branding logos (inlineSvg upload) =============================
+
+  /**
+   * Dry-run SVG sanitizer preview. Runs the SAME server-side sanitizer the write
+   * path uses (`sanitizeSvgUpload`) but persists NOTHING, so the Branding editor
+   * can show the organizer exactly what will be stored — and what was stripped —
+   * before they commit. A rejected payload (oversize / non-SVG / entity) returns
+   * `ok: false` with the reason rather than throwing, so the UI can render it.
+   */
+  sanitizeSvgPreview: adminProcedure
+    .input(SanitizeSvgPreviewSchema)
+    .mutation(async ({ input }) => {
+      const result = sanitizeSvgUpload(input.svg)
+      return {
+        ok: result.ok,
+        svg: result.svg,
+        removed: result.removed,
+        sizeBytes: result.sizeBytes,
+        error: result.error ?? null,
+      }
+    }),
+
+  /**
+   * Patch ONE branding logo slot (`logoBright` | `logoDark` | `logomarkBright` |
+   * `logomarkDark`). The markup is sanitized SERVER-SIDE — the authority, never
+   * the client — before it is stored; `svg: null` UNSETS the slot. Field-scoped
+   * per the house invariant: only the one slot is touched.
+   */
+  updateBrandingLogo: adminProcedure
+    .input(UpdateBrandingLogoSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      let sanitized: string | null
+      try {
+        sanitized = sanitizeSvgFieldOrThrow(input.svg)
+      } catch (error) {
+        if (error instanceof SvgSanitizeError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
+        }
+        throw error
+      }
+      return applyConferencePatch(conferenceId, { [input.slot]: sanitized })
     }),
 })

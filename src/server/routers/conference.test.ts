@@ -658,3 +658,92 @@ describe('conference router — announcement', () => {
     expect(lastUnset).toEqual(['announcement'])
   })
 })
+
+// === SE-3: branding logos (inlineSvg upload) ===============================
+
+describe('conference router — branding logo', () => {
+  const BENIGN = `<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>`
+
+  it('sets a sanitized, benign logo on the requested slot only', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateBrandingLogo({
+      slot: 'logoBright',
+      svg: BENIGN,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ logoBright: BENIGN })
+    expect(lastUnset).toBeUndefined()
+  })
+
+  it('strips dangerous content server-side before storing', async () => {
+    await makeCaller({ isOrganizer: true }).updateBrandingLogo({
+      slot: 'logoDark',
+      svg: `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect onclick="x()" width="10"/></svg>`,
+    })
+    const stored = (lastSet as Record<string, string>).logoDark
+    expect(stored).not.toMatch(/script/i)
+    expect(stored).not.toMatch(/onclick/i)
+    expect(stored).toMatch(/<rect/)
+  })
+
+  it('UNSETS the slot when svg is null', async () => {
+    await makeCaller({ isOrganizer: true }).updateBrandingLogo({
+      slot: 'logomarkBright',
+      svg: null,
+    })
+    expect(lastUnset).toEqual(['logomarkBright'])
+    expect(lastSet).toBeUndefined()
+  })
+
+  it('rejects an unknown slot (schema)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateBrandingLogo({
+        // @ts-expect-error — deliberately invalid slot
+        slot: 'faviconBright',
+        svg: BENIGN,
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-svg payload with BAD_REQUEST (no commit)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateBrandingLogo({
+        slot: 'logoBright',
+        svg: '<html><body>nope</body></html>',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('requires an organizer', async () => {
+    await expect(
+      makeCaller({ isOrganizer: false }).updateBrandingLogo({
+        slot: 'logoBright',
+        svg: BENIGN,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+})
+
+describe('conference router — sanitizeSvgPreview (dry run)', () => {
+  it('returns the sanitized markup and what was stripped, without committing', async () => {
+    const result = await makeCaller({ isOrganizer: true }).sanitizeSvgPreview({
+      svg: `<svg xmlns="http://www.w3.org/2000/svg"><script>x</script><rect onload="y()" width="10"/></svg>`,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.svg).not.toMatch(/script|onload/i)
+    expect(result.removed).toEqual(
+      expect.arrayContaining(['<script> element', 'onload event handler']),
+    )
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejection (ok:false) rather than throwing', async () => {
+    const result = await makeCaller({ isOrganizer: true }).sanitizeSvgPreview({
+      svg: 'not an svg',
+    })
+    expect(result.ok).toBe(false)
+    expect(result.svg).toBeNull()
+    expect(result.error).toBeTruthy()
+  })
+})
