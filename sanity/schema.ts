@@ -15,6 +15,7 @@ import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
+import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
 import speaker from './schemaTypes/speaker'
 import speakerBadge from './schemaTypes/speakerBadge'
 import sponsor from './schemaTypes/sponsor'
@@ -42,6 +43,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Conference
     conference,
     schedule,
+    scheduledReminderLog,
     dashboardConfig,
     imageGallery,
     volunteer,
