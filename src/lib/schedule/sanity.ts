@@ -7,6 +7,7 @@ import {
   createReference,
   createReferenceWithKey,
 } from '@/lib/sanity/helpers'
+import { notifyScheduleChanges, type SlotPlacement } from '@/lib/reminders'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
@@ -48,6 +49,82 @@ function resolveTalkId(talk: {
   return talk.talk?._id || talk.talk?._ref || ''
 }
 
+/**
+ * Flatten a schedule day's real (non-placeholder, resolvable) talk slots to the
+ * placement tuples the schedule-change diff compares. Placeholders and ghost
+ * slots (no resolvable talk) are skipped — they have no speakers to alert.
+ */
+function collectPlacements(
+  date: string,
+  tracks: ConferenceSchedule['tracks'] | undefined,
+): SlotPlacement[] {
+  const placements: SlotPlacement[] = []
+  for (const track of tracks || []) {
+    for (const talk of track.talks || []) {
+      if (talk.placeholder) continue
+      const talkId = resolveTalkId(talk)
+      if (!talkId) continue
+      placements.push({
+        talkId,
+        date,
+        startTime: talk.startTime,
+        trackTitle: track.trackTitle,
+      })
+    }
+  }
+  return placements
+}
+
+/** The raw prior-schedule projection used to diff talk placements on save. */
+interface PriorScheduleSlots {
+  date: string | null
+  tracks:
+    | {
+        trackTitle: string | null
+        talks: { startTime: string | null; talkId: string | null }[] | null
+      }[]
+    | null
+}
+
+/**
+ * Fetch the CURRENT persisted placements of a schedule day (before it is
+ * overwritten), so the save can diff moved talks afterwards. Best-effort: any
+ * failure yields an empty set (no false "moved" alerts), never a save failure.
+ */
+async function fetchPriorPlacements(
+  scheduleId: string,
+): Promise<SlotPlacement[]> {
+  try {
+    const doc = await clientWrite.fetch<PriorScheduleSlots | null>(
+      `*[_id == $id][0]{
+        date,
+        tracks[]{
+          trackTitle,
+          "talks": talks[defined(talk)]{ startTime, "talkId": talk._ref }
+        }
+      }`,
+      { id: scheduleId },
+    )
+    if (!doc?.date) return []
+    const placements: SlotPlacement[] = []
+    for (const track of doc.tracks || []) {
+      for (const slot of track.talks || []) {
+        if (!slot.talkId || !slot.startTime) continue
+        placements.push({
+          talkId: slot.talkId,
+          date: doc.date,
+          startTime: slot.startTime,
+          trackTitle: track.trackTitle || '',
+        })
+      }
+    }
+    return placements
+  } catch (error) {
+    console.error('Failed to read prior schedule placements:', error)
+    return []
+  }
+}
+
 /** True when a Sanity write failed because `ifRevisionId` did not match (409). */
 function isRevisionMismatch(error: unknown): boolean {
   const statusCode = (error as { statusCode?: number })?.statusCode
@@ -59,6 +136,7 @@ function isRevisionMismatch(error: unknown): boolean {
 export async function saveScheduleToSanity(
   schedule: ConferenceSchedule,
   conference: Conference,
+  options?: { actorId?: string },
 ): Promise<SaveScheduleResult> {
   try {
     // Compact save log — the full payload used to be dumped every save, leaking
@@ -149,6 +227,11 @@ export async function saveScheduleToSanity(
         return { error: 'Schedule not found or not accessible' }
       }
 
+      // Capture the CURRENT placements before the overwrite so we can alert
+      // speakers whose talk genuinely moved (see `notifyScheduleChanges` after
+      // the commit). Best-effort — never blocks or fails the save.
+      const priorPlacements = await fetchPriorPlacements(schedule._id)
+
       // Optimistic concurrency: `_rev` is guaranteed present (rejected above),
       // so ALWAYS patch with `ifRevisionId` — a save is rejected if the day
       // changed since it was loaded (two organizers editing the same day).
@@ -166,6 +249,17 @@ export async function saveScheduleToSanity(
         .commit()
 
       savedSchedule = { ...schedule, _rev: committed._rev }
+
+      // SCHEDULE-CHANGE ALERTS: diff prior vs saved placements and notify the
+      // speakers of any talk whose slot actually moved. Never-throw (a failure
+      // here must not fail the already-committed save); a run where nothing
+      // moved emits nothing.
+      await notifyScheduleChanges({
+        prior: priorPlacements,
+        next: collectPlacements(schedule.date, schedule.tracks),
+        conferenceId: conference._id,
+        actorId: options?.actorId,
+      })
     } else {
       // DUPLICATE-DAY GUARD: any payload with `_id: ''` creates a fresh schedule
       // doc and appends it to `conference.schedules`. Two organizers saving the
