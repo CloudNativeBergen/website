@@ -2,6 +2,7 @@ import { SessionProvider } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import { auth } from '@/lib/auth'
 import { SessionRefreshOnRestore } from './SessionRefreshOnRestore'
+import { AppBadgeSync, NotificationClickSync } from '@/components/pwa'
 
 /**
  * Narrow the server session into what is safe to serialize to the client, and
@@ -56,6 +57,17 @@ async function SessionLoader({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider session={sanitizeSession(session)}>
       <SessionRefreshOnRestore />
+      {/*
+        App-wide, signed-in-only PWA side effects. Both render null and self-gate
+        on the session, so they are inert for signed-out visitors:
+          - AppBadgeSync mirrors the unread count to the app-icon badge;
+          - NotificationClickSync marks a notification read when its push is
+            clicked (see public/sw.js postMessage).
+        Mounted here so they run on EVERY page (the bell only mounts in some
+        shells), inside SessionProvider + the layout's TRPCProvider.
+      */}
+      <AppBadgeSync />
+      <NotificationClickSync />
       {children}
     </SessionProvider>
   )

@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
-import { router, protectedProcedure } from '../trpc'
+import { router, protectedProcedure, resolveConferenceId } from '../trpc'
+import { createNotifications } from '@/lib/notification/sanity'
 import {
   PushSubscriptionInputSchema,
   PushUnsubscribeSchema,
@@ -189,10 +190,13 @@ export const pushRouter = router({
     // preferences entirely (unlike sendPushForNotifications, which gates each
     // notification on the speaker's category prefs). If a speaker taps "send
     // test", they get the test regardless of which categories they've muted.
+    // The deep link is ALIGNED with the hub item written below
+    // (`#notification-settings`) so a push-tap and a hub-item click both land on
+    // the push-settings card — the exact resource this test is about.
     const payload: PushMessagePayload = {
       title: 'Test notification',
       body: 'Push notifications are working on this device 🎉',
-      url: '/cfp/profile',
+      url: '/cfp/profile#notification-settings',
       tag: 'test-notification',
     }
 
@@ -283,6 +287,41 @@ export const pushRouter = router({
       if (seen.has(key)) continue
       seen.add(key)
       dedupedFailures.push(failure)
+    }
+
+    // ALSO mirror the test into the persistent hub so it shows in the bell/panel
+    // and drives the PWA app-icon badge — not just the transient OS push above.
+    // ONE self-recipient `system` notification.
+    //
+    // NO DOUBLE PUSH: the direct test push already fired for THIS device above
+    // (bypassing category prefs). We therefore write the hub doc with
+    // `skipPush: true` so `createNotifications` does NOT bridge a second push.
+    //
+    // NEVER-FAIL: a hub-write failure must not fail the test send (the button
+    // reads the send result below). `resolveConferenceId()` CAN throw, so the
+    // whole side effect is folded into its own try/catch and logged on failure.
+    // (`createNotifications` itself already never throws.)
+    try {
+      const conferenceId = await resolveConferenceId()
+      await createNotifications(
+        [
+          {
+            recipientId: ctx.speaker._id,
+            conferenceId,
+            notificationType: 'system',
+            title: 'Test notification',
+            message: 'Your push, hub, and badge are working.',
+            // Same target as the push above so both land on the settings card.
+            link: '/cfp/profile#notification-settings',
+          },
+        ],
+        { skipPush: true },
+      )
+    } catch (error) {
+      console.error(
+        `Failed to write test hub notification for speaker ${ctx.speaker._id}:`,
+        error,
+      )
     }
 
     // `total` lets the client distinguish "no devices subscribed" (total 0)
