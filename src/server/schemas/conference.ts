@@ -367,3 +367,30 @@ const PortableTextBlockSchema = z
 export const UpdateAnnouncementSchema = z.object({
   announcement: z.array(PortableTextBlockSchema).nullable(),
 })
+
+/**
+ * Branding logos (SE-3) — the four `inlineSvg` slots on the conference document
+ * (`logoBright`, `logoDark`, `logomarkBright`, `logomarkDark`). Each stores raw
+ * SVG markup as a string (the render path, {@link InlineSvg}, expects a string),
+ * so the mutation patches ONE slot at a time. `svg: null` UNSETS the slot; a
+ * string is sanitized SERVER-SIDE (`sanitizeSvgFieldOrThrow`) before it is
+ * stored — the Zod schema only checks the shape, never trusts the markup.
+ */
+export const BRANDING_SLOTS = [
+  'logoBright',
+  'logoDark',
+  'logomarkBright',
+  'logomarkDark',
+] as const
+
+export type BrandingSlot = (typeof BRANDING_SLOTS)[number]
+
+export const UpdateBrandingLogoSchema = z.object({
+  slot: z.enum(BRANDING_SLOTS),
+  svg: z.string().nullable(),
+})
+
+/** Dry-run preview: sanitize markup without persisting anything. */
+export const SanitizeSvgPreviewSchema = z.object({
+  svg: z.string(),
+})

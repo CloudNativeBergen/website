@@ -15,6 +15,10 @@ import {
 import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
+import {
+  BrandingEditor,
+  BrandingPreviewGrid,
+} from '@/components/admin/BrandingEditor'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
@@ -35,6 +39,7 @@ import {
   PencilSquareIcon,
   ServerStackIcon,
   BeakerIcon,
+  SwatchIcon,
 } from '@heroicons/react/24/outline'
 
 interface NamedItem {
@@ -426,6 +431,31 @@ export default async function AdminSettings() {
             <FieldRow label="Country" value={conference.country} />
             <FieldRow label="Tagline" value={conference.tagline} />
             <FieldRow label="Description" value={conference.description} />
+          </InfoCard>
+
+          <InfoCard
+            title="Branding"
+            icon={SwatchIcon}
+            editUrl={editUrl}
+            action={
+              <BrandingEditor
+                initialValues={{
+                  logoBright: conference.logoBright,
+                  logoDark: conference.logoDark,
+                  logomarkBright: conference.logomarkBright,
+                  logomarkDark: conference.logomarkDark,
+                }}
+              />
+            }
+          >
+            <BrandingPreviewGrid
+              values={{
+                logoBright: conference.logoBright,
+                logoDark: conference.logoDark,
+                logomarkBright: conference.logomarkBright,
+                logomarkDark: conference.logomarkDark,
+              }}
+            />
           </InfoCard>
 
           <InfoCard

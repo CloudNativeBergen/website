@@ -110,6 +110,9 @@ importers:
       '@workos-inc/node':
         specifier: ^10.7.0
         version: 10.7.0
+      '@xmldom/xmldom':
+        specifier: ^0.9.10
+        version: 0.9.10
       apexcharts:
         specifier: ^5.15.2
         version: 5.15.2
@@ -5121,6 +5124,10 @@ packages:
   '@workos-inc/node@10.7.0':
     resolution: {integrity: sha512-rffa9znZuIv4yo+9JRxGOLTTSxh0XhOT6jlsktgqEi9MuB9V0VFHRzLd3bTpkq+J9sgrPZNGpvX4aWNfMqt5cQ==}
     engines: {node: '>=22.11.0'}
+
+  '@xmldom/xmldom@0.9.10':
+    resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
+    engines: {node: '>=14.6'}
 
   '@xstate/react@6.1.0':
     resolution: {integrity: sha512-ep9F0jGTI63B/jE8GHdMpUqtuz7yRebNaKv8EMUaiSi29NOglywc2X2YSOV/ygbIK+LtmgZ0q9anoEA2iBSEOw==}
@@ -16232,6 +16239,8 @@ snapshots:
       - typescript
 
   '@workos-inc/node@10.7.0': {}
+
+  '@xmldom/xmldom@0.9.10': {}
 
   '@xstate/react@6.1.0(@types/react@19.2.15)(react@19.2.6)(xstate@5.32.2)':
     dependencies:
