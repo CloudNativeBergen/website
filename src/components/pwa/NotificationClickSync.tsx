@@ -1,8 +1,33 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
+
+/**
+ * The query param the service worker appends to the URL it OPENS on a
+ * notification click (see public/sw.js) so a COLD open — which spawns a brand-new
+ * client that never received the `notification-click` postMessage — can still
+ * clear the notification. Its value is the notification's ORIGINAL app-relative
+ * `link`.
+ */
+const MARK_READ_PARAM = 'markread'
+
+/**
+ * True for an app-relative deep link ("/..."; never "//..." or a backslash
+ * trick). Mirrors — and slightly tightens (it also rejects protocol-relative
+ * "//..." paths) — the SW's `sanitizeNotificationUrl` and the server's
+ * `MarkReadByLinkSchema`, so we never fire the mutation for a tampered param.
+ */
+function isAppRelativeLink(value: string): boolean {
+  return (
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.includes('\\') &&
+    !value.includes('://')
+  )
+}
 
 /** The message the service worker posts on a notificationclick (see public/sw.js). */
 interface NotificationClickMessage {
@@ -44,6 +69,7 @@ function isNotificationClickMessage(
 export function NotificationClickSync() {
   const { data: session } = useSession()
   const isSignedIn = Boolean(session?.speaker)
+  const pathname = usePathname()
   const utils = api.useUtils()
   const markReadByLink = api.notification.markReadByLink.useMutation({
     onSuccess: () => {
@@ -52,6 +78,39 @@ export function NotificationClickSync() {
     },
   })
   const mutate = markReadByLink.mutate
+
+  // COLD-OPEN path: on mount and on every navigation, consume a `markread` query
+  // param the SW appended to the opened URL, mark that notification's link read,
+  // and STRIP the param via history.replaceState so it doesn't linger (a reload
+  // or shared URL must not re-fire it). The param carries the notification's
+  // original app-relative link — NOT the current URL — so it matches the stored
+  // `link` markReadByLink validates against.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const link = params.get(MARK_READ_PARAM)
+    if (link === null) return
+
+    // Strip the param regardless of validity OR sign-in state so a junk value
+    // (or a param that arrived on a signed-out load) can't linger in the URL and
+    // re-fire on a later reload/share.
+    params.delete(MARK_READ_PARAM)
+    const query = params.toString()
+    const stripped =
+      window.location.pathname +
+      (query ? `?${query}` : '') +
+      window.location.hash
+    window.history.replaceState(window.history.state, '', stripped)
+
+    // Only mark-read for a signed-in caller (markReadByLink is a protected
+    // procedure); a signed-out visitor just gets the param stripped above.
+    if (isSignedIn && isAppRelativeLink(link)) {
+      // Recipient-guarded + link-matched + re-validated server-side, so this can
+      // only ever clear the CALLER'S OWN notification whose link equals `link`.
+      mutate({ links: [link] })
+    }
+  }, [isSignedIn, pathname, mutate])
 
   useEffect(() => {
     if (!isSignedIn) return

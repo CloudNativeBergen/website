@@ -15,10 +15,23 @@ import type { MovedTalk, SlotPlacement } from './types'
 
 /**
  * Pure diff: talks present in BOTH the prior and next placement sets whose
- * date, startTime, or trackTitle changed. A talk only in `next` (newly placed)
- * or only in `prior` (removed) is excluded. Last placement wins if a talk id
- * appears more than once in a set (defensive — a valid schedule places a talk
- * once).
+ * date, startTime, or track POSITION (`trackIndex`) changed. A talk only in
+ * `next` (newly placed) or only in `prior` (removed) is excluded. Last placement
+ * wins if a talk id appears more than once in a set (defensive — a valid
+ * schedule places a talk once).
+ *
+ * The track is compared by INDEX, not display title, so renaming a track fires
+ * no spurious "moved" alerts for its unchanged talks; only an actual position
+ * change (or a date/time change) is a move. This is the deliberate trade-off for
+ * the common case: post-placement track RENAMES (typo fixes, sponsor room names)
+ * are frequent and touch a whole track, so silencing them matters most.
+ *
+ * KNOWN LIMITATION: there is no stable track identity to compare on — the save
+ * path regenerates each track `_key` from its index, so index IS position. A
+ * post-placement track INSERT/REORDER therefore shifts the indices of unchanged
+ * talks and can emit "moved" alerts whose copy (time + title) looks unchanged.
+ * That edit is rare once talks are placed; a real fix needs a persisted,
+ * index-independent track id (a schema change), tracked separately.
  */
 export function diffScheduleSlots(
   prior: SlotPlacement[],
@@ -40,18 +53,20 @@ export function diffScheduleSlots(
     if (
       from.date !== to.date ||
       from.startTime !== to.startTime ||
-      from.trackTitle !== to.trackTitle
+      from.trackIndex !== to.trackIndex
     ) {
       moved.push({
         talkId,
         from: {
           date: from.date,
           startTime: from.startTime,
+          trackIndex: from.trackIndex,
           trackTitle: from.trackTitle,
         },
         to: {
           date: to.date,
           startTime: to.startTime,
+          trackIndex: to.trackIndex,
           trackTitle: to.trackTitle,
         },
       })

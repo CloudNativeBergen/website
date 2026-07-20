@@ -37,6 +37,16 @@ import type {
  * notification write fails). Callers therefore do not (and must not) wrap this
  * in a try/catch expecting to react to failures.
  *
+ * RETURN: the number of hub documents actually PERSISTED (the transaction
+ * committed) — `items.length` on success, `0` on an empty input OR a caught
+ * failure. This lets a caller that MUST NOT record success on a silent failure
+ * (e.g. the reminders runner, which stamps a once-only dedup marker) gate its
+ * follow-up write on `> 0`. The never-throw contract is unchanged: failures are
+ * still swallowed and merely reported through the return value. Callers that
+ * don't care may ignore it (a failed notification is still non-fatal). The push
+ * bridge is best-effort and does NOT affect the count — a committed doc counts
+ * even if its push later fails.
+ *
  * `options.skipPush` writes the hub document(s) WITHOUT firing the web-push
  * bridge. Used by `push.sendTest`, which already delivered its OWN direct test
  * push (bypassing category prefs) and only wants the hub/badge side effect — so
@@ -46,9 +56,9 @@ import type {
 export async function createNotifications(
   items: NotificationInput[],
   options?: { skipPush?: boolean },
-): Promise<void> {
+): Promise<number> {
   if (items.length === 0) {
-    return
+    return 0
   }
 
   try {
@@ -101,9 +111,14 @@ export async function createNotifications(
         console.error('Failed to send web push for notifications:', pushError)
       }
     }
+
+    // The transaction committed above; every input became one document.
+    return items.length
   } catch (error) {
-    // Never propagate — see the contract above.
+    // Never propagate — see the contract above. A caught failure persisted
+    // nothing, so report 0 (the caller may retry / skip a success marker).
     console.error('Failed to create notifications:', error)
+    return 0
   }
 }
 

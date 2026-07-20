@@ -13,6 +13,11 @@ vi.mock('next-auth/react', () => ({
   }),
 }))
 
+let mockPathname = '/'
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname,
+}))
+
 const markReadMutate = vi.fn()
 const invalidateUnread = vi.fn()
 const invalidateList = vi.fn()
@@ -59,7 +64,9 @@ function signedIn(): Session {
 beforeEach(() => {
   vi.clearAllMocks()
   mockSession = signedIn()
+  mockPathname = '/'
   installServiceWorker()
+  window.history.replaceState(null, '', '/')
 })
 
 afterEach(() => {
@@ -91,5 +98,58 @@ describe('NotificationClickSync', () => {
     render(<NotificationClickSync />)
     postFromSW({ type: 'notification-click', url: '/cfp/proposal/1' })
     expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  // --- Cold-open mark-read via the `markread` query param (N1) --------------
+
+  it('marks read from the markread param on mount and strips it', () => {
+    // A cold open lands with the SW-appended param carrying the ORIGINAL link.
+    mockPathname = '/cfp/proposal/1'
+    window.history.replaceState(
+      null,
+      '',
+      '/cfp/proposal/1?markread=%2Fcfp%2Fproposal%2F1&foo=bar',
+    )
+    render(<NotificationClickSync />)
+    // Fires markReadByLink for the DECODED original link (not the current URL).
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/1'] })
+    // Strips only the markread param, preserving other query + pathname.
+    expect(window.location.search).toBe('?foo=bar')
+    expect(window.location.pathname).toBe('/cfp/proposal/1')
+  })
+
+  it('does nothing when no markread param is present', () => {
+    mockPathname = '/program'
+    window.history.replaceState(null, '', '/program')
+    render(<NotificationClickSync />)
+    expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('strips but does not fire for a non-app-relative markread value', () => {
+    mockPathname = '/program'
+    window.history.replaceState(
+      null,
+      '',
+      '/program?markread=https%3A%2F%2Fevil.com',
+    )
+    render(<NotificationClickSync />)
+    expect(markReadMutate).not.toHaveBeenCalled()
+    // The junk param is still removed so it can't linger.
+    expect(window.location.search).toBe('')
+  })
+
+  it('does not fire the markread param when signed out, but still strips it', () => {
+    mockSession = null
+    mockPathname = '/cfp/proposal/1'
+    window.history.replaceState(
+      null,
+      '',
+      '/cfp/proposal/1?markread=%2Fcfp%2Fproposal%2F1',
+    )
+    render(<NotificationClickSync />)
+    expect(markReadMutate).not.toHaveBeenCalled()
+    // The param must be stripped even when signed out, so it can't linger and
+    // re-fire on a later authenticated reload/share.
+    expect(window.location.search).not.toContain('markread')
   })
 })

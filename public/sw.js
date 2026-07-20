@@ -306,23 +306,42 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
 
-      // Focus an existing tab already on the target URL if there is one.
+      // COLD-OPEN mark-read: a tap that opens the app from closed spawns a BRAND-
+      // NEW client via openWindow that never received the postMessage above — the
+      // dominant PWA case. So carry the mark-read intent THROUGH the opened URL: a
+      // `markread` query param whose value is the ORIGINAL app-relative `target`
+      // (exactly the notification's stored `link`, NOT this param-appended URL).
+      // On mount / navigation NotificationClickSync reads it, fires markReadByLink,
+      // and strips it. Warm taps are still cleared instantly by the postMessage.
+      let openUrl = targetUrl
+      try {
+        const withParam = new URL(targetUrl)
+        withParam.searchParams.set('markread', target)
+        openUrl = withParam.href
+      } catch (e) {
+        openUrl = targetUrl
+      }
+
+      // Focus an existing tab already on the target URL if there is one (it was
+      // already cleared by the postMessage; no need to carry the param).
       for (const client of allClients) {
         if (client.url === targetUrl && 'focus' in client) {
           return client.focus()
         }
       }
-      // Otherwise focus any open window and navigate it, or open a new one.
+      // Otherwise focus any open window and navigate it, or open a new one — both
+      // carry the mark-read param so a navigation that discards in-page JS state
+      // (or a cold open) still clears the notification once the app boots.
       const existing = allClients[0]
       if (existing && 'focus' in existing) {
         await existing.focus()
         if ('navigate' in existing) {
-          return existing.navigate(targetUrl).catch(() => undefined)
+          return existing.navigate(openUrl).catch(() => undefined)
         }
         return undefined
       }
       if (clients.openWindow) {
-        return clients.openWindow(targetUrl)
+        return clients.openWindow(openUrl)
       }
       return undefined
     })(),
