@@ -111,6 +111,16 @@ function claimSendSlot(speakerId: string): boolean {
  * kept rejecting picker-offered organizers with "Speaker not found".)
  * Cross-conference targeting stays blocked: a talk-less non-organizer from
  * another edition has no standing here.
+ *
+ * ANY-CONFERENCE ORGANIZER MATCH IS INTENTIONAL (QR-M6, verified not a leak):
+ * the organizer clause matches an organizer of ANY edition on purpose because
+ * `isOrganizer` is GLOBAL in this app — it is derived as `_id in
+ * *[_type == "conference"].organizers[]._ref` (see `lib/speaker/sanity.ts`), and
+ * `canAccessConversation` short-circuits `if (speaker.isOrganizer) return true`.
+ * So a global organizer can ALREADY read/write every thread; naming them the
+ * subjectSpeaker of a new general thread grants no access they lack. Scoping this
+ * clause to `$conferenceId` would instead REJECT a legitimate organizer the admin
+ * picker offers. Not a cross-tenant leak; do not narrow it.
  */
 async function speakerHasStandingInConference(
   speakerId: string,

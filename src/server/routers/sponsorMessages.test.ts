@@ -137,6 +137,45 @@ describe('sponsorMessages.send — token + validation', () => {
   })
 })
 
+describe('sponsorMessages.send — reopen on reply (M2)', () => {
+  it('REOPENS a resolved thread (sponsor is a non-organizer author)', async () => {
+    getConversationMock.mockResolvedValue({
+      _id: 'conversation.sponsor.sfc-1',
+      status: 'resolved',
+    })
+    await caller.send({
+      token: 'reopen-1',
+      body: 'Following up',
+      authorName: 'Dana Diaz',
+    })
+    expect(addMessageMock).toHaveBeenCalledOnce()
+    expect(addMessageMock.mock.calls[0][0]).toMatchObject({ reopen: true })
+  })
+
+  it('does NOT reopen an already-open thread', async () => {
+    getConversationMock.mockResolvedValue({
+      _id: 'conversation.sponsor.sfc-1',
+      status: 'open',
+    })
+    await caller.send({
+      token: 'reopen-2',
+      body: 'Another message',
+      authorName: 'Dana Diaz',
+    })
+    expect(addMessageMock.mock.calls[0][0]).toMatchObject({ reopen: false })
+  })
+
+  it('does NOT reopen a brand-new thread (no prior conversation)', async () => {
+    // getConversationMock defaults to null (thread just created) → reopen false.
+    await caller.send({
+      token: 'reopen-3',
+      body: 'First contact',
+      authorName: 'Dana Diaz',
+    })
+    expect(addMessageMock.mock.calls[0][0]).toMatchObject({ reopen: false })
+  })
+})
+
 describe('sponsorMessages.send — rate limit (5/min per token)', () => {
   it('allows a burst of 5 then rejects the 6th', async () => {
     const token = 'rate-limit-token'

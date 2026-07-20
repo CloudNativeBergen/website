@@ -116,14 +116,27 @@ const GLOBALLY_ARCHIVED = '(defined(archivedAt) && archivedAt >= lastMessageAt)'
 // drift between the inbox needs-reply filter and the nudge selection (R1).
 export const LAST_AUTHOR_REF =
   '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
+// Whether the thread has ANY message at all. EXPORTED and shared with the nudge
+// job for the SAME reason as LAST_AUTHOR_REF (R1): both must agree on "a message
+// exists". This gate replaces the old `defined(LAST_AUTHOR_REF)` existence
+// check, which conflated "a message exists" with "its author has an author._ref"
+// — a SPONSOR-authored message has NO `author` ref (sponsors have no speaker
+// doc), so `defined(LAST_AUTHOR_REF)` was FALSE for a sponsor-last-message thread
+// and the needs-reply tab/count/nudge silently dropped it while the Active-view
+// row still showed a needs-reply badge (badge vs tab disagreed). (M3)
+export const HAS_ANY_MESSAGE =
+  'count(*[_type == "message" && conversation._ref == ^._id]) > 0'
 // Needs an organizer reply: not resolved AND at least one organizer exists AND a
-// message exists whose author is not an organizer. Uses $organizerIds — bound
-// only for the `needs-reply` view. The `count($organizerIds) > 0` guard is
-// LOAD-BEARING: with an empty organizer set `x in []` is false, so the negation
-// would match EVERY thread vacuously (a misconfigured conference would flood the
-// needs-reply view). No organizers means nobody can reply → needs-reply is empty
-// (mirrors the JS derivation below and the nudge job's routing skip). (R2)
-const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && defined(${LAST_AUTHOR_REF}) && !(${LAST_AUTHOR_REF} in $organizerIds)`
+// message EXISTS whose author is not an organizer. A sponsor-authored last
+// message (null author ref) counts as non-organizer — `null in $organizerIds` is
+// false, so `!(... in $organizerIds)` is true — so it correctly needs a reply,
+// matching the JS derivation below. Uses $organizerIds — bound only for the
+// `needs-reply` view. The `count($organizerIds) > 0` guard is LOAD-BEARING: with
+// an empty organizer set `x in []` is false, so the negation would match EVERY
+// thread vacuously (a misconfigured conference would flood the needs-reply view).
+// No organizers means nobody can reply → needs-reply is empty (mirrors the JS
+// derivation below and the nudge job's routing skip). (R2, M3)
+const NEEDS_REPLY = `${STATUS_NOT_RESOLVED} && count($organizerIds) > 0 && ${HAS_ANY_MESSAGE} && !(${LAST_AUTHOR_REF} in $organizerIds)`
 
 /**
  * The non-organizer access scope: a speaker sees only conversations they
@@ -849,6 +862,12 @@ export async function listConversationsForSpeaker({
     // (misconfigured conference or a transient organizer-fetch failure)
     // `!organizerSet.has(...)` is vacuously true, which would flag every thread —
     // nobody can reply, so needs-reply must be FALSE. (R2)
+    //
+    // A SPONSOR-authored last message has a null `authorId` (no author ref);
+    // `organizerSet.has(null)` is false, so `!organizerSet.has(...)` is true and
+    // the thread needs a reply — deliberately CONSISTENT with the GROQ
+    // NEEDS_REPLY (HAS_ANY_MESSAGE + `!(LAST_AUTHOR_REF in $organizerIds)`) so the
+    // row badge, the needs-reply tab, its count, and the nudge never disagree. (M3)
     const needsReply =
       isOrganizer &&
       organizerSet.size > 0 &&

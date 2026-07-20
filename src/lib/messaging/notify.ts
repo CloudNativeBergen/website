@@ -345,11 +345,21 @@ export async function notifySponsorMessage({
     if (authorOrganizerId === undefined) {
       // ---- SPONSOR-authored ------------------------------------------------
       const authorName = message.authorName ?? sfc.sponsorName
-      // HUB (+push) to ALL organizers. Sponsor authors have no speaker id, so
-      // there is no actor to exclude and no `actorId` on the input. The
-      // "(Sponsor)" suffix on the author name yields the required title
-      // "New message from <authorName> (Sponsor) — <subject>".
-      const items: MessageNotificationInput[] = organizerIds.map((id) => ({
+      // HUB (+push) to the routed organizers, MINUS anyone who MUTED this thread
+      // — mirror the organizer-authored branch below and honour the module
+      // docstring's mute contract (a muted organizer must get nothing on any
+      // channel, sponsor-authored included). Sponsors have no preference docs, so
+      // only the organizer recipients are filtered. (M1)
+      const prefs = await getConversationPreferencesFor(
+        conversation._id,
+        organizerIds,
+      )
+      const active = organizerIds.filter((id) => !prefs.get(id)?.muted)
+      // Sponsor authors have no speaker id, so there is no actor to exclude and
+      // no `actorId` on the input. The "(Sponsor)" suffix on the author name
+      // yields the required title "New message from <authorName> (Sponsor) —
+      // <subject>".
+      const items: MessageNotificationInput[] = active.map((id) => ({
         recipientId: id,
         conversationId: conversation._id,
         conferenceId: conversation.conferenceId,
@@ -400,6 +410,21 @@ export async function notifySponsorMessage({
       await sendSponsorMessageEmails(
         sfc.contactPersons.map((c) => ({ email: c.email, name: c.name })),
         { authorName, subject, excerpt, portalUrl, conference },
+      )
+    } else if (sfc.contactPersons.length > 0 && !sfc.registrationToken) {
+      // OBSERVABILITY (M5): there ARE contact persons but NO registration token,
+      // so there is no portal link to build — the sponsor-side email silently
+      // never sends. Surface the drop (server warning + a sponsorActivity `note`)
+      // so it is diagnosable. We do NOT block the thread message: the hub still
+      // notifies the other organizers below, and the reply is already committed.
+      console.warn(
+        `notifySponsorMessage: sfc ${sfc.sfcId} has ${sfc.contactPersons.length} contact(s) but no registrationToken; the organizer reply was NOT emailed (no portal link).`,
+      )
+      await createSponsorActivity(
+        sfc.sfcId,
+        'note',
+        `Reply from ${authorName} could not be emailed to the sponsor: no portal registration token on file.`,
+        'system',
       )
     }
 
