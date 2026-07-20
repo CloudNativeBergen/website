@@ -199,7 +199,10 @@ self.addEventListener('fetch', (event) => {
 // helper in `src/lib/pwa/push-payload.ts` (kept in sync by the sw-source test).
 
 const NOTIFICATION_DEFAULT_TITLE = 'Cloud Native Days'
-const NOTIFICATION_DEFAULT_URL = '/'
+// A push with no (or an unparseable/off-origin) url opens the standalone
+// notifications page — somewhere the notification is readable — not the bare
+// app root. Mirrors DEFAULT_URL in src/lib/pwa/push-payload.ts.
+const NOTIFICATION_DEFAULT_URL = '/notifications'
 
 // Only allow a same-origin absolute PATH ("/..."; never "//..."). Any absolute
 // or protocol-relative URL is dropped so a click can never leave the origin. A
@@ -239,24 +242,27 @@ self.addEventListener('push', (event) => {
   const raw = event.data ? event.data.text() : ''
   const payload = parsePushPayload(raw)
 
-  // Best-effort PWA app-icon badge (Badging API), so the icon reflects "unread
-  // present" even when no tab is open. The SW does not know the exact unread
-  // count, so it shows the generic dot (no-arg setAppBadge); the in-app
-  // AppBadgeSync sets the PRECISE number the next time a tab is focused.
-  // Feature-detected and never throws (the API rejects on unsupported
-  // platforms) — purely additive to the notification display below.
-  if (self.navigator && 'setAppBadge' in self.navigator) {
-    self.navigator.setAppBadge().catch(() => {})
-  }
-
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: '/icon-192.png',
-      badge: '/favicon-32.png',
-      tag: payload.tag,
-      data: { url: payload.url },
-    }),
+    (async () => {
+      // Best-effort PWA app-icon badge (Badging API), so the icon reflects
+      // "unread present" even when no tab is open. The SW does not know the exact
+      // unread count, so it shows the generic dot (no-arg setAppBadge); the in-app
+      // AppBadgeSync sets the PRECISE number the next time a tab is focused.
+      // Feature-detected and never throws (the API rejects on unsupported
+      // platforms). MUST run inside waitUntil: on tight SW lifetimes work started
+      // outside the extended-lifetime promise can be dropped before it settles.
+      if (self.navigator && 'setAppBadge' in self.navigator) {
+        await self.navigator.setAppBadge().catch(() => {})
+      }
+
+      await self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: '/icon-192.png',
+        badge: '/favicon-32.png',
+        tag: payload.tag,
+        data: { url: payload.url },
+      })
+    })(),
   )
 })
 

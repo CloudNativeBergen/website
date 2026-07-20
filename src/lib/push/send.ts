@@ -290,8 +290,11 @@ async function deliverPushToRecipient(
       title: item.title,
       body: item.message ?? '',
       // The SW re-sanitises this to a same-origin path; hub links are already
-      // app-relative (e.g. /cfp/proposal/<id>). Fall back to the app root.
-      url: item.link ?? '/',
+      // app-relative (e.g. /cfp/proposal/<id>). A notification with NO deep link
+      // (system/announcement types) targets the standalone notifications page
+      // so a push tap on a closed app opens somewhere the message is readable —
+      // never the bare app root, where it would be lost.
+      url: item.link ?? '/notifications',
       // Stable per-thread tag (message notifications) → the SW passes it to
       // showNotification so repeat pushes for the same thread REPLACE the prior
       // one instead of stacking. Undefined for one-shot types (they stack).

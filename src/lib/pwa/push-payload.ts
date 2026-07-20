@@ -17,7 +17,10 @@ export interface ParsedPushNotification {
 }
 
 const DEFAULT_TITLE = 'Cloud Native Days'
-const DEFAULT_URL = '/'
+// A missing/malformed/off-origin url falls back to the standalone notifications
+// page so a linkless or unparseable push still opens somewhere readable, never
+// the bare app root. Mirrored inline by NOTIFICATION_DEFAULT_URL in public/sw.js.
+const DEFAULT_URL = '/notifications'
 
 /**
  * Parse a push message body. Tolerates malformed / empty payloads by falling

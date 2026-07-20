@@ -133,6 +133,11 @@ export const UnreadAndRead: Story = {
     onMessagesClick: fn(),
     settingsHref: '/cfp/profile#notification-settings',
     onSettingsClick: fn(),
+    // Panel wiring: a "View all notifications" footer link, and linkless rows
+    // route to the standalone page where they're readable.
+    viewAllHref: '/notifications',
+    onViewAllClick: fn(),
+    linklessHref: '/notifications',
   },
   render: (args) => <NotificationList {...args} items={makeItems()} />,
 }
