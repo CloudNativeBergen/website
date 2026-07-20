@@ -53,6 +53,8 @@ const meta = {
     confirmedCount: 24,
     onClose: fn(),
     onSubmit: fn(),
+    onEditAnnouncement: fn(),
+    onDeleteAnnouncement: fn(),
   },
   tags: ['autodocs'],
 } satisfies Meta<typeof AnnounceModal>
@@ -72,4 +74,28 @@ export const Submitting: Story = {
 
 export const SingleParticipant: Story = {
   args: { confirmedCount: 1 },
+}
+
+const announcements = [
+  {
+    _id: 'ann-1',
+    body: 'Please install Docker Desktop and kubectl before the session. A verification script is linked in the prerequisites doc.',
+    createdAt: '2026-09-05T09:30:00Z',
+    authorName: 'Hans K.',
+  },
+  {
+    _id: 'ann-2',
+    body: 'Room change: we have moved to Room B3 on the second floor.',
+    createdAt: '2026-09-06T14:15:00Z',
+    authorName: 'Hans K.',
+  },
+]
+
+export const WithAnnouncements: Story = {
+  args: { announcements },
+}
+
+export const WithAnnouncementsDark: Story = {
+  args: { announcements },
+  parameters: { dark: true },
 }

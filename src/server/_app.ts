@@ -19,6 +19,7 @@ import { pushRouter } from './routers/push'
 import { messageRouter } from './routers/message'
 import { conferenceRouter } from './routers/conference'
 import { topicRouter } from './routers/topic'
+import { staffRouter } from './routers/staff'
 import { sponsorMessagesRouter } from './routers/sponsorMessages'
 
 export const appRouter = router({
@@ -42,6 +43,7 @@ export const appRouter = router({
   message: messageRouter,
   conference: conferenceRouter,
   topic: topicRouter,
+  staff: staffRouter,
   sponsorMessages: sponsorMessagesRouter,
 })
 

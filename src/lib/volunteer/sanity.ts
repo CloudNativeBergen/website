@@ -170,6 +170,64 @@ export async function updateVolunteerStatus(
   }
 }
 
+/** The organizer-editable subset of a volunteer's detail fields (SE-4). */
+export interface VolunteerDetailsUpdate {
+  name: string
+  email: string
+  phone: string
+  occupation: string
+  availability?: string | null
+  preferredTasks?: string[] | null
+  tshirtSize?: string | null
+  dietaryRestrictions?: string | null
+  otherInfo?: string | null
+}
+
+/**
+ * Patch a volunteer's own detail fields (SE-4). Required fields are always set;
+ * nullable optional fields are UNSET when explicitly `null` and left untouched
+ * when absent (a `.set(null)` would be ignored by Sanity, stranding stale
+ * values). Never touches status/review provenance.
+ */
+export async function updateVolunteerDetails(
+  volunteerId: string,
+  data: VolunteerDetailsUpdate,
+): Promise<{ success: boolean; error: Error | null }> {
+  try {
+    const set: Record<string, unknown> = {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      occupation: data.occupation,
+    }
+    const unset: string[] = []
+
+    const optional: Array<keyof VolunteerDetailsUpdate> = [
+      'availability',
+      'preferredTasks',
+      'tshirtSize',
+      'dietaryRestrictions',
+      'otherInfo',
+    ]
+    for (const key of optional) {
+      const value = data[key]
+      if (value === null) unset.push(key)
+      else if (value !== undefined) set[key] = value
+    }
+
+    let patch = clientWrite.patch(volunteerId).set(set)
+    if (unset.length > 0) patch = patch.unset(unset)
+    await patch.commit()
+
+    return { success: true, error: null }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error'),
+    }
+  }
+}
+
 export async function deleteVolunteer(
   volunteerId: string,
 ): Promise<{ success: boolean; error: Error | null }> {

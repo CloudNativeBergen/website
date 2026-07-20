@@ -202,6 +202,25 @@ export const CreateSponsorActivitySchema = z.object({
   description: z.string().min(1, 'Description is required'),
 })
 
+/**
+ * Edit of a user-authored activity (SE-4). Only `note`/`call`/`meeting`/`email`
+ * activities are editable, and only by their creator — the server re-checks
+ * both against the stored doc (mirroring the delete gating). The `activityType`
+ * is NOT editable here.
+ */
+export const UpdateSponsorActivitySchema = z.object({
+  id: z.string().min(1, 'Activity ID is required'),
+  description: z.string().min(1, 'Description is required'),
+  metadata: z
+    .object({
+      oldValue: z.string().optional(),
+      newValue: z.string().optional(),
+      timestamp: z.string().optional(),
+      additionalData: z.string().optional(),
+    })
+    .optional(),
+})
+
 export const SponsorCRMFilterSchema = z.object({
   status: z.array(z.string()).optional(),
   invoiceStatus: z.array(z.string()).optional(),

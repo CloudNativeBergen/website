@@ -123,6 +123,21 @@ export const workshopAnnounceSchema = z.object({
     .max(2000, 'Announcement must be 2000 characters or fewer'),
 })
 
+/** Owner/organizer editing an existing announcement's body (SE-4). */
+export const workshopUpdateAnnouncementSchema = z.object({
+  announcementId: z.string().min(1, 'Announcement ID is required'),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Announcement message is required')
+    .max(2000, 'Announcement must be 2000 characters or fewer'),
+})
+
+/** Owner/organizer deleting an announcement (SE-4). */
+export const workshopDeleteAnnouncementSchema = z.object({
+  announcementId: z.string().min(1, 'Announcement ID is required'),
+})
+
 /** Public read of a workshop's announcements, bounded to [0...50], newest first. */
 export const workshopAnnouncementsQuerySchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
