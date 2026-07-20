@@ -22,17 +22,18 @@ import { getAuthSession } from '@/lib/auth'
  * role — an organizer impersonating a speaker is sent to `/cfp/list`, exactly
  * what they're trying to preview. No special-casing needed here.
  *
- * Caching: this must be evaluated fresh on every request. The route is forced
- * dynamic and the redirect carries `Cache-Control: no-store`. The service
+ * Caching: this must be evaluated fresh on every request. The route is
+ * inherently dynamic (it reads the request session) and the redirect carries
+ * `Cache-Control: no-store`. The service
  * worker treats this as a document navigation (network-first, never cached),
  * so `/launch` always reaches the server. It is purely a redirect dispatcher —
  * no data is read or rendered, so an unauthenticated hit leaks nothing.
  */
 
-// Never statically optimize or cache: the redirect target is per-user.
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
+// No `dynamic`/`revalidate` segment config: this repo builds with Next's
+// cacheComponents mode, which forbids them. Reading the session (request
+// headers) already opts the route out of any caching, and the response sets
+// `Cache-Control: no-store` — so the redirect is always evaluated per-request.
 export async function GET(request: Request): Promise<NextResponse> {
   // Pass the request so Bearer-token auth (Authorization header) and dev-mode
   // `?impersonate=` resolution work exactly as they do elsewhere.
@@ -53,6 +54,6 @@ export async function GET(request: Request): Promise<NextResponse> {
   const response = NextResponse.redirect(new URL(target, request.url), {
     status: 307,
   })
-  response.headers.set('Cache-Control', 'no-store, must-revalidate')
+  response.headers.set('Cache-Control', 'no-store')
   return response
 }
