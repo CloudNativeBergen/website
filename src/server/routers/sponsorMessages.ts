@@ -144,6 +144,16 @@ export const sponsorMessagesRouter = router({
         sponsorName: ctx.sponsorName,
       })
 
+      // Read the thread ONCE (it exists now — ensure is createIfNotExists): its
+      // PRE-reply status decides reopen, and the same object seeds the fan-out.
+      const conversation = await getConversationById(conversationId)
+
+      // REOPEN-ON-REPLY (S3): a sponsor is a NON-organizer author, so a reply to
+      // a RESOLVED thread must reopen it — atomically with the message write, so
+      // the follow-up re-enters the organizer active/needs-reply views instead of
+      // silently staying resolved (mirrors message.send's non-organizer reopen).
+      const reopen = conversation?.status === 'resolved'
+
       const message = await addMessage({
         conversationId,
         sponsorAuthor: {
@@ -151,11 +161,11 @@ export const sponsorMessagesRouter = router({
           authorName: match.name,
         },
         body: input.body,
+        reopen,
       })
 
       // Detach the (never-fail) fan-out from the response path (mirrors
       // message.send): the message is already committed and returned below.
-      const conversation = await getConversationById(conversationId)
       if (conversation) {
         const fanoutCtx = await getSponsorFanoutContext(ctx.sfcId)
         if (fanoutCtx) {

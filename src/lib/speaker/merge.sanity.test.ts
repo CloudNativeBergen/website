@@ -9,29 +9,38 @@ const deleteMock = vi.fn()
 
 // Ordered record of every op staged on the transaction, so tests can assert
 // not just WHAT was staged but the ORDER (delete must come last).
-const txOrder: Array<'patch' | 'delete'> = []
+const txOrder: Array<'patch' | 'delete' | 'create'> = []
 
 // Each `.patch(id, fn)` invokes `fn` with a fake, chainable patch builder whose
-// `.set()`/`.ifRevisionId()` record their arguments, so tests can assert the
-// exact ops AND that each referencing-doc patch is revision-guarded.
+// `.set()`/`.unset()`/`.ifRevisionId()` record their arguments, so tests can
+// assert the exact ops AND that each referencing-doc patch is revision-guarded.
 const patchOps: Array<{
   id: string
   set: Record<string, unknown>
+  unset?: string[]
   rev?: string
 }> = []
 const patchMock = vi.fn(
   (
     id: string,
-    fn: (p: { set: (o: Record<string, unknown>) => unknown }) => unknown,
+    fn: (p: {
+      set: (o: Record<string, unknown>) => unknown
+      unset: (keys: string[]) => unknown
+    }) => unknown,
   ) => {
-    const op = { id, set: {} as Record<string, unknown>, rev: undefined } as {
+    const op = { id, set: {} as Record<string, unknown> } as {
       id: string
       set: Record<string, unknown>
+      unset?: string[]
       rev?: string
     }
     const builder = {
       set: (o: Record<string, unknown>) => {
         op.set = o
+        return builder
+      },
+      unset: (keys: string[]) => {
+        op.unset = keys
         return builder
       },
       ifRevisionId: (rev: string) => {
@@ -46,9 +55,15 @@ const patchMock = vi.fn(
   },
 )
 
+const createdDocs: Array<Record<string, unknown>> = []
 const deletedIds: string[] = []
 const transactionApi = {
   patch: patchMock,
+  create: (doc: Record<string, unknown>) => {
+    createdDocs.push(doc)
+    txOrder.push('create')
+    return transactionApi
+  },
   delete: (id: string) => {
     deletedIds.push(id)
     deleteMock(id)
@@ -133,6 +148,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   patchOps.length = 0
   deletedIds.length = 0
+  createdDocs.length = 0
   txOrder.length = 0
   fetchMock.mockImplementation(routeFetch)
 })
@@ -240,5 +256,106 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(committed).toBe(false)
     expect(err?.message).toMatch(/Loser speaker not found/)
     expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('mergeSpeakers — deterministic-doc reconciliation (M4)', () => {
+  const CONVPREF_LOSER = `convpref.conv-1.${LOSER}`
+  const CONVPREF_SURVIVOR = `convpref.conv-1.${SURVIVOR}`
+  const NOTIF_LOSER = `notification.message.conv-1.${LOSER}`
+  const NOTIF_SURVIVOR = `notification.message.conv-1.${SURVIVOR}`
+
+  // The loser's deterministic docs, repointed-in-place by the generic path would
+  // strand them under the loser key. One MERGES (survivor pref exists), one
+  // RECREATEs (no survivor notification yet).
+  const collisionDocs = [
+    {
+      _id: CONVPREF_LOSER,
+      _type: 'conversationPreference',
+      _rev: 'rev-cp-loser',
+      conversation: ref('conv-1'),
+      speaker: ref(LOSER),
+      muted: true,
+    },
+    {
+      _id: NOTIF_LOSER,
+      _type: 'notification',
+      _rev: 'rev-nt-loser',
+      conversation: ref('conv-1'),
+      recipient: ref(LOSER),
+      notificationType: 'message_received',
+      count: 2,
+    },
+  ]
+
+  // The survivor's canonical pref exists (NOT muted) → MERGE to muted. The
+  // survivor has NO canonical notification → the loser's is RECREATED.
+  const survivorCanonicalDocs = [
+    {
+      _id: CONVPREF_SURVIVOR,
+      _type: 'conversationPreference',
+      _rev: 'rev-cp-surv',
+      conversation: ref('conv-1'),
+      speaker: ref(SURVIVOR),
+      muted: false,
+    },
+  ]
+
+  beforeEach(() => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id')) {
+          if (params.id === SURVIVOR) return Promise.resolve(survivorDoc)
+          if (params.id === LOSER) return Promise.resolve(loserDoc)
+          return Promise.resolve(null)
+        }
+        if (query.includes('references($loserId)')) {
+          return Promise.resolve(collisionDocs)
+        }
+        if (query.includes('_id in $ids')) {
+          return Promise.resolve(survivorCanonicalDocs)
+        }
+        return Promise.resolve(null)
+      },
+    )
+  })
+
+  it('MERGEs the loser pref onto the canonical id (more-restrictive mute wins) and deletes the loser doc', async () => {
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+    expect(err).toBeNull()
+    expect(committed).toBe(true)
+
+    // The canonical survivor pref is patched to muted; NO patch keyed by the
+    // loser-suffixed id survives.
+    const prefPatch = patchOps.find((p) => p.id === CONVPREF_SURVIVOR)!
+    expect(prefPatch.set.muted).toBe(true)
+    expect(patchOps.some((p) => p.id === CONVPREF_LOSER)).toBe(false)
+
+    // The loser-suffixed pref doc is deleted (never left repointed-but-stranded).
+    expect(deletedIds).toContain(CONVPREF_LOSER)
+  })
+
+  it('RECREATEs a loser notification under the canonical id with the recipient repointed, and deletes the loser doc', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const recreated = createdDocs.find((d) => d._id === NOTIF_SURVIVOR)!
+    expect(recreated).toBeDefined()
+    // Recipient ref now points at the survivor; system meta is stripped.
+    expect(recreated.recipient).toEqual({ _type: 'reference', _ref: SURVIVOR })
+    expect(recreated._rev).toBeUndefined()
+    expect(recreated.count).toBe(2)
+
+    expect(deletedIds).toContain(NOTIF_LOSER)
+    // The loser SPEAKER doc is still deleted LAST.
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
+    expect(deletedIds[deletedIds.length - 1]).toBe(LOSER)
   })
 })

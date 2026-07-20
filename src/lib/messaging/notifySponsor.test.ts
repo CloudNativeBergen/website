@@ -132,6 +132,25 @@ describe('notifySponsorMessage — SPONSOR-authored', () => {
     // NO sponsor emails on a sponsor-authored message.
     expect(sponsorEmailMock).not.toHaveBeenCalled()
   })
+
+  it('EXCLUDES an organizer who MUTED the thread from the hub fan-out (M1)', async () => {
+    // org-2 muted this conversation → sponsor-authored hub must skip them,
+    // mirroring the organizer-authored branch and the module mute contract. The
+    // sponsor-authored branch makes exactly one read (the preference lookup), so
+    // a single `mockImplementationOnce` targets it without leaking to later tests.
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve([
+        { speakerId: 'org-2', muted: true },
+      ] as unknown as never[]),
+    )
+
+    await notifySponsorMessage({ conversation, message, sfc })
+
+    expect(upsertMock).toHaveBeenCalledOnce()
+    const items = upsertMock.mock.calls[0][0] as { recipientId: string }[]
+    // Only the NON-muted organizer is hubbed.
+    expect(items.map((i) => i.recipientId)).toEqual(['org-1'])
+  })
 })
 
 describe('notifySponsorMessage — ORGANIZER-authored', () => {

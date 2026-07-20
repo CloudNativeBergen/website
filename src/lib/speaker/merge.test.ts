@@ -4,6 +4,7 @@ import {
   computeSurvivorFieldMerge,
   assertMergeable,
   buildMergePlan,
+  reconcileDeterministicDoc,
   MergeValidationError,
   type MergeSpeakerDoc,
 } from './merge'
@@ -313,5 +314,172 @@ describe('buildMergePlan', () => {
     )
     expect(plan.summary.referenceRepointsByType).toEqual(actualByType)
     expect(plan.summary.willDeleteLoserId).toBe(LOSER)
+  })
+})
+
+// --- reconcileDeterministicDoc (M4) ----------------------------------------
+
+describe('reconcileDeterministicDoc', () => {
+  it('MERGEs a convpref: more-restrictive mute wins, loser doc deleted', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `convpref.c1.${LOSER}`,
+        _type: 'conversationPreference',
+        muted: true,
+      },
+      {
+        _id: `convpref.c1.${SURVIVOR}`,
+        _type: 'conversationPreference',
+        muted: false,
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.deleteId).toBe(`convpref.c1.${LOSER}`)
+    expect(rec.canonicalId).toBe(`convpref.c1.${SURVIVOR}`)
+    expect(rec.mergeSet).toEqual({ muted: true })
+    expect(rec.createDoc).toBeUndefined()
+  })
+
+  it('MERGEs a convpref with no mute change → empty patch', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `convpref.c1.${LOSER}`,
+        _type: 'conversationPreference',
+        muted: false,
+      },
+      {
+        _id: `convpref.c1.${SURVIVOR}`,
+        _type: 'conversationPreference',
+        muted: true,
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    // Survivor already muted (more restrictive) → nothing to change.
+    expect(rec.mergeSet).toEqual({})
+  })
+
+  it('RECREATEs a convpref when the survivor has no canonical doc, repointing the speaker ref', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `convpref.c1.${LOSER}`,
+        _type: 'conversationPreference',
+        _rev: 'r1',
+        speaker: { _type: 'reference', _ref: LOSER },
+        muted: true,
+      },
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.createDoc).toEqual({
+      _id: `convpref.c1.${SURVIVOR}`,
+      _type: 'conversationPreference',
+      speaker: { _type: 'reference', _ref: SURVIVOR },
+      muted: true,
+    })
+    expect(rec.deleteId).toBe(`convpref.c1.${LOSER}`)
+  })
+
+  it('MERGEs a message notification: SUMS unread piles, keeps unread', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `notification.message.c1.${LOSER}`,
+        _type: 'notification',
+        count: 2,
+      },
+      {
+        _id: `notification.message.c1.${SURVIVOR}`,
+        _type: 'notification',
+        count: 3,
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    // Both unread (no readAt) → 3 + 2 = 5, still unread.
+    expect(rec.mergeSet).toEqual({ count: 5 })
+    expect(rec.mergeUnset ?? []).toEqual([])
+  })
+
+  it('MERGEs a message notification: a READ survivor + unread loser becomes unread', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `notification.message.c1.${LOSER}`,
+        _type: 'notification',
+        count: 4,
+      },
+      {
+        _id: `notification.message.c1.${SURVIVOR}`,
+        _type: 'notification',
+        count: 1,
+        readAt: '2026-07-01T00:00:00Z',
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    // Survivor was read (0 unread) + loser 4 unread → 4, and readAt is cleared.
+    expect(rec.mergeSet).toEqual({ count: 4 })
+    expect(rec.mergeUnset).toEqual(['readAt'])
+  })
+
+  it('MERGEs a message notification: both READ → no count/readAt change', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `notification.message.c1.${LOSER}`,
+        _type: 'notification',
+        count: 2,
+        readAt: '2026-07-01T00:00:00Z',
+      },
+      {
+        _id: `notification.message.c1.${SURVIVOR}`,
+        _type: 'notification',
+        count: 1,
+        readAt: '2026-07-02T00:00:00Z',
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.mergeSet).toEqual({})
+    expect(rec.mergeUnset ?? []).toEqual([])
+  })
+})
+
+describe('buildMergePlan — deterministic reconciliation (M4)', () => {
+  const survivor = speaker({ _id: SURVIVOR })
+  const loser = speaker({ _id: LOSER })
+
+  it('pulls convpref/notification collision docs OUT of the generic repoint into reconciliations', () => {
+    const referencingDocs = [
+      { _id: 'talk-1', _type: 'talk', speakers: [ref(LOSER, 'k1')] },
+      {
+        _id: `convpref.c1.${LOSER}`,
+        _type: 'conversationPreference',
+        speaker: ref(LOSER),
+        muted: true,
+      },
+    ]
+    const survivorDeterministicDocs = [
+      {
+        _id: `convpref.c1.${SURVIVOR}`,
+        _type: 'conversationPreference',
+        speaker: ref(SURVIVOR),
+        muted: false,
+      },
+    ]
+    const plan = buildMergePlan(
+      survivor,
+      loser,
+      referencingDocs,
+      survivorDeterministicDocs,
+    )
+    // The convpref is NOT a generic documentPatch.
+    expect(plan.documentPatches.map((p) => p.id)).toEqual(['talk-1'])
+    // It IS a reconciliation (merge to muted).
+    expect(plan.deterministicReconciliations).toHaveLength(1)
+    expect(plan.deterministicReconciliations[0].mergeSet).toEqual({
+      muted: true,
+    })
+    expect(plan.summary.reconciledDeterministicDocCount).toBe(1)
   })
 })

@@ -10,7 +10,7 @@ import { conversationLinkPath } from './links'
 // Single home for the last-author projection (R1): sharing the exact string with
 // the inbox `needs-reply` filter guarantees the nudge selection and the inbox can
 // never disagree on which thread's ball is in the organizers' court.
-import { LAST_AUTHOR_REF } from './sanity'
+import { LAST_AUTHOR_REF, HAS_ANY_MESSAGE } from './sanity'
 
 /**
  * Server-only stale-thread nudge for speaker↔organizer messaging (ticketing).
@@ -96,7 +96,10 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
     // Selection: open (or absent status) AND no activity since the cutoff AND
     // NOT globally archived (archivedAt >= lastMessageAt) AND not already nudged
     // for this trailing message (lastStaleNudgeAt < lastMessageAt) AND a last
-    // message exists whose author is NOT an organizer.
+    // message exists whose author is NOT an organizer. HAS_ANY_MESSAGE (not
+    // `defined(LAST_AUTHOR_REF)`) gates existence so a SPONSOR-authored last
+    // message — which has no author ref — still qualifies, keeping the nudge
+    // consistent with the inbox needs-reply tab/badge. (M3)
     const conversations =
       (await clientReadUncached.fetch<StaleConversation[]>(
         `*[_type == "conversation"
@@ -104,7 +107,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
           && lastMessageAt < $cutoff
           && (!defined(archivedAt) || archivedAt < lastMessageAt)
           && (!defined(lastStaleNudgeAt) || lastStaleNudgeAt < lastMessageAt)
-          && defined(${LAST_AUTHOR_REF})
+          && ${HAS_ANY_MESSAGE}
           && !(${LAST_AUTHOR_REF} in $organizerIds)
         ] | order(lastMessageAt asc) [0...${MAX_CONVERSATIONS_PER_RUN}] {
           "_id": _id,

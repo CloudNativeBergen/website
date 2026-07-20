@@ -314,6 +314,156 @@ export function assertMergeable(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Deterministic-id doc reconciliation (QR-M4)
+//
+// Some messaging docs use a DETERMINISTIC id that ENCODES the speaker/recipient
+// id as the trailing segment: `<prefix>.<conversationId>.<speakerId>`:
+//   - conversationPreference → `convpref.<conv>.<speakerId>`
+//   - collapsed message notification → `notification.message.<conv>.<recipientId>`
+// A plain reference repoint (the generic path) rewrites the inner ref to the
+// survivor but LEAVES the doc keyed by the loser id. If the survivor already
+// holds the canonical-id sibling for the same conversation, BOTH docs then point
+// at the survivor and:
+//   - listConversations sums `coalesce(count,1)` across both notification links →
+//     DOUBLED unread;
+//   - getConversationPreference reads ONLY the canonical id → a mute recorded on
+//     the loser-suffixed pref is SILENTLY IGNORED.
+// So these docs must be RECONCILED onto the survivor's canonical id (merged when
+// it exists, recreated otherwise) and the loser-suffixed doc deleted — never left
+// repointed-but-loser-keyed.
+// ---------------------------------------------------------------------------
+
+const DETERMINISTIC_ID_PREFIXES = [
+  'convpref.',
+  'notification.message.',
+] as const
+
+/**
+ * Whether `id` is a deterministic messaging doc whose trailing segment is the
+ * LOSER id — i.e. a repoint would strand it under the loser key. (A notification
+ * whose recipient is a THIRD speaker but whose ACTOR is the loser ends with that
+ * third speaker's id, so it is NOT a collision and keeps the generic actor
+ * repoint.)
+ */
+function isDeterministicCollisionDoc(id: string, loserId: string): boolean {
+  return (
+    id.endsWith(`.${loserId}`) &&
+    DETERMINISTIC_ID_PREFIXES.some((prefix) => id.startsWith(prefix))
+  )
+}
+
+/** Swap the trailing loser-id segment of a deterministic id for the survivor's. */
+function canonicalDeterministicId(
+  loserDocId: string,
+  loserId: string,
+  survivorId: string,
+): string {
+  return loserDocId.slice(0, loserDocId.length - loserId.length) + survivorId
+}
+
+/** A sane ceiling so a merge can never mint an absurd unread badge count. */
+const MERGED_UNREAD_COUNT_CAP = 999
+
+function toPositiveCount(value: unknown): number {
+  return typeof value === 'number' && value > 0 ? value : 1
+}
+
+/** The later of two (optional) ISO timestamps — ISO strings sort lexically. */
+function laterIso(a: unknown, b: unknown): string | undefined {
+  const av = typeof a === 'string' ? a : undefined
+  const bv = typeof b === 'string' ? b : undefined
+  if (av && bv) return av >= bv ? av : bv
+  return av ?? bv
+}
+
+/** Strip Sanity system meta so a fetched doc can be re-created under a new id. */
+function stripSystemMeta(
+  doc: Record<string, unknown>,
+): Record<string, unknown> {
+  const clone = { ...doc }
+  delete clone._rev
+  delete clone._createdAt
+  delete clone._updatedAt
+  return clone
+}
+
+/**
+ * The reconciliation of ONE loser-suffixed deterministic doc onto the survivor's
+ * canonical id. The loser doc is ALWAYS deleted (`deleteId`); the canonical doc
+ * is either MERGED (`mergeSet`/`mergeUnset` patched onto an existing survivor
+ * doc) or RECREATED (`createDoc`).
+ */
+export interface DeterministicReconciliation {
+  /** The loser-suffixed doc id to delete. */
+  deleteId: string
+  /** The canonical (survivor-suffixed) id being written/merged. */
+  canonicalId: string
+  /** MERGE: fields to `.set()` on the existing canonical doc (may be empty). */
+  mergeSet?: Record<string, unknown>
+  /** MERGE: keys to `.unset()` on the canonical doc (e.g. clear `readAt`). */
+  mergeUnset?: string[]
+  /** RECREATE: the full doc to create under the canonical id (survivor refs). */
+  createDoc?: Record<string, unknown>
+}
+
+/**
+ * Reconcile one loser deterministic doc against the survivor's canonical doc.
+ * Pure: given the two docs it decides MERGE vs RECREATE deterministically.
+ *
+ * MERGE rules:
+ *  - conversationPreference: the more-restrictive MUTE wins (`||`); an archive on
+ *    either side is preserved (latest `archivedAt`); the survivor's email
+ *    override is kept.
+ *  - message notification: UNREAD if EITHER side is unread; the two unread piles
+ *    are SUMMED (clamped) so the survivor's badge reflects both, never doubles.
+ */
+export function reconcileDeterministicDoc(
+  loserDoc: Record<string, unknown>,
+  survivorDoc: Record<string, unknown> | undefined,
+  loserId: string,
+  survivorId: string,
+): DeterministicReconciliation {
+  const deleteId = String(loserDoc._id)
+  const canonicalId = canonicalDeterministicId(deleteId, loserId, survivorId)
+
+  // RECREATE: no canonical sibling — carry the loser doc over under the canonical
+  // id with every loser ref repointed to the survivor.
+  if (!survivorDoc) {
+    const { doc } = repointReferencesInDocument(loserDoc, loserId, survivorId)
+    const createDoc = { ...stripSystemMeta(doc), _id: canonicalId }
+    return { deleteId, canonicalId, createDoc }
+  }
+
+  // MERGE onto the existing canonical doc.
+  if (deleteId.startsWith('notification.message.')) {
+    const survivorUnread = !survivorDoc.readAt
+    const loserUnread = !loserDoc.readAt
+    const mergeSet: Record<string, unknown> = {}
+    const mergeUnset: string[] = []
+    if (survivorUnread || loserUnread) {
+      // Keep unread if EITHER was unread; sum the two unread piles (clamped).
+      const summed =
+        (survivorUnread ? toPositiveCount(survivorDoc.count) : 0) +
+        (loserUnread ? toPositiveCount(loserDoc.count) : 0)
+      mergeSet.count = Math.min(Math.max(summed, 1), MERGED_UNREAD_COUNT_CAP)
+      if (survivorDoc.readAt) mergeUnset.push('readAt')
+    }
+    // Both already read → leave the survivor doc's readAt/count untouched.
+    return { deleteId, canonicalId, mergeSet, mergeUnset }
+  }
+
+  // conversationPreference.
+  const mergeSet: Record<string, unknown> = {}
+  const mergedMuted = Boolean(survivorDoc.muted) || Boolean(loserDoc.muted)
+  if (mergedMuted !== Boolean(survivorDoc.muted)) mergeSet.muted = mergedMuted
+  const mergedArchivedAt = laterIso(survivorDoc.archivedAt, loserDoc.archivedAt)
+  if (mergedArchivedAt && mergedArchivedAt !== survivorDoc.archivedAt) {
+    mergeSet.archivedAt = mergedArchivedAt
+  }
+  return { deleteId, canonicalId, mergeSet }
+}
+
 /** Per-referencing-document patch produced by the plan. */
 export interface MergeDocumentPatch {
   id: string
@@ -333,6 +483,11 @@ export interface MergePreview {
   referencingDocCount: number
   /** Per document `_type`, how many individual references were repointed. */
   referenceRepointsByType: Record<string, number>
+  /**
+   * Deterministic-id docs (convpref / message notification) reconciled onto the
+   * survivor's canonical id rather than repointed in place (QR-M4).
+   */
+  reconciledDeterministicDocCount: number
   fieldChanges: {
     providers: IdentityFieldChange
     knownEmails: IdentityFieldChange
@@ -348,6 +503,8 @@ export interface MergePlan {
   loserId: string
   survivorSet: Record<string, unknown>
   documentPatches: MergeDocumentPatch[]
+  /** Deterministic-id docs reconciled onto the survivor's canonical id (QR-M4). */
+  deterministicReconciliations: DeterministicReconciliation[]
   summary: MergePreview
 }
 
@@ -360,6 +517,14 @@ export function buildMergePlan(
   survivor: MergeSpeakerDoc,
   loser: MergeSpeakerDoc,
   referencingDocs: Array<Record<string, unknown>>,
+  /**
+   * The survivor's CANONICAL deterministic docs (convpref / message notification)
+   * for the conversations the loser also has one in — fetched by the wrapper from
+   * the canonical ids of the loser's collision docs. Absent ones simply take the
+   * RECREATE branch. Defaults to `[]` so existing 3-arg callers/tests are
+   * unaffected. (QR-M4)
+   */
+  survivorDeterministicDocs: Array<Record<string, unknown>> = [],
 ): MergePlan {
   assertMergeable(survivor, loser)
 
@@ -367,10 +532,18 @@ export function buildMergePlan(
 
   const documentPatches: MergeDocumentPatch[] = []
   const referenceRepointsByType: Record<string, number> = {}
+  // Loser-suffixed deterministic docs are pulled OUT of the generic repoint (it
+  // would strand them under the loser key) and reconciled onto the canonical id.
+  const deterministicLoserDocs: Array<Record<string, unknown>> = []
 
   for (const doc of referencingDocs) {
     // The loser is deleted, and the survivor's own fields are handled separately.
     if (doc._id === loser._id || doc._id === survivor._id) continue
+
+    if (isDeterministicCollisionDoc(String(doc._id), loser._id)) {
+      deterministicLoserDocs.push(doc)
+      continue
+    }
 
     const {
       changedKeys,
@@ -388,11 +561,30 @@ export function buildMergePlan(
       (referenceRepointsByType[type] ?? 0) + repointed
   }
 
+  const survivorDeterministicById = new Map(
+    survivorDeterministicDocs.map((doc) => [String(doc._id), doc]),
+  )
+  const deterministicReconciliations: DeterministicReconciliation[] =
+    deterministicLoserDocs.map((loserDoc) => {
+      const canonicalId = canonicalDeterministicId(
+        String(loserDoc._id),
+        loser._id,
+        survivor._id,
+      )
+      return reconcileDeterministicDoc(
+        loserDoc,
+        survivorDeterministicById.get(canonicalId),
+        loser._id,
+        survivor._id,
+      )
+    })
+
   const summary: MergePreview = {
     survivorId: survivor._id,
     loserId: loser._id,
     referencingDocCount: documentPatches.length,
     referenceRepointsByType,
+    reconciledDeterministicDocCount: deterministicReconciliations.length,
     fieldChanges: {
       providers: fieldMerge.identity.providers,
       knownEmails: fieldMerge.identity.knownEmails,
@@ -407,6 +599,7 @@ export function buildMergePlan(
     loserId: loser._id,
     survivorSet: fieldMerge.set,
     documentPatches,
+    deterministicReconciliations,
     summary,
   }
 }
@@ -466,10 +659,29 @@ export async function mergeSpeakers(
         { cache: 'no-store' },
       )) ?? []
 
+    // QR-M4: for every loser-suffixed deterministic doc (convpref / message
+    // notification), also fetch the survivor's CANONICAL sibling so the plan can
+    // MERGE (mute/unread) rather than strand a repointed loser-keyed doc. One
+    // extra bounded read, only when such docs exist.
+    const survivorDeterministicIds = referencingDocs
+      .filter((doc) => isDeterministicCollisionDoc(String(doc._id), loserId))
+      .map((doc) =>
+        canonicalDeterministicId(String(doc._id), loserId, survivorId),
+      )
+    const survivorDeterministicDocs =
+      survivorDeterministicIds.length > 0
+        ? ((await clientRead.fetch<Array<Record<string, unknown>>>(
+            groq`*[_id in $ids]`,
+            { ids: survivorDeterministicIds },
+            { cache: 'no-store' },
+          )) ?? [])
+        : []
+
     const plan = buildMergePlan(
       survivor as MergeSpeakerDoc,
       loser as MergeSpeakerDoc,
       referencingDocs,
+      survivorDeterministicDocs,
     )
 
     if (dryRun) {
@@ -495,6 +707,33 @@ export async function mergeSpeakers(
     if (Object.keys(plan.survivorSet).length > 0) {
       transaction.patch(survivorId, (p) => p.set(plan.survivorSet))
     }
+    // QR-M4: reconcile deterministic docs onto the survivor's canonical id.
+    // RECREATE with `create` (not createOrReplace): the survivor had NO canonical
+    // sibling at read time, so a concurrent creation must 409 the whole tx (admin
+    // retries → MERGE branch) rather than clobber fresh survivor state. Each
+    // loser-suffixed doc is deleted so none survives repointed-but-loser-keyed.
+    for (const rec of plan.deterministicReconciliations) {
+      if (rec.createDoc) {
+        transaction.create(
+          rec.createDoc as { _type: string } & Record<string, unknown>,
+        )
+      } else if (
+        (rec.mergeSet && Object.keys(rec.mergeSet).length > 0) ||
+        (rec.mergeUnset && rec.mergeUnset.length > 0)
+      ) {
+        transaction.patch(rec.canonicalId, (p) => {
+          let applied = p
+          if (rec.mergeSet && Object.keys(rec.mergeSet).length > 0) {
+            applied = applied.set(rec.mergeSet)
+          }
+          if (rec.mergeUnset && rec.mergeUnset.length > 0) {
+            applied = applied.unset(rec.mergeUnset)
+          }
+          return applied
+        })
+      }
+      transaction.delete(rec.deleteId)
+    }
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)
     await transaction.commit()
@@ -507,6 +746,8 @@ export async function mergeSpeakers(
       loserId,
       referencingDocCount: plan.summary.referencingDocCount,
       referenceRepointsByType: plan.summary.referenceRepointsByType,
+      reconciledDeterministicDocCount:
+        plan.summary.reconciledDeterministicDocCount,
       filledFromLoser: plan.summary.fieldChanges.filledFromLoser,
     })
 

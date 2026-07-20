@@ -33,7 +33,7 @@ import {
 } from '@/lib/messaging/nudge'
 // The nudge selection MUST use the SAME last-author projection as the inbox
 // needs-reply filter (single home — R1).
-import { LAST_AUTHOR_REF } from '@/lib/messaging/sanity'
+import { LAST_AUTHOR_REF, HAS_ANY_MESSAGE } from '@/lib/messaging/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
@@ -110,15 +110,17 @@ describe('selection GROQ encodes the stale policy', () => {
     expect(typeof params.cutoff).toBe('string')
   })
 
-  it('uses the SHARED LAST_AUTHOR_REF projection (single home, R1)', async () => {
+  it('uses the SHARED LAST_AUTHOR_REF + HAS_ANY_MESSAGE projections (single home, R1/M3)', async () => {
     readMock.fetch.mockResolvedValueOnce([])
     await nudgeStaleConversations()
     const [query] = readMock.fetch.mock.calls[0]
-    // The exact exported string appears (both in `defined(...)` and the
-    // `!(... in $organizerIds)` clauses), proving the nudge never re-declares a
-    // divergent copy.
+    // Existence is gated by the shared HAS_ANY_MESSAGE (so a SPONSOR-authored
+    // last message, which has no author ref, still qualifies — M3), and the
+    // author-is-organizer check reuses the exact LAST_AUTHOR_REF once, proving the
+    // nudge never re-declares a divergent copy of either projection.
+    expect(query).toContain(HAS_ANY_MESSAGE)
     expect(query).toContain(LAST_AUTHOR_REF)
-    expect(query.split(LAST_AUTHOR_REF).length - 1).toBe(2)
+    expect(query.split(LAST_AUTHOR_REF).length - 1).toBe(1)
   })
 
   it('no-ops (no notifications, no writes) when nothing is stale', async () => {
