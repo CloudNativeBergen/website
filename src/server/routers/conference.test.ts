@@ -4,6 +4,14 @@ import type { Context } from '@/server/trpc'
 // --- next/cache -------------------------------------------------------------
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
+// --- next/headers: drives the domains current-host guard --------------------
+const hostMock = vi.fn<() => string | null>(() => 'cloudnativebergen.no')
+vi.mock('next/headers', () => ({
+  headers: async () => ({
+    get: (key: string) => (key === 'host' ? hostMock() : null),
+  }),
+}))
+
 // --- Conference resolution (drives resolveConferenceId) ---------------------
 const getConferenceMock = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
@@ -16,12 +24,17 @@ const commitMock = vi.fn()
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
 let lastUnset: string[] | undefined
+let lastSetIfMissing: Record<string, unknown> | undefined
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     patch: (id: string) => {
       lastPatchId = id
       const builder = {
+        setIfMissing: (obj: Record<string, unknown>) => {
+          lastSetIfMissing = obj
+          return builder
+        },
         set: (obj: Record<string, unknown>) => {
           lastSet = obj
           return builder
@@ -57,6 +70,8 @@ beforeEach(() => {
   lastPatchId = undefined
   lastSet = undefined
   lastUnset = undefined
+  lastSetIfMissing = undefined
+  hostMock.mockReturnValue('cloudnativebergen.no')
   commitMock.mockResolvedValue({ _id: CONFERENCE_ID })
   getConferenceMock.mockResolvedValue({
     conference: { _id: CONFERENCE_ID },
@@ -241,5 +256,220 @@ describe('conference router — validation', () => {
         checkinEventId: 0,
       }),
     ).rejects.toBeTruthy()
+  })
+})
+
+// === SE-1b: array & object fieldsets =======================================
+
+describe('conference router — social links', () => {
+  it('replaces the whole array (empty allowed)', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateSocialLinks({
+      socialLinks: [],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ socialLinks: [] })
+  })
+
+  it('rejects an invalid URL row', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateSocialLinks({
+        socialLinks: ['https://ok.example', 'not-a-url'],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('sets only the socialLinks key (field-scoped)', async () => {
+    await makeCaller({ isOrganizer: true }).updateSocialLinks({
+      socialLinks: ['https://bsky.app/profile/x'],
+    })
+    expect(Object.keys(lastSet!)).toEqual(['socialLinks'])
+  })
+})
+
+describe('conference router — features', () => {
+  it('accepts a mix of known and custom flags', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateFeatures({
+      features: ['test_feature', 'custom_flag'],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ features: ['test_feature', 'custom_flag'] })
+  })
+
+  it('rejects duplicate flags', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateFeatures({
+        features: ['a', 'a'],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('conference router — vanity metrics', () => {
+  it('adds a _key to every row', async () => {
+    await makeCaller({ isOrganizer: true }).updateVanityMetrics({
+      vanityMetrics: [{ label: 'Attendees', value: '400' }],
+    })
+    const rows = lastSet!.vanityMetrics as Array<Record<string, unknown>>
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ label: 'Attendees', value: '400' })
+    expect(typeof rows[0]._key).toBe('string')
+  })
+
+  it('preserves an existing _key', async () => {
+    await makeCaller({ isOrganizer: true }).updateVanityMetrics({
+      vanityMetrics: [{ label: 'Talks', value: '30', _key: 'existing-1' }],
+    })
+    const rows = lastSet!.vanityMetrics as Array<Record<string, unknown>>
+    expect(rows[0]._key).toBe('existing-1')
+  })
+
+  it('rejects a row with a blank required column', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVanityMetrics({
+        vanityMetrics: [{ label: 'x', value: '   ' }],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('conference router — sponsor benefits', () => {
+  it('accepts a valid icon and keys the row', async () => {
+    await makeCaller({ isOrganizer: true }).updateSponsorBenefits({
+      sponsorBenefits: [
+        {
+          title: 'Reach',
+          description: 'Great reach',
+          icon: 'RocketLaunchIcon',
+        },
+      ],
+    })
+    const rows = lastSet!.sponsorBenefits as Array<Record<string, unknown>>
+    expect(rows[0]).toMatchObject({
+      title: 'Reach',
+      description: 'Great reach',
+      icon: 'RocketLaunchIcon',
+    })
+    expect(typeof rows[0]._key).toBe('string')
+  })
+
+  it('rejects an unknown icon value', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateSponsorBenefits({
+        sponsorBenefits: [
+          { title: 'x', description: 'y', icon: 'NotARealIcon' },
+        ],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('allows an omitted icon', async () => {
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).updateSponsorBenefits({
+      sponsorBenefits: [{ title: 'x', description: 'y' }],
+    })
+    expect(result.success).toBe(true)
+    const rows = lastSet!.sponsorBenefits as Array<Record<string, unknown>>
+    expect(rows[0]).not.toHaveProperty('icon')
+  })
+})
+
+describe('conference router — sponsorship customization (object)', () => {
+  it('patches field-scoped dot paths under a setIfMissing parent', async () => {
+    await makeCaller({ isOrganizer: true }).updateSponsorshipCustomization({
+      heroHeadline: 'New headline',
+      philosophyTitle: null,
+    })
+    expect(lastSetIfMissing).toEqual({ sponsorshipCustomization: {} })
+    expect(lastSet).toEqual({
+      'sponsorshipCustomization.heroHeadline': 'New headline',
+    })
+    expect(lastUnset).toEqual(['sponsorshipCustomization.philosophyTitle'])
+  })
+
+  it('rejects an invalid prospectus URL', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateSponsorshipCustomization({
+        prospectusUrl: 'notaurl',
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('conference router — domains (safeguarded)', () => {
+  const CURRENT = 'cloudnativebergen.no'
+  const other = 'cloudnativeday.no'
+
+  it('happy path: keeps the current domain', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [CURRENT, other],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: [CURRENT, other] })
+  })
+
+  it('rejects an empty list (BAD_REQUEST)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({ domains: [] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a duplicate entry', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [CURRENT, CURRENT],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a scheme-carrying entry', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [`https://${CURRENT}`],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a path-carrying entry', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [`${CURRENT}/admin`],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to remove the current domain (BAD_REQUEST with the exact message)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({ domains: [other] }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'You cannot remove the domain you are currently using',
+    })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('allows removal when a wildcard entry still serves the current host', async () => {
+    hostMock.mockReturnValue('cfp.example.com')
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: ['*.example.com'],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('normalizes entries to lowercase before storing', async () => {
+    hostMock.mockReturnValue(CURRENT)
+    await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [`${CURRENT.toUpperCase()}`, 'Other.Example.COM'],
+    })
+    expect(lastSet).toEqual({ domains: [CURRENT, 'other.example.com'] })
   })
 })
