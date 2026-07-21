@@ -5,6 +5,7 @@ import {
 } from '@/lib/push/send'
 import { getSpeakerPushState, prunePushSubscription } from '@/lib/push/sanity'
 import { isPushConfigured, getConfiguredWebPush } from '@/lib/push/vapid'
+import { getUnreadCount } from '@/lib/notification/sanity'
 import type { NotificationInput } from '@/lib/notification/types'
 import type { SpeakerPushState } from '@/lib/push/types'
 
@@ -23,11 +24,15 @@ vi.mock('@/lib/push/vapid', () => ({
   isPushConfigured: vi.fn().mockReturnValue(true),
   getConfiguredWebPush: vi.fn(),
 }))
+vi.mock('@/lib/notification/sanity', () => ({
+  getUnreadCount: vi.fn().mockResolvedValue(0),
+}))
 
 const mockGetState = vi.mocked(getSpeakerPushState)
 const mockPrune = vi.mocked(prunePushSubscription)
 const mockIsConfigured = vi.mocked(isPushConfigured)
 const mockGetWebPush = vi.mocked(getConfiguredWebPush)
+const mockGetUnreadCount = vi.mocked(getUnreadCount)
 
 const sendNotification = vi.fn()
 
@@ -70,6 +75,9 @@ function item(over: Partial<NotificationInput> = {}): NotificationInput {
 beforeEach(() => {
   vi.clearAllMocks()
   mockIsConfigured.mockReturnValue(true)
+  // Default: recipient has no unread notifications, so no badge is added to the
+  // payload. Individual badge tests override this.
+  mockGetUnreadCount.mockResolvedValue(0)
   // A minimal web-push client whose sendNotification resolves with a 201.
   sendNotification.mockResolvedValue({ statusCode: 201 })
   mockGetWebPush.mockReturnValue({
@@ -169,6 +177,50 @@ describe('sendPushForNotifications', () => {
     await sendPushForNotifications([item()])
     const [, body] = sendNotification.mock.calls[0]
     expect('tag' in JSON.parse(body as string)).toBe(false)
+  })
+
+  it('carries the recipient unread count as the numeric app-icon badge', async () => {
+    // iOS ignores the arg-less badge form, so a closed-app push must carry the
+    // count for the SW to set the numeric app-icon badge.
+    mockGetState.mockResolvedValue(state())
+    mockGetUnreadCount.mockResolvedValue(3)
+    await sendPushForNotifications([item()])
+    expect(mockGetUnreadCount).toHaveBeenCalledWith({
+      speakerId: 'speaker-1',
+      conferenceId: 'conf-1',
+    })
+    const [, body] = sendNotification.mock.calls[0]
+    expect(JSON.parse(body as string).badge).toBe(3)
+  })
+
+  it('omits badge from the payload when the unread count is zero', async () => {
+    mockGetState.mockResolvedValue(state())
+    mockGetUnreadCount.mockResolvedValue(0)
+    await sendPushForNotifications([item()])
+    const [, body] = sendNotification.mock.calls[0]
+    expect('badge' in JSON.parse(body as string)).toBe(false)
+  })
+
+  it('computes the unread count once for a recipient with two notifications', async () => {
+    mockGetState.mockResolvedValue(state())
+    mockGetUnreadCount.mockResolvedValue(2)
+    await sendPushForNotifications([
+      item({
+        recipientId: 'speaker-1',
+        notificationType: 'proposal_status_changed',
+      }),
+      item({ recipientId: 'speaker-1', notificationType: 'gallery_tagged' }),
+    ])
+    expect(mockGetUnreadCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('never breaks delivery when the unread-count query fails (no badge)', async () => {
+    mockGetState.mockResolvedValue(state())
+    mockGetUnreadCount.mockRejectedValue(new Error('sanity down'))
+    await expect(sendPushForNotifications([item()])).resolves.toBeUndefined()
+    expect(sendNotification).toHaveBeenCalledTimes(1)
+    const [, body] = sendNotification.mock.calls[0]
+    expect('badge' in JSON.parse(body as string)).toBe(false)
   })
 
   it('defaults a LINKLESS notification to the /notifications page (empty body too)', async () => {

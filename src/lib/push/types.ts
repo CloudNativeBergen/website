@@ -85,6 +85,13 @@ export interface PushMessagePayload {
   url: string
   /** Optional category tag, used to collapse/replace prior notifications. */
   tag?: string
+  /**
+   * The recipient's current unread-notification count, when > 0. The service
+   * worker sets this as the numeric app-icon badge (Badging API). iOS ignores
+   * the arg-less "flag" form of `setAppBadge`, so a closed-app push MUST carry a
+   * number for the icon badge to appear. Omitted when zero/unknown.
+   */
+  badge?: number
 }
 
 /** Normalises an arbitrary stored value into a complete PushPreferences. */

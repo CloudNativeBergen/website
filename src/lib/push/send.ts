@@ -6,6 +6,7 @@ import {
 } from './vapid'
 import { getSpeakerPushState, prunePushSubscription } from './sanity'
 import { isValidPushEndpoint } from './validate'
+import { getUnreadCount } from '@/lib/notification/sanity'
 import type {
   PushCategory,
   PushMessagePayload,
@@ -282,6 +283,19 @@ async function deliverPushToRecipient(
   }
   if (subscriptions.length === 0) return
 
+  // Compute the recipient's unread count ONCE (all items in this call go to the
+  // same recipient/conference) and carry it in every payload so the service
+  // worker can set the NUMERIC app-icon badge even when the app is closed — iOS
+  // ignores the arg-less badge form. Notifications are persisted before this
+  // bridge runs, so the count already includes the just-created ones. A failure
+  // here must never break delivery, hence the `.catch(() => 0)`.
+  const conferenceId = items[0]?.conferenceId
+  const badge = conferenceId
+    ? await getUnreadCount({ speakerId: recipientId, conferenceId }).catch(
+        () => 0,
+      )
+    : 0
+
   for (const item of items) {
     const category = pushCategoryForNotificationType(item.notificationType)
     if (!state.preferences[category]) continue
@@ -299,6 +313,8 @@ async function deliverPushToRecipient(
       // showNotification so repeat pushes for the same thread REPLACE the prior
       // one instead of stacking. Undefined for one-shot types (they stack).
       ...(item.tag ? { tag: item.tag } : {}),
+      // Numeric app-icon badge for the closed-app case (see above).
+      ...(badge > 0 ? { badge } : {}),
     }
 
     const results = await Promise.allSettled(

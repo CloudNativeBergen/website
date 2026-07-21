@@ -241,8 +241,13 @@ function parsePushPayload(raw) {
       : NOTIFICATION_DEFAULT_TITLE
   const body = typeof data.body === 'string' ? data.body : ''
   const tag = typeof data.tag === 'string' ? data.tag : undefined
+  // The recipient's unread count for the NUMERIC app-icon badge (Badging API).
+  // iOS ignores the arg-less badge form, so a closed-app push must carry a
+  // number for the icon badge to show. Omitted (undefined) when absent/zero.
+  const badge =
+    typeof data.badge === 'number' && data.badge > 0 ? data.badge : undefined
 
-  return { title, body, url: sanitizeNotificationUrl(data.url), tag }
+  return { title, body, url: sanitizeNotificationUrl(data.url), tag, badge }
 }
 
 self.addEventListener('push', (event) => {
@@ -252,14 +257,20 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     (async () => {
       // Best-effort PWA app-icon badge (Badging API), so the icon reflects
-      // "unread present" even when no tab is open. The SW does not know the exact
-      // unread count, so it shows the generic dot (no-arg setAppBadge); the in-app
-      // AppBadgeSync sets the PRECISE number the next time a tab is focused.
-      // Feature-detected and never throws (the API rejects on unsupported
-      // platforms). MUST run inside waitUntil: on tight SW lifetimes work started
-      // outside the extended-lifetime promise can be dropped before it settles.
+      // unread notifications even when no tab is open. Feature-detected and
+      // never throws (the API rejects on unsupported platforms). MUST run inside
+      // waitUntil: on tight SW lifetimes work started outside the
+      // extended-lifetime promise can be dropped before it settles.
       if (self.navigator && 'setAppBadge' in self.navigator) {
-        await self.navigator.setAppBadge().catch(() => {})
+        // iOS requires a numeric badge (it ignores the arg-less flag form). Fall
+        // back to 1 when the payload carries no count so a closed-app push still
+        // shows a badge; the in-app AppBadgeSync corrects it to the exact count on
+        // next focus.
+        const badgeCount =
+          typeof payload.badge === 'number' && payload.badge > 0
+            ? payload.badge
+            : 1
+        await self.navigator.setAppBadge(badgeCount).catch(() => {})
       }
 
       await self.registration.showNotification(payload.title, {
