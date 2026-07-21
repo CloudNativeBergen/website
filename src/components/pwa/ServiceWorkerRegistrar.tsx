@@ -1,7 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { UpdateBanner } from './UpdateBanner'
+
+// How long to wait for `controllerchange` after `SKIP_WAITING` before forcing a
+// reload ourselves, so the "Updating…" spinner can never hang forever.
+const RELOAD_FALLBACK_MS = 4000
 
 /**
  * Registers the service worker and drives the update lifecycle.
@@ -25,12 +29,34 @@ import { UpdateBanner } from './UpdateBanner'
  */
 export function ServiceWorkerRegistrar() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  // True from the moment the user clicks Reload until the page actually reloads.
+  // Drives the banner's in-progress ("Installing…") state.
+  const [updating, setUpdating] = useState(false)
   // The worker that is installed and waiting to activate.
   const waitingWorkerRef = useRef<ServiceWorker | null>(null)
   // Set only when the USER accepts the update (clicks Reload). Gates the
   // controllerchange reload so a first-install `clients.claim()` — which also
   // fires controllerchange — never triggers an unsolicited page reload.
   const reloadRequestedRef = useRef(false)
+  // Shared "already reloading" guard so the controllerchange handler AND the
+  // fallback timeout reload the page EXACTLY ONCE, whichever fires first.
+  const refreshingRef = useRef(false)
+  // Id of the fallback timeout that forces a reload if controllerchange never
+  // arrives. Stored in a ref so both paths (and cleanup) can clear it.
+  const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reload the page exactly once. Clears any pending fallback timeout so the
+  // other path can no longer fire a second reload. Both the controllerchange
+  // handler and the fallback timeout funnel through here.
+  const doReload = useCallback(() => {
+    if (fallbackTimeoutRef.current !== null) {
+      clearTimeout(fallbackTimeoutRef.current)
+      fallbackTimeoutRef.current = null
+    }
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -39,15 +65,13 @@ export function ServiceWorkerRegistrar() {
     if (process.env.NODE_ENV !== 'production') return
 
     // Reload exactly once when the active worker changes AFTER the user accepted
-    // the update. The `refreshing` guard prevents an infinite loop; the
-    // `reloadRequestedRef` guard prevents an unsolicited reload on first install
-    // (where `clients.claim()` also fires controllerchange).
-    let refreshing = false
+    // the update. `doReload`'s `refreshingRef` guard prevents an infinite loop
+    // (and coordinates with the fallback timeout); the `reloadRequestedRef`
+    // guard prevents an unsolicited reload on first install (where
+    // `clients.claim()` also fires controllerchange).
     const onControllerChange = () => {
       if (!reloadRequestedRef.current) return
-      if (refreshing) return
-      refreshing = true
-      window.location.reload()
+      doReload()
     }
     navigator.serviceWorker.addEventListener(
       'controllerchange',
@@ -114,10 +138,17 @@ export function ServiceWorkerRegistrar() {
       window.removeEventListener('focus', onFocusOrVisible)
       document.removeEventListener('visibilitychange', onFocusOrVisible)
       window.removeEventListener('load', register)
+      if (fallbackTimeoutRef.current !== null) {
+        clearTimeout(fallbackTimeoutRef.current)
+        fallbackTimeoutRef.current = null
+      }
     }
-  }, [])
+  }, [doReload])
 
   const handleReload = () => {
+    // Show the in-progress state immediately so the click has visible feedback
+    // even before the worker activates.
+    setUpdating(true)
     // Mark the reload as user-accepted so the controllerchange handler is
     // allowed to reload (an unsolicited first-install controllerchange is not).
     reloadRequestedRef.current = true
@@ -125,9 +156,13 @@ export function ServiceWorkerRegistrar() {
     if (worker) {
       // Tell the waiting worker to activate; `controllerchange` then reloads.
       worker.postMessage({ type: 'SKIP_WAITING' })
+      // Fallback: if `controllerchange` never fires (worker wedged, activation
+      // stalled), force a reload so the spinner always resolves. `doReload`
+      // coordinates with the controllerchange path so we reload exactly once.
+      fallbackTimeoutRef.current = setTimeout(doReload, RELOAD_FALLBACK_MS)
     } else {
       // No tracked worker (edge case) — a plain reload still recovers.
-      window.location.reload()
+      doReload()
     }
   }
 
@@ -142,5 +177,11 @@ export function ServiceWorkerRegistrar() {
 
   if (!updateAvailable) return null
 
-  return <UpdateBanner onReload={handleReload} onDismiss={handleDismiss} />
+  return (
+    <UpdateBanner
+      onReload={handleReload}
+      onDismiss={handleDismiss}
+      pending={updating}
+    />
+  )
 }
