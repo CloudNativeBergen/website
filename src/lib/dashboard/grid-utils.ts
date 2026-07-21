@@ -155,6 +155,10 @@ export function checkCollision(
  * @param cellHeight - Height of each grid cell
  * @param gap - Gap between cells
  * @param maxCols - Maximum columns to clamp to
+ * @param colSpan - Column span of the widget being placed (default 1). The
+ *   clamp must account for it: clamping to `maxCols - 1` let multi-column
+ *   widgets snap to columns where they overflow the grid, which always
+ *   collided and made right-edge drags silently snap back.
  * @returns Grid coordinates {row, col}
  */
 export function snapToGrid(
@@ -164,6 +168,7 @@ export function snapToGrid(
   cellHeight: number,
   gap: number,
   maxCols?: number,
+  colSpan = 1,
 ): { row: number; col: number } {
   const colWidthWithGap = cellWidth + gap
   const rowHeightWithGap = cellHeight + gap
@@ -172,10 +177,55 @@ export function snapToGrid(
   const row = Math.max(0, Math.round(pixelY / rowHeightWithGap))
 
   if (maxCols !== undefined) {
-    col = Math.min(col, maxCols - 1)
+    col = Math.min(col, Math.max(0, maxCols - colSpan))
   }
 
   return { row, col }
+}
+
+/**
+ * Computes where a dragged widget lands: snaps the drag delta to the grid
+ * (clamped so the widget's span stays inside the columns) and rejects
+ * positions that collide with other widgets.
+ *
+ * This is DashboardGrid's drag-end semantics extracted so the interaction
+ * logic is unit-testable without simulating dnd-kit pointer events.
+ *
+ * @returns The new position, or null when the drop must snap back (collision)
+ *   or lands exactly where the widget already is (no-op).
+ */
+export function computeDropPosition(
+  widget: Widget,
+  delta: { x: number; y: number },
+  cellWidth: number,
+  widgets: Widget[],
+  columnCount: number,
+): GridPosition | null {
+  const cellWithGap = cellWidth + GRID_CONFIG.gap
+  const rowWithGap = GRID_CONFIG.cellSize + GRID_CONFIG.gap
+  const { position } = widget
+
+  const snapped = snapToGrid(
+    position.col * cellWithGap + delta.x,
+    position.row * rowWithGap + delta.y,
+    cellWidth,
+    GRID_CONFIG.cellSize,
+    GRID_CONFIG.gap,
+    columnCount,
+    position.colSpan,
+  )
+
+  if (snapped.row === position.row && snapped.col === position.col) return null
+
+  const newPosition: GridPosition = {
+    ...position,
+    row: snapped.row,
+    col: snapped.col,
+  }
+
+  if (checkCollision(newPosition, widgets, widget.id, columnCount)) return null
+
+  return newPosition
 }
 
 /**

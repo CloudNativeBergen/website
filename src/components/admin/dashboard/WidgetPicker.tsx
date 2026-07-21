@@ -191,10 +191,10 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
                       <button
                         key={widget.type}
                         onClick={() => onSelect(widget.type)}
-                        className={`group flex items-start gap-3 rounded-lg border ${colors.border} bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg ${colors.hover} dark:bg-gray-900`}
+                        className={`group flex items-start gap-3 rounded-lg border ${colors.border} bg-white p-4 text-left transition-all hover:shadow-lg motion-safe:hover:-translate-y-0.5 motion-reduce:transition-none ${colors.hover} dark:bg-gray-900`}
                       >
                         <div
-                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${colors.icon} transition-transform group-hover:scale-110`}
+                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${colors.icon} transition-transform motion-safe:group-hover:scale-110 motion-reduce:transition-none`}
                         >
                           <Icon className="h-6 w-6" />
                         </div>

@@ -6,6 +6,7 @@ import {
   getCellsForPosition,
   checkCollision,
   snapToGrid,
+  computeDropPosition,
   getColumnCountForWidth,
   reflowWidgetsForColumns,
 } from '@/lib/dashboard/grid-utils'
@@ -132,6 +133,83 @@ describe('snapToGrid', () => {
   it('clamps col to maxCols when specified', () => {
     const result = snapToGrid(2000, 0, 96, 96, 16, 12)
     expect(result.col).toBeLessThanOrEqual(11)
+  })
+
+  it('clamps col so a multi-column widget stays inside the grid', () => {
+    // Regression: the clamp used maxCols - 1 regardless of span, so a
+    // colSpan-6 widget dragged to the right edge snapped to col 11 → always
+    // overflowed → collision → silent snap-back.
+    const result = snapToGrid(2000, 0, 96, 96, 16, 12, 6)
+    expect(result.col).toBe(6) // 12 - 6
+  })
+
+  it('span clamp never goes negative when colSpan exceeds maxCols', () => {
+    const result = snapToGrid(2000, 0, 96, 96, 16, 4, 6)
+    expect(result.col).toBe(0)
+  })
+
+  it('span clamp does not affect drops well inside the grid', () => {
+    const result = snapToGrid(112, 112, 96, 96, 16, 12, 6)
+    expect(result).toEqual({ row: 1, col: 1 })
+  })
+})
+
+describe('computeDropPosition', () => {
+  // GRID_CONFIG: cellSize 96, gap 16 → one column/row step = cellWidth+16 px
+  const cellWidth = 96
+  const step = cellWidth + 16
+
+  it('snaps a drag delta to the nearest grid cell', () => {
+    const widget = makeWidget('a', 0, 0, 2, 3)
+    const result = computeDropPosition(
+      widget,
+      { x: step * 2, y: step },
+      cellWidth,
+      [widget],
+      12,
+    )
+    expect(result).toEqual({ row: 1, col: 2, rowSpan: 2, colSpan: 3 })
+  })
+
+  it('returns null for a no-op drop (same cell)', () => {
+    const widget = makeWidget('a', 1, 1, 2, 3)
+    expect(
+      computeDropPosition(widget, { x: 10, y: -10 }, cellWidth, [widget], 12),
+    ).toBeNull()
+  })
+
+  it('returns null when the drop collides with another widget', () => {
+    const a = makeWidget('a', 0, 0, 2, 3)
+    const b = makeWidget('b', 0, 3, 2, 3)
+    expect(
+      computeDropPosition(a, { x: step * 3, y: 0 }, cellWidth, [a, b], 12),
+    ).toBeNull()
+  })
+
+  it('allows a multi-column widget to land flush against the right edge', () => {
+    // colSpan 6 dragged far right: clamped to col 6 (12 - 6), NOT col 11
+    const widget = makeWidget('a', 0, 0, 2, 6)
+    const result = computeDropPosition(
+      widget,
+      { x: step * 20, y: 0 },
+      cellWidth,
+      [widget],
+      12,
+    )
+    expect(result).toEqual({ row: 0, col: 6, rowSpan: 2, colSpan: 6 })
+  })
+
+  it('ignores the dragged widget itself in collision detection', () => {
+    const widget = makeWidget('a', 0, 0, 2, 3)
+    // Move one column right — overlaps its own old cells only
+    const result = computeDropPosition(
+      widget,
+      { x: step, y: 0 },
+      cellWidth,
+      [widget],
+      12,
+    )
+    expect(result).toEqual({ row: 0, col: 1, rowSpan: 2, colSpan: 3 })
   })
 })
 

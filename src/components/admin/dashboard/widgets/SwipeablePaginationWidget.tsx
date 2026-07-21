@@ -79,6 +79,16 @@ export function SwipeablePaginationWidget({
     setDragOffset(0)
   }
 
+  // The browser claims the gesture (e.g. touch-pan-y hands a mostly-vertical
+  // swipe to native scrolling) — pointerup never fires, so without this the
+  // widget was stuck with isDragging=true and a frozen dragOffset. Pointer
+  // capture is released implicitly on pointercancel.
+  const handlePointerCancel = () => {
+    if (!isDragging) return
+    setIsDragging(false)
+    setDragOffset(0)
+  }
+
   // Keyboard navigation (scoped to focused widget)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -107,6 +117,9 @@ export function SwipeablePaginationWidget({
     <div
       className="flex h-full flex-col outline-none"
       tabIndex={0}
+      role="group"
+      aria-roledescription="carousel"
+      aria-label={title}
       onKeyDown={handleKeyDown}
     >
       <div className="mb-2 flex items-center justify-between">
@@ -114,18 +127,25 @@ export function SwipeablePaginationWidget({
           {title}
         </h3>
         {showDots && totalPages > 1 && (
-          <div className="flex gap-1">
+          <div className="flex">
+            {/* The visual dot stays small; the button around it provides a
+                24px touch/click target. */}
             {Array.from({ length: totalPages }).map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToPage(index)}
-                className={`h-1.5 w-1.5 rounded-full transition-all ${
-                  index === currentPage
-                    ? 'w-3 bg-blue-600 dark:bg-blue-500'
-                    : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
-                }`}
+                className="group flex h-6 w-6 items-center justify-center"
                 aria-label={`Go to page ${index + 1}`}
-              />
+                aria-current={index === currentPage ? 'true' : undefined}
+              >
+                <span
+                  className={`h-1.5 rounded-full transition-all motion-reduce:transition-none ${
+                    index === currentPage
+                      ? 'w-3 bg-blue-600 dark:bg-blue-500'
+                      : 'w-1.5 bg-gray-300 group-hover:bg-gray-400 dark:bg-gray-600 dark:group-hover:bg-gray-500'
+                  }`}
+                />
+              </button>
             ))}
           </div>
         )}
@@ -138,11 +158,12 @@ export function SwipeablePaginationWidget({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           className="h-full touch-pan-y select-none"
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           <div
-            className="flex h-full transition-transform"
+            className="flex h-full transition-transform motion-reduce:transition-none"
             style={{
               transform: `translateX(calc(-${currentPage * 100}% + ${dragOffset}px))`,
               transitionDuration: isDragging
@@ -188,10 +209,16 @@ export function SwipeablePaginationWidget({
         )}
       </div>
 
-      {/* Page counter (optional) */}
+      {/* Page counter (optional). The sr-only live region announces page
+          changes; the terse visual counter is hidden from assistive tech. */}
       {totalPages > 1 && (
         <div className="mt-2 text-center text-[10px] text-gray-500 dark:text-gray-400">
-          {currentPage + 1} / {totalPages}
+          <span aria-hidden="true">
+            {currentPage + 1} / {totalPages}
+          </span>
+          <span className="sr-only" aria-live="polite">
+            Page {currentPage + 1} of {totalPages}
+          </span>
         </div>
       )}
     </div>

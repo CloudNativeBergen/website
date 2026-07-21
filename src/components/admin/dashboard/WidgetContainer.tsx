@@ -101,8 +101,11 @@ export function WidgetContainer({
       })
 
       const target = e.target as HTMLElement
-      target.setPointerCapture(e.pointerId)
-      pointerCaptureRef.current = { element: target, pointerId: e.pointerId }
+      // Guarded: jsdom (tests) doesn't implement pointer capture
+      if (typeof target.setPointerCapture === 'function') {
+        target.setPointerCapture(e.pointerId)
+        pointerCaptureRef.current = { element: target, pointerId: e.pointerId }
+      }
     },
     [editMode, widget.position],
   )
@@ -189,7 +192,7 @@ export function WidgetContainer({
 
     if (pointerCaptureRef.current) {
       const { element, pointerId } = pointerCaptureRef.current
-      if (element.hasPointerCapture(pointerId)) {
+      if (element.hasPointerCapture?.(pointerId)) {
         element.releasePointerCapture(pointerId)
       }
       pointerCaptureRef.current = null
@@ -203,17 +206,30 @@ export function WidgetContainer({
     onResize,
   ])
 
+  // pointercancel: the browser aborted the gesture (touch scroll takeover,
+  // window blur, …) — pointerup never fires, so without this the container
+  // stayed stuck in isResizing with a frozen preview. Discard the preview
+  // WITHOUT applying it; capture is released implicitly on pointercancel.
+  const handleResizeCancel = useCallback(() => {
+    setIsResizing(false)
+    setResizeStart(null)
+    setPreviewPosition(null)
+    pointerCaptureRef.current = null
+  }, [])
+
   useEffect(() => {
     if (!isResizing) return
 
     window.addEventListener('pointermove', handleResizeMove)
     window.addEventListener('pointerup', handleResizeEnd)
+    window.addEventListener('pointercancel', handleResizeCancel)
 
     return () => {
       window.removeEventListener('pointermove', handleResizeMove)
       window.removeEventListener('pointerup', handleResizeEnd)
+      window.removeEventListener('pointercancel', handleResizeCancel)
     }
-  }, [isResizing, handleResizeMove, handleResizeEnd])
+  }, [isResizing, handleResizeMove, handleResizeEnd, handleResizeCancel])
 
   const borderColor = hasCollision
     ? 'border-red-500 dark:border-red-400'

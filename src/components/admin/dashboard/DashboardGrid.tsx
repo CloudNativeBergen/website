@@ -6,11 +6,18 @@ import {
   DragStartEvent,
   pointerWithin,
   Modifier,
+  type Announcements,
+  type ScreenReaderInstructions,
 } from '@dnd-kit/core'
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
-import { checkCollision, snapToGrid } from '@/lib/dashboard/grid-utils'
+import { computeDropPosition } from '@/lib/dashboard/grid-utils'
+
+const SCREEN_READER_INSTRUCTIONS: ScreenReaderInstructions = {
+  draggable:
+    'To pick up a widget, press space or enter. While dragging, use the arrow keys to move it around the grid. Press space or enter again to drop the widget in its new position, or press escape to cancel.',
+}
 
 /**
  * DashboardGrid - The main container for the widget-based dashboard system
@@ -111,10 +118,16 @@ export function DashboardGrid({
     setActiveWidgetId(String(event.active.id))
   }, [])
 
+  // Where the last drag actually dropped, for the screen-reader announcement
+  // (the announcement callback has no access to the drop computation result).
+  const lastDropRef = useRef<{ id: string; row: number; col: number } | null>(
+    null,
+  )
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, delta } = event
-      const widgetId = active.id as string
+      const widgetId = String(active.id)
       const widget = widgets.find((w) => w.id === widgetId)
 
       if (!widget) {
@@ -122,37 +135,27 @@ export function DashboardGrid({
         return
       }
 
-      const currentPosition = widget.position
-      const cellWithGap = cellWidth + GRID_CONFIG.gap
-      const rowWithGap = GRID_CONFIG.cellSize + GRID_CONFIG.gap
-
-      const snapped = snapToGrid(
-        currentPosition.col * cellWithGap + delta.x,
-        currentPosition.row * rowWithGap + delta.y,
+      const newPosition = computeDropPosition(
+        widget,
+        delta,
         cellWidth,
-        GRID_CONFIG.cellSize,
-        GRID_CONFIG.gap,
-        columnCount,
-      )
-
-      const newPosition = {
-        ...currentPosition,
-        row: snapped.row,
-        col: snapped.col,
-      }
-
-      const hasCollision = checkCollision(
-        newPosition,
         widgets,
-        widgetId,
         columnCount,
       )
 
-      if (!hasCollision) {
-        const updatedWidgets = widgets.map((w) =>
-          w.id === widgetId ? { ...w, position: newPosition } : w,
+      if (newPosition) {
+        lastDropRef.current = {
+          id: widgetId,
+          row: newPosition.row,
+          col: newPosition.col,
+        }
+        onWidgetsChange(
+          widgets.map((w) =>
+            w.id === widgetId ? { ...w, position: newPosition } : w,
+          ),
         )
-        onWidgetsChange(updatedWidgets)
+      } else {
+        lastDropRef.current = null
       }
 
       setActiveWidgetId(null)
@@ -160,12 +163,50 @@ export function DashboardGrid({
     [widgets, onWidgetsChange, columnCount, cellWidth],
   )
 
+  // Announce drag lifecycle in grid coordinates (1-based rows/columns) —
+  // pixel deltas mean nothing to screen-reader users.
+  const announcements = useMemo<Announcements>(() => {
+    const find = (id: string | number) =>
+      widgets.find((w) => w.id === String(id))
+    const at = (row: number, col: number) =>
+      `row ${row + 1}, column ${col + 1}`
+
+    return {
+      onDragStart({ active }) {
+        const w = find(active.id)
+        if (!w) return
+        return `Picked up ${w.title} widget at ${at(w.position.row, w.position.col)}.`
+      },
+      onDragOver() {
+        return undefined
+      },
+      onDragEnd({ active }) {
+        const w = find(active.id)
+        if (!w) return
+        const drop = lastDropRef.current
+        if (drop && drop.id === String(active.id)) {
+          return `${w.title} widget moved to ${at(drop.row, drop.col)}.`
+        }
+        return `${w.title} widget returned to ${at(w.position.row, w.position.col)}.`
+      },
+      onDragCancel({ active }) {
+        const w = find(active.id)
+        if (!w) return
+        return `Drag cancelled. ${w.title} widget returned to ${at(w.position.row, w.position.col)}.`
+      },
+    }
+  }, [widgets])
+
   return (
     <DndContext
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       collisionDetection={pointerWithin}
       modifiers={[snapModifier]}
+      accessibility={{
+        announcements,
+        screenReaderInstructions: SCREEN_READER_INSTRUCTIONS,
+      }}
     >
       <div className="relative">
         <div ref={gridRef} style={gridStyle} className="min-h-screen">

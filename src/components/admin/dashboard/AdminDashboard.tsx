@@ -1,6 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import {
   getColumnCountForWidth,
@@ -45,7 +52,16 @@ interface AdminDashboardProps {
 export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [widgets, setWidgets] = useState<Widget[]>(DEFAULT_WIDGETS)
   const [editMode, setEditMode] = useState(false)
-  const [columnCount, setColumnCount] = useState(4)
+  // Initial column count matters twice: this client component is still
+  // SSR-rendered, so the server markup and the hydration render must agree
+  // (initializing from window.innerWidth here would be a hydration mismatch on
+  // non-desktop viewports). Both start from the desktop default; the layout
+  // effect below measures the real viewport and corrects it BEFORE first
+  // paint, so mobile never flashes the desktop layout. (The old initial value
+  // of 4 matched no breakpoint at all and flashed a bogus 4-column layout.)
+  const [columnCount, setColumnCount] = useState<number>(
+    GRID_CONFIG.breakpoints.desktop.cols,
+  )
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   // Preset-apply confirmation. `selectedPresetKey` is intentionally NOT
   // cleared on close so the modal's text stays intact during the leave
@@ -219,7 +235,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     }
   }, [performSave])
 
-  useEffect(() => {
+  // useLayoutEffect: the first measurement must land before the browser
+  // paints, otherwise mobile briefly renders the desktop grid (see the
+  // columnCount comment above). Subsequent resize events go through the same
+  // handler. This never runs during SSR (client-only), so no server warning.
+  useLayoutEffect(() => {
     const handleResize = () => {
       setColumnCount(getColumnCountForWidth(window.innerWidth))
     }
@@ -292,9 +312,17 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     setRemoveConfirmOpen(false)
   }, [removeTarget])
 
-  const handleWidgetsChange = useCallback((newWidgets: Widget[]) => {
+  const handleWidgetsChange = useCallback((widgetsFromGrid: Widget[]) => {
     dirtyRef.current = true
-    setWidgets(newWidgets)
+    // MERGE the grid's array back into full state by id — never replace
+    // wholesale. The grid only ever receives the phase-FILTERED display list
+    // (`displayWidgets`), so its callback array is missing any widget hidden
+    // in the current phase (`hideInIrrelevantPhases`); replacing state with it
+    // would silently delete those hidden widgets on the next drag.
+    setWidgets((prev) => {
+      const fromGrid = new Map(widgetsFromGrid.map((w) => [w.id, w]))
+      return prev.map((w) => fromGrid.get(w.id) ?? w)
+    })
   }, [])
 
   const handleResize = useCallback(

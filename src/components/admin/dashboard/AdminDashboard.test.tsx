@@ -24,6 +24,27 @@ vi.mock('@/components/admin/dashboard/widget-renderer', () => ({
   renderWidgetContent: () => null,
 }))
 
+// No real widget type sets hideInIrrelevantPhases yet; fabricate one so the
+// phase-filter → merge-by-id interaction can be exercised.
+vi.mock('@/lib/dashboard/widget-registry', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/dashboard/widget-registry')>()
+  return {
+    ...actual,
+    getWidgetMetadata: (type: string) => {
+      if (type === 'phase-hidden-widget') {
+        return {
+          ...actual.getWidgetMetadata('review-progress')!,
+          type: 'phase-hidden-widget',
+          // Relevant in NO phase + hide → always filtered from the grid
+          phaseConfig: { relevantPhases: [], hideInIrrelevantPhases: true },
+        }
+      }
+      return actual.getWidgetMetadata(type)
+    },
+  }
+})
+
 // Replace the dnd-kit grid with a button that simulates the grid reporting a
 // completed user drag — the only code path that calls onWidgetsChange in the
 // real DashboardGrid. The children render prop is still invoked so the real
@@ -260,6 +281,46 @@ describe('AdminDashboard persistence', () => {
     expect(
       screen.getByText("Couldn't save your dashboard layout"),
     ).toBeInTheDocument()
+  })
+
+  it('a drag never deletes widgets hidden in the current phase (merge-by-id)', async () => {
+    // Regression: the grid receives the phase-FILTERED widget list, and
+    // handleWidgetsChange used to REPLACE full state with the grid's array —
+    // any hidden widget was silently deleted (and unsaved) by the next drag.
+    vi.mocked(loadDashboardConfig).mockResolvedValue([
+      ...savedWidgets,
+      {
+        id: 'hidden-1',
+        type: 'phase-hidden-widget',
+        title: 'Hidden Widget',
+        position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
+        config: undefined,
+      },
+    ])
+
+    renderDashboard()
+    await flushLoad()
+
+    // The grid only sees the visible widget…
+    expect(screen.getByTestId('widget-count').textContent).toBe('1')
+
+    await simulateDrag()
+    await advancePastDebounce()
+
+    // …but the persisted layout still contains BOTH widgets, with the
+    // dragged one's new position applied.
+    expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
+    const payload = vi.mocked(saveDashboardConfig).mock.calls[0][0]
+    expect(payload).toHaveLength(2)
+    expect(payload).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'hidden-1' }),
+        expect.objectContaining({
+          id: 'review-progress-1',
+          position: expect.objectContaining({ row: 1 }),
+        }),
+      ]),
+    )
   })
 
   it('removing a widget requires confirmation; cancelling keeps it', async () => {
