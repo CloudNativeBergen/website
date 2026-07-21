@@ -157,7 +157,7 @@ export function TravelSupportQueueWidget({
     <div className="flex h-full flex-col">
       <WidgetHeader
         title="Travel Support"
-        link={{ href: '/admin/travel-support', label: 'Review →' }}
+        link={{ href: '/admin/speakers/travel-support', label: 'Review →' }}
       />
 
       {(config?.showPendingRequests ?? true) && data.pendingApprovals > 0 && (

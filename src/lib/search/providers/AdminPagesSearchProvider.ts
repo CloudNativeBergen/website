@@ -135,7 +135,7 @@ const ADMIN_PAGES: AdminPage[] = [
   {
     id: 'gallery',
     title: 'Gallery',
-    url: '/admin/gallery',
+    url: '/admin/marketing/gallery',
     keywords: ['gallery', 'photos', 'images', 'media'],
     icon: PhotoIcon,
   },

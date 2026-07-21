@@ -768,7 +768,7 @@ export async function fetchQuickActions(
         label: 'Travel Support',
         shortLabel: 'Travel',
         icon: 'GlobeAltIcon',
-        link: '/admin/travel-support',
+        link: '/admin/speakers/travel-support',
         variant: 'warning',
       },
       {
@@ -836,14 +836,14 @@ export async function fetchQuickActions(
         label: 'Publish Content',
         shortLabel: 'Gallery',
         icon: 'ClipboardDocumentCheckIcon',
-        link: '/admin/gallery',
+        link: '/admin/marketing/gallery',
         variant: 'primary',
       },
       {
         label: 'Travel Expenses',
         shortLabel: 'Expenses',
         icon: 'GlobeAltIcon',
-        link: '/admin/travel-support',
+        link: '/admin/speakers/travel-support',
         variant: 'warning',
       },
       {
