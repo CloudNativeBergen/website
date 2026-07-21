@@ -35,19 +35,22 @@ vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
     widgets: Widget[]
     onWidgetsChange: (widgets: Widget[]) => void
   }) => (
-    <button
-      onClick={() =>
-        onWidgetsChange(
-          widgets.map((w, i) =>
-            i === 0
-              ? { ...w, position: { ...w.position, row: w.position.row + 1 } }
-              : w,
-          ),
-        )
-      }
-    >
-      simulate-drag
-    </button>
+    <div>
+      <div data-testid="widget-count">{widgets.length}</div>
+      <button
+        onClick={() =>
+          onWidgetsChange(
+            widgets.map((w, i) =>
+              i === 0
+                ? { ...w, position: { ...w.position, row: w.position.row + 1 } }
+                : w,
+            ),
+          )
+        }
+      >
+        simulate-drag
+      </button>
+    </div>
   ),
 }))
 
@@ -154,11 +157,76 @@ describe('AdminDashboard persistence', () => {
     await advancePastDebounce()
     expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
     expect(saveDashboardConfig).toHaveBeenCalledWith(
-      'conf-1',
       expect.arrayContaining([
         expect.objectContaining({ id: 'review-progress-1' }),
       ]),
     )
+  })
+
+  it('empty-array load renders an EMPTY dashboard (no defaults) and no save', async () => {
+    // An existing personal doc with widgets: [] means the user deliberately
+    // cleared their dashboard — defaults apply only on a null load.
+    vi.mocked(loadDashboardConfig).mockResolvedValue([])
+
+    renderDashboard()
+    await flushLoad()
+
+    expect(screen.getByTestId('widget-count').textContent).toBe('0')
+
+    await advancePastDebounce()
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('null load falls back to the default preset widgets', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(null)
+
+    renderDashboard()
+    await flushLoad()
+
+    expect(
+      Number(screen.getByTestId('widget-count').textContent),
+    ).toBeGreaterThan(0)
+
+    await advancePastDebounce()
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('unmount with a pending debounced edit FLUSHES the save immediately', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+
+    const { unmount } = renderDashboard()
+    await flushLoad()
+
+    await simulateDrag()
+    // Still inside the debounce window — nothing sent yet
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+
+    await act(async () => {
+      unmount()
+    })
+
+    expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
+    expect(saveDashboardConfig).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'review-progress-1' }),
+      ]),
+    )
+    // The cleared timer must not fire a second save afterwards
+    await advancePastDebounce()
+    expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
+  })
+
+  it('unmount with no pending edit performs no save', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+
+    const { unmount } = renderDashboard()
+    await flushLoad()
+
+    await act(async () => {
+      unmount()
+    })
+
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
   })
 
   it('save failure: surfaces an error toast while keeping local state', async () => {
