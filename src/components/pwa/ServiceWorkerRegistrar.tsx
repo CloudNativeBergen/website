@@ -6,6 +6,12 @@ import { UpdateBanner } from './UpdateBanner'
 // How long to wait for `controllerchange` after `SKIP_WAITING` before forcing a
 // reload ourselves, so the "Updating…" spinner can never hang forever.
 const RELOAD_FALLBACK_MS = 4000
+// After we call reload(), a `beforeunload` prompt (e.g. unsaved schedule edits)
+// can cancel the navigation and leave us on the page. If we're still here this
+// long after, treat the reload as canceled and re-arm the banner so it isn't
+// stuck showing a dead spinner. Only ever fires on cancel — a committed reload
+// unloads the page before it can.
+const RELOAD_CANCEL_RECOVERY_MS = 500
 
 /**
  * Registers the service worker and drives the update lifecycle.
@@ -44,6 +50,8 @@ export function ServiceWorkerRegistrar() {
   // Id of the fallback timeout that forces a reload if controllerchange never
   // arrives. Stored in a ref so both paths (and cleanup) can clear it.
   const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Id of the post-reload recovery timeout (see RELOAD_CANCEL_RECOVERY_MS).
+  const recoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reload the page exactly once. Clears any pending fallback timeout so the
   // other path can no longer fire a second reload. Both the controllerchange
@@ -56,6 +64,14 @@ export function ServiceWorkerRegistrar() {
     if (refreshingRef.current) return
     refreshingRef.current = true
     window.location.reload()
+    // Execution only resumes here if the reload was CANCELED by a beforeunload
+    // prompt (a committed reload unloads the page first). Re-arm so the banner
+    // recovers from its disabled "Updating…" state and the user can retry.
+    recoveryTimeoutRef.current = setTimeout(() => {
+      refreshingRef.current = false
+      reloadRequestedRef.current = false
+      setUpdating(false)
+    }, RELOAD_CANCEL_RECOVERY_MS)
   }, [])
 
   useEffect(() => {
@@ -142,10 +158,17 @@ export function ServiceWorkerRegistrar() {
         clearTimeout(fallbackTimeoutRef.current)
         fallbackTimeoutRef.current = null
       }
+      if (recoveryTimeoutRef.current !== null) {
+        clearTimeout(recoveryTimeoutRef.current)
+        recoveryTimeoutRef.current = null
+      }
     }
   }, [doReload])
 
   const handleReload = () => {
+    // Ignore repeat clicks (e.g. a rapid double-tap before the button's disabled
+    // state renders) so we never post SKIP_WAITING or arm the fallback twice.
+    if (reloadRequestedRef.current) return
     // Show the in-progress state immediately so the click has visible feedback
     // even before the worker activates.
     setUpdating(true)

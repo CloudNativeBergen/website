@@ -78,7 +78,6 @@ export function UpdateBanner({
           onClick={onReload}
           disabled={pending}
           aria-busy={pending}
-          aria-live="polite"
           className="flex min-h-11 flex-none items-center justify-center gap-1.5 rounded-lg bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-default disabled:opacity-90 disabled:hover:bg-brand-cloud-blue"
         >
           {pending ? (
