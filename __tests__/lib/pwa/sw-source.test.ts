@@ -59,6 +59,30 @@ describe('public/sw.js source invariants', () => {
     expect(source).toContain('self.registration.showNotification')
   })
 
+  it('sets a NUMERIC app-icon badge (iOS ignores the arg-less flag form)', () => {
+    // The push handler must call setAppBadge WITH an argument. iOS does not
+    // support the arg-less "flag" form of the Badging API, so a closed-app push
+    // has to set a number for the app-icon badge to appear.
+    expect(source).toContain('self.navigator.setAppBadge(badgeCount)')
+    // Guard against a regression to the arg-less call.
+    expect(source).not.toContain('setAppBadge()')
+  })
+
+  it('derives the badge count from the payload, falling back to 1', () => {
+    // The count comes from the push payload (the recipient's unread total); when
+    // absent it falls back to 1 so a closed-app push still shows a badge.
+    expect(source).toContain('payload.badge')
+    expect(source).toContain('? payload.badge')
+    expect(source).toContain(': 1')
+  })
+
+  it('parses a numeric badge out of the push payload', () => {
+    // parsePushPayload must read the numeric badge (unread count) so the push
+    // handler can set it as the app-icon badge.
+    expect(source).toContain("typeof data.badge === 'number'")
+    expect(source).toContain('data.badge > 0')
+  })
+
   it('constrains a notification click to a same-origin path', () => {
     // Mirrors src/lib/pwa/push-payload.ts sanitizeUrl: reject "//..." absolute
     // and protocol-relative URLs so a click can never leave the origin.
