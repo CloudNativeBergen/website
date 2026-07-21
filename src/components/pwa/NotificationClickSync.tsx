@@ -105,8 +105,11 @@ function isNotificationClickMessage(
  * Renders nothing. Mounted once app-wide (see SessionProviderWrapper).
  */
 export function NotificationClickSync() {
-  const { data: session, status } = useSession()
-  const isSignedIn = Boolean(session?.speaker)
+  // Only `status` is needed: mark-read is a cookie-authenticated server mutation,
+  // so the client's session DATA never gates it — we fire unless the client is
+  // DEFINITIVELY unauthenticated (`status`), which also survives the iOS
+  // cold-open `loading` window (see the cold-open effect below).
+  const { status } = useSession()
   const pathname = usePathname()
   const router = useRouter()
   const utils = api.useUtils()
@@ -143,16 +146,16 @@ export function NotificationClickSync() {
     window.history.replaceState(window.history.state, '', stripped)
 
     // Only mark-read for a signed-in caller (markReadByLink is a protected
-    // procedure); a signed-out visitor just gets the param stripped above.
-    if (isSignedIn && isAppRelativeLink(link)) {
+    // procedure); a definitively signed-out visitor just gets the param stripped
+    // above.
+    if (status !== 'unauthenticated' && isAppRelativeLink(link)) {
       // Recipient-guarded + link-matched + re-validated server-side, so this can
       // only ever clear the CALLER'S OWN notification whose link equals `link`.
       mutate({ links: [link] })
     }
-  }, [isSignedIn, pathname, mutate])
+  }, [status, pathname, mutate])
 
   useEffect(() => {
-    if (!isSignedIn) return
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
       return
     }
@@ -160,21 +163,31 @@ export function NotificationClickSync() {
     const onMessage = (event: MessageEvent) => {
       if (!isNotificationClickMessage(event.data)) return
       const { url } = event.data
-      // The url is the notification's app-relative link (the SW only ever posts
-      // a sanitized "/..." path). The schema re-validates it; a non-matching url
-      // (e.g. the "/" fallback) simply clears nothing.
-      mutate({ links: [url] })
+      // Mark read in EVERY receiving tab (idempotent) so each open tab's bell
+      // clears. Cookie-authenticated server-side, so gate only on a definitively
+      // unauthenticated client (mirrors the cold-open path).
+      if (status !== 'unauthenticated') mutate({ links: [url] })
+
+      // The SW broadcasts this to ALL window clients. Only the FOREGROUND tab may
+      // navigate and clear the cold-open handoff: a background tab must not
+      // hijack-navigate every open window, and must not delete the pending-nav
+      // entry — an iOS cold-launched window may still need to consume it.
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible'
+      ) {
+        return
+      }
 
       // WARM navigation: iOS ignores the SW's `existing.navigate()`, so drive the
-      // deep-link navigation from here instead of relying on the worker. Only for
-      // an app-relative link that isn't already the current page (avoid redundant
-      // navigations / loops).
+      // deep-link navigation from here. Skip when already on the target page
+      // (avoid redundant navigations / loops).
       if (isAppRelativeLink(url) && url !== pathname) {
         router.push(url)
       }
 
-      // This warm tab handled the click, so a later COLD boot must NOT re-consume
-      // the same intent from the Cache-API handoff. Clear it best-effort.
+      // This foreground tab handled the click, so a later COLD boot must NOT
+      // re-consume the same intent from the Cache-API handoff. Clear it.
       void clearPendingNav()
     }
 
@@ -182,7 +195,7 @@ export function NotificationClickSync() {
     return () => {
       navigator.serviceWorker.removeEventListener('message', onMessage)
     }
-  }, [isSignedIn, mutate, pathname, router])
+  }, [status, mutate, pathname, router])
 
   // COLD-OPEN path (iOS-critical): when a tap launches the app from closed, iOS
   // boots it at the start_url and ignores the SW's openWindow/navigate, so the
@@ -222,21 +235,18 @@ export function NotificationClickSync() {
         ) {
           const { link, ts } = payload as { link: string; ts: number }
           const isFresh = Date.now() - ts <= PENDING_NAV_MAX_AGE_MS
-          if (
-            isAppRelativeLink(link) &&
-            isFresh &&
-            link !== window.location.pathname
-          ) {
-            router.push(link)
-            // Recipient-guarded + link-matched + re-validated server-side, so
-            // the mutation's REAL auth is the request cookie, not this client's
-            // `useSession` state. On an iOS cold open the session is often still
-            // `loading` (the deep-link page seeded `undefined` because `auth()`
-            // read falsy under cacheComponents — see SessionProviderWrapper), and
-            // gating on `isSignedIn` here would delete the entry mid-load and drop
-            // the mark-read. Fire whenever we're NOT definitively signed out; the
-            // cookie authenticates the request server-side either way.
+          if (isAppRelativeLink(link) && isFresh) {
+            // MARK READ even when we're already on the target page — the
+            // navigation guard below only suppresses a redundant push, it must
+            // not suppress the mark-read. The mutation's REAL auth is the request
+            // cookie, not this client's `useSession` state: on an iOS cold open
+            // the session is often still `loading` (the deep-link page seeded
+            // `undefined` because `auth()` read falsy under cacheComponents — see
+            // SessionProviderWrapper), so gating on session DATA would drop the
+            // mark-read. Fire unless DEFINITIVELY unauthenticated.
             if (status !== 'unauthenticated') mutate({ links: [link] })
+            // Navigate only when not already there (avoid a redundant push/loop).
+            if (link !== window.location.pathname) router.push(link)
           }
         }
         return true

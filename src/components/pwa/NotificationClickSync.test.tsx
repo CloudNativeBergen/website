@@ -133,11 +133,22 @@ describe('NotificationClickSync', () => {
     expect(markReadMutate).not.toHaveBeenCalled()
   })
 
-  it('does not register / fire when signed out', () => {
+  it('does not mark read on a warm click when definitively signed out', () => {
     mockSession = null
+    mockStatus = 'unauthenticated'
     render(<NotificationClickSync />)
     postFromSW({ type: 'notification-click', url: '/cfp/proposal/1' })
     expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('marks read on a warm click while the session is still loading', () => {
+    // Cookie-authed server-side, so a `loading` client must still mark read
+    // (mirrors the iOS cold-open race).
+    mockSession = null
+    mockStatus = 'loading'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/1' })
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/1'] })
   })
 
   // --- Cold-open mark-read via the `markread` query param (N1) --------------
@@ -217,6 +228,31 @@ describe('NotificationClickSync', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
+  it('a BACKGROUND tab marks read but does NOT navigate or clear the handoff', () => {
+    // The SW broadcasts to every window; a background tab must not hijack-
+    // navigate nor delete the cold-open handoff (the launched window needs it).
+    const restore = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'visibilityState',
+    )
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    try {
+      mockPathname = '/'
+      render(<NotificationClickSync />)
+      postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+      expect(markReadMutate).toHaveBeenCalledWith({
+        links: ['/cfp/proposal/2'],
+      })
+      expect(routerPush).not.toHaveBeenCalled()
+      expect(cacheDelete).not.toHaveBeenCalled()
+    } finally {
+      if (restore) Object.defineProperty(document, 'visibilityState', restore)
+    }
+  })
+
   // --- Cold-open consumer of the Cache-API pending-nav handoff ---------------
 
   it('consumes a fresh pending entry on mount: navigates, marks read, deletes it', async () => {
@@ -240,12 +276,15 @@ describe('NotificationClickSync', () => {
     expect(markReadMutate).not.toHaveBeenCalled()
   })
 
-  it('does not navigate when the pending entry is already the current page', async () => {
+  it('marks read but does not navigate when the pending entry is the current page', async () => {
     mockPathname = '/cfp/proposal/9'
     window.history.replaceState(null, '', '/cfp/proposal/9')
     seedPendingNav('/cfp/proposal/9', Date.now())
     render(<NotificationClickSync />)
     await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    // Redundant navigation is suppressed, but the notification must STILL be
+    // marked read (the user is looking at the resource).
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
     expect(routerPush).not.toHaveBeenCalled()
   })
 
