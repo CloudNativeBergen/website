@@ -9,6 +9,15 @@ import { defineWidget, type WidgetMetadata } from './widget-metadata'
 import { z } from 'zod'
 import type { WidgetConfigSchema } from './types'
 
+/*
+ * Size calibration: with GRID_CONFIG (cellSize 96, gap 16) a widget's inner
+ * content height is ≈ 112·rowSpan − 36 px (row steps minus border/padding).
+ * Defaults below are sized to the measured height of each widget's fullest
+ * operational view so newly added widgets neither clip (content scrolls via
+ * WidgetBody anyway) nor float in dead space. Stored user layouts keep their
+ * persisted spans — defaults only affect newly added widgets.
+ */
+
 /**
  * Quick Actions Widget
  * Essential operations for conference management
@@ -63,7 +72,9 @@ export const REVIEW_PROGRESS_WIDGET = defineWidget({
   category: 'core',
   icon: 'ChartPieIcon',
   constraints: {
-    minCols: 2,
+    // Mins match the smallest availableSize (3×2) — the old minCols 2 was
+    // below every offered size and only reachable via manual resize.
+    minCols: 3,
     maxCols: 4,
     minRows: 2,
     maxRows: 4,
@@ -265,13 +276,14 @@ export const CFP_HEALTH_WIDGET = defineWidget({
     minRows: 3,
     maxRows: 7,
   },
+  // 3×6 (≈636px) was sparse for the ~350px operational view → 3×4 (≈412px).
   defaultSize: {
     name: 'narrow',
     colSpan: 3,
-    rowSpan: 6,
+    rowSpan: 4,
   },
   availableSizes: [
-    { name: 'narrow', colSpan: 3, rowSpan: 6 },
+    { name: 'narrow', colSpan: 3, rowSpan: 4 },
     { name: 'small', colSpan: 4, rowSpan: 4 },
     { name: 'medium', colSpan: 6, rowSpan: 4 },
     { name: 'large', colSpan: 8, rowSpan: 5 },
@@ -378,10 +390,12 @@ export const TICKET_SALES_WIDGET = defineWidget({
     minRows: 3,
     maxRows: 6,
   },
+  // The full sales view (stats + gauge + trend + countdown) measures ≈470px;
+  // the old 6×3 default (≈300px) forced immediate scrolling → 6×4 (≈412px).
   defaultSize: {
-    name: 'compact',
+    name: 'medium',
     colSpan: 6,
-    rowSpan: 3,
+    rowSpan: 4,
   },
   availableSizes: [
     { name: 'narrow', colSpan: 3, rowSpan: 4 },
@@ -508,15 +522,18 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
     maxRows: 10,
     prefersLandscape: true,
   },
+  // The operational view (stats + revenue bar + 4 pipeline stages) measures
+  // ≈420px; the old 6×9 default (≈972px) left over 500px of dead space →
+  // 6×4 (≈412px). The 6×9 'tall' preset is dropped for the same reason.
   defaultSize: {
-    name: 'tall',
+    name: 'medium',
     colSpan: 6,
-    rowSpan: 9,
+    rowSpan: 4,
   },
   availableSizes: [
     { name: 'compact', colSpan: 5, rowSpan: 4 },
-    { name: 'medium', colSpan: 6, rowSpan: 5 },
-    { name: 'tall', colSpan: 6, rowSpan: 9 },
+    { name: 'medium', colSpan: 6, rowSpan: 4 },
+    { name: 'tall', colSpan: 6, rowSpan: 5 },
     { name: 'large', colSpan: 8, rowSpan: 5 },
     { name: 'full', colSpan: 12, rowSpan: 5 },
   ],
@@ -573,10 +590,13 @@ export const WORKSHOP_CAPACITY_WIDGET = defineWidget({
     minRows: 2,
     maxRows: 4,
   },
+  // The operational view (3 stat tiles + 3 workshop cards) measures ≈310px;
+  // the old 4×2 default (≈188px) clipped its own default content → 4×3
+  // (≈300px). 3×2/4×2 stay available — they scroll via WidgetBody.
   defaultSize: {
-    name: 'small',
+    name: 'medium',
     colSpan: 4,
-    rowSpan: 2,
+    rowSpan: 3,
   },
   availableSizes: [
     { name: 'compact', colSpan: 3, rowSpan: 2 },
@@ -677,15 +697,18 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
     minRows: 2,
     maxRows: 10,
   },
+  // A 10-item page measures ≈600px, so the old 3×10 default (≈1084px) was
+  // half-empty; pages also scroll now → 3×4 (≈412px, ~6 items visible).
+  // The 3×10 'narrow-tall' preset is dropped for the same reason.
   defaultSize: {
-    name: 'narrow-tall',
+    name: 'small',
     colSpan: 3,
-    rowSpan: 10,
+    rowSpan: 4,
   },
   availableSizes: [
     { name: 'compact', colSpan: 3, rowSpan: 2 },
+    { name: 'small', colSpan: 3, rowSpan: 4 },
     { name: 'narrow', colSpan: 3, rowSpan: 5 },
-    { name: 'narrow-tall', colSpan: 3, rowSpan: 10 },
     { name: 'medium', colSpan: 6, rowSpan: 4 },
     { name: 'large', colSpan: 8, rowSpan: 4 },
     { name: 'wide', colSpan: 12, rowSpan: 4 },
