@@ -23,12 +23,6 @@ export default defineType({
         'read-only as the first-visit default and is never written again.',
     }),
     defineField({
-      name: 'preset',
-      title: 'Preset Name',
-      type: 'string',
-      description: 'Name of the active dashboard preset',
-    }),
-    defineField({
       name: 'widgets',
       title: 'Widgets',
       type: 'array',
@@ -88,14 +82,11 @@ export default defineType({
     select: {
       conference: 'conference.title',
       speaker: 'speaker.name',
-      preset: 'preset',
     },
-    prepare({ conference, speaker, preset }) {
+    prepare({ conference, speaker }) {
       return {
         title: `Dashboard: ${conference || 'Unknown'}`,
-        subtitle: speaker
-          ? `${speaker}${preset ? ` — ${preset}` : ''}`
-          : `Shared default${preset ? ` — ${preset}` : ''}`,
+        subtitle: speaker ? `${speaker}` : 'Shared default',
       }
     },
   },

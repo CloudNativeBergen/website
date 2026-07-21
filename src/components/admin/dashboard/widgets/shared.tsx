@@ -8,9 +8,15 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 
 /* ---------- Loading skeleton ---------- */
 
+/*
+ * The `min-h-32` on the states below matters in single-column (mobile) mode:
+ * there the grid row height is auto, so a bare `h-full` collapses to 0 and
+ * loading/empty/error widgets vanished entirely.
+ */
+
 export function WidgetSkeleton() {
   return (
-    <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+    <div className="h-full min-h-32 rounded-lg bg-gray-100 motion-safe:animate-pulse dark:bg-gray-800" />
   )
 }
 
@@ -28,7 +34,7 @@ export function WidgetEmptyState({
   children,
 }: WidgetEmptyStateProps) {
   return (
-    <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
+    <div className="flex h-full min-h-32 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
       <div>
         {icon && <div className="mx-auto mb-2">{icon}</div>}
         <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
@@ -50,7 +56,7 @@ export function WidgetErrorState({
   onRetry,
 }: WidgetErrorStateProps) {
   return (
-    <div className="flex h-full items-center justify-center rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
+    <div className="flex h-full min-h-32 items-center justify-center rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
       <div>
         <ExclamationTriangleIcon className="mx-auto mb-2 h-8 w-8 text-red-400 dark:text-red-500" />
         <p className="text-sm font-medium text-red-700 dark:text-red-300">
@@ -128,20 +134,29 @@ interface ProgressBarProps {
   value: number
   color?: string
   className?: string
+  /** Accessible name for the progress bar (e.g. "Review progress"). */
+  label?: string
 }
 
 export function ProgressBar({
   value,
   color = 'bg-green-600 dark:bg-green-500',
   className = 'h-2',
+  label,
 }: ProgressBarProps) {
+  const clamped = Math.max(0, Math.min(value, 100))
   return (
     <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(clamped)}
+      aria-label={label}
       className={`overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700 ${className}`}
     >
       <div
-        className={`h-full rounded-full transition-all duration-500 ${color}`}
-        style={{ width: `${Math.min(value, 100)}%` }}
+        className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${color}`}
+        style={{ width: `${clamped}%` }}
       />
     </div>
   )

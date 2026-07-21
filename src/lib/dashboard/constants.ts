@@ -11,6 +11,8 @@ export const GRID_CONFIG: GridConfig = {
 }
 
 export const DASHBOARD_SAVE_DEBOUNCE_MS = 1500
+/** Preset applied when an organizer has no saved layout (see presets.ts). */
+export const DEFAULT_PRESET_KEY = 'planning'
 export const SWIPE_THRESHOLD_PX = 50
 export const SWIPE_ANIMATION_MS = 300
 export const MIN_GRID_ROWS = 10

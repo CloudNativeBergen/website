@@ -101,8 +101,11 @@ export function WidgetContainer({
       })
 
       const target = e.target as HTMLElement
-      target.setPointerCapture(e.pointerId)
-      pointerCaptureRef.current = { element: target, pointerId: e.pointerId }
+      // Guarded: jsdom (tests) doesn't implement pointer capture
+      if (typeof target.setPointerCapture === 'function') {
+        target.setPointerCapture(e.pointerId)
+        pointerCaptureRef.current = { element: target, pointerId: e.pointerId }
+      }
     },
     [editMode, widget.position],
   )
@@ -189,7 +192,7 @@ export function WidgetContainer({
 
     if (pointerCaptureRef.current) {
       const { element, pointerId } = pointerCaptureRef.current
-      if (element.hasPointerCapture(pointerId)) {
+      if (element.hasPointerCapture?.(pointerId)) {
         element.releasePointerCapture(pointerId)
       }
       pointerCaptureRef.current = null
@@ -203,17 +206,30 @@ export function WidgetContainer({
     onResize,
   ])
 
+  // pointercancel: the browser aborted the gesture (touch scroll takeover,
+  // window blur, …) — pointerup never fires, so without this the container
+  // stayed stuck in isResizing with a frozen preview. Discard the preview
+  // WITHOUT applying it; capture is released implicitly on pointercancel.
+  const handleResizeCancel = useCallback(() => {
+    setIsResizing(false)
+    setResizeStart(null)
+    setPreviewPosition(null)
+    pointerCaptureRef.current = null
+  }, [])
+
   useEffect(() => {
     if (!isResizing) return
 
     window.addEventListener('pointermove', handleResizeMove)
     window.addEventListener('pointerup', handleResizeEnd)
+    window.addEventListener('pointercancel', handleResizeCancel)
 
     return () => {
       window.removeEventListener('pointermove', handleResizeMove)
       window.removeEventListener('pointerup', handleResizeEnd)
+      window.removeEventListener('pointercancel', handleResizeCancel)
     }
-  }, [isResizing, handleResizeMove, handleResizeEnd])
+  }, [isResizing, handleResizeMove, handleResizeEnd, handleResizeCancel])
 
   const borderColor = hasCollision
     ? 'border-red-500 dark:border-red-400'
@@ -265,20 +281,28 @@ export function WidgetContainer({
         }}
         className={`relative overflow-hidden rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
       >
-        {/* macOS-style window controls */}
+        {/* macOS-style window controls. The visual dots stay small, but each
+            sits centered inside a 44x44 button so the effective hit target
+            meets the minimum touch size — in edit mode the widget content is
+            pointer-events-none anyway, so the larger hitboxes only borrow from
+            the drag surface. Icons are always visible in edit mode (they used
+            to be hover-only, i.e. undiscoverable on touch). */}
         {editMode && (
-          <div className="absolute top-2 left-2 z-10 flex gap-1.5">
+          <div className="absolute top-0 left-0 z-10 flex">
             {/* Close/Remove button - red */}
             <button
               onPointerDown={(e) => {
                 e.stopPropagation()
               }}
               onClick={handleRemove}
-              className="group pointer-events-auto flex h-3 w-3 items-center justify-center rounded-full bg-red-500 shadow-sm transition-all hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+              className="group pointer-events-auto flex h-11 w-11 items-center justify-center"
               title="Remove widget"
+              aria-label={`Remove ${widget.title} widget`}
               type="button"
             >
-              <XMarkIcon className="h-2.5 w-2.5 stroke-[2.5] text-red-950 opacity-0 transition-opacity group-hover:opacity-80 dark:text-red-950" />
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 shadow-sm transition-colors group-hover:bg-red-600 dark:bg-red-600 dark:group-hover:bg-red-700">
+                <XMarkIcon className="h-2.5 w-2.5 stroke-[2.5] text-red-950" />
+              </span>
             </button>
 
             {/* Config button - green (only show if widget has config schema) */}
@@ -288,11 +312,14 @@ export function WidgetContainer({
                   e.stopPropagation()
                 }}
                 onClick={handleConfigClick}
-                className="group pointer-events-auto flex h-3 w-3 items-center justify-center rounded-full bg-green-500 shadow-sm transition-all hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
+                className="group pointer-events-auto flex h-11 w-11 items-center justify-center"
                 title="Configure widget"
+                aria-label={`Configure ${widget.title} widget`}
                 type="button"
               >
-                <CogIcon className="h-2.5 w-2.5 stroke-[2.5] text-green-950 opacity-0 transition-opacity group-hover:opacity-80 dark:text-green-950" />
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-500 shadow-sm transition-colors group-hover:bg-green-600 dark:bg-green-600 dark:group-hover:bg-green-700">
+                  <CogIcon className="h-2.5 w-2.5 stroke-[2.5] text-green-950" />
+                </span>
               </button>
             )}
           </div>
@@ -300,7 +327,7 @@ export function WidgetContainer({
 
         {/* @supports not (container-type: size) fallback handled via CSS cascade */}
         <div
-          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none [&_h3:first-of-type]:ml-10' : ''}`}
+          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none [&_h3:first-of-type]:ml-20' : ''}`}
         >
           {children}
         </div>

@@ -76,7 +76,7 @@ Categories: **Core** (blue), **Analytics** (purple), **Operations** (green), **E
 
 ### Presets
 
-Pre-built widget configurations in `presets.ts` provide ready-made layouts: Planning, Execution, Financial, Comprehensive, and Empty. The default dashboard loads the Planning preset.
+Pre-built widget configurations in `presets.ts` provide ready-made layouts: Planning, Execution, Financial, Comprehensive, and Empty. In edit mode, the floating **Layout** control opens a preset picker (`PresetMenu`); applying a preset replaces the current layout after an explicit confirmation and persists like any other edit. There is no separate "reset" control — the Planning preset is marked as the default in the picker, and applying it is the reset. A dashboard with no saved config loads the Planning preset.
 
 ### Layout Persistence
 
@@ -161,6 +161,7 @@ src/components/admin/dashboard/
 ├── WidgetConfigModal.tsx # Configuration modal (Zod-driven)
 ├── WidgetErrorBoundary.tsx # Error isolation per widget
 ├── WidgetPicker.tsx     # Category-based widget browser
+├── PresetMenu.tsx       # Edit-mode preset (layout) picker
 ├── widget-renderer.tsx  # Maps widget type → component
 └── widgets/
     ├── shared.tsx       # Shared UI primitives
