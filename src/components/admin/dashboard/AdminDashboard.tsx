@@ -23,6 +23,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import {
   loadDashboardConfig,
   saveDashboardConfig,
@@ -30,6 +32,14 @@ import {
 } from '@/app/(admin)/admin/actions'
 
 const DEFAULT_WIDGETS = PRESET_CONFIGS.planning.widgets
+
+/**
+ * Outcome of the initial loadDashboardConfig call. Persistence is only ever
+ * enabled after a successful load ('loaded'): if the load FAILED we never saw
+ * the stored layout, so any save would overwrite it with local defaults —
+ * a silent data wipe. In that case saves stay disabled for the whole session.
+ */
+type LoadStatus = 'loading' | 'loaded' | 'failed'
 
 interface AdminDashboardProps {
   conference: Conference
@@ -40,8 +50,30 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [editMode, setEditMode] = useState(false)
   const [columnCount, setColumnCount] = useState(4)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
-  const [configLoaded, setConfigLoaded] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // The user must be told when the layout won't persist, but the toast
+  // context value has a new identity on every toast change; going through a
+  // ref (kept current by the effect below) keeps `persistWidgets` (and the
+  // persist effect) stable.
+  const { showNotification } = useNotification()
+  const showNotificationRef = useRef(showNotification)
+  useEffect(() => {
+    showNotificationRef.current = showNotification
+  })
+
+  // True once the USER has changed the layout this session (add/remove/drag/
+  // resize/config/reset). The persist effect below fires on EVERY `widgets`
+  // change — including the mount-time default state and the load-applied
+  // state — so without this flag the dashboard would echo freshly-loaded (or
+  // default) widgets straight back to the server with zero user action.
+  const dirtyRef = useRef(false)
+
+  // Deduplicates the save-failure toast: notify on the first failure of a
+  // burst, then stay quiet until a save succeeds again.
+  const saveFailureNotifiedRef = useRef(false)
 
   const currentPhase = getCurrentPhase(conference)
 
@@ -67,7 +99,13 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     [visibleWidgets, columnCount],
   )
 
-  // Load saved config on mount
+  // Load saved config on mount.
+  //
+  // Mount-time effect ordering with the persist effect below: this effect and
+  // the persist effect both run on mount, and the persist effect re-runs when
+  // this one resolves (setWidgets and/or setLoadStatus change its deps). None
+  // of those runs may write: `dirtyRef` is still false, so the persist effect
+  // is a no-op until the user actually mutates the layout.
   useEffect(() => {
     loadDashboardConfig(conference._id)
       .then((saved) => {
@@ -82,15 +120,32 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             })),
           )
         }
-        setConfigLoaded(true)
+        setLoadStatus('loaded')
       })
-      .catch(() => setConfigLoaded(true))
+      .catch(() => {
+        // Load failed: we never saw the stored layout, so persisting anything
+        // this session could overwrite it with defaults. Editing still works
+        // locally; tell the user once that changes won't stick.
+        setLoadStatus('failed')
+        showNotificationRef.current({
+          type: 'warning',
+          title: "Couldn't load your dashboard layout",
+          message:
+            'Showing the default layout. Changes you make will not be saved this session.',
+        })
+      })
   }, [conference._id])
 
-  // Debounced save whenever widgets change (after initial load)
+  // Debounced save after user edits (see gates below)
   const persistWidgets = useCallback(
     (widgetsToSave: Widget[]) => {
-      if (!configLoaded) return
+      // Persistence gates:
+      // - loadStatus 'loading'/'failed': never save before a SUCCESSFUL load
+      //   (saving would overwrite the stored layout with local state).
+      // - dirtyRef false: this `widgets` change came from mount or from
+      //   applying the loaded config, not from the user — persisting it would
+      //   be a pointless echo-write of what the server just sent us.
+      if (loadStatus !== 'loaded' || !dirtyRef.current) return
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
         const serialized: SerializedWidget[] = widgetsToSave.map((w) => ({
@@ -100,12 +155,27 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
           position: w.position,
           config: w.config as Record<string, unknown> | undefined,
         }))
-        saveDashboardConfig(conference._id, serialized).catch(() => {
-          // Silently fail — widget state is still in React
-        })
+        saveDashboardConfig(conference._id, serialized)
+          .then(() => {
+            saveFailureNotifiedRef.current = false
+          })
+          .catch(() => {
+            // Widget state is still in React, so the layout keeps working
+            // locally — but the user must know it didn't persist. Notify once
+            // per failure burst, not on every debounced retry.
+            if (!saveFailureNotifiedRef.current) {
+              saveFailureNotifiedRef.current = true
+              showNotificationRef.current({
+                type: 'error',
+                title: "Couldn't save your dashboard layout",
+                message:
+                  'Your latest changes are visible here but were not saved.',
+              })
+            }
+          })
       }, DASHBOARD_SAVE_DEBOUNCE_MS)
     },
-    [conference._id, configLoaded],
+    [conference._id, loadStatus],
   )
 
   useEffect(() => {
@@ -128,8 +198,12 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const handleReset = useCallback(() => {
+  // Destructive: replaces the whole layout with the planning preset (and
+  // persists it), so it only runs after explicit confirmation in the modal.
+  const handleConfirmedReset = useCallback(() => {
+    dirtyRef.current = true
     setWidgets(DEFAULT_WIDGETS)
+    setShowResetConfirm(false)
     // persistWidgets will fire via the useEffect on widget change
   }, [])
 
@@ -153,6 +227,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         metadata,
       }
 
+      dirtyRef.current = true
       setWidgets((prev) => [...prev, newWidget])
       setShowWidgetPicker(false)
     },
@@ -160,15 +235,18 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   )
 
   const handleRemoveWidget = useCallback((widgetId: string) => {
+    dirtyRef.current = true
     setWidgets((prev) => prev.filter((w) => w.id !== widgetId))
   }, [])
 
   const handleWidgetsChange = useCallback((newWidgets: Widget[]) => {
+    dirtyRef.current = true
     setWidgets(newWidgets)
   }, [])
 
   const handleResize = useCallback(
     (widgetId: string, newPosition: Widget['position']) => {
+      dirtyRef.current = true
       setWidgets((prev) =>
         prev.map((w) =>
           w.id === widgetId ? { ...w, position: newPosition } : w,
@@ -180,6 +258,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   const handleConfigChange = useCallback(
     (widgetId: string, config: Record<string, unknown>) => {
+      dirtyRef.current = true
       setWidgets((prev) =>
         prev.map((w) => (w.id === widgetId ? { ...w, config } : w)),
       )
@@ -227,13 +306,23 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         />
       )}
 
+      <ConfirmationModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={handleConfirmedReset}
+        title="Reset dashboard layout?"
+        message="This replaces your current widgets and layout with the default planning preset. This cannot be undone."
+        confirmButtonText="Reset layout"
+        variant="danger"
+      />
+
       {/* Floating edit controls — desktop only */}
       {isDesktop && (
         <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2">
           {editMode && (
             <>
               <button
-                onClick={handleReset}
+                onClick={() => setShowResetConfirm(true)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 <ArrowPathIcon className="h-3.5 w-3.5" />

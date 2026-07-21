@@ -47,11 +47,17 @@ export function AdminButton({
   variant = 'primary',
   color = 'indigo',
   size = 'sm',
+  // Default to type="button" (native buttons default to type="submit").
+  // Without this, any AdminButton inside a <form> — e.g. a modal's Cancel or
+  // Reset button — implicitly submits the form on click. Buttons that are
+  // meant to submit must pass type="submit" explicitly.
+  type = 'button',
   className,
   ...props
 }: AdminButtonProps) {
   return (
     <button
+      type={type}
       className={clsx(
         'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         variant === 'primary' ? colorStyles[color] : variantStyles[variant],

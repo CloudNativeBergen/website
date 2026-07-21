@@ -35,6 +35,25 @@ export const Danger: Story = {
   },
 }
 
+export const DashboardReset: Story = {
+  args: {
+    isOpen: true,
+    title: 'Reset dashboard layout?',
+    message:
+      'This replaces your current widgets and layout with the default planning preset. This cannot be undone.',
+    confirmButtonText: 'Reset layout',
+    variant: 'danger',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Confirmation shown by the admin dashboard before the Reset control replaces the whole layout with the planning preset (a destructive, persisted action).',
+      },
+    },
+  },
+}
+
 export const Warning: Story = {
   args: {
     isOpen: true,
