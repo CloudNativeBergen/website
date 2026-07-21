@@ -322,6 +322,30 @@ self.addEventListener('notificationclick', (event) => {
         openUrl = targetUrl
       }
 
+      // iOS PWA handoff: iOS launches the installed app at its start_url and
+      // IGNORES the SW's openWindow()/WindowClient.navigate() calls, so neither
+      // the deep-link navigation nor the `markread` param below ever reaches the
+      // window on iOS (cold OR warm). To survive that, stash the click intent in
+      // the Cache API under a fixed synthetic key BEFORE opening any window; the
+      // freshly-launched client (NotificationClickSync) reads it on boot, then
+      // navigates + marks read itself. Awaited so the write is durable before we
+      // hand off to the (Android-honoured) openWindow. Feature-detected and fully
+      // guarded so it can never throw on platforms without Cache Storage.
+      if (self.caches) {
+        try {
+          const cache = await self.caches.open('cndn-pending-nav')
+          await cache.put(
+            new Request('/__cndn_pending_notification'),
+            new Response(JSON.stringify({ link: target, ts: Date.now() }), {
+              headers: { 'content-type': 'application/json' },
+            }),
+          )
+        } catch (e) {
+          // Cache write failed (private mode / quota); Android still works via
+          // the openWindow markread param below.
+        }
+      }
+
       // Focus an existing tab already on the target URL if there is one (it was
       // already cleared by the postMessage; no need to carry the param).
       for (const client of allClients) {

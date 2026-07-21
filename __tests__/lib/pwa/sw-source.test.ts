@@ -82,4 +82,18 @@ describe('public/sw.js source invariants', () => {
     expect(source).toContain('clients.matchAll')
     expect(source).toContain('clients.openWindow')
   })
+
+  it('stashes the click intent in the pending-nav cache for the iOS cold-open handoff', () => {
+    // iOS ignores openWindow/navigate, so the click intent is handed off through
+    // Cache Storage under a fixed key for the freshly-launched client to read.
+    // The write must be feature-detected, awaited, and happen before openWindow.
+    expect(source).toContain("self.caches.open('cndn-pending-nav')")
+    expect(source).toContain("new Request('/__cndn_pending_notification')")
+    // The cache write is initiated before the window is opened/focused.
+    const cacheWriteIndex = source.indexOf("caches.open('cndn-pending-nav')")
+    const openWindowIndex = source.indexOf('clients.openWindow(openUrl)')
+    expect(cacheWriteIndex).toBeGreaterThan(-1)
+    expect(openWindowIndex).toBeGreaterThan(-1)
+    expect(cacheWriteIndex).toBeLessThan(openWindowIndex)
+  })
 })

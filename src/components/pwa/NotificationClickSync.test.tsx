@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, waitFor } from '@testing-library/react'
 import type { Session } from 'next-auth'
 
 let mockSession: Session | null = null
@@ -14,8 +14,10 @@ vi.mock('next-auth/react', () => ({
 }))
 
 let mockPathname = '/'
+const routerPush = vi.fn()
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ push: routerPush }),
 }))
 
 const markReadMutate = vi.fn()
@@ -53,6 +55,37 @@ function postFromSW(data: unknown) {
   ;(navigator.serviceWorker as unknown as EventTarget).dispatchEvent(event)
 }
 
+// --- Fake Cache Storage for the pending-nav handoff -------------------------
+
+const PENDING_NAV_KEY = '/__cndn_pending_notification'
+
+/** Body JSON keyed by request key; models a single `cndn-pending-nav` cache. */
+let pendingStore = new Map<string, string>()
+const cacheDelete = vi.fn(async (key: string) => pendingStore.delete(key))
+
+/** Install a minimal Cache Storage shim on the global. */
+function installCaches() {
+  const cache = {
+    match: async (key: string) => {
+      const body = pendingStore.get(key)
+      if (body === undefined) return undefined
+      return { json: async () => JSON.parse(body) }
+    },
+    delete: cacheDelete,
+    put: async () => undefined,
+  }
+  Object.defineProperty(globalThis, 'caches', {
+    value: { open: async () => cache },
+    configurable: true,
+    writable: true,
+  })
+}
+
+/** Seed a pending-nav entry as the SW would have written it. */
+function seedPendingNav(link: string, ts: number) {
+  pendingStore.set(PENDING_NAV_KEY, JSON.stringify({ link, ts }))
+}
+
 function signedIn(): Session {
   return {
     expires: new Date(Date.now() + 60_000).toISOString(),
@@ -65,7 +98,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockSession = signedIn()
   mockPathname = '/'
+  pendingStore = new Map<string, string>()
   installServiceWorker()
+  installCaches()
   window.history.replaceState(null, '', '/')
 })
 
@@ -151,5 +186,79 @@ describe('NotificationClickSync', () => {
     // The param must be stripped even when signed out, so it can't linger and
     // re-fire on a later authenticated reload/share.
     expect(window.location.search).not.toContain('markread')
+  })
+
+  // --- Warm navigation via the notification-click postMessage ---------------
+
+  it('navigates and clears the pending-nav cache on a warm notification-click', async () => {
+    mockPathname = '/'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+    // Marks read AND drives the deep-link navigation itself (iOS ignores the
+    // SW's own navigate()).
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/2'] })
+    expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/2')
+    // The warm tab handled it, so the cold-open handoff must be cleared.
+    await waitFor(() =>
+      expect(cacheDelete).toHaveBeenCalledWith(PENDING_NAV_KEY),
+    )
+  })
+
+  it('does not navigate on a warm click already on the target page', () => {
+    mockPathname = '/cfp/proposal/2'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/2'] })
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  // --- Cold-open consumer of the Cache-API pending-nav handoff ---------------
+
+  it('consumes a fresh pending entry on mount: navigates, marks read, deletes it', async () => {
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/9'),
+    )
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+  })
+
+  it('deletes a stale pending entry without navigating', async () => {
+    mockPathname = '/'
+    // Older than the 5-minute freshness window.
+    seedPendingNav('/cfp/proposal/9', Date.now() - 6 * 60 * 1000)
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('does not navigate when the pending entry is already the current page', async () => {
+    mockPathname = '/cfp/proposal/9'
+    window.history.replaceState(null, '', '/cfp/proposal/9')
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('clears a pending entry when signed out but fires no mutation', async () => {
+    mockSession = null
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('does not navigate for a non-app-relative pending link, but deletes it', async () => {
+    mockPathname = '/'
+    seedPendingNav('https://evil.com', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(markReadMutate).not.toHaveBeenCalled()
   })
 })

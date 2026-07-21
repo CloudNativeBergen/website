@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 
@@ -13,6 +13,44 @@ import { api } from '@/lib/trpc/client'
  * `link`.
  */
 const MARK_READ_PARAM = 'markread'
+
+/**
+ * Cache-API handoff for the notification click intent (see public/sw.js). iOS
+ * launches the installed PWA at its start_url and IGNORES the service worker's
+ * `openWindow()` / `WindowClient.navigate()`, so on iOS neither the deep-link
+ * navigation nor the `markread` query param ever reaches the window (cold OR
+ * warm). To survive that, the SW stashes `{ link, ts }` in this cache under a
+ * fixed synthetic key BEFORE opening any window; the freshly-launched client
+ * reads it here and does the navigation + mark-read itself.
+ */
+const PENDING_NAV_CACHE = 'cndn-pending-nav'
+const PENDING_NAV_KEY = '/__cndn_pending_notification'
+
+/** How long a stashed click intent is honoured. Anything older is discarded. */
+const PENDING_NAV_MAX_AGE_MS = 5 * 60 * 1000
+
+/**
+ * iOS may boot the app in parallel with the SW's cache write, so the entry can
+ * be absent on the very first read. Re-check after these delays (ms), stopping
+ * as soon as an entry is found & consumed.
+ */
+const PENDING_NAV_RETRY_DELAYS_MS = [600, 1600]
+
+/** Whether Cache Storage is usable in this environment (no-op on the server). */
+function hasCacheStorage(): boolean {
+  return typeof window !== 'undefined' && typeof caches !== 'undefined'
+}
+
+/** Best-effort delete of the pending-nav entry; never throws. */
+async function clearPendingNav(): Promise<void> {
+  if (!hasCacheStorage()) return
+  try {
+    const cache = await caches.open(PENDING_NAV_CACHE)
+    await cache.delete(PENDING_NAV_KEY)
+  } catch {
+    // Cache unavailable (private mode / quota); nothing to clear.
+  }
+}
 
 /**
  * True for an app-relative deep link ("/..."; never "//..." or a backslash
@@ -70,6 +108,7 @@ export function NotificationClickSync() {
   const { data: session } = useSession()
   const isSignedIn = Boolean(session?.speaker)
   const pathname = usePathname()
+  const router = useRouter()
   const utils = api.useUtils()
   const markReadByLink = api.notification.markReadByLink.useMutation({
     onSuccess: () => {
@@ -120,17 +159,108 @@ export function NotificationClickSync() {
 
     const onMessage = (event: MessageEvent) => {
       if (!isNotificationClickMessage(event.data)) return
+      const { url } = event.data
       // The url is the notification's app-relative link (the SW only ever posts
       // a sanitized "/..." path). The schema re-validates it; a non-matching url
       // (e.g. the "/" fallback) simply clears nothing.
-      mutate({ links: [event.data.url] })
+      mutate({ links: [url] })
+
+      // WARM navigation: iOS ignores the SW's `existing.navigate()`, so drive the
+      // deep-link navigation from here instead of relying on the worker. Only for
+      // an app-relative link that isn't already the current page (avoid redundant
+      // navigations / loops).
+      if (isAppRelativeLink(url) && url !== pathname) {
+        router.push(url)
+      }
+
+      // This warm tab handled the click, so a later COLD boot must NOT re-consume
+      // the same intent from the Cache-API handoff. Clear it best-effort.
+      void clearPendingNav()
     }
 
     navigator.serviceWorker.addEventListener('message', onMessage)
     return () => {
       navigator.serviceWorker.removeEventListener('message', onMessage)
     }
-  }, [isSignedIn, mutate])
+  }, [isSignedIn, mutate, pathname, router])
+
+  // COLD-OPEN path (iOS-critical): when a tap launches the app from closed, iOS
+  // boots it at the start_url and ignores the SW's openWindow/navigate, so the
+  // deep link never loads and nothing is marked read. Recover the click intent
+  // the SW stashed in the Cache API: navigate to it and mark it read here.
+  //
+  // Runs regardless of sign-in so the entry is always consumed (never lingers to
+  // re-fire on a later boot); the mutation only fires when signed in.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    let cancelled = false
+    const timers: ReturnType<typeof setTimeout>[] = []
+
+    const consume = async (): Promise<boolean> => {
+      if (cancelled || !hasCacheStorage()) return false
+      try {
+        const cache = await caches.open(PENDING_NAV_CACHE)
+        const res = await cache.match(PENDING_NAV_KEY)
+        if (!res) return false
+
+        // An entry exists — consume it EXACTLY once, whatever its contents.
+        let payload: unknown = null
+        try {
+          payload = await res.json()
+        } catch {
+          payload = null
+        }
+        await cache.delete(PENDING_NAV_KEY)
+
+        if (cancelled) return true
+        if (
+          payload &&
+          typeof payload === 'object' &&
+          typeof (payload as { link?: unknown }).link === 'string' &&
+          typeof (payload as { ts?: unknown }).ts === 'number'
+        ) {
+          const { link, ts } = payload as { link: string; ts: number }
+          const isFresh = Date.now() - ts <= PENDING_NAV_MAX_AGE_MS
+          if (
+            isAppRelativeLink(link) &&
+            isFresh &&
+            link !== window.location.pathname
+          ) {
+            router.push(link)
+            // Recipient-guarded + link-matched + re-validated server-side.
+            if (isSignedIn) mutate({ links: [link] })
+          }
+        }
+        return true
+      } catch {
+        // Cache unavailable; nothing to consume.
+        return false
+      }
+    }
+
+    const attempt = async () => {
+      if (cancelled) return
+      const found = await consume()
+      if (found) {
+        // Consumed — cancel any still-pending retries.
+        cancelled = true
+        for (const t of timers) clearTimeout(t)
+      }
+    }
+
+    // Check immediately, then re-check on a bounded schedule to cover the iOS
+    // race where the app boots before the SW's cache write lands.
+    void attempt()
+    for (const delay of PENDING_NAV_RETRY_DELAYS_MS) {
+      timers.push(setTimeout(() => void attempt(), delay))
+    }
+
+    return () => {
+      cancelled = true
+      for (const t of timers) clearTimeout(t)
+    }
+  }, [isSignedIn, mutate, router])
 
   return null
 }
