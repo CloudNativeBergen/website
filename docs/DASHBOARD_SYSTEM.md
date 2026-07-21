@@ -55,7 +55,7 @@ AdminDashboard
 
 ### Widget Pattern
 
-All 12 widgets follow the same structure:
+All 13 widgets follow the same structure:
 
 1. **Data fetching** via the `useWidgetData<T>` hook — eliminates boilerplate `useState` + `useEffect` + error/loading patterns.
 2. **Phase detection** via `getCurrentPhase(conference)` — determines which view to render.
@@ -80,7 +80,29 @@ Pre-built widget configurations in `presets.ts` provide ready-made layouts: Plan
 
 ### Layout Persistence
 
-Dashboard layouts are persisted per-conference via Sanity using a `dashboardConfig` document type. Changes are debounced and auto-saved. On mount, the saved layout is loaded; if none exists, the default preset is used.
+Dashboard layouts are persisted **per-organizer** via Sanity using the `dashboardConfig` document type. Each organizer's layout lives in its own document with a deterministic id — `dashboardConfig-<conferenceId>-<speakerId>` — carrying both a `conference` and a `speaker` reference. Saves use `createOrReplace` on that id, so concurrent saves by the same user are race-free and can never create duplicates.
+
+The server actions (`loadDashboardConfig` / `saveDashboardConfig`) accept **no conference id from the client**: the conference is resolved server-side from the request domain (`resolveConferenceId`, the same helper the tRPC routers use) and the organizer's speaker id comes from the server session.
+
+**Load fallback chain:**
+
+1. **Personal doc** (deterministic id) — returned even when its widgets array is empty: `widgets: []` means the organizer deliberately cleared their dashboard, and the client renders an empty grid rather than defaults.
+2. **Legacy shared doc** (matching `conference._ref`, no `speaker` reference) — a read-only first-visit default kept from the pre-per-organizer era. It is never written again; an empty legacy doc falls through to step 3.
+3. **`null`** — the client falls back to the default preset (Planning).
+
+Changes are debounced (1.5 s) and auto-saved; navigating away with a pending edit flushes the save immediately on unmount. Saves are only enabled after a successful initial load.
+
+**Server-side validation (on save):**
+
+| Rule       | Limit                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| Widgets    | ≤ 40 per layout                                                           |
+| Type       | Must exist in the widget registry (unknown types rejected)                |
+| Title / id | Strings ≤ 200 characters                                                  |
+| Position   | Integers: 0 ≤ row ≤ 500, 0 ≤ col ≤ 11, 1 ≤ rowSpan ≤ 24, 1 ≤ colSpan ≤ 12 |
+| Config     | ≤ 8 KB serialized JSON per widget                                         |
+
+Save rejects unknown widget types, but **load stays lenient**: unknown stored types render the "Widget not available" placeholder so old documents never break the dashboard.
 
 ### Data Flow
 
@@ -95,7 +117,7 @@ Server actions in `actions.ts` handle all data fetching with `requireOrganizer()
 
 ### Widget Configuration
 
-Widgets with configurable options (8 of 12) define a `configSchema` in the registry using Zod. The `WidgetConfigModal` renders input fields from the schema and persists values alongside the widget layout. Widgets receive config via their `config` prop.
+Widgets with configurable options (9 of 13) define a `configSchema` in the registry using Zod. The `WidgetConfigModal` renders input fields from the schema and persists values alongside the widget layout. Widgets receive config via their `config` prop.
 
 ## Widgets
 
@@ -113,6 +135,7 @@ Widgets with configurable options (8 of 12) define a `configSchema` in the regis
 | Schedule Builder   | Operations | Slot allocation progress by day                             |
 | Workshop Capacity  | Operations | Registration fill rates and waitlists                       |
 | Travel Support     | Operations | Request queue, budget usage, approval workflow              |
+| My Areas           | Operations | Needs-attention counts for the viewer's teams               |
 
 ## File Structure
 
@@ -141,7 +164,7 @@ src/components/admin/dashboard/
 ├── widget-renderer.tsx  # Maps widget type → component
 └── widgets/
     ├── shared.tsx       # Shared UI primitives
-    └── [12 widget components]
+    └── [13 widget components]
 
 src/app/(admin)/admin/
 └── actions.ts           # Server actions for widget data fetching

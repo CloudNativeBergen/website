@@ -54,6 +54,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Widgets scheduled for the debounced save but not yet sent. Lets the
+  // unmount cleanup FLUSH a pending save immediately instead of dropping
+  // edits made less than the debounce interval before navigation.
+  const pendingSaveRef = useRef<Widget[] | null>(null)
+
   // The user must be told when the layout won't persist, but the toast
   // context value has a new identity on every toast change; going through a
   // ref (kept current by the effect below) keeps `persistWidgets` (and the
@@ -107,9 +112,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   // of those runs may write: `dirtyRef` is still false, so the persist effect
   // is a no-op until the user actually mutates the layout.
   useEffect(() => {
-    loadDashboardConfig(conference._id)
+    loadDashboardConfig()
       .then((saved) => {
-        if (saved && saved.length > 0) {
+        // `[]` is a DELIBERATELY EMPTY personal layout and must render an
+        // empty grid — defaults apply only when NO config exists (null).
+        if (saved) {
           setWidgets(
             saved.map((w) => ({
               id: w.id,
@@ -134,7 +141,37 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             'Showing the default layout. Changes you make will not be saved this session.',
         })
       })
-  }, [conference._id])
+  }, [])
+
+  // Serialize + fire the actual save. Stable helper (refs only) shared by the
+  // debounce timer and the unmount flush so both send the same payload shape.
+  const performSave = useCallback((widgetsToSave: Widget[]) => {
+    pendingSaveRef.current = null
+    const serialized: SerializedWidget[] = widgetsToSave.map((w) => ({
+      id: w.id,
+      type: w.type,
+      title: w.title,
+      position: w.position,
+      config: w.config as Record<string, unknown> | undefined,
+    }))
+    saveDashboardConfig(serialized)
+      .then(() => {
+        saveFailureNotifiedRef.current = false
+      })
+      .catch(() => {
+        // Widget state is still in React, so the layout keeps working
+        // locally — but the user must know it didn't persist. Notify once
+        // per failure burst, not on every debounced retry.
+        if (!saveFailureNotifiedRef.current) {
+          saveFailureNotifiedRef.current = true
+          showNotificationRef.current({
+            type: 'error',
+            title: "Couldn't save your dashboard layout",
+            message: 'Your latest changes are visible here but were not saved.',
+          })
+        }
+      })
+  }, [])
 
   // Debounced save after user edits (see gates below)
   const persistWidgets = useCallback(
@@ -147,47 +184,28 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       //   be a pointless echo-write of what the server just sent us.
       if (loadStatus !== 'loaded' || !dirtyRef.current) return
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      pendingSaveRef.current = widgetsToSave
       saveTimerRef.current = setTimeout(() => {
-        const serialized: SerializedWidget[] = widgetsToSave.map((w) => ({
-          id: w.id,
-          type: w.type,
-          title: w.title,
-          position: w.position,
-          config: w.config as Record<string, unknown> | undefined,
-        }))
-        saveDashboardConfig(conference._id, serialized)
-          .then(() => {
-            saveFailureNotifiedRef.current = false
-          })
-          .catch(() => {
-            // Widget state is still in React, so the layout keeps working
-            // locally — but the user must know it didn't persist. Notify once
-            // per failure burst, not on every debounced retry.
-            if (!saveFailureNotifiedRef.current) {
-              saveFailureNotifiedRef.current = true
-              showNotificationRef.current({
-                type: 'error',
-                title: "Couldn't save your dashboard layout",
-                message:
-                  'Your latest changes are visible here but were not saved.',
-              })
-            }
-          })
+        saveTimerRef.current = null
+        if (pendingSaveRef.current) performSave(pendingSaveRef.current)
       }, DASHBOARD_SAVE_DEBOUNCE_MS)
     },
-    [conference._id, loadStatus],
+    [loadStatus, performSave],
   )
 
   useEffect(() => {
     persistWidgets(widgets)
   }, [widgets, persistWidgets])
 
-  // Clean up debounce timer on unmount
+  // On unmount: clear the debounce timer, then FLUSH any pending save
+  // (fire-and-forget) so edits made less than the debounce interval before
+  // navigating away are not silently dropped.
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (pendingSaveRef.current) performSave(pendingSaveRef.current)
     }
-  }, [])
+  }, [performSave])
 
   useEffect(() => {
     const handleResize = () => {

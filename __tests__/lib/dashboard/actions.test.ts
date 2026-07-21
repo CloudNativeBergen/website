@@ -98,19 +98,27 @@ vi.mock('@/lib/workshop/sanity', () => ({
 
 // Sanity client (dashboard config persistence + trimmed dashboard reads)
 const mockClientReadFetch = vi.fn<AnyFn>()
+const mockClientWriteFetch = vi.fn<AnyFn>()
+const mockCreateOrReplace = vi.fn<AnyFn>()
+const mockCreate = vi.fn<AnyFn>()
+const mockPatch = vi.fn<AnyFn>()
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: vi.fn(() => Promise.resolve(null)),
-    create: vi.fn(() => Promise.resolve({ _id: 'new-config' })),
-    patch: vi.fn(() => ({
-      set: vi.fn(() => ({
-        commit: vi.fn(() => Promise.resolve()),
-      })),
-    })),
+    fetch: (...args: unknown[]) => mockClientWriteFetch(...args),
+    create: (...args: unknown[]) => mockCreate(...args),
+    createOrReplace: (...args: unknown[]) => mockCreateOrReplace(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
   },
   clientReadUncached: {
     fetch: (...args: unknown[]) => mockClientReadFetch(...args),
   },
+}))
+
+// Conference resolution — the persistence actions never accept a client
+// conferenceId; they resolve it from the request domain like the tRPC routers.
+const mockResolveConferenceId = vi.fn<AnyFn>()
+vi.mock('@/server/trpc', () => ({
+  resolveConferenceId: (...args: unknown[]) => mockResolveConferenceId(...args),
 }))
 
 // Time utilities
@@ -216,10 +224,13 @@ describe('Dashboard Server Actions', () => {
     vi.clearAllMocks()
     mockFetchEventTickets.mockResolvedValue([])
     mockClientReadFetch.mockResolvedValue([])
+    mockClientWriteFetch.mockResolvedValue(null)
+    mockCreateOrReplace.mockResolvedValue({ _id: 'personal-config' })
+    mockResolveConferenceId.mockResolvedValue('conf-1')
     mockGetAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
-      speaker: { isOrganizer: true },
+      speaker: { _id: 'speaker-1', isOrganizer: true },
     })
   })
 
@@ -903,22 +914,270 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('Dashboard Config Persistence', () => {
-    it('loadDashboardConfig returns null when no config exists', async () => {
-      const result = await loadDashboardConfig('conf-1')
-      expect(result).toBeNull()
+    // Length-prefixed ('conf-1'.length = 6) so ids containing '-' stay unambiguous.
+    const PERSONAL_ID = 'dashboardConfig-6-conf-1-speaker-1'
+
+    const storedWidget = (overrides: Record<string, unknown> = {}) => ({
+      _key: 'widget-0',
+      widgetId: 'w1',
+      widgetType: 'quick-actions',
+      title: 'Quick Actions',
+      row: 0,
+      col: 0,
+      rowSpan: 2,
+      colSpan: 3,
+      ...overrides,
     })
 
-    it('saveDashboardConfig serializes widget positions', async () => {
-      await expect(
-        saveDashboardConfig('conf-1', [
+    const validWidget = (
+      overrides: Partial<SerializedWidget> = {},
+    ): SerializedWidget => ({
+      id: 'w1',
+      type: 'quick-actions',
+      title: 'Quick Actions',
+      position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
+      ...overrides,
+    })
+
+    describe('loadDashboardConfig', () => {
+      it('returns null when neither a personal nor a legacy doc exists', async () => {
+        const result = await loadDashboardConfig()
+        expect(result).toBeNull()
+        // Fallback chain: personal doc by deterministic id, then legacy doc
+        expect(mockClientWriteFetch).toHaveBeenCalledTimes(2)
+        expect(mockClientWriteFetch.mock.calls[0][1]).toEqual({
+          id: PERSONAL_ID,
+        })
+        expect(mockClientWriteFetch.mock.calls[1][0]).toContain(
+          '!defined(speaker)',
+        )
+      })
+
+      it('returns the personal doc without consulting the legacy doc', async () => {
+        mockClientWriteFetch.mockResolvedValueOnce({
+          _id: PERSONAL_ID,
+          _type: 'dashboardConfig',
+          conference: { _ref: 'conf-1', _type: 'reference' },
+          speaker: { _ref: 'speaker-1', _type: 'reference' },
+          widgets: [storedWidget()],
+        })
+
+        const result = await loadDashboardConfig()
+        expect(result).toEqual([
           {
             id: 'w1',
             type: 'quick-actions',
             title: 'Quick Actions',
             position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
+            config: undefined,
           },
-        ]),
-      ).resolves.not.toThrow()
+        ])
+        expect(mockClientWriteFetch).toHaveBeenCalledTimes(1)
+      })
+
+      it('falls back to the legacy shared doc when no personal doc exists', async () => {
+        mockClientWriteFetch
+          .mockResolvedValueOnce(null) // personal
+          .mockResolvedValueOnce({
+            _id: 'legacy-config',
+            _type: 'dashboardConfig',
+            conference: { _ref: 'conf-1', _type: 'reference' },
+            widgets: [storedWidget({ widgetId: 'legacy-w1' })],
+          })
+
+        const result = await loadDashboardConfig()
+        expect(result).toEqual([expect.objectContaining({ id: 'legacy-w1' })])
+      })
+
+      it('returns [] for an EMPTY personal doc (deliberately cleared layout)', async () => {
+        mockClientWriteFetch.mockResolvedValueOnce({
+          _id: PERSONAL_ID,
+          _type: 'dashboardConfig',
+          conference: { _ref: 'conf-1', _type: 'reference' },
+          speaker: { _ref: 'speaker-1', _type: 'reference' },
+          widgets: [],
+        })
+
+        const result = await loadDashboardConfig()
+        expect(result).toEqual([])
+        // The legacy default must NOT override a deliberate empty layout
+        expect(mockClientWriteFetch).toHaveBeenCalledTimes(1)
+      })
+
+      it('returns null for an empty LEGACY doc (falls through to preset)', async () => {
+        mockClientWriteFetch
+          .mockResolvedValueOnce(null) // personal
+          .mockResolvedValueOnce({
+            _id: 'legacy-config',
+            _type: 'dashboardConfig',
+            conference: { _ref: 'conf-1', _type: 'reference' },
+            widgets: [],
+          })
+
+        const result = await loadDashboardConfig()
+        expect(result).toBeNull()
+      })
+
+      it('keeps tolerating unknown STORED widget types (load is lenient)', async () => {
+        mockClientWriteFetch.mockResolvedValueOnce({
+          _id: PERSONAL_ID,
+          _type: 'dashboardConfig',
+          conference: { _ref: 'conf-1', _type: 'reference' },
+          speaker: { _ref: 'speaker-1', _type: 'reference' },
+          widgets: [storedWidget({ widgetType: 'retired-widget' })],
+        })
+
+        const result = await loadDashboardConfig()
+        expect(result).toEqual([
+          expect.objectContaining({ type: 'retired-widget' }),
+        ])
+      })
+
+      it('rejects when the caller is not an organizer', async () => {
+        mockGetAuthSession.mockResolvedValue({
+          user: { name: 'User', email: 'user@test.com' },
+          expires: '2099-01-01T00:00:00Z',
+          speaker: { _id: 'speaker-1', isOrganizer: false },
+        })
+
+        await expect(loadDashboardConfig()).rejects.toThrow(/Unauthorized/)
+      })
+    })
+
+    describe('saveDashboardConfig', () => {
+      it('createOrReplaces the personal doc with a deterministic _id and speaker ref', async () => {
+        await saveDashboardConfig([
+          validWidget({ config: { showTrend: true } }),
+        ])
+
+        expect(mockCreateOrReplace).toHaveBeenCalledTimes(1)
+        expect(mockCreateOrReplace).toHaveBeenCalledWith({
+          _id: PERSONAL_ID,
+          _type: 'dashboardConfig',
+          conference: { _ref: 'conf-1', _type: 'reference' },
+          speaker: { _ref: 'speaker-1', _type: 'reference' },
+          widgets: [
+            {
+              _key: 'widget-0',
+              widgetId: 'w1',
+              widgetType: 'quick-actions',
+              title: 'Quick Actions',
+              row: 0,
+              col: 0,
+              rowSpan: 2,
+              colSpan: 3,
+              config: JSON.stringify({ showTrend: true }),
+            },
+          ],
+        })
+      })
+
+      it('NEVER touches the legacy doc: no fetch-then-patch, no create', async () => {
+        await saveDashboardConfig([validWidget()])
+
+        // No lookup of an existing doc (the deterministic id kills the
+        // fetch-then-create race) and no writes via patch/create.
+        expect(mockClientWriteFetch).not.toHaveBeenCalled()
+        expect(mockPatch).not.toHaveBeenCalled()
+        expect(mockCreate).not.toHaveBeenCalled()
+      })
+
+      it('persists a deliberately EMPTY layout', async () => {
+        await saveDashboardConfig([])
+        expect(mockCreateOrReplace).toHaveBeenCalledWith(
+          expect.objectContaining({ _id: PERSONAL_ID, widgets: [] }),
+        )
+      })
+
+      it('rejects unknown widget types on save', async () => {
+        await expect(
+          saveDashboardConfig([validWidget({ type: 'not-a-widget' })]),
+        ).rejects.toThrow(/unknown widget type/)
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('rejects oversized spans and out-of-range positions', async () => {
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 0, rowSpan: 25, colSpan: 3 },
+            }),
+          ]),
+        ).rejects.toThrow(/rowSpan/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 0, rowSpan: 2, colSpan: 13 },
+            }),
+          ]),
+        ).rejects.toThrow(/colSpan/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 501, col: 0, rowSpan: 2, colSpan: 3 },
+            }),
+          ]),
+        ).rejects.toThrow(/row/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 12, rowSpan: 2, colSpan: 3 },
+            }),
+          ]),
+        ).rejects.toThrow(/col/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 1.5, col: 0, rowSpan: 2, colSpan: 3 },
+            }),
+          ]),
+        ).rejects.toThrow(/row/)
+
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('rejects more than 40 widgets', async () => {
+        const widgets = Array.from({ length: 41 }, (_, i) =>
+          validWidget({ id: `w${i}` }),
+        )
+        await expect(saveDashboardConfig(widgets)).rejects.toThrow(
+          /at most 40 widgets/,
+        )
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('rejects a widget config over 8 KB serialized', async () => {
+        await expect(
+          saveDashboardConfig([
+            validWidget({ config: { blob: 'x'.repeat(9000) } }),
+          ]),
+        ).rejects.toThrow(/8192 bytes/)
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('rejects an over-long title', async () => {
+        await expect(
+          saveDashboardConfig([validWidget({ title: 'x'.repeat(201) })]),
+        ).rejects.toThrow(/title/)
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('rejects when the caller is not an organizer', async () => {
+        mockGetAuthSession.mockResolvedValue({
+          user: { name: 'User', email: 'user@test.com' },
+          expires: '2099-01-01T00:00:00Z',
+          speaker: { _id: 'speaker-1', isOrganizer: false },
+        })
+
+        await expect(saveDashboardConfig([validWidget()])).rejects.toThrow(
+          /Unauthorized/,
+        )
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
     })
   })
 })

@@ -13,6 +13,16 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'speaker',
+      title: 'Organizer',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      description:
+        'The organizer this layout belongs to. Per-organizer configs carry ' +
+        'this reference; the legacy conference-wide doc (no speaker) is kept ' +
+        'read-only as the first-visit default and is never written again.',
+    }),
+    defineField({
       name: 'preset',
       title: 'Preset Name',
       type: 'string',
@@ -77,12 +87,15 @@ export default defineType({
   preview: {
     select: {
       conference: 'conference.title',
+      speaker: 'speaker.name',
       preset: 'preset',
     },
-    prepare({ conference, preset }) {
+    prepare({ conference, speaker, preset }) {
       return {
         title: `Dashboard: ${conference || 'Unknown'}`,
-        subtitle: preset || 'Default',
+        subtitle: speaker
+          ? `${speaker}${preset ? ` — ${preset}` : ''}`
+          : `Shared default${preset ? ` — ${preset}` : ''}`,
       }
     },
   },
