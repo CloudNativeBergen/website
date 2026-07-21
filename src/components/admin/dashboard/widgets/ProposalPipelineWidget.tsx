@@ -244,12 +244,11 @@ export function ProposalPipelineWidget({
                 {showPercentages && ' (100%)'}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-full rounded-full bg-gray-400 transition-all duration-500 dark:bg-gray-500"
-                style={{ width: '100%' }}
-              />
-            </div>
+            <ProgressBar
+              value={100}
+              color="bg-gray-400 dark:bg-gray-500"
+              label="Submitted proposals"
+            />
           </div>
 
           {/* Accepted */}
@@ -266,12 +265,11 @@ export function ProposalPipelineWidget({
                 {showPercentages && ` (${acceptedPercentage.toFixed(0)}%)`}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-full rounded-full bg-green-500 transition-all duration-500 dark:bg-green-400"
-                style={{ width: `${acceptedPercentage}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={acceptedPercentage}
+              color="bg-green-500 dark:bg-green-400"
+              label="Accepted proposals"
+            />
           </div>
 
           {/* Rejected */}
@@ -288,12 +286,11 @@ export function ProposalPipelineWidget({
                 {showPercentages && ` (${rejectedPercentage.toFixed(0)}%)`}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-full rounded-full bg-red-500 transition-all duration-500 dark:bg-red-400"
-                style={{ width: `${rejectedPercentage}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={rejectedPercentage}
+              color="bg-red-500 dark:bg-red-400"
+              label="Rejected proposals"
+            />
           </div>
 
           {/* Confirmed */}
@@ -310,12 +307,11 @@ export function ProposalPipelineWidget({
                 {showPercentages && ` (${confirmedPercentage.toFixed(0)}%)`}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-              <div
-                className="h-full rounded-full bg-blue-500 transition-all duration-500 dark:bg-blue-400"
-                style={{ width: `${confirmedPercentage}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={confirmedPercentage}
+              color="bg-blue-500 dark:bg-blue-400"
+              label="Confirmed proposals"
+            />
           </div>
         </div>
       </WidgetBody>

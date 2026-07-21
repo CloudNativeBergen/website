@@ -17,7 +17,9 @@ import {
   WidgetSkeleton,
   WidgetEmptyState,
   WidgetErrorState,
+  WidgetHeader,
   WidgetBody,
+  PhaseBadge,
 } from './shared'
 
 interface SpeakerEngagementConfig {
@@ -53,14 +55,10 @@ export function SpeakerEngagementWidget({
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Speaker Outreach
-          </h3>
-          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">
-            Early Stage
-          </span>
-        </div>
+        <WidgetHeader
+          title="Speaker Outreach"
+          badge={<PhaseBadge label="Early Stage" variant="purple" />}
+        />
 
         {/* Scrollable body; the "Manage speakers" link below stays pinned. */}
         <WidgetBody>
@@ -227,17 +225,12 @@ export function SpeakerEngagementWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-1.5 flex shrink-0 items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Speaker Engagement
-        </h3>
-        <Link
-          href="/admin/speakers"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          View all &rarr;
-        </Link>
-      </div>
+      {/* WidgetHeader uses the house mb-3 (this header used a tighter mb-1.5;
+          the flexible halves below absorb the 6px). */}
+      <WidgetHeader
+        title="Speaker Engagement"
+        link={{ href: '/admin/speakers', label: 'View all →' }}
+      />
 
       {/* Scrollable body. The two halves keep flex-1 (they split spare height
           when the slot is tall) but drop min-h-0 so they floor at their

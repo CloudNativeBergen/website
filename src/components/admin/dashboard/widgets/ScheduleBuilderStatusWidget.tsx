@@ -184,12 +184,11 @@ export function ScheduleBuilderStatusWidget({
                       {day.filled}/{day.total}
                     </span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div
-                      className="h-full bg-green-600 transition-all dark:bg-green-500"
-                      style={{ width: `${dayProgress}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={dayProgress}
+                    className="h-1.5"
+                    label={`${day.day} slots filled`}
+                  />
                 </div>
               )
             })}

@@ -550,6 +550,10 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
   },
   // NOTE: the revenue target has NO config knob here — it comes from the
   // canonical conference setting (sponsorRevenueGoal) via the fetch action.
+  // `showContractStatus` was removed: the widget never rendered contract
+  // status and the fetch action returns no such data, so the knob was a
+  // no-op. Stored configs still carrying the key are harmless — the zod
+  // parse strips unknown keys.
   configSchema: {
     fields: {
       showPipeline: {
@@ -559,17 +563,9 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
         defaultValue: true,
         schema: z.boolean(),
       },
-      showContractStatus: {
-        type: 'boolean',
-        label: 'Show Contract Status',
-        description: 'Display contract signing status',
-        defaultValue: true,
-        schema: z.boolean(),
-      },
     },
     schema: z.object({
       showPipeline: z.boolean(),
-      showContractStatus: z.boolean(),
     }),
   } satisfies WidgetConfigSchema,
 })

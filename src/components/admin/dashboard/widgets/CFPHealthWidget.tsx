@@ -256,15 +256,14 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          CFP Health
-        </h3>
-        <span className="text-[11px] text-gray-500 dark:text-gray-400">
-          {data.daysRemaining} days remaining
-        </span>
-      </div>
+      <WidgetHeader
+        title="CFP Health"
+        badge={
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            {data.daysRemaining} days remaining
+          </span>
+        }
+      />
 
       {/* Scrollable body: stats + trend + format distribution together can
           exceed short slots (the phase views above already scroll). */}

@@ -108,9 +108,7 @@ export function ReviewProgressWidget({
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-            No review data available
-          </div>
+          <WidgetEmptyState message="No review data available" />
         )}
       </div>
     )
