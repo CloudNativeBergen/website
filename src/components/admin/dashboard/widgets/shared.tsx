@@ -75,6 +75,43 @@ export function WidgetErrorState({
   )
 }
 
+/* ---------- Widget body (the height contract) ---------- */
+
+interface WidgetBodyProps {
+  /** Extra classes merged onto the scroll region (e.g. `flex flex-col`). */
+  className?: string
+  children: React.ReactNode
+}
+
+/**
+ * THE standard content region of a widget — and the house height contract.
+ *
+ * WidgetContainer clips (`overflow-hidden` + fixed grid height), so any
+ * variable-height widget content MUST live inside a WidgetBody: `min-h-0
+ * flex-1` lets it absorb whatever height the row span grants, and
+ * `overflow-y-auto` makes taller-than-slot content scroll instead of
+ * silently clipping. Fixed chrome (WidgetHeader, pinned footers) stays
+ * OUTSIDE as shrink-0 siblings; the widget root must be `flex h-full
+ * flex-col` for the flex-1 to bite.
+ *
+ * `overscroll-contain` stops a widget's inner scroll from chaining into the
+ * page scroll (same convention as ModalShell/BottomSheet). Scrollbars are the
+ * platform default, matching the widgets that already scrolled.
+ *
+ * Centering caveat: do NOT combine this with `justify-center` on the scroll
+ * region itself — centered overflow clips at the top unreachably. Center an
+ * inner wrapper with `m-auto` instead.
+ */
+export function WidgetBody({ className = '', children }: WidgetBodyProps) {
+  return (
+    <div
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
+
 /* ---------- Widget header ---------- */
 
 interface WidgetHeaderProps {

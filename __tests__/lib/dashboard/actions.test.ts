@@ -1140,6 +1140,43 @@ describe('Dashboard Server Actions', () => {
         expect(mockCreateOrReplace).not.toHaveBeenCalled()
       })
 
+      it('rejects spans outside the widget type’s registry constraints', async () => {
+        // quick-actions: minCols 3, maxCols 6, minRows 2, maxRows 4 — all of
+        // these pass the GENERIC bounds but violate the per-widget ones.
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 0, rowSpan: 2, colSpan: 2 },
+            }),
+          ]),
+        ).rejects.toThrow(/"quick-actions" colSpan must be between 3 and 6/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 0, rowSpan: 5, colSpan: 3 },
+            }),
+          ]),
+        ).rejects.toThrow(/"quick-actions" rowSpan must be between 2 and 4/)
+
+        await expect(
+          saveDashboardConfig([
+            validWidget({
+              position: { row: 0, col: 0, rowSpan: 2, colSpan: 7 },
+            }),
+          ]),
+        ).rejects.toThrow(/"quick-actions" colSpan must be between 3 and 6/)
+
+        expect(mockCreateOrReplace).not.toHaveBeenCalled()
+      })
+
+      it('accepts spans exactly at the widget type’s registry minima', async () => {
+        await saveDashboardConfig([
+          validWidget({ position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 } }),
+        ])
+        expect(mockCreateOrReplace).toHaveBeenCalledTimes(1)
+      })
+
       it('rejects more than 40 widgets', async () => {
         const widgets = Array.from({ length: 41 }, (_, i) =>
           validWidget({ id: `w${i}` }),

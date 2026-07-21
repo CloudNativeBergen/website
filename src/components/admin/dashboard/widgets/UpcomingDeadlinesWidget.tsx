@@ -12,6 +12,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
 } from './shared'
 
@@ -46,14 +47,21 @@ export function UpcomingDeadlinesWidget({
   config,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: initialization (planning card) and post-conference
+  // (completion card) are STATIC — they render no fetched data, so the
+  // fetcher is nulled for them (useWidgetData then never loads). This also
+  // stops those branches from masking fetch errors: in the remaining phases
+  // the order below is loading → error → data.
+  const isStaticPhase =
+    phase === 'initialization' || phase === 'post-conference'
   const {
     data: deadlines,
     loading,
     error,
     refetch,
   } = useWidgetData<DeadlineData[]>(
-    conference ? () => fetchDeadlines(conference) : null,
-    [conference],
+    conference && !isStaticPhase ? () => fetchDeadlines(conference) : null,
+    [conference, isStaticPhase],
   )
 
   // Phase-specific: Initialization without deadlines - Show planning timeline
@@ -119,7 +127,7 @@ export function UpcomingDeadlinesWidget({
         Upcoming Deadlines
       </h3>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+      <WidgetBody className="flex flex-col gap-1.5">
         {deadlines.slice(0, maxDeadlines).map((deadline) => {
           const urgency = getUrgency(deadline.daysRemaining)
           const urgencyClass = urgencyStyles[urgency]
@@ -163,7 +171,7 @@ export function UpcomingDeadlinesWidget({
             </div>
           )
         })}
-      </div>
+      </WidgetBody>
     </div>
   )
 }

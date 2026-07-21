@@ -49,14 +49,21 @@ export function RecentActivityFeedWidget({
   config,
 }: RecentActivityFeedWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: initialization renders a STATIC welcome card, so its
+  // fetcher is nulled (no skeleton, no masked fetch error). Post-conference
+  // KEEPS fetching — its completion card only applies when the fetched feed
+  // is actually empty, and a non-empty feed still renders below.
+  const isStaticPhase = phase === 'initialization'
   const {
     data: activities,
     loading,
     error,
     refetch,
   } = useWidgetData<ActivityItem[]>(
-    conference ? () => fetchRecentActivity(conference._id) : null,
-    [conference],
+    conference && !isStaticPhase
+      ? () => fetchRecentActivity(conference._id)
+      : null,
+    [conference, isStaticPhase],
   )
 
   // Phase-specific: Initialization - Show welcome message
@@ -75,7 +82,13 @@ export function RecentActivityFeedWidget({
     )
   }
 
-  // Phase-specific: Post-conference - Show completion message
+  // Loading and error come BEFORE the data-dependent post-conference branch:
+  // a failed fetch must surface as an error with retry, not be masked by a
+  // "Conference Complete" card it never verified.
+  if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
+
+  // Phase-specific: Post-conference with an empty feed - completion message
   if (phase === 'post-conference' && activities?.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-4">
@@ -91,8 +104,6 @@ export function RecentActivityFeedWidget({
     )
   }
 
-  if (loading) return <WidgetSkeleton />
-  if (error) return <WidgetErrorState onRetry={refetch} />
   if (!activities || activities.length === 0) {
     return <WidgetEmptyState message="No recent activity" />
   }

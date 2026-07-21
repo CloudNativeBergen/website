@@ -1294,6 +1294,24 @@ function validateDashboardWidgets(widgets: SerializedWidget[]): void {
       )
     }
 
+    // Per-widget minima/maxima from the registry, on top of the generic
+    // bounds above: a span outside the widget's own constraints can only come
+    // from a bypassed client (the UI clamps resizes and normalizes loads), so
+    // it is rejected like every other invalid payload rather than silently
+    // rewritten. `w.type` is known-valid here (checked above).
+    const { minCols, maxCols, minRows, maxRows } =
+      WIDGET_REGISTRY[w.type].constraints
+    if (!intInRange(rowSpan, minRows, maxRows)) {
+      throw new Error(
+        `Invalid dashboard config: "${w.type}" rowSpan must be between ${minRows} and ${maxRows}`,
+      )
+    }
+    if (!intInRange(colSpan, minCols, maxCols)) {
+      throw new Error(
+        `Invalid dashboard config: "${w.type}" colSpan must be between ${minCols} and ${maxCols}`,
+      )
+    }
+
     if (w.config !== undefined) {
       if (
         typeof w.config !== 'object' ||

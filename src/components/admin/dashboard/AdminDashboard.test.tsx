@@ -65,6 +65,16 @@ vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
   }) => (
     <div>
       <div data-testid="widget-count">{widgets.length}</div>
+      {widgets.map((w) => (
+        <div key={w.id} data-testid={`widget-span-${w.id}`}>
+          {w.position.colSpan}x{w.position.rowSpan}
+        </div>
+      ))}
+      {widgets.map((w) => (
+        <div key={`col-${w.id}`} data-testid={`widget-col-${w.id}`}>
+          {w.position.col}
+        </div>
+      ))}
       <button
         onClick={() =>
           onWidgetsChange(
@@ -213,6 +223,66 @@ describe('AdminDashboard persistence', () => {
 
     await advancePastDebounce()
     expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('clamps stored spans into registry min/max on load without echo-saving', async () => {
+    // Server-side save validation is generic-bounds only, and registry
+    // constraints tighten over time — a stored 1×1 sponsor-pipeline
+    // (minCols 5, minRows 4) must render at its minimum, not crushed.
+    vi.mocked(loadDashboardConfig).mockResolvedValue([
+      {
+        id: 'sponsor-pipeline-1',
+        type: 'sponsor-pipeline',
+        title: 'Sponsor Pipeline',
+        position: { row: 2, col: 1, rowSpan: 1, colSpan: 1 },
+        config: undefined,
+      },
+      {
+        // Unknown type: spans must pass through untouched (placeholder path)
+        id: 'retired-1',
+        type: 'retired-widget',
+        title: 'Retired',
+        position: { row: 0, col: 0, rowSpan: 1, colSpan: 1 },
+        config: undefined,
+      },
+    ])
+
+    renderDashboard()
+    await flushLoad()
+
+    expect(
+      screen.getByTestId('widget-span-sponsor-pipeline-1').textContent,
+    ).toBe('5x4')
+    expect(screen.getByTestId('widget-span-retired-1').textContent).toBe('1x1')
+
+    // Normalization is not a user edit — it must not be written back
+    await advancePastDebounce()
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('pulls a right-edge widget back into the grid when span clamping widens it', async () => {
+    // A stored 1×1 sponsor-pipeline at col 10 clamps UP to colSpan 5; without
+    // a col re-clamp it would span cols 10-14 on a 12-col grid.
+    vi.mocked(loadDashboardConfig).mockResolvedValue([
+      {
+        id: 'sponsor-pipeline-edge',
+        type: 'sponsor-pipeline',
+        title: 'Sponsor Pipeline',
+        position: { row: 0, col: 10, rowSpan: 1, colSpan: 1 },
+        config: undefined,
+      },
+    ])
+
+    renderDashboard()
+    await flushLoad()
+
+    expect(
+      screen.getByTestId('widget-span-sponsor-pipeline-edge').textContent,
+    ).toBe('5x4')
+    // col clamped from 10 to 12 - 5 = 7 so the widget stays inside the grid
+    expect(
+      screen.getByTestId('widget-col-sponsor-pipeline-edge').textContent,
+    ).toBe('7')
   })
 
   it('null load falls back to the default preset widgets', async () => {

@@ -146,13 +146,45 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         // empty grid — defaults apply only when NO config exists (null).
         if (saved) {
           setWidgets(
-            saved.map((w) => ({
-              id: w.id,
-              type: w.type,
-              title: w.title,
-              position: w.position,
-              config: w.config,
-            })),
+            saved.map((w) => {
+              // Normalize stored spans into the widget's registry min/max:
+              // server-side save validation is GENERIC-bounds only, and
+              // registry constraints tighten over time, so persisted layouts
+              // can hold spans below a widget's current minimum (which would
+              // render crushed). Row/col are preserved; unknown types pass
+              // through untouched for the "Widget not available" placeholder.
+              // The normalized layout is NOT echoed back to the server (the
+              // persist effect only fires on user edits).
+              const constraints = getWidgetMetadata(w.type)?.constraints
+              let position = w.position
+              if (constraints) {
+                const colSpan = Math.min(
+                  constraints.maxCols,
+                  Math.max(constraints.minCols, w.position.colSpan),
+                )
+                const rowSpan = Math.min(
+                  constraints.maxRows,
+                  Math.max(constraints.minRows, w.position.rowSpan),
+                )
+                // Clamping a span UP can push a right-edge widget past the
+                // grid (e.g. col 10 + minCols 5 on 12 cols): pull `col` back
+                // so the widget stays inside. colSpan ≤ maxCols ≤ grid cols,
+                // so the result is always ≥ 0.
+                const maxGridCols = GRID_CONFIG.breakpoints.desktop.cols
+                const col = Math.max(
+                  0,
+                  Math.min(w.position.col, maxGridCols - colSpan),
+                )
+                position = { ...w.position, col, colSpan, rowSpan }
+              }
+              return {
+                id: w.id,
+                type: w.type,
+                title: w.title,
+                position,
+                config: w.config,
+              }
+            }),
           )
         }
         setLoadStatus('loaded')

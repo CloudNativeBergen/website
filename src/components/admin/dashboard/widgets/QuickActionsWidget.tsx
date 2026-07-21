@@ -15,7 +15,12 @@ import { type QuickAction } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
-import { WidgetSkeleton, WidgetEmptyState, WidgetErrorState } from './shared'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetErrorState,
+  WidgetHeader,
+} from './shared'
 
 const iconMap = {
   ClipboardDocumentCheckIcon,
@@ -63,9 +68,7 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <h3 className="mb-2 text-xs font-semibold text-gray-900 dark:text-gray-100">
-        Quick Actions
-      </h3>
+      <WidgetHeader title="Quick Actions" />
       {/* Compact 3-column grid to show all 6 actions */}
       <div className="grid flex-1 auto-rows-fr grid-cols-3 gap-1.5 @[300px]:gap-2">
         {actions.map((action) => {
