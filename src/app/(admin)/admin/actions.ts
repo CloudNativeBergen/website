@@ -1213,7 +1213,13 @@ function personalDashboardConfigId(
   speakerId: string,
 ): string {
   const clean = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '-')
-  return `dashboardConfig-${clean(conferenceId)}-${clean(speakerId)}`
+  // The conference id's LENGTH is encoded into the id so the two source ids
+  // are unambiguously delimited: because ids may themselves contain "-", a
+  // bare separator would let distinct (conference, speaker) pairs collide
+  // (e.g. "a-b"/"c" vs "a"/"b-c"). With the length prefix the mapping is
+  // injective for any inputs the sanitizer leaves distinct.
+  const conf = clean(conferenceId)
+  return `dashboardConfig-${conf.length}-${conf}-${clean(speakerId)}`
 }
 
 // --- Server-side validation limits for saved layouts ---
@@ -1299,7 +1305,9 @@ function validateDashboardWidgets(widgets: SerializedWidget[]): void {
         )
       }
       const serialized = JSON.stringify(w.config)
-      if (serialized.length > MAX_CONFIG_JSON_BYTES) {
+      // Byte length, not string length: JS .length counts UTF-16 code units,
+      // which undercounts multibyte characters against a BYTE cap.
+      if (Buffer.byteLength(serialized, 'utf8') > MAX_CONFIG_JSON_BYTES) {
         throw new Error(
           `Invalid dashboard config: widget config exceeds ${MAX_CONFIG_JSON_BYTES} bytes when serialized`,
         )

@@ -914,7 +914,8 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('Dashboard Config Persistence', () => {
-    const PERSONAL_ID = 'dashboardConfig-conf-1-speaker-1'
+    // Length-prefixed ('conf-1'.length = 6) so ids containing '-' stay unambiguous.
+    const PERSONAL_ID = 'dashboardConfig-6-conf-1-speaker-1'
 
     const storedWidget = (overrides: Record<string, unknown> = {}) => ({
       _key: 'widget-0',
