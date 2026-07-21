@@ -22,7 +22,6 @@ import {
 } from './shared'
 
 interface TravelSupportConfig {
-  totalBudget?: number
   showPendingRequests?: boolean
   showBudgetUtilization?: boolean
 }
@@ -38,6 +37,22 @@ export function TravelSupportQueueWidget({
     conference ? () => fetchTravelSupport(conference) : null,
     [conference],
   )
+
+  // Loading and error come FIRST — phase branches must not mask fetch
+  // errors as setup cards or flash wrong content while loading.
+  if (loading) {
+    return <WidgetSkeleton />
+  }
+
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
+  }
+
+  // Fraction of budget used; null when no budget is configured (avoid NaN/∞)
+  const budgetUsed =
+    data && data.budgetAllocated > 0
+      ? (data.totalApproved / data.budgetAllocated) * 100
+      : null
 
   // Phase-specific: Initialization/Planning - Show setup guidance
   if (
@@ -83,8 +98,6 @@ export function TravelSupportQueueWidget({
 
   // Phase-specific: Post-conference - Show final summary
   if (phase === 'post-conference' && data) {
-    const budgetUsed = (data.totalApproved / data.budgetAllocated) * 100
-
     return (
       <div className="flex h-full flex-col">
         <WidgetHeader
@@ -108,7 +121,7 @@ export function TravelSupportQueueWidget({
               Budget Used
             </div>
             <div className="mt-1 text-3xl font-bold text-blue-900 dark:text-blue-100">
-              {budgetUsed.toFixed(0)}%
+              {budgetUsed !== null ? `${budgetUsed.toFixed(0)}%` : '—'}
             </div>
           </div>
 
@@ -117,7 +130,7 @@ export function TravelSupportQueueWidget({
               Speakers Supported
             </div>
             <div className="mt-1 text-3xl font-bold text-purple-900 dark:text-purple-100">
-              {data.requests.length}
+              {data.approvedCount}
             </div>
           </div>
 
@@ -126,10 +139,9 @@ export function TravelSupportQueueWidget({
               Avg per Speaker
             </div>
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
-              kr{' '}
-              {data.requests.length > 0
-                ? Math.round(data.totalApproved / data.requests.length)
-                : 0}
+              {data.approvedCount > 0
+                ? `kr ${formatNumber(Math.round(data.totalApproved / data.approvedCount))}`
+                : '—'}
             </div>
           </div>
         </div>
@@ -137,21 +149,11 @@ export function TravelSupportQueueWidget({
     )
   }
 
-  if (loading) {
-    return <WidgetSkeleton />
-  }
-
-  if (error) {
-    return <WidgetErrorState onRetry={refetch} />
-  }
-
   if (!data) {
     return <WidgetEmptyState message="No travel support data available" />
   }
 
   // Default operational view (execution phase)
-
-  const budgetUsed = (data.totalApproved / data.budgetAllocated) * 100
 
   return (
     <div className="flex h-full flex-col">
@@ -190,7 +192,7 @@ export function TravelSupportQueueWidget({
         </div>
       </div>
 
-      {(config?.showBudgetUtilization ?? true) && (
+      {(config?.showBudgetUtilization ?? true) && budgetUsed !== null && (
         <div className="mb-3">
           <div className="mb-1.5 flex items-center justify-between">
             <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">

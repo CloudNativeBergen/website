@@ -94,13 +94,13 @@ export function ProposalPipelineWidget({
             </div>
           </div>
 
-          {data?.total && data.total > 0 && (
+          {(data?.total ?? 0) > 0 && (
             <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
               <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
                 Early Submissions
               </div>
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                {data.total}
+                {data?.total}
               </div>
             </div>
           )}
@@ -153,7 +153,7 @@ export function ProposalPipelineWidget({
               Speakers
             </div>
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {data?.confirmed}
+              {data?.distinctSpeakers}
             </div>
           </div>
         </div>
@@ -170,6 +170,7 @@ export function ProposalPipelineWidget({
   const rejectedPercentage = (data.rejected / data.total) * 100
   const confirmedPercentage = (data.confirmed / data.total) * 100
   const showPercentages = config?.showPercentages ?? true
+  const targetAcceptanceRate = config?.targetAcceptanceRate ?? 30
 
   return (
     <div className="flex h-full flex-col">
@@ -203,6 +204,9 @@ export function ProposalPipelineWidget({
               </div>
               <div className="mt-1 text-3xl font-black text-green-900 @[400px]:text-4xl dark:text-green-100">
                 {data.acceptanceRate.toFixed(0)}%
+              </div>
+              <div className="mt-0.5 text-[10px] text-green-700 dark:text-green-300">
+                target {targetAcceptanceRate}%
               </div>
             </div>
             <CheckCircleIcon className="absolute -right-2 -bottom-2 h-16 w-16 text-green-300/40 @[400px]:h-20 @[400px]:w-20 dark:text-green-600/30" />

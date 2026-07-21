@@ -23,7 +23,12 @@ import { getConversationViewCounts } from '@/lib/messaging/sanity'
 import { getVolunteersByConference } from '@/lib/volunteer/sanity'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 import { getAuthSession } from '@/lib/auth'
-import { clientWrite } from '@/lib/sanity/client'
+import {
+  clientWrite,
+  clientReadUncached as clientRead,
+} from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
+import type { ProposalExisting } from '@/lib/proposal/types'
 import {
   formatRelativeTime,
   formatLabel,
@@ -35,7 +40,7 @@ import type {
   ActivityItem,
   CFPHealthData,
   SpeakerEngagementData,
-  TicketSalesData,
+  TicketSalesResult,
   ProposalPipelineData,
   ReviewProgressData,
   TravelSupportData,
@@ -433,14 +438,13 @@ export async function fetchSpeakerEngagement(
     }
   }
 
-  // Returning speakers have proposals in other conferences
-  const returningCount = speakers.length - firstTimeCount
-
+  // NOTE: we intentionally do NOT derive a "returning speakers" number.
+  // `total - firstTimeFlagged` would mislabel every untagged speaker as
+  // returning; only the explicit first-time flag is a trustworthy signal.
   return {
     totalSpeakers: speakers.length,
     featuredCount: featured?.length || 0,
     newSpeakers: firstTimeCount,
-    returningSpeakers: returningCount,
     diverseSpeakers: diverseCount,
     localSpeakers: localCount,
     awaitingConfirmation,
@@ -455,11 +459,11 @@ export async function fetchSpeakerEngagement(
 
 export async function fetchTicketSales(
   conference: Conference,
-): Promise<TicketSalesData | null> {
+): Promise<TicketSalesResult> {
   await requireOrganizer()
 
   if (!conference.checkinCustomerId || !conference.checkinEventId) {
-    return null
+    return { status: 'unconfigured' }
   }
 
   try {
@@ -472,26 +476,29 @@ export async function fetchTicketSales(
 
     if (!tickets || tickets.length === 0) {
       return {
-        currentSales: 0,
-        capacity,
-        percentage: 0,
-        revenue: 0,
-        salesByDate: [],
-        milestones: [
-          {
-            name: 'Early Bird',
-            target: Math.round(capacity * 0.2),
-            reached: false,
-          },
-          {
-            name: 'Break Even',
-            target: Math.round(capacity * 0.5),
-            reached: false,
-          },
-          { name: 'Sell Out', target: capacity, reached: false },
-        ],
-        daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
-        salesVelocity: 0,
+        status: 'ok',
+        data: {
+          currentSales: 0,
+          capacity,
+          percentage: 0,
+          revenue: 0,
+          salesByDate: [],
+          milestones: [
+            {
+              name: 'Early Bird',
+              target: Math.round(capacity * 0.2),
+              reached: false,
+            },
+            {
+              name: 'Break Even',
+              target: Math.round(capacity * 0.5),
+              reached: false,
+            },
+            { name: 'Sell Out', target: capacity, reached: false },
+          ],
+          daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
+          salesVelocity: 0,
+        },
       }
     }
 
@@ -534,59 +541,78 @@ export async function fetchTicketSales(
         : 0
 
     return {
-      currentSales: stats.totalPaidTickets,
-      capacity,
-      percentage:
-        capacity > 0
-          ? Math.round((stats.totalPaidTickets / capacity) * 1000) / 10
-          : 0,
-      revenue: stats.totalRevenue,
-      salesByDate,
-      milestones: [
-        {
-          name: 'Early Bird',
-          target: Math.round(capacity * 0.2),
-          reached: stats.totalPaidTickets >= Math.round(capacity * 0.2),
-        },
-        {
-          name: 'Break Even',
-          target: Math.round(capacity * 0.5),
-          reached: stats.totalPaidTickets >= Math.round(capacity * 0.5),
-        },
-        {
-          name: 'Sell Out',
-          target: capacity,
-          reached: stats.totalPaidTickets >= capacity,
-        },
-      ],
-      daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
-      salesVelocity,
+      status: 'ok',
+      data: {
+        currentSales: stats.totalPaidTickets,
+        capacity,
+        percentage:
+          capacity > 0
+            ? Math.round((stats.totalPaidTickets / capacity) * 1000) / 10
+            : 0,
+        revenue: stats.totalRevenue,
+        salesByDate,
+        milestones: [
+          {
+            name: 'Early Bird',
+            target: Math.round(capacity * 0.2),
+            reached: stats.totalPaidTickets >= Math.round(capacity * 0.2),
+          },
+          {
+            name: 'Break Even',
+            target: Math.round(capacity * 0.5),
+            reached: stats.totalPaidTickets >= Math.round(capacity * 0.5),
+          },
+          {
+            name: 'Sell Out',
+            target: capacity,
+            reached: stats.totalPaidTickets >= capacity,
+          },
+        ],
+        daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
+        salesVelocity,
+      },
     }
-  } catch {
-    return null
+  } catch (error) {
+    console.error('Failed to fetch ticket sales:', error)
+    return { status: 'error' }
   }
 }
 
 // --- Recent Activity ---
+
+const RECENT_ACTIVITY_LIMIT = 15
+const RECENT_PROPOSALS_LIMIT = 5
+
+interface RecentProposalRow {
+  _id: string
+  title: string
+  _createdAt: string
+  speakers?: { name?: string }[]
+}
 
 export async function fetchRecentActivity(
   conferenceId: string,
 ): Promise<ActivityItem[]> {
   await requireOrganizer()
 
-  const [activityResult, proposalResult] = await Promise.all([
-    listActivitiesForConference(conferenceId, 15),
-    getProposals({ conferenceId, returnAll: true }),
+  // Both sources are ordered + limited in GROQ — we never pull the full
+  // proposal corpus just to slice the newest few afterwards.
+  const [activityResult, recentProposals] = await Promise.all([
+    listActivitiesForConference(conferenceId, RECENT_ACTIVITY_LIMIT),
+    clientRead.fetch<RecentProposalRow[]>(
+      groq`*[_type == "talk" && conference._ref == $conferenceId && status != "${Status.draft}"]
+        | order(_createdAt desc)[0...${RECENT_PROPOSALS_LIMIT}]{
+        _id, title, _createdAt,
+        speakers[]-> { name }
+      }`,
+      { conferenceId },
+      { cache: 'no-store' },
+    ),
   ])
 
   if (activityResult.error) {
     throw new Error(
       `Failed to fetch activities: ${activityResult.error.message}`,
-    )
-  }
-  if (proposalResult.proposalsError) {
-    throw new Error(
-      `Failed to fetch proposals: ${proposalResult.proposalsError.message}`,
     )
   }
 
@@ -607,22 +633,12 @@ export async function fetchRecentActivity(
     })
   }
 
-  const proposals = proposalResult.proposals || []
-  const recentProposals = [...proposals]
-    .sort(
-      (a, b) =>
-        new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime(),
-    )
-    .slice(0, 5)
-
-  for (const p of recentProposals) {
+  for (const p of recentProposals || []) {
     items.push({
       id: `proposal-${p._id}`,
       type: 'proposal',
       description: `New proposal: \u201C${p.title}\u201D`,
-      user:
-        (p.speakers as Array<{ name?: string }>)?.[0]?.name ||
-        'Unknown Speaker',
+      user: p.speakers?.[0]?.name || 'Unknown Speaker',
       timestamp: formatRelativeTime(p._createdAt),
       link: `/admin/proposals/${p._id}`,
       _sortDate: p._createdAt,
@@ -635,7 +651,7 @@ export async function fetchRecentActivity(
       (a, b) =>
         new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime(),
     )
-    .slice(0, 15)
+    .slice(0, RECENT_ACTIVITY_LIMIT)
     .map((item): ActivityItem => ({
       id: item.id,
       type: item.type,
@@ -907,6 +923,17 @@ export async function fetchProposalPipeline(
     (p) => p.status === Status.submitted,
   ).length
 
+  // Distinct speakers across confirmed talks (co-speakers deduped).
+  const speakerIds = new Set<string>()
+  for (const p of nonDraft) {
+    if (p.status !== Status.confirmed) continue
+    for (const speaker of p.speakers || []) {
+      const s = speaker as { _id?: string; _ref?: string }
+      const id = s._id ?? s._ref
+      if (id) speakerIds.add(id)
+    }
+  }
+
   return {
     submitted,
     accepted,
@@ -916,32 +943,42 @@ export async function fetchProposalPipeline(
     acceptanceRate:
       submitted > 0 ? ((accepted + confirmed) / submitted) * 100 : 0,
     pendingDecisions,
+    distinctSpeakers: speakerIds.size,
   }
 }
 
 // --- Review Progress ---
+
+interface ReviewProgressRow {
+  _id: string
+  title: string
+  status: Status
+  reviews?: {
+    score?: { content: number; relevance: number; speaker: number }
+  }[]
+}
 
 export async function fetchReviewProgress(
   conferenceId: string,
 ): Promise<ReviewProgressData> {
   await requireOrganizer()
 
-  const { proposals, proposalsError } = await getProposals({
-    conferenceId,
-    returnAll: true,
-    includeReviews: true,
-  })
+  // Trimmed projection: the math only needs status + review scores — no
+  // speaker/reviewer joins, topics, or co-speaker invitations.
+  const nonDraft = await clientRead.fetch<ReviewProgressRow[]>(
+    groq`*[_type == "talk" && conference._ref == $conferenceId && status != "${Status.draft}"]
+      | order(_updatedAt desc){
+      _id, title, status,
+      "reviews": *[_type == "review" && proposal._ref == ^._id]{ score }
+    }`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
 
-  if (proposalsError) {
-    throw new Error(`Failed to fetch proposals: ${proposalsError.message}`)
-  }
-
-  const allProposals = proposals || []
-  const nonDraft = allProposals.filter((p) => p.status !== Status.draft)
   const reviewed = nonDraft.filter((p) => p.reviews && p.reviews.length > 0)
 
   const totalScores = reviewed.reduce(
-    (sum, p) => sum + calculateAverageRating(p),
+    (sum, p) => sum + calculateAverageRating(p as unknown as ProposalExisting),
     0,
   )
   const averageScore =
@@ -1002,6 +1039,7 @@ export async function fetchTravelSupport(
 
   return {
     pendingApprovals: pending.length,
+    approvedCount: approved.length,
     totalRequested,
     totalApproved,
     budgetAllocated,
