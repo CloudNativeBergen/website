@@ -34,6 +34,13 @@
 const CACHE_VERSION = 'cndn-dev'
 const PRECACHE = `${CACHE_VERSION}-precache`
 const RUNTIME = `${CACHE_VERSION}-runtime`
+// UNVERSIONED cache holding the pending notification-click intent for the iOS
+// cold-open handoff (see notificationclick). It must PERSIST across worker
+// versions — the active worker writes it at click time and a freshly launched
+// client reads it after a deploy may have activated a new worker — so it is
+// never version-stamped and is listed in EXPECTED_CACHES below so the activate
+// cleanup does not delete it.
+const PENDING_NAV_CACHE = 'cndn-pending-nav'
 
 // The offline shell: the fallback page plus committed static PWA icons. We do
 // NOT precache `/` or any HTML document other than `/offline`.
@@ -51,7 +58,7 @@ const PRECACHE_URLS = [
 
 // The set of cache names this worker version is allowed to keep. Any cache not
 // in this list is deleted on activate (cleans up caches from older versions).
-const EXPECTED_CACHES = [PRECACHE, RUNTIME]
+const EXPECTED_CACHES = [PRECACHE, RUNTIME, PENDING_NAV_CACHE]
 
 // --- Request classification (mirror of request-classification.ts) ----------
 
@@ -320,6 +327,30 @@ self.addEventListener('notificationclick', (event) => {
         openUrl = withParam.href
       } catch (e) {
         openUrl = targetUrl
+      }
+
+      // iOS PWA handoff: iOS launches the installed app at its start_url and
+      // IGNORES the SW's openWindow()/WindowClient.navigate() calls, so neither
+      // the deep-link navigation nor the `markread` param below ever reaches the
+      // window on iOS (cold OR warm). To survive that, stash the click intent in
+      // the Cache API under a fixed synthetic key BEFORE opening any window; the
+      // freshly-launched client (NotificationClickSync) reads it on boot, then
+      // navigates + marks read itself. Awaited so the write is durable before we
+      // hand off to the (Android-honoured) openWindow. Feature-detected and fully
+      // guarded so it can never throw on platforms without Cache Storage.
+      if (self.caches) {
+        try {
+          const cache = await self.caches.open(PENDING_NAV_CACHE)
+          await cache.put(
+            new Request('/__cndn_pending_notification'),
+            new Response(JSON.stringify({ link: target, ts: Date.now() }), {
+              headers: { 'content-type': 'application/json' },
+            }),
+          )
+        } catch (e) {
+          // Cache write failed (private mode / quota); Android still works via
+          // the openWindow markread param below.
+        }
       }
 
       // Focus an existing tab already on the target URL if there is one (it was

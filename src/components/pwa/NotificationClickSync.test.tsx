@@ -2,20 +2,26 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, waitFor } from '@testing-library/react'
 import type { Session } from 'next-auth'
 
 let mockSession: Session | null = null
+// Overridable so a test can simulate the iOS cold-open race where the session
+// is still `loading` (data null) on first render before the cookie-backed
+// session resolves.
+let mockStatus: 'authenticated' | 'loading' | 'unauthenticated' | null = null
 vi.mock('next-auth/react', () => ({
   useSession: () => ({
     data: mockSession,
-    status: mockSession ? 'authenticated' : 'unauthenticated',
+    status: mockStatus ?? (mockSession ? 'authenticated' : 'unauthenticated'),
   }),
 }))
 
 let mockPathname = '/'
+const routerPush = vi.fn()
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ push: routerPush }),
 }))
 
 const markReadMutate = vi.fn()
@@ -53,6 +59,37 @@ function postFromSW(data: unknown) {
   ;(navigator.serviceWorker as unknown as EventTarget).dispatchEvent(event)
 }
 
+// --- Fake Cache Storage for the pending-nav handoff -------------------------
+
+const PENDING_NAV_KEY = '/__cndn_pending_notification'
+
+/** Body JSON keyed by request key; models a single `cndn-pending-nav` cache. */
+let pendingStore = new Map<string, string>()
+const cacheDelete = vi.fn(async (key: string) => pendingStore.delete(key))
+
+/** Install a minimal Cache Storage shim on the global. */
+function installCaches() {
+  const cache = {
+    match: async (key: string) => {
+      const body = pendingStore.get(key)
+      if (body === undefined) return undefined
+      return { json: async () => JSON.parse(body) }
+    },
+    delete: cacheDelete,
+    put: async () => undefined,
+  }
+  Object.defineProperty(globalThis, 'caches', {
+    value: { open: async () => cache },
+    configurable: true,
+    writable: true,
+  })
+}
+
+/** Seed a pending-nav entry as the SW would have written it. */
+function seedPendingNav(link: string, ts: number) {
+  pendingStore.set(PENDING_NAV_KEY, JSON.stringify({ link, ts }))
+}
+
 function signedIn(): Session {
   return {
     expires: new Date(Date.now() + 60_000).toISOString(),
@@ -64,8 +101,11 @@ function signedIn(): Session {
 beforeEach(() => {
   vi.clearAllMocks()
   mockSession = signedIn()
+  mockStatus = null
   mockPathname = '/'
+  pendingStore = new Map<string, string>()
   installServiceWorker()
+  installCaches()
   window.history.replaceState(null, '', '/')
 })
 
@@ -93,11 +133,22 @@ describe('NotificationClickSync', () => {
     expect(markReadMutate).not.toHaveBeenCalled()
   })
 
-  it('does not register / fire when signed out', () => {
+  it('does not mark read on a warm click when definitively signed out', () => {
     mockSession = null
+    mockStatus = 'unauthenticated'
     render(<NotificationClickSync />)
     postFromSW({ type: 'notification-click', url: '/cfp/proposal/1' })
     expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('marks read on a warm click while the session is still loading', () => {
+    // Cookie-authed server-side, so a `loading` client must still mark read
+    // (mirrors the iOS cold-open race).
+    mockSession = null
+    mockStatus = 'loading'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/1' })
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/1'] })
   })
 
   // --- Cold-open mark-read via the `markread` query param (N1) --------------
@@ -151,5 +202,125 @@ describe('NotificationClickSync', () => {
     // The param must be stripped even when signed out, so it can't linger and
     // re-fire on a later authenticated reload/share.
     expect(window.location.search).not.toContain('markread')
+  })
+
+  // --- Warm navigation via the notification-click postMessage ---------------
+
+  it('navigates and clears the pending-nav cache on a warm notification-click', async () => {
+    mockPathname = '/'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+    // Marks read AND drives the deep-link navigation itself (iOS ignores the
+    // SW's own navigate()).
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/2'] })
+    expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/2')
+    // The warm tab handled it, so the cold-open handoff must be cleared.
+    await waitFor(() =>
+      expect(cacheDelete).toHaveBeenCalledWith(PENDING_NAV_KEY),
+    )
+  })
+
+  it('does not navigate on a warm click already on the target page', () => {
+    mockPathname = '/cfp/proposal/2'
+    render(<NotificationClickSync />)
+    postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/2'] })
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('a BACKGROUND tab marks read but does NOT navigate or clear the handoff', () => {
+    // The SW broadcasts to every window; a background tab must not hijack-
+    // navigate nor delete the cold-open handoff (the launched window needs it).
+    const restore = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'visibilityState',
+    )
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    })
+    try {
+      mockPathname = '/'
+      render(<NotificationClickSync />)
+      postFromSW({ type: 'notification-click', url: '/cfp/proposal/2' })
+      expect(markReadMutate).toHaveBeenCalledWith({
+        links: ['/cfp/proposal/2'],
+      })
+      expect(routerPush).not.toHaveBeenCalled()
+      expect(cacheDelete).not.toHaveBeenCalled()
+    } finally {
+      if (restore) Object.defineProperty(document, 'visibilityState', restore)
+    }
+  })
+
+  // --- Cold-open consumer of the Cache-API pending-nav handoff ---------------
+
+  it('consumes a fresh pending entry on mount: navigates, marks read, deletes it', async () => {
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/9'),
+    )
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+  })
+
+  it('deletes a stale pending entry without navigating', async () => {
+    mockPathname = '/'
+    // Older than the 5-minute freshness window.
+    seedPendingNav('/cfp/proposal/9', Date.now() - 6 * 60 * 1000)
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('marks read but does not navigate when the pending entry is the current page', async () => {
+    mockPathname = '/cfp/proposal/9'
+    window.history.replaceState(null, '', '/cfp/proposal/9')
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    // Redundant navigation is suppressed, but the notification must STILL be
+    // marked read (the user is looking at the resource).
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('clears a pending entry when signed out but fires no mutation', async () => {
+    mockSession = null
+    mockStatus = 'unauthenticated'
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('still marks read on cold open while the session is loading (iOS race)', async () => {
+    // The deep-link page seeded `undefined` (auth() read falsy under
+    // cacheComponents), so useSession is `loading`/null on first render even
+    // though the request carries a valid auth cookie. The mark-read must still
+    // fire — the mutation authenticates via the cookie server-side.
+    mockSession = null
+    mockStatus = 'loading'
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/9'),
+    )
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+  })
+
+  it('does not navigate for a non-app-relative pending link, but deletes it', async () => {
+    mockPathname = '/'
+    seedPendingNav('https://evil.com', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(markReadMutate).not.toHaveBeenCalled()
   })
 })
