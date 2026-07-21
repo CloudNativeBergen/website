@@ -168,8 +168,7 @@ export function DashboardGrid({
   const announcements = useMemo<Announcements>(() => {
     const find = (id: string | number) =>
       widgets.find((w) => w.id === String(id))
-    const at = (row: number, col: number) =>
-      `row ${row + 1}, column ${col + 1}`
+    const at = (row: number, col: number) => `row ${row + 1}, column ${col + 1}`
 
     return {
       onDragStart({ active }) {
