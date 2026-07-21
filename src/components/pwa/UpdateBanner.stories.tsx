@@ -25,3 +25,14 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
+
+/**
+ * In-progress state after the user clicks Reload: the leading icon and the
+ * Reload button spin, the copy switches to "Installing…", and both actions are
+ * disabled while the waiting worker activates and the page reloads.
+ */
+export const Updating: Story = {
+  args: {
+    pending: true,
+  },
+}

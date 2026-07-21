@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import {
+  act,
   render,
   screen,
   fireEvent,
@@ -115,7 +116,7 @@ describe('ServiceWorkerRegistrar', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('posts SKIP_WAITING to the waiting worker when Reload is clicked', async () => {
+  it('posts SKIP_WAITING and enters the pending state when Reload is clicked', async () => {
     const registration = await renderAndRegister()
 
     container.controller = {}
@@ -130,6 +131,140 @@ describe('ServiceWorkerRegistrar', () => {
     expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
     // Clicking Reload must NOT itself reload — the controllerchange does.
     expect(reloadMock).not.toHaveBeenCalled()
+
+    // The banner now shows in-progress feedback: the action becomes a disabled
+    // "Updating…" control so the user can tell the swap is underway.
+    const updatingButton = screen.getByRole('button', { name: /updating/i })
+    expect(updatingButton).toBeDisabled()
+    expect(updatingButton).toHaveAttribute('aria-busy', 'true')
+    expect(
+      screen.getByRole('button', { name: 'Dismiss update prompt' }),
+    ).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Reload' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('ignores a second Reload click while the swap is already in progress', async () => {
+    const registration = await renderAndRegister()
+
+    container.controller = {}
+    const worker = new FakeWorker()
+    registration.installing = worker
+    registration.dispatch('updatefound')
+    worker.setState('installed')
+
+    await screen.findByRole('status', { name: 'Update available' })
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    expect(worker.postMessage).toHaveBeenCalledTimes(1)
+
+    // The action is now the disabled "Updating…" control; clicking it again must
+    // not post SKIP_WAITING (nor arm a second fallback) a second time.
+    fireEvent.click(screen.getByRole('button', { name: /updating/i }))
+    expect(worker.postMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-arms the banner when a reload is canceled (beforeunload) instead of hanging', async () => {
+    vi.useFakeTimers()
+    try {
+      const registration = container.registration
+      render(<ServiceWorkerRegistrar />)
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      act(() => {
+        container.controller = {}
+        const worker = new FakeWorker()
+        registration.installing = worker
+        registration.dispatch('updatefound')
+        worker.setState('installed')
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+      // controllerchange calls reload(); the mock does NOT navigate, standing in
+      // for a beforeunload prompt (e.g. unsaved schedule edits) the user cancels.
+      act(() => container.dispatch('controllerchange'))
+      expect(reloadMock).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: /updating/i })).toBeDisabled()
+
+      // After the recovery delay the banner returns to its actionable state
+      // rather than hanging on a dead spinner.
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(screen.getByRole('button', { name: 'Reload' })).toBeEnabled()
+      expect(
+        screen.queryByRole('button', { name: /updating/i }),
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fallback timeout forces a reload when controllerchange never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const registration = container.registration
+      render(<ServiceWorkerRegistrar />)
+      // Flush the async register() promise + effects (microtasks aren't faked).
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(container.register).toHaveBeenCalledTimes(1)
+
+      act(() => {
+        container.controller = {}
+        const worker = new FakeWorker()
+        registration.installing = worker
+        registration.dispatch('updatefound')
+        worker.setState('installed')
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+      // controllerchange never arrives — the ~4s fallback must reload anyway.
+      expect(reloadMock).not.toHaveBeenCalled()
+
+      act(() => {
+        vi.advanceTimersByTime(4000)
+      })
+
+      expect(reloadMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reloads exactly once when both controllerchange and the fallback would fire', async () => {
+    vi.useFakeTimers()
+    try {
+      const registration = container.registration
+      render(<ServiceWorkerRegistrar />)
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      act(() => {
+        container.controller = {}
+        const worker = new FakeWorker()
+        registration.installing = worker
+        registration.dispatch('updatefound')
+        worker.setState('installed')
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+
+      // controllerchange fires first and reloads...
+      act(() => container.dispatch('controllerchange'))
+      // ...so advancing past the fallback window must NOT reload a second time.
+      act(() => {
+        vi.advanceTimersByTime(4000)
+      })
+
+      expect(reloadMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reloads exactly once on controllerchange AFTER the user accepts (guard prevents a second)', async () => {

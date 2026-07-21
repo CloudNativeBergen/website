@@ -8,6 +8,13 @@ export interface UpdateBannerProps {
   onReload: () => void
   /** Invoked by the dismiss control (keeps the current version for now). */
   onDismiss: () => void
+  /**
+   * When true the swap is in progress: the leading icon and the Reload button
+   * spin, the copy switches to "Installing…", and BOTH actions are disabled
+   * (you cannot cancel an activation mid-flight). The parent container owns this
+   * flag — the banner itself has no service-worker logic.
+   */
+  pending?: boolean
 }
 
 /**
@@ -20,7 +27,11 @@ export interface UpdateBannerProps {
  * `transition` utilities. The `motion-reduce:` variant disables the transform
  * and transition entirely for users who prefer reduced motion.
  */
-export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
+export function UpdateBanner({
+  onReload,
+  onDismiss,
+  pending = false,
+}: UpdateBannerProps) {
   const [entered, setEntered] = useState(false)
 
   useEffect(() => {
@@ -37,6 +48,7 @@ export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
       // stealing focus. It also sits BELOW open dialogs (shell family is z-50).
       role="status"
       aria-live="polite"
+      aria-busy={pending}
       aria-label="Update available"
       className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
     >
@@ -46,26 +58,44 @@ export function UpdateBanner({ onReload, onDismiss }: UpdateBannerProps) {
         }`}
       >
         <div className="flex size-10 flex-none items-center justify-center rounded-xl bg-brand-cloud-blue/10 text-brand-cloud-blue dark:bg-brand-cloud-blue/20">
-          <ArrowPathIcon className="size-5" />
+          <ArrowPathIcon
+            className={`size-5 ${
+              pending ? 'animate-spin motion-reduce:animate-none' : ''
+            }`}
+          />
         </div>
 
         <div className="flex-1 text-sm text-gray-700 dark:text-gray-200">
-          <span>A new version is available.</span>
+          <span>
+            {pending
+              ? 'Installing the new version…'
+              : 'A new version is available.'}
+          </span>
         </div>
 
         <button
           type="button"
           onClick={onReload}
-          className="flex min-h-11 flex-none items-center justify-center rounded-lg bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue"
+          disabled={pending}
+          aria-busy={pending}
+          className="flex min-h-11 flex-none items-center justify-center gap-1.5 rounded-lg bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-default disabled:opacity-90 disabled:hover:bg-brand-cloud-blue"
         >
-          Reload
+          {pending ? (
+            <>
+              <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" />
+              <span>Updating…</span>
+            </>
+          ) : (
+            <span>Reload</span>
+          )}
         </button>
 
         <button
           type="button"
           onClick={onDismiss}
+          disabled={pending}
           aria-label="Dismiss update prompt"
-          className="flex min-h-11 min-w-11 flex-none items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-700 dark:hover:text-gray-200"
+          className="flex min-h-11 min-w-11 flex-none items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:pointer-events-none disabled:opacity-40 dark:hover:bg-gray-700 dark:hover:text-gray-200"
         >
           <XMarkIcon className="size-5" />
         </button>
