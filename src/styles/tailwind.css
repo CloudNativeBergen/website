@@ -16,9 +16,17 @@
  * iOS Safari (and installed PWAs) auto-zoom the viewport when a focused
  * input/textarea/select has a font-size < 16px, and the zoom sticks — which
  * breaks the "native app" feel and clips content off the right edge. Many
- * controls in this app use Tailwind `text-sm` (14px), so we force >=16px on
- * touch / coarse-pointer devices only, leaving desktop (`text-sm`, etc.)
- * untouched.
+ * controls in this app use Tailwind `text-sm` (14px), so we pin the font-size
+ * to 16px on touch-capable devices only, leaving desktop (`text-sm`, etc.)
+ * untouched. No form control in the app is intentionally larger than 16px, so
+ * pinning to exactly 16px never shrinks anything; revisit if a >16px input is
+ * ever added.
+ *
+ * `any-pointer: coarse` (not `pointer: coarse`) is deliberate: an iPad with a
+ * Magic Keyboard trackpad reports its PRIMARY pointer as `fine`, so
+ * `pointer: coarse` would miss it — yet iPadOS Safari still auto-zooms. Matching
+ * when ANY available pointer is coarse covers touch-capable devices even when a
+ * fine pointer is primary (a touch laptop harmlessly gets 16px controls too).
  *
  * This block is deliberately UNLAYERED (outside any @layer). Tailwind 4 puts
  * its utilities in the `utilities` cascade layer, and unlayered CSS always
@@ -27,7 +35,7 @@
  * rule still overrides it. Placing it in `@layer base` would LOSE to `text-sm`
  * and the zoom would persist.
  */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
       [type='color']
     ),
