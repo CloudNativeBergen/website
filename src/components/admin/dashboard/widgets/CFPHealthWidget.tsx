@@ -19,6 +19,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
 } from './shared'
 
@@ -261,153 +262,157 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
         </span>
       </div>
 
-      {/* Main Stats - Gradient cards */}
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        {/* Total */}
-        <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
-          <div className="relative z-10">
-            <div className="text-[10px] font-medium tracking-wide text-blue-700 uppercase dark:text-blue-400">
-              Total
+      {/* Scrollable body: stats + trend + format distribution together can
+          exceed short slots (the phase views above already scroll). */}
+      <WidgetBody className="flex flex-col">
+        {/* Main Stats - Gradient cards */}
+        <div className="mb-3 grid shrink-0 grid-cols-3 gap-2">
+          {/* Total */}
+          <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-blue-700 uppercase dark:text-blue-400">
+                Total
+              </div>
+              <div className="mt-1 text-3xl font-black text-blue-900 dark:text-blue-100">
+                {data.totalSubmissions}
+              </div>
+              <div className="text-[10px] text-blue-600 dark:text-blue-300">
+                of {effectiveGoal} goal
+              </div>
             </div>
-            <div className="mt-1 text-3xl font-black text-blue-900 dark:text-blue-100">
-              {data.totalSubmissions}
-            </div>
-            <div className="text-[10px] text-blue-600 dark:text-blue-300">
-              of {effectiveGoal} goal
-            </div>
+            <DocumentTextIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-blue-300/40 dark:text-blue-600/30" />
           </div>
-          <DocumentTextIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-blue-300/40 dark:text-blue-600/30" />
-        </div>
 
-        {/* Progress */}
-        <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-2.5 dark:from-green-900/40 dark:to-emerald-800/40">
-          <div className="relative z-10">
-            <div className="text-[10px] font-medium tracking-wide text-green-700 uppercase dark:text-green-400">
-              Progress
-            </div>
-            <div className="mt-1 text-3xl font-black text-green-900 dark:text-green-100">
-              {progress.toFixed(0)}%
-            </div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-green-300/50 dark:bg-green-900/50">
-              <div
-                className="h-full bg-green-600 transition-all duration-500 dark:bg-green-400"
-                style={{ width: `${Math.min(progress, 100)}%` }}
-              />
-            </div>
-          </div>
-          <ChartBarIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-green-300/40 dark:text-green-600/30" />
-        </div>
-
-        {/* Avg/Day */}
-        <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-2.5 dark:from-purple-900/40 dark:to-pink-800/40">
-          <div className="relative z-10">
-            <div className="text-[10px] font-medium tracking-wide text-purple-700 uppercase dark:text-purple-400">
-              Avg/Day
-            </div>
-            <div className="mt-1 text-3xl font-black text-purple-900 dark:text-purple-100">
-              {data.averagePerDay.toFixed(1)}
-            </div>
-          </div>
-          <ClockIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-purple-300/40 dark:text-purple-600/30" />
-        </div>
-      </div>
-
-      {/* Minimal chart - Sparkline style */}
-      {showTrend && data.submissionsPerDay.length > 0 && (
-        <div className="mb-2">
-          <h4 className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-            Submissions Trend
-          </h4>
-          <div className="flex items-end gap-1">
-            {data.submissionsPerDay.map((day, index) => {
-              const height = (day.count / maxSubmissions) * 100
-              const date = new Date(day.date + 'T00:00:00Z')
-              const dateLabel = date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                timeZone: 'UTC',
-              })
-              return (
+          {/* Progress */}
+          <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-2.5 dark:from-green-900/40 dark:to-emerald-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-green-700 uppercase dark:text-green-400">
+                Progress
+              </div>
+              <div className="mt-1 text-3xl font-black text-green-900 dark:text-green-100">
+                {progress.toFixed(0)}%
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-green-300/50 dark:bg-green-900/50">
                 <div
-                  key={index}
-                  className="flex min-w-0 flex-1 flex-col items-center"
-                  style={{ maxWidth: '4rem' }}
-                >
-                  <span className="mb-0.5 text-[9px] font-semibold text-gray-600 dark:text-gray-400">
-                    {day.count}
-                  </span>
-                  <div className="flex h-8 w-full items-end">
-                    <div
-                      className="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-600 dark:bg-blue-400 dark:hover:bg-blue-300"
-                      style={{ height: `${height}%`, minHeight: '4px' }}
-                    />
-                  </div>
-                  <span className="mt-0.5 text-[8px] leading-tight text-gray-400 dark:text-gray-500">
-                    {dateLabel}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Format Distribution - Compact stacked bar + legend */}
-      {showFormatBreakdown && data.formatDistribution.length > 0 && (
-        <div className="min-h-0 flex-1">
-          <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-            Format Distribution
-          </h4>
-          {/* Stacked horizontal bar */}
-          <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-            {data.formatDistribution.map((format, i) => {
-              const percentage = (format.count / data.totalSubmissions) * 100
-              const colors = [
-                'bg-blue-500 dark:bg-blue-400',
-                'bg-purple-500 dark:bg-purple-400',
-                'bg-cyan-500 dark:bg-cyan-400',
-                'bg-amber-500 dark:bg-amber-400',
-                'bg-rose-500 dark:bg-rose-400',
-                'bg-green-500 dark:bg-green-400',
-              ]
-              return (
-                <div
-                  key={format.format}
-                  className={`h-full transition-all duration-500 ${colors[i % colors.length]}`}
-                  style={{ width: `${percentage}%` }}
-                  title={`${format.format}: ${format.count}`}
+                  className="h-full bg-green-600 transition-all duration-500 dark:bg-green-400"
+                  style={{ width: `${Math.min(progress, 100)}%` }}
                 />
-              )
-            })}
+              </div>
+            </div>
+            <ChartBarIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-green-300/40 dark:text-green-600/30" />
           </div>
-          {/* Legend */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {data.formatDistribution.map((format, i) => {
-              const dotColors = [
-                'bg-blue-500 dark:bg-blue-400',
-                'bg-purple-500 dark:bg-purple-400',
-                'bg-cyan-500 dark:bg-cyan-400',
-                'bg-amber-500 dark:bg-amber-400',
-                'bg-rose-500 dark:bg-rose-400',
-                'bg-green-500 dark:bg-green-400',
-              ]
-              return (
-                <div key={format.format} className="flex items-center gap-1">
-                  <div
-                    className={`h-2 w-2 shrink-0 rounded-full ${dotColors[i % dotColors.length]}`}
-                  />
-                  <span className="text-[10px] text-gray-600 dark:text-gray-400">
-                    {format.format}
-                  </span>
-                  <span className="text-[10px] font-bold text-gray-900 dark:text-gray-100">
-                    {format.count}
-                  </span>
-                </div>
-              )
-            })}
+
+          {/* Avg/Day */}
+          <div className="group relative overflow-hidden rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-2.5 dark:from-purple-900/40 dark:to-pink-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-purple-700 uppercase dark:text-purple-400">
+                Avg/Day
+              </div>
+              <div className="mt-1 text-3xl font-black text-purple-900 dark:text-purple-100">
+                {data.averagePerDay.toFixed(1)}
+              </div>
+            </div>
+            <ClockIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-purple-300/40 dark:text-purple-600/30" />
           </div>
         </div>
-      )}
+
+        {/* Minimal chart - Sparkline style */}
+        {showTrend && data.submissionsPerDay.length > 0 && (
+          <div className="mb-2">
+            <h4 className="mb-1 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+              Submissions Trend
+            </h4>
+            <div className="flex items-end gap-1">
+              {data.submissionsPerDay.map((day, index) => {
+                const height = (day.count / maxSubmissions) * 100
+                const date = new Date(day.date + 'T00:00:00Z')
+                const dateLabel = date.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  timeZone: 'UTC',
+                })
+                return (
+                  <div
+                    key={index}
+                    className="flex min-w-0 flex-1 flex-col items-center"
+                    style={{ maxWidth: '4rem' }}
+                  >
+                    <span className="mb-0.5 text-[9px] font-semibold text-gray-600 dark:text-gray-400">
+                      {day.count}
+                    </span>
+                    <div className="flex h-8 w-full items-end">
+                      <div
+                        className="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-600 dark:bg-blue-400 dark:hover:bg-blue-300"
+                        style={{ height: `${height}%`, minHeight: '4px' }}
+                      />
+                    </div>
+                    <span className="mt-0.5 text-[8px] leading-tight text-gray-400 dark:text-gray-500">
+                      {dateLabel}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Format Distribution - Compact stacked bar + legend */}
+        {showFormatBreakdown && data.formatDistribution.length > 0 && (
+          <div className="min-h-0 flex-1">
+            <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+              Format Distribution
+            </h4>
+            {/* Stacked horizontal bar */}
+            <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+              {data.formatDistribution.map((format, i) => {
+                const percentage = (format.count / data.totalSubmissions) * 100
+                const colors = [
+                  'bg-blue-500 dark:bg-blue-400',
+                  'bg-purple-500 dark:bg-purple-400',
+                  'bg-cyan-500 dark:bg-cyan-400',
+                  'bg-amber-500 dark:bg-amber-400',
+                  'bg-rose-500 dark:bg-rose-400',
+                  'bg-green-500 dark:bg-green-400',
+                ]
+                return (
+                  <div
+                    key={format.format}
+                    className={`h-full transition-all duration-500 ${colors[i % colors.length]}`}
+                    style={{ width: `${percentage}%` }}
+                    title={`${format.format}: ${format.count}`}
+                  />
+                )
+              })}
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {data.formatDistribution.map((format, i) => {
+                const dotColors = [
+                  'bg-blue-500 dark:bg-blue-400',
+                  'bg-purple-500 dark:bg-purple-400',
+                  'bg-cyan-500 dark:bg-cyan-400',
+                  'bg-amber-500 dark:bg-amber-400',
+                  'bg-rose-500 dark:bg-rose-400',
+                  'bg-green-500 dark:bg-green-400',
+                ]
+                return (
+                  <div key={format.format} className="flex items-center gap-1">
+                    <div
+                      className={`h-2 w-2 shrink-0 rounded-full ${dotColors[i % dotColors.length]}`}
+                    />
+                    <span className="text-[10px] text-gray-600 dark:text-gray-400">
+                      {format.format}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-900 dark:text-gray-100">
+                      {format.count}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </WidgetBody>
     </div>
   )
 }

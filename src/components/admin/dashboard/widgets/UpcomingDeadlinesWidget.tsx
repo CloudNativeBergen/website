@@ -12,6 +12,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
 } from './shared'
 
@@ -119,7 +120,7 @@ export function UpcomingDeadlinesWidget({
         Upcoming Deadlines
       </h3>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+      <WidgetBody className="flex flex-col gap-1.5">
         {deadlines.slice(0, maxDeadlines).map((deadline) => {
           const urgency = getUrgency(deadline.daysRemaining)
           const urgencyClass = urgencyStyles[urgency]
@@ -163,7 +164,7 @@ export function UpcomingDeadlinesWidget({
             </div>
           )
         })}
-      </div>
+      </WidgetBody>
     </div>
   )
 }

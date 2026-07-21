@@ -27,6 +27,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
   ProgressBar,
 } from './shared'
@@ -235,7 +236,7 @@ export function TicketSalesDashboardWidget({
           title="Ticket Sales"
           link={{ href: '/admin/tickets', label: 'Manage tickets →' }}
         />
-        <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto">
+        <WidgetBody className="flex flex-col justify-between">
           <div className="grid grid-cols-3 gap-3">
             <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
               <div className="relative z-10">
@@ -302,7 +303,7 @@ export function TicketSalesDashboardWidget({
               )
             })}
           </div>
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -314,7 +315,7 @@ export function TicketSalesDashboardWidget({
         link={{ href: '/admin/tickets', label: 'Manage tickets →' }}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <WidgetBody className="flex flex-col">
         <div className="mb-3 grid shrink-0 grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
           <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
             <div className="relative z-10">
@@ -424,7 +425,7 @@ export function TicketSalesDashboardWidget({
             {data.daysUntilEvent}
           </div>
         </div>
-      </div>
+      </WidgetBody>
     </div>
   )
 }

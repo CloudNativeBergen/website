@@ -17,6 +17,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
   ProgressBar,
 } from './shared'
@@ -66,7 +67,7 @@ export function TravelSupportQueueWidget({
           badge={<PhaseBadge label="Planning" variant="blue" />}
         />
 
-        <div className="space-y-3">
+        <WidgetBody className="space-y-3">
           <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-700 dark:bg-cyan-800/50">
             <GlobeAltIcon className="mb-2 h-8 w-8 text-cyan-500" />
             <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
@@ -91,7 +92,7 @@ export function TravelSupportQueueWidget({
               </div>
             </div>
           )}
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -105,7 +106,7 @@ export function TravelSupportQueueWidget({
           badge={<PhaseBadge label="Complete" variant="green" />}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <WidgetBody className="grid grid-cols-2 content-start gap-3">
           <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
             <CheckCircleIcon className="mb-2 h-6 w-6 text-green-500" />
             <div className="text-[10px] font-medium text-green-600 uppercase dark:text-green-400">
@@ -144,7 +145,7 @@ export function TravelSupportQueueWidget({
                 : '—'}
             </div>
           </div>
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -162,100 +163,107 @@ export function TravelSupportQueueWidget({
         link={{ href: '/admin/speakers/travel-support', label: 'Review →' }}
       />
 
-      {(config?.showPendingRequests ?? true) && data.pendingApprovals > 0 && (
-        <div className="mb-3 rounded-lg bg-amber-50 p-2.5 text-center dark:bg-amber-900/20">
-          <div className="text-[11px] text-amber-600 dark:text-amber-400">
-            Pending Approvals
+      {/* Scrollable body (flex column so the empty state can still center in
+          leftover space); the request list grows unbounded with pending
+          requests and must scroll, not clip. */}
+      <WidgetBody className="flex flex-col">
+        {(config?.showPendingRequests ?? true) && data.pendingApprovals > 0 && (
+          <div className="mb-3 rounded-lg bg-amber-50 p-2.5 text-center dark:bg-amber-900/20">
+            <div className="text-[11px] text-amber-600 dark:text-amber-400">
+              Pending Approvals
+            </div>
+            <div className="mt-1 text-2xl font-bold text-amber-900 dark:text-amber-100">
+              {data.pendingApprovals}
+            </div>
           </div>
-          <div className="mt-1 text-2xl font-bold text-amber-900 dark:text-amber-100">
-            {data.pendingApprovals}
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
-          <div className="text-[11px] text-green-600 dark:text-green-400">
-            Approved
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
+            <div className="text-[11px] text-green-600 dark:text-green-400">
+              Approved
+            </div>
+            <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
+              kr {(data.totalApproved / 1000).toFixed(1)}k
+            </div>
           </div>
-          <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
-            kr {(data.totalApproved / 1000).toFixed(1)}k
+          <div className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800">
+            <div className="text-[11px] text-gray-600 dark:text-gray-300">
+              Requested
+            </div>
+            <div className="mt-1 text-lg font-bold text-gray-900 dark:text-gray-100">
+              kr {(data.totalRequested / 1000).toFixed(1)}k
+            </div>
           </div>
         </div>
-        <div className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800">
-          <div className="text-[11px] text-gray-600 dark:text-gray-300">
-            Requested
-          </div>
-          <div className="mt-1 text-lg font-bold text-gray-900 dark:text-gray-100">
-            kr {(data.totalRequested / 1000).toFixed(1)}k
-          </div>
-        </div>
-      </div>
 
-      {(config?.showBudgetUtilization ?? true) && budgetUsed !== null && (
-        <div className="mb-3">
-          <div className="mb-1.5 flex items-center justify-between">
-            <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-              Budget Usage
+        {(config?.showBudgetUtilization ?? true) && budgetUsed !== null && (
+          <div className="mb-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+                Budget Usage
+              </h4>
+              <span className="text-[11px] text-gray-600 dark:text-gray-300">
+                kr {(data.budgetAllocated / 1000).toFixed(0)}k total
+              </span>
+            </div>
+            <ProgressBar
+              value={budgetUsed}
+              color={
+                budgetUsed > 90
+                  ? 'bg-red-600 dark:bg-red-500'
+                  : budgetUsed > 70
+                    ? 'bg-amber-600 dark:bg-amber-500'
+                    : 'bg-green-600 dark:bg-green-500'
+              }
+              className="h-1.5"
+            />
+            <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
+              {budgetUsed.toFixed(0)}% used
+            </div>
+          </div>
+        )}
+
+        {data.requests.length > 0 && (
+          <div>
+            <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Pending Requests
             </h4>
-            <span className="text-[11px] text-gray-600 dark:text-gray-300">
-              kr {(data.budgetAllocated / 1000).toFixed(0)}k total
-            </span>
+            {/* No width-keyed item caps (old nth-child hiding) — the body
+              scrolls, so every pending request is rendered and reachable. */}
+            <div className="space-y-2">
+              {data.requests.map((request) => (
+                <Link
+                  key={request.id}
+                  href={`/admin/travel-support/${request.id}`}
+                  className="block rounded-lg border border-gray-200 bg-white p-2.5 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-blue-600 dark:hover:bg-blue-900/20"
+                >
+                  <div className="mb-0.5 flex items-start justify-between">
+                    <span className="text-[11px] leading-tight font-semibold text-gray-900 dark:text-gray-100">
+                      {request.speaker}
+                    </span>
+                    <span className="ml-2 flex items-center gap-0.5 text-[11px] font-bold text-gray-900 dark:text-gray-100">
+                      <BanknotesIcon className="h-3 w-3" />
+                      {formatNumber(request.amount)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Submitted {request.submittedAt}
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-          <ProgressBar
-            value={budgetUsed}
-            color={
-              budgetUsed > 90
-                ? 'bg-red-600 dark:bg-red-500'
-                : budgetUsed > 70
-                  ? 'bg-amber-600 dark:bg-amber-500'
-                  : 'bg-green-600 dark:bg-green-500'
-            }
-            className="h-1.5"
-          />
-          <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
-            {budgetUsed.toFixed(0)}% used
-          </div>
-        </div>
-      )}
+        )}
 
-      {data.requests.length > 0 && (
-        <div className="flex-1">
-          <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Pending Requests
-          </h4>
-          <div className="space-y-2 [&>*:nth-child(n+3)]:hidden @[300px]:[&>*:nth-child(n+4)]:block @[300px]:[&>*:nth-child(n+5)]:hidden @[500px]:[&>*:nth-child(n+5)]:block">
-            {data.requests.map((request) => (
-              <Link
-                key={request.id}
-                href={`/admin/travel-support/${request.id}`}
-                className="block rounded-lg border border-gray-200 bg-white p-2.5 transition-colors hover:border-blue-300 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-blue-600 dark:hover:bg-blue-900/20"
-              >
-                <div className="mb-0.5 flex items-start justify-between">
-                  <span className="text-[11px] leading-tight font-semibold text-gray-900 dark:text-gray-100">
-                    {request.speaker}
-                  </span>
-                  <span className="ml-2 flex items-center gap-0.5 text-[11px] font-bold text-gray-900 dark:text-gray-100">
-                    <BanknotesIcon className="h-3 w-3" />
-                    {formatNumber(request.amount)}
-                  </span>
-                </div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                  Submitted {request.submittedAt}
-                </div>
-              </Link>
-            ))}
+        {data.requests.length === 0 && data.pendingApprovals === 0 && (
+          <div className="flex flex-1 items-center justify-center rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-800">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              No pending requests
+            </p>
           </div>
-        </div>
-      )}
-
-      {data.requests.length === 0 && data.pendingApprovals === 0 && (
-        <div className="flex flex-1 items-center justify-center rounded-lg bg-gray-50 p-4 text-center dark:bg-gray-800">
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            No pending requests
-          </p>
-        </div>
-      )}
+        )}
+      </WidgetBody>
     </div>
   )
 }

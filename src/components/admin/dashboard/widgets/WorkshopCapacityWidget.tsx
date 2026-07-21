@@ -15,7 +15,9 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
+  ProgressBar,
 } from './shared'
 
 type WorkshopCapacityWidgetProps = BaseWidgetProps
@@ -24,6 +26,9 @@ export function WorkshopCapacityWidget({
   conference,
 }: WorkshopCapacityWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: no phase view here is static — the initialization/planning
+  // branch is CONDITIONED on the fetched data being empty (and post-conference
+  // renders fetched totals), so the fetch must always run.
   const { data, loading, error, refetch } = useWidgetData<WorkshopStatistics>(
     conference ? () => fetchWorkshopCapacity(conference._id) : null,
     [conference],
@@ -51,7 +56,7 @@ export function WorkshopCapacityWidget({
           badge={<PhaseBadge label="Planning" variant="blue" />}
         />
 
-        <div className="space-y-3">
+        <WidgetBody className="space-y-3">
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-800/50">
             <AcademicCapIcon className="mb-2 h-8 w-8 text-purple-500" />
             <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
@@ -83,7 +88,7 @@ export function WorkshopCapacityWidget({
               </div>
             </div>
           )}
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -103,7 +108,7 @@ export function WorkshopCapacityWidget({
           badge={<PhaseBadge label="Complete" variant="green" />}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <WidgetBody className="grid grid-cols-2 content-start gap-3">
           <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
             <CheckCircleIcon className="mb-2 h-6 w-6 text-purple-500" />
             <div className="text-[10px] font-medium text-purple-600 uppercase dark:text-purple-400">
@@ -140,7 +145,7 @@ export function WorkshopCapacityWidget({
               {totalCapacity}
             </div>
           </div>
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -158,84 +163,95 @@ export function WorkshopCapacityWidget({
         link={{ href: '/admin/workshops', label: 'Manage →' }}
       />
 
-      <div className="@container:grid-cols-1 mb-3 grid grid-cols-3 gap-2">
-        <div className="rounded-lg bg-blue-50 p-2 text-center dark:bg-blue-900/20">
-          <div className="text-[11px] text-blue-600 dark:text-blue-400">
-            Avg Fill
-          </div>
-          <div className="mt-1 text-lg font-bold text-blue-900 dark:text-blue-100">
-            {data.totals.averageUtilization.toFixed(0)}%
-          </div>
-        </div>
-        <div className="rounded-lg bg-green-50 p-2 text-center dark:bg-green-900/20">
-          <div className="text-[11px] text-green-600 dark:text-green-400">
-            Full
-          </div>
-          <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
-            {data.workshops.filter((w) => w.utilization >= 100).length}
-          </div>
-        </div>
-        <div className="rounded-lg bg-amber-50 p-2 text-center dark:bg-amber-900/20">
-          <div className="text-[11px] text-amber-600 dark:text-amber-400">
-            Waitlist
-          </div>
-          <div className="mt-1 text-lg font-bold text-amber-900 dark:text-amber-100">
-            {data.totals.totalWaitlist}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 space-y-2 [&>*:nth-child(n+4)]:hidden @[300px]:[&>*:nth-child(n+5)]:block @[300px]:[&>*:nth-child(n+6)]:hidden @[400px]:[&>*:nth-child(n+6)]:block @[600px]:[&>*:nth-child(n+7)]:block">
-        {data.workshops.map((workshop) => {
-          const fillColor =
-            workshop.utilization === 100
-              ? 'bg-green-600 dark:bg-green-500'
-              : workshop.utilization >= 80
-                ? 'bg-blue-600 dark:bg-blue-500'
-                : workshop.utilization >= 50
-                  ? 'bg-amber-600 dark:bg-amber-500'
-                  : 'bg-gray-600 dark:bg-gray-500'
-
-          return (
-            <div
-              key={workshop.workshopId}
-              className="rounded-lg border border-gray-200 bg-white p-2.5 dark:border-gray-700 dark:bg-gray-900"
-            >
-              <div className="mb-1.5 flex items-start justify-between">
-                <h4 className="flex-1 truncate text-[11px] leading-tight font-semibold text-gray-900 dark:text-gray-100">
-                  {workshop.workshopTitle}
-                </h4>
-                <span className="ml-2 text-[11px] font-bold text-gray-700 dark:text-gray-200">
-                  {workshop.utilization.toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className={`h-full transition-all ${fillColor}`}
-                  style={{ width: `${workshop.utilization}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">
-                {/* Compact mode: just show ratio on small, full details on larger */}
-                <span className="block @[250px]:hidden">
-                  {workshop.confirmedSignups}/{workshop.capacity}
-                </span>
-                <span className="hidden @[250px]:block">
-                  {workshop.confirmedSignups}/{workshop.capacity} confirmed
-                </span>
-                {workshop.waitlistSignups > 0 && (
-                  <span className="text-amber-600 dark:text-amber-400">
-                    {workshop.waitlistSignups}
-                    <span className="hidden @[250px]:inline"> waiting</span>
-                  </span>
-                )}
-              </div>
+      {/* Everything below the header scrolls: workshop lists routinely exceed
+          the slot height, and the container clips (see WidgetBody). */}
+      <WidgetBody>
+        {/* (dead `@container:grid-cols-1` class removed — `@container` is not
+            a Tailwind variant; width adaptation is handled per-card below) */}
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <div className="rounded-lg bg-blue-50 p-2 text-center dark:bg-blue-900/20">
+            <div className="text-[11px] text-blue-600 dark:text-blue-400">
+              Avg Fill
             </div>
-          )
-        })}
-      </div>
+            <div className="mt-1 text-lg font-bold text-blue-900 dark:text-blue-100">
+              {data.totals.averageUtilization.toFixed(0)}%
+            </div>
+          </div>
+          <div className="rounded-lg bg-green-50 p-2 text-center dark:bg-green-900/20">
+            <div className="text-[11px] text-green-600 dark:text-green-400">
+              Full
+            </div>
+            <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
+              {data.workshops.filter((w) => w.utilization >= 100).length}
+            </div>
+          </div>
+          <div className="rounded-lg bg-amber-50 p-2 text-center dark:bg-amber-900/20">
+            <div className="text-[11px] text-amber-600 dark:text-amber-400">
+              Waitlist
+            </div>
+            <div className="mt-1 text-lg font-bold text-amber-900 dark:text-amber-100">
+              {data.totals.totalWaitlist}
+            </div>
+          </div>
+        </div>
+
+        {/* No width-keyed item caps: the old nth-child hiding limited the list
+            by container WIDTH to dodge vertical clipping — with the body
+            scrolling, every workshop is rendered and reachable. */}
+        <div className="space-y-2">
+          {data.workshops.map((workshop) => {
+            const fillColor =
+              workshop.utilization === 100
+                ? 'bg-green-600 dark:bg-green-500'
+                : workshop.utilization >= 80
+                  ? 'bg-blue-600 dark:bg-blue-500'
+                  : workshop.utilization >= 50
+                    ? 'bg-amber-600 dark:bg-amber-500'
+                    : 'bg-gray-600 dark:bg-gray-500'
+
+            return (
+              <div
+                key={workshop.workshopId}
+                className="rounded-lg border border-gray-200 bg-white p-2.5 dark:border-gray-700 dark:bg-gray-900"
+              >
+                <div className="mb-1.5 flex items-start justify-between">
+                  <h4 className="flex-1 truncate text-[11px] leading-tight font-semibold text-gray-900 dark:text-gray-100">
+                    {workshop.workshopTitle}
+                  </h4>
+                  <span className="ml-2 text-[11px] font-bold text-gray-700 dark:text-gray-200">
+                    {workshop.utilization.toFixed(0)}%
+                  </span>
+                </div>
+
+                <div className="mb-1.5">
+                  <ProgressBar
+                    value={workshop.utilization}
+                    color={fillColor}
+                    className="h-1.5"
+                    label={`${workshop.workshopTitle} capacity`}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">
+                  {/* Compact mode: just show ratio on small, full details on larger */}
+                  <span className="block @[250px]:hidden">
+                    {workshop.confirmedSignups}/{workshop.capacity}
+                  </span>
+                  <span className="hidden @[250px]:block">
+                    {workshop.confirmedSignups}/{workshop.capacity} confirmed
+                  </span>
+                  {workshop.waitlistSignups > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      {workshop.waitlistSignups}
+                      <span className="hidden @[250px]:inline"> waiting</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </WidgetBody>
     </div>
   )
 }

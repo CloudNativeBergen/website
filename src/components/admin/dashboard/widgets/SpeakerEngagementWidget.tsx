@@ -13,7 +13,12 @@ import { type SpeakerEngagementData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
-import { WidgetSkeleton, WidgetEmptyState, WidgetErrorState } from './shared'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetErrorState,
+  WidgetBody,
+} from './shared'
 
 interface SpeakerEngagementConfig {
   showDiversityMetrics?: boolean
@@ -53,66 +58,69 @@ export function SpeakerEngagementWidget({
           </span>
         </div>
 
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
-            <div className="text-[10px] text-purple-600 dark:text-purple-400">
-              Featured
+        {/* Scrollable body; the "Manage speakers" link below stays pinned. */}
+        <WidgetBody>
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
+              <div className="text-[10px] text-purple-600 dark:text-purple-400">
+                Featured
+              </div>
+              <div className="mt-0.5 text-xl font-bold text-purple-900 dark:text-purple-100">
+                {featuredCount}
+              </div>
             </div>
-            <div className="mt-0.5 text-xl font-bold text-purple-900 dark:text-purple-100">
-              {featuredCount}
+            <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
+              <div className="text-[10px] text-green-600 dark:text-green-400">
+                Registered
+              </div>
+              <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
+                {registeredCount}
+              </div>
             </div>
           </div>
-          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
-            <div className="text-[10px] text-green-600 dark:text-green-400">
-              Registered
-            </div>
-            <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
-              {registeredCount}
-            </div>
+
+          <div className="space-y-3">
+            {featuredCount > 0 && (
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+                <h4 className="mb-1 text-[11px] font-semibold text-purple-900 dark:text-purple-200">
+                  Featured Speakers
+                </h4>
+                <p className="text-[11px] text-purple-700 dark:text-purple-400">
+                  {featuredCount} speaker{featuredCount !== 1 ? 's' : ''}{' '}
+                  featured on the website. Add more via the speakers page to
+                  build early momentum.
+                </p>
+              </div>
+            )}
+
+            {registeredCount > 0 ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                <h4 className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-gray-200">
+                  Early Registrations
+                </h4>
+                <p className="text-[11px] text-gray-600 dark:text-gray-400">
+                  {registeredCount} speaker
+                  {registeredCount !== 1 ? 's have' : ' has'} created profiles.
+                  Returning speakers are marked automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                <h4 className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-gray-200">
+                  Speaker Registrations
+                </h4>
+                <p className="text-[11px] text-gray-600 dark:text-gray-400">
+                  No speakers have registered yet. Feature speakers and open the
+                  CFP to attract submissions.
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-
-        <div className="flex-1 space-y-3">
-          {featuredCount > 0 && (
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
-              <h4 className="mb-1 text-[11px] font-semibold text-purple-900 dark:text-purple-200">
-                Featured Speakers
-              </h4>
-              <p className="text-[11px] text-purple-700 dark:text-purple-400">
-                {featuredCount} speaker{featuredCount !== 1 ? 's' : ''} featured
-                on the website. Add more via the speakers page to build early
-                momentum.
-              </p>
-            </div>
-          )}
-
-          {registeredCount > 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-              <h4 className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-gray-200">
-                Early Registrations
-              </h4>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400">
-                {registeredCount} speaker
-                {registeredCount !== 1 ? 's have' : ' has'} created profiles.
-                Returning speakers are marked automatically.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-              <h4 className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-gray-200">
-                Speaker Registrations
-              </h4>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400">
-                No speakers have registered yet. Feature speakers and open the
-                CFP to attract submissions.
-              </p>
-            </div>
-          )}
-        </div>
+        </WidgetBody>
 
         <Link
           href="/admin/speakers"
-          className="mt-3 block text-center text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          className="mt-3 block shrink-0 text-center text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Manage speakers &rarr;
         </Link>
@@ -227,67 +235,73 @@ export function SpeakerEngagementWidget({
         </Link>
       </div>
 
-      {/* Top half: Total speakers hero */}
-      <div className="flex min-h-0 flex-1 flex-col justify-center rounded-lg bg-linear-to-br from-blue-50 to-purple-50 px-3 dark:from-blue-900/20 dark:to-purple-900/20">
-        <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
-          {data.totalSpeakers}
-        </div>
-        <div className="text-[11px] text-blue-600 dark:text-blue-400">
-          speakers &middot; {data.averageProposalsPerSpeaker.toFixed(1)}{' '}
-          proposals each
-        </div>
-        {data.awaitingConfirmation > 0 && (
-          <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
-            {data.awaitingConfirmation} awaiting confirmation
+      {/* Scrollable body. The two halves keep flex-1 (they split spare height
+          when the slot is tall) but drop min-h-0 so they floor at their
+          content height — that's what makes the body scroll instead of
+          crushing the text when the slot is short. */}
+      <WidgetBody className="flex flex-col">
+        {/* Top half: Total speakers hero */}
+        <div className="flex flex-1 flex-col justify-center rounded-lg bg-linear-to-br from-blue-50 to-purple-50 px-3 py-2 dark:from-blue-900/20 dark:to-purple-900/20">
+          <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
+            {data.totalSpeakers}
           </div>
-        )}
-      </div>
+          <div className="text-[11px] text-blue-600 dark:text-blue-400">
+            speakers &middot; {data.averageProposalsPerSpeaker.toFixed(1)}{' '}
+            proposals each
+          </div>
+          {data.awaitingConfirmation > 0 && (
+            <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+              {data.awaitingConfirmation} awaiting confirmation
+            </div>
+          )}
+        </div>
 
-      {/* Bottom half: stat columns */}
-      <div
-        className={`mt-1.5 grid min-h-0 flex-1 gap-1.5`}
-        style={{
-          gridTemplateColumns: `repeat(${Math.max(statColumns, 1)}, minmax(0, 1fr))`,
-        }}
-      >
-        {/* NOTE: no "returning" tile — `total - firstTimeFlagged` would count
+        {/* Bottom half: stat columns */}
+        <div
+          className={`mt-1.5 grid flex-1 gap-1.5`}
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(statColumns, 1)}, minmax(0, 1fr))`,
+          }}
+        >
+          {/* NOTE: no "returning" tile — `total - firstTimeFlagged` would count
             every untagged speaker as returning, which is not a real signal. */}
-        {showFirstTimers && (
-          <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
-            <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-            <div className="text-[9px] text-green-600 dark:text-green-400">
-              First-time
+          {showFirstTimers && (
+            <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
+              <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+              <div className="text-[9px] text-green-600 dark:text-green-400">
+                First-time
+              </div>
+              <div className="text-lg font-bold text-green-900 dark:text-green-100">
+                {data.newSpeakers}
+              </div>
             </div>
-            <div className="text-lg font-bold text-green-900 dark:text-green-100">
-              {data.newSpeakers}
-            </div>
-          </div>
-        )}
+          )}
 
-        {showDiversity && (
-          <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">
-            <UserGroupIcon className="mb-0.5 h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-            <div className="text-[9px] text-purple-600 dark:text-purple-400">
-              Diverse
+          {showDiversity && (
+            <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">
+              <UserGroupIcon className="mb-0.5 h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+              <div className="text-[9px] text-purple-600 dark:text-purple-400">
+                Diverse
+              </div>
+              <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
+                {data.diverseSpeakers}
+              </div>
             </div>
-            <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
-              {data.diverseSpeakers}
-            </div>
-          </div>
-        )}
+          )}
 
-        {showGeo && (
-          <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 text-center dark:bg-cyan-900/20">
-            <MapPinIcon className="mb-0.5 h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
-            <div className="text-[9px] text-cyan-600 dark:text-cyan-400">
-              Local
+          {showGeo && (
+            <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 text-center dark:bg-cyan-900/20">
+              <MapPinIcon className="mb-0.5 h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+              <div className="text-[9px] text-cyan-600 dark:text-cyan-400">
+                Local
+              </div>
+              <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100">
+                {data.localSpeakers}
+              </div>
             </div>
-            <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100">
-              {data.localSpeakers}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </WidgetBody>
     </div>
   )
 }

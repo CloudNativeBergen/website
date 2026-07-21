@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { type MyAreasData } from '@/lib/dashboard/data-types'
-import { WidgetEmptyState, WidgetHeader } from './shared'
+import { WidgetEmptyState, WidgetHeader, WidgetBody } from './shared'
 
 /**
  * Presentational body of the "My areas" widget (TEAMS-3, L4). Pure over
@@ -23,7 +23,8 @@ export function MyAreasView({ data }: { data: MyAreasData | null }) {
   return (
     <div className="flex h-full flex-col">
       <WidgetHeader title="My Areas" />
-      <div className="grid grid-cols-1 gap-2 @[300px]:grid-cols-2">
+      {/* Scrollable body: the card count grows with team membership. */}
+      <WidgetBody className="grid grid-cols-1 content-start gap-2 @[300px]:grid-cols-2">
         {data.areas.map((area) => (
           <div
             key={area.key}
@@ -66,7 +67,7 @@ export function MyAreasView({ data }: { data: MyAreasData | null }) {
             )}
           </div>
         ))}
-      </div>
+      </WidgetBody>
     </div>
   )
 }

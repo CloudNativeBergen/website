@@ -16,7 +16,9 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
+  ProgressBar,
 } from './shared'
 
 interface ProposalPipelineConfig {
@@ -63,7 +65,7 @@ export function ProposalPipelineWidget({
           badge={<PhaseBadge label="Setup" variant="blue" />}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
+        <WidgetBody className="flex flex-col space-y-3">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-800/50">
             <CalendarIcon className="mb-2 h-8 w-8 text-blue-500" />
             <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
@@ -104,7 +106,7 @@ export function ProposalPipelineWidget({
               </div>
             </div>
           )}
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -118,7 +120,7 @@ export function ProposalPipelineWidget({
           badge={<PhaseBadge label="Complete" variant="green" />}
         />
 
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto">
+        <WidgetBody className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
             <PaperAirplaneIcon className="mb-2 h-6 w-6 text-blue-500" />
             <div className="text-[10px] font-medium text-blue-600 uppercase dark:text-blue-400">
@@ -156,7 +158,7 @@ export function ProposalPipelineWidget({
               {data?.distinctSpeakers}
             </div>
           </div>
-        </div>
+        </WidgetBody>
       </div>
     )
   }
@@ -180,7 +182,7 @@ export function ProposalPipelineWidget({
         link={{ href: '/admin/proposals', label: 'View all →' }}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <WidgetBody className="flex flex-col">
         {/* Main Stats - Redesigned as overlapping cards */}
         <div className="mb-4 grid shrink-0 grid-cols-3 gap-2 @[400px]:gap-3">
           {/* Total */}
@@ -316,7 +318,7 @@ export function ProposalPipelineWidget({
             </div>
           </div>
         </div>
-      </div>
+      </WidgetBody>
     </div>
   )
 }

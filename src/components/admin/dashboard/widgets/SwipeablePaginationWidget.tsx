@@ -173,9 +173,14 @@ export function SwipeablePaginationWidget({
             }}
           >
             {pages.map((page, index) => (
+              /* Each page scrolls vertically: items beyond the visible height
+                 must stay reachable instead of clipping against the carousel's
+                 overflow-hidden. `touch-pan-y` on the swipe container already
+                 hands mostly-vertical touch gestures to native scrolling, so
+                 the horizontal swipe mechanics are unaffected. */
               <div
                 key={index}
-                className="h-full w-full shrink-0"
+                className="h-full w-full shrink-0 overflow-y-auto overscroll-contain"
                 style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
               >
                 {page}

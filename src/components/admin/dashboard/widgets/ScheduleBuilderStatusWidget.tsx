@@ -12,6 +12,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
   PhaseBadge,
   ProgressBar,
 } from './shared'
@@ -123,91 +124,97 @@ export function ScheduleBuilderStatusWidget({
         link={{ href: '/admin/schedule', label: 'Build schedule →' }}
       />
 
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
-          <div className="text-[11px] text-blue-600 dark:text-blue-400">
-            Slots Filled
+      {/* Scrollable body: multi-day conferences make the By Day list (and the
+          footer stats) taller than small slots — scroll, don't clip. */}
+      <WidgetBody className="flex flex-col">
+        <div className="mb-3 grid shrink-0 grid-cols-2 gap-2">
+          <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
+            <div className="text-[11px] text-blue-600 dark:text-blue-400">
+              Slots Filled
+            </div>
+            <div className="mt-0.5 text-xl font-bold text-blue-900 dark:text-blue-100">
+              {data.filledSlots}/{data.totalSlots}
+            </div>
           </div>
-          <div className="mt-0.5 text-xl font-bold text-blue-900 dark:text-blue-100">
-            {data.filledSlots}/{data.totalSlots}
+          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
+            <div className="text-[11px] text-green-600 dark:text-green-400">
+              Progress
+            </div>
+            <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
+              {overallProgress.toFixed(0)}%
+            </div>
           </div>
         </div>
-        <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
-          <div className="text-[11px] text-green-600 dark:text-green-400">
-            Progress
-          </div>
-          <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
-            {overallProgress.toFixed(0)}%
-          </div>
-        </div>
-      </div>
 
-      <div className="mb-3">
-        <div className="mb-1.5 flex items-center justify-between">
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Overall
+            </h4>
+            <span className="text-[11px] text-gray-600 dark:text-gray-300">
+              {overallProgress.toFixed(0)}%
+            </span>
+          </div>
+          <ProgressBar
+            value={overallProgress}
+            color="bg-blue-600 dark:bg-blue-500"
+          />
+        </div>
+
+        <div className="flex-1 space-y-2">
           <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Overall
+            By Day
           </h4>
-          <span className="text-[11px] text-gray-600 dark:text-gray-300">
-            {overallProgress.toFixed(0)}%
-          </span>
+          {/* No width-keyed item caps (old nth-child hiding) — the body
+            scrolls, so every day row is rendered and reachable. */}
+          <div className="space-y-2">
+            {data.byDay.map((day) => {
+              const dayProgress = (day.filled / day.total) * 100
+              return (
+                <div key={day.day}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                      {day.day}
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                      {day.filled}/{day.total}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className="h-full bg-green-600 transition-all dark:bg-green-500"
+                      style={{ width: `${dayProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
-        <ProgressBar
-          value={overallProgress}
-          color="bg-blue-600 dark:bg-blue-500"
-        />
-      </div>
 
-      <div className="flex-1 space-y-2">
-        <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-          By Day
-        </h4>
-        <div className="space-y-2 [&>*:nth-child(n+3)]:hidden @[300px]:[&>*:nth-child(n+4)]:block">
-          {data.byDay.map((day) => {
-            const dayProgress = (day.filled / day.total) * 100
-            return (
-              <div key={day.day}>
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300">
-                    {day.day}
-                  </span>
-                  <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                    {day.filled}/{day.total}
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div
-                    className="h-full bg-green-600 transition-all dark:bg-green-500"
-                    style={{ width: `${dayProgress}%` }}
-                  />
-                </div>
+        <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
+          {data.unassignedConfirmedTalks > 0 && (
+            <div className="flex-1 rounded-lg bg-amber-50 p-2 text-center dark:bg-amber-900/20">
+              <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                Unassigned
               </div>
-            )
-          })}
+              <div className="mt-0.5 text-lg font-bold text-amber-900 dark:text-amber-100">
+                {data.unassignedConfirmedTalks}
+              </div>
+            </div>
+          )}
+          {data.placeholderSlots > 0 && (
+            <div className="flex-1 rounded-lg bg-gray-50 p-2 text-center dark:bg-gray-800">
+              <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                Placeholders
+              </div>
+              <div className="mt-0.5 text-lg font-bold text-gray-900 dark:text-gray-100">
+                {data.placeholderSlots}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
-        {data.unassignedConfirmedTalks > 0 && (
-          <div className="flex-1 rounded-lg bg-amber-50 p-2 text-center dark:bg-amber-900/20">
-            <div className="text-[11px] text-amber-600 dark:text-amber-400">
-              Unassigned
-            </div>
-            <div className="mt-0.5 text-lg font-bold text-amber-900 dark:text-amber-100">
-              {data.unassignedConfirmedTalks}
-            </div>
-          </div>
-        )}
-        {data.placeholderSlots > 0 && (
-          <div className="flex-1 rounded-lg bg-gray-50 p-2 text-center dark:bg-gray-800">
-            <div className="text-[11px] text-gray-600 dark:text-gray-300">
-              Placeholders
-            </div>
-            <div className="mt-0.5 text-lg font-bold text-gray-900 dark:text-gray-100">
-              {data.placeholderSlots}
-            </div>
-          </div>
-        )}
-      </div>
+      </WidgetBody>
     </div>
   )
 }
