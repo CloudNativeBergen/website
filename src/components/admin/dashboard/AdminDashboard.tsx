@@ -13,14 +13,11 @@ import { WidgetContainer } from '@/components/admin/dashboard/WidgetContainer'
 import { WidgetErrorBoundary } from '@/components/admin/dashboard/WidgetErrorBoundary'
 import { renderWidgetContent } from '@/components/admin/dashboard/widget-renderer'
 import { WidgetPicker } from '@/components/admin/dashboard/WidgetPicker'
+import { PresetMenu } from '@/components/admin/dashboard/PresetMenu'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
-import { PRESET_CONFIGS } from '@/lib/dashboard/presets'
-import {
-  PencilIcon,
-  ArrowPathIcon,
-  PlusIcon,
-} from '@heroicons/react/24/outline'
+import { ALL_PRESETS, PRESET_CONFIGS } from '@/lib/dashboard/presets'
+import { PencilIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -50,7 +47,13 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [editMode, setEditMode] = useState(false)
   const [columnCount, setColumnCount] = useState(4)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  // Preset-apply confirmation. `selectedPresetKey` is intentionally NOT
+  // cleared on close so the modal's text stays intact during the leave
+  // transition; `presetConfirmOpen` alone controls visibility.
+  const [presetConfirmOpen, setPresetConfirmOpen] = useState(false)
+  const [selectedPresetKey, setSelectedPresetKey] = useState<string | null>(
+    null,
+  )
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -81,6 +84,10 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const saveFailureNotifiedRef = useRef(false)
 
   const currentPhase = getCurrentPhase(conference)
+
+  const selectedPreset = selectedPresetKey
+    ? (ALL_PRESETS[selectedPresetKey] ?? null)
+    : null
 
   const isDesktop = columnCount >= GRID_CONFIG.breakpoints.desktop.cols
 
@@ -216,14 +223,25 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Destructive: replaces the whole layout with the planning preset (and
-  // persists it), so it only runs after explicit confirmation in the modal.
-  const handleConfirmedReset = useCallback(() => {
-    dirtyRef.current = true
-    setWidgets(DEFAULT_WIDGETS)
-    setShowResetConfirm(false)
-    // persistWidgets will fire via the useEffect on widget change
+  const handlePresetSelect = useCallback((presetKey: string) => {
+    setSelectedPresetKey(presetKey)
+    setPresetConfirmOpen(true)
   }, [])
+
+  // Destructive: replaces the whole layout with the chosen preset (and
+  // persists it), so it only runs after explicit confirmation in the modal.
+  const handleConfirmedPresetApply = useCallback(() => {
+    const preset = selectedPresetKey ? ALL_PRESETS[selectedPresetKey] : null
+    if (!preset) return
+    dirtyRef.current = true
+    // Clone positions so later in-place edits can never mutate the shared
+    // preset module constants.
+    setWidgets(
+      preset.widgets.map((w) => ({ ...w, position: { ...w.position } })),
+    )
+    setPresetConfirmOpen(false)
+    // persistWidgets will fire via the useEffect on widget change
+  }, [selectedPresetKey])
 
   const handleAddWidget = useCallback(
     (widgetType: string) => {
@@ -325,12 +343,16 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       )}
 
       <ConfirmationModal
-        isOpen={showResetConfirm}
-        onClose={() => setShowResetConfirm(false)}
-        onConfirm={handleConfirmedReset}
-        title="Reset dashboard layout?"
-        message="This replaces your current widgets and layout with the default planning preset. This cannot be undone."
-        confirmButtonText="Reset layout"
+        isOpen={presetConfirmOpen}
+        onClose={() => setPresetConfirmOpen(false)}
+        onConfirm={handleConfirmedPresetApply}
+        title={`Apply "${selectedPreset?.name ?? ''}" layout?`}
+        message={
+          selectedPreset && selectedPreset.widgets.length === 0
+            ? 'This removes every widget from your dashboard so you can start from scratch. This cannot be undone.'
+            : `This replaces your current widgets and layout with the ${selectedPreset?.name ?? ''} preset. This cannot be undone.`
+        }
+        confirmButtonText="Apply layout"
         variant="danger"
       />
 
@@ -339,13 +361,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2">
           {editMode && (
             <>
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <ArrowPathIcon className="h-3.5 w-3.5" />
-                Reset
-              </button>
+              <PresetMenu onSelect={handlePresetSelect} />
 
               <button
                 onClick={() => setShowWidgetPicker(true)}

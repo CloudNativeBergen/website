@@ -54,6 +54,15 @@ vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
   ),
 }))
 
+// HeadlessUI's Menu (used by the PresetMenu layout picker) requires
+// ResizeObserver, which jsdom does not implement.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+
 const conference = { _id: 'conf-1', title: 'Test Conf' } as Conference
 
 const savedWidgets = [
@@ -245,7 +254,7 @@ describe('AdminDashboard persistence', () => {
     ).toBeInTheDocument()
   })
 
-  it('reset requires confirmation; cancelling neither resets nor saves', async () => {
+  it('the Layout picker lists every preset with the default marked', async () => {
     vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
 
     renderDashboard()
@@ -253,28 +262,70 @@ describe('AdminDashboard persistence', () => {
 
     // Enter edit mode (jsdom innerWidth 1024 → desktop controls visible)
     fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Layout/ }))
 
-    expect(screen.getByText('Reset dashboard layout?')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await advancePastDebounce()
-    expect(saveDashboardConfig).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('menuitem', { name: /Planning Focus/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('menuitem', { name: /Execution Focus/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('menuitem', { name: /Financial Focus/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('menuitem', { name: /Comprehensive/ }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /Empty/ })).toBeInTheDocument()
+    // The planning preset doubles as "reset to default" and is marked
+    expect(
+      screen.getByRole('menuitem', { name: /Planning Focus/ }),
+    ).toHaveTextContent('Default')
   })
 
-  it('confirming reset applies the default layout and persists it', async () => {
+  it('applying a preset requires confirmation; cancelling neither applies nor saves', async () => {
     vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
 
     renderDashboard()
     await flushLoad()
 
     fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Layout/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Execution Focus/ }))
+
+    expect(
+      screen.getByText('Apply "Execution Focus" layout?'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await advancePastDebounce()
+    // Layout untouched, nothing saved
+    expect(screen.getByTestId('widget-count').textContent).toBe('1')
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('confirming a preset replaces the layout and persists it', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+
+    renderDashboard()
+    await flushLoad()
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Layout/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Execution Focus/ }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Reset layout' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Apply layout' }))
     })
+
+    // Execution preset has 6 widgets (see presets.ts)
+    expect(screen.getByTestId('widget-count').textContent).toBe('6')
 
     await advancePastDebounce()
     expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
+    expect(saveDashboardConfig).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'schedule-builder' }),
+      ]),
+    )
   })
 })
