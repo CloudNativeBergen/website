@@ -156,19 +156,27 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
               // The normalized layout is NOT echoed back to the server (the
               // persist effect only fires on user edits).
               const constraints = getWidgetMetadata(w.type)?.constraints
-              const position = constraints
-                ? {
-                    ...w.position,
-                    colSpan: Math.min(
-                      constraints.maxCols,
-                      Math.max(constraints.minCols, w.position.colSpan),
-                    ),
-                    rowSpan: Math.min(
-                      constraints.maxRows,
-                      Math.max(constraints.minRows, w.position.rowSpan),
-                    ),
-                  }
-                : w.position
+              let position = w.position
+              if (constraints) {
+                const colSpan = Math.min(
+                  constraints.maxCols,
+                  Math.max(constraints.minCols, w.position.colSpan),
+                )
+                const rowSpan = Math.min(
+                  constraints.maxRows,
+                  Math.max(constraints.minRows, w.position.rowSpan),
+                )
+                // Clamping a span UP can push a right-edge widget past the
+                // grid (e.g. col 10 + minCols 5 on 12 cols): pull `col` back
+                // so the widget stays inside. colSpan ≤ maxCols ≤ grid cols,
+                // so the result is always ≥ 0.
+                const maxGridCols = GRID_CONFIG.breakpoints.desktop.cols
+                const col = Math.max(
+                  0,
+                  Math.min(w.position.col, maxGridCols - colSpan),
+                )
+                position = { ...w.position, col, colSpan, rowSpan }
+              }
               return {
                 id: w.id,
                 type: w.type,

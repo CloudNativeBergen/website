@@ -28,8 +28,14 @@ export function useWidgetData<T>(
   useEffect(() => {
     let isMounted = true
     if (!fetcher) {
+      // No fetch for this render (no conference, or a phase whose view is
+      // static). Reset ALL fetch state — a stale `error`/`data` from a prior
+      // fetcher (e.g. a failed fetch in a data phase before the phase flipped
+      // to a gated static one) must not leak into the fetchless view.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false)
+      setError(false)
+      setData(null)
       return
     }
 
