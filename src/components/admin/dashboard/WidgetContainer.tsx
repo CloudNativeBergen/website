@@ -337,8 +337,15 @@ export function WidgetContainer({
         )}
 
         {/* @supports not (container-type: size) fallback handled via CSS cascade */}
+        {/* Edit mode reserves a uniform top strip (pt-10 clears the 44px-tall
+            window-control buttons whose visible dots end ≈29px down) so the
+            dots layer never overlaps ANY widget state. The previous
+            `[&_h3:first-of-type]:ml-20` hack only worked for branches whose
+            first element was an h3 header — on every other state the dots sat
+            on top of the content, and narrow headers were crushed by the
+            margin. View-mode layout is untouched. */}
         <div
-          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none [&_h3:first-of-type]:ml-20' : ''}`}
+          className={`h-full p-2 ${editMode ? 'pointer-events-none pt-10 select-none' : ''}`}
         >
           {children}
         </div>
