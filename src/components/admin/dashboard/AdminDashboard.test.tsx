@@ -26,14 +26,21 @@ vi.mock('@/components/admin/dashboard/widget-renderer', () => ({
 
 // Replace the dnd-kit grid with a button that simulates the grid reporting a
 // completed user drag — the only code path that calls onWidgetsChange in the
-// real DashboardGrid.
+// real DashboardGrid. The children render prop is still invoked so the real
+// WidgetContainer (edit controls incl. the remove button) is exercised.
 vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
   DashboardGrid: ({
     widgets,
     onWidgetsChange,
+    children,
   }: {
     widgets: Widget[]
     onWidgetsChange: (widgets: Widget[]) => void
+    children: (
+      widget: Widget,
+      isDragging: boolean,
+      cellWidth: number,
+    ) => React.ReactNode
   }) => (
     <div>
       <div data-testid="widget-count">{widgets.length}</div>
@@ -50,6 +57,7 @@ vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
       >
         simulate-drag
       </button>
+      {widgets.map((w) => children(w, false, 96))}
     </div>
   ),
 }))
@@ -252,6 +260,46 @@ describe('AdminDashboard persistence', () => {
     expect(
       screen.getByText("Couldn't save your dashboard layout"),
     ).toBeInTheDocument()
+  })
+
+  it('removing a widget requires confirmation; cancelling keeps it', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+
+    renderDashboard()
+    await flushLoad()
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Review Progress widget' }),
+    )
+
+    expect(screen.getByText('Remove widget?')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await advancePastDebounce()
+    expect(screen.getByTestId('widget-count').textContent).toBe('1')
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('confirming widget removal removes it and persists', async () => {
+    vi.mocked(loadDashboardConfig).mockResolvedValue(savedWidgets)
+
+    renderDashboard()
+    await flushLoad()
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Review Progress widget' }),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove widget' }))
+    })
+
+    expect(screen.getByTestId('widget-count').textContent).toBe('0')
+
+    await advancePastDebounce()
+    expect(saveDashboardConfig).toHaveBeenCalledTimes(1)
+    expect(saveDashboardConfig).toHaveBeenCalledWith([])
   })
 
   it('the Layout picker lists every preset with the default marked', async () => {

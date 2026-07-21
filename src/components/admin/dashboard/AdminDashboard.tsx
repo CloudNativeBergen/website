@@ -54,6 +54,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [selectedPresetKey, setSelectedPresetKey] = useState<string | null>(
     null,
   )
+  // Widget-removal confirmation. Removal is single-click-destructive with no
+  // undo (the toast API has no action buttons), so it must be confirmed.
+  // `removeTarget` keeps the last target through the close transition.
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<Widget | null>(null)
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -270,10 +275,22 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     [widgets, columnCount],
   )
 
-  const handleRemoveWidget = useCallback((widgetId: string) => {
+  const handleRemoveRequest = useCallback(
+    (widgetId: string) => {
+      const target = widgets.find((w) => w.id === widgetId)
+      if (!target) return
+      setRemoveTarget(target)
+      setRemoveConfirmOpen(true)
+    },
+    [widgets],
+  )
+
+  const handleConfirmedRemove = useCallback(() => {
+    if (!removeTarget) return
     dirtyRef.current = true
-    setWidgets((prev) => prev.filter((w) => w.id !== widgetId))
-  }, [])
+    setWidgets((prev) => prev.filter((w) => w.id !== removeTarget.id))
+    setRemoveConfirmOpen(false)
+  }, [removeTarget])
 
   const handleWidgetsChange = useCallback((newWidgets: Widget[]) => {
     dirtyRef.current = true
@@ -314,7 +331,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             cellWidth={cellWidth}
             allWidgets={displayWidgets}
             onResize={handleResize}
-            onRemove={handleRemoveWidget}
+            onRemove={handleRemoveRequest}
             onConfigChange={handleConfigChange}
           >
             {renderWidgetContent(widget, conference)}
@@ -327,7 +344,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       columnCount,
       displayWidgets,
       handleResize,
-      handleRemoveWidget,
+      handleRemoveRequest,
       handleConfigChange,
       conference,
     ],
@@ -353,6 +370,16 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             : `This replaces your current widgets and layout with the ${selectedPreset?.name ?? ''} preset. This cannot be undone.`
         }
         confirmButtonText="Apply layout"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={removeConfirmOpen}
+        onClose={() => setRemoveConfirmOpen(false)}
+        onConfirm={handleConfirmedRemove}
+        title="Remove widget?"
+        message={`This removes the "${removeTarget?.title ?? ''}" widget from your dashboard. You can add it back later from the widget picker.`}
+        confirmButtonText="Remove widget"
         variant="danger"
       />
 
