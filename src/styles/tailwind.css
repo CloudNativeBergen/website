@@ -10,6 +10,33 @@
 /* Use class strategy for dark mode but ensure media query fallback works */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Prevent iOS auto-zoom on focus for form controls.
+ *
+ * iOS Safari (and installed PWAs) auto-zoom the viewport when a focused
+ * input/textarea/select has a font-size < 16px, and the zoom sticks — which
+ * breaks the "native app" feel and clips content off the right edge. Many
+ * controls in this app use Tailwind `text-sm` (14px), so we force >=16px on
+ * touch / coarse-pointer devices only, leaving desktop (`text-sm`, etc.)
+ * untouched.
+ *
+ * This block is deliberately UNLAYERED (outside any @layer). Tailwind 4 puts
+ * its utilities in the `utilities` cascade layer, and unlayered CSS always
+ * wins over any layered CSS regardless of selector specificity. So even though
+ * `.text-sm` is a class (higher specificity than these element selectors), this
+ * rule still overrides it. Placing it in `@layer base` would LOSE to `text-sm`
+ * and the zoom would persist.
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
+      [type='color']
+    ),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Critical chart styles - prevent tree shaking */
 .chart-container {
   min-height: 300px !important;
