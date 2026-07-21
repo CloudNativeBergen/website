@@ -65,6 +65,11 @@ vi.mock('@/components/admin/dashboard/DashboardGrid', () => ({
   }) => (
     <div>
       <div data-testid="widget-count">{widgets.length}</div>
+      {widgets.map((w) => (
+        <div key={w.id} data-testid={`widget-span-${w.id}`}>
+          {w.position.colSpan}x{w.position.rowSpan}
+        </div>
+      ))}
       <button
         onClick={() =>
           onWidgetsChange(
@@ -211,6 +216,41 @@ describe('AdminDashboard persistence', () => {
 
     expect(screen.getByTestId('widget-count').textContent).toBe('0')
 
+    await advancePastDebounce()
+    expect(saveDashboardConfig).not.toHaveBeenCalled()
+  })
+
+  it('clamps stored spans into registry min/max on load without echo-saving', async () => {
+    // Server-side save validation is generic-bounds only, and registry
+    // constraints tighten over time — a stored 1×1 sponsor-pipeline
+    // (minCols 5, minRows 4) must render at its minimum, not crushed.
+    vi.mocked(loadDashboardConfig).mockResolvedValue([
+      {
+        id: 'sponsor-pipeline-1',
+        type: 'sponsor-pipeline',
+        title: 'Sponsor Pipeline',
+        position: { row: 2, col: 1, rowSpan: 1, colSpan: 1 },
+        config: undefined,
+      },
+      {
+        // Unknown type: spans must pass through untouched (placeholder path)
+        id: 'retired-1',
+        type: 'retired-widget',
+        title: 'Retired',
+        position: { row: 0, col: 0, rowSpan: 1, colSpan: 1 },
+        config: undefined,
+      },
+    ])
+
+    renderDashboard()
+    await flushLoad()
+
+    expect(
+      screen.getByTestId('widget-span-sponsor-pipeline-1').textContent,
+    ).toBe('5x4')
+    expect(screen.getByTestId('widget-span-retired-1').textContent).toBe('1x1')
+
+    // Normalization is not a user edit — it must not be written back
     await advancePastDebounce()
     expect(saveDashboardConfig).not.toHaveBeenCalled()
   })

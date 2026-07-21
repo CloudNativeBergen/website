@@ -146,13 +146,37 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         // empty grid — defaults apply only when NO config exists (null).
         if (saved) {
           setWidgets(
-            saved.map((w) => ({
-              id: w.id,
-              type: w.type,
-              title: w.title,
-              position: w.position,
-              config: w.config,
-            })),
+            saved.map((w) => {
+              // Normalize stored spans into the widget's registry min/max:
+              // server-side save validation is GENERIC-bounds only, and
+              // registry constraints tighten over time, so persisted layouts
+              // can hold spans below a widget's current minimum (which would
+              // render crushed). Row/col are preserved; unknown types pass
+              // through untouched for the "Widget not available" placeholder.
+              // The normalized layout is NOT echoed back to the server (the
+              // persist effect only fires on user edits).
+              const constraints = getWidgetMetadata(w.type)?.constraints
+              const position = constraints
+                ? {
+                    ...w.position,
+                    colSpan: Math.min(
+                      constraints.maxCols,
+                      Math.max(constraints.minCols, w.position.colSpan),
+                    ),
+                    rowSpan: Math.min(
+                      constraints.maxRows,
+                      Math.max(constraints.minRows, w.position.rowSpan),
+                    ),
+                  }
+                : w.position
+              return {
+                id: w.id,
+                type: w.type,
+                title: w.title,
+                position,
+                config: w.config,
+              }
+            }),
           )
         }
         setLoadStatus('loaded')

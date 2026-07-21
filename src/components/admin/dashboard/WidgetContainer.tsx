@@ -146,8 +146,19 @@ export function WidgetContainer({
         newRowSpan = Math.max(1, newRowSpan)
       }
 
-      // Ensure doesn't exceed grid boundaries
-      newColSpan = Math.min(columnCount - resizeStart.position.col, newColSpan)
+      // Grid-boundary cap: never spill past the right edge. This runs AFTER
+      // the registry clamp, so it must not undercut minCols: when the space
+      // right of the widget's column can't even fit minCols (widget parked
+      // near the edge), FREEZE colSpan at its current value — any clamp here
+      // would either overflow the grid or violate the registry minimum, and
+      // keeping the size the user already has is the least surprising of the
+      // three. Vertical resizing still works in that state.
+      const availableCols = columnCount - resizeStart.position.col
+      const minCols = constraints?.minCols ?? 1
+      newColSpan =
+        availableCols < minCols
+          ? resizeStart.position.colSpan
+          : Math.min(availableCols, newColSpan)
 
       const newPosition: GridPosition = {
         ...resizeStart.position,
