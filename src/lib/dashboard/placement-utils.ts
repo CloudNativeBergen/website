@@ -18,6 +18,9 @@ const MAX_SEARCH_ROWS = 600
  * primitives (buildOccupationMap / getCellsForPosition) — placement must never
  * disagree with drag-time collision detection.
  */
+/** Mirror of the server-side span bound (MAX_ROW_SPAN in the save validator). */
+const MAX_PLACEMENT_ROW_SPAN = 24
+
 export function findAvailablePosition(
   colSpan: number,
   rowSpan: number,
@@ -25,6 +28,10 @@ export function findAvailablePosition(
   columnCount: number,
 ): GridPosition {
   const clampedColSpan = Math.min(colSpan, columnCount)
+  // The requested span is registry-sourced at today's call sites, but this is
+  // an exported utility: clamp defensively so a pathological rowSpan can't
+  // make getCellsForPosition iterate rowSpan*colSpan cells unboundedly.
+  rowSpan = Math.max(1, Math.min(rowSpan, MAX_PLACEMENT_ROW_SPAN))
 
   // Bound each widget's cell range BEFORE building the occupation map: a
   // pathological row/rowSpan would otherwise make the map itself explode
