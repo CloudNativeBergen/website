@@ -329,8 +329,16 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               {data.submissionsPerDay.map((day, index) => {
                 const height = (day.count / maxSubmissions) * 100
                 const date = new Date(day.date + 'T00:00:00Z')
-                const dateLabel = date.toLocaleDateString('en-US', {
+                // Month and day rendered as two fixed lines: a single-line
+                // "Jun 10" wraps in narrow columns while "Jun 1" does not,
+                // and in a bottom-aligned flex row that mixed 1-/2-line
+                // wrapping made columns ragged (value labels at differing
+                // heights, adjacent date labels colliding).
+                const monthLabel = date.toLocaleDateString('en-US', {
                   month: 'short',
+                  timeZone: 'UTC',
+                })
+                const dayLabel = date.toLocaleDateString('en-US', {
                   day: 'numeric',
                   timeZone: 'UTC',
                 })
@@ -349,8 +357,10 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
                         style={{ height: `${height}%`, minHeight: '4px' }}
                       />
                     </div>
-                    <span className="mt-0.5 text-[8px] leading-tight text-gray-400 dark:text-gray-500">
-                      {dateLabel}
+                    <span className="mt-0.5 text-center text-[8px] leading-tight text-gray-400 dark:text-gray-500">
+                      {monthLabel}
+                      <br />
+                      {dayLabel}
                     </span>
                   </div>
                 )

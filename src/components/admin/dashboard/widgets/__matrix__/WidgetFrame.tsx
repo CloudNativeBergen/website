@@ -11,8 +11,8 @@
  * - Mobile: single-column behaviour (columnCount === 1) — auto height, NO
  *   container-type (container queries fall back to the viewport), 361px wide
  *   (393px iPhone-portrait viewport minus 2x16px page padding).
- * - Edit chrome: the macOS-dots overlay plus the `[&_h3:first-of-type]:ml-20`
- *   header-indent hack, so dot/header overlap cells are inspectable.
+ * - Edit chrome: the macOS-dots overlay plus the uniform `pt-10` top strip
+ *   that edit mode reserves so the dots never overlap widget content.
  *
  * CELL_W = 92px: a 1280px desktop grid with 12 columns and 16px gaps gives
  * (1280 - 11*16) / 12 = 92px per column — the representative desktop cell.
@@ -88,9 +88,7 @@ export function WidgetFrame({
 
         <div
           className={`h-full p-2 ${
-            editMode
-              ? 'pointer-events-none select-none [&_h3:first-of-type]:ml-20'
-              : ''
+            editMode ? 'pointer-events-none pt-10 select-none' : ''
           }`}
         >
           {children}
