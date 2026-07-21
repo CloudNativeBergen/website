@@ -62,7 +62,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const showNotificationRef = useRef(showNotification)
   useEffect(() => {
     showNotificationRef.current = showNotification
-  })
+  }, [showNotification])
 
   // True once the USER has changed the layout this session (add/remove/drag/
   // resize/config/reset). The persist effect below fires on EVERY `widgets`
