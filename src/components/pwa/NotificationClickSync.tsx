@@ -105,7 +105,7 @@ function isNotificationClickMessage(
  * Renders nothing. Mounted once app-wide (see SessionProviderWrapper).
  */
 export function NotificationClickSync() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const isSignedIn = Boolean(session?.speaker)
   const pathname = usePathname()
   const router = useRouter()
@@ -228,8 +228,15 @@ export function NotificationClickSync() {
             link !== window.location.pathname
           ) {
             router.push(link)
-            // Recipient-guarded + link-matched + re-validated server-side.
-            if (isSignedIn) mutate({ links: [link] })
+            // Recipient-guarded + link-matched + re-validated server-side, so
+            // the mutation's REAL auth is the request cookie, not this client's
+            // `useSession` state. On an iOS cold open the session is often still
+            // `loading` (the deep-link page seeded `undefined` because `auth()`
+            // read falsy under cacheComponents — see SessionProviderWrapper), and
+            // gating on `isSignedIn` here would delete the entry mid-load and drop
+            // the mark-read. Fire whenever we're NOT definitively signed out; the
+            // cookie authenticates the request server-side either way.
+            if (status !== 'unauthenticated') mutate({ links: [link] })
           }
         }
         return true
@@ -260,7 +267,7 @@ export function NotificationClickSync() {
       cancelled = true
       for (const t of timers) clearTimeout(t)
     }
-  }, [isSignedIn, mutate, router])
+  }, [status, mutate, router])
 
   return null
 }

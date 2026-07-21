@@ -6,10 +6,14 @@ import { render, cleanup, waitFor } from '@testing-library/react'
 import type { Session } from 'next-auth'
 
 let mockSession: Session | null = null
+// Overridable so a test can simulate the iOS cold-open race where the session
+// is still `loading` (data null) on first render before the cookie-backed
+// session resolves.
+let mockStatus: 'authenticated' | 'loading' | 'unauthenticated' | null = null
 vi.mock('next-auth/react', () => ({
   useSession: () => ({
     data: mockSession,
-    status: mockSession ? 'authenticated' : 'unauthenticated',
+    status: mockStatus ?? (mockSession ? 'authenticated' : 'unauthenticated'),
   }),
 }))
 
@@ -97,6 +101,7 @@ function signedIn(): Session {
 beforeEach(() => {
   vi.clearAllMocks()
   mockSession = signedIn()
+  mockStatus = null
   mockPathname = '/'
   pendingStore = new Map<string, string>()
   installServiceWorker()
@@ -246,11 +251,29 @@ describe('NotificationClickSync', () => {
 
   it('clears a pending entry when signed out but fires no mutation', async () => {
     mockSession = null
+    mockStatus = 'unauthenticated'
     mockPathname = '/'
     seedPendingNav('/cfp/proposal/9', Date.now())
     render(<NotificationClickSync />)
     await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
     expect(markReadMutate).not.toHaveBeenCalled()
+  })
+
+  it('still marks read on cold open while the session is loading (iOS race)', async () => {
+    // The deep-link page seeded `undefined` (auth() read falsy under
+    // cacheComponents), so useSession is `loading`/null on first render even
+    // though the request carries a valid auth cookie. The mark-read must still
+    // fire — the mutation authenticates via the cookie server-side.
+    mockSession = null
+    mockStatus = 'loading'
+    mockPathname = '/'
+    seedPendingNav('/cfp/proposal/9', Date.now())
+    render(<NotificationClickSync />)
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith('/cfp/proposal/9'),
+    )
+    expect(markReadMutate).toHaveBeenCalledWith({ links: ['/cfp/proposal/9'] })
+    await waitFor(() => expect(pendingStore.has(PENDING_NAV_KEY)).toBe(false))
   })
 
   it('does not navigate for a non-app-relative pending link, but deletes it', async () => {
