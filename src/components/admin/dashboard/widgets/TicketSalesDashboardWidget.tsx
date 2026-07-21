@@ -1,7 +1,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo } from 'react'
+import { useTheme } from 'next-themes'
 import type { ApexOptions } from 'apexcharts'
 import {
   BanknotesIcon,
@@ -19,7 +20,7 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { fetchTicketSales } from '@/app/(admin)/admin/actions'
-import { TicketSalesData } from '@/lib/dashboard/data-types'
+import { TicketSalesResult } from '@/lib/dashboard/data-types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
@@ -32,19 +33,7 @@ import {
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
-function subscribeDarkMode(callback: () => void) {
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  mediaQuery.addEventListener('change', callback)
-  return () => mediaQuery.removeEventListener('change', callback)
-}
-
-function getSnapshotDarkMode() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-}
-
 interface TicketSalesConfig {
-  capacityTarget?: number
-  revenueTarget?: number
   showTrend?: boolean
 }
 
@@ -54,17 +43,21 @@ export function TicketSalesDashboardWidget({
   conference,
   config,
 }: TicketSalesDashboardWidgetProps) {
-  const { data, loading, error, refetch } =
-    useWidgetData<TicketSalesData | null>(
-      conference ? () => fetchTicketSales(conference) : null,
-      [conference],
-    )
-
-  const isDark = useSyncExternalStore(
-    subscribeDarkMode,
-    getSnapshotDarkMode,
-    () => false,
+  const {
+    data: result,
+    loading,
+    error,
+    refetch,
+  } = useWidgetData<TicketSalesResult>(
+    conference ? () => fetchTicketSales(conference) : null,
+    [conference],
   )
+  const data = result?.status === 'ok' ? result.data : null
+
+  // Follow the app's class-based theme (next-themes), not the OS preference —
+  // the in-app toggle can differ from `prefers-color-scheme`.
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
   const phase = conference ? getCurrentPhase(conference) : null
 
   const gaugeOptions: ApexOptions = useMemo(() => {
@@ -127,7 +120,9 @@ export function TicketSalesDashboardWidget({
     return <WidgetSkeleton />
   }
 
-  if (error) {
+  // A failed ticket-API call is an error with retry — NOT the amber
+  // "Not Configured" card (that is reserved for missing checkin IDs).
+  if (error || result?.status === 'error') {
     return <WidgetErrorState onRetry={refetch} />
   }
 
@@ -207,7 +202,8 @@ export function TicketSalesDashboardWidget({
     )
   }
 
-  // Planning & Execution phases: Not configured
+  // Planning & Execution phases: the conference genuinely lacks checkin
+  // customer/event IDs (result.status === 'unconfigured')
   if (!data) {
     return (
       <div className="flex h-full flex-col">

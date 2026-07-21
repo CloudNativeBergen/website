@@ -103,6 +103,15 @@ export function UpcomingDeadlinesWidget({
   }
 
   const maxDeadlines = config?.maxDeadlines ?? 5
+  // Re-derive urgency from the configured threshold (the action's default
+  // urgency assumes 7 days). The 30-day "medium" band is kept as-is.
+  const urgentThreshold = config?.urgentThreshold ?? 7
+  const getUrgency = (daysRemaining: number): DeadlineData['urgency'] =>
+    daysRemaining <= urgentThreshold
+      ? 'high'
+      : daysRemaining <= 30
+        ? 'medium'
+        : 'low'
 
   return (
     <div className="flex h-full flex-col">
@@ -112,8 +121,9 @@ export function UpcomingDeadlinesWidget({
 
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
         {deadlines.slice(0, maxDeadlines).map((deadline) => {
-          const urgencyClass = urgencyStyles[deadline.urgency]
-          const badgeClass = urgencyBadgeStyles[deadline.urgency]
+          const urgency = getUrgency(deadline.daysRemaining)
+          const urgencyClass = urgencyStyles[urgency]
+          const badgeClass = urgencyBadgeStyles[urgency]
 
           return (
             <div

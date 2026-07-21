@@ -402,30 +402,11 @@ export const TICKET_SALES_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  // NOTE: capacity and revenue targets deliberately have NO config knobs here —
+  // they come from canonical conference settings (ticketCapacity/ticketTargets)
+  // via the fetch action. Double-sourcing them in widget config was removed.
   configSchema: {
     fields: {
-      capacityTarget: {
-        type: 'number',
-        label: 'Capacity Target',
-        description: 'Total ticket capacity for the event',
-        defaultValue: 500,
-        min: 50,
-        max: 10000,
-        step: 50,
-        unit: 'tickets',
-        schema: z.number().min(50).max(10000),
-      },
-      revenueTarget: {
-        type: 'number',
-        label: 'Revenue Target',
-        description: 'Target revenue in local currency',
-        defaultValue: 100000,
-        min: 1000,
-        max: 10000000,
-        step: 1000,
-        unit: 'NOK',
-        schema: z.number().min(1000).max(10000000),
-      },
       showTrend: {
         type: 'boolean',
         label: 'Show Sales Trend',
@@ -435,8 +416,6 @@ export const TICKET_SALES_WIDGET = defineWidget({
       },
     },
     schema: z.object({
-      capacityTarget: z.number().min(50).max(10000),
-      revenueTarget: z.number().min(1000).max(10000000),
       showTrend: z.boolean(),
     }),
   } satisfies WidgetConfigSchema,
@@ -552,19 +531,10 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  // NOTE: the revenue target has NO config knob here — it comes from the
+  // canonical conference setting (sponsorRevenueGoal) via the fetch action.
   configSchema: {
     fields: {
-      revenueTarget: {
-        type: 'number',
-        label: 'Sponsorship Revenue Target',
-        description: 'Target sponsorship revenue',
-        defaultValue: 500000,
-        min: 10000,
-        max: 10000000,
-        step: 10000,
-        unit: 'NOK',
-        schema: z.number().min(10000).max(10000000),
-      },
       showPipeline: {
         type: 'boolean',
         label: 'Show Pipeline Stages',
@@ -581,7 +551,6 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
       },
     },
     schema: z.object({
-      revenueTarget: z.number().min(10000).max(10000000),
       showPipeline: z.boolean(),
       showContractStatus: z.boolean(),
     }),
@@ -666,19 +635,10 @@ export const TRAVEL_SUPPORT_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  // NOTE: the travel budget has NO config knob here — it comes from the
+  // canonical conference setting (travelSupportBudget) via the fetch action.
   configSchema: {
     fields: {
-      totalBudget: {
-        type: 'number',
-        label: 'Total Travel Budget',
-        description: 'Total budget allocated for travel support',
-        defaultValue: 100000,
-        min: 1000,
-        max: 1000000,
-        step: 1000,
-        unit: 'NOK',
-        schema: z.number().min(1000).max(1000000),
-      },
       showPendingRequests: {
         type: 'boolean',
         label: 'Show Pending Requests',
@@ -695,7 +655,6 @@ export const TRAVEL_SUPPORT_WIDGET = defineWidget({
       },
     },
     schema: z.object({
-      totalBudget: z.number().min(1000).max(1000000),
       showPendingRequests: z.boolean(),
       showBudgetUtilization: z.boolean(),
     }),
@@ -744,10 +703,12 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
   },
   configSchema: {
     fields: {
+      // Key kept as `maxActivities` for stored-config compatibility; the
+      // widget paginates all fetched activities, so this is a page size.
       maxActivities: {
         type: 'number',
-        label: 'Maximum Activities',
-        description: 'Number of activity items to display',
+        label: 'Items Per Page',
+        description: 'Number of activity items shown per page',
         defaultValue: 10,
         min: 5,
         max: 50,

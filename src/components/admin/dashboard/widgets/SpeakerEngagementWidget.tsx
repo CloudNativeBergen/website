@@ -5,7 +5,6 @@ import {
   UserGroupIcon,
   SparklesIcon,
   MapPinIcon,
-  ArrowPathIcon,
   CheckCircleIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline'
@@ -183,7 +182,7 @@ export function SpeakerEngagementWidget({
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
               <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
-                New Speakers
+                First-Time Speakers
               </div>
               <div className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
                 {data.newSpeakers}
@@ -193,8 +192,8 @@ export function SpeakerEngagementWidget({
           <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
             <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
             <p className="text-xs text-green-800 dark:text-green-300">
-              {data.returningSpeakers} returning, {data.diverseSpeakers}{' '}
-              diverse, {data.localSpeakers} local
+              {data.newSpeakers} first-time, {data.diverseSpeakers} diverse,{' '}
+              {data.localSpeakers} local
             </p>
           </div>
         </div>
@@ -210,7 +209,7 @@ export function SpeakerEngagementWidget({
   const showFirstTimers = config?.showFirstTimers ?? true
   const showDiversity = config?.showDiversityMetrics ?? true
   const showGeo = config?.showGeography ?? true
-  const statColumns = [showFirstTimers, true, showDiversity, showGeo].filter(
+  const statColumns = [showFirstTimers, showDiversity, showGeo].filter(
     Boolean,
   ).length
 
@@ -248,30 +247,22 @@ export function SpeakerEngagementWidget({
       <div
         className={`mt-1.5 grid min-h-0 flex-1 gap-1.5`}
         style={{
-          gridTemplateColumns: `repeat(${statColumns}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${Math.max(statColumns, 1)}, minmax(0, 1fr))`,
         }}
       >
+        {/* NOTE: no "returning" tile — `total - firstTimeFlagged` would count
+            every untagged speaker as returning, which is not a real signal. */}
         {showFirstTimers && (
           <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
             <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
             <div className="text-[9px] text-green-600 dark:text-green-400">
-              New
+              First-time
             </div>
             <div className="text-lg font-bold text-green-900 dark:text-green-100">
               {data.newSpeakers}
             </div>
           </div>
         )}
-
-        <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 text-center dark:bg-blue-900/20">
-          <ArrowPathIcon className="mb-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-          <div className="text-[9px] text-blue-600 dark:text-blue-400">
-            Return
-          </div>
-          <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
-            {data.returningSpeakers}
-          </div>
-        </div>
 
         {showDiversity && (
           <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">

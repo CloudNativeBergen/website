@@ -17,8 +17,9 @@ export interface ReviewProgressData {
 export interface SpeakerEngagementData {
   totalSpeakers: number
   featuredCount: number
+  /** Speakers explicitly flagged as first-time. Untagged speakers are NOT
+   * assumed to be returning — there is no reliable "returning" signal. */
   newSpeakers: number
-  returningSpeakers: number
   diverseSpeakers: number
   localSpeakers: number
   awaitingConfirmation: number
@@ -59,6 +60,8 @@ export interface SponsorPipelineWidgetData {
 
 export interface TravelSupportData {
   pendingApprovals: number
+  /** Number of requests approved or paid (used for "speakers supported"). */
+  approvedCount: number
   totalRequested: number
   totalApproved: number
   budgetAllocated: number
@@ -111,6 +114,16 @@ export interface TicketSalesData {
   salesVelocity: number
 }
 
+/**
+ * Discriminated result for ticket sales so the widget can distinguish
+ * "integration not configured" (no checkin IDs on the conference) from
+ * "the ticket API call failed" — previously both collapsed to `null`.
+ */
+export type TicketSalesResult =
+  | { status: 'unconfigured' }
+  | { status: 'error' }
+  | { status: 'ok'; data: TicketSalesData }
+
 export interface CFPHealthData {
   totalSubmissions: number
   submissionGoal: number
@@ -128,6 +141,8 @@ export interface ProposalPipelineData {
   total: number
   acceptanceRate: number
   pendingDecisions: number
+  /** Distinct speakers across confirmed talks (a talk can have co-speakers). */
+  distinctSpeakers: number
 }
 
 /**

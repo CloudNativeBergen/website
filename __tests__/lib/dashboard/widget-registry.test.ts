@@ -74,6 +74,34 @@ describe('Widget Registry', () => {
       ([, meta]) => meta.configSchema,
     )
 
+    it('does not double-source canonical conference settings as config knobs', () => {
+      // These come from conference settings via the fetch actions:
+      // ticketCapacity/ticketTargets, sponsorRevenueGoal, travelSupportBudget.
+      expect(
+        WIDGET_REGISTRY['ticket-sales'].configSchema!.fields,
+      ).not.toHaveProperty('capacityTarget')
+      expect(
+        WIDGET_REGISTRY['ticket-sales'].configSchema!.fields,
+      ).not.toHaveProperty('revenueTarget')
+      expect(
+        WIDGET_REGISTRY['sponsor-pipeline'].configSchema!.fields,
+      ).not.toHaveProperty('revenueTarget')
+      expect(
+        WIDGET_REGISTRY['travel-support'].configSchema!.fields,
+      ).not.toHaveProperty('totalBudget')
+    })
+
+    it('stored configs containing removed keys still validate field-by-field lookups', () => {
+      // Old stored configs may still carry removed keys; config is passed
+      // through opaquely and unknown keys must be harmless.
+      const legacyConfig = { showTrend: true, capacityTarget: 500 }
+      const schema = WIDGET_REGISTRY['ticket-sales'].configSchema!
+      const result = schema.schema.safeParse(legacyConfig)
+      expect(result.success).toBe(true)
+      // Zod strips unknown keys on parse
+      expect(result.data).toEqual({ showTrend: true })
+    })
+
     it('at least some widgets have config schemas', () => {
       expect(widgetsWithConfig.length).toBeGreaterThan(0)
     })

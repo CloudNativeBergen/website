@@ -29,6 +29,16 @@ export function WorkshopCapacityWidget({
     [conference],
   )
 
+  // Loading and error come FIRST — phase branches must not mask fetch
+  // errors as setup cards or flash wrong content while loading.
+  if (loading) {
+    return <WidgetSkeleton />
+  }
+
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
+  }
+
   // Phase-specific: Initialization/Planning - Show workshop planning
   if (
     (phase === 'initialization' || phase === 'planning') &&
@@ -133,14 +143,6 @@ export function WorkshopCapacityWidget({
         </div>
       </div>
     )
-  }
-
-  if (loading) {
-    return <WidgetSkeleton />
-  }
-
-  if (error) {
-    return <WidgetErrorState onRetry={refetch} />
   }
 
   if (!data || data.workshops.length === 0) {

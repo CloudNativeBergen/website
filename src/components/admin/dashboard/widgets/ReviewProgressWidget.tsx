@@ -118,6 +118,11 @@ export function ReviewProgressWidget({
   const strokeDashoffset =
     circumference - (data.percentage / 100) * circumference
 
+  // Pace estimate driven by the configured daily review target
+  const targetReviewsPerDay = config?.targetReviewsPerDay ?? 5
+  const remainingReviews = data.totalProposals - data.reviewedCount
+  const daysToFinish = Math.ceil(remainingReviews / targetReviewsPerDay)
+
   return (
     <div className="flex h-full flex-col">
       <h3 className="mb-2 shrink-0 text-xs font-semibold text-gray-900 dark:text-gray-100">
@@ -178,6 +183,14 @@ export function ReviewProgressWidget({
                   /10
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Pace toward the configured daily review target */}
+          {remainingReviews > 0 && (
+            <div className="text-[10px] text-gray-500 @[200px]:text-xs dark:text-gray-400">
+              ~{daysToFinish} day{daysToFinish !== 1 ? 's' : ''} left at{' '}
+              {targetReviewsPerDay}/day
             </div>
           )}
 

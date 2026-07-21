@@ -23,7 +23,6 @@ import {
 } from './shared'
 
 interface SponsorPipelineConfig {
-  revenueTarget?: number
   showPipeline?: boolean
   showContractStatus?: boolean
 }

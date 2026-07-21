@@ -62,8 +62,9 @@ vi.mock('@/lib/sponsor-crm/activities', () => ({
 }))
 
 // Tickets
+const mockFetchEventTickets = vi.fn<AnyFn>()
 vi.mock('@/lib/tickets/api', () => ({
-  fetchEventTickets: vi.fn(() => Promise.resolve([])),
+  fetchEventTickets: (...args: unknown[]) => mockFetchEventTickets(...args),
 }))
 
 vi.mock('@/lib/tickets/processor', () => ({
@@ -95,7 +96,8 @@ vi.mock('@/lib/workshop/sanity', () => ({
     mockGetWorkshopStatistics(...args),
 }))
 
-// Sanity client (for dashboard config persistence)
+// Sanity client (dashboard config persistence + trimmed dashboard reads)
+const mockClientReadFetch = vi.fn<AnyFn>()
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: vi.fn(() => Promise.resolve(null)),
@@ -105,6 +107,9 @@ vi.mock('@/lib/sanity/client', () => ({
         commit: vi.fn(() => Promise.resolve()),
       })),
     })),
+  },
+  clientReadUncached: {
+    fetch: (...args: unknown[]) => mockClientReadFetch(...args),
   },
 }))
 
@@ -209,6 +214,8 @@ describe('Dashboard Server Actions', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
     vi.clearAllMocks()
+    mockFetchEventTickets.mockResolvedValue([])
+    mockClientReadFetch.mockResolvedValue([])
     mockGetAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
@@ -357,6 +364,34 @@ describe('Dashboard Server Actions', () => {
       expect(pipeline.acceptanceRate).toBe(40)
     })
 
+    it('counts distinct speakers across confirmed talks only, deduped', async () => {
+      mockGetProposals.mockResolvedValue({
+        proposals: [
+          makeProposal({
+            status: Status.confirmed,
+            speakers: [{ _id: 'sp-1', name: 'Alice' }],
+          }),
+          makeProposal({
+            status: Status.confirmed,
+            // Alice co-speaks again + Bob — Alice must not double count
+            speakers: [
+              { _id: 'sp-1', name: 'Alice' },
+              { _id: 'sp-2', name: 'Bob' },
+            ],
+          }),
+          makeProposal({
+            // accepted (not confirmed) — excluded from the speaker count
+            status: Status.accepted,
+            speakers: [{ _id: 'sp-3', name: 'Carol' }],
+          }),
+        ],
+        proposalsError: null,
+      })
+
+      const pipeline = await fetchProposalPipeline('conf-1')
+      expect(pipeline.distinctSpeakers).toBe(2) // Alice + Bob
+    })
+
     it('returns zero acceptance rate when no proposals', async () => {
       mockGetProposals.mockResolvedValue({
         proposals: [],
@@ -384,23 +419,24 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchReviewProgress', () => {
+    // fetchReviewProgress uses a trimmed GROQ projection (status + review
+    // scores only, drafts excluded in the query) via the read client.
+    const reviewRow = (overrides: Record<string, unknown> = {}) => ({
+      _id: `proposal-${Math.random().toString(36).slice(2)}`,
+      title: 'Test Talk',
+      status: Status.submitted,
+      reviews: [],
+      ...overrides,
+    })
+
     it('computes percentage of reviewed proposals', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [
-          makeProposal({
-            status: Status.submitted,
-            reviews: [
-              {
-                score: { content: 4, relevance: 4, speaker: 4 },
-              },
-            ],
-          }),
-          makeProposal({ status: Status.submitted, reviews: [] }),
-          makeProposal({ status: Status.submitted }),
-          makeProposal({ status: Status.draft }), // excluded
-        ],
-        proposalsError: null,
-      })
+      mockClientReadFetch.mockResolvedValue([
+        reviewRow({
+          reviews: [{ score: { content: 4, relevance: 4, speaker: 4 } }],
+        }),
+        reviewRow({ reviews: [] }),
+        reviewRow({ reviews: undefined }),
+      ])
 
       const progress = await fetchReviewProgress('conf-1')
       // 3 non-draft, 1 has reviews
@@ -409,23 +445,29 @@ describe('Dashboard Server Actions', () => {
       expect(progress.percentage).toBeCloseTo(33.33, 0)
     })
 
+    it('requests only a trimmed projection without reviewer joins', async () => {
+      mockClientReadFetch.mockResolvedValue([])
+      await fetchReviewProgress('conf-1')
+
+      expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+      const [query] = mockClientReadFetch.mock.calls[0]
+      expect(query).toContain('{ score }')
+      expect(query).not.toContain('reviewer')
+      expect(query).toContain('status != "draft"')
+    })
+
     it('finds the next unreviewed submitted proposal', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [
-          makeProposal({
-            _id: 'reviewed-1',
-            status: Status.submitted,
-            reviews: [{ score: { content: 3, relevance: 3, speaker: 3 } }],
-          }),
-          makeProposal({
-            _id: 'unreviewed-1',
-            title: 'Needs Review',
-            status: Status.submitted,
-            reviews: [],
-          }),
-        ],
-        proposalsError: null,
-      })
+      mockClientReadFetch.mockResolvedValue([
+        reviewRow({
+          _id: 'reviewed-1',
+          reviews: [{ score: { content: 3, relevance: 3, speaker: 3 } }],
+        }),
+        reviewRow({
+          _id: 'unreviewed-1',
+          title: 'Needs Review',
+          reviews: [],
+        }),
+      ])
 
       const progress = await fetchReviewProgress('conf-1')
       expect(progress.nextUnreviewed).toEqual({
@@ -435,15 +477,11 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('returns no nextUnreviewed when all are reviewed', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [
-          makeProposal({
-            status: Status.submitted,
-            reviews: [{ score: { content: 5, relevance: 5, speaker: 5 } }],
-          }),
-        ],
-        proposalsError: null,
-      })
+      mockClientReadFetch.mockResolvedValue([
+        reviewRow({
+          reviews: [{ score: { content: 5, relevance: 5, speaker: 5 } }],
+        }),
+      ])
 
       const progress = await fetchReviewProgress('conf-1')
       expect(progress.nextUnreviewed).toBeUndefined()
@@ -488,7 +526,8 @@ describe('Dashboard Server Actions', () => {
       expect(data.diverseSpeakers).toBe(1) // Alice
       expect(data.localSpeakers).toBe(1) // Alice
       expect(data.newSpeakers).toBe(1) // Bob (first-time)
-      expect(data.returningSpeakers).toBe(2) // Alice + Carol
+      // No derived "returning" stat: untagged speakers are not assumed returning
+      expect(data).not.toHaveProperty('returningSpeakers')
       expect(data.awaitingConfirmation).toBe(1) // Bob (status=accepted)
       expect(data.featuredCount).toBe(1)
       // totalProposals = 2+1+1 = 4, speakers = 3, avg = 1.3
@@ -543,6 +582,7 @@ describe('Dashboard Server Actions', () => {
 
       const data = await fetchTravelSupport(confWithBudget)
       expect(data.pendingApprovals).toBe(1) // submitted only
+      expect(data.approvedCount).toBe(2) // approved + paid
       expect(data.totalRequested).toBe(16000) // 5000+8000+3000
       expect(data.totalApproved).toBe(10500) // 7500+3000 (approved+paid)
       expect(data.budgetAllocated).toBe(50000)
@@ -703,6 +743,8 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchRecentActivity', () => {
+    // Proposals come from an ordered + limited GROQ query (read client),
+    // not from the full getProposals corpus.
     it('merges sponsor activities and proposals sorted by date', async () => {
       mockListActivities.mockResolvedValue({
         activities: [
@@ -718,28 +760,39 @@ describe('Dashboard Server Actions', () => {
         error: null,
       })
 
-      mockGetProposals.mockResolvedValue({
-        proposals: [
-          makeProposal({
-            _id: 'p1',
-            title: 'Latest Talk',
-            _createdAt: '2025-02-15T09:00:00Z',
-            speakers: [{ name: 'Speaker A' }],
-          }),
-        ],
-        proposalsError: null,
-      })
+      mockClientReadFetch.mockResolvedValue([
+        {
+          _id: 'p1',
+          title: 'Latest Talk',
+          _createdAt: '2025-02-15T09:00:00Z',
+          speakers: [{ name: 'Speaker A' }],
+        },
+      ])
 
       const items = await fetchRecentActivity('conf-1')
       expect(items.length).toBeGreaterThanOrEqual(2)
       // Most recent first
       expect(items[0].type).toBe('proposal') // Feb 15
       expect(items[1].type).toBe('sponsor') // Feb 14
+      expect(items[0].user).toBe('Speaker A')
     })
 
-    it('returns at most 10 items', async () => {
+    it('pushes ordering and limits into the proposal query', async () => {
+      mockListActivities.mockResolvedValue({ activities: [], error: null })
+      mockClientReadFetch.mockResolvedValue([])
+
+      await fetchRecentActivity('conf-1')
+
+      const [query] = mockClientReadFetch.mock.calls[0]
+      expect(query).toContain('order(_createdAt desc)')
+      expect(query).toContain('[0...5]')
+      // Bounded activity fetch on the other source
+      expect(mockListActivities).toHaveBeenCalledWith('conf-1', 15)
+    })
+
+    it('returns at most 15 items', async () => {
       mockListActivities.mockResolvedValue({
-        activities: Array.from({ length: 10 }, (_, i) => ({
+        activities: Array.from({ length: 15 }, (_, i) => ({
           _id: `a${i}`,
           description: `Activity ${i}`,
           createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
@@ -750,15 +803,14 @@ describe('Dashboard Server Actions', () => {
         error: null,
       })
 
-      mockGetProposals.mockResolvedValue({
-        proposals: Array.from({ length: 5 }, (_, i) =>
-          makeProposal({
-            _id: `p${i}`,
-            _createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T12:00:00Z`,
-          }),
-        ),
-        proposalsError: null,
-      })
+      mockClientReadFetch.mockResolvedValue(
+        Array.from({ length: 5 }, (_, i) => ({
+          _id: `p${i}`,
+          title: `Talk ${i}`,
+          _createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T12:00:00Z`,
+          speakers: [{ name: 'Speaker' }],
+        })),
+      )
 
       const items = await fetchRecentActivity('conf-1')
       expect(items.length).toBeLessThanOrEqual(15)
@@ -812,12 +864,12 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchTicketSales', () => {
-    it('returns null when conference lacks ticket config', async () => {
+    it('returns unconfigured when conference lacks checkin IDs', async () => {
       const result = await fetchTicketSales(baseConference)
-      expect(result).toBeNull()
+      expect(result).toEqual({ status: 'unconfigured' })
     })
 
-    it('returns ticket data when conference has checkin IDs', async () => {
+    it('returns ok with ticket data when conference has checkin IDs', async () => {
       const confWithTickets: Conference = {
         ...baseConference,
         checkinCustomerId: 123,
@@ -826,10 +878,27 @@ describe('Dashboard Server Actions', () => {
       }
 
       const result = await fetchTicketSales(confWithTickets)
-      expect(result).not.toBeNull()
-      expect(result!.capacity).toBe(500)
-      expect(result!.milestones).toHaveLength(3)
-      expect(result!.milestones[0].name).toBe('Early Bird')
+      expect(result.status).toBe('ok')
+      if (result.status !== 'ok') throw new Error('expected ok result')
+      expect(result.data.capacity).toBe(500)
+      expect(result.data.milestones).toHaveLength(3)
+      expect(result.data.milestones[0].name).toBe('Early Bird')
+    })
+
+    it('returns error (not unconfigured) when the ticket API fails', async () => {
+      const confWithTickets: Conference = {
+        ...baseConference,
+        checkinCustomerId: 123,
+        checkinEventId: 456,
+      }
+      mockFetchEventTickets.mockRejectedValueOnce(new Error('API down'))
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = await fetchTicketSales(confWithTickets)
+      expect(result).toEqual({ status: 'error' })
+      expect(consoleSpy).toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
     })
   })
 
