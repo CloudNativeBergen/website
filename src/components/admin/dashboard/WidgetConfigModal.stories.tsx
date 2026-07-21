@@ -44,7 +44,7 @@ export const NoConfig: Story = {
     docs: {
       description: {
         story:
-          'When a widget type has no configSchema, a "No Configuration Available" message is shown.',
+          'When a widget type has no configSchema, an explanatory message with a Close action is shown instead of a form.',
       },
     },
   },

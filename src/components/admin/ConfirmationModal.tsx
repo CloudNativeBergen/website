@@ -104,20 +104,26 @@ export function ConfirmationModal({
         >
           {cancelButtonText}
         </Button>
-        <Button
+        {/* Deliberately a plain <button>, not the house <Button>: Button's
+            default "primary" variant bakes in bg-brand-cloud-blue, and since
+            variant and className classes have equal specificity the stylesheet
+            order decides — the brand blue won, so the danger/warning variants
+            silently rendered blue. A plain button owns its background. */}
+        <button
+          type="button"
           onClick={onConfirm}
           disabled={isLoading || confirmDisabled}
-          className={`font-space-grotesk w-full justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto`}
+          className={`font-space-grotesk inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 motion-reduce:transition-none ${styles.confirmButton} disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto`}
         >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
-              <div className="h-4 w-4 animate-pulse rounded bg-white/30" />
+              <div className="h-4 w-4 rounded bg-white/30 motion-safe:animate-pulse" />
               Processing...
             </div>
           ) : (
             confirmButtonText
           )}
-        </Button>
+        </button>
       </div>
     </ModalShell>
   )

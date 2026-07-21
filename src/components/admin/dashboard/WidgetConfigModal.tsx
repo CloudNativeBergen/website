@@ -1,18 +1,12 @@
 'use client'
 
-import { Fragment, useState, useEffect, useRef } from 'react'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
-import { XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import { CogIcon } from '@heroicons/react/24/solid'
 import type { WidgetConfigField } from '@/lib/dashboard/types'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { ModalShell } from '@/components/ModalShell'
 
 interface WidgetConfigModalProps {
   /** Whether the modal is open */
@@ -78,54 +72,26 @@ export function WidgetConfigModal({
 
   if (!configSchema) {
     return (
-      <Transition appear show={isOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={onClose}>
-          <TransitionChild
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black/25 dark:bg-black/50" />
-          </TransitionChild>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <TransitionChild
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <DialogPanel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all dark:bg-gray-800">
-                  <DialogTitle
-                    as="h3"
-                    className="text-lg leading-6 font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    No Configuration Available
-                  </DialogTitle>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      This widget does not have configurable settings.
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <AdminButton color="blue" size="md" onClick={onClose}>
-                      Close
-                    </AdminButton>
-                  </div>
-                </DialogPanel>
-              </TransitionChild>
-            </div>
+      <ModalShell
+        isOpen={isOpen}
+        onClose={onClose}
+        size="md"
+        padded={false}
+        title="Configure Widget"
+        subtitle={widgetDisplayName}
+        icon={<CogIcon className="h-5 w-5" />}
+      >
+        <div className="px-6 py-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            This widget does not have configurable settings.
+          </p>
+          <div className="mt-4">
+            <AdminButton color="blue" size="md" onClick={onClose}>
+              Close
+            </AdminButton>
           </div>
-        </Dialog>
-      </Transition>
+        </div>
+      </ModalShell>
     )
   }
 
@@ -172,102 +138,66 @@ export function WidgetConfigModal({
   }
 
   return (
-    <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <TransitionChild
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-black/25 dark:bg-black/50" />
-        </TransitionChild>
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      padded={false}
+      title="Configure Widget"
+      subtitle={widgetDisplayName}
+      icon={<CogIcon className="h-5 w-5" />}
+    >
+      {/* Only the Save button submits (explicit type="submit"); AdminButton
+          defaults to type="button", so Cancel/Reset can never submit. */}
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-6 px-6 py-4">
+          {Object.entries(configSchema.fields).map(([key, field]) => (
+            <ConfigField
+              key={key}
+              fieldKey={key}
+              field={field}
+              value={formData[key]}
+              error={errors[key]}
+              onChange={(value) => handleFieldChange(key, value)}
+            />
+          ))}
+        </div>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
-            <TransitionChild
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
+        {/* Footer: stacked full-width buttons on mobile (no wrapping at
+            narrow widths), Reset left / Cancel+Save right from sm up. */}
+        <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              className="justify-center py-2.5 sm:justify-start sm:py-2"
             >
-              <DialogPanel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white shadow-xl transition-all dark:bg-gray-800">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                  <div className="flex items-center gap-3">
-                    <CogIcon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
-                    <div>
-                      <DialogTitle
-                        as="h3"
-                        className="text-lg leading-6 font-semibold text-gray-900 dark:text-gray-100"
-                      >
-                        Configure Widget
-                      </DialogTitle>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {widgetDisplayName}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-md text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-400"
-                  >
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-6 px-6 py-4">
-                    {Object.entries(configSchema.fields).map(([key, field]) => (
-                      <ConfigField
-                        key={key}
-                        fieldKey={key}
-                        field={field}
-                        value={formData[key]}
-                        error={errors[key]}
-                        onChange={(value) => handleFieldChange(key, value)}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-                    <AdminButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleReset}
-                    >
-                      <ArrowPathIcon className="h-4 w-4" />
-                      Reset to Defaults
-                    </AdminButton>
-                    <div className="flex gap-3">
-                      <AdminButton
-                        variant="secondary"
-                        size="md"
-                        onClick={onClose}
-                      >
-                        Cancel
-                      </AdminButton>
-                      <AdminButton color="blue" size="md" type="submit">
-                        Save Changes
-                      </AdminButton>
-                    </div>
-                  </div>
-                </form>
-              </DialogPanel>
-            </TransitionChild>
+              <ArrowPathIcon className="h-4 w-4" />
+              Reset to Defaults
+            </AdminButton>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:gap-3">
+              <AdminButton
+                variant="secondary"
+                size="md"
+                onClick={onClose}
+                className="w-full py-2.5 sm:w-auto sm:py-2"
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                color="blue"
+                size="md"
+                type="submit"
+                className="w-full py-2.5 sm:w-auto sm:py-2"
+              >
+                Save Changes
+              </AdminButton>
+            </div>
           </div>
         </div>
-      </Dialog>
-    </Transition>
+      </form>
+    </ModalShell>
   )
 }
 
