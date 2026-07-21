@@ -27,6 +27,7 @@
     "sanity/**",
     "migrations/**",
     "src/lib/empty-module.ts",
+    "src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts",
     "src/components/email/CoSpeakerResponseTemplate.tsx",
     "src/lib/sponsor-crm/contract-send.ts"
   ],
