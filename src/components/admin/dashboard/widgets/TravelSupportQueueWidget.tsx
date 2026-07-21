@@ -34,6 +34,10 @@ export function TravelSupportQueueWidget({
   config,
 }: TravelSupportQueueWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: no phase view here is static — the planning branch is
+  // CONDITIONED on the fetched data (totalRequested) and shows the fetched
+  // budget, and post-conference renders fetched totals, so the fetch must
+  // always run.
   const { data, loading, error, refetch } = useWidgetData<TravelSupportData>(
     conference ? () => fetchTravelSupport(conference) : null,
     [conference],

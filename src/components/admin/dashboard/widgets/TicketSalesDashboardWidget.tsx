@@ -44,14 +44,20 @@ export function TicketSalesDashboardWidget({
   conference,
   config,
 }: TicketSalesDashboardWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: the initialization view is a STATIC setup guide (no fetched
+  // data at all), so its fetcher is nulled — no skeleton while fetching data
+  // the view won't use. Post-conference and the operational views all render
+  // fetched data and keep fetching.
+  const isStaticPhase = phase === 'initialization'
   const {
     data: result,
     loading,
     error,
     refetch,
   } = useWidgetData<TicketSalesResult>(
-    conference ? () => fetchTicketSales(conference) : null,
-    [conference],
+    conference && !isStaticPhase ? () => fetchTicketSales(conference) : null,
+    [conference, isStaticPhase],
   )
   const data = result?.status === 'ok' ? result.data : null
 
@@ -59,7 +65,6 @@ export function TicketSalesDashboardWidget({
   // the in-app toggle can differ from `prefers-color-scheme`.
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
-  const phase = conference ? getCurrentPhase(conference) : null
 
   const gaugeOptions: ApexOptions = useMemo(() => {
     const themeColors = getThemeColors(isDark)

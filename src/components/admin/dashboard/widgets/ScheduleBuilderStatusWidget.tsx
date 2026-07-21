@@ -23,9 +23,13 @@ export function ScheduleBuilderStatusWidget({
   conference,
 }: ScheduleBuilderStatusWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: the initialization view is a STATIC planning guide (no
+  // fetched data at all), so its fetcher is nulled — no skeleton while
+  // fetching data the view won't use. Every other phase renders fetched data.
+  const isStaticPhase = phase === 'initialization'
   const { data, loading, error, refetch } = useWidgetData<ScheduleStatusData>(
-    conference ? () => fetchScheduleStatus(conference) : null,
-    [conference],
+    conference && !isStaticPhase ? () => fetchScheduleStatus(conference) : null,
+    [conference, isStaticPhase],
   )
 
   if (loading) {

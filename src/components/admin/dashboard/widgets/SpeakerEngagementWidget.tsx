@@ -32,6 +32,10 @@ export function SpeakerEngagementWidget({
   conference,
   config,
 }: SpeakerEngagementWidgetProps) {
+  // Fetch gating: no phase view here is static — even the initialization
+  // view renders fetched counts (featured/registered speakers), and the
+  // execution/post-conference branches require data — so the fetch must
+  // always run.
   const { data, loading, error, refetch } =
     useWidgetData<SpeakerEngagementData>(
       conference ? () => fetchSpeakerEngagement(conference._id) : null,

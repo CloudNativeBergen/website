@@ -47,14 +47,21 @@ export function UpcomingDeadlinesWidget({
   config,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: initialization (planning card) and post-conference
+  // (completion card) are STATIC — they render no fetched data, so the
+  // fetcher is nulled for them (useWidgetData then never loads). This also
+  // stops those branches from masking fetch errors: in the remaining phases
+  // the order below is loading → error → data.
+  const isStaticPhase =
+    phase === 'initialization' || phase === 'post-conference'
   const {
     data: deadlines,
     loading,
     error,
     refetch,
   } = useWidgetData<DeadlineData[]>(
-    conference ? () => fetchDeadlines(conference) : null,
-    [conference],
+    conference && !isStaticPhase ? () => fetchDeadlines(conference) : null,
+    [conference, isStaticPhase],
   )
 
   // Phase-specific: Initialization without deadlines - Show planning timeline

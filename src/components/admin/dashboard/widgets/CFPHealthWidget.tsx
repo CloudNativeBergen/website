@@ -34,9 +34,13 @@ type CFPHealthWidgetProps = BaseWidgetProps<CFPHealthConfig>
 export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [now] = useState(() => Date.now())
+  // Fetch gating: the initialization view is STATIC (countdown computed from
+  // conference dates alone), so its fetcher is nulled — no skeleton while
+  // fetching data the view won't use. Every other phase renders fetched data.
+  const isStaticPhase = phase === 'initialization'
   const { data, loading, error, refetch } = useWidgetData<CFPHealthData>(
-    conference ? () => fetchCFPHealth(conference) : null,
-    [conference],
+    conference && !isStaticPhase ? () => fetchCFPHealth(conference) : null,
+    [conference, isStaticPhase],
   )
 
   // Apply config defaults

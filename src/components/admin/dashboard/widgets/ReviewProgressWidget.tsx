@@ -27,11 +27,18 @@ export function ReviewProgressWidget({
   conference,
   config,
 }: ReviewProgressWidgetProps) {
-  const { data, loading, error, refetch } = useWidgetData<ReviewProgressData>(
-    conference ? () => fetchReviewProgress(conference._id) : null,
-    [conference],
-  )
   const phase = conference ? getCurrentPhase(conference) : null
+  // Fetch gating: the initialization view is a STATIC setup guide (no fetched
+  // data at all), so its fetcher is nulled — no skeleton while fetching data
+  // the view won't use. Post-conference and the operational view render
+  // fetched data and keep fetching.
+  const isStaticPhase = phase === 'initialization'
+  const { data, loading, error, refetch } = useWidgetData<ReviewProgressData>(
+    conference && !isStaticPhase
+      ? () => fetchReviewProgress(conference._id)
+      : null,
+    [conference, isStaticPhase],
+  )
 
   const showAverageScore = config?.showAverageScore ?? true
 
