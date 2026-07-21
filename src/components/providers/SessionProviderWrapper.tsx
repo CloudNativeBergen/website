@@ -2,7 +2,11 @@ import { SessionProvider } from 'next-auth/react'
 import type { Session } from 'next-auth'
 import { auth } from '@/lib/auth'
 import { SessionRefreshOnRestore } from './SessionRefreshOnRestore'
-import { AppBadgeSync, NotificationClickSync } from '@/components/pwa'
+import {
+  AppBadgeSync,
+  NotificationClickSync,
+  StandaloneLaunchRedirect,
+} from '@/components/pwa'
 
 /**
  * Narrow the server session into what is safe to serialize to the client, and
@@ -62,12 +66,15 @@ async function SessionLoader({ children }: { children: React.ReactNode }) {
         on the session, so they are inert for signed-out visitors:
           - AppBadgeSync mirrors the unread count to the app-icon badge;
           - NotificationClickSync marks a notification read when its push is
-            clicked (see public/sw.js postMessage).
+            clicked (see public/sw.js postMessage);
+          - StandaloneLaunchRedirect rescues iOS installed launches that land on
+            `/` instead of the manifest `start_url` (see the component).
         Mounted here so they run on EVERY page (the bell only mounts in some
         shells), inside SessionProvider + the layout's TRPCProvider.
       */}
       <AppBadgeSync />
       <NotificationClickSync />
+      <StandaloneLaunchRedirect />
       {children}
     </SessionProvider>
   )

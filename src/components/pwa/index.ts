@@ -14,6 +14,7 @@ export type { UpdateBannerProps } from './UpdateBanner'
 export { ServiceWorkerRegistrar } from './ServiceWorkerRegistrar'
 export { AppBadgeSync } from './AppBadgeSync'
 export { NotificationClickSync } from './NotificationClickSync'
+export { StandaloneLaunchRedirect } from './StandaloneLaunchRedirect'
 export { PwaInstallProvider, usePwaInstall } from './PwaInstallProvider'
 export type { InstallPlatform } from './PwaInstallProvider'
 export {
