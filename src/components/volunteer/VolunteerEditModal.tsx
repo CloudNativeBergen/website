@@ -72,6 +72,12 @@ export function VolunteerEditModal({
     setError(null)
   }
 
+  // Unsaved edits guard the close (ModalShell shows a discard confirm).
+  const pristine = draftFrom(volunteer)
+  const isDirty = (Object.keys(pristine) as (keyof Draft)[]).some(
+    (key) => draft[key] !== pristine[key],
+  )
+
   const updateMutation = api.volunteer.admin.update.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -128,6 +134,8 @@ export function VolunteerEditModal({
       title="Edit volunteer details"
       subtitle={volunteer.name}
       icon={<PencilSquareIcon className="h-5 w-5" />}
+      confirmOnDirtyClose
+      isDirty={isDirty}
     >
       <form noValidate onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
