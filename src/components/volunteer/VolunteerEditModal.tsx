@@ -62,20 +62,25 @@ export function VolunteerEditModal({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(volunteer))
+  // Snapshot of the values the draft was initialized from. Kept in state (not
+  // recomputed from the live prop) so a background refetch of the same
+  // volunteer can't shift the dirty baseline mid-edit.
+  const [baseline, setBaseline] = useState<Draft>(() => draftFrom(volunteer))
   const [error, setError] = useState<string | null>(null)
 
   // Reset the draft whenever a different volunteer is opened.
   const [lastId, setLastId] = useState(volunteer._id)
   if (lastId !== volunteer._id) {
     setLastId(volunteer._id)
-    setDraft(draftFrom(volunteer))
+    const next = draftFrom(volunteer)
+    setDraft(next)
+    setBaseline(next)
     setError(null)
   }
 
   // Unsaved edits guard the close (ModalShell shows a discard confirm).
-  const pristine = draftFrom(volunteer)
-  const isDirty = (Object.keys(pristine) as (keyof Draft)[]).some(
-    (key) => draft[key] !== pristine[key],
+  const isDirty = (Object.keys(baseline) as (keyof Draft)[]).some(
+    (key) => draft[key] !== baseline[key],
   )
 
   const updateMutation = api.volunteer.admin.update.useMutation({
