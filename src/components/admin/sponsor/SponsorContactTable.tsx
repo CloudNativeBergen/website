@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { ContactPerson } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
@@ -8,20 +8,13 @@ import {
   BuildingOffice2Icon,
   ClipboardIcon,
   PencilIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { SponsorContactEditor } from './SponsorContactEditor'
-import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
+import { ModalShell } from '@/components/ModalShell'
 import {
   TableContainer,
   TableHeader,
@@ -85,6 +78,9 @@ export function SponsorContactTable({
     useState<SponsorForConferenceExpanded[]>(initialSponsors)
   const [editingSponsor, setEditingSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
+  // Unsaved-changes state reported by the embedded SponsorContactEditor;
+  // drives ModalShell's dirty-close guard.
+  const [isEditorDirty, setIsEditorDirty] = useState(false)
   const utils = api.useUtils()
 
   useEffect(() => {
@@ -93,11 +89,13 @@ export function SponsorContactTable({
   }, [initialSponsors])
 
   const handleStartEdit = (sfc: SponsorForConferenceExpanded) => {
+    setIsEditorDirty(false)
     setEditingSponsor(sfc)
   }
 
   const handleCloseEdit = () => {
     setEditingSponsor(null)
+    setIsEditorDirty(false)
   }
 
   const handleUpdateSuccess = () => {
@@ -142,63 +140,29 @@ export function SponsorContactTable({
 
   return (
     <div>
-      {/* Editor Modal */}
-      <Transition appear show={!!editingSponsor} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={handleCloseEdit}>
-          <TransitionChild
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black/25 backdrop-blur-xs dark:bg-black/50" />
-          </TransitionChild>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <TransitionChild
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <DialogPanel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all dark:bg-gray-900">
-                  <div className="mb-4 flex items-center justify-between">
-                    <DialogTitle
-                      as="h3"
-                      className="font-space-grotesk text-xl font-bold text-gray-900 dark:text-white"
-                    >
-                      Manage Contacts: {editingSponsor?.sponsor.name}
-                    </DialogTitle>
-                    <button
-                      onClick={handleCloseEdit}
-                      className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                    >
-                      <XMarkIcon className="h-6 w-6" />
-                    </button>
-                  </div>
-
-                  {editingSponsor && (
-                    <div className="mt-2">
-                      <SponsorContactEditor
-                        sponsorForConference={editingSponsor}
-                        onSuccess={handleUpdateSuccess}
-                        onCancel={handleCloseEdit}
-                      />
-                    </div>
-                  )}
-                </DialogPanel>
-              </TransitionChild>
-            </div>
+      {/* Editor Modal — canonical ModalShell (house header with a labeled
+          44px close, sheet presentation on mobile with internal scroll, and a
+          dirty-close guard fed by the editor's unsaved-changes state). */}
+      <ModalShell
+        isOpen={!!editingSponsor}
+        onClose={handleCloseEdit}
+        size="2xl"
+        title="Manage Contacts"
+        subtitle={editingSponsor?.sponsor.name}
+        confirmOnDirtyClose
+        isDirty={isEditorDirty}
+      >
+        {editingSponsor && (
+          <div className="text-left">
+            <SponsorContactEditor
+              sponsorForConference={editingSponsor}
+              onSuccess={handleUpdateSuccess}
+              onCancel={handleCloseEdit}
+              onDirtyChange={setIsEditorDirty}
+            />
           </div>
-        </Dialog>
-      </Transition>
+        )}
+      </ModalShell>
 
       <div className="space-y-3 md:hidden">
         {contactRows.map((row, index) => (

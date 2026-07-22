@@ -262,7 +262,8 @@ export function SponsorPipelineView({
             'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
             isPending
               ? 'bg-gray-400 dark:bg-gray-600'
-              : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+              : // House primary-footer-button color (brand-cloud-blue).
+                'bg-brand-cloud-blue hover:bg-primary-700 dark:bg-indigo-600 dark:hover:bg-indigo-500',
           )}
         >
           {isPending ? (

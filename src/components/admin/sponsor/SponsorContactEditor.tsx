@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ContactPerson } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
@@ -23,6 +23,12 @@ interface SponsorContactEditorProps {
   onSuccess?: () => void
   onCancel?: () => void
   className?: string
+  /**
+   * Notifies the host whenever the editor's unsaved-changes state flips
+   * (compared against the initial contacts/billing snapshot). Lets modal
+   * hosts drive ModalShell's dirty-close guard for this editor's state.
+   */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export function SponsorContactEditor({
@@ -30,6 +36,7 @@ export function SponsorContactEditor({
   onSuccess,
   onCancel,
   className = '',
+  onDirtyChange,
 }: SponsorContactEditorProps) {
   const [contacts, setContacts] = useState<ContactPerson[]>(
     sponsorForConference.contactPersons || [],
@@ -40,6 +47,20 @@ export function SponsorContactEditor({
     reference: sponsorForConference.billing?.reference || '',
     comments: sponsorForConference.billing?.comments || '',
   })
+
+  // Dirty tracking: compare against the state captured on mount. The callback
+  // lives in a ref so a host passing an inline lambda doesn't re-run the
+  // effect on every render.
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange
+  })
+  const [initialSnapshot] = useState(() => JSON.stringify([contacts, billing]))
+  useEffect(() => {
+    onDirtyChangeRef.current?.(
+      JSON.stringify([contacts, billing]) !== initialSnapshot,
+    )
+  }, [contacts, billing, initialSnapshot])
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
