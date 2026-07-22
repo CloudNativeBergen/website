@@ -68,9 +68,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
   return (
     <Transition appear show={open}>
+      {/* z-50 matches the ModalShell family — the palette must layer above the
+          admin's sticky headers (z-40), which previously overlapped it. */}
       <Dialog
         as="div"
-        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
+        className={`relative z-50 ${theme === 'dark' ? 'dark' : ''}`}
         onClose={handleClose}
       >
         <TransitionChild
@@ -84,7 +86,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           <div className="fixed inset-0 bg-gray-500/25 dark:bg-gray-900/50" />
         </TransitionChild>
 
-        <div className="fixed inset-0 z-10 w-screen overflow-y-auto p-4 sm:p-6 md:p-20">
+        <div className="fixed inset-0 overflow-y-auto p-4 sm:p-6 md:p-20">
           <TransitionChild
             enter="ease-out duration-300"
             enterFrom="opacity-0 scale-95"
@@ -95,7 +97,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           >
             <DialogPanel
               transition
-              className="mx-auto max-w-xl transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700"
+              className="mx-auto w-full max-w-xl min-w-0 transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700"
             >
               <Combobox
                 onChange={(item) => {
@@ -144,17 +146,22 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                                     <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
                                   </div>
                                 </div>
-                                <div className="ml-3 flex-auto truncate">
-                                  <div className="font-medium dark:text-white">
+                                {/* min-w-0 on the container + truncate on each
+                                    text line: truncating only the wrapper clips
+                                    child blocks without an ellipsis and lets
+                                    long nowrap titles dictate the row's
+                                    min-content width (mobile overflow). */}
+                                <div className="ml-3 min-w-0 flex-auto">
+                                  <div className="truncate font-medium dark:text-white">
                                     {item.title}
                                   </div>
                                   {item.subtitle && (
-                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                    <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
                                       {item.subtitle}
                                     </div>
                                   )}
                                   {item.description && (
-                                    <div className="text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                    <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
                                       {item.description}
                                     </div>
                                   )}

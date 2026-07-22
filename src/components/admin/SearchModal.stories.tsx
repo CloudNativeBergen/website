@@ -7,12 +7,20 @@ import {
   UserGroupIcon,
   HomeIcon,
 } from '@heroicons/react/24/outline'
+import { http, HttpResponse } from 'msw'
+import { fn, userEvent, waitFor, within } from 'storybook/test'
 import { SkeletonSearchResult } from './LoadingSkeleton'
+import { SearchModal } from './SearchModal'
 
 const meta = {
   title: 'Systems/Proposals/Admin/SearchModal',
   parameters: {
-    layout: 'centered',
+    // 'padded', not 'centered': the centered layout makes <body> a flex
+    // centering context that sizes the story to its min-content width, which
+    // let long nowrap result titles inflate the replica past the viewport
+    // (scrollWidth 484 at a 393px viewport) — a situation the real dialog's
+    // `fixed inset-0` container can never produce. Padded mirrors the app.
+    layout: 'padded',
     options: { showPanel: false },
     docs: {
       description: {
@@ -34,7 +42,7 @@ function SearchModalShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-xl divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700">
+    <div className="mx-auto w-full max-w-xl min-w-0 divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700">
       <div className="grid grid-cols-1">
         <input
           className="col-start-1 row-start-1 h-12 w-full pr-4 pl-11 text-base text-gray-900 outline-hidden placeholder:text-gray-400 sm:text-sm dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
@@ -97,17 +105,17 @@ function ResultsList({ groups }: { groups: ResultGroup[] }) {
                 <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
                   <item.icon className="size-4 text-gray-400 dark:text-gray-500" />
                 </div>
-                <div className="ml-3 flex-auto truncate">
-                  <div className="font-medium dark:text-white">
+                <div className="ml-3 min-w-0 flex-auto">
+                  <div className="truncate font-medium dark:text-white">
                     {item.title}
                   </div>
                   {item.subtitle && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="truncate text-xs text-gray-500 dark:text-gray-400">
                       {item.subtitle}
                     </div>
                   )}
                   {item.description && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="truncate text-xs text-gray-500 dark:text-gray-400">
                       {item.description}
                     </div>
                   )}
@@ -261,6 +269,86 @@ export const SearchError: Story = {
       </div>
     </SearchModalShell>
   ),
+}
+
+/**
+ * The REAL portalled dialog (not the markup replica used by the state stories
+ * above), rendered open with MSW-mocked search endpoints. The play function
+ * types a query so the results list renders. Used for visual QA of z-index,
+ * width containment and mobile overflow — shoot this story at 393px.
+ */
+export const LiveWithResults: Story = {
+  render: () => <SearchModal open={true} onClose={fn()} />,
+  parameters: {
+    layout: 'fullscreen',
+    msw: {
+      handlers: [
+        http.get('/api/trpc/proposal.admin.search', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'prop-1',
+                  title: 'Building Resilient Microservices with Kubernetes',
+                  status: 'accepted',
+                  format: 'presentation_45',
+                  speakers: [{ _id: 'spk-1', name: 'Jane Doe' }],
+                },
+                {
+                  _id: 'prop-2',
+                  title: 'Kubernetes Security Best Practices',
+                  status: 'submitted',
+                  format: 'presentation_25',
+                  speakers: [{ _id: 'spk-2', name: 'John Smith' }],
+                },
+              ],
+            },
+          }),
+        ),
+        http.get('/api/trpc/sponsor.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'sponsor-1',
+                  name: 'Kubernetes Foundation',
+                  website: 'https://kubernetes.io',
+                },
+              ],
+            },
+          }),
+        ),
+        http.get('/api/trpc/speaker.admin.search', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  _id: 'spk-1',
+                  name: 'Jane Kubernetes Expert',
+                  title: 'Cloud Architect',
+                },
+              ],
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async () => {
+    // The dialog portals to document.body, outside the story canvas.
+    const body = within(document.body)
+    const input = await body.findByPlaceholderText(
+      'Search pages, proposals, speakers, sponsors...',
+    )
+    await userEvent.type(input, 'kubernetes')
+    // Debounced 300ms + parallel provider fetches.
+    await waitFor(
+      async () => {
+        await body.findByText('Kubernetes Foundation')
+      },
+      { timeout: 5000 },
+    )
+  },
 }
 
 export const PagesOnly: Story = {
