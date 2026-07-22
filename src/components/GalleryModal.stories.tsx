@@ -1,143 +1,125 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import {
-  XMarkIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-} from '@heroicons/react/24/outline'
+import { http, HttpResponse } from 'msw'
+import { fn } from 'storybook/test'
+import { GalleryModal } from './GalleryModal'
+import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+
+// Renders the REAL GalleryModal (previously this story was a static visual
+// mock, so captures never exercised the actual component). The global
+// Session/TRPC decorators provide the providers it needs; MSW serves
+// placeholder images for the Sanity CDN URLs the image builder produces and
+// answers the `gallery.untagSelf` tRPC mutation.
+
+function mockImage(
+  id: string,
+  overrides: Partial<GalleryImageWithSpeakers>,
+): GalleryImageWithSpeakers {
+  return {
+    _id: id,
+    _rev: 'r1',
+    _createdAt: '2025-06-12T10:00:00Z',
+    _updatedAt: '2025-06-12T10:00:00Z',
+    photographer: 'Olav Nordmann',
+    date: '2025-06-12',
+    location: 'Grieghallen, Bergen',
+    featured: false,
+    image: {
+      _type: 'image',
+      asset: {
+        _ref: `image-${id.replace(/-/g, '')}0000000000000000000000000000-1920x1080-jpg`,
+        _type: 'reference',
+      },
+    },
+    speakers: [],
+    ...overrides,
+  } as GalleryImageWithSpeakers
+}
+
+const images: GalleryImageWithSpeakers[] = [
+  mockImage('gal1', {
+    location: 'Grieghallen, Bergen',
+    imageAlt: 'Keynote presentation on the main stage',
+    speakers: [
+      // Matches the global SessionDecorator's speaker id so the
+      // "Remove Me" self-untag affordance is visible in the capture.
+      { _id: 'speaker-storybook', name: 'Storybook User', slug: 'storybook' },
+      { _id: 'sp-2', name: 'Jane Doe', slug: 'jane-doe' },
+    ],
+  }),
+  mockImage('gal2', {
+    location: 'Workshop Room A',
+    photographer: 'Kari Hansen',
+    imageAlt: 'Hands-on workshop session',
+    speakers: [{ _id: 'sp-3', name: 'Alice Johnson', slug: 'alice-johnson' }],
+  }),
+  mockImage('gal3', {
+    location: 'Foyer',
+    imageAlt: 'Networking break',
+  }),
+]
+
+const placeholderSvg = (w: number, h: number, label: string, hue: number) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+  `<rect width="${w}" height="${h}" fill="hsl(${hue} 40% 30%)"/>` +
+  `<text x="50%" y="50%" fill="hsl(${hue} 30% 75%)" font-family="sans-serif" font-size="${Math.round(h / 12)}" text-anchor="middle" dominant-baseline="middle">${label}</text>` +
+  `</svg>`
+
+const handlers = [
+  // The Sanity image builder emits cdn.sanity.io URLs; serve deterministic
+  // placeholders so the lightbox and thumbnail strip render real <img> content.
+  http.get('https://cdn.sanity.io/images/*', ({ request }) => {
+    const url = new URL(request.url)
+    const match = /gal(\d)/.exec(url.pathname)
+    const n = match ? Number(match[1]) : 1
+    const thumb = url.searchParams.get('w') === '192'
+    return new HttpResponse(
+      placeholderSvg(
+        thumb ? 192 : 1920,
+        thumb ? 128 : 1080,
+        `Photo ${n}`,
+        [210, 150, 30][n - 1] ?? 210,
+      ),
+      { headers: { 'Content-Type': 'image/svg+xml' } },
+    )
+  }),
+  http.post('/api/trpc/gallery.untagSelf', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+]
 
 const meta = {
   title: 'Components/Feedback/GalleryModal',
+  component: GalleryModal,
   parameters: {
     layout: 'fullscreen',
-    options: { showPanel: false },
+    msw: { handlers },
     docs: {
       description: {
         component:
-          'Full-screen gallery modal with image carousel, thumbnail navigation, speaker tags, and self-untag functionality. Uses `useImageCarousel` for keyboard/touch navigation and `useSession` for identifying the current speaker. Supports swipe gestures on mobile.',
+          'Full-screen gallery lightbox with image carousel, thumbnail navigation, speaker tags, and self-untag. A deliberate ModalShell exception: the full-bleed black lightbox opts out of the shared card/sheet shell but follows the same house bar — modern Headless UI v2 dialog, a labeled 44×44 close button, and a real accessible dialog name ("Photo gallery, image N of M"). Keyboard (← → Esc via `useImageCarousel`) and touch swipe are supported.',
       },
     },
   },
-} satisfies Meta
+  args: {
+    isOpen: true,
+    onClose: fn(),
+    images,
+    onImageUpdated: fn(),
+  },
+} satisfies Meta<typeof GalleryModal>
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-const mockImages = [
-  {
-    title: 'Keynote Presentation',
-    photographer: 'Olav Nordmann',
-    location: 'Grieghallen, Bergen',
-    date: 'June 12, 2025',
-    speakers: ['Jane Doe', 'John Smith'],
-  },
-  {
-    title: 'Workshop Session',
-    photographer: 'Olav Nordmann',
-    location: 'Grieghallen, Bergen',
-    date: 'June 12, 2025',
-    speakers: ['Alice Johnson'],
-  },
-  {
-    title: 'Networking Break',
-    photographer: 'Kari Hansen',
-    location: 'Grieghallen, Bergen',
-    date: 'June 12, 2025',
-    speakers: [],
-  },
-]
+/**
+ * The lightbox on its first image. The signed-in mock speaker is tagged in
+ * this photo, so the "Remove Me" self-untag button is visible. The lightbox
+ * uses a fixed black surface in both themes, so light and dark captures are
+ * identical by design.
+ */
+export const Default: Story = {}
 
-function MockGalleryModal() {
-  const currentImage = mockImages[0]
-
-  return (
-    <div className="relative h-150 w-full bg-black">
-      <div className="flex h-full flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 bg-black/50 px-4 py-3 backdrop-blur-sm sm:px-6">
-          <div className="flex items-center space-x-4">
-            <h2 className="text-lg font-semibold text-white">
-              1 of {mockImages.length}
-            </h2>
-            <span className="hidden text-sm text-gray-300/90 sm:block">
-              {currentImage.location}
-            </span>
-          </div>
-          <button className="rounded-md p-2 text-gray-400 hover:bg-gray-800 hover:text-white">
-            <XMarkIcon className="h-6 w-6" />
-          </button>
-        </div>
-
-        {/* Image area */}
-        <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-          <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-gray-800 to-gray-900">
-            <div className="text-center text-gray-500">
-              <div className="mx-auto mb-2 h-32 w-48 rounded-lg bg-gray-700/50" />
-              <p className="text-sm">Gallery image placeholder</p>
-            </div>
-          </div>
-
-          {/* Navigation arrows */}
-          <button className="absolute top-1/2 left-4 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm">
-            <ChevronLeftIcon className="h-6 w-6" />
-          </button>
-          <button className="absolute top-1/2 right-4 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm">
-            <ChevronRightIcon className="h-6 w-6" />
-          </button>
-        </div>
-
-        {/* Info panel */}
-        <div className="border-t border-gray-800 bg-black/50 backdrop-blur-sm">
-          <div className="px-4 py-4 sm:px-6">
-            <div className="mb-4 space-y-2">
-              <h3 className="text-xl font-semibold text-white">
-                {currentImage.location}
-              </h3>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300/90">
-                <span>Photo by {currentImage.photographer}</span>
-                <span>{currentImage.date}</span>
-              </div>
-              <div className="flex flex-wrap gap-2 pt-2">
-                {currentImage.speakers.map((speaker) => (
-                  <span
-                    key={speaker}
-                    className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium text-blue-400"
-                  >
-                    {speaker}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Thumbnails */}
-            <div className="flex space-x-2 overflow-x-auto pb-2">
-              {mockImages.map((img, index) => (
-                <div
-                  key={img.title}
-                  className={`relative h-16 w-24 shrink-0 overflow-hidden rounded ${
-                    index === 0
-                      ? 'ring-2 ring-white ring-offset-2 ring-offset-black'
-                      : 'opacity-50'
-                  }`}
-                >
-                  <div className="h-full w-full bg-gray-700" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export const Default: Story = {
-  render: () => <MockGalleryModal />,
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Full-screen gallery modal showing the first image in a carousel. Includes navigation arrows, photographer credit, speaker tags, and thumbnail strip. The actual component uses Sanity image URLs and supports keyboard navigation (← → arrows) and touch swipe gestures.',
-      },
-    },
-  },
+/** Opened at the second image via `initialIndex`. */
+export const SecondImage: Story = {
+  args: { initialIndex: 1 },
 }
