@@ -779,7 +779,9 @@ export const MY_AREAS_WIDGET = defineWidget({
     minCols: 3,
     maxCols: 6,
     minRows: 2,
-    maxRows: 4,
+    // Content is team-count-driven (realistically ≤3 team cards): at 4 rows
+    // the card is mostly dead space, so cap height at 3 (matrix-sweep verdict).
+    maxRows: 3,
     prefersLandscape: true,
   },
   defaultSize: {

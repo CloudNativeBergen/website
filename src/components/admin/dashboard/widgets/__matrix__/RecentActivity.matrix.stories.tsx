@@ -169,7 +169,7 @@ export const KnownRiskCells: Story = {
     docs: {
       description: {
         story:
-          'The two flagged cells: 3x2 with a dense paginated feed (header + pager chrome in a 2-row cell) and the 3x10 default with only 2 items (dead space).',
+          'The two flagged cells: 3x2 with a dense paginated feed (header + pager chrome in a 2-row cell) and 3x10 with only 2 items (the pre-recalibration default, now a user-chosen oversize; the registry default is 3x4, covered sparse in AllStatesDefaultSize).',
       },
     },
   },

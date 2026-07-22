@@ -61,6 +61,12 @@ export function getBaseChartOptions(isDark = false): ApexOptions {
   return {
     chart: {
       fontFamily: 'inherit',
+      // Setting `theme.mode` makes ApexCharts paint its own opaque background
+      // panel (white in light, dark gray in dark) behind the plot area — in
+      // dark mode the gauge/trend charts sat on a white rectangle instead of
+      // the card. Force transparency so charts always sit on the card's own
+      // background in both themes.
+      background: 'transparent',
       toolbar: {
         show: false,
       },

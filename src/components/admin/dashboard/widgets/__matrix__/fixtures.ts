@@ -420,9 +420,14 @@ export const speakerEngagementSparse: SpeakerEngagementData = {
   averageProposalsPerSpeaker: 1.0,
 }
 
-/** Tiny inline SVG the SponsorLogo/InlineSvg pipeline can render offline. */
+/**
+ * Tiny inline SVG the SponsorLogo/InlineSvg pipeline can render offline.
+ * The explicit width/height matter: with only a viewBox the SVG has no
+ * intrinsic size, and inside the logo chip's shrink-to-fit flex context it
+ * resolved to 0x0 (blank chips). Real sponsor logos carry intrinsic sizes.
+ */
 const sponsorLogoSvg = (fill: string): string =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 16"><rect width="48" height="16" rx="3" fill="${fill}"/><text x="24" y="11.5" font-size="8" fill="#ffffff" text-anchor="middle" font-family="sans-serif">LOGO</text></svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="16" viewBox="0 0 48 16"><rect width="48" height="16" rx="3" fill="${fill}"/><text x="24" y="11.5" font-size="8" fill="#ffffff" text-anchor="middle" font-family="sans-serif">LOGO</text></svg>`
 
 export const sponsorPipelineDense: SponsorPipelineWidgetData = {
   stages: [

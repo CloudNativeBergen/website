@@ -67,15 +67,29 @@ setMockActionFor(
   mockResolved(ticketSalesUnconfigured),
 )
 
-/** The widget calls next-themes useTheme() for chart theming. */
-const withNextThemes: Decorator = (Story, ctx) => (
-  <ThemeProvider
-    attribute="class"
-    forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
-  >
-    <Story />
-  </ThemeProvider>
-)
+/**
+ * The widget calls next-themes useTheme().resolvedTheme for chart theming.
+ * NOT forcedTheme: next-themes does not reflect a forced theme into
+ * resolvedTheme (it stays on the stored/system value — light in headless
+ * browsers), so a forcedTheme decorator renders dark stories with
+ * light-themed charts. defaultTheme + enableSystem=false makes
+ * resolvedTheme follow the toolbar; the per-theme storageKey and key
+ * ensure no persisted value or stale provider wins over a toolbar switch.
+ */
+const withNextThemes: Decorator = (Story, ctx) => {
+  const theme = ctx.globals.theme === 'dark' ? 'dark' : 'light'
+  return (
+    <ThemeProvider
+      key={theme}
+      attribute="class"
+      defaultTheme={theme}
+      enableSystem={false}
+      storageKey={`sb-matrix-theme-${theme}`}
+    >
+      <Story />
+    </ThemeProvider>
+  )
+}
 
 const meta = {
   title: 'Systems/Proposals/Admin/Dashboard/Matrix/TicketSales',

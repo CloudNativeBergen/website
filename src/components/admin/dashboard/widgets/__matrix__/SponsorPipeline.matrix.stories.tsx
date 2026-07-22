@@ -143,7 +143,7 @@ export const KnownRiskCells: Story = {
       <WidgetFrame label="min/compact operational" colSpan={5} rowSpan={4}>
         <SponsorPipelineWidget conference={dense} />
       </WidgetFrame>
-      <WidgetFrame label="default/tall operational" colSpan={6} rowSpan={9}>
+      <WidgetFrame label="oversized (old default)" colSpan={6} rowSpan={9}>
         <SponsorPipelineWidget conference={dense} />
       </WidgetFrame>
     </MatrixGrid>
@@ -152,7 +152,7 @@ export const KnownRiskCells: Story = {
     docs: {
       description: {
         story:
-          'The two flagged operational cells: 5x4 (compact/min — 4 pipeline stages in 4 rows) and 6x9 (the tall default — check for dead space below the stages).',
+          'The two flagged operational cells: 5x4 (compact/min — 4 pipeline stages in 4 rows) and 6x9 (the pre-recalibration default, now a user-chosen oversize — dead space below the stages is inherent to the fixed content).',
       },
     },
   },

@@ -20,6 +20,7 @@ import {
   WidgetEmptyState,
   WidgetErrorState,
   WidgetHeader,
+  WidgetBody,
 } from './shared'
 
 const iconMap = {
@@ -69,35 +70,41 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
   return (
     <div className="flex h-full flex-col">
       <WidgetHeader title="Quick Actions" />
-      {/* Compact 3-column grid to show all 6 actions */}
-      <div className="grid flex-1 auto-rows-fr grid-cols-3 gap-1.5 @[300px]:gap-2">
-        {actions.map((action) => {
-          const IconComponent =
-            iconMap[action.icon as keyof typeof iconMap] || CalendarIcon
-          const variantClass =
-            variantStyles[action.variant] || variantStyles.secondary
+      {/* Compact 3-column grid to show all 6 actions. Wrapped in WidgetBody
+          (min-h-0 flex-1 overflow-y-auto) so a squeezed cell — e.g. edit
+          mode's pt-10 strip at the 3x2 default — scrolls instead of
+          hard-clipping the second action row; min-h-full keeps auto-rows-fr
+          filling the body when everything fits. */}
+      <WidgetBody>
+        <div className="grid min-h-full auto-rows-fr grid-cols-3 gap-1.5 @[300px]:gap-2">
+          {actions.map((action) => {
+            const IconComponent =
+              iconMap[action.icon as keyof typeof iconMap] || CalendarIcon
+            const variantClass =
+              variantStyles[action.variant] || variantStyles.secondary
 
-          return (
-            <Link
-              key={action.label}
-              href={action.link}
-              className={`group relative flex flex-col items-center justify-center gap-1 rounded-lg p-2 transition-all @[300px]:gap-1.5 @[300px]:p-2.5 ${variantClass}`}
-            >
-              {action.badge !== undefined && action.badge > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gray-900 @[300px]:top-1.5 @[300px]:right-1.5">
-                  {action.badge > 99 ? '99+' : action.badge}
+            return (
+              <Link
+                key={action.label}
+                href={action.link}
+                className={`group relative flex flex-col items-center justify-center gap-1 rounded-lg p-2 transition-all @[300px]:gap-1.5 @[300px]:p-2.5 ${variantClass}`}
+              >
+                {action.badge !== undefined && action.badge > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gray-900 @[300px]:top-1.5 @[300px]:right-1.5">
+                    {action.badge > 99 ? '99+' : action.badge}
+                  </span>
+                )}
+                {/* Responsive icon sizing */}
+                <IconComponent className="h-5 w-5 shrink-0 @[250px]:h-6 @[250px]:w-6 @[400px]:h-7 @[400px]:w-7" />
+                {/* Use short labels for compact display */}
+                <span className="text-center text-[10px] leading-tight font-medium @[300px]:text-[11px]">
+                  {action.shortLabel || action.label}
                 </span>
-              )}
-              {/* Responsive icon sizing */}
-              <IconComponent className="h-5 w-5 shrink-0 @[250px]:h-6 @[250px]:w-6 @[400px]:h-7 @[400px]:w-7" />
-              {/* Use short labels for compact display */}
-              <span className="text-center text-[10px] leading-tight font-medium @[300px]:text-[11px]">
-                {action.shortLabel || action.label}
-              </span>
-            </Link>
-          )
-        })}
-      </div>
+              </Link>
+            )
+          })}
+        </div>
+      </WidgetBody>
     </div>
   )
 }

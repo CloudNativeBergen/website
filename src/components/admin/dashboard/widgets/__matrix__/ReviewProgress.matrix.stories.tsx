@@ -149,7 +149,7 @@ export const Phases: Story = {
 export const KnownRiskCells: Story = {
   render: () => (
     <MatrixGrid>
-      <WidgetFrame label="min operational" colSpan={2} rowSpan={2}>
+      <WidgetFrame label="min operational" colSpan={3} rowSpan={2}>
         <ReviewProgressWidget conference={dense} />
       </WidgetFrame>
     </MatrixGrid>
@@ -158,7 +158,7 @@ export const KnownRiskCells: Story = {
     docs: {
       description: {
         story:
-          'The true 2x2 registry minimum with the full operational view (progress ring + stats + CTA) — the known layout-stress cell for this widget.',
+          'The true 3x2 registry minimum (minCols was raised from 2 to 3) with the full operational view (progress ring + stats + CTA) — the known layout-stress cell for this widget.',
       },
     },
   },
