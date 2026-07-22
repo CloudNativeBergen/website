@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ThemeProvider } from 'next-themes'
-import { fn, userEvent } from 'storybook/test'
+import { fn, userEvent, waitFor, within } from 'storybook/test'
 import { AddTrackModal } from './AddTrackModal'
 
 // The REAL modal — it rides on ModalShell (house header with labelled 44px
@@ -58,7 +58,15 @@ export const Mobile: Story = {
  */
 export const DirtyCloseConfirm: Story = {
   play: async () => {
-    await userEvent.keyboard('Platform Engineering')
+    // The dialog is PORTALED to document.body — query there, not the canvas,
+    // and type into the labelled input rather than relying on implicit focus.
+    const body = within(document.body)
+    const input = await body.findByLabelText(/track title/i)
+    await userEvent.type(input, 'Platform Engineering')
     await userEvent.keyboard('{Escape}')
+    // Wait for the dirty-close confirm so the story settles deterministically.
+    await waitFor(() =>
+      body.getByRole('alertdialog', { name: /discard unsaved changes/i }),
+    )
   },
 }

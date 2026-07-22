@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ThemeProvider } from 'next-themes'
-import { fn, userEvent } from 'storybook/test'
+import { fn, userEvent, waitFor, within } from 'storybook/test'
 import { ServiceSessionModal } from './ServiceSessionModal'
 import type { ScheduleTrack } from '@/lib/conference/types'
 
@@ -76,7 +76,14 @@ export const Mobile: Story = {
  */
 export const DirtyCloseConfirm: Story = {
   play: async () => {
-    await userEvent.keyboard('Coffee Break')
+    // The dialog is PORTALED to document.body — query there, type into the
+    // labelled input, and await the confirm so the story settles.
+    const body = within(document.body)
+    const input = await body.findByLabelText(/session title/i)
+    await userEvent.type(input, 'Coffee Break')
     await userEvent.keyboard('{Escape}')
+    await waitFor(() =>
+      body.getByRole('alertdialog', { name: /discard unsaved changes/i }),
+    )
   },
 }

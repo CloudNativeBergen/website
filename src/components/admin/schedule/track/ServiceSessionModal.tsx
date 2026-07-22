@@ -51,7 +51,8 @@ const ServiceSessionDialog = ({
   onSave,
 }: Omit<ServiceSessionModalProps, 'isOpen'>) => {
   const [title, setTitle] = useState('')
-  const [duration, setDuration] = useState('10')
+  const DEFAULT_DURATION = '10'
+  const [duration, setDuration] = useState(DEFAULT_DURATION)
   const [error, setError] = useState<string | null>(null)
 
   // Free minutes from the chosen start until the next talk/session (or the end
@@ -133,7 +134,9 @@ const ServiceSessionDialog = ({
       }
       icon={<ClockIcon className="h-5 w-5" />}
       confirmOnDirtyClose
-      isDirty={title.trim().length > 0}
+      // A changed duration is ALSO unsaved intent — without it, Escape/backdrop
+      // after picking a duration (but before typing a title) discards silently.
+      isDirty={title.trim().length > 0 || duration !== DEFAULT_DURATION}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
