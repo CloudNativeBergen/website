@@ -308,7 +308,7 @@ export function SponsorCRMForm({
                 onClick={handlePrimaryAction}
                 disabled={Boolean(primaryBlocked)}
                 className={clsx(
-                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors',
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-xs transition-colors',
                   primaryBlocked
                     ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600'
                     : 'cursor-pointer bg-brand-cloud-blue text-white hover:bg-primary-700 dark:bg-indigo-600 dark:hover:bg-indigo-500',
