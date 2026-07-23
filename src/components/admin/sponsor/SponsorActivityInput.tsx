@@ -99,7 +99,7 @@ export function SponsorActivityInput({
             </button>
           </div>
         </div>
-        </div>
+      </div>
     </div>
   )
 }
