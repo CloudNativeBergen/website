@@ -90,6 +90,7 @@ export function SponsorActivityInput({
               disabled={!description.trim() || isPending}
               className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
               title="Post activity"
+              aria-label="Post activity"
             >
               {isPending ? (
                 <div className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

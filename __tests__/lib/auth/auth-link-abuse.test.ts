@@ -51,9 +51,15 @@ describe('signLinkIntent', () => {
   })
 
   it('fails closed when AUTH_SECRET is missing', () => {
-    expect(() => signLinkIntent(validInput, undefined, NOW)).toThrow(
-      /AUTH_SECRET/,
-    )
+    const orig = process.env.AUTH_SECRET
+    delete process.env.AUTH_SECRET
+    try {
+      expect(() => signLinkIntent(validInput, undefined, NOW)).toThrow(
+        /AUTH_SECRET/,
+      )
+    } finally {
+      process.env.AUTH_SECRET = orig
+    }
   })
 
   it('refuses to mint without a speaker id', () => {
