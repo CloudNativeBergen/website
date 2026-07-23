@@ -68,14 +68,18 @@ export function VolunteerEditModal({
   const [baseline, setBaseline] = useState<Draft>(() => draftFrom(volunteer))
   const [error, setError] = useState<string | null>(null)
 
-  // Reset the draft whenever a different volunteer is opened.
+  const [wasOpen, setWasOpen] = useState(isOpen)
   const [lastId, setLastId] = useState(volunteer._id)
-  if (lastId !== volunteer._id) {
+
+  if (lastId !== volunteer._id || (!wasOpen && isOpen)) {
     setLastId(volunteer._id)
+    setWasOpen(isOpen)
     const next = draftFrom(volunteer)
     setDraft(next)
     setBaseline(next)
     setError(null)
+  } else if (wasOpen !== isOpen) {
+    setWasOpen(isOpen)
   }
 
   // Unsaved edits guard the close (ModalShell shows a discard confirm).
