@@ -292,7 +292,6 @@ export default async function SpeakerDashboard() {
             onLinkAction={startProviderLink}
           />
         </div>
-
       </div>
     )
   }
