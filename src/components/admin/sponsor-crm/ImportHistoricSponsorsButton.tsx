@@ -1,22 +1,14 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState } from 'react'
 import {
-  Dialog,
-  DialogPanel,
-  DialogTitle,
-  Transition,
-  TransitionChild,
-} from '@headlessui/react'
-import {
-  ArrowPathIcon,
   DocumentDuplicateIcon,
-  XMarkIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 
 interface ImportHistoricSponsorsButtonProps {
   conferenceId: string
@@ -95,113 +87,51 @@ export function ImportHistoricSponsorsButton({
         Import Historic
       </button>
 
-      <Transition show={isOpen} as={Fragment}>
-        <Dialog onClose={() => setIsOpen(false)} className="relative z-50">
-          <TransitionChild
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-          </TransitionChild>
-
-          <div className="fixed inset-0 flex items-center justify-center overflow-y-auto p-4">
-            <TransitionChild
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <DialogPanel className="mx-auto max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
-                <div className="flex items-start justify-between">
-                  <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Import Historic Sponsors
-                  </DialogTitle>
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="flex h-11 w-11 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    This will import all sponsors from previous conferences into
-                    the Prospect column.
-                  </p>
-
-                  <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
-                    <div className="flex gap-3">
-                      <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <div className="text-sm text-amber-800 dark:text-amber-200">
-                        <p className="font-medium">Sponsors will be tagged:</p>
-                        <ul className="mt-1 list-inside list-disc space-y-1">
-                          <li>
-                            <span className="font-medium">
-                              Returning Sponsor
-                            </span>{' '}
-                            — previously confirmed sponsors
-                          </li>
-                          <li>
-                            <span className="font-medium">
-                              Previously Declined
-                            </span>{' '}
-                            — sponsors who declined in all previous years
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-                    <div className="flex gap-3">
-                      <CheckCircleIcon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        Sponsors already in your pipeline will be skipped.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    disabled={importMutation.isPending}
-                    className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                  >
-                    {importMutation.isPending ? (
-                      <>
-                        <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <DocumentDuplicateIcon className="h-4 w-4" />
-                        Import Sponsors
-                      </>
-                    )}
-                  </button>
-                </div>
-              </DialogPanel>
-            </TransitionChild>
+      {/* House confirm: ConfirmationModal (on ModalShell) supplies the
+          canonical backdrop, footer order (Cancel left / primary right,
+          stacked-reverse on mobile), brand-cloud-blue primary via the `info`
+          variant, dark gray-900 surface and theme-class portal handling. The
+          tag/skip explainer panels ride in as children. */}
+      <ConfirmationModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onConfirm={handleImport}
+        title="Import Historic Sponsors"
+        message="This will import all sponsors from previous conferences into the Prospect column."
+        confirmButtonText="Import Sponsors"
+        variant="info"
+        isLoading={importMutation.isPending}
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
+            <div className="flex gap-3">
+              <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                <p className="font-medium">Sponsors will be tagged:</p>
+                <ul className="mt-1 list-inside list-disc space-y-1">
+                  <li>
+                    <span className="font-medium">Returning Sponsor</span> —
+                    previously confirmed sponsors
+                  </li>
+                  <li>
+                    <span className="font-medium">Previously Declined</span> —
+                    sponsors who declined in all previous years
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
-        </Dialog>
-      </Transition>
+
+          <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+            <div className="flex gap-3">
+              <CheckCircleIcon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Sponsors already in your pipeline will be skipped.
+              </p>
+            </div>
+          </div>
+        </div>
+      </ConfirmationModal>
     </>
   )
 }
