@@ -106,10 +106,7 @@ importers:
         version: 2.0.0(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       '@workos-inc/authkit-nextjs':
         specifier: ^4.2.0
-        version: 4.2.0(@workos-inc/node@10.7.0)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
-      '@workos-inc/node':
-        specifier: ^10.7.0
-        version: 10.7.0
+        version: 4.2.0(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
       '@xmldom/xmldom':
         specifier: ^0.9.10
         version: 0.9.10
@@ -5120,10 +5117,6 @@ packages:
       next: ^13.5.9 || ^14.2.26 || ^15.2.3 || ^16
       react: ^18.0 || ^19.0.0
       react-dom: ^18.0 || ^19.0.0
-
-  '@workos-inc/node@10.7.0':
-    resolution: {integrity: sha512-rffa9znZuIv4yo+9JRxGOLTTSxh0XhOT6jlsktgqEi9MuB9V0VFHRzLd3bTpkq+J9sgrPZNGpvX4aWNfMqt5cQ==}
-    engines: {node: '>=22.11.0'}
 
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
@@ -16224,10 +16217,9 @@ snapshots:
 
   '@webcontainer/env@1.1.1': {}
 
-  '@workos-inc/authkit-nextjs@4.2.0(@workos-inc/node@10.7.0)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
+  '@workos-inc/authkit-nextjs@4.2.0(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
     dependencies:
       '@sindresorhus/fnv1a': 3.1.0
-      '@workos-inc/node': 10.7.0
       iron-session: 8.0.4
       jose: 5.10.0
       next: 16.2.9(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -16237,8 +16229,6 @@ snapshots:
       valibot: 1.4.2(typescript@6.0.3)
     transitivePeerDependencies:
       - typescript
-
-  '@workos-inc/node@10.7.0': {}
 
   '@xmldom/xmldom@0.9.10': {}
 
