@@ -62,7 +62,7 @@ export function TagCombobox({ value, onChange }: TagComboboxProps) {
               )
             })}
             <ComboboxInput
-              className="flex-1 border-none bg-transparent p-0 text-gray-900 focus:ring-0 dark:text-white"
+              className="w-0 min-w-[2rem] flex-1 border-none bg-transparent p-0 text-gray-900 focus:ring-0 dark:text-white"
               placeholder={value.length === 0 ? 'Select tags...' : ''}
               onChange={(event) => setQuery(event.target.value)}
               onBlur={() => setQuery('')}

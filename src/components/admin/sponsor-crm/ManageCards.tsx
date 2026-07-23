@@ -110,7 +110,7 @@ export function ManageCards({ sponsor, hasLogo, onOpen }: ManageCardsProps) {
           key={card.view}
           type="button"
           onClick={() => onOpen(card.view)}
-          className="group relative flex flex-col gap-1 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-white dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-indigo-500/50 dark:hover:bg-gray-800"
+          className="group relative flex flex-col gap-1 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-white dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-indigo-500/50 dark:hover:bg-gray-700"
         >
           {card.dot && (
             <span

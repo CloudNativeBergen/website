@@ -65,6 +65,7 @@ export function SponsorCRMPipeline({
   const searchParams = useSearchParams()
   const { data: session } = useSession()
   const hasDefaultedRef = useRef(false)
+  const isClosingRef = useRef(false)
 
   const [selectedSponsor, setSelectedSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
@@ -256,11 +257,16 @@ export function SponsorCRMPipeline({
   )
 
   const handleCloseForm = useCallback(() => {
-    setSelectedSponsor(null)
+    isClosingRef.current = true
     setIsFormOpen(false)
     updateUrlParams({ sponsor: null, view: null })
     utils.sponsor.crm.list.invalidate()
     utils.sponsor.crm.healthViolations.invalidate()
+
+    setTimeout(() => {
+      setSelectedSponsor(null)
+      isClosingRef.current = false
+    }, 500)
   }, [
     updateUrlParams,
     utils.sponsor.crm.list,
@@ -395,6 +401,7 @@ export function SponsorCRMPipeline({
 
   // Restore sponsor form from URL on initial load
   useEffect(() => {
+    if (isClosingRef.current) return
     const sponsorId = searchParams.get('sponsor')
     const viewParam = searchParams.get('view') as
       'pipeline' | 'history' | 'contract' | null
@@ -551,37 +558,35 @@ export function SponsorCRMPipeline({
         hasContractDocument={!!deleteConfirmSponsor?.contractDocument}
         isLoading={deleteMutation.isPending}
       />
-      {isFormOpen && (
-        <SponsorCRMForm
-          key={selectedSponsor?._id || 'new'}
-          conferenceId={conferenceId}
-          sponsor={selectedSponsor}
-          isOpen={isFormOpen}
-          onClose={handleCloseForm}
-          onSuccess={(createdId) => {
-            if (createdId) {
-              const created = utils.sponsor.crm.list
-                .getData({
-                  assignedTo:
-                    assignedToFilter === 'unassigned'
-                      ? undefined
-                      : assignedToFilter,
-                  unassignedOnly: assignedToFilter === 'unassigned',
-                  tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-                  tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-                })
-                ?.find((s) => s._id === createdId)
-              if (created) {
-                setSelectedSponsor(created)
-                setInitialFormView('pipeline')
-              }
+      <SponsorCRMForm
+        key={selectedSponsor?._id || 'new'}
+        conferenceId={conferenceId}
+        sponsor={selectedSponsor}
+        isOpen={isFormOpen}
+        onClose={handleCloseForm}
+        onSuccess={(createdId) => {
+          if (createdId) {
+            const created = utils.sponsor.crm.list
+              .getData({
+                assignedTo:
+                  assignedToFilter === 'unassigned'
+                    ? undefined
+                    : assignedToFilter,
+                unassignedOnly: assignedToFilter === 'unassigned',
+                tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+                tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+              })
+              ?.find((s) => s._id === createdId)
+            if (created) {
+              setSelectedSponsor(created)
+              setInitialFormView('pipeline')
             }
-          }}
-          existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
-          initialView={initialFormView}
-          onViewChange={handleFormViewChange}
-        />
-      )}
+          }
+        }}
+        existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
+        initialView={initialFormView}
+        onViewChange={handleFormViewChange}
+      />
 
       {emailSponsor && conference && (
         <SponsorIndividualEmailModal

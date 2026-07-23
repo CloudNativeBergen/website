@@ -81,9 +81,9 @@ export function SponsorActivityInput({
             onChange={(e) => setDescription(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => !description && setIsFocused(false)}
-            className="block w-full rounded-md bg-white px-3 py-2 pr-12 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+            className="block w-full resize-none rounded-md bg-white px-3 py-2 pr-11 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
           />
-          <div className="absolute right-2 bottom-2">
+          <div className="absolute right-1.5 bottom-1.5">
             <button
               type="button"
               onClick={handleSubmit}
