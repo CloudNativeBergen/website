@@ -293,9 +293,6 @@ export default async function SpeakerDashboard() {
           />
         </div>
 
-        <div className="mt-6 max-w-md">
-          <SpeakerShare speaker={speakerWithTalks} />
-        </div>
       </div>
     )
   }
@@ -349,7 +346,7 @@ export default async function SpeakerDashboard() {
               />
             )}
 
-            {(confirmedTalks.length > 0 || !latestBadge) && (
+            {confirmedTalks.length > 0 && (
               <SpeakerShareSidebar
                 speaker={speakerWithTalks}
                 talkTitle={talkTitle}
