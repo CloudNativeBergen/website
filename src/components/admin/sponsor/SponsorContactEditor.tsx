@@ -55,12 +55,12 @@ export function SponsorContactEditor({
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange
   })
-  const [initialSnapshot] = useState(() => JSON.stringify([contacts, billing]))
+  const initialSnapshotRef = useRef(JSON.stringify([contacts, billing]))
   useEffect(() => {
     onDirtyChangeRef.current?.(
-      JSON.stringify([contacts, billing]) !== initialSnapshot,
+      JSON.stringify([contacts, billing]) !== initialSnapshotRef.current,
     )
-  }, [contacts, billing, initialSnapshot])
+  }, [contacts, billing])
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
@@ -164,6 +164,9 @@ export function SponsorContactEditor({
           }
         : undefined,
     })
+
+    initialSnapshotRef.current = JSON.stringify([contacts, billing])
+    onDirtyChangeRef.current?.(false)
   }
 
   return (
