@@ -40,8 +40,8 @@ export function SponsorActivityInput({
       },
     })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault()
     if (!description.trim() || isPending) return
 
     createActivity({
@@ -53,7 +53,7 @@ export function SponsorActivityInput({
 
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/5">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {ACTIVITY_TYPES.map((type) => (
             <button
@@ -85,7 +85,8 @@ export function SponsorActivityInput({
           />
           <div className="absolute right-2 bottom-2">
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               disabled={!description.trim() || isPending}
               className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
               title="Post activity"
@@ -98,7 +99,7 @@ export function SponsorActivityInput({
             </button>
           </div>
         </div>
-      </form>
+      </div>
     </div>
   )
 }
