@@ -62,15 +62,30 @@ export function VolunteerEditModal({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(volunteer))
+  // Snapshot of the values the draft was initialized from. Kept in state (not
+  // recomputed from the live prop) so a background refetch of the same
+  // volunteer can't shift the dirty baseline mid-edit.
+  const [baseline, setBaseline] = useState<Draft>(() => draftFrom(volunteer))
   const [error, setError] = useState<string | null>(null)
 
-  // Reset the draft whenever a different volunteer is opened.
+  const [wasOpen, setWasOpen] = useState(isOpen)
   const [lastId, setLastId] = useState(volunteer._id)
-  if (lastId !== volunteer._id) {
+
+  if (lastId !== volunteer._id || (!wasOpen && isOpen)) {
     setLastId(volunteer._id)
-    setDraft(draftFrom(volunteer))
+    setWasOpen(isOpen)
+    const next = draftFrom(volunteer)
+    setDraft(next)
+    setBaseline(next)
     setError(null)
+  } else if (wasOpen !== isOpen) {
+    setWasOpen(isOpen)
   }
+
+  // Unsaved edits guard the close (ModalShell shows a discard confirm).
+  const isDirty = (Object.keys(baseline) as (keyof Draft)[]).some(
+    (key) => draft[key] !== baseline[key],
+  )
 
   const updateMutation = api.volunteer.admin.update.useMutation({
     onSuccess: async () => {
@@ -128,6 +143,8 @@ export function VolunteerEditModal({
       title="Edit volunteer details"
       subtitle={volunteer.name}
       icon={<PencilSquareIcon className="h-5 w-5" />}
+      confirmOnDirtyClose
+      isDirty={isDirty}
     >
       <form noValidate onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,7 +1,13 @@
 'use client'
 
-import React, { Fragment, useState, useEffect } from 'react'
-import { Dialog, Transition } from '@headlessui/react'
+import React, { useState, useEffect } from 'react'
+import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  Transition,
+  TransitionChild,
+} from '@headlessui/react'
 import {
   XMarkIcon,
   ChevronLeftIcon,
@@ -113,10 +119,9 @@ export function GalleryModal({
   }
 
   return (
-    <Transition.Root show={isOpen} as={Fragment}>
+    <Transition show={isOpen}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <Transition.Child
-          as={Fragment}
+        <TransitionChild
           enter="ease-out duration-300"
           enterFrom="opacity-0"
           enterTo="opacity-100"
@@ -125,12 +130,11 @@ export function GalleryModal({
           leaveTo="opacity-0"
         >
           <div className="fixed inset-0 bg-black/95 backdrop-blur-sm" />
-        </Transition.Child>
+        </TransitionChild>
 
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center">
-            <Transition.Child
-              as={Fragment}
+            <TransitionChild
               enter="ease-out duration-300"
               enterFrom="opacity-0 scale-95"
               enterTo="opacity-100 scale-100"
@@ -138,13 +142,14 @@ export function GalleryModal({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="relative h-screen w-screen bg-black">
+              <DialogPanel className="relative h-screen w-screen bg-black">
                 <div className="flex h-full flex-col">
                   <div className="flex items-center justify-between border-b border-gray-800 bg-black/50 px-4 py-3 backdrop-blur-sm sm:px-6">
                     <div className="flex items-center space-x-4">
-                      <Dialog.Title className="font-space-grotesk text-lg font-semibold text-white">
+                      <DialogTitle className="font-space-grotesk text-lg font-semibold text-white">
+                        <span className="sr-only">Photo gallery, image </span>
                         {currentIndex + 1} of {localImages.length}
-                      </Dialog.Title>
+                      </DialogTitle>
                       {currentImage?.location && (
                         <span className="hidden text-sm text-gray-300/90 sm:block">
                           {currentImage.location}
@@ -153,10 +158,10 @@ export function GalleryModal({
                     </div>
                     <button
                       type="button"
-                      className="rounded-md p-2 text-gray-400 hover:bg-gray-800 hover:text-white focus:ring-2 focus:ring-white focus:outline-none"
+                      aria-label="Close photo gallery"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-800 hover:text-white focus:ring-2 focus:ring-white focus:outline-none"
                       onClick={onClose}
                     >
-                      <span className="sr-only">Close</span>
                       <XMarkIcon className="h-6 w-6" aria-hidden="true" />
                     </button>
                   </div>
@@ -307,6 +312,11 @@ export function GalleryModal({
                           {localImages.map((image, index) => (
                             <button
                               key={image._id}
+                              type="button"
+                              aria-label={`Go to image ${index + 1}`}
+                              aria-current={
+                                index === currentIndex ? 'true' : undefined
+                              }
                               onClick={() => goToIndex(index)}
                               className={cn(
                                 'relative h-16 w-24 shrink-0 cursor-pointer overflow-hidden rounded',
@@ -341,11 +351,11 @@ export function GalleryModal({
                     </div>
                   </div>
                 </div>
-              </Dialog.Panel>
-            </Transition.Child>
+              </DialogPanel>
+            </TransitionChild>
           </div>
         </div>
       </Dialog>
-    </Transition.Root>
+    </Transition>
   )
 }

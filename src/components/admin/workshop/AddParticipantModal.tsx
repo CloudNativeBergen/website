@@ -59,7 +59,8 @@ export function AddParticipantModal({
     onClose()
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
     if (!formData.userName || !formData.userEmail) {
       setValidationError('Please fill in both name and email.')
       return
@@ -68,6 +69,12 @@ export function AddParticipantModal({
     onSubmit(formData)
   }
 
+  // Any edit away from the pristine defaults guards the close (ModalShell
+  // shows a discard confirm on backdrop/Escape/header-close).
+  const isDirty = (
+    Object.keys(DEFAULT_PARTICIPANT) as (keyof ParticipantFormData)[]
+  ).some((key) => formData[key] !== DEFAULT_PARTICIPANT[key])
+
   return (
     <ModalShell
       isOpen={isOpen}
@@ -75,8 +82,10 @@ export function AddParticipantModal({
       size="lg"
       title={`Add Participant to ${workshopTitle}`}
       icon={<UserPlusIcon className="h-5 w-5" />}
+      confirmOnDirtyClose
+      isDirty={isDirty}
     >
-      <div>
+      <form onSubmit={handleSubmit}>
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -180,25 +189,28 @@ export function AddParticipantModal({
           </p>
         )}
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <AdminButton
+            type="button"
             variant="secondary"
             size="md"
             onClick={handleClose}
             disabled={isSubmitting}
+            className="min-h-[44px]"
           >
             Cancel
           </AdminButton>
           <AdminButton
+            type="submit"
             color="blue"
             size="md"
-            onClick={handleSubmit}
             disabled={isSubmitting}
+            className="min-h-[44px]"
           >
             {isSubmitting ? 'Adding...' : 'Add Participant'}
           </AdminButton>
         </div>
-      </div>
+      </form>
     </ModalShell>
   )
 }
