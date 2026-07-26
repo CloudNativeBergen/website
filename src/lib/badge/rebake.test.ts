@@ -167,11 +167,22 @@ describe('rebakeBadge — tenant scoping', () => {
   })
 
   it('reports not_found for a missing badge', async () => {
-    getBadgeByIdMock.mockResolvedValue({ error: new Error('Badge not found') })
+    // Absent badge WITHOUT a read error — a failed read is 'error', not
+    // 'not_found' (a transient Sanity failure must never read as missing).
+    getBadgeByIdMock.mockResolvedValue({ badge: undefined })
 
     const res = await rebakeBadge({ badgeId: 'nope', conferenceId: 'conf-A' })
 
     expect(res).toMatchObject({ success: false, reason: 'not_found' })
+    expect(generateBadgeArtifactsMock).not.toHaveBeenCalled()
+  })
+
+  it('reports error (not not_found) for a failed badge read', async () => {
+    getBadgeByIdMock.mockResolvedValue({ error: new Error('sanity down') })
+
+    const res = await rebakeBadge({ badgeId: 'b-1', conferenceId: 'conf-A' })
+
+    expect(res).toMatchObject({ success: false, reason: 'error' })
     expect(generateBadgeArtifactsMock).not.toHaveBeenCalled()
   })
 })

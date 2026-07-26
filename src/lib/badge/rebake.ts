@@ -1,6 +1,7 @@
 import { generateBadgeArtifacts } from './artifacts'
 import { createBadgeConfiguration } from './config'
 import {
+  deleteBadgeSVGAsset,
   getBadgeById,
   patchBadgeArtifacts,
   uploadBadgeSVGAsset,
@@ -57,7 +58,12 @@ export async function rebakeBadge(
   params: RebakeBadgeParams,
 ): Promise<RebakeBadgeResult> {
   const { badge, error } = await getBadgeById(params.badgeId)
-  if (error || !badge) {
+  if (error) {
+    // A failed READ is not "not found" — surface it as an error so a
+    // transient Sanity failure never reads as a missing badge.
+    return { success: false, reason: 'error', error: 'Failed to load badge' }
+  }
+  if (!badge) {
     return { success: false, reason: 'not_found', error: 'Badge not found' }
   }
 
@@ -84,14 +90,27 @@ export async function rebakeBadge(
   }
 
   // Speaker is dereferenced on the badge record (name/email/slug). Guard the
-  // shape defensively — a bare reference cannot seed the credential.
-  const speaker = badge.speaker
-  if (!speaker || typeof speaker !== 'object' || !('email' in speaker)) {
+  // shape defensively — everything generation touches must be present; a bare
+  // reference or partial dereference cannot seed the credential or filename.
+  const rawSpeaker = badge.speaker as Record<string, unknown> | undefined
+  const isUsableSpeaker =
+    !!rawSpeaker &&
+    typeof rawSpeaker === 'object' &&
+    typeof rawSpeaker._id === 'string' &&
+    typeof rawSpeaker.name === 'string' &&
+    typeof rawSpeaker.email === 'string'
+  if (!isUsableSpeaker) {
     return {
       success: false,
       reason: 'error',
       error: 'Badge speaker data unavailable',
     }
+  }
+  const speaker = rawSpeaker as {
+    _id: string
+    name: string
+    email: string
+    slug?: string
   }
 
   const conferenceYear = conference.startDate
@@ -108,55 +127,74 @@ export async function rebakeBadge(
       ? await resolveAcceptedTalk(speaker._id, conference._id)
       : {}
 
-  const { credentialJson, credentialJwt, bakedSvg } =
-    await generateBadgeArtifacts(
-      {
-        speakerId: speaker._id,
-        speakerName: speaker.name,
-        speakerEmail: speaker.email,
-        speakerSlug: speaker.slug,
-        conferenceId: conference._id,
-        conferenceTitle: conference.title,
-        conferenceYear,
-        conferenceDate,
-        badgeType: badge.badgeType,
-        talkId,
-        talkTitle,
-      },
-      config,
-      // Preserve the identity: same badgeId (⇒ same verificationUrl) and the
-      // original achievement date. The proof's `created` is minted now.
-      { badgeId: badge.badgeId, validFrom: badge.issuedAt },
+  try {
+    return await regenerateAndPatch()
+  } catch (err) {
+    // generateBadgeArtifacts/createBadgeConfiguration can throw (signing key
+    // material, canvas failures); the mutation contract is a STRUCTURED
+    // result, never an unexpected tRPC internal error.
+    console.error('rebakeBadge failed:', err)
+    return {
+      success: false,
+      reason: 'error',
+      error: err instanceof Error ? err.message : 'Rebake failed',
+    }
+  }
+
+  async function regenerateAndPatch(): Promise<RebakeBadgeResult> {
+    const { credentialJson, credentialJwt, bakedSvg } =
+      await generateBadgeArtifacts(
+        {
+          speakerId: speaker._id,
+          speakerName: speaker.name,
+          speakerEmail: speaker.email,
+          speakerSlug: speaker.slug,
+          conferenceId: conference._id,
+          conferenceTitle: conference.title,
+          conferenceYear,
+          conferenceDate,
+          badgeType: badge!.badgeType,
+          talkId,
+          talkTitle,
+        },
+        config,
+        // Preserve the identity: same badgeId (⇒ same verificationUrl) and the
+        // original achievement date. The proof's `created` is minted now.
+        { badgeId: badge!.badgeId, validFrom: badge!.issuedAt },
+      )
+
+    const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
+      bakedSvg,
+      `badge-${speaker!.name.replace(/\s+/g, '-').toLowerCase()}-${badge!.badgeId}.svg`,
     )
-
-  const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
-    bakedSvg,
-    `badge-${speaker.name.replace(/\s+/g, '-').toLowerCase()}-${badge.badgeId}.svg`,
-  )
-  if (uploadError || !assetId) {
-    return {
-      success: false,
-      reason: 'error',
-      error: 'Failed to upload badge SVG',
+    if (uploadError || !assetId) {
+      return {
+        success: false,
+        reason: 'error',
+        error: 'Failed to upload badge SVG',
+      }
     }
-  }
 
-  const { badge: updated, error: patchError } = await patchBadgeArtifacts(
-    badge.badgeId,
-    {
-      badgeJson: JSON.stringify(credentialJson),
-      badgeJwt: credentialJwt,
-      bakedSvgAssetId: assetId,
-      generatorVersion: BADGE_GENERATOR_VERSION,
-    },
-  )
-  if (patchError || !updated) {
-    return {
-      success: false,
-      reason: 'error',
-      error: 'Failed to update badge record',
+    const { badge: updated, error: patchError } = await patchBadgeArtifacts(
+      badge!.badgeId,
+      {
+        badgeJson: JSON.stringify(credentialJson),
+        badgeJwt: credentialJwt,
+        bakedSvgAssetId: assetId,
+        generatorVersion: BADGE_GENERATOR_VERSION,
+      },
+    )
+    if (patchError || !updated) {
+      // The new asset is referenced by nothing — best-effort cleanup so a
+      // failed patch doesn't orphan it in the dataset.
+      await deleteBadgeSVGAsset(assetId).catch(() => undefined)
+      return {
+        success: false,
+        reason: 'error',
+        error: 'Failed to update badge record',
+      }
     }
-  }
 
-  return { success: true, badge: updated }
+    return { success: true, badge: updated }
+  }
 }

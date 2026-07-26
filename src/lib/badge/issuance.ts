@@ -151,6 +151,10 @@ export async function issueBadgeForSpeaker(
       ? await resolveAcceptedTalk(speaker._id, conferenceId)
       : {}
 
+  // ONE timestamp: the credential's validFrom and the stored issuedAt must be
+  // the same instant (a rebake later reuses issuedAt as validFrom).
+  const issuedAt = getCurrentDateTime()
+
   const { credentialJson, credentialJwt, badgeId, bakedSvg, verificationUrl } =
     await generateBadgeArtifacts(
       {
@@ -168,6 +172,7 @@ export async function issueBadgeForSpeaker(
         talkTitle,
       },
       config,
+      { validFrom: issuedAt },
     )
 
   const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
@@ -184,7 +189,7 @@ export async function issueBadgeForSpeaker(
     speakerId: speaker._id,
     conferenceId: conference._id,
     badgeType,
-    issuedAt: getCurrentDateTime(),
+    issuedAt,
     badgeJson: JSON.stringify(credentialJson),
     badgeJwt: credentialJwt,
     bakedSvgAssetId: assetId,

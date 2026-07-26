@@ -202,16 +202,21 @@ export function BadgeManagementClient({
     let succeeded = 0
     let failed = 0
     // Sequential — one Sanity write + asset upload each; keep the load bounded.
-    for (const badge of outdated) {
-      try {
-        await rebakeMutation.mutateAsync({ badgeId: badge.badgeId })
-        succeeded += 1
-      } catch {
-        failed += 1
+    try {
+      for (const badge of outdated) {
+        try {
+          await rebakeMutation.mutateAsync({ badgeId: badge.badgeId })
+          succeeded += 1
+        } catch {
+          failed += 1
+        }
       }
+      // A failed refetch must not strand the button in its disabled state or
+      // swallow the completion toast.
+      await refetchBadges().catch(() => undefined)
+    } finally {
+      setIsRebakingAll(false)
     }
-    await refetchBadges()
-    setIsRebakingAll(false)
     showNotification({
       type: failed > 0 ? (succeeded > 0 ? 'warning' : 'error') : 'success',
       title: 'Rebake Complete',

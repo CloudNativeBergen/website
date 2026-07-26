@@ -371,6 +371,15 @@ export async function getBadgeStats(conferenceId: string): Promise<{
   }
 }
 
+/**
+ * Delete a badge SVG asset document. Used for best-effort cleanup when a
+ * rebake uploads a new asset but fails before the badge document references
+ * it (an unreferenced asset would otherwise be orphaned in the dataset).
+ */
+export async function deleteBadgeSVGAsset(assetId: string): Promise<void> {
+  await clientWrite.delete(assetId)
+}
+
 export async function deleteBadge(
   badgeId: string,
 ): Promise<{ success: boolean; error?: Error }> {
