@@ -144,7 +144,7 @@ export function VolunteerEditModal({
       subtitle={volunteer.name}
       icon={<PencilSquareIcon className="h-5 w-5" />}
       confirmOnDirtyClose
-      isDirty={isDirty}
+      isDirty={isDirty && !updateMutation.isPending}
     >
       <form noValidate onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">

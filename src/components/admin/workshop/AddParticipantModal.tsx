@@ -83,7 +83,7 @@ export function AddParticipantModal({
       title={`Add Participant to ${workshopTitle}`}
       icon={<UserPlusIcon className="h-5 w-5" />}
       confirmOnDirtyClose
-      isDirty={isDirty}
+      isDirty={isDirty && !isSubmitting}
     >
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
