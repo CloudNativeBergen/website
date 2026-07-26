@@ -6,7 +6,7 @@ const conf = (startDate?: string) =>
   ({ startDate }) as unknown as Pick<Conference, 'startDate'>
 
 describe('resolveCountdownTarget', () => {
-  it('anchors the conference start date at Oslo noon (12:00 UTC)', () => {
+  it('anchors the conference start date at 12:00 UTC (house anchoring)', () => {
     const ms = resolveCountdownTarget(conf('2099-09-15'), {})
     expect(ms).toBe(Date.UTC(2099, 8, 15, 12))
   })

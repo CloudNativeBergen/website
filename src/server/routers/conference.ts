@@ -459,8 +459,17 @@ export const conferenceRouter = router({
             }
             case 'homepageFaq': {
               if (section.heading) base.heading = section.heading
-              if (section.source) base.source = section.source
-              if (section.items && section.items.length > 0) {
+              // Persist only the EFFECTIVE config: `source` only when it's the
+              // non-default 'ticketFaqs', and `items` only when they're what
+              // renders ('own') — a block in ticketFaqs mode must not store
+              // dead item drafts.
+              const usesTicketFaqs = section.source === 'ticketFaqs'
+              if (usesTicketFaqs) base.source = 'ticketFaqs'
+              if (
+                !usesTicketFaqs &&
+                section.items &&
+                section.items.length > 0
+              ) {
                 base.items = ensureUniqueArrayKeys(
                   section.items.map((item) => ({
                     question: item.question,

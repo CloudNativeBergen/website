@@ -628,7 +628,7 @@ const HeroCtaOverrideSchema = z.object({
 
 /**
  * A tenant-entered date for the countdown target. Accepts a bare `YYYY-MM-DD`
- * (anchored at Oslo noon downstream) or any timestamp `Date.parse` understands
+ * (anchored at 12:00 UTC (the house date-anchoring convention) downstream) or any timestamp `Date.parse` understands
  * (e.g. the datetime-local editor value); anything unparseable is rejected so
  * the stored value always resolves.
  */

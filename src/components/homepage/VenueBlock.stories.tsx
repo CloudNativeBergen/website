@@ -23,7 +23,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Front-page builder (F4) venue block. Name/address come from the conference; the "Get directions" link is constructed from the address at render (no map tiles/embeds, no stored URL). Renders nothing without a venue name or address.',
+          'Front-page builder (F4) venue block. Name/address come from the conference; the "Get directions" link is constructed from the venue name and address (either alone suffices) at render (no map tiles/embeds, no stored URL). Renders nothing without a venue name or address.',
       },
     },
   },
