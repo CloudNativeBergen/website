@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { AdminLayout } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default async function AdminRootLayout({
   children: React.ReactNode
 }) {
   const session = await getAuthSession()
-  if (!session || !session.speaker || !session.speaker.isOrganizer) {
+  // ORG-SCOPED admin gate (CaaS T1-2, #614): organizer of the CURRENT domain's
+  // org (legacy-bridged to the deprecated global flag when the org is unresolvable).
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     return (
       <div className="flex h-screen items-center justify-center">
         <p className="text-lg text-gray-500">Access Denied</p>

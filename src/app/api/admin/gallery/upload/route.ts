@@ -4,6 +4,7 @@ import { createGalleryImage } from '@/lib/gallery/sanity'
 import { getSpeakerByEmail } from '@/lib/sanity/speaker'
 import { galleryImageCreateSchema } from '@/server/schemas/gallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { getCurrentDateTime } from '@/lib/time'
 
@@ -21,8 +22,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // ORG-SCOPED (CaaS T1-2, #614): organizer of the current domain's org.
+    // `getSpeakerByEmail` now projects `organizerOrgIds` for this check.
     const speaker = await getSpeakerByEmail(session.user.email)
-    if (!speaker?.isOrganizer) {
+    if (!(await isOrganizerForCurrentOrg(speaker))) {
       return NextResponse.json(
         { error: 'Admin access required' },
         { status: 403 },

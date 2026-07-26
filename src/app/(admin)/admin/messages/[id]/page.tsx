@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { BackLink } from '@/components/BackButton'
 import { ConversationThread } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
 export const metadata: Metadata = {
   title: 'Conversation',
@@ -22,7 +23,7 @@ export default async function AdminConversationPage({
   // who reaches this route to their own labelled surface rather than the bare
   // "Access Denied" wall (audience-correct deep link, admin mirror of /cfp).
   const session = await getAuthSession()
-  if (session?.speaker && !session.speaker.isOrganizer) {
+  if (session?.speaker && !(await isOrganizerForCurrentOrg(session.speaker))) {
     redirect(`/cfp/messages/${id}`)
   }
 

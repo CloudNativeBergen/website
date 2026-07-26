@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
 /**
  * PWA launcher — role-aware start page (`start_url` in `src/app/manifest.ts`).
@@ -42,8 +43,11 @@ export async function GET(request: Request): Promise<NextResponse> {
     headers: request.headers,
   })
 
+  // ORG-SCOPED (CaaS T1-2, #614): send to /admin only when the caller is an
+  // organizer of the CURRENT domain's organization (falls back to the deprecated
+  // global flag via the authz legacy bridge when the org can't be resolved).
   let target: string
-  if (session?.speaker?.isOrganizer) {
+  if (await isOrganizerForCurrentOrg(session?.speaker)) {
     target = '/admin'
   } else if (session?.speaker) {
     target = '/cfp/list'

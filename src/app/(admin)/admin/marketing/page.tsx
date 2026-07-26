@@ -1,5 +1,6 @@
 import React from 'react'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -124,7 +125,8 @@ const ErrorDisplay = ({ message }: { message: string }) => (
 export default async function MarketingPage() {
   const session = await getAuthSession()
 
-  if (!session?.speaker?.isOrganizer) {
+  // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     return (
       <div className="flex h-screen items-center justify-center">
         <p className="text-lg text-gray-500 dark:text-gray-400">
