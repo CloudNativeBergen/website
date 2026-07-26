@@ -17,12 +17,13 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Call for Presentations - Cloud Native Days Norway',
-    description:
-      'Submit your talk proposal for Cloud Native Days Norway conference',
+    title: { absolute: `Call for Presentations - ${brand}` },
+    description: `Submit your talk proposal for ${brand} conference`,
     alternates: await canonicalAlternates('/cfp'),
     twitter: {
       card: 'summary_large_image',

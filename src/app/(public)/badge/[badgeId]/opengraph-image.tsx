@@ -2,6 +2,7 @@ import React from 'react'
 import { ImageResponse } from 'next/og'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { notFound } from 'next/navigation'
 
 export const runtime = 'edge'
@@ -107,7 +108,7 @@ export default async function Image({
       : null
 
   const speakerName = speaker?.name || 'Speaker'
-  const conferenceName = conference?.title || 'Cloud Native Days'
+  const conferenceName = conference?.title || PLATFORM_NAME
   const conferenceLocation =
     conference && 'city' in conference && 'country' in conference
       ? `${conference.city}, ${conference.country}`

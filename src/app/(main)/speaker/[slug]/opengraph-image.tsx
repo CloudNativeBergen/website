@@ -2,6 +2,8 @@ import React from 'react'
 import { ImageResponse } from 'next/og'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
+import { ogImageMetadata } from '@/lib/og/metadata'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   createSvgDataUrl,
   formatDateRange,
@@ -73,9 +75,13 @@ const renderSponsorLogo = (
   size: 'small' | 'large' = 'small',
 ) => createSponsorLogo(logoSvg, logoBrightSvg, sponsorName, size === 'large')
 
-export const alt = 'Cloud Native Days Norway Speaker Profile'
-export const size = OG_IMAGE_SIZE
-export const contentType = 'image/png'
+export function generateImageMetadata() {
+  return ogImageMetadata((brand) => `${brand} Speaker Profile`)
+}
+
+// Internal (non-exported) size for the ImageResponse below; the exported image
+// metadata (alt/size/contentType) now comes from `generateImageMetadata`.
+const size = OG_IMAGE_SIZE
 
 const SpeakerImage = ({
   imageUrl,
@@ -244,7 +250,7 @@ export default async function Image({
   }
 
   const conferenceData = {
-    title: conference?.title || 'Cloud Native Days Norway',
+    title: conference?.title || PLATFORM_NAME,
     startDate: conference?.startDate,
     endDate: conference?.endDate,
     city: conference?.city,

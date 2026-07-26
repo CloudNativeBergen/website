@@ -225,6 +225,29 @@ export default defineType({
         'Icon-only logo mark for dark backgrounds. Falls back to Logo Mark (Light Mode) if not set.',
       fieldset: 'branding',
     }),
+    // Background pattern (go-live gate G2, #643): the decorative page background.
+    // ABSENT resolves to 'cloud-native' — the animated CNCF ecosystem logos —
+    // so existing tenants are unchanged. Tenants outside the CNCF ecosystem can
+    // dial it down ('subtle') or off ('none', a plain gradient).
+    defineField({
+      name: 'backgroundPattern',
+      title: 'Background Pattern',
+      type: 'string',
+      fieldset: 'branding',
+      description:
+        'The decorative page background. "Cloud Native" shows the animated CNCF project logos. "Subtle" shows the same logos at a much lower density and opacity. "None" shows a plain gradient with no logos. Leave blank for "Cloud Native".',
+      options: {
+        list: [
+          {
+            title: 'Cloud Native — animated CNCF logos',
+            value: 'cloud-native',
+          },
+          { title: 'Subtle — sparse, faint logos', value: 'subtle' },
+          { title: 'None — plain gradient, no logos', value: 'none' },
+        ],
+        layout: 'radio',
+      },
+    }),
 
     // === Important Dates ===
     defineField({

@@ -7,6 +7,10 @@ import {
   CONFERENCE_VISIBILITY_VALUES,
   type ConferenceVisibility,
 } from '@/lib/conference/visibility'
+import {
+  BACKGROUND_PATTERN_VALUES,
+  type BackgroundPattern,
+} from '@/lib/conference/backgroundPattern'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -61,6 +65,20 @@ export const UpdateVisibilitySchema = z.object({
 export const UpdateVenueSchema = z.object({
   venueName: z.string().trim().nullable().optional(),
   venueAddress: z.string().trim().nullable().optional(),
+})
+
+// === Branding (background pattern; go-live gate G2, #643) ===
+// The logo slots are edited through the dedicated BrandingEditor/updateBrandingLogo
+// path; this scalar fieldset carries only the decorative background switch.
+// A required enum — the mutation always sets an explicit value; absent is
+// treated as `'cloud-native'` by the renderer (see backgroundPattern.ts).
+export const UpdateBrandingSchema = z.object({
+  backgroundPattern: z.enum(
+    BACKGROUND_PATTERN_VALUES as unknown as [
+      BackgroundPattern,
+      ...BackgroundPattern[],
+    ],
+  ),
 })
 
 // === Dates ===

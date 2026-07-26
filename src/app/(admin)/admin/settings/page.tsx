@@ -20,6 +20,10 @@ import {
   BrandingEditor,
   BrandingPreviewGrid,
 } from '@/components/admin/BrandingEditor'
+import {
+  normalizeBackgroundPattern,
+  type BackgroundPattern,
+} from '@/lib/conference/backgroundPattern'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
@@ -45,6 +49,13 @@ import {
   EyeIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
+
+/** Read-only labels for the branding-card background-pattern row. */
+const BACKGROUND_PATTERN_LABELS: Record<BackgroundPattern, string> = {
+  'cloud-native': 'Cloud Native (animated CNCF logos)',
+  subtle: 'Subtle (sparse, faint logos)',
+  none: 'None (plain gradient)',
+}
 
 interface NamedItem {
   name?: string
@@ -483,14 +494,26 @@ export default async function AdminSettings() {
             icon={SwatchIcon}
             editUrl={editUrl}
             action={
-              <BrandingEditor
-                initialValues={{
-                  logoBright: conference.logoBright,
-                  logoDark: conference.logoDark,
-                  logomarkBright: conference.logomarkBright,
-                  logomarkDark: conference.logomarkDark,
-                }}
-              />
+              <>
+                <EditConferenceCard
+                  fieldset="branding"
+                  initialValues={{
+                    // Normalize (not just null-coalesce) so an invalid stored
+                    // value can't seed an enum-invalid submit.
+                    backgroundPattern: normalizeBackgroundPattern(
+                      conference.backgroundPattern,
+                    ),
+                  }}
+                />
+                <BrandingEditor
+                  initialValues={{
+                    logoBright: conference.logoBright,
+                    logoDark: conference.logoDark,
+                    logomarkBright: conference.logomarkBright,
+                    logomarkDark: conference.logomarkDark,
+                  }}
+                />
+              </>
             }
           >
             <BrandingPreviewGrid
@@ -500,6 +523,14 @@ export default async function AdminSettings() {
                 logomarkBright: conference.logomarkBright,
                 logomarkDark: conference.logomarkDark,
               }}
+            />
+            <FieldRow
+              label="Background Pattern"
+              value={
+                BACKGROUND_PATTERN_LABELS[
+                  normalizeBackgroundPattern(conference.backgroundPattern)
+                ]
+              }
             />
           </InfoCard>
 

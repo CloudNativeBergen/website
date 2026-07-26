@@ -1,9 +1,18 @@
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+import { escapeHtml } from '@/lib/email/escape'
+
 interface BadgeEmailTemplateProps {
   speakerName: string
   conferenceName: string
   conferenceYear: string
   badgeType: 'speaker' | 'organizer'
   downloadUrl: string
+  /**
+   * The issuing organizer shown in the footer. Defaults to the neutral platform
+   * name; callers thread the conference organizer/title so the footer names the
+   * actual tenant (go-live gate G2, E8).
+   */
+  organizerName?: string
 }
 
 export const BadgeEmailTemplate = ({
@@ -12,23 +21,36 @@ export const BadgeEmailTemplate = ({
   conferenceYear,
   badgeType,
   downloadUrl,
+  organizerName = PLATFORM_NAME,
 }: BadgeEmailTemplateProps) => {
+  // Raw template string — every tenant-derived value must be escaped before
+  // interpolation (a conference/organizer/speaker name containing < or & must
+  // not break or inject into the outgoing email). `badgeType` is a closed
+  // union, `downloadUrl` is app-generated; both escaped anyway for depth.
+  const safe = {
+    speakerName: escapeHtml(speakerName),
+    conferenceName: escapeHtml(conferenceName),
+    conferenceYear: escapeHtml(conferenceYear),
+    badgeType: escapeHtml(badgeType),
+    downloadUrl: escapeHtml(downloadUrl),
+    organizerName: escapeHtml(organizerName),
+  }
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your ${badgeType} badge for ${conferenceName} ${conferenceYear}</title>
+  <title>Your ${safe.badgeType} badge for ${safe.conferenceName} ${safe.conferenceYear}</title>
 </head>
 <body style="background-color: #f6f9fc; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Ubuntu,sans-serif; margin: 0; padding: 0;">
   <div style="background-color: #ffffff; margin: 0 auto 64px; padding: 20px 0 48px; max-width: 600px;">
     <h1 style="color: #1D4ED8; font-size: 32px; font-weight: bold; margin: 40px 0; padding: 0 48px;">
-      🎉 Congratulations, ${speakerName}!
+      🎉 Congratulations, ${safe.speakerName}!
     </h1>
 
     <p style="color: #032B45; font-size: 16px; line-height: 26px; padding: 0 48px;">
-      Thank you for being a ${badgeType} at ${conferenceName} ${conferenceYear}. Your contribution to our community is invaluable!
+      Thank you for being a ${safe.badgeType} at ${safe.conferenceName} ${safe.conferenceYear}. Your contribution to our community is invaluable!
     </p>
 
     <p style="color: #032B45; font-size: 16px; line-height: 26px; padding: 0 48px;">
@@ -36,7 +58,7 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <div style="padding: 27px 48px;">
-      <a href="${downloadUrl}" style="background-color: #06B6D4; border-radius: 5px; color: #fff; font-size: 16px; font-weight: bold; text-decoration: none; text-align: center; display: block; padding: 12px 20px;">
+      <a href="${safe.downloadUrl}" style="background-color: #06B6D4; border-radius: 5px; color: #fff; font-size: 16px; font-weight: bold; text-decoration: none; text-align: center; display: block; padding: 12px 20px;">
         Download Your Badge
       </a>
     </div>
@@ -54,7 +76,7 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <p style="color: #8898aa; font-size: 12px; line-height: 16px; padding: 0 48px; margin-top: 32px;">
-      Cloud Native Days<br>
+      ${safe.organizerName}<br>
       Building the cloud native community
     </p>
   </div>

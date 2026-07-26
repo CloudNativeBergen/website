@@ -42,6 +42,7 @@ import { conferenceTag } from '@/lib/cache/tags'
 import type { ElementType } from 'react'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
 const INCLUSION_ICONS: Record<string, ElementType> = {
   MicrophoneIcon,
@@ -67,9 +68,10 @@ const INCLUSION_ICONS: Record<string, ElementType> = {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Tickets - Cloud Native Days Norway',
-    description: 'Get your tickets for Cloud Native Days Norway conference',
+    title: { absolute: `Tickets - ${brand}` },
+    description: `Get your tickets for ${brand} conference`,
     alternates: await canonicalAlternates('/tickets'),
     twitter: {
       card: 'summary_large_image',

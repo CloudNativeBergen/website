@@ -25,6 +25,7 @@ import {
   UpdateBasicInfoSchema,
   UpdateVisibilitySchema,
   UpdateVenueSchema,
+  UpdateBrandingSchema,
   UpdateDatesSchema,
   UpdateRegistrationSchema,
   UpdateCommunicationSchema,
@@ -166,6 +167,13 @@ export const conferenceRouter = router({
 
   updateVenue: adminProcedure
     .input(UpdateVenueSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  updateBranding: adminProcedure
+    .input(UpdateBrandingSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)

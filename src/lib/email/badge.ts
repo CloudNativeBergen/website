@@ -45,6 +45,9 @@ export async function sendBadgeEmail({
       conferenceYear,
       badgeType: badge.badgeType,
       downloadUrl,
+      // Footer issuer: the conference organizer, then its title, then the
+      // neutral platform default (never another tenant's hardcoded brand).
+      organizerName: conference?.organizer || conference?.title || undefined,
     })
 
     // Determine from email using conference data (neutral platform fallback

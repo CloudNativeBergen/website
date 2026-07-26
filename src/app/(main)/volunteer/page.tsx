@@ -10,10 +10,12 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Volunteer | Cloud Native Days Norway',
+    title: { absolute: `Volunteer | ${brand}` },
     description:
       'Join our volunteer team and help make the conference a success',
     alternates: await canonicalAlternates('/volunteer'),

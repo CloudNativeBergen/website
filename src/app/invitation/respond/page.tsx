@@ -10,11 +10,15 @@ import {
 import InvitationResponseClient from '@/components/InvitationResponseClient'
 import { AppEnvironment } from '@/lib/environment'
 import { DevBanner } from '@/components/DevBanner'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
-export const metadata: Metadata = {
-  title: 'Co-Speaker Invitation | Cloud Native Days Norway',
-  description: 'Respond to your co-speaker invitation',
-  robots: { index: false, follow: false },
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
+  return {
+    title: { absolute: `Co-Speaker Invitation | ${brand}` },
+    description: 'Respond to your co-speaker invitation',
+    robots: { index: false, follow: false },
+  }
 }
 
 interface PageProps {
