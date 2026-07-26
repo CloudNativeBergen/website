@@ -120,12 +120,18 @@ describe('link-intent token', () => {
   })
 
   it('throws when minting without a configured secret (fail closed)', () => {
-    expect(() =>
-      signLinkIntent(
-        { speakerId: 'spk-1', provider: 'github', initiatorSub: 'sess-1' },
-        undefined,
-      ),
-    ).toThrow(/AUTH_SECRET/)
+    const orig = process.env.AUTH_SECRET
+    delete process.env.AUTH_SECRET
+    try {
+      expect(() =>
+        signLinkIntent(
+          { speakerId: 'spk-1', provider: 'github', initiatorSub: 'sess-1' },
+          undefined,
+        ),
+      ).toThrow(/AUTH_SECRET/)
+    } finally {
+      process.env.AUTH_SECRET = orig
+    }
   })
 
   it('throws when minting without an initiating session (fail closed)', () => {

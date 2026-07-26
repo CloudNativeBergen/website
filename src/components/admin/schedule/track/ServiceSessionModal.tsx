@@ -1,8 +1,11 @@
 'use client'
 
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
+import { ClockIcon } from '@heroicons/react/24/outline'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { Dropdown } from '@/components/Form'
+import { ModalShell } from '@/components/ModalShell'
+import { AdminButton } from '@/components/admin/AdminButton'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
 import {
   SCHEDULE_END,
@@ -11,7 +14,6 @@ import {
   toMinutes,
 } from '@/lib/schedule/time'
 import { isTrackIntervalFree } from '@/lib/schedule/rules'
-import { useModalA11y } from '../useModalA11y'
 
 interface ServiceSessionModalProps {
   isOpen: boolean
@@ -28,8 +30,9 @@ export const ServiceSessionModal = ({
   onClose,
   onSave,
 }: ServiceSessionModalProps) => {
-  // The dialog is an inner component so its hooks (modal a11y, per-open state)
-  // only run while the modal is actually open.
+  // The dialog is an inner component so its per-open state (title, duration,
+  // error) resets between opens. ModalShell's `appear` transition still
+  // animates the entry on mount.
   if (!isOpen) return null
   return (
     <ServiceSessionDialog
@@ -48,14 +51,9 @@ const ServiceSessionDialog = ({
   onSave,
 }: Omit<ServiceSessionModalProps, 'isOpen'>) => {
   const [title, setTitle] = useState('')
-  const [duration, setDuration] = useState('10')
+  const DEFAULT_DURATION = '10'
+  const [duration, setDuration] = useState(DEFAULT_DURATION)
   const [error, setError] = useState<string | null>(null)
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  // Modal semantics: Escape closes, focus moves in (preferring the autoFocus
-  // title input) and is restored on close, Tab is trapped. Shared with
-  // AddTrackModal and the mobile BottomSheet.
-  useModalA11y(dialogRef, onClose)
 
   // Free minutes from the chosen start until the next talk/session (or the end
   // of the day). Recomputed from the LIVE track so a schedule change while the
@@ -117,90 +115,100 @@ const ServiceSessionDialog = ({
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="service-session-modal-title"
-        className="mx-4 w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800"
-      >
-        <h3
-          id="service-session-modal-title"
-          className="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
-        >
-          Create Service Session
-        </h3>
-        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+    // ModalShell provides the house dialog semantics this modal used to
+    // hand-roll via useModalA11y: focus trap + restore, Escape close, scroll
+    // lock, labelled 44px header close, backdrop click-to-close, and a bottom
+    // sheet below `sm`. HeadlessUI's Dialog portals to document.body — outside
+    // the schedule editor's DndContext DOM, which is fine: React context flows
+    // through portals and the modal only opens from a click, never mid-drag.
+    <ModalShell
+      isOpen
+      onClose={onClose}
+      size="md"
+      title="Create Service Session"
+      subtitle={
+        <>
           Starting at {timeSlot}
           {maxDurationMin > 0 && ` · up to ${maxDurationMin} min available`}
-        </p>
+        </>
+      }
+      icon={<ClockIcon className="h-5 w-5" />}
+      confirmOnDirtyClose
+      // A changed duration is ALSO unsaved intent — without it, Escape/backdrop
+      // after picking a duration (but before typing a title) discards silently.
+      isDirty={title.trim().length > 0 || duration !== DEFAULT_DURATION}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label
+            htmlFor="title"
+            className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Session Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+            placeholder="e.g., Coffee Break, Lunch, Networking"
+            required
+            // HeadlessUI's focus trap sends initial focus to the first
+            // focusable (the header Close button) unless an element opts in
+            // with data-autofocus — keep the title input as the landing spot.
+            data-autofocus
+          />
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="title"
-              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Session Title
-            </label>
-            <input
-              type="text"
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-              placeholder="e.g., Coffee Break, Lunch, Networking"
-              required
-              autoFocus
-            />
-          </div>
+        <div>
+          <Dropdown
+            name="duration"
+            label="Duration (minutes)"
+            options={durationOptions}
+            value={effectiveDuration}
+            setValue={(val) => {
+              setDuration(val)
+              setError(null)
+            }}
+            disabled={nothingFits}
+          />
+        </div>
 
-          <div>
-            <Dropdown
-              name="duration"
-              label="Duration (minutes)"
-              options={durationOptions}
-              value={effectiveDuration}
-              setValue={(val) => {
-                setDuration(val)
-                setError(null)
-              }}
-              disabled={nothingFits}
-            />
-          </div>
+        {(error || nothingFits) && (
+          <p
+            role="alert"
+            className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
+          >
+            {nothingFits
+              ? 'This slot is no longer free — close and pick another.'
+              : error}
+          </p>
+        )}
 
-          {(error || nothingFits) && (
-            <p
-              role="alert"
-              className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
-            >
-              {nothingFits
-                ? 'This slot is no longer free — close and pick another.'
-                : error}
-            </p>
-          )}
-
-          {/* Cancel LEFT, primary RIGHT — mirrors the SendMessageModal footer
-              (the house order); a primary-on-the-left footer read as a bug. */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:ring-2 focus:ring-gray-500 focus:outline-none dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={nothingFits}
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600"
-            >
-              Create Session
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* House footer: right-aligned on sm+, stacked with the primary on top
+            on mobile (flex-col-reverse). Cancel stays type="button" (the
+            AdminButton default) so it never submits the form. */}
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          <AdminButton
+            variant="secondary"
+            size="md"
+            onClick={onClose}
+            className="min-h-[44px]"
+          >
+            Cancel
+          </AdminButton>
+          <AdminButton
+            type="submit"
+            color="blue"
+            size="md"
+            disabled={nothingFits}
+            className="min-h-[44px]"
+          >
+            Create Session
+          </AdminButton>
+        </div>
+      </form>
+    </ModalShell>
   )
 }

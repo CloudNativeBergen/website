@@ -12,7 +12,6 @@ import { isConferenceOver } from '@/lib/conference/state'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
-import { SpeakerShare } from '@/components/SpeakerShare'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
 import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmationHandler'
@@ -292,10 +291,6 @@ export default async function SpeakerDashboard() {
             onLinkAction={startProviderLink}
           />
         </div>
-
-        <div className="mt-6 max-w-md">
-          <SpeakerShare speaker={speakerWithTalks} />
-        </div>
       </div>
     )
   }
@@ -349,7 +344,7 @@ export default async function SpeakerDashboard() {
               />
             )}
 
-            {(confirmedTalks.length > 0 || !latestBadge) && (
+            {confirmedTalks.length > 0 && (
               <SpeakerShareSidebar
                 speaker={speakerWithTalks}
                 talkTitle={talkTitle}
