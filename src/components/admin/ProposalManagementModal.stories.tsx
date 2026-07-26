@@ -15,6 +15,7 @@ import { Topic } from '@/lib/topic/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { fn } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
+import { withPortalTheme } from '@/lib/storybook'
 
 const mockTopics: Topic[] = [
   {
@@ -131,10 +132,11 @@ const meta: Meta<typeof ProposalManagementModal> = {
   component: ProposalManagementModal,
   tags: ['autodocs'],
   parameters: {
+    layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'A full-featured modal for creating or editing proposals from the admin interface. Includes speaker multi-select, the shared ProposalDetailsForm (title, description, format, level, audience, topics, outline), validation errors, and keyboard shortcuts (Cmd+S to save).',
+          'A full-featured modal for creating or editing proposals from the admin interface. Built on the shared ModalShell. Includes speaker multi-select, the shared ProposalDetailsForm (title, description, format, level, audience, topics, outline), validation errors, and keyboard shortcuts (Cmd+S to save). Inspect at 393px and in dark mode.',
       },
     },
     msw: {
@@ -178,6 +180,9 @@ const meta: Meta<typeof ProposalManagementModal> = {
     },
   },
   decorators: [
+    // ModalShell portals via HeadlessUI to document.body; mirror the toolbar
+    // theme onto <html> so the portalled modal's dark: classes resolve.
+    withPortalTheme,
     (Story) => (
       <NotificationProvider>
         <Story />

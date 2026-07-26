@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { SpeakerImageModal } from './SpeakerImageModal'
+import { withPortalTheme } from '@/lib/storybook'
 
 // Inline SVG portrait so the story renders deterministically without any
 // network request (speakerImageUrl returns non-Sanity URLs untouched).
@@ -29,6 +30,10 @@ const meta = {
     },
   },
   tags: ['autodocs'],
+  // ModalShell's HeadlessUI Dialog portals to document.body, escaping the
+  // Storybook theme wrapper; mirror the toolbar theme onto <html> so the
+  // portalled modal's dark: classes resolve.
+  decorators: [withPortalTheme],
   args: {
     onClose: fn(),
   },

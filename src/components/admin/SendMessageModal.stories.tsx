@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
+import { ThemeProvider } from 'next-themes'
 import { SendMessageModal } from './SendMessageModal'
 import { NotificationProvider } from './NotificationProvider'
 
@@ -36,18 +37,20 @@ const meta = {
     onClose: fn(),
   },
   decorators: [
+    // SendMessageModal now sits on ModalShell, whose HeadlessUI Dialog portals
+    // to document.body — a wrapper `.dark` class never reaches it. ModalShell
+    // reads next-themes instead, so force the theme (synced to the Storybook
+    // theme global) here; React context crosses the portal. Mirrors
+    // SearchModal.stories.
     (Story, ctx) => (
-      <NotificationProvider>
-        <div
-          className={
-            ctx.parameters.dark
-              ? 'dark min-h-screen bg-gray-950'
-              : 'min-h-screen'
-          }
-        >
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={ctx.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <NotificationProvider>
           <Story />
-        </div>
-      </NotificationProvider>
+        </NotificationProvider>
+      </ThemeProvider>
     ),
   ],
   tags: ['autodocs'],
@@ -57,10 +60,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
-
-export const Dark: Story = {
-  parameters: { dark: true },
-}
 
 /** After a successful send: confirmation with a "View conversation" link. */
 export const Sent: Story = {
