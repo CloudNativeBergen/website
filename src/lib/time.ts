@@ -409,16 +409,20 @@ function osloParts(instant: Date): {
   date: string
   time: string
 } {
-  const formatted = new Intl.DateTimeFormat('sv-SE', {
+  // formatToParts, not format(): the assembled string's separators are not
+  // guaranteed across engines, but part values are.
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: OSLO_TZ,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
-  }).format(instant)
-  const [date, time] = formatted.split(' ')
+    hourCycle: 'h23',
+  }).formatToParts(instant)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  const date = `${get('year')}-${get('month')}-${get('day')}`
+  const time = `${get('hour')}:${get('minute')}`
   return { date, time }
 }
 
