@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, ReactNode } from 'react'
+import { useId, useState, ReactNode } from 'react'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 interface CollapsibleSectionProps {
@@ -31,6 +31,7 @@ export function CollapsibleSection({
   action,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
+  const contentId = useId()
 
   return (
     <div
@@ -45,6 +46,7 @@ export function CollapsibleSection({
             type="button"
             onClick={() => setIsOpen(!isOpen)}
             aria-expanded={isOpen}
+            aria-controls={contentId}
             className="flex min-w-0 flex-1 items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <span className="flex min-w-0 items-center">
@@ -75,7 +77,10 @@ export function CollapsibleSection({
       </div>
 
       {isOpen && (
-        <div className="border-t border-gray-200 dark:border-gray-700">
+        <div
+          id={contentId}
+          className="border-t border-gray-200 dark:border-gray-700"
+        >
           {children}
         </div>
       )}

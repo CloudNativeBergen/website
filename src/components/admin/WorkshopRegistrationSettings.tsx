@@ -68,7 +68,10 @@ export function WorkshopRegistrationSettings({
         router.refresh()
       },
       onError: (err) => {
-        setError(err.message || 'Failed to update')
+        setError(
+          err.message ||
+            'Failed to update the workshop registration window. Please try again.',
+        )
         showNotification({
           type: 'error',
           title: 'Could not save',
