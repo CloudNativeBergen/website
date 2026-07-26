@@ -369,7 +369,10 @@ export async function getConferenceForDomain(
  * ticket count, so no expansion is required.
  */
 export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
-  const query = `*[_type == "conference" && defined(endDate) && defined(salesNotificationChannel)] | order(startDate asc){
+  // NOTE: an empty string passes defined() in GROQ — require a non-empty
+  // channel so a blanked-out field doesn't qualify a conference for a post
+  // that postSlackMessage would no-op anyway.
+  const query = `*[_type == "conference" && defined(endDate) && defined(salesNotificationChannel) && salesNotificationChannel != ""] | order(startDate asc){
     ...,
     teams[]{
       _key,
