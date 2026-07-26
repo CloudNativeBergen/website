@@ -169,8 +169,8 @@ export async function jwtSignInCallback({
   if (trigger === 'update') {
     const existing = token.speaker as Session['speaker'] | undefined
     if (existing?._id && token.account) {
-      const { getSpeaker } = await import('@/lib/speaker/sanity')
-      const { speaker, err } = await getSpeaker(existing._id)
+      const { getSpeakerLoginClaims } = await import('@/lib/speaker/sanity')
+      const { speaker, err } = await getSpeakerLoginClaims(existing._id)
       // A transient read failure or a vanished document must NEVER invalidate a
       // live session — return the existing token untouched on any read problem.
       if (err || !speaker?._id) {
@@ -184,6 +184,10 @@ export async function jwtSignInCallback({
       }
       // Preserve the authenticated account; re-apply only the speaker claims.
       applySpeakerToToken(token, speaker, token.account as Account)
+      // applySpeakerToToken sets token.speaker.* and token.picture but not the
+      // JWT's own top-level name claim (session.user.name reads token.name) —
+      // refresh it too so a renamed speaker isn't stale until re-login.
+      if (speaker.name) token.name = speaker.name
     }
     return token
   }

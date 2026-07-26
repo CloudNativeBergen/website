@@ -57,6 +57,28 @@ const LOGIN_SPEAKER_PROJECTION = `{
   }`
 
 /**
+ * Fetch ONLY the login-claim fields for a speaker by id — the same minimal
+ * projection the sign-in lookups use. For session refreshes (the JWT
+ * `trigger:'update'` path): re-reading the full document there would pull
+ * bio/links/consent/push blobs the token never carries.
+ */
+export async function getSpeakerLoginClaims(id: string): Promise<{
+  speaker: Speaker | null
+  err: Error | null
+}> {
+  try {
+    const speaker = await clientRead.fetch<Speaker | null>(
+      `*[_type == "speaker" && _id == $id][0]${LOGIN_SPEAKER_PROJECTION}`,
+      { id },
+      { cache: 'no-store' },
+    )
+    return { speaker: speaker ?? null, err: null }
+  } catch (error) {
+    return { speaker: null, err: error as Error }
+  }
+}
+
+/**
  * Org-membership + participation predicate for ADMIN-facing speaker lists
  * (#615). A speaker belongs to an org's admin surface when they are either an
  * explicit member (`organizations[]._ref` — post-044-backfill everyone is) OR,

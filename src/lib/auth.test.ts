@@ -57,6 +57,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
     attachProviderToSpeaker(...args),
   getOrCreateSpeaker: (...args: unknown[]) => getOrCreateSpeaker(...args),
   getSpeaker: (...args: unknown[]) => getSpeaker(...args),
+  getSpeakerLoginClaims: (...args: unknown[]) => getSpeaker(...args),
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
