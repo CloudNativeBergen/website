@@ -288,7 +288,7 @@ async function ensureSpeakerOrgMembership(speakerId: string): Promise<void> {
     const orgRef = await getOrganizationRefForCurrentConference()
     if (!orgRef) return
     const alreadyMember = await clientRead.fetch<boolean>(
-      `count(*[_id == $speakerId && $orgRef in organizations[]._ref]) > 0`,
+      `count(*[_id == $speakerId && $orgRef in coalesce(organizations, [])[]._ref]) > 0`,
       { speakerId, orgRef },
     )
     if (alreadyMember) return

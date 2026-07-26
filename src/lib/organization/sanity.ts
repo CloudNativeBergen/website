@@ -20,9 +20,9 @@ interface OrganizationRef {
 }
 
 /**
- * Build the `organization` reference field for a document being created, or
- * `undefined` when there is no organization to stamp. Spread the result so an
- * absent key contributes nothing:
+ * Build the `organization` reference field for a document being created, or an
+ * EMPTY OBJECT when there is no organization to stamp — so callers can always
+ * spread the result and an absent org contributes no key:
  *
  *   ...organizationField(orgId)
  */

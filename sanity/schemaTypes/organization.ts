@@ -33,8 +33,15 @@ export default defineType({
       options: {
         source: 'name',
         maxLength: 96,
+        // Same normalization as the 044 backfill migration's slugify — strip
+        // punctuation and edge dashes, not just whitespace.
         slugify: (input) =>
-          input.toLowerCase().replace(/\s+/g, '-').slice(0, 96),
+          input
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 96),
       },
       validation: (Rule) => Rule.required(),
     }),

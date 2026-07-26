@@ -45,7 +45,11 @@ export async function bulkUpdateSponsors(
 
   // A bulk update operates within the CURRENT conference, so every logged
   // activity shares its organization (CaaS T1-1). Resolve once. Best-effort:
-  // absent before the 044 backfill.
+  // absent before the 044 backfill. NOTE: the stamp follows this operation's
+  // existing conference scope — it does not itself validate that the supplied
+  // sfc ids belong to the current conference; cross-conference id validation
+  // is the query-scoping invariant's job (#616), and in the single-org dataset
+  // every stamp resolves to the same organization regardless.
   const orgRef = await getOrganizationRefForCurrentConference()
 
   // Fetch the new assignee's name if we're assigning someone
