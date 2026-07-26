@@ -37,6 +37,7 @@ import {
   UserMinusIcon,
 } from '@heroicons/react/24/outline'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -57,6 +58,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
   const { conference, error: conferenceError } =
     await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (conferenceError) {
     return (

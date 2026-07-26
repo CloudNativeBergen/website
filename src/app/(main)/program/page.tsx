@@ -7,6 +7,7 @@ import { Sponsors } from '@/components/Sponsors'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { EventJsonLd } from '@/components/seo/EventJsonLd'
 import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
@@ -38,6 +39,10 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     sponsorTiers: true,
     confirmedTalksOnly: false,
   })
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (error || !conference) {
     return (

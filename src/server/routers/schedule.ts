@@ -5,6 +5,7 @@ import { saveScheduleToSanity, getValidTalkIds } from '@/lib/schedule/sanity'
 import { validateSchedulePayload } from '@/lib/schedule/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 
 export const scheduleRouter = router({
@@ -56,9 +57,13 @@ export const scheduleRouter = router({
         })
       }
 
-      revalidateTag('content:program', 'default')
-      revalidateTag('content:conferences', 'default')
-      revalidateTag(`sanity:conference-${conference._id}`, 'default')
+      // A schedule save changes exactly ONE conference's program. Revalidate the
+      // tenant-scoped tag ONLY — the generic `content:program`/`content:conferences`
+      // tags would bust every other conference's cached pages. Every page that
+      // renders this conference's content (and the shared conference read in
+      // `fetchConferenceData`) now carries `sanity:conference-<id>`, so the
+      // scoped tag alone fully invalidates this tenant.
+      revalidateTag(conferenceTag(conference._id), 'default')
 
       return { schedule }
     }),

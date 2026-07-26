@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
@@ -124,8 +125,10 @@ async function applyConferencePatch(
 
     // Bust the cached conference read so the server-rendered settings page (and
     // every other `getConferenceForCurrentDomain` consumer) reflects the change.
-    revalidateTag('content:conferences', 'default')
-    revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+    // Settings belong to ONE conference, so revalidate the tenant-scoped tag
+    // only — `fetchConferenceData` and every public page tag this conference's
+    // cached reads with `sanity:conference-<id>`, so other tenants stay warm.
+    revalidateTag(conferenceTag(conferenceId), 'default')
 
     return { success: true, updated: result }
   } catch (error) {

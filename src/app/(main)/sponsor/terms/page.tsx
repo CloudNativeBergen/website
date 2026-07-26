@@ -5,6 +5,7 @@ import { getTermsForConference } from '@/lib/sponsor-crm/contract-templates'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -24,6 +25,10 @@ async function CachedTermsContent({ domain }: { domain: string }) {
   cacheTag('content:sponsor-terms')
 
   const { conference, error: confError } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (confError || !conference) {
     return (

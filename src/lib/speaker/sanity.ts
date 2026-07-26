@@ -9,6 +9,7 @@ import { v4 as randomUUID } from 'uuid'
 import { Account, Profile, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { generateUniqueSpeakerSlug } from './slug'
 import { normalizeEmail, uniqueEmails } from './email'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
@@ -655,7 +656,7 @@ export async function getSpeakers(
   cacheLife('hours')
   cacheTag('content:speakers')
   if (conferenceId) {
-    cacheTag(`sanity:conference-${conferenceId}`)
+    cacheTag(conferenceTag(conferenceId))
   }
 
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []

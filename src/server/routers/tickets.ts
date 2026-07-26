@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   TicketSettingsUpdateSchema,
@@ -497,7 +498,8 @@ export const ticketsRouter = router({
             .set(updates)
             .commit()
 
-          revalidateTag('content:tickets', 'default')
+          // Ticket page content belongs to one conference — bust only this tenant.
+          revalidateTag(conferenceTag(conferenceId), 'default')
 
           return {
             success: true,

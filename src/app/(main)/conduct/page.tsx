@@ -3,6 +3,7 @@ import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -22,6 +23,11 @@ async function CachedConductContent({ domain }: { domain: string }) {
   cacheTag('content:conduct')
 
   const { conference } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
+
   const organizerName = conference?.organizer || 'Cloud Native Days Norway'
 
   return (

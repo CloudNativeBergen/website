@@ -36,6 +36,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import type { ElementType } from 'react'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -92,6 +93,10 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   cacheTag('content:tickets')
 
   const { conference, error } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (error) {
     console.error('Error fetching conference data:', error)

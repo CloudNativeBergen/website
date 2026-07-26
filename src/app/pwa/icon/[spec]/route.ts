@@ -23,6 +23,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { domainTag } from '@/lib/cache/tags'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { ICON_SPECS, renderConferenceIconPng } from '@/lib/pwa/icons'
 
@@ -41,7 +42,7 @@ async function renderCachedIconBase64(
   'use cache'
   cacheLife('max')
   cacheTag('pwa-icons')
-  cacheTag(`domain:${host}`)
+  cacheTag(domainTag(host))
 
   const spec = ICON_SPECS[specKey]
   const { conference } = await getConferenceForDomain(host)

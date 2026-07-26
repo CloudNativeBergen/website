@@ -4,6 +4,7 @@ import { normalizeDomain } from './domains'
 import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import {
   getFeaturedGalleryImages,
   getGalleryImages,
@@ -18,8 +19,16 @@ async function fetchConferenceData(
   'use cache'
   cacheLife('hours')
   cacheTag('content:conferences')
-  cacheTag(`domain:${domain}`)
-  return clientWrite.fetch(query, { domain, wildcardSubdomain })
+  cacheTag(domainTag(domain))
+  const result = await clientWrite.fetch(query, { domain, wildcardSubdomain })
+  // Tag this cached read with the resolved conference id so a conference-scoped
+  // mutation (which revalidates `sanity:conference-<id>`) busts THIS tenant's
+  // conference read — and only this tenant's — without the broad
+  // `content:conferences` hammer that busts every tenant.
+  if (result?._id) {
+    cacheTag(conferenceTag(result._id))
+  }
+  return result
 }
 
 export async function getConferenceForCurrentDomain({

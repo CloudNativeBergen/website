@@ -5,6 +5,7 @@ import { Container } from '@/components/Container'
 import { InfoContent } from '@/components/info/InfoContent'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -79,6 +80,10 @@ async function CachedInfoContent({ domain }: { domain: string }) {
   const { conference } = await getConferenceForDomain(domain, {
     schedule: true,
   })
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (!conference) {
     return null

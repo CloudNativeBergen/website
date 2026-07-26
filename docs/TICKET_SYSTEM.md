@@ -122,8 +122,14 @@ Complimentary tickets are identified using **name-pattern filtering** (e.g., tic
 ### Caching Strategy
 
 - `getPublicTicketTypes()` uses `'use cache'` + `cacheLife('hours')` + `cacheTag('content:tickets')`
-- The page component `CachedTicketsContent` has its own `'use cache'` layer
-- Cache can be invalidated via `revalidateTag('content:tickets')`
+- The page component `CachedTicketsContent` has its own `'use cache'` layer, and
+  additionally tags itself with the tenant-scoped `conferenceTag(conference._id)`
+  (`sanity:conference-<id>`) once the conference resolves
+- Editing ticket page content (`tickets.updatePageContent`) revalidates the
+  **tenant-scoped** tag only — `revalidateTag(conferenceTag(conferenceId))` — so
+  one conference's edit does not bust every other tenant's tickets page (#618).
+  The generic `content:tickets` tag stays on the cache entries for platform-wide
+  invalidation. Build tag names via `src/lib/cache/tags.ts`, never inline strings.
 
 ---
 

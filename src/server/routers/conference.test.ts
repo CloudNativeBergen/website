@@ -61,7 +61,10 @@ vi.mock('@/lib/teams', () => ({
   clearConferenceTeamsCache: () => clearTeamsCacheMock(),
 }))
 
+import { revalidateTag } from 'next/cache'
 import { conferenceRouter } from './conference'
+
+const revalidateTagMock = revalidateTag as unknown as ReturnType<typeof vi.fn>
 
 const CONFERENCE_ID = 'conf-1'
 
@@ -117,6 +120,24 @@ describe('conference router — authorization', () => {
     })
     expect(result.success).toBe(true)
     expect(lastPatchId).toBe(CONFERENCE_ID)
+  })
+})
+
+describe('conference router — tenant-scoped cache invalidation (#618)', () => {
+  it('revalidates only the edited conference by its scoped tag', async () => {
+    await makeCaller({ isOrganizer: true }).updateBasicInfo({
+      title: 'DevOpsDays',
+      organizer: 'CNB',
+    })
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      `sanity:conference-${CONFERENCE_ID}`,
+      'default',
+    )
+    // The broad tag would bust every other tenant's cached conference read.
+    expect(revalidateTagMock).not.toHaveBeenCalledWith(
+      'content:conferences',
+      expect.anything(),
+    )
   })
 })
 

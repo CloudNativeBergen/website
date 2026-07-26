@@ -6,6 +6,7 @@ import { UserGroupIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { canonicalAlternates } from '@/lib/seo/canonical'
 
@@ -24,6 +25,10 @@ async function CachedVolunteerContent({ domain }: { domain: string }) {
   cacheTag('content:volunteer')
 
   const { conference, error } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (error || !conference?._id) {
     return (
