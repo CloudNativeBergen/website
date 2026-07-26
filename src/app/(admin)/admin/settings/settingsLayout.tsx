@@ -180,8 +180,9 @@ export function FieldRow({
               <div key={idx}>
                 <a
                   href={safeDisplayHref(link)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  {...(safeDisplayHref(link) !== '#'
+                    ? { target: '_blank', rel: 'noopener noreferrer' }
+                    : {})}
                   className="inline-flex max-w-full min-w-0 items-start text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                   {/* break-all, not truncate: a URL is an unbreakable token, and
@@ -244,8 +245,9 @@ export function FieldRow({
       displayValue = value ? (
         <a
           href={safeDisplayHref(value)}
-          target="_blank"
-          rel="noopener noreferrer"
+          {...(safeDisplayHref(value) !== '#'
+            ? { target: '_blank', rel: 'noopener noreferrer' }
+            : {})}
           className="flex min-w-0 items-start text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           {/* Same overflow class as the 'links' case: an unbreakable URL must
