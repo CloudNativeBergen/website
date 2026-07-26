@@ -33,6 +33,13 @@ export function BackgroundImage({
 
   const settings = pattern === 'none' ? null : PATTERN_SETTINGS[pattern]
 
+  // Daily-rotating pattern seed as the UTC day number. The previous
+  // `new Date().setHours(0, 0, 0, 0)` was LOCAL-timezone midnight, which
+  // differs between the SSR server and the visitor's browser — a hydration
+  // mismatch whenever their timezones disagree. The UTC day is identical on
+  // both (except in the instant of UTC midnight between render and hydration).
+  const dailySeed = Math.floor(Date.now() / 86_400_000)
+
   return (
     <div className={clsx('absolute inset-0 overflow-hidden', className)}>
       <div className="absolute inset-0 bg-brand-gradient opacity-20" />
@@ -48,7 +55,7 @@ export function BackgroundImage({
               baseSize={100}
               iconCount={settings.iconCount}
               className="size-full"
-              seed={new Date().setHours(0, 0, 0, 0)}
+              seed={dailySeed}
             />
           </div>
 
@@ -60,7 +67,7 @@ export function BackgroundImage({
               baseSize={100}
               iconCount={settings.iconCount}
               className="size-full"
-              seed={new Date().setHours(0, 0, 0, 0)}
+              seed={dailySeed}
             />
           </div>
         </div>
