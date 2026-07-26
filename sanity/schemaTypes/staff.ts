@@ -50,6 +50,15 @@ export default defineType({
       type: 'url',
       validation: (Rule) => Rule.required(),
     }),
+    // Multi-tenant owner (CaaS T1-1, #613). Additive/optional; populated by the
+    // 044 backfill and stamped at creation. Server code must not assume presence.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      description: 'The organization (tenant) that owns this staff member.',
+    }),
   ],
   preview: {
     select: {

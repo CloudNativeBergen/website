@@ -100,6 +100,13 @@ export interface AgentConfiguration {
 export interface Conference {
   _id: string
   title: string
+  /**
+   * Multi-tenant anchor (CaaS T1-1, #613): the organization (tenant) that owns
+   * this conference edition. Projected as a raw reference by the main conference
+   * projection (`...` spread). OPTIONAL on the type because legacy documents lack
+   * it until the 044 backfill runs — downstream code must not assume presence.
+   */
+  organization?: { _ref: string; _type?: 'reference' }
   organizer: string
   organizerOrgNumber?: string
   organizerAddress?: string

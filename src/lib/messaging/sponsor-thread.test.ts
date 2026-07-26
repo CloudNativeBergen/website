@@ -215,4 +215,27 @@ describe('addMessage — sponsor author', () => {
     const party = doc.authorParty as Record<string, unknown>
     expect(party.partyType).toBe('speaker')
   })
+
+  it('denormalizes the parent conversation organization onto the message (CaaS T1-1)', async () => {
+    // The parent-conference organization ref resolves for this write.
+    fetchMock.mockResolvedValue('org-9')
+    await addMessage({
+      conversationId: sponsorConversationId(SFC),
+      authorId: 'org-1',
+      body: 'Organizer reply',
+    })
+    const doc = createdDocs[0] as Record<string, unknown>
+    expect(doc.organization).toEqual({ _type: 'reference', _ref: 'org-9' })
+  })
+
+  it('omits the organization when the parent chain has none (pre-backfill)', async () => {
+    fetchMock.mockResolvedValue(null)
+    await addMessage({
+      conversationId: sponsorConversationId(SFC),
+      authorId: 'org-1',
+      body: 'Organizer reply',
+    })
+    const doc = createdDocs[0] as Record<string, unknown>
+    expect(doc.organization).toBeUndefined()
+  })
 })

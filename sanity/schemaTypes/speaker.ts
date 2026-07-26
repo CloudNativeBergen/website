@@ -81,6 +81,21 @@ export default defineType({
         )
       },
     }),
+    // Multi-tenant membership (CaaS T1-1, #613). A speaker is a GLOBAL PERSON:
+    // the SAME human can belong to several organizations (tenants), so membership
+    // is an ARRAY of organization references rather than a single owner ref.
+    // Populated by the 044 backfill and appended-to (setIfMissing + append) on
+    // login for the current conference's organization. Additive/optional —
+    // legacy speaker docs without it remain valid.
+    defineField({
+      name: 'organizations',
+      title: 'Organizations',
+      type: 'array',
+      description:
+        'Organizations (tenants) this person belongs to. A person can be a member of several organizations; membership accrues as they participate in each.',
+      of: [{ type: 'reference', to: [{ type: 'organization' }] }],
+      validation: (Rule) => Rule.unique(),
+    }),
     defineField({
       name: 'imageURL',
       title: 'Image URL',

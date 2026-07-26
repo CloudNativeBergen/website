@@ -14,6 +14,7 @@ import { generateUniqueSpeakerSlug } from './slug'
 import { normalizeEmail, uniqueEmails } from './email'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
+import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -271,6 +272,39 @@ async function linkProviderToSpeaker(
   }
 }
 
+/**
+ * Append the CURRENT conference's organization to a speaker's `organizations`
+ * membership array, idempotently (CaaS T1-1, #613). A speaker is a global
+ * person; membership in a tenant accrues as they participate in it, so every
+ * login stamps the current org if not already present.
+ *
+ * BEST-EFFORT: this is tenant bookkeeping, never a login gate. Any failure — no
+ * resolvable organization (a legacy conference before the 044 backfill), no
+ * request-domain context, or a transient write error — is swallowed so login
+ * always proceeds. Append-if-absent is guarded by a membership check so repeated
+ * logins never accumulate duplicate references.
+ */
+async function ensureSpeakerOrgMembership(speakerId: string): Promise<void> {
+  try {
+    const orgRef = await getOrganizationRefForCurrentConference()
+    if (!orgRef) return
+    const alreadyMember = await clientRead.fetch<boolean>(
+      `count(*[_id == $speakerId && $orgRef in coalesce(organizations, [])[]._ref]) > 0`,
+      { speakerId, orgRef },
+    )
+    if (alreadyMember) return
+    await clientWrite
+      .patch(speakerId)
+      .setIfMissing({ organizations: [] })
+      .insert('after', 'organizations[-1]', [
+        { _type: 'reference', _ref: orgRef, _key: orgRef },
+      ])
+      .commit()
+  } catch (error) {
+    console.error('Failed to ensure speaker org membership', error)
+  }
+}
+
 export async function getOrCreateSpeaker(
   user: User,
   account: Account,
@@ -299,6 +333,8 @@ export async function getOrCreateSpeaker(
   if (providerResult.speaker?._id) {
     // Backfill a slug for pre-existing slugless speakers on login.
     await backfillSlugIfMissing(providerResult.speaker)
+    // Accrue current-org membership for this returning person (CaaS T1-1).
+    await ensureSpeakerOrgMembership(providerResult.speaker._id)
     return { speaker: providerResult.speaker, err: null }
   }
 
@@ -384,6 +420,9 @@ export async function getOrCreateSpeaker(
       ...createdSpeaker,
       slug: slugValue,
     } as Speaker
+
+    // Seed the new person's first tenant membership (CaaS T1-1).
+    await ensureSpeakerOrgMembership(updatedSpeaker._id)
 
     return { speaker: updatedSpeaker, err: null }
   } catch (error) {

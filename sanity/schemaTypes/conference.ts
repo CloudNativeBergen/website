@@ -80,6 +80,20 @@ export default defineType({
       fieldset: 'basicInfo',
       validation: (Rule) => Rule.required(),
     }),
+    // Multi-tenant anchor (CaaS T1-1, #613): the organization (tenant) that owns
+    // this conference edition. REQUIRED for new documents via this Studio-only
+    // validation rule, but the field itself is nullable on legacy docs until the
+    // 044 backfill runs — server code must NOT assume its presence yet.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      fieldset: 'basicInfo',
+      description:
+        'The organization (tenant) that owns this conference edition and all of its scoped documents.',
+      validation: (Rule) => Rule.required(),
+    }),
     defineField({
       name: 'organizer',
       title: 'Organiser',

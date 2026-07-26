@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
         "conferenceCity": conference->city,
         "conferenceStartDate": conference->startDate,
         "conferenceSponsorEmail": conference->sponsorEmail,
-        "conferenceOrganizer": conference->organizer
+        "conferenceOrganizer": conference->organizer,
+        "organizationRef": conference->organization._ref
       }`,
       { threshold: thresholdDate, maxReminders: MAX_REMINDERS },
     )
@@ -140,6 +141,15 @@ export async function GET(request: NextRequest) {
           },
           createdBy: { _type: 'reference', _ref: 'system' },
           createdAt: getCurrentDateTime(),
+          // Denormalized tenant key (CaaS T1-1), from the sfc's conference.
+          ...(contract.organizationRef
+            ? {
+                organization: {
+                  _type: 'reference',
+                  _ref: contract.organizationRef,
+                },
+              }
+            : {}),
         })
 
         sent++

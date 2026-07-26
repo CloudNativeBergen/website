@@ -86,6 +86,20 @@ export default defineType({
       validation: (Rule) => Rule.required(),
       initialValue: () => new Date().toISOString(),
     }),
+    // DENORMALIZED multi-tenant owner (CaaS T1-1, #613). This doc hangs off a
+    // sponsorForConference (which carries the conference) and has no conference
+    // key of its own. Document-level security (#614) can't traverse references,
+    // so the tenant key is copied down here at creation (derived from the parent
+    // sponsorForConference's conference). Additive/optional until 044 backfill.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      description:
+        'Denormalized organization (tenant) owner, copied from the parent sponsor-for-conference at creation for reference-blind document security.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

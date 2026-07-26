@@ -7,6 +7,10 @@ import {
   SponsorEmailTemplate,
 } from './types'
 import { prepareArrayWithKeys, createReference } from '@/lib/sanity/helpers'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 export async function createSponsorTier(
   data: SponsorTierInput & { conference: string },
@@ -157,6 +161,9 @@ export async function createSponsor(
   data: SponsorInput,
 ): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
   try {
+    // Stamp the current conference's organization (CaaS T1-1) so the sponsor is
+    // born tenant-owned. Best-effort: absent before the 044 backfill.
+    const orgRef = await getOrganizationRefForCurrentConference()
     const sponsor = await clientWrite.create({
       _type: 'sponsor',
       name: data.name,
@@ -164,6 +171,7 @@ export async function createSponsor(
       logo: data.logo,
       logoBright: data.logoBright,
       orgNumber: data.orgNumber,
+      ...organizationField(orgRef),
     })
 
     const result: SponsorExisting = {
@@ -422,6 +430,9 @@ export async function createSponsorEmailTemplate(data: {
   sortOrder?: number
 }): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
+    // Stamp the current conference's organization (CaaS T1-1) so the template is
+    // born tenant-owned. Best-effort: absent before the 044 backfill.
+    const orgRef = await getOrganizationRefForCurrentConference()
     const template = await clientWrite.create({
       _type: 'sponsorEmailTemplate',
       title: data.title,
@@ -433,6 +444,7 @@ export async function createSponsorEmailTemplate(data: {
       description: data.description,
       isDefault: data.isDefault ?? false,
       sortOrder: data.sortOrder ?? 0,
+      ...organizationField(orgRef),
     })
     return { template: template as unknown as SponsorEmailTemplate }
   } catch (error) {

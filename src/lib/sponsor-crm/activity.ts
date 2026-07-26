@@ -2,6 +2,11 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { ActivityType, SponsorActivityInput } from './types'
 import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
+import {
+  getOrganizationRefForCurrentConference,
+  getOrganizationRefViaParentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 export async function createSponsorActivity(
   sponsorForConferenceId: string,
@@ -25,6 +30,12 @@ export async function createSponsorActivity(
       metadata,
     }
 
+    // DENORMALIZED tenant key (CaaS T1-1): copy the organization down from the
+    // parent sponsorForConference's conference. Best-effort: absent before 044.
+    const orgRef = await getOrganizationRefViaParentConference(
+      activity.sponsorForConference,
+    )
+
     const doc = {
       _type: 'sponsorActivity' as const,
       sponsorForConference: {
@@ -35,6 +46,7 @@ export async function createSponsorActivity(
       description: activity.description,
       metadata: activity.metadata,
       createdAt: activity.createdAt,
+      ...organizationField(orgRef),
       ...(activity.createdBy &&
         activity.createdBy !== 'system' && {
           createdBy: { _type: 'reference', _ref: activity.createdBy },
@@ -203,6 +215,11 @@ export async function logBulkEmailSent(
     const transaction = clientWrite.transaction()
     const timestamp = getCurrentDateTime()
 
+    // A broadcast targets sponsors of the CURRENT conference, so all activities
+    // share its organization (CaaS T1-1). Resolve once. Best-effort: absent
+    // before the 044 backfill.
+    const orgRef = await getOrganizationRefForCurrentConference()
+
     for (const id of sponsorForConferenceIds) {
       transaction.create({
         _type: 'sponsorActivity',
@@ -218,6 +235,7 @@ export async function logBulkEmailSent(
         },
         createdBy: { _type: 'reference', _ref: createdBy },
         createdAt: timestamp,
+        ...organizationField(orgRef),
       })
     }
 

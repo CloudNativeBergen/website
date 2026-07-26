@@ -60,6 +60,20 @@ export default defineType({
         'The GENERAL party representation of the author (messaging party model, G1). Dual-written next to the legacy `author` ref; only speaker parties are produced in G1. NOT yet the read source — `author` still drives fan-out and previews; the read path flips in G2. Written by the server, not edited in Studio.',
       readOnly: true,
     }),
+    // DENORMALIZED multi-tenant owner (CaaS T1-1, #613). A message has no
+    // conference key of its own — it hangs off a conversation, which carries the
+    // conference. Document-level security (#614) can't traverse references, so
+    // the tenant key is copied down here at creation (derived from the parent
+    // conversation's conference). Additive/optional until the 044 backfill runs.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      description:
+        'Denormalized organization (tenant) owner, copied from the parent conversation at creation for reference-blind document security.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

@@ -32,6 +32,17 @@ vi.mock('@/lib/profile/github', () => ({
   verifiedEmails: (...args: unknown[]) => verifiedEmailsMock(...args),
 }))
 
+// Multi-tenant org resolution (CaaS T1-1). Defaults to "no org" so the base
+// tests exercise the pre-backfill behaviour (no membership stamping); the
+// membership tests below override it.
+const orgRefMock = vi.fn().mockResolvedValue(null)
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationRefForCurrentConference: () => orgRefMock(),
+}))
+
+const setIfMissingMock = vi.fn()
+const insertMock = vi.fn()
+
 import { attachProviderToSpeaker, getOrCreateSpeaker } from './sanity'
 
 // --- Fetch routing helpers -------------------------------------------------
@@ -98,10 +109,17 @@ function existingSpeaker(overrides: Partial<Speaker> = {}): Speaker {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  orgRefMock.mockResolvedValue(null)
   commitMock.mockResolvedValue({})
   setMock.mockImplementation(() => ({ commit: commitMock, unset: unsetMock }))
   unsetMock.mockImplementation(() => ({ commit: commitMock }))
-  patchMock.mockImplementation(() => ({ set: setMock, unset: unsetMock }))
+  insertMock.mockImplementation(() => ({ commit: commitMock }))
+  setIfMissingMock.mockImplementation(() => ({ insert: insertMock }))
+  patchMock.mockImplementation(() => ({
+    set: setMock,
+    unset: unsetMock,
+    setIfMissing: setIfMissingMock,
+  }))
   createMock.mockImplementation((doc: Record<string, unknown>) =>
     Promise.resolve({ ...doc }),
   )
@@ -147,6 +165,62 @@ describe('getOrCreateSpeaker — provider id match', () => {
     await getOrCreateSpeaker(user(), githubAccount())
 
     expect(patchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('getOrCreateSpeaker — organization membership (CaaS T1-1)', () => {
+  it('appends the current org to a returning speaker missing that membership', async () => {
+    orgRefMock.mockResolvedValue('org-1')
+    // Provider match; the membership-presence count query resolves falsy.
+    fetchMock.mockImplementation(routeFetch({ provider: existingSpeaker() }))
+
+    const { err } = await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(err).toBeNull()
+    expect(patchMock).toHaveBeenCalledWith('spk-existing')
+    expect(setIfMissingMock).toHaveBeenCalledWith({ organizations: [] })
+    expect(insertMock).toHaveBeenCalledWith('after', 'organizations[-1]', [
+      { _type: 'reference', _ref: 'org-1', _key: 'org-1' },
+    ])
+  })
+
+  it('does not append when the speaker already belongs to the org', async () => {
+    orgRefMock.mockResolvedValue('org-1')
+    fetchMock.mockImplementation((query: string) => {
+      if (query.includes('$id in providers'))
+        return Promise.resolve(existingSpeaker())
+      // Membership-presence check: already a member.
+      if (query.includes('in coalesce(organizations, [])[]._ref'))
+        return Promise.resolve(true)
+      return Promise.resolve(null)
+    })
+
+    await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(insertMock).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when no org resolves (pre-backfill / no domain)', async () => {
+    orgRefMock.mockResolvedValue(null)
+    fetchMock.mockImplementation(routeFetch({ provider: existingSpeaker() }))
+
+    await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(insertMock).not.toHaveBeenCalled()
+  })
+
+  it('seeds membership on a freshly created speaker', async () => {
+    orgRefMock.mockResolvedValue('org-1')
+    // No provider match and no email match -> create path.
+    fetchMock.mockImplementation(routeFetch({ provider: {}, emailMatches: [] }))
+
+    const { err } = await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(err).toBeNull()
+    expect(createMock).toHaveBeenCalled()
+    expect(insertMock).toHaveBeenCalledWith('after', 'organizations[-1]', [
+      { _type: 'reference', _ref: 'org-1', _key: 'org-1' },
+    ])
   })
 })
 

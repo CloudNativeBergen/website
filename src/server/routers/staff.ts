@@ -8,6 +8,10 @@ import {
   StaffUpdateSchema,
   StaffDeleteSchema,
 } from '../schemas/staff'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 /**
  * Staff CRUD (SE-4). `staff` are flat, standalone documents listed publicly at
@@ -49,6 +53,9 @@ export const staffRouter = router({
     .mutation(async ({ input }) => {
       try {
         const image = imageField(input.image)
+        // Stamp the current conference's organization (CaaS T1-1) so the staff
+        // member is born tenant-owned. Best-effort: absent before 044 backfill.
+        const orgRef = await getOrganizationRefForCurrentConference()
         const created = await clientWrite.create({
           _type: 'staff',
           name: input.name,
@@ -57,6 +64,7 @@ export const staffRouter = router({
           ...(input.email ? { email: input.email } : {}),
           ...(input.company ? { company: input.company } : {}),
           ...(image ? { image } : {}),
+          ...organizationField(orgRef),
         })
         revalidateTag('content:staff', 'default')
         return { _id: created._id }
