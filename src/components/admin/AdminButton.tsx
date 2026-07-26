@@ -2,7 +2,7 @@ import clsx from 'clsx'
 
 type AdminButtonVariant = 'primary' | 'secondary' | 'ghost'
 type AdminButtonColor =
-  'indigo' | 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow'
+  'brand' | 'indigo' | 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow'
 type AdminButtonSize = 'xs' | 'sm' | 'md'
 
 interface AdminButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -12,6 +12,10 @@ interface AdminButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const colorStyles: Record<AdminButtonColor, string> = {
+  // `brand` is the documented primary color for modal footers — it matches the
+  // brand-cloud-blue focus ring ModalShell uses for its header close button.
+  brand:
+    'bg-brand-cloud-blue text-white shadow-sm hover:bg-brand-cloud-blue-hover focus-visible:outline-brand-cloud-blue',
   indigo:
     'bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-indigo-600',
   blue: 'bg-blue-600 text-white shadow-sm hover:bg-blue-700 focus-visible:outline-blue-600',
