@@ -96,8 +96,14 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
  * theme is set — the same default `BaseEmailTemplate` already uses.
  */
 export function emailBrandColor(theme?: ConferenceTheme | null): string {
+  // Same ALL-OR-NOTHING pair rule as `conferenceThemeCss`: a half-theme
+  // (legacy/malformed data) is unthemed EVERYWHERE — site, email and manifest
+  // must never disagree about whether a tenant is themed.
   const primary = theme?.primaryColor?.trim()
-  return primary && isHexColor(primary) ? primary : DEFAULT_PRIMARY_COLOR
+  const accent = theme?.accentColor?.trim()
+  const isCompletePair =
+    primary && isHexColor(primary) && accent && isHexColor(accent)
+  return isCompletePair ? primary : DEFAULT_PRIMARY_COLOR
 }
 
 /**

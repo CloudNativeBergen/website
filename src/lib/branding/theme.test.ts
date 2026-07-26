@@ -82,9 +82,19 @@ describe('conferenceThemeCss — token resolution', () => {
 })
 
 describe('emailBrandColor / manifestThemeColor', () => {
-  it('returns the primary hex when themed', () => {
-    expect(emailBrandColor({ primaryColor: '#7C3AED' })).toBe('#7C3AED')
-    expect(manifestThemeColor({ primaryColor: '#7C3AED' })).toBe('#7C3AED')
+  it('returns the primary hex when fully themed', () => {
+    const theme = { primaryColor: '#7C3AED', accentColor: '#22D3EE' }
+    expect(emailBrandColor(theme)).toBe('#7C3AED')
+    expect(manifestThemeColor(theme)).toBe('#7C3AED')
+  })
+
+  it('treats a half-theme as unthemed (consistent with the CSS seam)', () => {
+    expect(emailBrandColor({ primaryColor: '#7C3AED' })).toBe(
+      DEFAULT_PRIMARY_COLOR,
+    )
+    expect(manifestThemeColor({ accentColor: '#22D3EE' })).toBe(
+      DEFAULT_PRIMARY_COLOR,
+    )
   })
 
   it('falls back to the house blue when unthemed or invalid', () => {
