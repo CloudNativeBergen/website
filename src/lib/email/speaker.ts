@@ -51,6 +51,9 @@ export async function sendMultiSpeakerEmail({
       id: proposalId,
       speakerId: '',
       isOrganizer: true,
+      // B1 (#642): org-scope the organizer read to this conference's tenant so a
+      // cross-tenant proposal id cannot be loaded into another org's email.
+      organizerOrgId: conference.organization?._ref ?? null,
       includeReviews: false,
       includePreviousAcceptedTalks: false,
       includeSubmittedTalks: false,

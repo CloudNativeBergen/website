@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import {
   router,
   protectedProcedure,
+  organizerProcedure,
   adminProcedure,
   resolveConferenceId,
 } from '@/server/trpc'
@@ -203,15 +204,16 @@ export const proposalRouter = router({
   }),
 
   // Get proposal by ID
-  getById: protectedProcedure
+  getById: organizerProcedure
     .input(IdParamSchema)
     .query(async ({ input, ctx }) => {
       try {
-        const isOrganizer = ctx.speaker.isOrganizer === true
+        const isOrganizer = ctx.isOrgOrganizer
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
           isOrganizer,
+          organizerOrgId: ctx.orgId,
           includeReviews: isOrganizer,
         })
 
@@ -387,7 +389,7 @@ export const proposalRouter = router({
     }),
 
   // Update proposal
-  update: protectedProcedure
+  update: organizerProcedure
     .input(IdParamSchema.extend({ data: ProposalUpdateSchema }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -413,7 +415,7 @@ export const proposalRouter = router({
           })
         }
 
-        if (!ctx.speaker.isOrganizer && existing.conference) {
+        if (!ctx.isOrgOrganizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
             '_id' in existing.conference
@@ -496,11 +498,11 @@ export const proposalRouter = router({
 
   // Remove a co-speaker from a proposal. Speakers on the proposal can
   // remove other speakers (not themselves); organizers can remove anyone.
-  removeCoSpeaker: protectedProcedure
+  removeCoSpeaker: organizerProcedure
     .input(RemoveCoSpeakerSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const isOrganizer = ctx.speaker.isOrganizer === true
+        const isOrganizer = ctx.isOrgOrganizer
 
         // getProposal scopes the query to the caller's speaker id unless
         // they are an organizer, so this doubles as the ownership check
@@ -508,6 +510,7 @@ export const proposalRouter = router({
           id: input.proposalId,
           speakerId: ctx.speaker._id,
           isOrganizer,
+          organizerOrgId: ctx.orgId,
         })
 
         if (proposalError) {
@@ -621,7 +624,7 @@ export const proposalRouter = router({
     }),
 
   // Execute proposal action (submit, withdraw, etc.)
-  action: protectedProcedure
+  action: organizerProcedure
     .input(
       IdParamSchema.extend(ProposalActionSchema.shape).superRefine(
         requireWithdrawalReason,
@@ -650,7 +653,8 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposalSanity({
           id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.isOrganizer,
+          isOrganizer: ctx.isOrgOrganizer,
+          organizerOrgId: ctx.orgId,
         })
 
         if (proposalError || !proposal || proposal._id !== id) {
@@ -664,7 +668,7 @@ export const proposalRouter = router({
         const { status, isValidAction } = actionStateMachine(
           proposal.status,
           action,
-          ctx.speaker.isOrganizer,
+          ctx.isOrgOrganizer,
         )
 
         if (!isValidAction) {
@@ -675,7 +679,7 @@ export const proposalRouter = router({
         }
 
         // Block unsubmit after CFP closes — speakers should withdraw instead
-        if (action === Action.unsubmit && !ctx.speaker.isOrganizer) {
+        if (action === Action.unsubmit && !ctx.isOrgOrganizer) {
           const { isCfpOpen } = await import('@/lib/conference/state')
           if (!isCfpOpen(conference)) {
             throw new TRPCError({
@@ -689,7 +693,7 @@ export const proposalRouter = router({
         // Block speaker self-withdrawal within the pre-conference cutoff window.
         // Organizers keep the ability to act on behalf of speakers this close
         // to the event; only self-service withdrawal is closed (#251).
-        if (action === Action.withdraw && !ctx.speaker.isOrganizer) {
+        if (action === Action.withdraw && !ctx.isOrgOrganizer) {
           const { isWithdrawalCutoffActive } =
             await import('@/lib/conference/state')
           if (isWithdrawalCutoffActive(conference)) {
@@ -705,7 +709,7 @@ export const proposalRouter = router({
         if (
           proposal.status === Status.draft &&
           status === Status.submitted &&
-          !ctx.speaker.isOrganizer
+          !ctx.isOrgOrganizer
         ) {
           const { proposals: existingProposals } = await getProposals({
             speakerId: ctx.speaker._id,
@@ -771,7 +775,7 @@ export const proposalRouter = router({
           metadata: {
             triggeredBy: {
               speakerId: ctx.speaker._id,
-              isOrganizer: ctx.speaker.isOrganizer,
+              isOrganizer: ctx.isOrgOrganizer,
             },
             shouldNotify: notify,
             comment,
@@ -798,7 +802,7 @@ export const proposalRouter = router({
         // committed, so a messaging failure must not fail the action.
         const trimmedComment = comment?.trim()
         if (
-          ctx.speaker.isOrganizer &&
+          ctx.isOrgOrganizer &&
           trimmedComment &&
           COMMENT_RELAY_ACTIONS.includes(action)
         ) {
@@ -882,6 +886,7 @@ export const proposalRouter = router({
             id: input.id,
             speakerId: ctx.speaker._id,
             isOrganizer: true,
+            organizerOrgId: ctx.orgId,
             includeReviews: true,
             includeSubmittedTalks: true,
             includePreviousAcceptedTalks: true,
@@ -1168,6 +1173,7 @@ export const proposalRouter = router({
             id: input.id,
             speakerId: ctx.speaker._id,
             isOrganizer: true,
+            organizerOrgId: ctx.orgId,
             includeReviews: true,
           })
 
@@ -1363,7 +1369,7 @@ export const proposalRouter = router({
   }),
 
   // Speaker attachment operations
-  uploadAttachment: protectedProcedure
+  uploadAttachment: organizerProcedure
     .input(
       IdParamSchema.extend({
         blobUrl: z.string().url(),
@@ -1378,7 +1384,8 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.isOrganizer === true,
+          isOrganizer: ctx.isOrgOrganizer,
+          organizerOrgId: ctx.orgId,
         })
 
         if (proposalError || !proposal) {
@@ -1466,7 +1473,7 @@ export const proposalRouter = router({
       }
     }),
 
-  updateAttachments: protectedProcedure
+  updateAttachments: organizerProcedure
     .input(
       IdParamSchema.extend({
         attachments: z.array(AttachmentSchema),
@@ -1478,7 +1485,8 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.isOrganizer === true,
+          isOrganizer: ctx.isOrgOrganizer,
+          organizerOrgId: ctx.orgId,
         })
 
         if (proposalError || !proposal) {
@@ -1520,7 +1528,7 @@ export const proposalRouter = router({
     }),
 
   // Delete attachment (speaker)
-  deleteAttachment: protectedProcedure
+  deleteAttachment: organizerProcedure
     .input(
       IdParamSchema.extend({
         attachmentKey: z.string(),
@@ -1532,7 +1540,8 @@ export const proposalRouter = router({
         const { proposal, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
-          isOrganizer: ctx.speaker.isOrganizer === true,
+          isOrganizer: ctx.isOrgOrganizer,
+          organizerOrgId: ctx.orgId,
         })
 
         if (proposalError || !proposal) {
@@ -1557,7 +1566,7 @@ export const proposalRouter = router({
         // Speakers cannot delete recording attachments
         if (
           attachmentToCheck.attachmentType === 'recording' &&
-          !ctx.speaker.isOrganizer
+          !ctx.isOrgOrganizer
         ) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -1586,7 +1595,7 @@ export const proposalRouter = router({
   // Co-speaker invitation operations
   invitation: router({
     // Send invitation
-    send: protectedProcedure
+    send: organizerProcedure
       .input(InvitationCreateSchema)
       .mutation(async ({ input, ctx }) => {
         try {
@@ -1594,7 +1603,8 @@ export const proposalRouter = router({
           const { proposal, proposalError } = await getProposal({
             id: input.proposalId,
             speakerId: ctx.speaker._id,
-            isOrganizer: ctx.speaker.isOrganizer === true,
+            isOrganizer: ctx.isOrgOrganizer,
+            organizerOrgId: ctx.orgId,
           })
 
           if (proposalError || !proposal || !proposal._id) {
@@ -1732,7 +1742,7 @@ export const proposalRouter = router({
       }),
 
     // Respond to invitation
-    respond: protectedProcedure
+    respond: organizerProcedure
       .input(InvitationResponseSchema)
       .mutation(async ({ input, ctx }) => {
         try {
@@ -1807,10 +1817,16 @@ export const proposalRouter = router({
               })
             }
 
+            // The invitee is not yet a speaker on the proposal, so bypass the
+            // owner filter (isOrganizer branch) — but STILL org-scope the read to
+            // the current tenant (B1): the respond endpoint is always hit on the
+            // proposal's own conference domain, so `ctx.orgId` matches the
+            // proposal's org; a cross-tenant id cannot be loaded here.
             const { proposal } = await getProposal({
               id: proposalId,
               speakerId: ctx.speaker._id,
               isOrganizer: true,
+              organizerOrgId: ctx.orgId,
             })
 
             if (!proposal || !proposal._id) {
@@ -1956,7 +1972,7 @@ export const proposalRouter = router({
       }),
 
     // List invitations for a proposal
-    list: protectedProcedure
+    list: organizerProcedure
       .input(IdParamSchema)
       .query(async ({ input, ctx }) => {
         try {
@@ -1964,7 +1980,8 @@ export const proposalRouter = router({
           const { proposal, proposalError } = await getProposal({
             id: input.id,
             speakerId: ctx.speaker._id,
-            isOrganizer: ctx.speaker.isOrganizer === true,
+            isOrganizer: ctx.isOrgOrganizer,
+            organizerOrgId: ctx.orgId,
           })
 
           if (proposalError || !proposal || !proposal._id) {
@@ -1987,7 +2004,7 @@ export const proposalRouter = router({
       }),
 
     // Cancel invitation
-    cancel: protectedProcedure
+    cancel: organizerProcedure
       .input(InvitationCancelSchema)
       .mutation(async ({ input, ctx }) => {
         try {
@@ -2014,7 +2031,8 @@ export const proposalRouter = router({
           const { proposal, proposalError } = await getProposal({
             id: proposalRef._ref,
             speakerId: ctx.speaker._id,
-            isOrganizer: ctx.speaker.isOrganizer === true,
+            isOrganizer: ctx.isOrgOrganizer,
+            organizerOrgId: ctx.orgId,
           })
 
           if (proposalError || !proposal || !proposal._id) {

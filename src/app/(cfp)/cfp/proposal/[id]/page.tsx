@@ -3,7 +3,10 @@ import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { getAuthSession } from '@/lib/auth'
-import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
+import {
+  isOrganizerForCurrentOrg,
+  resolveCurrentOrgId,
+} from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
@@ -51,6 +54,10 @@ export default async function ProposalViewPage({
     id,
     speakerId: session.speaker._id,
     isOrganizer: isImpersonatingAsOrganizer,
+    // B1 (#642): org-scope the impersonated organizer read to the current org.
+    organizerOrgId: isImpersonatingAsOrganizer
+      ? await resolveCurrentOrgId()
+      : null,
   })
 
   if (proposalError) {

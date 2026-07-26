@@ -20,6 +20,7 @@ export async function getProposal({
   id,
   speakerId,
   isOrganizer = false,
+  organizerOrgId,
   includeReviews = false,
   includeSubmittedTalks = false,
   includePreviousAcceptedTalks = false,
@@ -27,6 +28,16 @@ export async function getProposal({
   id: string
   speakerId: string
   isOrganizer?: boolean
+  /**
+   * ORG-SCOPE for the organizer branch (go-live B1, #642). When `isOrganizer`,
+   * the proposal is constrained to the conferences of THIS organization — a
+   * proposal from another tenant's conference is invisible even by exact id, so
+   * a CNB organizer cannot reach an external tenant's proposal. Prior to #642
+   * the organizer branch dropped ALL scoping (`speakerFilter = ''`). A null/absent
+   * org here FAILS CLOSED (the organizer branch matches nothing) rather than
+   * reverting to the unscoped query. Ignored for the non-organizer (owner) branch.
+   */
+  organizerOrgId?: string | null
   includeReviews?: boolean
   includeSubmittedTalks?: boolean
   includePreviousAcceptedTalks?: boolean
@@ -39,7 +50,9 @@ export async function getProposal({
   let proposal: ProposalExisting = {} as ProposalExisting
 
   const speakerFilter = isOrganizer
-    ? ''
+    ? organizerOrgId
+      ? `&& conference._ref in *[_type == "conference" && organization._ref == $organizerOrgId]._id`
+      : `&& false`
     : `&& "${speakerId}" in speakers[]._ref`
 
   try {
@@ -112,7 +125,7 @@ export async function getProposal({
 
     proposal = await clientRead.fetch(
       query,
-      { id, speakerId },
+      { id, speakerId, organizerOrgId: organizerOrgId ?? null },
       { cache: 'no-store' },
     )
   } catch (error) {
