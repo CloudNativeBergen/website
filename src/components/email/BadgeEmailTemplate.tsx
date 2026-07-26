@@ -1,9 +1,17 @@
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+
 interface BadgeEmailTemplateProps {
   speakerName: string
   conferenceName: string
   conferenceYear: string
   badgeType: 'speaker' | 'organizer'
   downloadUrl: string
+  /**
+   * The issuing organizer shown in the footer. Defaults to the neutral platform
+   * name; callers thread the conference organizer/title so the footer names the
+   * actual tenant (go-live gate G2, E8).
+   */
+  organizerName?: string
 }
 
 export const BadgeEmailTemplate = ({
@@ -12,6 +20,7 @@ export const BadgeEmailTemplate = ({
   conferenceYear,
   badgeType,
   downloadUrl,
+  organizerName = PLATFORM_NAME,
 }: BadgeEmailTemplateProps) => {
   return `
 <!DOCTYPE html>
@@ -54,7 +63,7 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <p style="color: #8898aa; font-size: 12px; line-height: 16px; padding: 0 48px; margin-top: 32px;">
-      Cloud Native Days<br>
+      ${organizerName}<br>
       Building the cloud native community
     </p>
   </div>

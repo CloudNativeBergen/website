@@ -1,9 +1,20 @@
 import * as React from 'react'
 import { iconForLink, titleForLink } from '../SocialIcons'
 
+/**
+ * The default brand accent (Cloud Native Days blue). Overridable per-send via
+ * `brandColor` so a tenant's mail can carry its own accent; full design-token
+ * theming lands later — this is the neutral-correctness seam (go-live gate G2,
+ * E8). The base template's footer already names the sender via `eventName`, so
+ * no hardcoded brand name remains here.
+ */
+export const DEFAULT_EMAIL_BRAND_COLOR = '#1D4ED8'
+
 interface BaseEmailTemplateProps {
   title?: string
   titleColor?: string
+  /** Accent colour for links, the event-details header and footer emphasis. */
+  brandColor?: string
   speakerName?: string
   proposalTitle?: string
   eventName: string
@@ -50,6 +61,7 @@ function messagesUrlFromEventUrl(eventUrl: string): string {
 export function BaseEmailTemplate({
   title,
   titleColor = '#334155',
+  brandColor = DEFAULT_EMAIL_BRAND_COLOR,
   speakerName,
   proposalTitle,
   eventName,
@@ -63,6 +75,7 @@ export function BaseEmailTemplate({
   showMessagesLink,
   customContent,
 }: BaseEmailTemplateProps) {
+  const accent = brandColor
   if (!speakerName && !customContent) {
     throw new Error(
       `BaseEmailTemplate requires either speakerName or customContent to be provided. ` +
@@ -109,7 +122,7 @@ export function BaseEmailTemplate({
   }
 
   const eventDetailsHeaderStyle: React.CSSProperties = {
-    color: '#1D4ED8',
+    color: accent,
     marginTop: '0',
     marginBottom: '16px',
     fontFamily:
@@ -131,7 +144,7 @@ export function BaseEmailTemplate({
   }
 
   const linkStyle: React.CSSProperties = {
-    color: '#1D4ED8',
+    color: accent,
     textDecoration: 'none',
     fontWeight: '500',
   }
@@ -158,7 +171,7 @@ export function BaseEmailTemplate({
   }
 
   const socialLinkStyle: React.CSSProperties = {
-    color: '#1D4ED8',
+    color: accent,
     textDecoration: 'none',
     fontSize: '0',
     marginRight: '12px',
@@ -193,7 +206,7 @@ export function BaseEmailTemplate({
                   {proposalTitle && (
                     <p style={paragraphStyle}>
                       Thank you for submitting your proposal{' '}
-                      <strong style={{ color: '#1D4ED8' }}>
+                      <strong style={{ color: accent }}>
                         &quot;{proposalTitle}&quot;
                       </strong>{' '}
                       for {eventName}.
@@ -278,13 +291,13 @@ export function BaseEmailTemplate({
                   <div style={footerStyle}>
                     <p style={footerTextStyle}>
                       This email was sent by{' '}
-                      <strong style={{ color: '#1D4ED8' }}>{eventName}</strong>
+                      <strong style={{ color: accent }}>{eventName}</strong>
                       .<br />
                       {unsubscribeUrl ? (
                         <a
                           href={unsubscribeUrl}
                           style={{
-                            color: '#1D4ED8',
+                            color: accent,
                             textDecoration: 'underline',
                           }}
                         >

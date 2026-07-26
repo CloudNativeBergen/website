@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { DEFAULT_EMAIL_BRAND_COLOR } from './BaseEmailTemplate'
 
 interface EmailSectionProps {
   backgroundColor?: string
@@ -35,7 +36,7 @@ interface EmailSectionHeaderProps {
 
 export function EmailSectionHeader({
   children,
-  color = '#1D4ED8',
+  color = DEFAULT_EMAIL_BRAND_COLOR,
 }: EmailSectionHeaderProps) {
   const headerStyle: React.CSSProperties = {
     color,
@@ -81,15 +82,18 @@ interface EmailButtonProps {
   href: string
   children: React.ReactNode
   variant?: 'primary' | 'secondary'
+  /** Primary-variant accent; defaults to the Cloud Native Days brand blue. */
+  color?: string
 }
 
 export function EmailButton({
   href,
   children,
   variant = 'primary',
+  color = DEFAULT_EMAIL_BRAND_COLOR,
 }: EmailButtonProps) {
   const buttonStyle: React.CSSProperties = {
-    backgroundColor: variant === 'primary' ? '#1D4ED8' : '#6366F1',
+    backgroundColor: variant === 'primary' ? color : '#6366F1',
     color: 'white',
     padding: '16px 32px',
     textDecoration: 'none',
