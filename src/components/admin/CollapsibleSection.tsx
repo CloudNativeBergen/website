@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, ReactNode, ComponentType } from 'react'
+import { useState, ReactNode } from 'react'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 interface CollapsibleSectionProps {
@@ -8,8 +8,12 @@ interface CollapsibleSectionProps {
   children: ReactNode
   defaultOpen?: boolean
   className?: string
-  /** Optional leading icon shown next to the title (matches InfoCard chrome). */
-  icon?: ComponentType<{ className?: string }>
+  /**
+   * Rendered icon ELEMENT (not a component function): this is a client
+   * component, and server callers can only pass serializable props — a
+   * ReactNode element crosses the RSC boundary; a component function throws.
+   */
+  icon?: ReactNode
   /**
    * Optional header affordance (e.g. an EditConferenceCard pencil) rendered to
    * the right, OUTSIDE the toggle button so it stays valid HTML and clickable
@@ -23,7 +27,7 @@ export function CollapsibleSection({
   children,
   defaultOpen = false,
   className = '',
-  icon: Icon,
+  icon,
   action,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
@@ -43,8 +47,10 @@ export function CollapsibleSection({
             className="flex min-w-0 flex-1 items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <span className="flex min-w-0 items-center">
-              {Icon ? (
-                <Icon className="mr-2 h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
+              {icon ? (
+                <span className="mr-2 shrink-0 text-gray-400 dark:text-gray-500 [&>svg]:h-5 [&>svg]:w-5">
+                  {icon}
+                </span>
               ) : null}
               <span className="truncate text-lg font-medium text-gray-900 dark:text-white">
                 {title}

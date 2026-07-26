@@ -287,7 +287,7 @@ export default async function AdminSettings() {
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
               title="Venue Information"
-              icon={MapPinIcon}
+              icon={<MapPinIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={editUrl} />
@@ -528,7 +528,7 @@ export default async function AdminSettings() {
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
               title="Homepage Stats"
-              icon={ChartPieIcon}
+              icon={<ChartPieIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={editUrl} />
@@ -624,7 +624,7 @@ export default async function AdminSettings() {
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
               title="Sponsor Benefits"
-              icon={CurrencyDollarIcon}
+              icon={<CurrencyDollarIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={editUrl} />
@@ -658,7 +658,7 @@ export default async function AdminSettings() {
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
               title="Sponsorship Page"
-              icon={DocumentTextIcon}
+              icon={<DocumentTextIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={editUrl} />

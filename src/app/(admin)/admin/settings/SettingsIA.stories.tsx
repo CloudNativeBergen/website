@@ -129,7 +129,7 @@ function SettingsIADemo() {
 
             <CollapsibleSection
               title="Venue Information"
-              icon={MapPinIcon}
+              icon={<MapPinIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={EDIT_URL} />
@@ -237,7 +237,7 @@ function SettingsIADemo() {
 
             <CollapsibleSection
               title="Homepage Stats"
-              icon={ChartPieIcon}
+              icon={<ChartPieIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={EDIT_URL} />
@@ -288,7 +288,7 @@ function SettingsIADemo() {
 
             <CollapsibleSection
               title="Sponsor Benefits"
-              icon={CurrencyDollarIcon}
+              icon={<CurrencyDollarIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={EDIT_URL} />
@@ -306,7 +306,7 @@ function SettingsIADemo() {
 
             <CollapsibleSection
               title="Sponsorship Page"
-              icon={DocumentTextIcon}
+              icon={<DocumentTextIcon />}
               action={
                 <>
                   <StudioEditLink editUrl={EDIT_URL} />
