@@ -707,11 +707,13 @@ const organizerCache = new Map<string, { ids: string[]; expiresAt: number }>()
  *    sends don't depend on request domain).
  *  - `orgId` explicitly `null` → the GLOBAL set (every conference's organizers).
  *
- * LEGACY BRIDGE: a `null` resolved org (pre-044-backfill conference / no domain)
- * yields the GLOBAL organizer set with a `console.warn`, mirroring the auth
- * bridge in `src/lib/authz/organizer.ts`. This historical behaviour ("organizer
- * of one edition = organizer everywhere") is retained ONLY as the migration
- * bridge; remove it under the same condition as the auth bridge.
+ * LEGACY BRIDGE: an `undefined` orgId that RESOLVES to null (pre-044-backfill
+ * conference / no domain) yields the GLOBAL organizer set with a
+ * `console.warn`, mirroring the auth bridge in `src/lib/authz/organizer.ts`.
+ * This historical behaviour ("organizer of one edition = organizer everywhere")
+ * is retained ONLY as the migration bridge; remove it under the same condition
+ * as the auth bridge. An EXPLICIT `null` is an intentional global read (e.g.
+ * the nudge candidacy superset) and does NOT log the bridge warning.
  *
  * Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}, keyed by resolved org.
  * The returned array is treated as read-only by callers (they wrap it in a Set).
@@ -743,7 +745,9 @@ export async function getOrganizerSpeakerIds(
     ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
     : `*[_type == "conference"].organizers[]._ref`
 
-  if (!resolvedOrgId) {
+  // Warn only when the org was supposed to resolve and didn't — an explicit
+  // `null` is an intentional global read, not a bridge event.
+  if (!resolvedOrgId && orgId === undefined) {
     console.warn(
       '[authz-bridge] getOrganizerSpeakerIds: org unresolvable; using the GLOBAL organizer set (recipient-selection legacy bridge)',
     )

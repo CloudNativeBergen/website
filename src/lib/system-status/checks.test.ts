@@ -155,6 +155,21 @@ describe('collectStaticChecks — contract provider', () => {
     const checks = collectStaticChecks(CONFERENCE)
     expect(byId(checks, 'contracts.provider').value).toBe('self-hosted')
   })
+
+  it('warns on an unsupported legacy provider value instead of reporting ok', () => {
+    vi.stubEnv('CONTRACT_SIGNING_PROVIDER', 'adobe-sign')
+    const checks = collectStaticChecks(CONFERENCE)
+    const check = byId(checks, 'contracts.provider')
+    expect(check.status).toBe('warn')
+    expect(check.value).toBe('adobe-sign')
+    expect(check.detail).toContain('falling back to self-hosted')
+  })
+
+  it('reports ok for the supported self-hosted value', () => {
+    vi.stubEnv('CONTRACT_SIGNING_PROVIDER', 'self-hosted')
+    const checks = collectStaticChecks(CONFERENCE)
+    expect(byId(checks, 'contracts.provider').status).toBe('ok')
+  })
 })
 
 describe('buildSystemChecks — live probes', () => {

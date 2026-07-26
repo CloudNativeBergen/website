@@ -178,16 +178,14 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
           continue
         }
 
-        // The organizer set for THIS tenant only — the team-else-all fallback
-        // for an unassigned thread. Cached per-org by getOrganizerSpeakerIds, so
-        // multiple conversations in the same org share one read.
-        const orgOrganizerIds = await getOrganizerSpeakerIds(orgId)
-
         // Route down the TEAMS-2 chain: the assignee when set → else the
         // thread's team (`sponsors` for a sponsor thread, `cfp` otherwise) →
         // else every organizer OF THIS ORG (the team-else-all fallback). If
         // nobody can be notified (no assignee AND no team AND no organizers),
         // skip without stamping so the thread is retried once organizers exist.
+        // The per-org organizer read happens only on the unassigned branch
+        // (assigned threads never need it) and is cached per-org by
+        // getOrganizerSpeakerIds, so same-org conversations share one read.
         const recipientIds = conversation.assignedToId
           ? [conversation.assignedToId]
           : await resolveRoutedOrganizerIds({
@@ -196,7 +194,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
                 conversation.conversationType === 'sponsor'
                   ? 'sponsors'
                   : 'cfp',
-              allOrganizerIds: orgOrganizerIds,
+              allOrganizerIds: await getOrganizerSpeakerIds(orgId),
             })
         if (recipientIds.length === 0) continue
 
