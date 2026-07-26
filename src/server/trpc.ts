@@ -139,9 +139,10 @@ const requireAuth = t.middleware(({ ctx, next }) => {
  * request's organization is resolved from the domain conference (never from
  * client input) and the caller must be an organizer OF THAT org
  * (`speaker.organizerOrgIds` includes it). FAIL CLOSED when the org resolves but
- * the caller is not a member; when the org CANNOT be resolved (pre-044-backfill
- * data / unknown domain) {@link isOrganizerForOrg} engages the documented LEGACY
- * BRIDGE (deprecated global `isOrganizer`, with a `console.warn`). See
+ * the caller is not a member AND when the org CANNOT be resolved (unknown domain /
+ * transient failure) — post-044-backfill {@link isOrganizerForOrg} denies an
+ * unresolvable org (the org-unresolvable bridge is gone). The one remaining bridge
+ * is legacy TOKENS without `organizerOrgIds` (sunset). See
  * `src/lib/authz/organizer.ts` for the bridge's removal condition.
  */
 const requireAdmin = t.middleware(async ({ ctx, next }) => {
@@ -194,9 +195,10 @@ export async function resolveConferenceId(): Promise<string> {
  * The REQUEST's organization id, resolved from the domain conference (the tenant
  * key the org-scoped authz waist gates on). Mirrors {@link resolveConferenceId}
  * but returns `null` rather than throwing when the org cannot be resolved
- * (pre-044-backfill conference / unknown domain), because the authorization
- * middleware maps that `null` onto the deliberate LEGACY BRIDGE rather than a hard
- * failure. The underlying conference read is request-cached, so calling this in
+ * (unknown domain / transient read), because the authorization middleware maps
+ * that `null` onto a FAIL-CLOSED denial (the org-unresolvable bridge is gone;
+ * see `src/lib/authz/organizer.ts`). The underlying conference read is
+ * request-cached, so calling this in
  * the waist does not add a fetch for endpoints that also call
  * `resolveConferenceId`.
  */
@@ -207,7 +209,8 @@ export async function resolveOrganizationId(): Promise<string | null> {
     return conference.organization?._ref ?? null
   } catch {
     // A thrown resolution (no request domain, transient read) must not error the
-    // authz waist — it maps to `null`, i.e. the deliberate legacy bridge.
+    // authz waist — it maps to `null`, which the waist now treats as FAIL CLOSED
+    // (deny) rather than the removed org-unresolvable bridge.
     return null
   }
 }

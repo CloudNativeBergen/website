@@ -5,8 +5,9 @@
  * `adminProcedure` middleware (`requireAdmin` in src/server/trpc.ts) end to end:
  * the request org comes from the domain conference, and access requires the
  * caller's `organizerOrgIds` to include it. Proves the cross-org 403, the fail-
- * closed (resolvable org, non-member) path, and the legacy bridge (org
- * unresolvable → deprecated global `isOrganizer`, with a warn).
+ * closed (resolvable org, non-member) path, and that an UNRESOLVABLE org now FAILS
+ * CLOSED (bridge (1) removed post-044-backfill — deny, with a warn on a would-be
+ * organizer's denial).
  *
  * `getConferenceForCurrentDomain` is mocked to control the request's org; callers
  * are built with explicit session shapes so `organizerOrgIds` can be varied.
@@ -114,15 +115,16 @@ describe('adminProcedure waist — org-scoped organizer authorization', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
-  describe('legacy bridge — org unresolvable', () => {
-    it('ALLOWS via the deprecated global isOrganizer and warns', async () => {
-      resolveOrg(null) // conference has no organization (pre-backfill)
-      const caller = callerFor({
-        _id: 'sp-4',
-        isOrganizer: true,
-        organizerOrgIds: [],
-      })
-      expect(await wasAllowed(caller)).toBe(true)
+  describe('org unresolvable — bridge (1) removed, FAILS CLOSED', () => {
+    it('DENIES a would-be organizer (global flag set) and warns on the denial', async () => {
+      resolveOrg(null) // conference has no organization (unknown domain)
+      await expect(
+        callerFor({
+          _id: 'sp-4',
+          isOrganizer: true,
+          organizerOrgIds: [],
+        }).speaker.admin.list(),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
       expect(console.warn).toHaveBeenCalledWith(
         expect.stringContaining('[authz-bridge]'),
       )
@@ -139,14 +141,15 @@ describe('adminProcedure waist — org-scoped organizer authorization', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     })
 
-    it('bridges when domain resolution THROWS (fail-closed to bridge, not error)', async () => {
+    it('DENIES (fail-closed) when domain resolution THROWS (maps to null, not error)', async () => {
       h.getConference.mockRejectedValue(new Error('no domain'))
-      const caller = callerFor({
-        _id: 'sp-6',
-        isOrganizer: true,
-        organizerOrgIds: [],
-      })
-      expect(await wasAllowed(caller)).toBe(true)
+      await expect(
+        callerFor({
+          _id: 'sp-6',
+          isOrganizer: true,
+          organizerOrgIds: [],
+        }).speaker.admin.list(),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     })
   })
 })

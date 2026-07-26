@@ -4,9 +4,10 @@
  * Unit tests for the org-scoped organizer authorization helpers (CaaS T1-2,
  * #614). This is THE security boundary the middleware waist and every gate share,
  * so we pin: an org member passes; an organizer of ANOTHER org is denied;
- * fail-closed when the org resolves but the caller is not a member; and the
- * deliberate LEGACY BRIDGE (org unresolvable → deprecated global `isOrganizer`,
- * with a warn) both grants and denies correctly.
+ * fail-closed when the org resolves but the caller is not a member; org
+ * UNRESOLVABLE now FAILS CLOSED (bridge (1) removed post-044-backfill, with a warn
+ * on a would-be organizer's denial); and the remaining legacy-TOKEN bridge
+ * (bridge (2), no `organizerOrgIds` field → deprecated global flag) still grants.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -103,12 +104,17 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
     })
   })
 
-  describe('legacy bridge (orgId === null)', () => {
-    it('GRANTS via the deprecated global isOrganizer and WARNS', () => {
+  describe('org unresolvable (orgId === null) — bridge (1) removed, FAILS CLOSED', () => {
+    it('DENIES a would-be organizer (global flag set) and WARNS on the denial', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      expect(isOrganizerForOrg(speaker({ isOrganizer: true }), null)).toBe(true)
+      expect(isOrganizerForOrg(speaker({ isOrganizer: true }), null)).toBe(
+        false,
+      )
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('[authz-bridge]'),
+      )
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('DENYING (fail-closed'),
       )
     })
 
@@ -151,10 +157,10 @@ describe('isOrganizerForCurrentOrg — resolve + decide', () => {
     ).toBe(false)
   })
 
-  it('bridges to the global flag when the org is unresolvable', async () => {
+  it('DENIES (fail-closed) when the org is unresolvable — bridge (1) removed', async () => {
     h.resolveOrg.mockResolvedValue(null)
     expect(await isOrganizerForCurrentOrg(speaker({ isOrganizer: true }))).toBe(
-      true,
+      false,
     )
   })
 

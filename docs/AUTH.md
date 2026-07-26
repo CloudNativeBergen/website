@@ -55,6 +55,46 @@ Browser                     Site                        OAuth Provider
    - Stores speaker profile and account info on the JWT token
 5. NextAuth sets an encrypted HttpOnly cookie containing the JWT
 
+### Session Refresh (`trigger === 'update'`)
+
+The speaker claims baked into the JWT (`organizerOrgIds`, `isOrganizer`,
+`name`/`image`) are captured at sign-in. Without a refresh path they would only
+change on a full re-login — which would, for example, lock the creator of a
+brand-new organization out of it until they signed out and back in, and let stale
+organizer grants persist for the token's life.
+
+The `jwt` callback therefore handles `trigger === 'update'`: it re-fetches the
+speaker (`getSpeaker`, the same `organizerOrgIds` + `isOrganizer` read used at
+sign-in) and re-applies the claims via `applySpeakerToToken`, preserving the
+authenticated `account`. A transient read failure (or a vanished document) returns
+the existing token unchanged — a refresh never invalidates a live session. This
+path is kept strictly separate from sign-in and never runs the link-intent logic.
+
+**How to trigger it**
+
+- **Client (browser).** Call the updater from next-auth's session hook:
+
+  ```typescript
+  'use client'
+  import { useSession } from 'next-auth/react'
+
+  const { update } = useSession()
+  // After an action that changes the speaker's grants (e.g. creating an org):
+  await update() // re-invokes the jwt callback with trigger 'update'
+  ```
+
+  The payload is ignored (the callback re-reads from Sanity), so `update()` with
+  no argument is sufficient. This works out of the box because `callbacks.jwt` is
+  registered — no extra wiring is needed. The app wraps the client tree in
+  next-auth's `SessionProvider` (via `SessionProviderWrapper` in the root layout),
+  which `useSession()` requires. The wiring is already exercised in production by
+  `SessionRefreshOnRestore` (`src/components/providers/SessionRefreshOnRestore.tsx`),
+  which calls `update()` on bfcache restore; with the update path implemented, that
+  refresh now also re-reads the speaker's grants from Sanity.
+
+- **Server.** next-auth's `unstable_update` (returned from `NextAuth(config)`) can
+  drive the same refresh from a server action if a client round-trip is undesired.
+
 ### Multi-Domain OAuth (Centralized Auth Origin, #619)
 
 **Opt-in, config-driven, off by default.** Wired in `src/lib/auth.ts` via
@@ -162,7 +202,11 @@ The encrypted JWT contains:
     name: string
     email: string
     image: string       // Sanity image reference
-    isOrganizer: boolean  // Computed via GROQ from conference.organizers[]
+    isOrganizer: boolean  // DEPRECATED global flag; kept only as the authz
+                          // legacy-TOKEN bridge (see "Authorization bridge" below)
+    organizerOrgIds: string[] // Org-SCOPED organizer capability (#614/#635):
+                          // deduped organization refs the speaker organizes.
+                          // The org-scoped authz waist gates on this.
     flags: Flags[]      // e.g., ["local", "first-time"]
   }
   account: {
@@ -220,13 +264,38 @@ Three procedure tiers:
 
 - `publicProcedure` &mdash; no auth required
 - `protectedProcedure` &mdash; requires `session.speaker._id` (401 otherwise)
-- `adminProcedure` &mdash; requires `session.speaker.isOrganizer` (403 otherwise)
+- `adminProcedure` &mdash; org-scoped organizer check (403 otherwise): the request's
+  org is resolved from the domain conference and the caller's `organizerOrgIds`
+  must include it (see `src/lib/authz/organizer.ts`)
 
 Session is obtained via `getAuthSession({ url, headers })` in `createTRPCContext()`,
 which supports both cookie-based and Bearer token authentication.
 
 All admin operations previously protected by REST middleware are now handled by
 `adminProcedure` in tRPC routers.
+
+#### Authorization bridge (org-scoped, sunset)
+
+Org-scoped organizer authz (`isOrganizerForOrg`, #614/#635) gates on the JWT's
+`organizerOrgIds`. Two migration bridges to the deprecated global `isOrganizer`
+flag once softened it; their status now:
+
+- **Org UNRESOLVABLE (`orgId === null`) &mdash; FAILS CLOSED.** The 044 backfill has
+  run (every live conference has an `organization`), so an unresolvable org is now
+  an unknown domain / transient failure rather than pre-backfill data. It **denies**
+  (a `console.warn('[authz-bridge] …')` records a would-be organizer's denial).
+- **Legacy TOKEN (no `organizerOrgIds` field) &mdash; KEPT, SUNSET.** Tokens minted
+  before #635 lack the field; denying them would 403 every logged-in organizer
+  until their token expires (**session `maxAge` = 30 days**, the next-auth default —
+  no explicit `maxAge` is set) or they re-login. This bridge still grants via the
+  global flag. It is dated for removal: `TODO(sunset 2026-08-26)` (30 days after
+  #635).
+
+**Bridge-removal condition.** Once every pre-#635 token has expired, delete the
+legacy-token bridge so a missing `organizerOrgIds` denies. The
+`trigger === 'update'` session refresh (above) is the mechanism by which any active
+session re-mints a modern token carrying `organizerOrgIds` before then; the two
+changes together complete the removal.
 
 ### Test Mode
 
