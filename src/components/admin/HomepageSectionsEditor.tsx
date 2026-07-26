@@ -56,7 +56,7 @@ import {
   toPreviewBands,
   type EditorRow,
   type PreviewBand,
-} from '@/lib/homepage'
+} from '@/lib/homepage/editor'
 
 /**
  * Front-page builder (F3) admin editor — a drag-and-drop composition builder
@@ -100,7 +100,7 @@ export function HomepageSectionsEditor({
   // stored sections, so a second call would mint DIFFERENT keys — the dirty
   // baseline below must be derived from this same array or the form would
   // read as dirty the moment it opens.
-  const [initialRows] = useState<EditorRow[]>(() =>
+  const [initialRows, setInitialRows] = useState<EditorRow[]>(() =>
     toEditorRows(initialSections),
   )
   const [rows, setRows] = useState<EditorRow[]>(initialRows)
@@ -109,6 +109,7 @@ export function HomepageSectionsEditor({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmingRevert, setConfirmingRevert] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
   // Live drag state: the id being dragged and the id it is currently over, used
   // to PROJECT the in-progress order into the preview without disturbing the
   // sortable list (which animates itself via transforms).
@@ -166,12 +167,34 @@ export function HomepageSectionsEditor({
     setOverKey(null)
   }
   const open = () => {
-    reset()
+    // Re-materialize from the CURRENT props: after a save, router.refresh()
+    // delivers the updated composition, and reopening must show and baseline
+    // against that — not the rows captured at first mount.
+    const fresh = toEditorRows(initialSections)
+    setInitialRows(fresh)
+    setRows(fresh)
+    setSubmitError(null)
+    setExpanded(new Set())
+    setActiveKey(null)
+    setOverKey(null)
     setIsOpen(true)
   }
   const close = () => {
     setIsOpen(false)
+    setConfirmingCancel(false)
     reset()
+  }
+  /**
+   * The in-modal Cancel button honors the same dirty guard as the shell's
+   * backdrop/Escape/X close paths — unsaved changes are never discarded
+   * without an explicit choice.
+   */
+  const cancel = () => {
+    if (isDirty) {
+      setConfirmingCancel(true)
+      return
+    }
+    close()
   }
 
   const toggleExpanded = (key: string) =>
@@ -425,7 +448,7 @@ export function HomepageSectionsEditor({
                 type="button"
                 variant="secondary"
                 size="md"
-                onClick={close}
+                onClick={cancel}
                 disabled={mutation.isPending}
                 className="min-h-[44px]"
               >
@@ -455,6 +478,16 @@ export function HomepageSectionsEditor({
         confirmButtonText="Revert to default"
         variant="warning"
         isLoading={mutation.isPending}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmingCancel}
+        onClose={() => setConfirmingCancel(false)}
+        onConfirm={close}
+        title="Discard unsaved changes?"
+        message="Your homepage composition changes have not been saved."
+        confirmButtonText="Discard changes"
+        variant="warning"
       />
     </>
   )

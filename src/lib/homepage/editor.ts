@@ -100,7 +100,12 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
   })
 }
 
-/** Build the mutation payload; empty strings are dropped by the server. */
+/**
+ * Build the mutation payload. Empty/blank optional fields are omitted HERE
+ * (the server schema trims and REJECTS empty strings via `.min(1)`, it does
+ * not drop them) — the editor's own `validate()` catches required-field gaps
+ * with friendlier messages before the payload is built.
+ */
 export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
   return rows.map((row) => {
     const out: Record<string, unknown> = { _type: row._type, _key: row._key }
