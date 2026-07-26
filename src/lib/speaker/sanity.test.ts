@@ -190,7 +190,7 @@ describe('getOrCreateSpeaker — organization membership (CaaS T1-1)', () => {
       if (query.includes('$id in providers'))
         return Promise.resolve(existingSpeaker())
       // Membership-presence check: already a member.
-      if (query.includes('in organizations[]._ref'))
+      if (query.includes('in coalesce(organizations, [])[]._ref'))
         return Promise.resolve(true)
       return Promise.resolve(null)
     })
