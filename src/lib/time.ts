@@ -1,139 +1,162 @@
-export function formatDate(dateString: string): string {
-  if (!dateString) return 'TBD'
+/**
+ * House display locale for all UI-facing date formatting: Norwegian Bokmål.
+ * Note: nb-NO renders weekday and month names in lowercase ("27. oktober 2025",
+ * "mandag") — this is correct Norwegian orthography and is accepted as-is.
+ */
+const HOUSE_LOCALE = 'nb-NO'
 
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-GB', {
+/** Conference timezone. All dates are anchored/rendered here. */
+const OSLO_TZ = 'Europe/Oslo'
+
+/** Lowercase Norwegian long month names (index = month number - 1). */
+const NB_LONG_MONTHS = [
+  'januar',
+  'februar',
+  'mars',
+  'april',
+  'mai',
+  'juni',
+  'juli',
+  'august',
+  'september',
+  'oktober',
+  'november',
+  'desember',
+] as const
+
+/**
+ * Parses a date string so its calendar day is stable in Europe/Oslo regardless
+ * of the viewer's timezone. Bare YYYY-MM-DD values are pinned to 12:00 UTC
+ * (noon) — far enough from midnight that no real-world offset shifts the day
+ * (the previous `new Date(y, m-1, d)` used LOCAL midnight, so viewers east of
+ * Oslo saw the previous day and it hydration-mismatched). Full ISO timestamps
+ * are parsed as-is since they already carry an offset.
+ */
+function toOsloAnchoredDate(dateString: string): Date {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString)
+  if (dateOnly) {
+    return new Date(
+      Date.UTC(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+        12,
+      ),
+    )
+  }
+  return new Date(dateString)
+}
+
+/** Extracts and validates Y/M/D components from a bare YYYY-MM-DD string. */
+function dateOnlyParts(
+  dateString: string,
+): { day: number; monthIndex: number; year: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString)
+  if (!m) return null
+  const year = Number(m[1])
+  const monthIndex = Number(m[2]) - 1
+  const day = Number(m[3])
+  const probe = new Date(Date.UTC(year, monthIndex, day, 12))
+  if (
+    isNaN(probe.getTime()) ||
+    probe.getUTCFullYear() !== year ||
+    probe.getUTCMonth() !== monthIndex ||
+    probe.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return { day, monthIndex, year }
+}
+
+/**
+ * Formats a date in the given BCP-47 locale (defaults to the nb-NO house
+ * locale). Anchored to Europe/Oslo so the calendar day is stable across
+ * viewer timezones. Use the `locale` override only for documents that must
+ * follow their own language (e.g. English sponsor contracts).
+ */
+export function formatDateLocalized(
+  dateString: string,
+  locale: string = HOUSE_LOCALE,
+): string {
+  if (!dateString) return 'TBD'
+  return toOsloAnchoredDate(dateString).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: OSLO_TZ,
   })
 }
 
+/** Formats a date in the house locale (e.g. "27. oktober 2025"). */
+export function formatDate(dateString: string): string {
+  return formatDateLocalized(dateString, HOUSE_LOCALE)
+}
+
+/** Compact date, house locale (e.g. "27. okt. 2025"). Safe for timestamps. */
 export function formatDateSafe(dateString: string): string {
   if (!dateString) return 'TBD'
 
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'Invalid Date'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'Invalid Date'
 
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ]
-    const month = months[date.getMonth()]
-    const day = date.getDate()
-    const year = date.getFullYear()
-
-    return `${month} ${day}, ${year}`
-  } catch (error) {
-    console.error('Error formatting date:', error)
-    return 'Invalid Date'
-  }
+  return date.toLocaleDateString(HOUSE_LOCALE, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: OSLO_TZ,
+  })
 }
 
+/**
+ * Formats a date range in the house locale, collapsing shared parts
+ * (e.g. "27.–28. oktober 2025", "27. oktober – 5. november 2025").
+ * Inputs are conference dates in YYYY-MM-DD form.
+ */
 export function formatDatesSafe(
   dateString1: string,
   dateString2: string,
 ): string {
   if (!dateString1 || !dateString2) return 'TBD'
 
-  try {
-    const date1 = new Date(dateString1)
-    const date2 = new Date(dateString2)
+  const p1 = dateOnlyParts(dateString1)
+  const p2 = dateOnlyParts(dateString2)
 
-    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
-      if (!isNaN(date1.getTime())) return formatDateSafe(dateString1)
-      if (!isNaN(date2.getTime())) return formatDateSafe(dateString2)
-      return 'Invalid Date Range'
-    }
-
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ]
-
-    const day1 = date1.getDate()
-    const month1 = months[date1.getMonth()]
-    const year1 = date1.getFullYear()
-
-    const day2 = date2.getDate()
-    const month2 = months[date2.getMonth()]
-    const year2 = date2.getFullYear()
-
-    if (dateString1 === dateString2) {
-      return `${day1} ${month1} ${year1}`
-    }
-    if (year1 !== year2) {
-      return `${day1} ${month1} ${year1} - ${day2} ${month2} ${year2}`
-    }
-    if (month1 !== month2) {
-      return `${day1} ${month1} - ${day2} ${month2} ${year1}`
-    }
-    return `${day1} - ${day2} ${month1} ${year1}`
-  } catch (error) {
-    console.error('Error formatting date range:', error)
-    const formatted1 = formatDateSafe(dateString1)
-    const formatted2 = formatDateSafe(dateString2)
-    if (formatted1 !== 'TBD' && formatted2 !== 'TBD') {
-      return `${formatted1} - ${formatted2}`
-    }
-    return 'TBD'
+  if (!p1 || !p2) {
+    if (p1) return formatDateSafe(dateString1)
+    if (p2) return formatDateSafe(dateString2)
+    return 'Invalid Date Range'
   }
+
+  const month1 = NB_LONG_MONTHS[p1.monthIndex]
+  const month2 = NB_LONG_MONTHS[p2.monthIndex]
+
+  if (dateString1 === dateString2) {
+    return `${p1.day}. ${month1} ${p1.year}`
+  }
+  if (p1.year !== p2.year) {
+    return `${p1.day}. ${month1} ${p1.year} – ${p2.day}. ${month2} ${p2.year}`
+  }
+  if (p1.monthIndex !== p2.monthIndex) {
+    return `${p1.day}. ${month1} – ${p2.day}. ${month2} ${p1.year}`
+  }
+  return `${p1.day}.–${p2.day}. ${month1} ${p1.year}`
 }
 
+/** Formats a timestamp with time, house locale (e.g. "27. oktober 2025, 14:30"). */
 export function formatDateTimeSafe(dateString: string): string {
   if (!dateString) return 'TBD'
 
-  try {
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'Invalid Date'
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return 'Invalid Date'
 
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ]
-    const month = months[date.getMonth()]
-    const day = date.getDate()
-    const year = date.getFullYear()
-
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-
-    return `${month} ${day}, ${year} at ${hours}:${minutes}`
-  } catch (error) {
-    console.error('Error formatting date time:', error)
-    return 'Invalid Date'
-  }
+  return date.toLocaleString(HOUSE_LOCALE, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: OSLO_TZ,
+  })
 }
 
 /**
@@ -159,19 +182,16 @@ export function formatConferenceDate(
     day: 'numeric',
   },
 ): string {
-  // Parse the date string (YYYY-MM-DD) components directly
-  // to avoid timezone-related parsing issues
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-
-  return date.toLocaleDateString('en-US', {
+  // Anchor bare YYYY-MM-DD at 12:00 UTC so the calendar day is stable in every
+  // viewer timezone, then render in the conference timezone (Europe/Oslo).
+  return toOsloAnchoredDate(dateString).toLocaleDateString(HOUSE_LOCALE, {
     ...options,
-    timeZone: 'Europe/Oslo',
+    timeZone: OSLO_TZ,
   })
 }
 
 /**
- * Formats a date string with short format (e.g., "Mon, Oct 27")
+ * Formats a date string with short format (e.g., "man. 27. okt.")
  */
 export function formatConferenceDateShort(dateString: string): string {
   return formatConferenceDate(dateString, {
@@ -182,7 +202,7 @@ export function formatConferenceDateShort(dateString: string): string {
 }
 
 /**
- * Formats a date string with long format (e.g., "Monday, October 27, 2025")
+ * Formats a date string with long format (e.g., "mandag 27. oktober 2025")
  */
 export function formatConferenceDateLong(dateString: string): string {
   return formatConferenceDate(dateString, {
@@ -194,13 +214,46 @@ export function formatConferenceDateLong(dateString: string): string {
 }
 
 /**
- * Formats a date string for badge display (e.g., "October 2025")
+ * Formats a date string for badge display (e.g., "oktober 2025")
  * Shows only month and year without day or weekday
  */
 export function formatConferenceDateForBadge(dateString: string): string {
   return formatConferenceDate(dateString, {
     year: 'numeric',
     month: 'long',
+  })
+}
+
+/**
+ * Compact month label for chart axes/trends (e.g. "okt"), house locale.
+ * Pairs with formatChartDay for two-line labels in narrow chart columns.
+ */
+export function formatChartMonth(dateString: string): string {
+  return toOsloAnchoredDate(dateString).toLocaleDateString(HOUSE_LOCALE, {
+    month: 'short',
+    timeZone: OSLO_TZ,
+  })
+}
+
+/**
+ * Bare day-of-month label for chart axes/trends (e.g. "27"), Oslo-anchored.
+ * Extracted via formatToParts because nb-NO renders a standalone numeric day
+ * with a trailing period ("27.") which reads as noise on a chart axis.
+ */
+export function formatChartDay(dateString: string): string {
+  const parts = new Intl.DateTimeFormat(HOUSE_LOCALE, {
+    day: 'numeric',
+    timeZone: OSLO_TZ,
+  }).formatToParts(toOsloAnchoredDate(dateString))
+  return parts.find((p) => p.type === 'day')?.value ?? ''
+}
+
+/** Single-line compact chart date label (e.g. "27. okt."), house locale. */
+export function formatChartDateShort(dateString: string): string {
+  return toOsloAnchoredDate(dateString).toLocaleDateString(HOUSE_LOCALE, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: OSLO_TZ,
   })
 }
 
