@@ -1,6 +1,33 @@
 import { PortableTextComponents } from '@portabletext/react'
 
 /**
+ * Restrict a stored rich-text link to schemes that are safe to render into a
+ * public page: site-internal paths, http(s), and mailto. Portable-text content
+ * is tenant-authored (speaker bios, homepage rich-text blocks, …), so a stored
+ * `javascript:`/`data:` href must degrade to an inert anchor, not execute.
+ */
+function safePortableTextHref(href: string | undefined): string {
+  const value = href?.trim()
+  if (!value) return '#'
+  if (value.startsWith('/') && !value.startsWith('//')) return value
+  // http(s) requires the explicit scheme prefix — `new URL` also parses
+  // degenerate no-authority forms like `https:example.com`. mailto: has no
+  // authority by design, so the protocol check suffices there.
+  const hasHttpPrefix = /^https?:\/\//i.test(value)
+  try {
+    const parsed = new URL(value)
+    if (
+      ((parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+        hasHttpPrefix) ||
+      parsed.protocol === 'mailto:'
+    ) {
+      return value
+    }
+  } catch {}
+  return '#'
+}
+
+/**
  * Custom PortableText components for rendering rich text content.
  * Provides consistent styling for headings, paragraphs, lists, and inline formatting
  * that matches the editor experience.
@@ -39,7 +66,7 @@ export const portableTextComponents: PortableTextComponents = {
     em: ({ children }) => <em className="italic">{children}</em>,
     underline: ({ children }) => <u className="underline">{children}</u>,
     link: ({ value, children }) => {
-      const href = (value as { href?: string })?.href || '#'
+      const href = safePortableTextHref((value as { href?: string })?.href)
       return (
         <a
           href={href}

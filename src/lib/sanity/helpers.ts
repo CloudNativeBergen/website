@@ -26,8 +26,43 @@ export function ensureArrayKeys<T extends Record<string, unknown>>(
   if (!Array.isArray(array)) return array as Array<T & { _key: string }>
   return array.map((item) => ({
     ...item,
-    _key: (item._key as string) || generateKey(prefix),
+    // Only a non-empty STRING satisfies Sanity's `_key` contract (and this
+    // function's return type) — any other truthy value is replaced.
+    _key:
+      typeof item._key === 'string' && item._key
+        ? item._key
+        : generateKey(prefix),
   }))
+}
+
+/**
+ * {@link ensureArrayKeys} + UNIQUENESS: client-supplied `_key`s are kept only
+ * for their FIRST occurrence — a duplicate is dropped and regenerated, since
+ * duplicate keys corrupt Sanity array addressing and React reconciliation.
+ * Use this for any array persisted from client input.
+ */
+export function ensureUniqueArrayKeys<T extends Record<string, unknown>>(
+  array: T[],
+  prefix: string = 'item',
+): Array<T & { _key: string }> {
+  if (!Array.isArray(array)) return array as Array<T & { _key: string }>
+  const seen = new Set<string>()
+  return ensureArrayKeys(
+    array.map((item) => {
+      const key =
+        typeof item._key === 'string' && item._key ? item._key : undefined
+      if (!key) return item
+      if (!seen.has(key)) {
+        seen.add(key)
+        return item
+      }
+      // Duplicate: strip the key so ensureArrayKeys regenerates it.
+      const rest = { ...item }
+      delete rest._key
+      return rest
+    }),
+    prefix,
+  )
 }
 
 export function createReference(id: string): Reference {

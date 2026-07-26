@@ -1,4 +1,5 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
+import type { HeroCtaOverride } from '@/lib/homepage/sections'
 import { Button } from '@/components/Button'
 import { CollapsibleDescription } from '@/components/CollapsibleDescription'
 import { Container } from '@/components/Container'
@@ -55,10 +56,33 @@ function isPortableTextEmpty(content?: TypedObject[]): boolean {
 function ActionButtons({
   conference,
   ticketsFromPrice,
+  ctaOverrides,
 }: {
   conference: Conference
   ticketsFromPrice?: string | null
+  /**
+   * F1 homepage-builder override. When non-empty, these buttons REPLACE the
+   * phase-aware CTA row entirely; absent leaves the smart phase behaviour intact.
+   */
+  ctaOverrides?: HeroCtaOverride[]
 }) {
+  if (ctaOverrides && ctaOverrides.length > 0) {
+    return (
+      <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
+        {ctaOverrides.map((cta, idx) => (
+          <Button
+            key={cta._key ?? `${cta.href}-${idx}`}
+            href={cta.href}
+            variant={idx === 0 ? 'primary' : 'outline'}
+            className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
+          >
+            <span>{cta.label}</span>
+          </Button>
+        ))}
+      </div>
+    )
+  }
+
   const buttons: Array<{
     label: string
     href: string
@@ -172,10 +196,23 @@ function ActionButtons({
 export function Hero({
   conference,
   ticketsFromPrice,
+  headlineOverride,
+  subheadlineOverride,
+  ctaOverrides,
 }: {
   conference: Conference
   /** Lowest ticket price formatted for display (e.g. "1 234"), excl. VAT */
   ticketsFromPrice?: string | null
+  /**
+   * F1 homepage-builder overrides. All optional; when ABSENT the Hero renders
+   * exactly today's tagline/description/phase-aware CTAs (pixel-identical
+   * default). `headlineOverride` replaces the tagline (plain text, no
+   * typewriter); `subheadlineOverride` replaces the description; `ctaOverrides`
+   * replaces the phase-aware CTA row.
+   */
+  headlineOverride?: string
+  subheadlineOverride?: string
+  ctaOverrides?: HeroCtaOverride[]
 }) {
   return (
     <div className="relative py-10 sm:pt-36 sm:pb-24">
@@ -240,7 +277,9 @@ export function Hero({
             )}
           <h1 className="font-jetbrains h-[5.5rem] overflow-hidden text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:h-[8.5rem] sm:text-6xl lg:h-auto lg:overflow-visible">
             <span className="sr-only">{conference.title} - </span>
-            {conference.tagline?.startsWith('Real ') ? (
+            {headlineOverride ? (
+              headlineOverride
+            ) : conference.tagline?.startsWith('Real ') ? (
               <TypewriterEffect
                 prefix="Real "
                 words={['Cases.', 'People.', 'Cloud Native.']}
@@ -253,16 +292,23 @@ export function Hero({
               conference.tagline
             )}
           </h1>
-          {conference.description &&
+          {subheadlineOverride ? (
+            <CollapsibleDescription
+              paragraphs={subheadlineOverride.split('\n')}
+            />
+          ) : (
+            conference.description &&
             typeof conference.description === 'string' && (
               <CollapsibleDescription
                 paragraphs={conference.description.split('\n')}
               />
-            )}
+            )
+          )}
 
           <ActionButtons
             conference={conference}
             ticketsFromPrice={ticketsFromPrice}
+            ctaOverrides={ctaOverrides}
           />
 
           {conference.venueName && (

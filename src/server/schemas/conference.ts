@@ -573,3 +573,119 @@ export const CreateEditionSchema = z
       path: ['cfpEndDate'],
     },
   )
+
+// === Homepage Composition (front-page builder F1/F2) =====================
+
+/**
+ * The homepage section list — a full-array replace mirroring the CLOSED registry
+ * in `src/lib/homepage/sections.ts`. A STRICT discriminated union on `_type`:
+ * unknown block types are rejected at the boundary (the renderer additionally
+ * skips unknown types it reads back, for forward compat). Every block carries an
+ * optional `_key` (the router re-keys) and a `hidden` visibility flag (F1).
+ *
+ * An empty array UNSETS the field — the page falls back to the phase-aware
+ * default layout. Content still comes from the existing conference sources;
+ * blocks carry only their own presentation config.
+ */
+const sectionKey = z.string().optional()
+const sectionHidden = z.boolean().optional()
+
+/**
+ * A link an ORGANIZER can point a public-page button at: a site-internal path
+ * (`/tickets`) or an absolute http(s) URL. Anything else — `javascript:`,
+ * `data:`, scheme-relative `//host` — is rejected: these are tenant-entered
+ * values rendered into every visitor's page, so the scheme surface must be
+ * closed at the write path (same standard as the legal-page authority URL).
+ */
+const safeLinkHref = z
+  .string()
+  .trim()
+  .min(1, 'Link is required')
+  .refine(
+    (value) => {
+      if (value.startsWith('/') && !value.startsWith('//')) return true
+      // Require the EXPLICIT scheme prefix: `new URL` also parses degenerate
+      // forms like `https:example.com` (no authority), which are not the
+      // "full http(s) URL" the message promises.
+      if (!/^https?:\/\//i.test(value)) return false
+      try {
+        const parsed = new URL(value)
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      } catch {
+        return false
+      }
+    },
+    {
+      message: 'Enter a site path (e.g. /tickets) or a full http(s) URL',
+    },
+  )
+
+const HeroCtaOverrideSchema = z.object({
+  _key: sectionKey,
+  label: z.string().trim().min(1, 'Label is required'),
+  href: safeLinkHref,
+})
+
+const HomepageSectionSchema = z.discriminatedUnion('_type', [
+  z.object({
+    _type: z.literal('homepageHero'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heroHeadline: z.string().trim().min(1).nullable().optional(),
+    heroSubheadline: z.string().trim().min(1).nullable().optional(),
+    ctaOverrides: z.array(HeroCtaOverrideSchema).optional(),
+  }),
+  z.object({
+    _type: z.literal('homepageFeaturedSpeakers'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+  }),
+  z.object({
+    _type: z.literal('homepageProgramHighlights'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+  }),
+  z.object({
+    _type: z.literal('homepageOrganizers'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+  }),
+  z.object({
+    _type: z.literal('homepageSponsors'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+  }),
+  z.object({
+    _type: z.literal('homepageGallery'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+  }),
+  z.object({
+    _type: z.literal('homepageMetrics'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+  }),
+  z.object({
+    _type: z.literal('homepageCtaBanner'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1, 'Heading is required'),
+    body: z.string().trim().min(1).nullable().optional(),
+    buttonLabel: z.string().trim().min(1, 'Button label is required'),
+    buttonHref: safeLinkHref,
+  }),
+  z.object({
+    _type: z.literal('homepageRichText'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+    content: z
+      .array(PortableTextBlockSchema)
+      .min(1, 'Rich text needs at least one block'),
+  }),
+])
+
+export const UpdateHomepageSectionsSchema = z.object({
+  homepageSections: z.array(HomepageSectionSchema),
+})

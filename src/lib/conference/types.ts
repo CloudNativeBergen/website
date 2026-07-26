@@ -8,6 +8,7 @@ import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import type { ConferenceVisibility } from './visibility'
 import type { BackgroundPattern } from './backgroundPattern'
+import type { HomepageSection } from '@/lib/homepage/sections'
 
 export interface CrmActivityThreshold {
   _key?: string
@@ -221,4 +222,11 @@ export interface Conference {
   featuredGalleryImages?: GalleryImageWithSpeakers[]
   galleryImages?: GalleryImageWithSpeakers[]
   crmInactivityThresholds?: CrmActivityThreshold[]
+  /**
+   * Front-page builder (F1/F2) composition. ABSENT (every legacy conference)
+   * renders the phase-aware default layout — see `@/lib/homepage/sections`
+   * (`resolveHomepageSections`). Projected raw by the main conference projection's
+   * `...` spread; sections carry only their own presentation config.
+   */
+  homepageSections?: HomepageSection[]
 }

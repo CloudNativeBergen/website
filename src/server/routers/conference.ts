@@ -6,6 +6,7 @@ import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import {
   ensureArrayKeys,
+  ensureUniqueArrayKeys,
   createReferenceWithKey,
   generateKey,
 } from '@/lib/sanity/helpers'
@@ -44,6 +45,7 @@ import {
   SanitizeSvgPreviewSchema,
   CreateEditionSchema,
   ValidateNewDomainsSchema,
+  UpdateHomepageSectionsSchema,
 } from '../schemas/conference'
 import {
   sanitizeSvgUpload,
@@ -393,6 +395,78 @@ export const conferenceRouter = router({
       const value =
         !blocks || blocks.length === 0 ? null : ensureArrayKeys(blocks, 'block')
       return applyConferencePatch(conferenceId, { announcement: value })
+    }),
+
+  // === Homepage Composition (front-page builder F1/F2) =====================
+
+  /**
+   * Replace the homepage section composition. Full-array replace like the other
+   * array fieldsets. An EMPTY list UNSETS the field so the page falls back to the
+   * phase-aware default layout (never a blank homepage). Object items are
+   * given a UNIQUE `_key` (client keys kept when present, missing/duplicate
+   * ones generated) and stripped of null/empty optionals so nothing but the
+   * intended presentation config is stored. The strict discriminated-union schema
+   * has already rejected any unknown block type.
+   */
+  updateHomepageSections: adminProcedure
+    .input(UpdateHomepageSectionsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      if (input.homepageSections.length === 0) {
+        return applyConferencePatch(conferenceId, { homepageSections: null })
+      }
+      const sections = ensureUniqueArrayKeys(
+        input.homepageSections.map((section) => {
+          // Keep the discriminator + optional visibility flag; then layer on the
+          // block-specific config, dropping null/undefined so we never store an
+          // empty override.
+          const base: Record<string, unknown> = { _type: section._type }
+          if (section.hidden) base.hidden = true
+          if ('_key' in section && section._key) base._key = section._key
+
+          switch (section._type) {
+            case 'homepageHero': {
+              if (section.heroHeadline) base.heroHeadline = section.heroHeadline
+              if (section.heroSubheadline)
+                base.heroSubheadline = section.heroSubheadline
+              if (section.ctaOverrides && section.ctaOverrides.length > 0) {
+                base.ctaOverrides = ensureUniqueArrayKeys(
+                  section.ctaOverrides.map((cta) => ({
+                    label: cta.label,
+                    href: cta.href,
+                    ...(cta._key ? { _key: cta._key } : {}),
+                  })),
+                  'cta',
+                )
+              }
+              break
+            }
+            case 'homepageMetrics': {
+              if (section.heading) base.heading = section.heading
+              break
+            }
+            case 'homepageCtaBanner': {
+              base.heading = section.heading
+              if (section.body) base.body = section.body
+              base.buttonLabel = section.buttonLabel
+              base.buttonHref = section.buttonHref
+              break
+            }
+            case 'homepageRichText': {
+              if (section.heading) base.heading = section.heading
+              base.content = ensureUniqueArrayKeys(section.content, 'block')
+              break
+            }
+            default:
+              // The content-free blocks (featured speakers, program, organizers,
+              // sponsors, gallery) carry only `_type`/`_key`/`hidden`.
+              break
+          }
+          return base
+        }),
+        'section',
+      )
+      return applyConferencePatch(conferenceId, { homepageSections: sections })
     }),
 
   // === SE-3: branding logos (inlineSvg upload) =============================
