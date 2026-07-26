@@ -278,9 +278,10 @@ export function TravelSupportPageClient({
             />
           )}
           <button
+            type="button"
             onClick={createTravelSupport}
             disabled={createMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {createMutation.isPending
               ? 'Setting up...'
@@ -389,8 +390,9 @@ export function TravelSupportPageClient({
                   </div>
                   {canEdit && !showExpenseForm && (
                     <button
+                      type="button"
                       onClick={() => setShowExpenseForm(true)}
-                      className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                      className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue-hover"
                     >
                       <PlusIcon className="h-4 w-4" />
                       Add Expense
