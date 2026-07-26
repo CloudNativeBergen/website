@@ -95,8 +95,7 @@ export default async function WorkshopPage() {
   if (conference.checkinCustomerId && conference.checkinEventId) {
     const eligibility = await checkWorkshopEligibility({
       userEmail: user.email,
-      customerId: conference.checkinCustomerId,
-      eventId: conference.checkinEventId,
+      conference,
       contactEmail: conference.contactEmail,
     })
 

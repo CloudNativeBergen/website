@@ -210,7 +210,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   let lowestTicketPrice: LowestTicketPrice | null = null
   if (conference.checkinEventId) {
     try {
-      const ticketData = await getPublicTicketTypes(conference.checkinEventId)
+      const ticketData = await getPublicTicketTypes(conference)
       if (ticketData) {
         lowestTicketPrice = getLowestTicketPrice(ticketData.tickets)
       }

@@ -105,7 +105,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   }
 
   const ticketData = conference.checkinEventId
-    ? await getPublicTicketTypes(conference.checkinEventId)
+    ? await getPublicTicketTypes(conference)
     : null
 
   const hasTicketPricing = ticketData && ticketData.tickets.length > 0

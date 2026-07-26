@@ -57,7 +57,7 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
 }
 
 /** Just the conference fields the ticketing resolver needs. */
-type ConferenceTicketingBinding = {
+export type ConferenceTicketingBinding = {
   checkinCustomerId?: number
   checkinEventId?: number
   /** The owning organization (tenant), used to resolve per-org credentials. */
