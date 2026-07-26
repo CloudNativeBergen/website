@@ -58,7 +58,9 @@ export interface IdentityObject {
   type: 'IdentityObject'
   hashed: boolean
   identityHash: string
-  identityType: 'emailAddress' | string
+  // `(string & {})` keeps the 'emailAddress' literal in autocomplete while
+  // still admitting the spec's other enum values and ext: extensions.
+  identityType: 'emailAddress' | (string & {})
   salt?: string
 }
 

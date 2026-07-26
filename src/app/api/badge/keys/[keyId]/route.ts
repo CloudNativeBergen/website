@@ -22,6 +22,7 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { createPublicKey } from 'crypto'
+import { normalizeDomain } from '@/lib/conference/domains'
 import {
   ED25519_KEY_ID,
   buildEd25519MultikeyDocument,
@@ -128,8 +129,11 @@ async function serveEd25519Multikey(): Promise<NextResponse> {
   }
 
   // Derive the tenant base URL from the request host, matching the issuer
-  // profile endpoint (getConferenceForCurrentDomain uses the same header).
-  const host = (await headers()).get('host') || ''
+  // profile endpoint (getConferenceForCurrentDomain uses the same header) —
+  // normalized with the house helper so the key document's id/controller
+  // byte-match the ids minted into credentials (which derive from the stored,
+  // normalized conference domains).
+  const host = normalizeDomain((await headers()).get('host') || '')
   const baseUrl = `https://${host}`
 
   const keyDocument = buildEd25519MultikeyDocument(baseUrl, publicKeyMultibase)
