@@ -93,11 +93,20 @@ export function buildLegalConfig(
 
   const isNorway = jurisdiction.toLowerCase() === 'norway'
 
-  // Controller location line: city + country when both are known, else whatever
-  // single part we have, else the jurisdiction.
+  // Controller location line ("based in …"): it describes the CONTROLLER's
+  // seat, so it follows the resolved jurisdiction. The venue city is included
+  // only when the conference country agrees with that jurisdiction — an org
+  // legal override (e.g. Germany) must not render "Bergen, Germany", nor keep
+  // "Bergen, Norway" next to a German governing-law clause.
   const city = conference?.city?.trim()
-  const country = conference?.country?.trim() || jurisdiction
-  const location = city ? `${city}, ${country}` : country
+  const conferenceCountry = conference?.country?.trim()
+  const cityMatchesJurisdiction =
+    Boolean(city) &&
+    (!conferenceCountry ||
+      conferenceCountry.toLowerCase() === jurisdiction.toLowerCase())
+  const location = cityMatchesJurisdiction
+    ? `${city}, ${jurisdiction}`
+    : jurisdiction
 
   const orgAuthorityName = org?.supervisoryAuthority?.name?.trim()
   const supervisoryAuthority: SupervisoryAuthority = orgAuthorityName

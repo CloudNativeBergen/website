@@ -109,4 +109,19 @@ describe('buildLegalConfig — location assembly', () => {
     )
     expect(legal.location).toBe('Norway')
   })
+
+  it('drops the venue city when an org jurisdiction override disagrees with the conference country', () => {
+    // The location line describes the CONTROLLER's seat: a German legal entity
+    // running a conference in Bergen must not read "Bergen, Germany" — nor keep
+    // "Bergen, Norway" next to a German governing-law clause.
+    const legal = buildLegalConfig(conf(), { legalJurisdiction: 'Germany' })
+    expect(legal.jurisdiction).toBe('Germany')
+    expect(legal.location).toBe('Germany')
+  })
+
+  it('keeps the venue city when the org jurisdiction override matches the conference country', () => {
+    const legal = buildLegalConfig(conf(), { legalJurisdiction: 'norway' })
+    expect(legal.location).toBe('Bergen, norway')
+    expect(legal.isNorway).toBe(true)
+  })
 })
