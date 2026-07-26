@@ -68,8 +68,9 @@ export function BankingDetailsDisplay({
         {canEdit && onEdit && (
           <div className="mt-4">
             <button
+              type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue-hover"
             >
               <PlusIcon className="h-4 w-4" />
               Add Banking Details
