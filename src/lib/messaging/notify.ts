@@ -106,11 +106,16 @@ export async function notifyNewMessage({
 }): Promise<void> {
   try {
     // ACCESS vs ROUTING split (TEAMS-2). `organizerSet` is the FULL organizer
-    // set and is used ONLY to CLASSIFY identities — whether the author is an
-    // organizer, whether a recipient is an organizer (audience-dependent email
-    // default + link variant), whether any recipient is a speaker. That is an
-    // access/participant question and MUST stay the whole organizer set.
-    const organizerIds = await getOrganizerSpeakerIds()
+    // set for THIS conference's org and is used ONLY to CLASSIFY identities —
+    // whether the author is an organizer, whether a recipient is an organizer
+    // (audience-dependent email default + link variant), whether any recipient is
+    // a speaker. That is an access/participant question. ORG-SCOPED (CaaS T1-2,
+    // #614): pass the conference's own org so a background send does not depend on
+    // request domain; a pre-backfill conference (no org) falls back to the global
+    // set via the recipient-selection legacy bridge.
+    const organizerIds = await getOrganizerSpeakerIds(
+      conference.organization?._ref ?? null,
+    )
     const organizerSet = new Set(organizerIds)
     const authorIsOrganizer = organizerSet.has(authorId)
     // ROUTING: the `organizers` group party is expanded for NOTIFICATION

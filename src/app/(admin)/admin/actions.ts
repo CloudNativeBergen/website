@@ -24,6 +24,7 @@ import { getConversationViewCounts } from '@/lib/messaging/sanity'
 import { getVolunteersByConference } from '@/lib/volunteer/sanity'
 import { VolunteerStatus } from '@/lib/volunteer/types'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import {
   clientWrite,
   clientReadUncached as clientRead,
@@ -58,7 +59,9 @@ import { resolveConferenceId } from '@/server/trpc'
 
 async function requireOrganizer(): Promise<void> {
   const session = await getAuthSession()
-  if (!session?.speaker?.isOrganizer) {
+  // ORG-SCOPED (CaaS T1-2, #614): organizer of the CURRENT domain's org, with the
+  // authz legacy bridge for unresolvable orgs.
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     throw new Error('Unauthorized: organizer access required')
   }
 }
@@ -97,7 +100,12 @@ async function resolveConference(
  */
 async function requireOrganizerSession(): Promise<{ speakerId: string }> {
   const session = await getAuthSession()
-  if (!session?.speaker?.isOrganizer || !session.speaker._id) {
+  // ORG-SCOPED (CaaS T1-2, #614): same org gate as requireOrganizer, but also
+  // returns the caller's server-derived speaker id for per-organizer scoping.
+  if (
+    !session?.speaker?._id ||
+    !(await isOrganizerForCurrentOrg(session.speaker))
+  ) {
     throw new Error('Unauthorized: organizer access required')
   }
   return { speakerId: session.speaker._id }

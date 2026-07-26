@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { BackLink } from '@/components/BackButton'
 import { ConversationThread } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
 export const metadata: Metadata = {
   title: 'Conversation',
@@ -21,7 +22,10 @@ export default async function CfpConversationPage({
   // Audience-correct deep link: an organizer following a handed /cfp link would
   // otherwise land on a speaker-labelled surface. Send them to the admin thread.
   const session = await getAuthSession()
-  if (session?.speaker?.isOrganizer && !session.isImpersonating) {
+  if (
+    !session?.isImpersonating &&
+    (await isOrganizerForCurrentOrg(session?.speaker))
+  ) {
     redirect(`/admin/messages/${id}`)
   }
 

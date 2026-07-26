@@ -39,7 +39,14 @@ function applySpeakerToToken(
     name: speaker.name,
     email: speaker.email,
     image: speaker.image,
+    // Deprecated GLOBAL flag — kept as the org-scoped authz migration bridge.
     isOrganizer: speaker.isOrganizer,
+    // Org-SCOPED organizer capability (CaaS T1-2, #614). Deduped + falsy-filtered
+    // so a speaker organizing several conferences of one org contributes its org
+    // id once, and pre-backfill conferences (no org) contribute nothing.
+    organizerOrgIds: Array.from(
+      new Set((speaker.organizerOrgIds ?? []).filter(Boolean)),
+    ),
     flags: speaker.flags,
   }
 }
@@ -513,8 +520,13 @@ export async function getAuthSession(req?: {
     return session
   }
 
-  // SECURITY: Only organizers can impersonate
-  if (!session?.speaker?.isOrganizer) {
+  // SECURITY: Only organizers can impersonate — ORG-SCOPED (CaaS T1-2, #614): the
+  // impersonator must be an organizer of the CURRENT domain's org (legacy-bridged
+  // to the deprecated global flag when the org can't be resolved). Dynamically
+  // imported to keep the org/conference read out of the edge middleware bundle,
+  // mirroring the `getSpeaker` import below.
+  const { isOrganizerForCurrentOrg } = await import('@/lib/authz/organizer')
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     return session
   }
 

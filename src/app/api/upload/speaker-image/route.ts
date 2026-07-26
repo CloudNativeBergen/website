@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { clientWrite } from '@/lib/sanity/client'
 
 export async function POST(request: Request) {
@@ -49,9 +50,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify authorization: user must be uploading their own image OR be an organizer
+    // Verify authorization: user must be uploading their own image OR be an
+    // organizer of the current domain's org (CaaS T1-2, #614; legacy-bridged).
     const isOwnProfile = !speakerId || speakerId === session.speaker._id
-    const isOrganizer = session.speaker.isOrganizer === true
+    const isOrganizer = await isOrganizerForCurrentOrg(session.speaker)
 
     if (!isOwnProfile && !isOrganizer) {
       return NextResponse.json(

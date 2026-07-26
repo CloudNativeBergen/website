@@ -7,10 +7,12 @@ import {
   setAdobeSignSessionCookie,
 } from '@/lib/adobe-sign/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
 export async function GET(request: Request) {
   const session = await getAuthSession()
-  if (!session?.speaker?.isOrganizer) {
+  // ORG-SCOPED (CaaS T1-2, #614): organizer of the current domain's org.
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

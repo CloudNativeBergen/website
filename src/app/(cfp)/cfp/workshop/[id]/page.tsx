@@ -2,6 +2,7 @@ import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
@@ -130,8 +131,11 @@ export default async function WorkshopDetailsPage({
       typeof s === 'object' && s !== null && s._id === currentSpeaker._id,
   )
 
+  // ORG-SCOPED (CaaS T1-2, #614): during dev impersonation, treat the viewer as an
+  // organizer only when the REAL admin is an organizer of the current org.
   const isImpersonatingAsOrganizer =
-    session.isImpersonating && session.realAdmin?.isOrganizer
+    !!session.isImpersonating &&
+    (await isOrganizerForCurrentOrg(session.realAdmin))
 
   if (!isSpeaker && !isImpersonatingAsOrganizer) {
     return (

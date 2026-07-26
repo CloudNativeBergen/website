@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { AppEnvironment } from '@/lib/environment/config'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
@@ -132,8 +133,20 @@ const requireAuth = t.middleware(({ ctx, next }) => {
   })
 })
 
-const requireAdmin = t.middleware(({ ctx, next }) => {
-  if (!ctx.session?.speaker?.isOrganizer) {
+/**
+ * THE AUTHORIZATION WAIST (CaaS T1-2, #614). Every `adminProcedure` inherits this
+ * single org-scoped organizer check — do NOT re-gate individual endpoints. The
+ * request's organization is resolved from the domain conference (never from
+ * client input) and the caller must be an organizer OF THAT org
+ * (`speaker.organizerOrgIds` includes it). FAIL CLOSED when the org resolves but
+ * the caller is not a member; when the org CANNOT be resolved (pre-044-backfill
+ * data / unknown domain) {@link isOrganizerForOrg} engages the documented LEGACY
+ * BRIDGE (deprecated global `isOrganizer`, with a `console.warn`). See
+ * `src/lib/authz/organizer.ts` for the bridge's removal condition.
+ */
+const requireAdmin = t.middleware(async ({ ctx, next }) => {
+  const orgId = await resolveOrganizationId()
+  if (!isOrganizerForOrg(ctx.session?.speaker, orgId)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Admin privileges required',
@@ -143,8 +156,8 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
-      speaker: ctx.session.speaker,
-      user: ctx.session.user!,
+      speaker: ctx.session!.speaker!,
+      user: ctx.session!.user!,
     },
   })
 })
@@ -175,4 +188,26 @@ export async function resolveConferenceId(): Promise<string> {
     })
   }
   return conference._id
+}
+
+/**
+ * The REQUEST's organization id, resolved from the domain conference (the tenant
+ * key the org-scoped authz waist gates on). Mirrors {@link resolveConferenceId}
+ * but returns `null` rather than throwing when the org cannot be resolved
+ * (pre-044-backfill conference / unknown domain), because the authorization
+ * middleware maps that `null` onto the deliberate LEGACY BRIDGE rather than a hard
+ * failure. The underlying conference read is request-cached, so calling this in
+ * the waist does not add a fetch for endpoints that also call
+ * `resolveConferenceId`.
+ */
+export async function resolveOrganizationId(): Promise<string | null> {
+  try {
+    const { conference, error } = await getConferenceForCurrentDomain()
+    if (error || !conference?._id) return null
+    return conference.organization?._ref ?? null
+  } catch {
+    // A thrown resolution (no request domain, transient read) must not error the
+    // authz waist — it maps to `null`, i.e. the deliberate legacy bridge.
+    return null
+  }
 }

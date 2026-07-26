@@ -1,6 +1,7 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
 import { NextAuthRequest, auth } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getProposal } from '@/lib/proposal/data/sanity'
 
 /**
@@ -87,7 +88,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
         const proposalId = match[1]
 
         const speakerId = req.auth?.speaker?._id
-        const isOrganizer = req.auth?.speaker?.isOrganizer === true
+        // ORG-SCOPED (CaaS T1-2, #614): organizer-level proposal access is granted
+        // only to organizers of the current domain's org (legacy-bridged).
+        const isOrganizer = await isOrganizerForCurrentOrg(req.auth?.speaker)
 
         if (!speakerId) {
           throw new Error('Speaker ID not found in session')

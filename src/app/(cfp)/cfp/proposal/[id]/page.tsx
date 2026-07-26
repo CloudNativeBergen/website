@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
@@ -40,8 +41,11 @@ export default async function ProposalViewPage({
     return redirect('/api/auth/signin?callbackUrl=/cfp/proposal/' + id)
   }
 
+  // ORG-SCOPED (CaaS T1-2, #614): during dev impersonation, grant organizer-level
+  // proposal access only when the REAL admin is an organizer of the current org.
   const isImpersonatingAsOrganizer =
-    session.isImpersonating && !!session.realAdmin?.isOrganizer
+    !!session.isImpersonating &&
+    (await isOrganizerForCurrentOrg(session.realAdmin))
 
   const { proposal, proposalError } = await getProposal({
     id,

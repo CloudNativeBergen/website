@@ -20,6 +20,15 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
 const IS_ORGANIZER_FIELD =
   '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
 
+// Computed field (CaaS T1-2, #614): the ORG-SCOPED organizer capability — the
+// `organization._ref`s of the conferences whose `organizers[]` contain this
+// speaker. Conferences with no `organization` (pre-044-backfill) are filtered
+// out; duplicate refs (a speaker organizing several conferences of one org) are
+// deduped in `applySpeakerToToken`. This is the source of the session token's
+// `organizerOrgIds`, which the authorization middleware/gates key on.
+const ORGANIZER_ORG_IDS_FIELD =
+  '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref'
+
 /**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
  * `findSpeakersByEmails`). These run on EVERY login and cannot be indexed
@@ -43,7 +52,8 @@ const LOGIN_SPEAKER_PROJECTION = `{
     "organizations": organizations[]._ref,
     "slug": slug.current,
     "image": coalesce(image.asset->url, imageURL),
-    ${IS_ORGANIZER_FIELD}
+    ${IS_ORGANIZER_FIELD},
+    ${ORGANIZER_ORG_IDS_FIELD}
   }`
 
 /**
@@ -622,7 +632,8 @@ export async function getSpeaker(
       ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
-      ${IS_ORGANIZER_FIELD}
+      ${IS_ORGANIZER_FIELD},
+      ${ORGANIZER_ORG_IDS_FIELD}
     }`,
       { speakerId },
       { cache: 'no-store' },
