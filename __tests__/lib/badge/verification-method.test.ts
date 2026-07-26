@@ -76,3 +76,11 @@ describe('verification-method helpers', () => {
     expect(typeof doc.publicKeyMultibase).toBe('string')
   })
 })
+
+describe('acceptedEd25519VerificationMethods — malformed issuer ids', () => {
+  it('returns an empty accept-list (untrusted, not a throw) for missing/non-string ids', () => {
+    expect(acceptedEd25519VerificationMethods(undefined)).toEqual([])
+    expect(acceptedEd25519VerificationMethods(null)).toEqual([])
+    expect(acceptedEd25519VerificationMethods('')).toEqual([])
+  })
+})

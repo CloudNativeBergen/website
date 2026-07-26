@@ -68,7 +68,13 @@ export function baseUrlFromIssuerId(issuerId: string): string {
  * Used by the verify paths so freshly minted and previously baked badges both
  * verify, while foreign / did:key methods still do not.
  */
-export function acceptedEd25519VerificationMethods(issuerId: string): string[] {
+export function acceptedEd25519VerificationMethods(
+  issuerId: string | null | undefined,
+): string[] {
+  // A malformed assertion can carry a missing/non-string issuer id; that's an
+  // UNTRUSTED badge (empty accept-list → signature invalid), never a throw
+  // that would shove valid/invalid handling through the exception path.
+  if (typeof issuerId !== 'string' || !issuerId) return []
   return [
     ed25519VerificationMethodUrl(baseUrlFromIssuerId(issuerId)),
     legacyEd25519VerificationMethod(issuerId),
