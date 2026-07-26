@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { DialogTitle } from '@headlessui/react'
-import { ArrowRightIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/Button'
 import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
@@ -102,26 +101,17 @@ export function SpeakerMergeModal({
 
   return (
     <>
-      <ModalShell isOpen={isOpen} onClose={resetAndClose} size="2xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <DialogTitle className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
-              Merge duplicate speakers
-            </DialogTitle>
-            <p className="font-inter mt-1 text-sm text-brand-slate-gray/70 dark:text-gray-400">
-              Fold a duplicate speaker into a canonical one. All references are
-              repointed to the survivor and the duplicate is deleted. This
-              cannot be undone.
-            </p>
-          </div>
-          <button
-            onClick={resetAndClose}
-            className="ml-4 rounded-lg p-1 text-brand-slate-gray/60 hover:bg-brand-sky-mist dark:hover:bg-gray-800"
-            aria-label="Close"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
+      <ModalShell
+        isOpen={isOpen}
+        onClose={resetAndClose}
+        size="2xl"
+        title="Merge duplicate speakers"
+      >
+        <p className="font-inter text-sm text-brand-slate-gray/70 dark:text-gray-400">
+          Fold a duplicate speaker into a canonical one. All references are
+          repointed to the survivor and the duplicate is deleted. This cannot be
+          undone.
+        </p>
 
         <div className="mt-6 grid grid-cols-1 items-end gap-4 sm:grid-cols-[1fr_auto_1fr]">
           <label className="block">

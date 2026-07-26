@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useMemo } from 'react'
 import { SpeakerDetailsForm } from '@/components/cfp/SpeakerDetailsForm'
-import { Button } from '@/components/Button'
+import { AdminButton } from '@/components/admin/AdminButton'
 import { Input, ErrorText } from '@/components/Form'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
@@ -89,6 +87,36 @@ export function SpeakerManagementModal({
     updateEmailMutation.isPending ||
     isUploading
 
+  // Snapshot the pristine form (mirrors the reset effect below) so the
+  // dirty-close guard only fires once the organizer has actually edited a field.
+  const initialSnapshot = useMemo(() => {
+    const data: SpeakerInput = editingSpeaker
+      ? {
+          name: editingSpeaker.name || '',
+          bio: editingSpeaker.bio || '',
+          title: editingSpeaker.title || '',
+          image: editingSpeaker.image,
+          links: editingSpeaker.links,
+          consent: editingSpeaker.consent || {
+            dataProcessing: { granted: false },
+            publicProfile: { granted: false },
+          },
+        }
+      : {
+          name: '',
+          bio: '',
+          title: '',
+          consent: {
+            dataProcessing: { granted: false },
+            publicProfile: { granted: false },
+          },
+        }
+    return JSON.stringify({ data, email: editingSpeaker?.email || '' })
+  }, [editingSpeaker])
+
+  const isDirty =
+    JSON.stringify({ data: speakerData, email }) !== initialSnapshot
+
   useEffect(() => {
     if (isOpen) {
       if (editingSpeaker) {
@@ -170,24 +198,13 @@ export function SpeakerManagementModal({
       isOpen={isOpen}
       onClose={onClose}
       size="3xl"
-      className="max-h-[90dvh] transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white transition-all dark:border-gray-700"
+      title={editingSpeaker ? 'Edit Speaker' : 'Create New Speaker'}
+      className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"
+      confirmOnDirtyClose
+      isDirty={isDirty && !isPending}
     >
-      <div className="mb-6 flex items-start justify-between">
-        <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-          {editingSpeaker ? 'Edit Speaker' : 'Create New Speaker'}
-        </DialogTitle>
-        <button
-          type="button"
-          className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <XMarkIcon className="h-6 w-6" />
-        </button>
-      </div>
-
       <form onSubmit={handleSubmit}>
-        <div className="max-h-[calc(90dvh-200px)] overflow-y-auto py-6">
+        <div className="pb-6">
           <div className="mb-6">
             <Input
               name="email"
@@ -232,16 +249,24 @@ export function SpeakerManagementModal({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-3 pb-[env(safe-area-inset-bottom)]">
-          <Button
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <AdminButton
             type="button"
-            variant="outline"
+            variant="secondary"
+            size="md"
             onClick={onClose}
             disabled={isPending}
+            className="min-h-11"
           >
             Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          </AdminButton>
+          <AdminButton
+            type="submit"
+            color="brand"
+            size="md"
+            disabled={isPending}
+            className="min-h-11"
+          >
             {isPending
               ? editingSpeaker
                 ? 'Updating...'
@@ -249,7 +274,7 @@ export function SpeakerManagementModal({
               : editingSpeaker
                 ? 'Update Speaker'
                 : 'Create Speaker'}
-          </Button>
+          </AdminButton>
         </div>
       </form>
     </ModalShell>

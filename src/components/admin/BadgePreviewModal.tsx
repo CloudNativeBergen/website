@@ -1,14 +1,13 @@
 'use client'
 
-import { DialogTitle } from '@headlessui/react'
 import {
-  XMarkIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
   ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { ModalShell } from '@/components/ModalShell'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 interface BadgePreviewModalProps {
   isOpen: boolean
@@ -78,22 +77,9 @@ export function BadgePreviewModal({
       isOpen={isOpen}
       onClose={onClose}
       size="4xl"
-      className="transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white transition-all dark:border-gray-700"
+      title="Badge Details"
+      className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"
     >
-      <div className="mb-6 flex items-start justify-between">
-        <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-          Badge Details
-        </DialogTitle>
-        <button
-          type="button"
-          className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <XMarkIcon className="h-6 w-6" />
-        </button>
-      </div>
-
       <div className="grid gap-6 md:grid-cols-2">
         {/* Badge Image */}
         <div className="space-y-4">
@@ -286,12 +272,14 @@ export function BadgePreviewModal({
       </div>
 
       <div className="mt-6 flex justify-end border-t border-brand-frosted-steel pt-4 dark:border-gray-700">
-        <button
+        <AdminButton
+          variant="secondary"
+          size="md"
           onClick={onClose}
-          className="bg-brand-aqua dark:hover:bg-brand-aqua rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue dark:bg-brand-cloud-blue"
+          className="min-h-11"
         >
           Close
-        </button>
+        </AdminButton>
       </div>
     </ModalShell>
   )

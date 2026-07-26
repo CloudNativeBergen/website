@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { formatDateSafe } from '@/lib/time'
 
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { TrashIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DataTable, type Column } from '@/components/DataTable'
@@ -111,40 +110,16 @@ export function SignupDetailsModal({
       isOpen={isOpen}
       onClose={onClose}
       size="4xl"
-      padded={false}
-      className="relative overflow-hidden px-4 pt-5 pb-4 sm:p-6"
+      title={`${workshopTitle} - ${statusLabel} Signups`}
     >
-      <div className="absolute top-0 right-0 pt-4 pr-4">
-        <button
-          type="button"
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
-          onClick={onClose}
-        >
-          <span className="sr-only">Close</span>
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
-      <div className="sm:flex sm:items-start">
-        <div className="mt-3 w-full text-center sm:mt-0 sm:text-left">
-          <DialogTitle
-            as="h3"
-            className="mb-4 text-lg leading-6 font-semibold text-gray-900 dark:text-white"
-          >
-            {workshopTitle} - {statusLabel} Signups
-          </DialogTitle>
-
-          <div className="mt-4">
-            <DataTable<WorkshopSignupExisting>
-              data={signups}
-              columns={columns}
-              keyExtractor={(signup) => signup._id}
-              emptyState={{
-                title: `No ${status ?? ''} signups for this workshop`,
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      <DataTable<WorkshopSignupExisting>
+        data={signups}
+        columns={columns}
+        keyExtractor={(signup) => signup._id}
+        emptyState={{
+          title: `No ${status ?? ''} signups for this workshop`,
+        }}
+      />
 
       <ConfirmationModal
         isOpen={deleteTarget !== null}

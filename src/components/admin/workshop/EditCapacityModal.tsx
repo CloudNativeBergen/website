@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 
@@ -49,32 +47,14 @@ export function EditCapacityModal({
       isOpen={isOpen}
       onClose={onClose}
       size="md"
-      padded={false}
-      className="relative overflow-hidden px-4 pt-5 pb-4 sm:p-6"
+      title="Edit Workshop Capacity"
+      subtitle={workshopTitle}
+      confirmOnDirtyClose
+      isDirty={capacity !== currentCapacity && !isSubmitting}
     >
-      <div className="absolute top-0 right-0 pt-4 pr-4">
-        <button
-          type="button"
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
-          onClick={onClose}
-        >
-          <span className="sr-only">Close</span>
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
       <div>
-        <DialogTitle
-          as="h3"
-          className="mb-4 text-lg leading-6 font-semibold text-gray-900 dark:text-white"
-        >
-          Edit Workshop Capacity
-        </DialogTitle>
-
         <div className="mb-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {workshopTitle}
-          </p>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Currently {currentSignups} confirmed participants
           </p>
         </div>
@@ -102,20 +82,22 @@ export function EditCapacityModal({
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <AdminButton
             variant="secondary"
             size="md"
             onClick={onClose}
             disabled={isSubmitting}
+            className="min-h-11"
           >
             Cancel
           </AdminButton>
           <AdminButton
-            color="blue"
+            color="brand"
             size="md"
             onClick={handleSubmit}
             disabled={isSubmitting || isInvalid}
+            className="min-h-11"
           >
             {isSubmitting ? 'Updating...' : 'Update Capacity'}
           </AdminButton>

@@ -1,10 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect, useMemo } from 'react'
 import { XCircleIcon } from '@heroicons/react/24/solid'
-import { Button } from '@/components/Button'
+import { AdminButton } from '@/components/admin/AdminButton'
 import { ErrorText } from '@/components/Form'
 import { prepareReferenceArray } from '@/lib/sanity/helpers'
 import {
@@ -184,6 +182,24 @@ export function ProposalManagementModal({
   })
 
   const isPending = createMutation.isPending || updateMutation.isPending
+
+  // Snapshot the pristine form so the dirty-close guard only arms once the
+  // organizer has actually changed the proposal fields or its speakers.
+  const initialSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        proposalData: getInitialProposalData(),
+        speakerIds: getInitialSpeakerIds(),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editingProposal & conference are the only inputs to the initial builders
+    [editingProposal, conference],
+  )
+
+  const isDirty =
+    JSON.stringify({
+      proposalData,
+      speakerIds: selectedSpeakerIds,
+    }) !== initialSnapshot
 
   // Reset form when modal opens or when editing a different proposal
   useEffect(() => {
@@ -369,26 +385,13 @@ export function ProposalManagementModal({
       onClose={onClose}
       size="4xl"
       padded={false}
-      className="transform overflow-hidden border border-brand-frosted-steel bg-brand-glacier-white text-left align-middle transition-all dark:border-gray-700"
+      title={editingProposal ? 'Edit Proposal' : 'Create New Proposal'}
+      className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"
+      confirmOnDirtyClose
+      isDirty={isDirty && !isPending}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-        <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-          {editingProposal ? 'Edit Proposal' : 'Create New Proposal'}
-        </DialogTitle>
-        <button
-          type="button"
-          className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800"
-          onClick={onClose}
-          disabled={isPending}
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Scrollable Content Area */}
       <form onSubmit={handleSubmit}>
-        <div className="max-h-[calc(90vh-200px)] overflow-y-auto px-6 py-6">
+        <div className="px-6 py-6">
           {/* Speaker Selection Section */}
           <div className="mb-6">
             <SpeakerMultiSelect
@@ -458,20 +461,23 @@ export function ProposalManagementModal({
 
         {/* Action Buttons Footer */}
         <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-          <div className="flex justify-end gap-3">
-            <Button
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <AdminButton
               type="button"
-              variant="outline"
+              variant="secondary"
+              size="md"
               onClick={onClose}
               disabled={isPending}
+              className="min-h-11"
             >
               Cancel
-            </Button>
-            <Button
+            </AdminButton>
+            <AdminButton
               type="submit"
-              variant="primary"
+              color="brand"
+              size="md"
               disabled={isPending}
-              className="min-w-35"
+              className="min-h-11 min-w-35"
               title="Save changes"
             >
               {isPending ? (
@@ -484,12 +490,12 @@ export function ProposalManagementModal({
                   <span>
                     {editingProposal ? 'Update Proposal' : 'Create Proposal'}
                   </span>
-                  <kbd className="rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white dark:border-indigo-600 dark:bg-indigo-700">
+                  <kbd className="rounded border border-white/40 bg-white/20 px-1.5 py-0.5 text-xs font-semibold text-white">
                     ⌘S
                   </kbd>
                 </span>
               )}
-            </Button>
+            </AdminButton>
           </div>
         </div>
       </form>

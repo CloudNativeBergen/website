@@ -1,7 +1,5 @@
 'use client'
 
-import { DialogTitle } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Speaker, Flags, flags } from '@/lib/speaker/types'
@@ -45,26 +43,10 @@ export default function SpeakerProfilePreview({
       isOpen={isOpen}
       onClose={onClose}
       size="5xl"
-      padded={false}
-      className="flex max-h-[90dvh] transform flex-col overflow-hidden bg-brand-glacier-white text-left align-middle transition-all"
+      title="Speaker Profile Preview"
+      className="bg-brand-glacier-white"
     >
-      <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
-        <DialogTitle
-          as="h2"
-          className="font-space-grotesk text-2xl font-bold text-brand-slate-gray dark:text-white"
-        >
-          Speaker Profile Preview
-        </DialogTitle>
-        <button
-          onClick={onClose}
-          className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-          aria-label="Close modal"
-        >
-          <XMarkIcon className="h-6 w-6 text-gray-500 dark:text-gray-400" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
+      <div>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <div className="sticky top-8 space-y-6">

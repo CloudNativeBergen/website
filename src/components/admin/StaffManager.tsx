@@ -122,6 +122,14 @@ export function StaffManager({
 
   const isSaving = createMutation.isPending || updateMutation.isPending
 
+  // Dirty-close guard: compare the working draft to the pristine baseline
+  // (the edited member's saved values, or the empty draft when creating).
+  const editingMember = editingId
+    ? staff?.find((member) => member._id === editingId)
+    : null
+  const baselineDraft = editingMember ? draftFrom(editingMember) : EMPTY_DRAFT
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(baselineDraft)
+
   const openCreate = () => {
     setEditingId(null)
     setDraft(EMPTY_DRAFT)
@@ -318,6 +326,8 @@ export function StaffManager({
         title={editingId ? 'Edit staff member' : 'Add staff member'}
         subtitle="Shown on the public staff pages"
         icon={<UsersIcon className="h-5 w-5" />}
+        confirmOnDirtyClose
+        isDirty={isDirty && !isSaving && !isUploading}
       >
         <form noValidate onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
