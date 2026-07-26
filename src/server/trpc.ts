@@ -157,6 +157,36 @@ const requireAdmin = t.middleware(async ({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
+      // The resolved request org (the tenant the waist gated on) is stashed so
+      // admin handlers can scope resource reads to it (e.g. getProposal's
+      // organizer branch) without re-resolving the domain conference.
+      orgId,
+      speaker: ctx.session!.speaker!,
+      user: ctx.session!.user!,
+    },
+  })
+})
+
+/**
+ * DUAL-ROLE org-scoped organizer resolution (go-live B1-B3/E11, #642). Unlike
+ * {@link requireAdmin} this does NOT reject — it resolves the request org from the
+ * domain conference and exposes an ORG-SCOPED organizer decision as
+ * `ctx.isOrgOrganizer` (plus the resolved `ctx.orgId`) for endpoints that serve
+ * BOTH speakers and organizers (a speaker acts on their own resource; an organizer
+ * acts on any of the ORG's). It replaces the DEPRECATED GLOBAL `ctx.speaker.isOrganizer`
+ * (true for an organizer of ANY org) that dual-role endpoints used to branch on,
+ * which let a CNB organizer reach an external tenant's data. The decision reuses
+ * {@link isOrganizerForOrg} so the legacy-token bridge semantics match the waist
+ * (#635/#639) exactly. Pure-organizer endpoints should use {@link adminProcedure}
+ * (which fails closed); this is for the dual-role surfaces only.
+ */
+const withOrgOrganizer = t.middleware(async ({ ctx, next }) => {
+  const orgId = await resolveOrganizationId()
+  return next({
+    ctx: {
+      ...ctx,
+      orgId,
+      isOrgOrganizer: isOrganizerForOrg(ctx.session?.speaker, orgId),
       speaker: ctx.session!.speaker!,
       user: ctx.session!.user!,
     },
@@ -166,6 +196,9 @@ const requireAdmin = t.middleware(async ({ ctx, next }) => {
 export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure.use(requireAuth)
 export const adminProcedure = t.procedure.use(requireAuth).use(requireAdmin)
+export const organizerProcedure = t.procedure
+  .use(requireAuth)
+  .use(withOrgOrganizer)
 export const router = t.router
 
 const CLIENT_ERROR_CODES = new Set([
