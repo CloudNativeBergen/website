@@ -249,7 +249,7 @@ export async function sendWeeklyUpdateToSlack(
     lastUpdated,
   } = data
 
-  const formattedDate = new Date(lastUpdated).toLocaleDateString('no-NO', {
+  const formattedDate = new Date(lastUpdated).toLocaleDateString('nb-NO', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -400,7 +400,7 @@ export async function sendWeeklyUpdateToSlack(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `_This report was generated automatically on ${new Date(lastUpdated).toLocaleString('no-NO')}_`,
+        text: `_This report was generated automatically on ${new Date(lastUpdated).toLocaleString('nb-NO')}_`,
       },
     },
   )

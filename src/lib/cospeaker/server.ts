@@ -319,7 +319,7 @@ export async function sendInvitationEmail(
         eventLocation,
         eventDate,
         eventUrl,
-        expiresAt: new Date(invitation.expiresAt).toLocaleDateString(),
+        expiresAt: formatDate(invitation.expiresAt),
         socialLinks: conference?.socialLinks || [],
       },
     })

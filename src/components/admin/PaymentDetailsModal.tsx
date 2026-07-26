@@ -1,5 +1,6 @@
 'use client'
 import { ModalShell } from '@/components/ModalShell'
+import { formatDate } from '@/lib/time'
 import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
@@ -29,14 +30,6 @@ export function PaymentDetailsModal({
 }: PaymentDetailsModalProps) {
   const formatCurrencyFromString = (amount: string): string => {
     return formatCurrency(parseFloat(amount))
-  }
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('nb-NO', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
   }
 
   const getPaymentStatusColor = (status: string, isOverdue: boolean) => {

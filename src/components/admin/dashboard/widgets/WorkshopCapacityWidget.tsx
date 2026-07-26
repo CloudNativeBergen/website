@@ -8,6 +8,7 @@ import {
 import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { fetchWorkshopCapacity } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { formatChartDateShort } from '@/lib/time'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
@@ -77,12 +78,7 @@ export function WorkshopCapacityWidget({
                 <CalendarIcon className="h-4 w-4 text-gray-400" />
                 <div className="text-sm font-bold text-gray-900 dark:text-white">
                   {conference.workshopRegistrationStart
-                    ? new Date(
-                        conference.workshopRegistrationStart,
-                      ).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
+                    ? formatChartDateShort(conference.workshopRegistrationStart)
                     : 'Not set'}
                 </div>
               </div>

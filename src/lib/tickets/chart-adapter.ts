@@ -1,3 +1,4 @@
+import { formatConferenceDate } from '@/lib/time'
 import type {
   TicketAnalysisResult,
   ChartData,
@@ -204,7 +205,7 @@ export function createTooltipContent(
   revenue: number,
 ): string {
   const date = new Date(point.date)
-  const formattedDate = date.toLocaleDateString('en-US', {
+  const formattedDate = formatConferenceDate(point.date, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',

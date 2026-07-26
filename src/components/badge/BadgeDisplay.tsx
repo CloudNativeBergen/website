@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDate } from '@/lib/time'
 import {
   ShieldCheckIcon,
   ClipboardIcon,
@@ -44,11 +45,7 @@ export function BadgeDisplay({
   const [copied, setCopied] = useState<'url' | null>(null)
 
   const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
-  const issuedDate = new Date(badge.issuedAt).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  const issuedDate = formatDate(badge.issuedAt)
 
   const badgeUrl = `/badge/${badgeId}`
   const downloadUrl = `/api/badge/${badgeId}/download`

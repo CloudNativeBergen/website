@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { formatDate } from '@/lib/time'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
@@ -313,7 +314,7 @@ export function SponsorContractView({
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Company details, contacts, billing, and logo collected.
             {sponsor.registrationCompletedAt &&
-              ` Completed ${new Date(sponsor.registrationCompletedAt).toLocaleDateString()}.`}
+              ` Completed ${formatDate(sponsor.registrationCompletedAt)}.`}
           </p>
         ) : !isSponsorWon ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -354,14 +355,14 @@ export function SponsorContractView({
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Contract signed
             {sponsor.contractSignedAt &&
-              ` on ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`}
+              ` on ${formatDate(sponsor.contractSignedAt)}`}
             .
           </p>
         ) : isSent ? (
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Contract sent
             {sponsor.contractSentAt &&
-              ` on ${new Date(sponsor.contractSentAt).toLocaleDateString()}`}
+              ` on ${formatDate(sponsor.contractSentAt)}`}
             .
           </p>
         ) : isPortalComplete ? (
@@ -433,7 +434,7 @@ export function SponsorContractView({
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Signed
             {sponsor.contractSignedAt &&
-              ` on ${new Date(sponsor.contractSignedAt).toLocaleDateString()}`}
+              ` on ${formatDate(sponsor.contractSignedAt)}`}
             .
           </p>
         ) : isPendingSignature ? (
@@ -523,7 +524,7 @@ export function SponsorContractView({
                 <dd className="font-medium text-gray-900 dark:text-white">
                   {sponsor.organizerSignedBy}
                   {sponsor.organizerSignedAt &&
-                    ` on ${new Date(sponsor.organizerSignedAt).toLocaleDateString()}`}
+                    ` on ${formatDate(sponsor.organizerSignedAt)}`}
                 </dd>
               </>
             )}

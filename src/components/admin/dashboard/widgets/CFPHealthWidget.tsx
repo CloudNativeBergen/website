@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatChartMonth, formatChartDay } from '@/lib/time'
 import {
   DocumentTextIcon,
   ChartBarIcon,
@@ -328,20 +329,13 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
             <div className="flex items-end gap-1">
               {data.submissionsPerDay.map((day, index) => {
                 const height = (day.count / maxSubmissions) * 100
-                const date = new Date(day.date + 'T00:00:00Z')
                 // Month and day rendered as two fixed lines: a single-line
-                // "Jun 10" wraps in narrow columns while "Jun 1" does not,
+                // "10. jun." wraps in narrow columns while "1. jun." does not,
                 // and in a bottom-aligned flex row that mixed 1-/2-line
                 // wrapping made columns ragged (value labels at differing
                 // heights, adjacent date labels colliding).
-                const monthLabel = date.toLocaleDateString('en-US', {
-                  month: 'short',
-                  timeZone: 'UTC',
-                })
-                const dayLabel = date.toLocaleDateString('en-US', {
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })
+                const monthLabel = formatChartMonth(day.date)
+                const dayLabel = formatChartDay(day.date)
                 return (
                   <div
                     key={index}

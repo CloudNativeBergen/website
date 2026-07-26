@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { formatDate } from '@/lib/time'
 import clsx from 'clsx'
 import { ClockIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import type { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
@@ -385,7 +386,7 @@ export default function NextTalkDisplay({
         {!isToday && (
           <div className="flex items-center text-gray-600 dark:text-gray-400">
             <CalendarIcon className="mr-2 h-5 w-5" />
-            <span>{startDate.toLocaleDateString()}</span>
+            <span>{formatDate(scheduleDate)}</span>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDateSafe } from '@/lib/time'
 import {
   ShieldCheckIcon,
   ArrowDownTrayIcon,
@@ -57,14 +58,7 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
         {badges.map((badge) => {
           const badgeTypeName =
             badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
-          const issuedDate = new Date(badge.issuedAt).toLocaleDateString(
-            'en-US',
-            {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            },
-          )
+          const issuedDate = formatDateSafe(badge.issuedAt)
 
           return (
             <div

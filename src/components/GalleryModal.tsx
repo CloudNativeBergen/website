@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { formatDate } from '@/lib/time'
 import {
   Dialog,
   DialogPanel,
@@ -242,13 +243,7 @@ export function GalleryModal({
                               const date = new Date(currentImage.date)
                               if (!isNaN(date.getTime())) {
                                 return (
-                                  <span>
-                                    {date.toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                    })}
-                                  </span>
+                                  <span>{formatDate(currentImage.date)}</span>
                                 )
                               }
                               return null
