@@ -30,8 +30,8 @@ export function WorkshopCapacityWidget({
   // branch is CONDITIONED on the fetched data being empty (and post-conference
   // renders fetched totals), so the fetch must always run.
   const { data, loading, error, refetch } = useWidgetData<WorkshopStatistics>(
-    conference ? () => fetchWorkshopCapacity(conference._id) : null,
-    [conference],
+    conference ? () => fetchWorkshopCapacity() : null,
+    [conference?._id],
   )
 
   // Loading and error come FIRST — phase branches must not mask fetch

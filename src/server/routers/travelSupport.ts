@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure, protectedProcedure } from '../trpc'
 import {
-  GetTravelSupportSchema,
   GetTravelSupportByIdSchema,
   TravelSupportClientInputSchema,
   UpdateBankingDetailsSchema,
@@ -623,43 +622,44 @@ export const travelSupportRouter = router({
         }
       }),
 
-    list: adminProcedure
-      .input(GetTravelSupportSchema)
-      .query(async ({ input }) => {
-        try {
-          const { conference, error: confError } =
-            await getConferenceForCurrentDomain()
-          if (confError || !conference) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to get current conference',
-              cause: confError,
-            })
-          }
+    // No input: the conference is domain-resolved, and the old schema's
+    // speakerId/status fields were declared-but-never-used on main as well —
+    // an empty contract is honest; add real filters when the UI needs them.
+    list: adminProcedure.query(async () => {
+      try {
+        const { conference, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
 
-          const conferenceId = input.conferenceId || conference._id
-          const { travelSupports, error } =
-            await getAllTravelSupport(conferenceId)
+        const { travelSupports, error } = await getAllTravelSupport(
+          conference._id,
+        )
 
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to fetch travel support requests',
-              cause: error,
-            })
-          }
-
-          return travelSupports
-        } catch (error) {
-          if (error instanceof TRPCError) throw error
-
+        if (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch travel support requests',
             cause: error,
           })
         }
-      }),
+
+        return travelSupports
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch travel support requests',
+          cause: error,
+        })
+      }
+    }),
 
     updateStatus: adminProcedure
       .input(UpdateTravelSupportStatusSchema)

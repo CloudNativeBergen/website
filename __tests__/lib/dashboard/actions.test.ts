@@ -114,11 +114,19 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-// Conference resolution — the persistence actions never accept a client
-// conferenceId; they resolve it from the request domain like the tRPC routers.
+// Conference resolution — NO action in the module accepts a client
+// conference/conferenceId; they resolve it from the request domain like the
+// tRPC routers (resolveConferenceId for id-only actions,
+// getConferenceForCurrentDomain when conference fields are needed).
 const mockResolveConferenceId = vi.fn<AnyFn>()
 vi.mock('@/server/trpc', () => ({
   resolveConferenceId: (...args: unknown[]) => mockResolveConferenceId(...args),
+}))
+
+const mockGetConferenceForCurrentDomain = vi.fn<AnyFn>()
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: (...args: unknown[]) =>
+    mockGetConferenceForCurrentDomain(...args),
 }))
 
 // Time utilities
@@ -193,6 +201,15 @@ const baseConference: Conference = {
   topics: [],
 }
 
+/** Point the mocked domain resolution at a specific conference document. */
+function setDomainConference(conference: Conference) {
+  mockGetConferenceForCurrentDomain.mockImplementation(async () => ({
+    conference,
+    domain: 'test.dev',
+    error: null,
+  }))
+}
+
 function makeProposal(overrides: Record<string, unknown> = {}) {
   return {
     _id: `proposal-${Math.random().toString(36).slice(2)}`,
@@ -227,6 +244,7 @@ describe('Dashboard Server Actions', () => {
     mockClientWriteFetch.mockResolvedValue(null)
     mockCreateOrReplace.mockResolvedValue({ _id: 'personal-config' })
     mockResolveConferenceId.mockResolvedValue('conf-1')
+    setDomainConference(baseConference)
     mockGetAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
@@ -240,7 +258,7 @@ describe('Dashboard Server Actions', () => {
 
   describe('fetchDeadlines', () => {
     it('returns deadlines sorted by days remaining ascending', async () => {
-      const deadlines = await fetchDeadlines(baseConference)
+      const deadlines = await fetchDeadlines()
       const daysValues = deadlines.map((d) => d.daysRemaining)
       expect(daysValues).toEqual([...daysValues].sort((a, b) => a - b))
     })
@@ -253,7 +271,8 @@ describe('Dashboard Server Actions', () => {
         programDate: '2025-04-20', // 64 days → low
         startDate: '2025-06-01', // 106 days → low
       }
-      const deadlines = await fetchDeadlines(confSoon)
+      setDomainConference(confSoon)
+      const deadlines = await fetchDeadlines()
       const urgencyMap = Object.fromEntries(
         deadlines.map((d) => [d.name, d.urgency]),
       )
@@ -264,7 +283,7 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('excludes past deadlines (negative days remaining)', async () => {
-      const deadlines = await fetchDeadlines(baseConference)
+      const deadlines = await fetchDeadlines()
       for (const d of deadlines) {
         expect(d.daysRemaining).toBeGreaterThan(0)
       }
@@ -280,7 +299,8 @@ describe('Dashboard Server Actions', () => {
         startDate: '2024-06-01',
         endDate: '2024-06-02',
       }
-      const deadlines = await fetchDeadlines(pastConf)
+      setDomainConference(pastConf)
+      const deadlines = await fetchDeadlines()
       expect(deadlines).toHaveLength(0)
     })
   })
@@ -296,7 +316,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const health = await fetchCFPHealth(baseConference)
+      const health = await fetchCFPHealth()
       expect(health.totalSubmissions).toBe(2) // excludes draft
     })
 
@@ -313,7 +333,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const health = await fetchCFPHealth(baseConference)
+      const health = await fetchCFPHealth()
       expect(health.averagePerDay).toBe(1)
       expect(health.totalSubmissions).toBe(45)
     })
@@ -328,7 +348,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const health = await fetchCFPHealth(baseConference)
+      const health = await fetchCFPHealth()
       expect(health.formatDistribution).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ format: 'Presentation', count: 2 }),
@@ -343,7 +363,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const health = await fetchCFPHealth(baseConference)
+      const health = await fetchCFPHealth()
       expect(health.totalSubmissions).toBe(0)
       expect(health.averagePerDay).toBe(0)
       expect(health.formatDistribution).toHaveLength(0)
@@ -364,7 +384,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline('conf-1')
+      const pipeline = await fetchProposalPipeline()
 
       expect(pipeline.submitted).toBe(5) // non-draft total
       expect(pipeline.accepted).toBe(1)
@@ -399,7 +419,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline('conf-1')
+      const pipeline = await fetchProposalPipeline()
       expect(pipeline.distinctSpeakers).toBe(2) // Alice + Bob
     })
 
@@ -409,7 +429,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline('conf-1')
+      const pipeline = await fetchProposalPipeline()
       expect(pipeline.submitted).toBe(0)
       expect(pipeline.acceptanceRate).toBe(0)
     })
@@ -423,7 +443,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline('conf-1')
+      const pipeline = await fetchProposalPipeline()
       expect(pipeline.submitted).toBe(0)
       expect(pipeline.acceptanceRate).toBe(0)
     })
@@ -449,7 +469,7 @@ describe('Dashboard Server Actions', () => {
         reviewRow({ reviews: undefined }),
       ])
 
-      const progress = await fetchReviewProgress('conf-1')
+      const progress = await fetchReviewProgress()
       // 3 non-draft, 1 has reviews
       expect(progress.totalProposals).toBe(3)
       expect(progress.reviewedCount).toBe(1)
@@ -458,7 +478,7 @@ describe('Dashboard Server Actions', () => {
 
     it('requests only a trimmed projection without reviewer joins', async () => {
       mockClientReadFetch.mockResolvedValue([])
-      await fetchReviewProgress('conf-1')
+      await fetchReviewProgress()
 
       expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
       const [query] = mockClientReadFetch.mock.calls[0]
@@ -480,7 +500,7 @@ describe('Dashboard Server Actions', () => {
         }),
       ])
 
-      const progress = await fetchReviewProgress('conf-1')
+      const progress = await fetchReviewProgress()
       expect(progress.nextUnreviewed).toEqual({
         id: 'unreviewed-1',
         title: 'Needs Review',
@@ -494,7 +514,7 @@ describe('Dashboard Server Actions', () => {
         }),
       ])
 
-      const progress = await fetchReviewProgress('conf-1')
+      const progress = await fetchReviewProgress()
       expect(progress.nextUnreviewed).toBeUndefined()
     })
   })
@@ -532,7 +552,7 @@ describe('Dashboard Server Actions', () => {
         speakers: [{ _id: 'f1' }],
       })
 
-      const data = await fetchSpeakerEngagement('conf-1')
+      const data = await fetchSpeakerEngagement()
       expect(data.totalSpeakers).toBe(3)
       expect(data.diverseSpeakers).toBe(1) // Alice
       expect(data.localSpeakers).toBe(1) // Alice
@@ -549,7 +569,7 @@ describe('Dashboard Server Actions', () => {
       mockGetSpeakers.mockResolvedValue({ speakers: [], err: null })
       mockGetFeaturedSpeakers.mockResolvedValue({ speakers: [] })
 
-      const data = await fetchSpeakerEngagement('conf-1')
+      const data = await fetchSpeakerEngagement()
       expect(data.totalSpeakers).toBe(0)
       expect(data.averageProposalsPerSpeaker).toBe(0)
     })
@@ -591,7 +611,8 @@ describe('Dashboard Server Actions', () => {
         error: null,
       })
 
-      const data = await fetchTravelSupport(confWithBudget)
+      setDomainConference(confWithBudget)
+      const data = await fetchTravelSupport()
       expect(data.pendingApprovals).toBe(1) // submitted only
       expect(data.approvedCount).toBe(2) // approved + paid
       expect(data.totalRequested).toBe(16000) // 5000+8000+3000
@@ -608,7 +629,7 @@ describe('Dashboard Server Actions', () => {
         error: null,
       })
 
-      const data = await fetchTravelSupport(baseConference)
+      const data = await fetchTravelSupport()
       expect(data.budgetAllocated).toBe(0)
       expect(data.pendingApprovals).toBe(0)
       expect(data.averageRequest).toBe(0)
@@ -645,7 +666,7 @@ describe('Dashboard Server Actions', () => {
       }
       mockGetWorkshopStatistics.mockResolvedValue(mockStats)
 
-      const result = await fetchWorkshopCapacity('conf-1')
+      const result = await fetchWorkshopCapacity()
       expect(result).toEqual(mockStats)
       expect(mockGetWorkshopStatistics).toHaveBeenCalledWith('conf-1')
     })
@@ -671,7 +692,10 @@ describe('Dashboard Server Actions', () => {
         error: null,
       })
 
-      const data = await fetchSponsorPipelineData('conf-1', 500000)
+      // Revenue goal comes from the domain-resolved conference document,
+      // never from a client argument.
+      setDomainConference({ ...baseConference, sponsorRevenueGoal: 500000 })
+      const data = await fetchSponsorPipelineData()
 
       expect(data.stages).toHaveLength(4)
       expect(data.stages[0]).toMatchObject({
@@ -730,7 +754,14 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const data = await fetchScheduleStatus(confWithSchedule)
+      setDomainConference(confWithSchedule)
+      const data = await fetchScheduleStatus()
+      // The dereferenced schedules are fetched server-side, with every
+      // assigned slot counted regardless of talk status.
+      expect(mockGetConferenceForCurrentDomain).toHaveBeenCalledWith({
+        schedule: true,
+        confirmedTalksOnly: false,
+      })
       expect(data.totalSlots).toBe(4)
       expect(data.filledSlots).toBe(2)
       expect(data.placeholderSlots).toBe(1)
@@ -745,7 +776,7 @@ describe('Dashboard Server Actions', () => {
         proposalsError: null,
       })
 
-      const data = await fetchScheduleStatus(baseConference)
+      const data = await fetchScheduleStatus()
       expect(data.totalSlots).toBe(0)
       expect(data.filledSlots).toBe(0)
       expect(data.percentage).toBe(0)
@@ -780,7 +811,7 @@ describe('Dashboard Server Actions', () => {
         },
       ])
 
-      const items = await fetchRecentActivity('conf-1')
+      const items = await fetchRecentActivity()
       expect(items.length).toBeGreaterThanOrEqual(2)
       // Most recent first
       expect(items[0].type).toBe('proposal') // Feb 15
@@ -792,7 +823,7 @@ describe('Dashboard Server Actions', () => {
       mockListActivities.mockResolvedValue({ activities: [], error: null })
       mockClientReadFetch.mockResolvedValue([])
 
-      await fetchRecentActivity('conf-1')
+      await fetchRecentActivity()
 
       const [query] = mockClientReadFetch.mock.calls[0]
       expect(query).toContain('order(_createdAt desc)')
@@ -823,7 +854,7 @@ describe('Dashboard Server Actions', () => {
         })),
       )
 
-      const items = await fetchRecentActivity('conf-1')
+      const items = await fetchRecentActivity()
       expect(items.length).toBeLessThanOrEqual(15)
     })
   })
@@ -847,8 +878,14 @@ describe('Dashboard Server Actions', () => {
       })
     })
 
+    // The phase is computed SERVER-SIDE from the domain-resolved conference
+    // (the client no longer supplies a phase argument), so each case sets a
+    // conference fixture whose dates land in the desired phase relative to
+    // the fake system time (2025-02-15).
+
     it('returns phase-specific actions for planning phase', async () => {
-      const actions = await fetchQuickActions(baseConference, 'planning')
+      // CFP open (2025-01-01..2025-03-31) → planning
+      const actions = await fetchQuickActions()
       expect(actions.length).toBe(6)
       const labels = actions.map((a) => a.label)
       expect(labels).toContain('Review Proposals')
@@ -856,56 +893,72 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('returns phase-specific actions for execution phase', async () => {
-      const actions = await fetchQuickActions(baseConference, 'execution')
+      // Program published (2025-02-01), conference not over → execution
+      setDomainConference({ ...baseConference, programDate: '2025-02-01' })
+      const actions = await fetchQuickActions()
       const labels = actions.map((a) => a.label)
       expect(labels).toContain('Finalize Schedule')
       expect(labels).toContain('Ticket Sales')
     })
 
     it('includes badge counts from live data', async () => {
-      const actions = await fetchQuickActions(baseConference, 'planning')
+      const actions = await fetchQuickActions()
       const proposalAction = actions.find((a) => a.label === 'Review Proposals')
       expect(proposalAction?.badge).toBe(1) // 1 submitted
     })
 
-    it('falls back to planning actions for unknown phase', async () => {
-      const actions = await fetchQuickActions(baseConference, 'unknown-phase')
-      expect(actions.length).toBe(6) // planning has 6 actions
+    it('returns initialization actions before the CFP opens', async () => {
+      // CFP not yet open (starts 2025-03-01) → initialization
+      setDomainConference({
+        ...baseConference,
+        cfpStartDate: '2025-03-01',
+        cfpEndDate: '2025-04-30',
+      })
+      const actions = await fetchQuickActions()
+      expect(actions.length).toBe(6)
+      const labels = actions.map((a) => a.label)
+      expect(labels).toContain('Configure CFP')
     })
   })
 
   describe('fetchTicketSales', () => {
     it('returns unconfigured when conference lacks checkin IDs', async () => {
-      const result = await fetchTicketSales(baseConference)
+      const result = await fetchTicketSales()
       expect(result).toEqual({ status: 'unconfigured' })
+      expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
 
-    it('returns ok with ticket data when conference has checkin IDs', async () => {
+    it('queries Checkin with the DOMAIN conference ids only', async () => {
       const confWithTickets: Conference = {
         ...baseConference,
         checkinCustomerId: 123,
         checkinEventId: 456,
         ticketCapacity: 500,
       }
+      setDomainConference(confWithTickets)
 
-      const result = await fetchTicketSales(confWithTickets)
+      const result = await fetchTicketSales()
       expect(result.status).toBe('ok')
       if (result.status !== 'ok') throw new Error('expected ok result')
       expect(result.data.capacity).toBe(500)
       expect(result.data.milestones).toHaveLength(3)
       expect(result.data.milestones[0].name).toBe('Early Bird')
+      // The checkin customer/event ids come from the resolved conference —
+      // there is no client argument that could point the server's Checkin
+      // credentials at another account.
+      expect(mockFetchEventTickets).toHaveBeenCalledWith(123, 456)
     })
 
     it('returns error (not unconfigured) when the ticket API fails', async () => {
-      const confWithTickets: Conference = {
+      setDomainConference({
         ...baseConference,
         checkinCustomerId: 123,
         checkinEventId: 456,
-      }
+      })
       mockFetchEventTickets.mockRejectedValueOnce(new Error('API down'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      const result = await fetchTicketSales(confWithTickets)
+      const result = await fetchTicketSales()
       expect(result).toEqual({ status: 'error' })
       expect(consoleSpy).toHaveBeenCalled()
 

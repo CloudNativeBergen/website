@@ -33,8 +33,8 @@ export function ProposalPipelineWidget({
   config,
 }: ProposalPipelineWidgetProps) {
   const { data, loading, error, refetch } = useWidgetData<ProposalPipelineData>(
-    conference ? () => fetchProposalPipeline(conference._id) : null,
-    [conference],
+    conference ? () => fetchProposalPipeline() : null,
+    [conference?._id],
   )
   const phase = conference ? getCurrentPhase(conference) : null
 

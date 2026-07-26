@@ -39,8 +39,8 @@ export function TravelSupportQueueWidget({
   // budget, and post-conference renders fetched totals, so the fetch must
   // always run.
   const { data, loading, error, refetch } = useWidgetData<TravelSupportData>(
-    conference ? () => fetchTravelSupport(conference) : null,
-    [conference],
+    conference ? () => fetchTravelSupport() : null,
+    [conference?._id],
   )
 
   // Loading and error come FIRST — phase branches must not mask fetch

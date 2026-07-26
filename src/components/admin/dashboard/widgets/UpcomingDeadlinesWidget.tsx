@@ -60,8 +60,8 @@ export function UpcomingDeadlinesWidget({
     error,
     refetch,
   } = useWidgetData<DeadlineData[]>(
-    conference && !isStaticPhase ? () => fetchDeadlines(conference) : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchDeadlines() : null,
+    [conference?._id, isStaticPhase],
   )
 
   // Phase-specific: Initialization without deadlines - Show planning timeline

@@ -28,8 +28,8 @@ export function ScheduleBuilderStatusWidget({
   // fetching data the view won't use. Every other phase renders fetched data.
   const isStaticPhase = phase === 'initialization'
   const { data, loading, error, refetch } = useWidgetData<ScheduleStatusData>(
-    conference && !isStaticPhase ? () => fetchScheduleStatus(conference) : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchScheduleStatus() : null,
+    [conference?._id, isStaticPhase],
   )
 
   if (loading) {

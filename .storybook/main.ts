@@ -37,6 +37,24 @@ const config: StorybookConfig = {
         }
       },
     })
+    // The real dashboard fetchers take no arguments (the server resolves the
+    // conference from the request domain), so the mock registry keys on the
+    // conference _id each widget passes in its useWidgetData DEPS. This
+    // wrapper hook lifts that id into the mock's dispatch scope; it matches
+    // only the `@/`-prefixed id, and the wrapper imports the real hook via a
+    // relative path, so there is no resolution cycle.
+    config.plugins.push({
+      name: 'mock-use-widget-data',
+      enforce: 'pre',
+      resolveId(id) {
+        if (id === '@/hooks/dashboard/useWidgetData') {
+          return join(
+            __dirname,
+            '../src/components/admin/dashboard/widgets/__matrix__/mock-use-widget-data.ts',
+          )
+        }
+      },
+    })
     config.plugins.push({
       name: 'mock-cloud-native-pattern',
       enforce: 'pre',

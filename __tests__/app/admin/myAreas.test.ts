@@ -26,10 +26,18 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   getVolunteersByConference: (id: string) => getVolunteersByConference(id),
 }))
 
+// The action takes NO conferenceId from the client — it resolves it from the
+// request domain via the same helper the tRPC routers use.
+const resolveConferenceId = vi.fn()
+vi.mock('@/server/trpc', () => ({
+  resolveConferenceId: () => resolveConferenceId(),
+}))
+
 import { fetchMyAreasData } from '@/app/(admin)/admin/actions'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resolveConferenceId.mockResolvedValue('conf-1')
   getAuthSession.mockResolvedValue({
     speaker: { _id: 'org-1', isOrganizer: true },
   })
@@ -55,7 +63,7 @@ describe('fetchMyAreasData (L4 My areas)', () => {
     getConferenceTeams.mockResolvedValue([
       { key: 'cfp', title: 'Programme', members: ['someone-else'] },
     ])
-    const data = await fetchMyAreasData('conf-1')
+    const data = await fetchMyAreasData()
     expect(data.areas).toEqual([])
     // No area sources read when the viewer is on no team.
     expect(getConversationViewCounts).not.toHaveBeenCalled()
@@ -66,7 +74,7 @@ describe('fetchMyAreasData (L4 My areas)', () => {
     getConferenceTeams.mockResolvedValue([
       { key: 'cfp', title: 'Programme', members: ['org-1'] },
     ])
-    const data = await fetchMyAreasData('conf-1')
+    const data = await fetchMyAreasData()
     expect(data.areas).toHaveLength(1)
     const cfp = data.areas[0]
     expect(cfp.title).toBe('Programme')
@@ -92,7 +100,7 @@ describe('fetchMyAreasData (L4 My areas)', () => {
       { key: 'sponsors', title: 'Sales', members: ['org-1'] },
       { key: 'volunteers', title: 'Crew', members: ['org-1'] },
     ])
-    const data = await fetchMyAreasData('conf-1')
+    const data = await fetchMyAreasData()
 
     const sponsors = data.areas.find((a) => a.key === 'sponsors')
     expect(sponsors?.metrics[0]).toEqual({
@@ -118,7 +126,7 @@ describe('fetchMyAreasData (L4 My areas)', () => {
     getConferenceTeams.mockResolvedValue([
       { key: 'workshops', title: 'Workshops', members: ['org-1'] },
     ])
-    const data = await fetchMyAreasData('conf-1')
+    const data = await fetchMyAreasData()
     expect(data.areas).toEqual([
       { key: 'workshops', title: 'Workshops', metrics: [] },
     ])

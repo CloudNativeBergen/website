@@ -40,6 +40,11 @@ export const workshopSignupInputSchema = z.object({
  * is bound server-side to the authenticated WorkOS session, and confirmed-vs-
  * waitlist is decided by live capacity on the server. Removing these fields from
  * the client contract is what closes the identity-spoofing hole.
+ *
+ * It also carries NO `conference` reference: the conference is resolved
+ * server-side from the request domain, so a signup can never target (or bypass
+ * the registration window of) another tenant's conference. `manualSignup`
+ * omits the `conference` field of the admin schema above for the same reason.
  */
 export const workshopSignupClientInputSchema = z.object({
   experienceLevel: z.enum(['beginner', 'intermediate', 'advanced']),
@@ -47,10 +52,6 @@ export const workshopSignupClientInputSchema = z.object({
   workshop: z.object({
     _type: z.literal('reference'),
     _ref: z.string().min(1, 'Workshop reference is required'),
-  }),
-  conference: z.object({
-    _type: z.literal('reference'),
-    _ref: z.string().min(1, 'Conference reference is required'),
   }),
   notes: z.string().optional(),
 })

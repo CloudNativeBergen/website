@@ -34,10 +34,8 @@ export function ReviewProgressWidget({
   // fetched data and keep fetching.
   const isStaticPhase = phase === 'initialization'
   const { data, loading, error, refetch } = useWidgetData<ReviewProgressData>(
-    conference && !isStaticPhase
-      ? () => fetchReviewProgress(conference._id)
-      : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchReviewProgress() : null,
+    [conference?._id, isStaticPhase],
   )
 
   const showAverageScore = config?.showAverageScore ?? true

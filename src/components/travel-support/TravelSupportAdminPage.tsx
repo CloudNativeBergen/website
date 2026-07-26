@@ -34,7 +34,7 @@ export function TravelSupportAdminPage() {
     isLoading,
     error,
     refetch,
-  } = api.travelSupport.admin.list.useQuery({})
+  } = api.travelSupport.admin.list.useQuery()
 
   // Filter out draft requests - only show submitted, approved, rejected, or paid
   const requests = allRequests?.filter(

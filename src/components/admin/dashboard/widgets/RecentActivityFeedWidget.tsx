@@ -60,10 +60,8 @@ export function RecentActivityFeedWidget({
     error,
     refetch,
   } = useWidgetData<ActivityItem[]>(
-    conference && !isStaticPhase
-      ? () => fetchRecentActivity(conference._id)
-      : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchRecentActivity() : null,
+    [conference?._id, isStaticPhase],
   )
 
   // Phase-specific: Initialization - Show welcome message

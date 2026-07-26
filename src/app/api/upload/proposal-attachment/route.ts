@@ -89,13 +89,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
         const speakerId = req.auth?.speaker?._id
         const isOrganizer = req.auth?.speaker?.isOrganizer === true
 
-        console.log('Upload token request:', {
-          proposalId,
-          speakerId,
-          isOrganizer,
-          hasSpeaker: !!req.auth?.speaker,
-        })
-
         if (!speakerId) {
           throw new Error('Speaker ID not found in session')
         }
@@ -106,13 +99,11 @@ export const POST = auth(async (req: NextAuthRequest) => {
           isOrganizer,
         })
 
-        console.log('Proposal lookup result:', {
-          found: !!proposal,
-          hasError: !!proposalError,
-          error: proposalError?.message,
-        })
-
         if (proposalError || !proposal) {
+          // Minimal error-path log: no session/token payloads.
+          console.error(
+            'Upload token denied: proposal not found or access denied',
+          )
           throw new Error('Proposal not found or access denied')
         }
 

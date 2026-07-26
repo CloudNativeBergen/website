@@ -1,7 +1,8 @@
 'use server'
 
 import { Conference } from '@/lib/conference/types'
-import { getPhaseContext } from '@/lib/conference/phase'
+import { getPhaseContext, getCurrentPhase } from '@/lib/conference/phase'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { aggregateSponsorPipeline } from '@/lib/sponsor-crm/pipeline'
 import { listActivitiesForConference } from '@/lib/sponsor-crm/activities'
@@ -62,6 +63,32 @@ async function requireOrganizer(): Promise<void> {
   }
 }
 
+// --- Conference resolution ---
+//
+// NONE of the actions in this file accept a conference or conferenceId from
+// the client. The conference is always resolved server-side from the request
+// domain (`resolveConferenceId()` — the same helper the tRPC routers use — or
+// `resolveConference()` below when an action needs conference FIELDS such as
+// dates, checkin ids or budgets). Trusting a client-supplied conference here
+// would let any organizer read another tenant's data — or, worse for
+// fetchTicketSales, point the server's Checkin credentials at arbitrary
+// customer/event ids.
+
+/**
+ * Domain-resolved conference document for actions that need conference fields
+ * (dates, phase, checkin ids, budgets, schedules). Server-side counterpart of
+ * {@link resolveConferenceId} that returns the full document.
+ */
+async function resolveConference(
+  options: Parameters<typeof getConferenceForCurrentDomain>[0] = {},
+): Promise<Conference> {
+  const { conference, error } = await getConferenceForCurrentDomain(options)
+  if (error || !conference?._id) {
+    throw new Error('Could not resolve conference from request domain')
+  }
+  return conference
+}
+
 /**
  * Like {@link requireOrganizer} but also returns the caller's identity, for
  * actions that scope data to the CURRENT organizer (e.g. per-organizer
@@ -93,13 +120,13 @@ async function requireOrganizerSession(): Promise<{ speakerId: string }> {
  * A viewer on none of these well-known teams still gets a titled card (no
  * metrics). Returns `{ areas: [] }` when the viewer is on no team at all.
  */
-export async function fetchMyAreasData(
-  conferenceId: string,
-): Promise<MyAreasData> {
+export async function fetchMyAreasData(): Promise<MyAreasData> {
   await requireOrganizer()
   const session = await getAuthSession()
   const speakerId = session?.speaker?._id
   if (!speakerId) return { areas: [] }
+
+  const conferenceId = await resolveConferenceId()
 
   const teams = await getConferenceTeams(conferenceId)
   const myTeams = teams.filter((t) => t.members.includes(speakerId))
@@ -193,11 +220,12 @@ const STAGE_LABELS: Record<string, string> = {
   'closed-won': 'Closed Won',
 }
 
-export async function fetchSponsorPipelineData(
-  conferenceId: string,
-  revenueGoal: number,
-): Promise<SponsorPipelineWidgetData> {
+export async function fetchSponsorPipelineData(): Promise<SponsorPipelineWidgetData> {
   await requireOrganizer()
+
+  const conference = await resolveConference()
+  const conferenceId = conference._id
+  const revenueGoal = conference.sponsorRevenueGoal || 0
 
   const [sponsorResult, activityResult] = await Promise.all([
     listSponsorsForConference(conferenceId),
@@ -262,11 +290,10 @@ interface DeadlineCandidate {
   actionLink?: string
 }
 
-export async function fetchDeadlines(
-  conference: Conference,
-): Promise<DeadlineData[]> {
+export async function fetchDeadlines(): Promise<DeadlineData[]> {
   await requireOrganizer()
 
+  const conference = await resolveConference()
   const ctx = getPhaseContext(conference)
 
   const candidates: DeadlineCandidate[] = []
@@ -339,11 +366,10 @@ export async function fetchDeadlines(
 
 // --- CFP Health ---
 
-export async function fetchCFPHealth(
-  conference: Conference,
-): Promise<CFPHealthData> {
+export async function fetchCFPHealth(): Promise<CFPHealthData> {
   await requireOrganizer()
 
+  const conference = await resolveConference()
   const { proposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
     returnAll: true,
@@ -414,11 +440,10 @@ export async function fetchCFPHealth(
 
 // --- Speaker Engagement ---
 
-export async function fetchSpeakerEngagement(
-  conferenceId: string,
-): Promise<SpeakerEngagementData> {
+export async function fetchSpeakerEngagement(): Promise<SpeakerEngagementData> {
   await requireOrganizer()
 
+  const conferenceId = await resolveConferenceId()
   const [{ speakers: speakerList, err }, { speakers: featured }] =
     await Promise.all([
       getSpeakers(conferenceId, [
@@ -473,10 +498,13 @@ export async function fetchSpeakerEngagement(
 
 // --- Ticket Sales ---
 
-export async function fetchTicketSales(
-  conference: Conference,
-): Promise<TicketSalesResult> {
+export async function fetchTicketSales(): Promise<TicketSalesResult> {
   await requireOrganizer()
+
+  // The checkin customer/event ids come EXCLUSIVELY from the domain-resolved
+  // conference document: accepting them from the client would let any
+  // organizer point the server's Checkin credentials at arbitrary accounts.
+  const conference = await resolveConference()
 
   if (!conference.checkinCustomerId || !conference.checkinEventId) {
     return { status: 'unconfigured' }
@@ -606,11 +634,10 @@ interface RecentProposalRow {
   speakers?: { name?: string }[]
 }
 
-export async function fetchRecentActivity(
-  conferenceId: string,
-): Promise<ActivityItem[]> {
+export async function fetchRecentActivity(): Promise<ActivityItem[]> {
   await requireOrganizer()
 
+  const conferenceId = await resolveConferenceId()
   // Both sources are ordered + limited in GROQ — we never pull the full
   // proposal corpus just to slice the newest few afterwards.
   const [activityResult, recentProposals] = await Promise.all([
@@ -717,11 +744,13 @@ async function fetchQuickActionBadges(
   }
 }
 
-export async function fetchQuickActions(
-  conference: Conference,
-  phase: string,
-): Promise<QuickAction[]> {
+export async function fetchQuickActions(): Promise<QuickAction[]> {
   await requireOrganizer()
+
+  // Phase is computed server-side from the domain-resolved conference — the
+  // client neither picks the conference nor the phase's action set.
+  const conference = await resolveConference()
+  const phase = getCurrentPhase(conference)
 
   const badges = await fetchQuickActionBadges(conference._id)
 
@@ -914,11 +943,10 @@ export async function fetchQuickActions(
 
 // --- Proposal Pipeline ---
 
-export async function fetchProposalPipeline(
-  conferenceId: string,
-): Promise<ProposalPipelineData> {
+export async function fetchProposalPipeline(): Promise<ProposalPipelineData> {
   await requireOrganizer()
 
+  const conferenceId = await resolveConferenceId()
   const { proposals, proposalsError } = await getProposals({
     conferenceId,
     returnAll: true,
@@ -974,11 +1002,10 @@ interface ReviewProgressRow {
   }[]
 }
 
-export async function fetchReviewProgress(
-  conferenceId: string,
-): Promise<ReviewProgressData> {
+export async function fetchReviewProgress(): Promise<ReviewProgressData> {
   await requireOrganizer()
 
+  const conferenceId = await resolveConferenceId()
   // Trimmed projection: the math only needs status + review scores — no
   // speaker/reviewer joins, topics, or co-speaker invitations.
   const nonDraft = await clientRead.fetch<ReviewProgressRow[]>(
@@ -1020,11 +1047,10 @@ export async function fetchReviewProgress(
 
 // --- Travel Support ---
 
-export async function fetchTravelSupport(
-  conference: Conference,
-): Promise<TravelSupportData> {
+export async function fetchTravelSupport(): Promise<TravelSupportData> {
   await requireOrganizer()
 
+  const conference = await resolveConference()
   const { travelSupports, error } = await getAllTravelSupport(conference._id)
 
   if (error) {
@@ -1078,19 +1104,23 @@ export async function fetchTravelSupport(
 
 // --- Workshop Capacity ---
 
-export async function fetchWorkshopCapacity(
-  conferenceId: string,
-): Promise<WorkshopStatistics> {
+export async function fetchWorkshopCapacity(): Promise<WorkshopStatistics> {
   await requireOrganizer()
-  return getWorkshopStatistics(conferenceId)
+  return getWorkshopStatistics(await resolveConferenceId())
 }
 
 // --- Schedule Status ---
 
-export async function fetchScheduleStatus(
-  conference: Conference,
-): Promise<ScheduleStatusData> {
+export async function fetchScheduleStatus(): Promise<ScheduleStatusData> {
   await requireOrganizer()
+
+  // `schedule: true` dereferences schedules[] (tracks + slots); with
+  // `confirmedTalksOnly: false` every assigned slot counts toward fill,
+  // regardless of the talk's status — this is an admin progress view.
+  const conference = await resolveConference({
+    schedule: true,
+    confirmedTalksOnly: false,
+  })
 
   const schedules = conference.schedules || []
 

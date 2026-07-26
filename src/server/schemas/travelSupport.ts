@@ -11,7 +11,6 @@ import {
   UpdateExpenseStatusSchema,
   UpdateTravelSupportStatusSchema,
   SubmitTravelSupportSchema,
-  GetTravelSupportSchema,
   GetTravelSupportByIdSchema,
 } from '@/lib/travel-support/validation'
 
@@ -28,6 +27,5 @@ export {
   UpdateExpenseStatusSchema,
   UpdateTravelSupportStatusSchema,
   SubmitTravelSupportSchema,
-  GetTravelSupportSchema,
   GetTravelSupportByIdSchema,
 }

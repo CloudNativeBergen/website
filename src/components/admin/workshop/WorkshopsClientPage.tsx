@@ -283,10 +283,8 @@ export function WorkshopsClientPage({
         _type: 'reference',
         _ref: addParticipantModal.workshopId,
       },
-      conference: {
-        _type: 'reference',
-        _ref: conferenceId,
-      },
+      // No conference reference: the server resolves it from the request
+      // domain, so a signup can never target another tenant's conference.
     })
   }
 
