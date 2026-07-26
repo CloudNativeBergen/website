@@ -28,8 +28,10 @@ import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
 import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { ActivationChecklist } from '@/components/admin/ActivationChecklist'
 import { resolveHomepageSections } from '@/lib/homepage'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
+import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
   InfoCard,
   FieldRow,
@@ -109,6 +111,10 @@ export default async function AdminSettings() {
   const editUrl = studioEditUrl(conference._id)
   const visibility = resolveConferenceVisibility(conference)
   const systemChecks = await buildSystemChecks(conference)
+  // "Get started" activation checklist — derived purely from the conference and
+  // the checks we already built above (no extra probing). Rendered at the top of
+  // the Configuration tier; auto-collapses once everything required is done.
+  const activation = buildActivationChecklist(conference, systemChecks)
   const session = await getAuthSession()
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({
@@ -167,6 +173,10 @@ export default async function AdminSettings() {
           title="Conference configuration"
           description="Content managed in Sanity for this conference."
         />
+
+        {/* "Get started" — the onboarding checklist. Sits above the grouped
+            configuration cards and deep-links into them. */}
+        <ActivationChecklist checklist={activation} />
 
         <div className="space-y-10">
           {/* ---- Identity & Brand ---- */}
