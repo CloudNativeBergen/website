@@ -523,8 +523,13 @@ export default async function MarketingPage() {
                           sponsor={sponsor}
                           tier={tier}
                           variant={variant}
-                          eventName={conference.title || 'Cloud Native Days'}
+                          eventName={conference.title}
                           eventDate={eventDate}
+                          baseUrl={
+                            conference.domains?.[0]
+                              ? `https://${conference.domains[0]}`
+                              : undefined
+                          }
                           showCloudNativePattern={true}
                           className="h-full w-full"
                         />

@@ -1,5 +1,6 @@
 import type { Conference } from '@/lib/conference/types'
 import { createPublicKey } from 'crypto'
+import { resolveConferenceContact } from '@/lib/email/from'
 
 /**
  * Signing configuration for OpenBadges credentials
@@ -151,11 +152,7 @@ export async function createBadgeConfiguration(
   const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
 
   // Build issuer configuration
-  const issuerEmail =
-    conference.contactEmail ||
-    (conference.domains?.[0]
-      ? `contact@${conference.domains[0]}`
-      : 'contact@cloudnativedays.no')
+  const issuerEmail = resolveConferenceContact(conference)
 
   const issuerDescription =
     conference.description ||

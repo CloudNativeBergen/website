@@ -430,7 +430,7 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
   checks.push(
     plainCheck(
       { id: 'push.vapidSubject', group: 'push', label: 'VAPID_SUBJECT' },
-      process.env.VAPID_SUBJECT ?? 'mailto:hei@cloudnativedays.no',
+      process.env.VAPID_SUBJECT ?? 'not set',
       'warn',
     ),
   )

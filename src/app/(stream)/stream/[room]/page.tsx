@@ -7,7 +7,7 @@ import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLooping'
 import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper'
 import { StreamError } from '@/components/stream/StreamError'
-import { STREAM_CONFIG } from '@/lib/stream/config'
+import { STREAM_CONFIG, deriveBlueskyHandle } from '@/lib/stream/config'
 import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/schedule-utils'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
@@ -43,6 +43,8 @@ export default async function StreamRoomPage({ params }: Props) {
       />
     )
   }
+
+  const blueskyHandle = deriveBlueskyHandle(conference.socialLinks)
 
   const matchedTrack = findTrackByRoom(conference.schedules, room)
 
@@ -99,14 +101,16 @@ export default async function StreamRoomPage({ params }: Props) {
                   className={STREAM_CONFIG.nextTalk.className}
                 />
 
-                <BlueskyAuthorFeedLooping
-                  handle={STREAM_CONFIG.blueskyFeed.handle}
-                  compact={STREAM_CONFIG.blueskyFeed.compact}
-                  title={STREAM_CONFIG.blueskyFeed.title}
-                  speed={STREAM_CONFIG.blueskyFeed.speed}
-                  maxHeight={STREAM_CONFIG.blueskyFeed.maxHeight}
-                  className={STREAM_CONFIG.blueskyFeed.className}
-                />
+                {blueskyHandle && (
+                  <BlueskyAuthorFeedLooping
+                    handle={blueskyHandle}
+                    compact={STREAM_CONFIG.blueskyFeed.compact}
+                    title={STREAM_CONFIG.blueskyFeed.title}
+                    speed={STREAM_CONFIG.blueskyFeed.speed}
+                    maxHeight={STREAM_CONFIG.blueskyFeed.maxHeight}
+                    className={STREAM_CONFIG.blueskyFeed.className}
+                  />
+                )}
               </div>
             </div>
           </Container>

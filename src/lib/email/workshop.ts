@@ -5,6 +5,7 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
+import { resolveConferenceFrom, resolveConferenceContact } from './from'
 
 export interface WorkshopConfirmationEmailRequest {
   userEmail: string
@@ -35,14 +36,9 @@ export async function sendBasicWorkshopConfirmation({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference?.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference?.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference?.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
@@ -145,18 +141,13 @@ export async function sendWorkshopSignupInstructions({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const workshopUrl = conference.domains?.[0]
       ? `https://${conference.domains[0]}/workshop`
-      : 'https://cloudnativedays.org/workshop'
+      : ''
 
     const subject = `Workshop Signup Available - ${conference.title}`
 
@@ -295,14 +286,9 @@ export async function sendWorkshopAnnouncementEmail({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference?.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference?.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference?.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const subject = `Workshop Update: ${workshopTitle}`
     const safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>')

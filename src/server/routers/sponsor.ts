@@ -134,6 +134,7 @@ import {
   type SigningProviderType,
 } from '@/lib/contract-signing'
 import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveConferenceFrom } from '@/lib/email/from'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { sendIndividualEmail } from '@/lib/email/broadcast'
 import { syncSponsorAudience, type Contact } from '@/lib/email/audience'
@@ -2199,13 +2200,14 @@ export const sponsorRouter = router({
             if (!result) {
               console.error(`${logCtxFull} Contract email template not found`)
             } else {
-              const fromEmail =
-                sfc.conference.sponsorEmail || 'sponsors@cloudnativeday.no'
-              const fromName = sfc.conference.organizer || 'Cloud Native Days'
+              const from = resolveConferenceFrom(sfc.conference, {
+                field: 'sponsorEmail',
+                localPart: 'sponsors',
+              })
 
               await retryWithBackoff(async () => {
                 return resend.emails.send({
-                  from: `${fromName} <${fromEmail}>`,
+                  from,
                   to: [input.signerEmail!],
                   subject: result.subject,
                   react: result.react,

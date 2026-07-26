@@ -1,6 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { resolveConferenceContact } from '@/lib/email/from'
 import { ErrorDisplay } from '@/components/admin'
 import {
   DocumentTextIcon,
@@ -48,7 +49,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = conference.contactEmail || 'contact@cloudnativedays.no'
+  const contactEmail = resolveConferenceContact(conference)
   const organizationName = conference.organizer || 'Cloud Native Days'
 
   return (

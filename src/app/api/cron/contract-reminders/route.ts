@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import { resend, retryWithBackoff } from '@/lib/email/config'
+import { platformFallbackContact } from '@/lib/email/from'
 import { unstable_noStore as noStore } from 'next/cache'
 
 const MAX_REMINDERS = 2
@@ -77,10 +78,10 @@ export async function GET(request: NextRequest) {
 
         const newCount = (contract.reminderCount || 0) + 1
 
+        const eventName = contract.conferenceName || 'the conference'
         const fromEmail =
-          contract.conferenceSponsorEmail || 'sponsors@cloudnativeday.no'
-        const fromName = contract.conferenceOrganizer || 'Cloud Native Days'
-        const eventName = contract.conferenceName || 'Cloud Native Day'
+          contract.conferenceSponsorEmail || platformFallbackContact()
+        const fromName = contract.conferenceOrganizer || eventName
 
         const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
           await import('@/lib/email/contract-email')

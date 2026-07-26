@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { resolveConferenceContact } from '@/lib/email/from'
 import { generateErrorResponse, seedToMultikey } from '@/lib/openbadges'
 
 export async function GET(request: Request) {
@@ -111,11 +112,7 @@ export async function GET(request: Request) {
       type: ['Profile'],
       name: conference.organizer,
       url: baseUrl,
-      email:
-        conference.contactEmail ||
-        (conference.domains?.[0]
-          ? `contact@${conference.domains[0]}`
-          : 'contact@cloudnativedays.no'),
+      email: resolveConferenceContact(conference),
       description: conference.description || conference.tagline || '',
       image: {
         id: `${baseUrl}/og/base.png`,

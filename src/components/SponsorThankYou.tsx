@@ -41,6 +41,9 @@ interface SponsorThankYouProps {
   eventDate?: string
   showCloudNativePattern?: boolean
   ctaUrl?: string
+  /** Conference origin (e.g. `https://2026.example.dev`) used to absolutize a
+   * relative `ctaUrl` for the QR code. Falls back to `NEXT_PUBLIC_BASE_URL`. */
+  baseUrl?: string
 }
 
 interface VariantConfig {
@@ -106,10 +109,18 @@ const variantConfig: Record<SponsorVariant, VariantConfig> = {
   },
 }
 
-async function generateQRCode(url: string, size = 256): Promise<string> {
-  const fullUrl = url.startsWith('http')
-    ? url
-    : `https://cloudnativedays.no${url}`
+async function generateQRCode(
+  url: string,
+  size = 256,
+  baseUrl?: string,
+): Promise<string> {
+  // For a relative CTA, prefix the conference's own origin (passed in) or the
+  // platform base URL — never a hardcoded brand host.
+  const origin = (baseUrl || process.env.NEXT_PUBLIC_BASE_URL || '').replace(
+    /\/$/,
+    '',
+  )
+  const fullUrl = url.startsWith('http') ? url : `${origin}${url}`
   const cacheKey = `${fullUrl}_${size}`
 
   if (qrCodeCache.has(cacheKey)) {
@@ -209,11 +220,12 @@ export async function SponsorThankYou({
   eventDate,
   showCloudNativePattern = false,
   ctaUrl,
+  baseUrl,
 }: SponsorThankYouProps) {
   const config = variantConfig[variant]
   const Icon = config.icon
   const finalCtaUrl = ctaUrl || '/'
-  const qrCodeUrl = await generateQRCode(finalCtaUrl, 512)
+  const qrCodeUrl = await generateQRCode(finalCtaUrl, 512, baseUrl)
   const backgroundStyle = showCloudNativePattern
     ? 'from-slate-900 via-blue-900 to-slate-900'
     : config.gradient

@@ -22,13 +22,18 @@ export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
   const isPast = isConferenceOver(c)
 
-  const currentDomain = c.domains?.[0] ?? 'cloudnativedays.no'
-  const currentYear = parseInt(currentDomain.split('.')[0])
+  // The previous-edition link is derived from THIS conference's own domain
+  // (`<year>.<host>`), decrementing the year on the same host — never a
+  // hardcoded brand. When the domain has no leading `<year>.` label the link is
+  // underivable and omitted entirely.
+  const currentDomain = c.domains?.[0]
+  const [firstLabel, ...restLabels] = currentDomain?.split('.') ?? []
+  const currentYear = firstLabel ? parseInt(firstLabel, 10) : NaN
   const previousYear = currentYear - 1
   const previousDomain =
-    currentYear <= 2026
-      ? `${previousYear}.cloudnativebergen.dev`
-      : `${previousYear}.cloudnativedays.no`
+    Number.isFinite(currentYear) && restLabels.length > 0
+      ? `${previousYear}.${restLabels.join('.')}`
+      : null
 
   return (
     <header className="relative z-50 flex-none lg:pt-11">
@@ -95,13 +100,17 @@ export function Header({ c }: { c: Conference }) {
                 Past Event
               </span>
             )}
-            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-            <a
-              href={`https://${previousDomain}`}
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              {previousYear} Conference
-            </a>
+            {previousDomain && (
+              <>
+                <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+                <a
+                  href={`https://${previousDomain}`}
+                  className="text-brand-cloud-blue hover:text-brand-slate-gray"
+                >
+                  {previousYear} Conference
+                </a>
+              </>
+            )}
           </div>
         </div>
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
