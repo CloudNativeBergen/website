@@ -86,7 +86,28 @@ export function scopedQuery(scope: Scope, groqBody: string): string {
     )
   }
   const insertAt = idx + 2 // just past the `*[`
-  return `${groqBody.slice(0, insertAt)}${predicate} && ${groqBody.slice(insertAt)}`
+
+  // Parenthesize the EXISTING root filter before AND-ing the scope predicate:
+  // `pred && a || b` would parse as `(pred && a) || b` — a scope BYPASS for the
+  // `|| b` arm. Find the root filter's matching `]` by depth-counting.
+  let depth = 1
+  let close = -1
+  for (let i = insertAt; i < groqBody.length; i++) {
+    const ch = groqBody[i]
+    if (ch === '[') depth++
+    else if (ch === ']') {
+      depth--
+      if (depth === 0) {
+        close = i
+        break
+      }
+    }
+  }
+  if (close === -1) {
+    throw new Error('scopedQuery: unbalanced brackets in groqBody root filter')
+  }
+  const existing = groqBody.slice(insertAt, close)
+  return `${groqBody.slice(0, insertAt)}${predicate} && (${existing})${groqBody.slice(close)}`
 }
 
 /** Structural client shape — anything with the read `fetch` signature. */

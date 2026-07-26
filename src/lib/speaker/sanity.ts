@@ -802,8 +802,13 @@ export async function getSpeakers(
     // surface degrades to prior behaviour rather than showing nothing.
     const orgFilter = orgId ? `&& ${SPEAKER_ORG_FILTER}` : ''
 
+    // Crossing conferences must still stay INSIDE the org: without this, an
+    // org-scoped speaker list would expose a shared speaker's proposals from
+    // ANOTHER organization's conferences.
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
-      ? ''
+      ? orgId
+        ? '&& conference->organization._ref == $orgId'
+        : ''
       : conferenceFilter
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {

@@ -151,7 +151,7 @@ time). For each unscoped query:
 5. **If the query is genuinely global,** annotate `// groq-global: <reason>`
    instead of scoping.
 6. **Track progress** by watching the warn count fall:
-   `pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`.
+   `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`.
 
 ### Migrated exemplars (the pattern)
 

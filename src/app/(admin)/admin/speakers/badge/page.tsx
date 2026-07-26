@@ -38,8 +38,12 @@ export default async function AdminBadgePage() {
     console.error('Failed to get speakers:', speakersErr)
   }
 
-  // Also get organizers (who may not have talks)
-  const { speakers: organizers, err: organizersErr } = await getOrganizers()
+  // Also get organizers (who may not have talks) — scoped to the current
+  // conference's organization so a multi-tenant dataset never surfaces another
+  // org's organizers on this page (falls back to global pre-backfill).
+  const { speakers: organizers, err: organizersErr } = await getOrganizers(
+    conference.organization?._ref ?? null,
+  )
   if (organizersErr) {
     console.warn('Could not get organizers:', organizersErr)
   }

@@ -48,21 +48,28 @@ describe('scopedQuery', () => {
   it('prepends the predicate immediately after the root `*[`', () => {
     const body = `*[_type == "notification" && recipient._ref == $speakerId] | order(createdAt desc) [0...20] { _id }`
     expect(scopedQuery({ conferenceId: 'c1' }, body)).toBe(
-      `*[conference._ref == $conferenceId && _type == "notification" && recipient._ref == $speakerId] | order(createdAt desc) [0...20] { _id }`,
+      `*[conference._ref == $conferenceId && (_type == "notification" && recipient._ref == $speakerId)] | order(createdAt desc) [0...20] { _id }`,
     )
   })
 
   it('scopes a count() query by injecting into its inner filter', () => {
     const body = `count(*[_type == "notification" && !defined(readAt)])`
     expect(scopedQuery({ conferenceId: 'c1' }, body)).toBe(
-      `count(*[conference._ref == $conferenceId && _type == "notification" && !defined(readAt)])`,
+      `count(*[conference._ref == $conferenceId && (_type == "notification" && !defined(readAt))])`,
     )
   })
 
   it('composes both dimensions in front of the body', () => {
     const body = `*[_type == "talk"]._id`
     expect(scopedQuery({ conferenceId: 'c1', orgId: 'o1' }, body)).toBe(
-      `*[conference._ref == $conferenceId && organization._ref == $orgId && _type == "talk"]._id`,
+      `*[conference._ref == $conferenceId && organization._ref == $orgId && (_type == "talk")]._id`,
+    )
+  })
+
+  it('parenthesizes an existing top-level || so the scope cannot be bypassed', () => {
+    const body = `*[_type == "talk" || _type == "workshop"]._id`
+    expect(scopedQuery({ conferenceId: 'c1' }, body)).toBe(
+      `*[conference._ref == $conferenceId && (_type == "talk" || _type == "workshop")]._id`,
     )
   })
 
@@ -89,7 +96,7 @@ describe('scopedFetch', () => {
     )
     expect(result).toBe(3)
     expect(fetch).toHaveBeenCalledWith(
-      `count(*[conference._ref == $conferenceId && _type == "notification" && recipient._ref == $speakerId])`,
+      `count(*[conference._ref == $conferenceId && (_type == "notification" && recipient._ref == $speakerId)])`,
       { speakerId: 's1', conferenceId: 'c1' },
       undefined,
     )
