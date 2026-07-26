@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { formatChartDateShort } from '@/lib/time'
 import { useMemo } from 'react'
 import { useTheme } from 'next-themes'
 import type { ApexOptions } from 'apexcharts'
@@ -85,12 +86,7 @@ export function TicketSalesDashboardWidget({
       xaxis: {
         ...baseOptions.xaxis,
         categories:
-          data?.salesByDate.map((d) =>
-            new Date(d.date).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            }),
-          ) || [],
+          data?.salesByDate.map((d) => formatChartDateShort(d.date)) || [],
       },
       colors: [themeColors.primary, themeColors.gray[300]],
       stroke: {

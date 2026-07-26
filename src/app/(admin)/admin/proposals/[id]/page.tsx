@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposalSanity } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -68,9 +69,7 @@ export default async function ProposalDetailPage({
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                     <ClockIcon className="mr-1 h-4 w-4" />
                     <span className="hidden sm:inline">Last updated: </span>
-                    {new Date(
-                      proposal._updatedAt || proposal._createdAt,
-                    ).toLocaleDateString()}
+                    {formatDate(proposal._updatedAt || proposal._createdAt)}
                   </div>
                 </div>
               </div>

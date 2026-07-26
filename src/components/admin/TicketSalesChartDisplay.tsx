@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
+import { formatChartDateShort } from '@/lib/time'
 import dynamic from 'next/dynamic'
 import type {
   TicketAnalysisResult,
@@ -72,13 +73,7 @@ interface ChartProps {
   freeTicketAllocation?: FreeTicketAllocation
 }
 
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
-}
+const formatDate = (dateStr: string): string => formatChartDateShort(dateStr)
 
 const getStatusColors = (variance: number): string => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {

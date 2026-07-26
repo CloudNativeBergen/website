@@ -2,7 +2,7 @@ import {
   processTemplateVariables,
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
-import { formatDate, getCurrentDateTime } from '@/lib/time'
+import { formatDateLocalized, getCurrentDateTime } from '@/lib/time'
 import { formatOrgNumber, formatCurrency } from '@/lib/format'
 
 export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
@@ -71,10 +71,16 @@ export interface ContractVariableContext {
 export function buildContractVariables(
   ctx: ContractVariableContext,
 ): Record<string, string> {
+  // Legal contract dates follow the contract's own language so the document is
+  // internally consistent (an English contract gets English dates, a Norwegian
+  // one gets Norwegian). Language defaults to Norwegian, matching the VAT
+  // suffix default below.
+  const dateLocale = ctx.language === 'en' ? 'en-GB' : 'nb-NO'
+
   const vars: Record<string, string> = {
     SPONSOR_NAME: ctx.sponsor.name,
     CONFERENCE_TITLE: ctx.conference.title,
-    TODAY_DATE: formatDate(getCurrentDateTime()),
+    TODAY_DATE: formatDateLocalized(getCurrentDateTime(), dateLocale),
   }
 
   if (ctx.sponsor.orgNumber) {
@@ -114,16 +120,20 @@ export function buildContractVariables(
   }
 
   if (ctx.conference.startDate) {
-    vars.CONFERENCE_DATE = formatDate(ctx.conference.startDate)
-    vars.CONFERENCE_YEAR = ctx.conference.startDate.slice(0, 4)
+    const startDate = ctx.conference.startDate
+    vars.CONFERENCE_DATE = formatDateLocalized(startDate, dateLocale)
+    vars.CONFERENCE_YEAR = startDate.slice(0, 4)
 
     if (ctx.conference.endDate) {
-      const start = new Date(ctx.conference.startDate)
-      const end = new Date(ctx.conference.endDate)
-      if (start.getMonth() === end.getMonth()) {
-        vars.CONFERENCE_DATES = `${start.getDate()}\u2013${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+      const endDate = ctx.conference.endDate
+      const sameMonth = startDate.slice(0, 7) === endDate.slice(0, 7)
+      if (sameMonth) {
+        // Collapse to a compact range, e.g. "10.\u201311. juni 2026" / "10\u201311 June 2026"
+        const startDay = Number(startDate.slice(8, 10))
+        const daySuffix = dateLocale === 'nb-NO' ? '.' : ''
+        vars.CONFERENCE_DATES = `${startDay}${daySuffix}\u2013${formatDateLocalized(endDate, dateLocale)}`
       } else {
-        vars.CONFERENCE_DATES = `${formatDate(ctx.conference.startDate)} \u2013 ${formatDate(ctx.conference.endDate)}`
+        vars.CONFERENCE_DATES = `${formatDateLocalized(startDate, dateLocale)} \u2013 ${formatDateLocalized(endDate, dateLocale)}`
       }
     } else {
       vars.CONFERENCE_DATES = vars.CONFERENCE_DATE

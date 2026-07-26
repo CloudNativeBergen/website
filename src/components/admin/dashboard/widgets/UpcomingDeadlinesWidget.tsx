@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { formatChartDateShort } from '@/lib/time'
 import { CheckCircleIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import { fetchDeadlines } from '@/app/(admin)/admin/actions'
 import { type DeadlineData } from '@/lib/dashboard/data-types'
@@ -148,10 +149,7 @@ export function UpcomingDeadlinesWidget({
                   </span>
                   <span className="text-[10px] opacity-60">&middot;</span>
                   <span className="text-[10px] opacity-75">
-                    {new Date(deadline.date).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    {formatChartDateShort(deadline.date)}
                   </span>
                   {deadline.action && deadline.actionLink && (
                     <Link

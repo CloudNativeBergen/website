@@ -1,3 +1,4 @@
+import { formatDateSafe } from '@/lib/time'
 import { checkinQuery } from './graphql-client'
 import { cacheLife, cacheTag } from 'next/cache'
 
@@ -351,12 +352,7 @@ export function buildPricingMatrix(tickets: PublicTicketType[]): {
 }
 
 function formatShortDate(isoDate: string): string {
-  const date = new Date(isoDate)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatDateSafe(isoDate)
 }
 
 /**

@@ -1,3 +1,4 @@
+import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
 import type {
   TicketAnalysisResult,
   ChartData,
@@ -203,8 +204,7 @@ export function createTooltipContent(
   actualTicketCount: number,
   revenue: number,
 ): string {
-  const date = new Date(point.date)
-  const formattedDate = date.toLocaleDateString('en-US', {
+  const formattedDate = formatConferenceDate(point.date, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -212,9 +212,13 @@ export function createTooltipContent(
   })
 
   const badges: string[] = []
-  const today = new Date()
-  const isToday = date.toDateString() === today.toDateString()
-  const isFuture = date > today
+  // Compare calendar days in the CONFERENCE timezone: point.date is a bare
+  // YYYY-MM-DD, and the displayed date above is Oslo-anchored — comparing via
+  // the viewer's local toDateString() would flip Today/Future near midnight
+  // for viewers outside Oslo. Lexicographic compare works on YYYY-MM-DD.
+  const osloToday = osloTodayDateString()
+  const isToday = point.date === osloToday
+  const isFuture = point.date > osloToday
 
   if (isToday) {
     badges.push(

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { formatDate } from '@/lib/time'
 import {
   router,
   publicProcedure,
@@ -459,7 +460,7 @@ export const workshopRouter = router({
         ) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `Workshop registration opens on ${new Date(conference.workshopRegistrationStart).toLocaleDateString()}`,
+            message: `Workshop registration opens on ${formatDate(conference.workshopRegistrationStart)}`,
           })
         }
 

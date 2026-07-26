@@ -214,10 +214,10 @@ describe('buildPricingMatrix', () => {
 
     const { tiers } = buildPricingMatrix(tickets)
 
-    expect(tiers[0].dateRange).toContain('Jan')
-    expect(tiers[0].dateRange).toContain('Jun')
-    expect(tiers[1].dateRange).toContain('Jun')
-    expect(tiers[1].dateRange).toContain('Oct')
+    expect(tiers[0].dateRange).toContain('jan.')
+    expect(tiers[0].dateRange).toContain('juni')
+    expect(tiers[1].dateRange).toContain('juni')
+    expect(tiers[1].dateRange).toContain('okt.')
   })
 
   it('should handle colon in category name (split on first colon only)', () => {

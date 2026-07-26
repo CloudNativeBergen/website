@@ -113,25 +113,30 @@ describe('contract-variables', () => {
       expect(vars.CONTRACT_VALUE_NUMBER).toBe('10000')
     })
 
-    it('should build conference date variables', () => {
+    it('should build conference date variables in Norwegian by default', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
-      expect(vars.CONFERENCE_DATE).toContain('10')
-      expect(vars.CONFERENCE_DATE).toContain('June')
-      expect(vars.CONFERENCE_DATE).toContain('2026')
+      // Dates follow the contract language, defaulting to Norwegian: "10. juni 2026"
+      expect(vars.CONFERENCE_DATE).toBe('10. juni 2026')
       expect(vars.CONFERENCE_YEAR).toBe('2026')
+    })
+
+    it('should build conference date variables in English when language is en', () => {
+      const ctx = createBasicContext()
+      ctx.language = 'en'
+      const vars = buildContractVariables(ctx)
+
+      expect(vars.CONFERENCE_DATE).toBe('10 June 2026')
+      expect(vars.CONFERENCE_DATES).toBe('10–11 June 2026')
     })
 
     it('should build date range for multi-day conference in same month', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
-      // 10–11 June 2026
-      expect(vars.CONFERENCE_DATES).toContain('10')
-      expect(vars.CONFERENCE_DATES).toContain('11')
-      expect(vars.CONFERENCE_DATES).toContain('June')
-      expect(vars.CONFERENCE_DATES).toContain('2026')
+      // 10.–11. juni 2026 (Norwegian default)
+      expect(vars.CONFERENCE_DATES).toBe('10.–11. juni 2026')
     })
 
     it('should build date range for conference spanning multiple months', () => {
@@ -141,8 +146,9 @@ describe('contract-variables', () => {
 
       const vars = buildContractVariables(ctx)
 
-      expect(vars.CONFERENCE_DATES).toContain('May')
-      expect(vars.CONFERENCE_DATES).toContain('June')
+      // 31. mai – 1. juni 2026 (Norwegian default)
+      expect(vars.CONFERENCE_DATES).toContain('mai')
+      expect(vars.CONFERENCE_DATES).toContain('juni')
     })
 
     it('should handle single-day conference', () => {
@@ -269,9 +275,18 @@ describe('contract-variables', () => {
       const ctx = createBasicContext()
       const vars = buildContractVariables(ctx)
 
-      // Should be in format "11 February 2026"
-      const dateRegex = /^\d{1,2} [A-Z][a-z]+ \d{4}$/
+      // Norwegian default, e.g. "11. februar 2026"
+      const dateRegex = /^\d{1,2}\. [a-zæøå]+ \d{4}$/
       expect(vars.TODAY_DATE).toMatch(dateRegex)
+    })
+
+    it('should format today date in English when language is en', () => {
+      const ctx = createBasicContext()
+      ctx.language = 'en'
+      const vars = buildContractVariables(ctx)
+
+      // e.g. "11 February 2026"
+      expect(vars.TODAY_DATE).toMatch(/^\d{1,2} [A-Z][a-z]+ \d{4}$/)
     })
   })
 

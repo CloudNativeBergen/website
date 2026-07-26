@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDate } from '@/lib/time'
 import { DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import {
   ExpenseCategory,
@@ -491,7 +492,7 @@ export function ExpenseForm({
                           📎 {receipt.filename}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {new Date(receipt.uploadedAt).toLocaleDateString()}
+                          {formatDate(receipt.uploadedAt)}
                         </span>
                       </div>
                     ))}

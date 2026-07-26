@@ -400,8 +400,8 @@ describe('organizer signature embedding', () => {
 
   it('includes date text in the PDF', async () => {
     const texts = await findTextDraws(new Uint8Array(signedPdf))
-    // formatDate uses en-GB long format: "15 February 2025"
-    const dateText = texts.find((t) => /\d{1,2}\s+\w+\s+\d{4}/.test(t.text))
+    // formatDate uses nb-NO long format: "15. februar 2025"
+    const dateText = texts.find((t) => /\d{1,2}\.\s+\w+\s+\d{4}/.test(t.text))
     expect(dateText).toBeDefined()
   })
 })

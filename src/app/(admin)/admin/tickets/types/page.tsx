@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatDateTimeSafe } from '@/lib/time'
 import {
   fetchTicketTypesFromCheckin,
   getTicketSaleStatus,
@@ -33,13 +34,7 @@ function StatusBadge({
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTimeSafe(dateStr)
 }
 
 export default async function TicketTypesAdminPage() {
