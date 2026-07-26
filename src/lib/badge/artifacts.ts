@@ -27,9 +27,13 @@ export function deriveBadgeConferenceFields(conference: {
   startDate?: string
 }): { conferenceYear: string; conferenceDate: string } {
   return {
+    // Year straight from the date string when it's ISO-shaped: bare
+    // YYYY-MM-DD parses as UTC midnight, and getFullYear() reads the LOCAL
+    // zone — off by one west of UTC on Jan 1. getUTCFullYear as the fallback.
     conferenceYear: conference.startDate
-      ? new Date(conference.startDate).getFullYear().toString()
-      : new Date().getFullYear().toString(),
+      ? (/^\d{4}/.exec(conference.startDate)?.[0] ??
+        new Date(conference.startDate).getUTCFullYear().toString())
+      : new Date().getUTCFullYear().toString(),
     conferenceDate: conference.startDate
       ? formatConferenceDateForBadge(conference.startDate)
       : 'TBD',

@@ -76,6 +76,7 @@ export default defineType({
       name: 'centerGraphicSvg',
       title: 'Center Graphic SVG (issuance input)',
       type: 'text',
+      readOnly: true,
       description:
         'The optional custom center graphic supplied at issuance, stored so an ' +
         'in-place rebake can reproduce the visual identity. Absent for badges ' +
