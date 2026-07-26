@@ -136,3 +136,41 @@ dry run before applying with `--no-dry-run --no-confirm`.
 - **Wave 3 (#616) — query scoping.** Application GROQ projections start
   filtering by `organization`, so a request only ever sees its own tenant's
   documents.
+
+## Org-scoped authorization (CaaS T1-2, #614)
+
+With the tenant key on every conference and speaker, **authorization** becomes
+org-scoped rather than a single global boolean.
+
+- **Before.** `isOrganizer` was one global flag: membership in **any**
+  conference's `organizers[]`, baked into the session token and checked by the
+  tRPC `requireAdmin` waist and ~13 handler/layout gates.
+- **Now.** A user is an organizer **of an organization** iff they are in the
+  `organizers[]` of any of **that org's** conferences — derivable, so no new
+  schema. Login computes `speaker.organizerOrgIds` (the deduped set of
+  `organization._ref`s of the conferences whose `organizers[]` contain the
+  speaker) and stores it in the token. The request's org comes from the
+  **domain-resolved conference** (`conference.organization._ref`), never from
+  client input, and access requires that org id to be in `organizerOrgIds`.
+
+The old `isOrganizer` boolean is **kept in the token, marked deprecated**, purely
+as a **legacy bridge**: the middleware and gates fall back to it (with a
+`console.warn('[authz-bridge] …')`) **only** when the request's org cannot be
+resolved (a pre-`044`-backfill conference, or an unknown domain). Because the
+`044` backfill has run, this bridge is rarely exercised in production; it exists
+so any residual org-less data or an old token cannot lock organizers out during
+rollout.
+
+**Removal condition** (shared with `src/lib/authz/organizer.ts` and
+`docs/TRPC_SERVER_ARCHITECTURE.md`): once every live conference has an
+`organization` and every issued token carries `organizerOrgIds`, delete the
+bridge so an unresolvable org **denies**, and drop the deprecated `isOrganizer`
+field and its remaining UI reads.
+
+Key modules: `src/lib/authz/organizer.ts` (the shared `isOrganizerForOrg` /
+`isOrganizerForCurrentOrg` helpers + bridge), `src/server/trpc.ts`
+(`requireAdmin` waist + `resolveOrganizationId`), `src/lib/speaker/sanity.ts`
+(`ORGANIZER_ORG_IDS_FIELD` projection). Recipient-selection helpers
+(`getOrganizerSpeakerIds`, `getOrganizers`) are **org-scoped too** — they select
+message recipients, not access, but must agree with this boundary so a cross-org
+organizer is neither notified about nor able to own another tenant's threads.

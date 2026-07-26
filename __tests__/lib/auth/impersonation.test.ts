@@ -23,6 +23,16 @@ const h = vi.hoisted(() => ({
   env: { isTestMode: false, isDevelopment: true, isProduction: false },
   mockAuth: vi.fn(),
   mockGetSpeaker: vi.fn(),
+  // The current-domain org resolver, consumed by the org-scoped impersonation
+  // gate (CaaS T1-2, #614) via `@/lib/authz/organizer`. Defaults per-test.
+  mockResolveOrg: vi.fn<() => Promise<string | null>>(),
+}))
+
+// The impersonation gate is now ORG-SCOPED: the real admin must be an organizer
+// of the CURRENT domain's org. `isOrganizerForCurrentOrg` resolves that org via
+// this module, so control it here.
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationRefForCurrentConference: h.mockResolveOrg,
 }))
 
 // Control what `_auth()` resolves to (the browser cookie session).
@@ -62,6 +72,8 @@ import { getAuthSession } from '@/lib/auth'
 const ADMIN_ID = 'org-admin-1'
 const TARGET_SPEAKER_ID = 'speaker-2'
 const OTHER_ORGANIZER_ID = 'org-admin-2'
+const CURRENT_ORG_ID = 'org-current'
+const OTHER_ORG_ID = 'org-other'
 
 function organizerSession(): Session {
   return {
@@ -76,6 +88,9 @@ function organizerSession(): Session {
       _id: ADMIN_ID,
       email: 'admin@cloudnativedays.no',
       isOrganizer: true,
+      // Organizer of the current org (CURRENT_ORG_ID) — the org-scoped gate keys
+      // on this, not on the deprecated global flag.
+      organizerOrgIds: [CURRENT_ORG_ID],
     },
     account: { provider: 'github', providerAccountId: '1', type: 'oauth' },
   } as unknown as Session
@@ -83,8 +98,10 @@ function organizerSession(): Session {
 
 function nonOrganizerSession(): Session {
   const s = organizerSession()
-  ;(s.speaker as { _id: string; isOrganizer: boolean })._id = TARGET_SPEAKER_ID
+  ;(s.speaker as { _id: string })._id = TARGET_SPEAKER_ID
   ;(s.speaker as { isOrganizer: boolean }).isOrganizer = false
+  // Not an organizer of ANY org — clear the inherited org membership.
+  ;(s.speaker as { organizerOrgIds: string[] }).organizerOrgIds = []
   return s
 }
 
@@ -101,6 +118,9 @@ beforeEach(() => {
   h.env.isTestMode = false
   h.env.isDevelopment = true
   h.env.isProduction = false
+  // The current domain resolves to CURRENT_ORG_ID by default; the organizer
+  // session is an organizer of exactly that org, so the gate passes.
+  h.mockResolveOrg.mockResolvedValue(CURRENT_ORG_ID)
   // Silence audit/security console output the code emits.
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -151,6 +171,23 @@ describe('getAuthSession impersonation — dev/organizer gating', () => {
 
     expect(result?.isImpersonating).toBeUndefined()
     expect(result?.speaker?._id).toBe(TARGET_SPEAKER_ID)
+    expect(h.mockGetSpeaker).not.toHaveBeenCalled()
+  })
+
+  it('ORG-SCOPED: an organizer of ANOTHER org cannot impersonate on this domain', async () => {
+    // Admin organizes org-other, but the current domain resolves to org-current.
+    const session = organizerSession()
+    ;(
+      session.speaker as { organizerOrgIds: string[]; isOrganizer: boolean }
+    ).organizerOrgIds = [OTHER_ORG_ID]
+    h.mockAuth.mockResolvedValue(session)
+    h.mockResolveOrg.mockResolvedValue(CURRENT_ORG_ID)
+
+    const result = await getAuthSession(reqWithImpersonate(TARGET_SPEAKER_ID))
+
+    // Gate denied → session unchanged, no speaker lookup, no impersonation.
+    expect(result?.isImpersonating).toBeUndefined()
+    expect(result?.speaker?._id).toBe(ADMIN_ID)
     expect(h.mockGetSpeaker).not.toHaveBeenCalled()
   })
 

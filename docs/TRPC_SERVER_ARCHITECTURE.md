@@ -283,13 +283,56 @@ publicProcedure
 // Requires session.speaker._id — any authenticated user
 protectedProcedure
 
-// Requires session.speaker.isOrganizer — organizer-only
+// Requires org-scoped organizer of the request's org — organizer-only
 adminProcedure
 ```
 
 The context is created in `createTRPCContext()` which calls `getAuthSession()`, supporting both cookie-based sessions (browser) and Bearer tokens (CLI). After `requireAuth` middleware, `ctx.speaker` and `ctx.user` are guaranteed non-null. Access `ctx.session!` when you need the full session (e.g., `session.account`).
 
 **Rule:** All admin operations use `adminProcedure`. There is no separate REST middleware — tRPC handles auth entirely.
+
+### Org-scoped organizer authorization (CaaS T1-2, #614)
+
+`adminProcedure` is **the authorization waist**: every admin endpoint inherits a
+single org-scoped organizer check from the `requireAdmin` middleware — **do not
+re-gate individual endpoints.**
+
+**The model.** A user is an organizer _of an organization_ iff they are in the
+`organizers[]` of any of **that org's** conferences. This is computed at login
+and baked into the session token as `speaker.organizerOrgIds` (the deduped set of
+`organization._ref`s of the conferences whose `organizers[]` contain the
+speaker — see `ORGANIZER_ORG_IDS_FIELD` in `src/lib/speaker/sanity.ts` and
+`applySpeakerToToken` in `src/lib/auth.ts`).
+
+**The request's org** is always resolved server-side from the **domain
+conference** via `resolveOrganizationId()` (mirrors `resolveConferenceId()` but
+returns `null` instead of throwing) — **never** from client input. The waist then
+requires `organizerOrgIds` to include that org id (`isOrganizerForOrg` in
+`src/lib/authz/organizer.ts`). It **fails closed**: a resolvable org whose id is
+not in the caller's set is denied (`FORBIDDEN`), including a cross-org organizer.
+
+**The legacy bridge.** When the request's org **cannot** be resolved
+(pre-`044`-backfill conference without an `organization`, or an unknown domain),
+the check falls back to the **deprecated global** `speaker.isOrganizer` boolean
+(organizer of _any_ conference) and emits a `console.warn('[authz-bridge] …')`.
+This is a deliberate, temporary migration bridge so the org tier can roll out
+without locking legitimate organizers out; a resolution _throw_ also maps to the
+bridge rather than erroring the waist.
+
+**Removal condition.** Delete the bridge (make an unresolvable org **deny**) once
+every live conference has an `organization` **and** every issued token carries
+`organizerOrgIds` (all pre-#614 tokens expired / all users re-logged-in). At that
+point `resolveOrganizationId() === null` should produce `FORBIDDEN`, and the
+deprecated `isOrganizer` field (plus its UI reads) can be removed.
+
+**Shared gates.** Handler/layout/route-handler gates that previously read
+`session.speaker.isOrganizer` (the `(admin)` layout, admin server actions'
+`requireOrganizer`, the `/launch` dispatcher, the `speaker-image` / `gallery` /
+`adobe-sign` / upload API routes, the `(cfp)` organizer-view pages, and the
+dev-only impersonation gate in `src/lib/auth.ts`) all go through the **same**
+`isOrganizerForOrg` / `isOrganizerForCurrentOrg` helpers with the **same** bridge.
+UI components still read the deprecated `isOrganizer` boolean this wave (a
+follow-up rewrites them).
 
 ## Performance Considerations
 
