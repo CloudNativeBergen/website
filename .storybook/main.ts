@@ -55,6 +55,25 @@ const config: StorybookConfig = {
         }
       },
     })
+    // CFPProfilePage imports `startProviderLink` from a `'use server'` module
+    // (`@/app/(cfp)/cfp/profile/link-actions`) that pulls in `next/headers` and
+    // the server-only auth stack — none of which can load in the browser
+    // bundle. Stub it to a browser-safe no-op action so the profile page can be
+    // storied (same aliasing technique as the CloudNativePattern stub below).
+    config.plugins.push({
+      name: 'mock-cfp-link-actions',
+      enforce: 'pre',
+      resolveId(id) {
+        if (id === '@/app/(cfp)/cfp/profile/link-actions') {
+          return '\0mock:cfp-link-actions'
+        }
+      },
+      load(id) {
+        if (id === '\0mock:cfp-link-actions') {
+          return `export async function startProviderLink() { return { ok: true } }`
+        }
+      },
+    })
     config.plugins.push({
       name: 'mock-cloud-native-pattern',
       enforce: 'pre',
