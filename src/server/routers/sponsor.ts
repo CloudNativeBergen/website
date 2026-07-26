@@ -14,7 +14,6 @@ import {
   SponsorEmailTemplateUpdateSchema,
   ReorderTemplatesSchema,
   SetDefaultTemplateSchema,
-  WebhookUrlSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -3362,87 +3361,6 @@ export const sponsorRouter = router({
           })
         }
         await clientWrite.patch(conferenceId).set(fields).commit()
-        return { success: true }
-      }),
-
-    getSigningProviderStatus: adminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-      const provider = getSigningProvider(conference.signingProvider)
-      const status = await provider.getConnectionStatus()
-      return {
-        connected: status.connected,
-        expiresAt: status.expiresAt ?? null,
-        apiAccessPoint: status.detail ?? null,
-        webhookActive: status.webhookActive ?? null,
-        providerName: status.providerName,
-        signingProvider: conference.signingProvider ?? 'self-hosted',
-      }
-    }),
-
-    getAdobeSignAuthorizeUrl: adminProcedure.query(async () => {
-      const { conference, domain, error } =
-        await getConferenceForCurrentDomain()
-      if (error || !conference || !domain) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-      const origin = `https://${domain}`
-      const redirectUri = `${origin}/api/adobe-sign/callback`
-      const provider = getSigningProvider(conference.signingProvider)
-      return provider.getAuthorizeUrl(redirectUri)
-    }),
-
-    disconnectAdobeSign: adminProcedure.mutation(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: error,
-        })
-      }
-      const provider = getSigningProvider(conference.signingProvider)
-      await provider.disconnect()
-      return { success: true }
-    }),
-
-    registerAdobeSignWebhook: adminProcedure
-      .input(WebhookUrlSchema)
-      .mutation(async ({ input }) => {
-        const { conference, error } = await getConferenceForCurrentDomain()
-        if (error || !conference) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to get current conference',
-            cause: error,
-          })
-        }
-        const provider = getSigningProvider(conference.signingProvider)
-        return provider.registerWebhook(input.webhookUrl)
-      }),
-
-    updateSigningProvider: adminProcedure
-      .input(
-        z.object({
-          signingProvider: z.enum(['self-hosted', 'adobe-sign']),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        const conferenceId = await resolveConferenceId()
-        await clientWrite
-          .patch(conferenceId)
-          .set({ signingProvider: input.signingProvider })
-          .commit()
         return { success: true }
       }),
   }),

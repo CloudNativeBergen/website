@@ -9,7 +9,7 @@ Two integrations use this pattern today:
 
 - **Ticketing** — `src/lib/tickets/provider/` (`TicketingProvider`, Checkin.no)
 - **Contract signing** — `src/lib/contract-signing/` (`ContractSigningProvider`,
-  self-hosted + Adobe Sign)
+  self-hosted)
 
 ## The house pattern
 

@@ -143,19 +143,17 @@ describe('collectStaticChecks — paired OAuth provider', () => {
   })
 })
 
-describe('collectStaticChecks — contract provider conditional', () => {
-  it('omits Adobe checks unless the provider is adobe-sign', () => {
+describe('collectStaticChecks — contract provider', () => {
+  it('reports the configured signing provider', () => {
     vi.stubEnv('CONTRACT_SIGNING_PROVIDER', 'self-hosted')
     const selfHosted = collectStaticChecks(CONFERENCE)
     expect(byId(selfHosted, 'contracts.provider').value).toBe('self-hosted')
-    expect(
-      selfHosted.find((c) => c.id === 'contracts.adobeAppId'),
-    ).toBeUndefined()
+  })
 
-    vi.stubEnv('CONTRACT_SIGNING_PROVIDER', 'adobe-sign')
-    vi.stubEnv('ADOBE_SIGN_APPLICATION_ID', '')
-    const adobe = collectStaticChecks(CONFERENCE)
-    expect(byId(adobe, 'contracts.adobeAppId').status).toBe('error')
+  it('defaults the provider to self-hosted when unset', () => {
+    vi.stubEnv('CONTRACT_SIGNING_PROVIDER', undefined)
+    const checks = collectStaticChecks(CONFERENCE)
+    expect(byId(checks, 'contracts.provider').value).toBe('self-hosted')
   })
 })
 

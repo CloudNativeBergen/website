@@ -27,8 +27,8 @@ import type {
  * DESIGN CONTRACT (do not break):
  *  - Read `process.env.X` DIRECTLY. Never import a module that asserts/throws at
  *    load when unconfigured (email/config asserts RESEND_API_KEY;
- *    cospeaker/server throws on INVITATION_TOKEN_SECRET; badge/config and
- *    adobe-sign/auth getters throw on missing keys). We only import modules that
+ *    cospeaker/server throws on INVITATION_TOKEN_SECRET; badge/config getters
+ *    throw on missing keys). We only import modules that
  *    are provably import-safe: sanity/client (falls back to 'invalid'),
  *    push/vapid (returns '' when unset), tickets/provider (a plain factory —
  *    reads no env at import; the CheckinProvider only warns), and auth
@@ -515,49 +515,23 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
   )
 
   // ---- CONTRACTS ------------------------------------------------------------
+  // Self-hosted is the only supported provider; any other value (e.g. a stale
+  // legacy `adobe-sign` env var) silently falls back to self-hosted at
+  // runtime, so surface the misconfiguration here instead of a clean 'ok'.
   const provider = process.env.CONTRACT_SIGNING_PROVIDER ?? 'self-hosted'
+  const providerSupported = provider === 'self-hosted'
   checks.push({
     id: 'contracts.provider',
     group: 'contracts',
     label: 'Signing provider',
-    status: 'ok',
+    status: providerSupported ? 'ok' : 'warn',
     value: provider,
+    ...(providerSupported
+      ? {}
+      : {
+          detail: `Unsupported provider "${provider}" — falling back to self-hosted; delete the stale CONTRACT_SIGNING_PROVIDER value.`,
+        }),
   })
-  if (provider === 'adobe-sign') {
-    checks.push(
-      presenceCheck(
-        {
-          id: 'contracts.adobeAppId',
-          group: 'contracts',
-          label: 'ADOBE_SIGN_APPLICATION_ID',
-        },
-        'ADOBE_SIGN_APPLICATION_ID',
-        'error',
-        { missing: 'Adobe Sign is selected but the application id is unset' },
-      ),
-      secretCheck(
-        {
-          id: 'contracts.adobeAppSecret',
-          group: 'contracts',
-          label: 'ADOBE_SIGN_APPLICATION_SECRET',
-        },
-        'ADOBE_SIGN_APPLICATION_SECRET',
-        'error',
-        {
-          missing: 'Adobe Sign is selected but the application secret is unset',
-        },
-      ),
-      plainCheck(
-        {
-          id: 'contracts.adobeShard',
-          group: 'contracts',
-          label: 'ADOBE_SIGN_SHARD',
-        },
-        process.env.ADOBE_SIGN_SHARD ?? 'eu2',
-        'warn',
-      ),
-    )
-  }
 
   // ---- BADGES (presence only — large keys) ----------------------------------
   checks.push(

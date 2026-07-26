@@ -77,18 +77,18 @@ New documents are born carrying the tenant key. The helpers live in
 can't be resolved (a legacy conference before the backfill, or a context without
 a request domain), they return `null` and nothing is stamped.
 
-| Type                     | Where stamped                                                                                                  | Org source                                                                |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `topic`                  | `topic.create` router                                                                                          | current conference                                                        |
-| `staff`                  | `staff.create` router                                                                                          | current conference                                                        |
-| `speaker` (create)       | `speaker.create` router                                                                                        | current conference                                                        |
-| `speaker` (login)        | `getOrCreateSpeaker`                                                                                           | current conference                                                        |
-| `sponsor`                | `createSponsor`                                                                                                | current conference                                                        |
-| `sponsorEmailTemplate`   | `createSponsorEmailTemplate`                                                                                   | current conference                                                        |
-| `message`                | `addMessage`                                                                                                   | parent conversation → conference                                          |
-| `conversationPreference` | `setConversationPreference`                                                                                    | parent conversation → conference                                          |
-| `travelExpense`          | `addTravelExpense`                                                                                             | parent travelSupport → conference                                         |
-| `sponsorActivity`        | `createSponsorActivity`, `logBulkEmailSent`, `bulkUpdateSponsors`, Adobe Sign webhook, contract-reminders cron | parent sponsorForConference → conference (or current conference for bulk) |
+| Type                     | Where stamped                                                                              | Org source                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `topic`                  | `topic.create` router                                                                      | current conference                                                        |
+| `staff`                  | `staff.create` router                                                                      | current conference                                                        |
+| `speaker` (create)       | `speaker.create` router                                                                    | current conference                                                        |
+| `speaker` (login)        | `getOrCreateSpeaker`                                                                       | current conference                                                        |
+| `sponsor`                | `createSponsor`                                                                            | current conference                                                        |
+| `sponsorEmailTemplate`   | `createSponsorEmailTemplate`                                                               | current conference                                                        |
+| `message`                | `addMessage`                                                                               | parent conversation → conference                                          |
+| `conversationPreference` | `setConversationPreference`                                                                | parent conversation → conference                                          |
+| `travelExpense`          | `addTravelExpense`                                                                         | parent travelSupport → conference                                         |
+| `sponsorActivity`        | `createSponsorActivity`, `logBulkEmailSent`, `bulkUpdateSponsors`, contract-reminders cron | parent sponsorForConference → conference (or current conference for bulk) |
 
 - **Global types** take the tenant of the **current-domain conference**
   (`getOrganizationRefForCurrentConference`).

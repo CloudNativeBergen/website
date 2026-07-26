@@ -61,7 +61,7 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `signatureStatus`         | Digital signature state: `not-started` &rarr; `pending` &rarr; `signed` / `rejected` / `expired`       |
 | `signatureId`             | External ID from e-signing provider (read-only)                                                        |
 | `signerEmail`             | Email of the person designated to sign the contract                                                    |
-| `signingUrl`              | Adobe Sign signing URL for portal display and reminder emails (read-only)                              |
+| `signingUrl`              | Contract signing URL for portal display and reminder emails (read-only)                                |
 | `contractSentAt`          | When the contract was sent for signing (read-only)                                                     |
 | `organizerSignedBy`       | Name of the organizer who counter-signed the contract (read-only)                                      |
 | `organizerSignedAt`       | When the organizer counter-signed (read-only)                                                          |
@@ -178,7 +178,6 @@ src/
 │   │   └── markdown.ts             # PortableText ↔ Markdown conversion for CLI email flow
 │   ├── contract-signing/              # Provider-agnostic contract signing abstraction
 │   │   ├── types.ts                # ContractSigningProvider interface, result types
-│   │   ├── adobe-sign.ts           # Adobe Sign implementation of the provider
 │   │   ├── self-hosted.ts          # Self-hosted signing (built-in signature pad)
 │   │   └── index.ts                # Provider factory (getSigningProvider)
 │   └── sponsor-crm/                # CRM pipeline domain
@@ -231,8 +230,7 @@ src/
 │       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
 │       │   ├── SponsorTemplatePicker.tsx    # Email template selector dropdown
 │       │   ├── SponsorEmailTemplatesPageClient.tsx # Template list + editor page
-│       │   ├── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
-│       │   └── AdobeSignConfigPanel.tsx     # Adobe Sign OAuth + webhook management
+│       │   └── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
 │       └── sponsor-crm/            # CRM pipeline admin UI
 │           ├── SponsorCRMPageClient.tsx     # CRM page shell
 │           ├── SponsorCRMPipeline.tsx       # Main board with filters/search
@@ -290,14 +288,14 @@ sanity/schemaTypes/
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                                         |
-| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                                                   |
-| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                                           |
-| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                                              |
-| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                                               |
-| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`, `getAdobeSignAuthorizeUrl`, `disconnectAdobeSign`, `registerAdobeSignWebhook`                             | Contract template CRUD, PDF gen, and signing provider integration |
+| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                 |
+| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                           |
+| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                   |
+| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                      |
+| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                       |
+| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`                                                                                                            | Contract template CRUD and PDF generation |
 
 All procedures are protected by `adminProcedure` (requires `isOrganizer: true`).
 
@@ -331,7 +329,7 @@ Sponsor tier assignments feed into the ticket allocation system, where each tier
 
 ## Contract System
 
-The contract system enables organizers to generate, digitally sign, and track sponsorship agreements directly from the CRM. It integrates with Adobe Acrobat Sign for legally binding e-signatures, automated reminders, and webhook-driven status updates — targeting zero manual steps after an organizer clicks "Send Contract".
+The contract system enables organizers to generate, digitally sign, and track sponsorship agreements directly from the CRM. It uses self-hosted signing (a built-in signature pad, no external service) for legally binding e-signatures and automated reminders — targeting zero manual steps after an organizer clicks "Send Contract".
 
 ### Contract Templates
 
@@ -409,8 +407,9 @@ Key result types:
 
 | Value         | Provider                    | Description                                 |
 | ------------- | --------------------------- | ------------------------------------------- |
-| `adobe-sign`  | `AdobeSignProvider`         | Adobe Acrobat Sign (default)                |
 | `self-hosted` | `SelfHostedSigningProvider` | Built-in signature pad, no external service |
+
+`self-hosted` is the only supported provider and the default. Any other value — including values stored on legacy conference documents — is tolerated and falls back to `self-hosted` with a warning; nothing throws on an unknown value.
 
 To add a new provider:
 
@@ -437,40 +436,7 @@ await provider.cancelAgreement(agreementId)
 
 No provider-specific imports appear in the router or CRM business logic.
 
-### Adobe Acrobat Sign Provider
-
-The current (and default) provider implementation is `AdobeSignProvider` in `src/lib/contract-signing/adobe-sign.ts`. It wraps the [Adobe Acrobat Sign REST API v6](https://developer.adobe.com/acrobat-sign/docs/overview/developer_guide/) and covers the full lifecycle: document upload, agreement creation, status tracking via webhooks, automated reminders, and signed document retrieval.
-
-#### Authentication
-
-Adobe Sign uses OAuth 2.0 with the **client credentials** grant type for server-to-server authentication. Tokens are requested from the Adobe IMS endpoint and cached in memory with a 60-second safety buffer before expiry.
-
-| Detail         | Value                                                                        |
-| -------------- | ---------------------------------------------------------------------------- |
-| Token endpoint | `https://ims-na1.adobelogin.com/ims/token/v3`                                |
-| Grant type     | `client_credentials`                                                         |
-| Scopes         | `agreement_read agreement_write agreement_send`                              |
-| Token lifetime | 3600 seconds (1 hour)                                                        |
-| Cache strategy | In-memory with 60s buffer before expiry                                      |
-| Implementation | `src/lib/adobe-sign/auth.ts` — OAuth Authorization Code flow with JWE cookie |
-
-#### API Client
-
-The Adobe Sign client (`src/lib/adobe-sign/client.ts`) wraps the REST v6 API with the following operations:
-
-| Function                    | API Endpoint                       | Purpose                               |
-| --------------------------- | ---------------------------------- | ------------------------------------- |
-| `uploadTransientDocument()` | `POST /transientDocuments`         | Upload PDF for signing (valid 7 days) |
-| `createAgreement()`         | `POST /agreements`                 | Create and send signing request       |
-| `getAgreement()`            | `GET /agreements/{id}`             | Check current agreement status        |
-| `getSigningUrls()`          | `GET /agreements/{id}/signingUrls` | Capture signing URL for portal/email  |
-| `registerWebhook()`         | `POST /webhooks`                   | Register webhook for status changes   |
-| `sendReminder()`            | `POST /agreements/{id}/reminders`  | Send a signing reminder to the signer |
-| `cancelAgreement()`         | `PUT /agreements/{id}/state`       | Cancel a pending agreement            |
-
-All API calls are authenticated via per-user OAuth session stored in an encrypted JWE cookie. The API base URL is derived from the `api_access_point` returned during OAuth (shard-specific, e.g., `https://api.eu2.adobesign.com/`).
-
-#### Contract Send Flow
+### Contract Send Flow
 
 The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.ts` orchestrates the entire send process. It accepts a `ContractSigningProvider` instance (injected by the caller) and is used by both the admin manual send and the automated registration completion flow.
 
@@ -499,25 +465,9 @@ The `generateAndSendContract()` function in `src/lib/sponsor-crm/contract-send.t
 
 If the signing provider is unavailable or fails, the contract PDF is still generated and stored — only the digital signing step is skipped. This graceful degradation ensures contracts can always be generated even without a signing provider configured.
 
-#### Webhook Handler
+Signature status changes are logged as `sponsorActivity` entries with `activityType: "signature_status_change"`. With self-hosted signing, status transitions happen synchronously when the sponsor submits their signature (see [Self-Hosted Signing Provider](#self-hosted-signing-provider)) — no external webhook is involved.
 
-Adobe Sign notifies our application of agreement status changes via webhooks at `/api/webhooks/adobe-sign`. The handler supports both the initial GET verification and ongoing POST notifications.
-
-**Verification (GET):** When registering a webhook, Adobe Sign sends a GET request with an `X-AdobeSign-ClientId` header. The handler must respond with a 2XX status and echo the client ID back in both the `X-AdobeSign-ClientId` response header and JSON body (`{ xAdobeSignClientId: "<id>" }`).
-
-**Notifications (POST):** Every POST notification also includes `X-AdobeSign-ClientId` and must be echoed back. The handler processes three event types:
-
-| Event                          | Action                                                                                                                                                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AGREEMENT_WORKFLOW_COMPLETED` | Extract signed PDF from webhook payload (inline base64), store in Sanity, set signatureStatus=signed, contractStatus=contract-signed, contractSignedAt=now |
-| `AGREEMENT_RECALLED`           | Set signatureStatus=rejected                                                                                                                               |
-| `AGREEMENT_EXPIRED`            | Set signatureStatus=expired                                                                                                                                |
-
-All status changes are logged as `sponsorActivity` entries with `activityType: "signature_status_change"`.
-
-The handler looks up the sponsor by matching `signatureId` on `sponsorForConference` documents against the `agreement.id` from the webhook event.
-
-#### Automated Reminders
+### Automated Reminders
 
 A Vercel cron job at `/api/cron/contract-reminders` runs daily (configured in `vercel.json`). It queries for contracts that:
 
@@ -532,43 +482,13 @@ The cron endpoint is protected by a `CRON_SECRET` bearer token.
 
 #### Environment Variables
 
-| Variable                        | Required | Purpose                                               |
-| ------------------------------- | -------- | ----------------------------------------------------- |
-| `ADOBE_SIGN_APPLICATION_ID`     | Yes      | OAuth client ID for token requests                    |
-| `ADOBE_SIGN_APPLICATION_SECRET` | Yes      | OAuth client secret                                   |
-| `ADOBE_SIGN_CLIENT_ID`          | Yes      | Client ID for webhook verification (may equal app ID) |
-| `ADOBE_SIGN_SHARD`              | No       | API shard (default: `eu2`)                            |
-| `CRON_SECRET`                   | Yes      | Bearer token for cron job authentication              |
+| Variable                    | Required | Purpose                                              |
+| --------------------------- | -------- | ---------------------------------------------------- |
+| `CONTRACT_SIGNING_PROVIDER` | No       | Signing provider selector; defaults to `self-hosted` |
+| `NEXTAUTH_URL`              | Yes      | Base URL used to construct self-hosted signing links |
+| `CRON_SECRET`               | Yes      | Bearer token for cron job authentication             |
 
-#### Adobe Sign Setup
-
-To configure Adobe Sign for a new environment:
-
-1. Log in to [Adobe Sign](https://secure.adobesign.com/public/login) and go to API > API Applications
-2. Create a new application (domain: CUSTOMER for internal use)
-3. Note the Application ID and Secret from View/Edit
-4. Configure OAuth scopes: enable `agreement_read`, `agreement_write`, `agreement_send`
-5. Set the four `ADOBE_SIGN_*` environment variables in Vercel
-6. Register the webhook URL by calling `POST /api/rest/v6/webhooks` with the body shown below
-7. Set `CRON_SECRET` in Vercel and configure the cron schedule in `vercel.json`
-
-```json
-{
-  "name": "Sponsor Contract Webhooks",
-  "scope": "ACCOUNT",
-  "state": "ACTIVE",
-  "webhookSubscriptionEvents": [
-    "AGREEMENT_WORKFLOW_COMPLETED",
-    "AGREEMENT_RECALLED",
-    "AGREEMENT_EXPIRED"
-  ],
-  "webhookUrlInfo": {
-    "url": "https://<domain>/api/webhooks/adobe-sign"
-  }
-}
-```
-
-#### Contract Data Model (on `sponsorForConference`)
+### Contract Data Model (on `sponsorForConference`)
 
 The contract lifecycle is tracked across several fields on the `sponsorForConference` document:
 
@@ -582,7 +502,7 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 | `contractSentAt`    | DateTime  | When the contract was sent for signing                                    |
 | `organizerSignedBy` | String    | Name of the organizer who counter-signed (set on send, read-only)         |
 | `organizerSignedAt` | DateTime  | When the organizer counter-signed (set on send, read-only)                |
-| `contractSignedAt`  | DateTime  | When the signed PDF was received (set by webhook)                         |
+| `contractSignedAt`  | DateTime  | When the signed PDF was received (set on signature submission)            |
 | `contractDocument`  | File      | Generated/signed PDF stored as a Sanity file asset                        |
 | `contractTemplate`  | Reference | The `contractTemplate` used to generate the PDF                           |
 | `reminderCount`     | Number    | Signing reminders sent (max 2, tracked by cron)                           |
@@ -609,28 +529,27 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 │  sendForSigning()   checkStatus()   cancelAgreement()           │
 │  sendReminder()     getConnectionStatus()   disconnect()        │
 │  getAuthorizeUrl()  registerWebhook()                           │
-└────────┬───────────────────────────────────────┬────────────────┘
-         │ CONTRACT_SIGNING_PROVIDER=adobe-sign  │ =self-hosted
-         ▼                                       ▼
-┌────────────────────────────┐   ┌────────────────────────────────┐
-│   Adobe Sign REST API v6   │   │  Self-Hosted Signing           │
-│                            │   │                                │
-│  POST /transientDocuments  │   │  UUID token → signatureId      │
-│  POST /agreements          │   │  signingUrl → /sponsor/        │
-│  POST /{id}/reminders      │   │    contract/sign/{token}       │
-│  GET  /{id}/combinedDoc    │   │                                │
-└────────────┬───────────────┘   └──────────────┬─────────────────┘
-             │ Webhook                          │ Direct submit
-             ▼                                  ▼
-┌────────────────────────────┐   ┌────────────────────────────────┐
-│ /api/webhooks/adobe-sign   │   │  signing.submitSignature       │
-│                            │   │  (tRPC, public)                │
-│ WORKFLOW_COMPLETED → signed│   │                                │
-│ RECALLED → rejected        │   │  1. Fetch PDF from Sanity      │
-│ EXPIRED → expired          │   │  2. Embed signature via pdf-lib│
-└────────────────────────────┘   │  3. Upload signed PDF          │
-                                 │  4. Patch sfc → signed         │
-                                 └────────────────────────────────┘
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ SelfHostedSigningProvider
+                               ▼
+                 ┌────────────────────────────────┐
+                 │  Self-Hosted Signing           │
+                 │                                │
+                 │  UUID token → signatureId      │
+                 │  signingUrl → /sponsor/        │
+                 │    contract/sign/{token}       │
+                 └──────────────┬─────────────────┘
+                                │ Direct submit
+                                ▼
+                 ┌────────────────────────────────┐
+                 │  signing.submitSignature       │
+                 │  (tRPC, public)                │
+                 │                                │
+                 │  1. Fetch PDF from Sanity      │
+                 │  2. Embed signature via pdf-lib│
+                 │  3. Upload signed PDF          │
+                 │  4. Patch sfc → signed         │
+                 └────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
 │              /api/cron/contract-reminders (daily)                │
@@ -646,9 +565,9 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 **Graceful degradation.** If the signing provider is not connected or its API is down, contract PDF generation still works — only the e-signing step is skipped. The PDF is stored in Sanity regardless.
 
-**Webhook-driven status updates.** Instead of polling Adobe Sign for agreement status (which has strict rate limits: 1 call/10 min for developer accounts), we rely entirely on webhooks for real-time status changes. Signed documents are extracted inline from the webhook payload (`includeSignedDocuments: true` on webhook registration) — no API calls needed in the webhook handler. This aligns with Adobe's recommended approach.
+**Synchronous status updates.** The self-hosted provider records status transitions directly in Sanity when the sponsor submits their signature — no external webhooks or polling. Legacy provider values stored on older conference documents fall back to self-hosted gracefully.
 
-**Dual storage.** The contract PDF is stored in both Sanity (permanent, accessible via CMS) and Adobe Sign (transient, valid 7 days, then stored as part of the agreement). When the signed version arrives via webhook, it replaces the original in Sanity.
+**Single source of storage.** The contract PDF is stored in Sanity (permanent, accessible via CMS). When the signed version is submitted, it replaces the original in Sanity.
 
 **Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated registration-triggered sends, ensuring consistent behavior and logging.
 
@@ -739,7 +658,7 @@ The CRM board, activity log, and sponsor portal all reflect the updated status a
 
 - **No automated reminders** — `sendReminder()` is a no-op. The daily cron job still sends email reminders via Resend using the stored `signingUrl`, so reminders work at the application level.
 - **No webhooks** — status updates happen synchronously during signature submission, so webhooks are unnecessary.
-- **No OAuth** — `getAuthorizeUrl()` and `disconnect()` are no-ops. The Adobe Sign config panel is hidden when using self-hosted signing.
+- **No OAuth** — `getAuthorizeUrl()` and `disconnect()` are no-ops; self-hosted signing requires no external connection or admin configuration.
 
 #### Dependencies
 
@@ -750,10 +669,10 @@ The CRM board, activity log, and sponsor portal all reflect the updated status a
 
 #### Self-Hosted Environment Variables
 
-| Variable                    | Required | Default      | Purpose                                      |
-| --------------------------- | -------- | ------------ | -------------------------------------------- |
-| `CONTRACT_SIGNING_PROVIDER` | No       | `adobe-sign` | Set to `self-hosted` to enable this provider |
-| `NEXTAUTH_URL`              | Yes      | —            | Base URL for constructing the signing link   |
+| Variable                    | Required | Default       | Purpose                                                     |
+| --------------------------- | -------- | ------------- | ----------------------------------------------------------- |
+| `CONTRACT_SIGNING_PROVIDER` | No       | `self-hosted` | Signing provider selector (only `self-hosted` is supported) |
+| `NEXTAUTH_URL`              | Yes      | —             | Base URL for constructing the signing link                  |
 
 ## Sponsor Portal
 
@@ -808,11 +727,10 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 **Key outcomes:**
 
 - 1-click contract sending from the CRM board
-- Digital signatures via Adobe Acrobat Sign
+- Digital signatures via self-hosted signing (built-in signature pad)
 - Automated reminders for unsigned contracts (daily cron via Resend)
 - Self-service registration portal for sponsors (logo, billing, contacts)
 - Full activity tracking throughout the contract lifecycle
-- Admin panel for Adobe Sign OAuth connection and webhook management
 
 **Sub-issues and dependencies:**
 

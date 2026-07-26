@@ -328,7 +328,7 @@ deprecated `isOrganizer` field (plus its UI reads) can be removed.
 **Shared gates.** Handler/layout/route-handler gates that previously read
 `session.speaker.isOrganizer` (the `(admin)` layout, admin server actions'
 `requireOrganizer`, the `/launch` dispatcher, the `speaker-image` / `gallery` /
-`adobe-sign` / upload API routes, the `(cfp)` organizer-view pages, and the
+upload API routes, the `(cfp)` organizer-view pages, and the
 dev-only impersonation gate in `src/lib/auth.ts`) all go through the **same**
 `isOrganizerForOrg` / `isOrganizerForCurrentOrg` helpers with the **same** bridge.
 UI components still read the deprecated `isOrganizer` boolean this wave (a
@@ -487,7 +487,7 @@ if (error || !conference) {
 Not everything should be tRPC. These stay as REST route handlers:
 
 - **OAuth callbacks** — NextAuth/WorkOS need full request/response control
-- **Webhooks** — External services (Adobe Sign, Checkin) POST to fixed URLs
+- **Webhooks** — External services (Checkin) POST to fixed URLs
 - **Cron jobs** — Vercel cron triggers specific route paths
 - **Binary/streaming** — Image proxying, OpenBadges JWT endpoints
 - **File uploads** — FormData multipart requires REST (Vercel Blob SDK, speaker images, gallery)

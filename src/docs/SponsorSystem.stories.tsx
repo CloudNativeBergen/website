@@ -503,14 +503,14 @@ Contract flow (via generateAndSendContract)
   → Update SFC: contractStatus=contract-sent, signatureStatus=pending
   → Log contract_status_change + signature_status_change activities
 
-Webhooks (/api/webhooks/adobe-sign — provider-specific)
-  → AGREEMENT_WORKFLOW_COMPLETED → download signed PDF → mark signed
-  → AGREEMENT_RECALLED → mark rejected
-  → AGREEMENT_EXPIRED → mark expired
+Signature capture (self-hosted, /sponsor/contract/sign/[token])
+  → Signer opens unique signing URL → canvas pad → PNG
+  → signing.submitSignature → embed signature in PDF → mark signed
+  → signatureStatus tracked directly in Sanity (no external webhooks)
 
 Automated reminders (/api/cron/contract-reminders, daily)
   → Query pending > 5 days, < 2 reminders
-  → signingProvider.sendReminder(agreementId) → increment reminderCount
+  → sends reminder email → increment reminderCount
 
 Invoicing
   → crm.updateInvoiceStatus → sent (auto-sets invoiceSentAt)
@@ -534,9 +534,10 @@ Self-service portal
             Digital contract signing via a provider-agnostic abstraction layer (
             <code className="text-xs">ContractSigningProvider</code> interface
             in <code className="text-xs">src/lib/contract-signing/</code>).
-            Currently backed by Adobe Acrobat Sign REST API v6. The CRM, router,
-            and UI never interact with Adobe Sign directly &mdash; only through
-            the provider interface.
+            Backed by a self-hosted signing implementation &mdash; a built-in
+            signature pad with unique per-signer links, no external service
+            required. The CRM, router, and UI interact only through the provider
+            interface.
           </p>
 
           <div className="mb-8 rounded-lg border border-brand-frosted-steel bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
@@ -564,22 +565,21 @@ Self-service portal
 │  getConnectionStatus()  disconnect()            │
 │  getAuthorizeUrl()  registerWebhook()           │
 └──────────────────────┬──────────────────────────┘
-                       │ Currently: AdobeSignProvider
+                       │ SelfHostedSigningProvider
                        ▼
 ┌─────────────────────────────────────────────────┐
-│         Adobe Sign REST API v6                  │
-│  POST /transientDocuments → transientDocId      │
-│  POST /agreements → agreementId                 │
-│  POST /agreements/{id}/reminders                │
-│  GET  /agreements/{id}/combinedDocument         │
+│         Self-Hosted Signing                     │
+│  sendForSigning → unique token + signing URL    │
+│  /sponsor/contract/sign/[token] → signature pad │
+│  signing.submitSignature → embed PNG in PDF     │
+│  Lifecycle metadata stored in Sanity            │
 └──────────────────────┬──────────────────────────┘
-                       │ Webhook notifications
+                       │ Status tracked in Sanity
                        ▼
 ┌─────────────────────────────────────────────────┐
-│    /api/webhooks/adobe-sign (provider-specific) │
-│  WORKFLOW_COMPLETED → download PDF, mark signed │
-│  RECALLED → mark rejected                       │
-│  EXPIRED → mark expired                         │
+│    signatureStatus on sponsorForConference      │
+│  submitSignature → mark signed                  │
+│  cancelAgreement → mark rejected                │
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
@@ -603,8 +603,8 @@ Self-service portal
                   ContractSigningProvider interface
                 </li>
                 <li>
-                  <code className="text-xs">adobe-sign.ts</code> —
-                  AdobeSignProvider implementation
+                  <code className="text-xs">self-hosted.ts</code> —
+                  SelfHostedSigningProvider implementation
                 </li>
                 <li>
                   <code className="text-xs">index.ts</code> —
@@ -639,20 +639,12 @@ Self-service portal
               </h3>
               <ul className="font-inter space-y-1 text-xs text-brand-slate-gray dark:text-gray-400">
                 <li>
-                  <code className="text-xs">ADOBE_SIGN_APPLICATION_ID</code> —
-                  OAuth client ID
+                  <code className="text-xs">CONTRACT_SIGNING_PROVIDER</code> —
+                  Optional; defaults to self-hosted
                 </li>
                 <li>
-                  <code className="text-xs">ADOBE_SIGN_APPLICATION_SECRET</code>{' '}
-                  — OAuth client secret
-                </li>
-                <li>
-                  <code className="text-xs">ADOBE_SIGN_CLIENT_ID</code> —
-                  Webhook verification
-                </li>
-                <li>
-                  <code className="text-xs">ADOBE_SIGN_SHARD</code> — API shard
-                  (default: eu2)
+                  <code className="text-xs">NEXTAUTH_URL</code> — Base URL used
+                  to build signing links
                 </li>
                 <li>
                   <code className="text-xs">CRON_SECRET</code> — Cron job auth
@@ -714,12 +706,12 @@ Self-service portal
                   without signing provider
                 </li>
                 <li>
-                  <strong>Webhook-driven</strong> — No polling; provider pushes
-                  status updates
+                  <strong>Self-hosted signing</strong> — Built-in signature pad;
+                  status tracked directly in Sanity
                 </li>
                 <li>
-                  <strong>Dual storage</strong> — Sanity (permanent) + Adobe
-                  Sign (transient 7d)
+                  <strong>Single storage</strong> — Signed PDF stored in Sanity
+                  (permanent, accessible via CMS)
                 </li>
                 <li>
                   <strong>Unified send</strong> — Same function for manual +
