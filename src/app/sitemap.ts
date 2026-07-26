@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 
 import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { isConferenceUnlisted } from '@/lib/conference/visibility'
+import { getDiscoveryVisibilityForDomain } from '@/lib/conference/visibility'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { buildSitemap } from '@/lib/seo/sitemap'
 
@@ -15,16 +15,19 @@ import { buildSitemap } from '@/lib/seo/sitemap'
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const host = (await headers()).get('host') || 'localhost:3000'
 
-  const { conference } = await getConferenceForDomain(host)
-
-  // No conference resolves for this host → emit only the static public pages.
-  if (!conference?._id) {
-    return buildSitemap(host)
+  // FAIL-CLOSED gate first (minimal projection): an unknown host or a
+  // transient read failure emits an EMPTY sitemap — never the permissive one —
+  // so an unlisted tenant can't leak its discovery surface during an outage,
+  // and the unknown-host platform landing contributes no URLs.
+  const { discoverable } = await getDiscoveryVisibilityForDomain(host)
+  if (!discoverable) {
+    return buildSitemap(host, { unlisted: true })
   }
 
-  // Unlisted (M0 trial) → emit nothing; the pages still resolve for direct
-  // visitors but contribute no discovery URLs. Skip the speaker fetch entirely.
-  if (isConferenceUnlisted(conference)) {
+  const { conference } = await getConferenceForDomain(host)
+  if (!conference?._id) {
+    // The light gate said live but the full read failed (transient) — stay
+    // conservative rather than emitting a partial sitemap.
     return buildSitemap(host, { unlisted: true })
   }
 

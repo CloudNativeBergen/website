@@ -2,8 +2,7 @@ import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 
 import { buildRobots } from '@/lib/seo/robots'
-import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { isConferenceUnlisted } from '@/lib/conference/visibility'
+import { getDiscoveryVisibilityForDomain } from '@/lib/conference/visibility'
 
 /**
  * Per-host `robots.txt` (Next.js file convention).
@@ -20,7 +19,11 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const headersList = await headers()
   const host = headersList.get('host') || 'localhost:3000'
 
-  const { conference } = await getConferenceForDomain(host)
+  // FAIL-CLOSED + minimal projection: an unknown host or transient read
+  // failure must never serve the permissive crawl policy (which would leak an
+  // unlisted tenant's discovery surface during an outage), and robots.txt has
+  // no business fetching the full conference document for one field.
+  const { discoverable } = await getDiscoveryVisibilityForDomain(host)
 
-  return buildRobots(host, { unlisted: isConferenceUnlisted(conference) })
+  return buildRobots(host, { unlisted: !discoverable })
 }
