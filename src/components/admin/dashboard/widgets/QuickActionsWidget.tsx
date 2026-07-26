@@ -57,8 +57,10 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
     error,
     refetch,
   } = useWidgetData<QuickAction[]>(
-    conference ? () => fetchQuickActions(conference, currentPhase) : null,
-    [conference, currentPhase],
+    // The server recomputes the phase from the domain-resolved conference;
+    // currentPhase stays in the deps so a client-side phase flip refetches.
+    conference ? () => fetchQuickActions() : null,
+    [conference?._id, currentPhase],
   )
 
   if (loading) return <WidgetSkeleton />

@@ -14,14 +14,12 @@ export interface UseEmailModalStorageProps {
   storageKey: string
   isOpen: boolean
   autoSaveDelay?: number
-  debug?: boolean // Enable debug logging
 }
 
 export function useEmailModalStorage({
   storageKey,
   isOpen,
   autoSaveDelay = 1000,
-  debug = false,
 }: UseEmailModalStorageProps) {
   const [storedData, setStoredData] = useState<EmailModalStorageData | null>(
     null,
@@ -34,42 +32,13 @@ export function useEmailModalStorage({
 
   useEffect(() => {
     if (isOpen && typeof window !== 'undefined') {
-      if (debug)
-        console.log(`[EmailStorage] Loading data for key: ${storageKey}`)
       try {
         const stored = localStorage.getItem(storageKey)
         if (stored) {
-          if (debug) {
-            console.log(`[EmailStorage] Raw stored string:`, {
-              length: stored.length,
-              preview:
-                stored.substring(0, 200) + (stored.length > 200 ? '...' : ''),
-            })
-          }
-
           const parsedData = JSON.parse(stored) as EmailModalStorageData
-
-          if (debug) {
-            console.log(`[EmailStorage] Parsed data:`, {
-              subject: parsedData.subject,
-              messageType: typeof parsedData.message,
-              messageIsArray: Array.isArray(parsedData.message),
-              messageLength: Array.isArray(parsedData.message)
-                ? parsedData.message.length
-                : 'N/A',
-              lastModified: new Date(parsedData.lastModified).toISOString(),
-              additionalFields: parsedData.additionalFields,
-              fullMessage: parsedData.message,
-            })
-          }
 
           // eslint-disable-next-line react-hooks/set-state-in-effect
           setStoredData(parsedData)
-        } else {
-          if (debug)
-            console.log(
-              `[EmailStorage] No stored data found for key: ${storageKey}`,
-            )
         }
       } catch (error) {
         console.warn(
@@ -82,7 +51,7 @@ export function useEmailModalStorage({
     } else if (!isOpen) {
       setIsLoading(true)
     }
-  }, [isOpen, storageKey, debug])
+  }, [isOpen, storageKey])
 
   useEffect(() => {
     return () => {
@@ -103,20 +72,6 @@ export function useEmailModalStorage({
     ) => {
       if (typeof window === 'undefined') return
 
-      if (debug)
-        console.log(`[EmailStorage] Attempting to save:`, {
-          subject,
-          messageType: typeof message,
-          messageIsArray: Array.isArray(message),
-          messageLength: Array.isArray(message)
-            ? message.length
-            : typeof message === 'string'
-              ? message.length
-              : 'unknown',
-          message: Array.isArray(message) ? message : message,
-          additionalFields,
-        })
-
       const hasContent =
         subject.trim() ||
         (typeof message === 'string'
@@ -132,8 +87,6 @@ export function useEmailModalStorage({
             }))
 
       if (!hasContent && !additionalFields) {
-        if (debug)
-          console.log(`[EmailStorage] Removing empty data from storage`)
         localStorage.removeItem(storageKey)
         setStoredData(null)
         setIsSaving(false)
@@ -149,33 +102,7 @@ export function useEmailModalStorage({
           ...(additionalFields && { additionalFields }),
         }
 
-        const serializedData = JSON.stringify(dataToStore)
-        if (debug) {
-          console.log(`[EmailStorage] About to save to localStorage:`, {
-            storageKey,
-            dataToStore,
-            serializedData:
-              serializedData.substring(0, 500) +
-              (serializedData.length > 500 ? '...' : ''),
-            serializedLength: serializedData.length,
-          })
-        }
-
-        localStorage.setItem(storageKey, serializedData)
-
-        if (debug) {
-          const readBack = localStorage.getItem(storageKey)
-          const parsedBack = readBack ? JSON.parse(readBack) : null
-          console.log(
-            `[EmailStorage] Verification - read back from localStorage:`,
-            {
-              readBackLength: readBack?.length,
-              parsedBack: parsedBack,
-              messageEqual:
-                JSON.stringify(parsedBack?.message) === JSON.stringify(message),
-            },
-          )
-        }
+        localStorage.setItem(storageKey, JSON.stringify(dataToStore))
 
         setStoredData(dataToStore)
         setLastSaved(Date.now())
@@ -192,7 +119,7 @@ export function useEmailModalStorage({
         setIsSaving(false)
       }
     },
-    [storageKey, debug],
+    [storageKey],
   )
 
   const autoSave = useCallback(
@@ -259,20 +186,6 @@ export function useEmailModalStorage({
       clearStorage,
       getLastModifiedText,
       hasStoredData: !!storedData,
-      // Debug helper to manually check localStorage
-      debugStorage: debug
-        ? () => {
-            if (typeof window !== 'undefined') {
-              const stored = localStorage.getItem(storageKey)
-              console.log(
-                `[EmailStorage] Manual debug for key '${storageKey}':`,
-                stored ? JSON.parse(stored) : null,
-              )
-              return stored ? JSON.parse(stored) : null
-            }
-            return null
-          }
-        : undefined,
     }),
     [
       storedData,
@@ -283,8 +196,6 @@ export function useEmailModalStorage({
       saveToStorage,
       clearStorage,
       getLastModifiedText,
-      storageKey,
-      debug,
     ],
   )
 }

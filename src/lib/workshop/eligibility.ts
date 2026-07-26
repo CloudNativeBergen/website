@@ -1,4 +1,4 @@
-import { fetchEventTickets } from '@/lib/tickets/checkin'
+import { fetchEventTickets } from '@/lib/tickets/api'
 import type { EventTicket } from '@/lib/tickets/types'
 
 const WORKSHOP_ELIGIBLE_CATEGORIES = [

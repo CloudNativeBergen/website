@@ -97,13 +97,13 @@ const getAllMock = getAllWorkshopSignups as unknown as LooseMock
 const cancelMock = cancelWorkshopSignup as unknown as LooseMock
 
 const workshopRef = { _type: 'reference' as const, _ref: 'workshop-1' }
-const conferenceRef = { _type: 'reference' as const, _ref: 'conf-1' }
 
+// NOTE: no `conference` field — the schemas no longer accept one; the server
+// always resolves the conference from the request domain.
 const baseSignupInput = {
   experienceLevel: 'beginner' as const,
   operatingSystem: 'linux' as const,
   workshop: workshopRef,
-  conference: conferenceRef,
 }
 
 beforeEach(() => {
@@ -140,6 +140,25 @@ describe('workshop.signup identity binding', () => {
       'conf-1',
       undefined,
     )
+  })
+
+  it('binds the signup to the DOMAIN conference, ignoring a smuggled conference ref', async () => {
+    const caller = createWorkshopCaller({
+      id: 'workos-real',
+      email: 'real@example.com',
+    })
+
+    // A malicious client tries to point the signup at another tenant's
+    // conference. The schema no longer declares the field, so it is stripped;
+    // the server writes the domain-resolved conference regardless.
+    await caller.workshop.signup({
+      ...baseSignupInput,
+      conference: { _type: 'reference', _ref: 'evil-conf' },
+    } as unknown as typeof baseSignupInput)
+
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+    const written = createSignupMock.mock.calls[0][0]
+    expect(written.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
   })
 
   it('rejects signup with UNAUTHORIZED when there is no WorkOS session', async () => {
@@ -232,5 +251,26 @@ describe('workshop admin procedures remain NextAuth-gated', () => {
     const caller = createAdminCaller()
     const result = await caller.workshop.admin.getSummary()
     expect(result.success).toBe(true)
+  })
+
+  it('manualSignup writes the DOMAIN conference, ignoring a smuggled conference ref', async () => {
+    const caller = createAdminCaller()
+    await caller.workshop.admin.manualSignup({
+      ...baseSignupInput,
+      userWorkOSId: 'manual-user',
+      userEmail: 'participant@example.com',
+      userName: 'Participant',
+      conference: { _type: 'reference', _ref: 'evil-conf' },
+    } as never)
+
+    expect(createSignupMock).toHaveBeenCalledTimes(1)
+    const written = createSignupMock.mock.calls[0][0]
+    expect(written.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+    // The duplicate-check read is scoped to the domain conference too.
+    expect(getSignupsMock).toHaveBeenCalledWith(
+      'manual-user',
+      'conf-1',
+      undefined,
+    )
   })
 })

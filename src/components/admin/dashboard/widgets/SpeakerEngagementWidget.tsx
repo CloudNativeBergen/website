@@ -40,8 +40,8 @@ export function SpeakerEngagementWidget({
   // always run.
   const { data, loading, error, refetch } =
     useWidgetData<SpeakerEngagementData>(
-      conference ? () => fetchSpeakerEngagement(conference._id) : null,
-      [conference],
+      conference ? () => fetchSpeakerEngagement() : null,
+      [conference?._id],
     )
   const phase = conference ? getCurrentPhase(conference) : null
 

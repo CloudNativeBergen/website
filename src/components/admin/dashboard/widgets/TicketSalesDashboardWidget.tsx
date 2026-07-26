@@ -56,8 +56,8 @@ export function TicketSalesDashboardWidget({
     error,
     refetch,
   } = useWidgetData<TicketSalesResult>(
-    conference && !isStaticPhase ? () => fetchTicketSales(conference) : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchTicketSales() : null,
+    [conference?._id, isStaticPhase],
   )
   const data = result?.status === 'ok' ? result.data : null
 

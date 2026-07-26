@@ -18,8 +18,8 @@ type MyAreasWidgetProps = BaseWidgetProps
  */
 export function MyAreasWidget({ conference }: MyAreasWidgetProps) {
   const { data, loading, error, refetch } = useWidgetData<MyAreasData>(
-    conference ? () => fetchMyAreasData(conference._id) : null,
-    [conference],
+    conference ? () => fetchMyAreasData() : null,
+    [conference?._id],
   )
 
   if (loading) return <WidgetSkeleton />

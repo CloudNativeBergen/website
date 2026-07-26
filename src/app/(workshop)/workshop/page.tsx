@@ -274,7 +274,6 @@ export default async function WorkshopPage() {
 
           <div className="mt-12">
             <WorkshopList
-              conferenceId={conference._id}
               userWorkOSId={user.id}
               userEmail={user.email}
               userName={

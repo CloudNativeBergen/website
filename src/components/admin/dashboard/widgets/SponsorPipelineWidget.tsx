@@ -39,14 +39,8 @@ export function SponsorPipelineWidget({
   // skip the fetch.
   const { data, loading, error, refetch } =
     useWidgetData<SponsorPipelineWidgetData>(
-      conference
-        ? () =>
-            fetchSponsorPipelineData(
-              conference._id,
-              conference.sponsorRevenueGoal || 0,
-            )
-        : null,
-      [conference],
+      conference ? () => fetchSponsorPipelineData() : null,
+      [conference?._id],
     )
 
   if (loading) return <WidgetSkeleton />

@@ -623,43 +623,41 @@ export const travelSupportRouter = router({
         }
       }),
 
-    list: adminProcedure
-      .input(GetTravelSupportSchema)
-      .query(async ({ input }) => {
-        try {
-          const { conference, error: confError } =
-            await getConferenceForCurrentDomain()
-          if (confError || !conference) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to get current conference',
-              cause: confError,
-            })
-          }
+    list: adminProcedure.input(GetTravelSupportSchema).query(async () => {
+      try {
+        const { conference, error: confError } =
+          await getConferenceForCurrentDomain()
+        if (confError || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to get current conference',
+            cause: confError,
+          })
+        }
 
-          const conferenceId = input.conferenceId || conference._id
-          const { travelSupports, error } =
-            await getAllTravelSupport(conferenceId)
+        const { travelSupports, error } = await getAllTravelSupport(
+          conference._id,
+        )
 
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to fetch travel support requests',
-              cause: error,
-            })
-          }
-
-          return travelSupports
-        } catch (error) {
-          if (error instanceof TRPCError) throw error
-
+        if (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch travel support requests',
             cause: error,
           })
         }
-      }),
+
+        return travelSupports
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch travel support requests',
+          cause: error,
+        })
+      }
+    }),
 
     updateStatus: adminProcedure
       .input(UpdateTravelSupportStatusSchema)

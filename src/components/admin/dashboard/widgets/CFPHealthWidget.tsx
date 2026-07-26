@@ -39,8 +39,8 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   // fetching data the view won't use. Every other phase renders fetched data.
   const isStaticPhase = phase === 'initialization'
   const { data, loading, error, refetch } = useWidgetData<CFPHealthData>(
-    conference && !isStaticPhase ? () => fetchCFPHealth(conference) : null,
-    [conference, isStaticPhase],
+    conference && !isStaticPhase ? () => fetchCFPHealth() : null,
+    [conference?._id, isStaticPhase],
   )
 
   // Apply config defaults

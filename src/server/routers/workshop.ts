@@ -469,21 +469,24 @@ export const workshopRouter = router({
           })
         }
 
+        // The conference is ALWAYS the domain-resolved one — never client
+        // input — so a signup cannot target (or bypass the registration
+        // window of) another tenant's conference.
         const belongs = await verifyWorkshopBelongsToConference(
           input.workshop._ref,
-          input.conference._ref,
+          conference._id,
         )
 
         if (!belongs) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Workshop does not belong to the specified conference',
+            message: 'Workshop does not belong to this conference',
           })
         }
 
         const existingSignups = await getWorkshopSignups(
           userWorkOSId,
-          input.conference._ref,
+          conference._id,
           undefined,
         )
 
@@ -508,7 +511,7 @@ export const workshopRouter = router({
           experienceLevel: input.experienceLevel,
           operatingSystem: input.operatingSystem,
           workshop: input.workshop,
-          conference: input.conference,
+          conference: { _type: 'reference' as const, _ref: conference._id },
           notes: input.notes,
           status: isWaitlist
             ? WorkshopSignupStatus.WAITLIST
@@ -934,18 +937,23 @@ export const workshopRouter = router({
     }),
 
     manualSignup: adminProcedure
-      .input(workshopSignupInputSchema)
+      .input(workshopSignupInputSchema.omit({ conference: true }))
       .mutation(async ({ input }) => {
         try {
+          // Conference is resolved from the request domain — never client
+          // input — so an organizer cannot write signups into another
+          // tenant's conference.
+          const conferenceId = await resolveConferenceId()
+
           const belongs = await verifyWorkshopBelongsToConference(
             input.workshop._ref,
-            input.conference._ref,
+            conferenceId,
           )
 
           if (!belongs) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: 'Workshop does not belong to the specified conference',
+              message: 'Workshop does not belong to this conference',
             })
           }
 
@@ -959,7 +967,7 @@ export const workshopRouter = router({
 
           const existingSignups = await getWorkshopSignups(
             input.userWorkOSId,
-            input.conference._ref,
+            conferenceId,
             undefined,
           )
 
@@ -974,7 +982,10 @@ export const workshopRouter = router({
             })
           }
 
-          const signup = await createWorkshopSignup(input)
+          const signup = await createWorkshopSignup({
+            ...input,
+            conference: { _type: 'reference' as const, _ref: conferenceId },
+          })
 
           await sendBasicWorkshopConfirmation({
             userEmail: signup.userEmail,

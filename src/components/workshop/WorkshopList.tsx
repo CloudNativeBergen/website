@@ -17,7 +17,6 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
 interface WorkshopListProps {
-  conferenceId: string
   userWorkOSId?: string
   userEmail?: string
   userName?: string
@@ -26,7 +25,6 @@ interface WorkshopListProps {
 }
 
 export default function WorkshopList({
-  conferenceId,
   userWorkOSId,
   userEmail,
   userName,
@@ -120,13 +118,13 @@ export default function WorkshopList({
     }
 
     try {
-      // Identity (userWorkOSId/userEmail/userName) is intentionally NOT sent:
-      // the server binds the signup to the authenticated WorkOS session.
+      // Identity (userWorkOSId/userEmail/userName) and the conference are
+      // intentionally NOT sent: the server binds the signup to the
+      // authenticated WorkOS session and the domain-resolved conference.
       await signupMutation.mutateAsync({
         experienceLevel,
         operatingSystem,
         workshop: { _type: 'reference', _ref: workshopId },
-        conference: { _type: 'reference', _ref: conferenceId },
       })
       return { success: true }
     } catch (error) {
