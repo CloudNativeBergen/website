@@ -10,11 +10,15 @@ function safePortableTextHref(href: string | undefined): string {
   const value = href?.trim()
   if (!value) return '#'
   if (value.startsWith('/') && !value.startsWith('//')) return value
+  // http(s) requires the explicit scheme prefix — `new URL` also parses
+  // degenerate no-authority forms like `https:example.com`. mailto: has no
+  // authority by design, so the protocol check suffices there.
+  const hasHttpPrefix = /^https?:\/\//i.test(value)
   try {
     const parsed = new URL(value)
     if (
-      parsed.protocol === 'https:' ||
-      parsed.protocol === 'http:' ||
+      ((parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+        hasHttpPrefix) ||
       parsed.protocol === 'mailto:'
     ) {
       return value
