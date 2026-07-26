@@ -55,6 +55,82 @@ Browser                     Site                        OAuth Provider
    - Stores speaker profile and account info on the JWT token
 5. NextAuth sets an encrypted HttpOnly cookie containing the JWT
 
+### Multi-Domain OAuth (Centralized Auth Origin, #619)
+
+**Opt-in, config-driven, off by default.** Wired in `src/lib/auth.ts` via
+`redirectProxyConfig()`, driven by the `AUTH_REDIRECT_PROXY_URL` env var. When
+the env is **absent** the built config carries no proxy keys and behavior is
+byte-for-byte today's single-domain flow.
+
+#### The problem
+
+A GitHub OAuth app allows **exactly one** authorization callback URL, and cookies
+cannot span registrable domains. So a single OAuth app cannot directly serve
+conferences hosted on different domains: the provider rejects a mismatched
+`redirect_uri` with `redirect_uri_mismatch` **before our app ever runs**.
+
+#### The mechanism
+
+Auth.js's `redirectProxyUrl` (env `AUTH_REDIRECT_PROXY_URL`) pins the OAuth
+`redirect_uri` to **one central auth origin**. The flow, in words:
+
+```text
+2026.example.no                auth.example.no (proxy)            OAuth Provider
+      │                              │                                 │
+      ├─ signIn(github) ────────────►│  redirect_uri = the proxy       │
+      │  (state carries the origin)  ├────────────────────────────────►│
+      │                              │◄──── code + signed state ───────┤
+      │◄── bounce code to origin ────┤  (proxy sees isOnRedirectProxy) │
+      ├─ token exchange + jwt/session callbacks run HERE, on the origin
+      │◄── Set session cookie (origin-local)
+```
+
+The central origin is the ONLY callback URL registered with the OAuth app. It
+verifies the **signed `state`** and bounces the authorization `code` back to the
+initiating origin, where token exchange and our `jwt`/`session` callbacks run and
+the session cookie is set. Setting `AUTH_REDIRECT_PROXY_URL` **auto-enables the
+provider's `state` check** (Auth.js contract) — that signed round-trip is what
+carries the initiating origin safely.
+
+#### Configuration
+
+`redirectProxyConfig()` returns `{ redirectProxyUrl, trustHost: true }` when the
+env is set, spread **last** into the NextAuth config. `trustHost` is enabled
+alongside it because the central origin must trust the incoming `Host` to build
+callback URLs (on Vercel `trustHost` already defaults true). The URL must include
+the full path up to where Auth.js is initialized, e.g.
+`https://auth.example.no/api/auth`.
+
+#### Interaction with provider-link intents
+
+The self-service **"link another provider"** flow (see [Speaker Linking](#speaker-linking))
+binds a link-intent to the initiating session by reading two **origin-local**
+cookies in the `jwt` callback: the `LINK_INTENT_COOKIE` and the pre-existing
+session token (`readPriorSessionToken`). Because the redirect proxy only governs
+the OAuth `redirect_uri` (the authorization round-trip) and the `jwt`/`session`
+callbacks still run **on the initiating origin**, the link-intent logic needs
+**no change** and is unaffected by the proxy at the code level.
+
+**Limitation (documented, not enforced):** link-intents are same-session /
+same-origin by construction. The proxy is effectively scoped to sign-**in**; it
+does not make provider-linking work **across** registrable domains, since the
+initiating cookies are origin-local and are not shared with a different domain.
+Cross-domain provider-linking is therefore not a supported combination.
+
+#### Manual verification (cannot be E2E-tested here)
+
+1. Register the proxy origin's `/api/auth/callback/{provider}` as the OAuth app's
+   single callback URL.
+2. Set `AUTH_REDIRECT_PROXY_URL=https://auth.<domain>/api/auth` on each satellite
+   deployment.
+3. Sign in from a satellite domain → confirm the provider redirects to the proxy
+   origin, then lands back on the satellite with a valid session.
+4. On a satellite, run the profile "link another provider" flow → confirm the
+   intent still binds to the initiating session (link-intent unaffected).
+
+The config wiring itself is unit-tested (`redirectProxyConfig` under both env
+states) in `src/lib/auth.test.ts`.
+
 ### Speaker Linking
 
 `getOrCreateSpeaker()` in `src/lib/speaker/sanity.ts` links OAuth identities to Sanity
@@ -265,10 +341,11 @@ GitHub for CFP has no automatic session for workshops, and vice versa.
 
 ### Optional
 
-| Variable                       | Description                                                                                                                            |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `CRON_SECRET`                  | Bearer token for cron job endpoints (`/api/cron/*`). Not related to user auth but uses the same `Authorization: Bearer` header pattern |
-| `NEXT_PUBLIC_ENABLE_TEST_MODE` | Set to `"true"` in development to enable mock auth sessions (bypasses OAuth)                                                           |
+| Variable                       | Description                                                                                                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                  | Bearer token for cron job endpoints (`/api/cron/*`). Not related to user auth but uses the same `Authorization: Bearer` header pattern                                                                          |
+| `NEXT_PUBLIC_ENABLE_TEST_MODE` | Set to `"true"` in development to enable mock auth sessions (bypasses OAuth)                                                                                                                                    |
+| `AUTH_REDIRECT_PROXY_URL`      | **Opt-in** centralized OAuth origin (#619) for serving multiple domains from ONE OAuth app. Absent = single-domain (today's default). See [Multi-Domain OAuth](#multi-domain-oauth-centralized-auth-origin-619) |
 
 ### WorkOS (Workshops Only)
 
