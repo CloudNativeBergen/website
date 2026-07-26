@@ -20,6 +20,11 @@ interface CollapsibleSectionProps {
    * independently of expanding/collapsing.
    */
   action?: ReactNode
+  /**
+   * Heading level for the card title so the document outline stays monotonic
+   * wherever the card is nested (e.g. 4 under the Settings groups' h3s).
+   */
+  headingLevel?: 2 | 3 | 4
 }
 
 export function CollapsibleSection({
@@ -29,7 +34,9 @@ export function CollapsibleSection({
   className = '',
   icon,
   action,
+  headingLevel = 2,
 }: CollapsibleSectionProps) {
+  const Heading = `h${headingLevel}` as const
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const contentId = useId()
 
@@ -41,7 +48,7 @@ export function CollapsibleSection({
         {/* Accessible-disclosure pattern: the HEADING wraps the toggle button
             (h2 > button is valid; button/span > h2 is not — a heading is flow
             content and cannot sit inside phrasing content). */}
-        <h2 className="flex min-w-0 flex-1">
+        <Heading className="flex min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
@@ -70,7 +77,7 @@ export function CollapsibleSection({
               )}
             </span>
           </button>
-        </h2>
+        </Heading>
         {action ? (
           <div className="flex shrink-0 items-center gap-2 pr-4">{action}</div>
         ) : null}

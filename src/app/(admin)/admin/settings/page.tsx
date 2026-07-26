@@ -286,6 +286,7 @@ export default async function AdminSettings() {
 
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
+              headingLevel={4}
               title="Venue Information"
               icon={<MapPinIcon />}
               action={
@@ -527,6 +528,7 @@ export default async function AdminSettings() {
 
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
+              headingLevel={4}
               title="Homepage Stats"
               icon={<ChartPieIcon />}
               action={
@@ -623,6 +625,7 @@ export default async function AdminSettings() {
 
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
+              headingLevel={4}
               title="Sponsor Benefits"
               icon={<CurrencyDollarIcon />}
               action={
@@ -657,6 +660,7 @@ export default async function AdminSettings() {
 
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection
+              headingLevel={4}
               title="Sponsorship Page"
               icon={<DocumentTextIcon />}
               action={
