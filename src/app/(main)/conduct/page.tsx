@@ -8,12 +8,14 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Code of Conduct - Cloud Native Days Norway',
-    description:
-      'Community Code of Conduct for Cloud Native Days Norway events and activities.',
+    title: { absolute: `Code of Conduct - ${brand}` },
+    description: `Community Code of Conduct for ${brand} events and activities.`,
     alternates: await canonicalAlternates('/conduct'),
   }
 }
@@ -35,7 +37,7 @@ async function CachedConductContent({ domain }: { domain: string }) {
     return null
   }
 
-  const organizerName = conference?.organizer || 'Cloud Native Days Norway'
+  const organizerName = conference?.organizer || PLATFORM_NAME
 
   return (
     <>

@@ -10,12 +10,13 @@ import { headers } from 'next/headers'
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Become a Sponsor - Cloud Native Days Norway',
-    description:
-      'Sponsorship opportunities for Cloud Native Days Norway conference',
+    title: { absolute: `Become a Sponsor - ${brand}` },
+    description: `Sponsorship opportunities for ${brand} conference`,
     alternates: await canonicalAlternates('/sponsor'),
     twitter: {
       card: 'summary_large_image',

@@ -17,6 +17,7 @@ import { Suspense } from 'react'
 import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -77,6 +78,7 @@ export async function generateMetadata(): Promise<Metadata> {
   // request host, keeping local development correct.
   const { conference } = await getConferenceForDomain(host)
   const metadataBase = new URL(canonicalOrigin(conference, host))
+  const brand = conference?.title?.trim() || PLATFORM_NAME
 
   return {
     metadataBase,
@@ -89,11 +91,13 @@ export async function generateMetadata(): Promise<Metadata> {
       ? { robots: { index: false, follow: false } }
       : {}),
     title: {
-      template: '%s - Cloud Native Days',
-      default:
-        'Cloud Native Days - A community-driven Kubernetes and Cloud conference',
+      template: `%s - ${brand}`,
+      default: conference?.tagline
+        ? `${brand} - ${conference.tagline}`
+        : `${brand} - A community-driven Kubernetes and Cloud conference`,
     },
     description:
+      conference?.description ||
       'We bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
     // PWA / installability. Next injects the manifest link automatically from
     // `app/manifest.ts`; here we add the iOS web-app meta and the icon links.
@@ -103,7 +107,7 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
-      title: 'Cloud Native Days',
+      title: brand,
     },
     icons: {
       icon: [

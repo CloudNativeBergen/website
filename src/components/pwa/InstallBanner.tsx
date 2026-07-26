@@ -43,7 +43,7 @@ export function InstallBanner({
 
         <div className="flex-1 text-sm text-gray-700 dark:text-gray-200">
           {mode === 'chromium' ? (
-            <span>Install Cloud Native Days for quick, app-like access.</span>
+            <span>Install this app for quick, app-like access.</span>
           ) : (
             <span>
               Add to your Home Screen: tap Share, then{' '}

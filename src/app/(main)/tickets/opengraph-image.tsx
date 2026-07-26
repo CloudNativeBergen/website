@@ -1,10 +1,11 @@
 import { generateOGImage } from '@/lib/og/template'
-import { OG_IMAGE_SIZE } from '@/lib/og/styles'
+import { ogImageMetadata } from '@/lib/og/metadata'
 
 export const dynamic = 'force-dynamic'
-export const alt = 'Get Your Ticket - Cloud Native Days Norway'
-export const size = OG_IMAGE_SIZE
-export const contentType = 'image/png'
+
+export function generateImageMetadata() {
+  return ogImageMetadata((brand) => `Get Your Ticket - ${brand}`)
+}
 
 export default async function Image() {
   return generateOGImage({

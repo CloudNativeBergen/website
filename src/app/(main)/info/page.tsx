@@ -10,12 +10,13 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Practical Information - Cloud Native Days Norway',
-    description:
-      'Essential details for attending Cloud Native Days Norway conference',
+    title: { absolute: `Practical Information - ${brand}` },
+    description: `Essential details for attending ${brand} conference`,
     alternates: await canonicalAlternates('/info'),
   }
 }

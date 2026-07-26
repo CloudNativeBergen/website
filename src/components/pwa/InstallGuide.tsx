@@ -16,6 +16,7 @@ import {
   resolveInstallView,
   type InstallView,
 } from './installView'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 /** Why someone would install — shown above the manual/actionable flows. */
 function Benefits() {
@@ -68,6 +69,12 @@ export interface InstallGuidePanelProps {
   view: InstallView
   /** Invoked by the Chromium Install button. */
   onInstall?: () => void
+  /**
+   * The installable app's display name, shown in the copy. Defaults to the
+   * neutral platform name; the `/install` page passes the tenant conference
+   * title so the guidance names the actual app.
+   */
+  productName?: string
 }
 
 /**
@@ -75,7 +82,11 @@ export interface InstallGuidePanelProps {
  * any browser-event or context access so every state can be rendered directly
  * (Storybook, tests). The container {@link InstallGuide} picks the view.
  */
-export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
+export function InstallGuidePanel({
+  view,
+  onInstall,
+  productName = PLATFORM_NAME,
+}: InstallGuidePanelProps) {
   if (view === 'installed') {
     return (
       <div className="text-center">
@@ -87,7 +98,7 @@ export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
           You&rsquo;re all set
         </h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-          Cloud Native Days is installed. Launch it from your home screen or app
+          {productName} is installed. Launch it from your home screen or app
           launcher any time.
         </p>
       </div>
@@ -104,7 +115,7 @@ export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
           Install the app
         </h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-          One tap adds Cloud Native Days to your device.
+          One tap adds {productName} to your device.
         </p>
         <button
           type="button"
@@ -112,7 +123,7 @@ export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
           className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-cloud-blue px-6 py-3 text-base font-semibold text-white transition hover:bg-brand-cloud-blue-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
         >
           <ArrowDownTrayIcon className="size-5" aria-hidden="true" />
-          Install Cloud Native Days
+          Install {productName}
         </button>
         <Benefits />
       </div>
@@ -195,8 +206,8 @@ export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
         Look for an <span className="font-semibold">install icon</span> in the
         address bar, or open your browser menu and choose{' '}
-        <span className="font-semibold">Install Cloud Native Days</span>.
-        Available in Chrome, Edge, and other Chromium browsers.
+        <span className="font-semibold">Install {productName}</span>. Available
+        in Chrome, Edge, and other Chromium browsers.
       </p>
       <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
         Firefox and desktop Safari don&rsquo;t support installing this app — you
@@ -215,7 +226,7 @@ export function InstallGuidePanel({ view, onInstall }: InstallGuidePanelProps) {
  * prompt; `appinstalled` flips the provider to standalone and this re-renders
  * into the success state automatically.
  */
-export function InstallGuide() {
+export function InstallGuide({ productName }: { productName?: string }) {
   const { platform, isStandalone, promptInstall } = usePwaInstall()
   const [browser, setBrowser] = useState({ isIOS: false, isSafari: false })
 
@@ -235,7 +246,11 @@ export function InstallGuide() {
 
   return (
     <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-lg ring-1 ring-gray-900/5 sm:p-8 dark:bg-gray-800 dark:ring-white/10">
-      <InstallGuidePanel view={view} onInstall={() => void promptInstall()} />
+      <InstallGuidePanel
+        view={view}
+        onInstall={() => void promptInstall()}
+        productName={productName}
+      />
     </div>
   )
 }
