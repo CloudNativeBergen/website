@@ -17,6 +17,7 @@ import {
   TrashIcon,
   ClipboardDocumentIcon,
   ArrowDownTrayIcon,
+  ArrowPathIcon,
   IdentificationIcon,
 } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
@@ -25,6 +26,8 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
 import { SearchInput } from '@/components/SearchInput'
 import { StatusBadge } from '@/components/StatusBadge'
+import { AdminButton } from '@/components/admin/AdminButton'
+import { isBadgeOutdated } from '@/lib/badge/version'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
@@ -162,6 +165,62 @@ export function BadgeManagementClient({
     },
   })
 
+  const [rebakingBadgeId, setRebakingBadgeId] = useState<string | null>(null)
+  const [isRebakingAll, setIsRebakingAll] = useState(false)
+
+  const rebakeMutation = api.badge.admin.rebake.useMutation()
+
+  const handleRebakeBadge = async (badgeId: string, speakerName: string) => {
+    setRebakingBadgeId(badgeId)
+    try {
+      await rebakeMutation.mutateAsync({ badgeId })
+      await refetchBadges()
+      showNotification({
+        type: 'success',
+        title: 'Badge Rebaked',
+        message: `Badge for ${speakerName} rebaked to the current format`,
+      })
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Rebake Failed',
+        message:
+          error instanceof Error ? error.message : 'Failed to rebake badge',
+      })
+    } finally {
+      setRebakingBadgeId(null)
+    }
+  }
+
+  const handleRebakeAllOutdated = async () => {
+    const outdated = (existingBadges || []).filter((b) =>
+      isBadgeOutdated(b.generatorVersion),
+    )
+    if (outdated.length === 0) return
+
+    setIsRebakingAll(true)
+    let succeeded = 0
+    let failed = 0
+    // Sequential — one Sanity write + asset upload each; keep the load bounded.
+    for (const badge of outdated) {
+      try {
+        await rebakeMutation.mutateAsync({ badgeId: badge.badgeId })
+        succeeded += 1
+      } catch {
+        failed += 1
+      }
+    }
+    await refetchBadges()
+    setIsRebakingAll(false)
+    showNotification({
+      type: failed > 0 ? (succeeded > 0 ? 'warning' : 'error') : 'success',
+      title: 'Rebake Complete',
+      message: `Rebaked ${succeeded} badge${succeeded === 1 ? '' : 's'}${
+        failed > 0 ? `, ${failed} failed` : ''
+      }`,
+    })
+  }
+
   const handleSelectSpeaker = (speakerId: string) => {
     const newSelection = new Set(selectedSpeakers)
     if (newSelection.has(speakerId)) {
@@ -237,6 +296,9 @@ export function BadgeManagementClient({
   }
 
   const badges = existingBadges || []
+  const outdatedCount = badges.filter((b) =>
+    isBadgeOutdated(b.generatorVersion),
+  ).length
   const localhostWarning = createLocalhostWarning(domain, 'badge recipients')
 
   const hasExistingBadge = (speakerId: string): boolean => {
@@ -418,6 +480,13 @@ export function BadgeManagementClient({
             <div className="text-xs text-gray-500 dark:text-gray-400">
               {formatDateSafe(badge.issuedAt)}
             </div>
+            {isBadgeOutdated(badge.generatorVersion) && (
+              <StatusBadge
+                label="Outdated format"
+                color="yellow"
+                icon={ExclamationTriangleIcon}
+              />
+            )}
             {hasEmailError && badge.emailError && (
               <div className="text-xs text-red-600 dark:text-red-400">
                 {badge.emailError}
@@ -458,6 +527,15 @@ export function BadgeManagementClient({
               download
             >
               Download
+            </ActionMenuItem>
+            <ActionMenuItem
+              onClick={() => handleRebakeBadge(badge.badgeId, speaker.name)}
+              icon={ArrowPathIcon}
+              disabled={rebakingBadgeId === badge.badgeId || isRebakingAll}
+            >
+              {isBadgeOutdated(badge.generatorVersion)
+                ? 'Rebake (outdated)'
+                : 'Rebake'}
             </ActionMenuItem>
             {isDevelopment && (
               <>
@@ -649,6 +727,22 @@ export function BadgeManagementClient({
                   </div>
                 </div>
               </FilterDropdown>
+              {outdatedCount > 0 && (
+                <AdminButton
+                  color="yellow"
+                  size="md"
+                  onClick={handleRebakeAllOutdated}
+                  disabled={isRebakingAll || rebakingBadgeId !== null}
+                  title="Re-bake every badge on an older credential format with the current generator"
+                >
+                  <ArrowPathIcon
+                    className={`h-4 w-4 ${isRebakingAll ? 'animate-spin' : ''}`}
+                  />
+                  {isRebakingAll
+                    ? 'Rebaking...'
+                    : `Rebake ${outdatedCount} outdated`}
+                </AdminButton>
+              )}
               <button
                 onClick={handlePreview}
                 className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"

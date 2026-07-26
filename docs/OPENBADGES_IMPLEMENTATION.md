@@ -324,6 +324,89 @@ Every badge is signed with both methods:
 - **Baking (legacy badges only):** JWT embedded in SVG using
   `<openbadges:credential verify="{jwt}">`
 
+#### Why the RSA keys stay REQUIRED
+
+`BADGE_ISSUER_RSA_PRIVATE_KEY` and `BADGE_ISSUER_RSA_PUBLIC_KEY` are **not
+optional**, even though the primary (Ed25519 embedded) proof does not use them —
+`createBadgeConfiguration()` throws at issuance if either is unset. They are
+required for two durable reasons:
+
+1. **Dual-format issuance.** Every badge is signed in _both_ formats: the
+   embedded Ed25519 proof (baked into the SVG, stored in `badgeJson`) **and** the
+   RS256 JWT (stored in `badgeJwt`, served from `/api/badge/[id]/jwt`). The JWT
+   is what the 1EdTech OB30Inspector validator consumes. Dropping RSA would
+   silently stop minting the JWT half of every new badge.
+2. **Verifying already-issued JWT badges.** The public RSA key is published as a
+   JWK from the keys endpoint and the issuer profile, and the `badge.verify`
+   path uses `BADGE_ISSUER_RSA_PUBLIC_KEY` to verify **legacy badges whose
+   `badgeJson` is a raw JWT** (`isJWTFormat`). Rotating away the RSA public key
+   would make those historical badges fail verification.
+
+---
+
+## Generator Versioning & Rebaking
+
+Baked badges are **immutable artifacts**: the download route serves the stored
+`bakedSvg` as-is and does not re-prove on download, so a badge issued under an
+older credential format keeps that format forever unless it is explicitly
+re-baked.
+
+### The version constant and bump rule
+
+`src/lib/badge/version.ts` exports `BADGE_GENERATOR_VERSION`. Every
+`speakerBadge` document is stamped with `generatorVersion` at issuance. A stored
+doc with **no** `generatorVersion` is treated as **v1**.
+
+**Bump the constant whenever the credential format changes such that
+already-baked badges become stale** — i.e. a fresh re-issue would produce a
+materially different, more correct credential/proof/SVG. Do **not** bump for
+changes that leave existing baked artifacts valid (copy tweaks on new issuance,
+output-identical refactors). The version is a re-bake trigger, not a build
+number.
+
+Version history:
+
+- **v1** — pre-#655. The embedded proof `verificationMethod` was the
+  issuer-profile _fragment_ (not dereferenceable by the 1EdTech
+  `EmbeddedProofProbe`), and the credential carried no
+  `credentialSubject.identifier[]` block for displayer ownership matching.
+- **v2** — #655. The embedded proof `verificationMethod` is the dereferenceable
+  keys URL (`/api/badge/keys/key-ed25519`) returning a bare Multikey document,
+  and the credential includes a `credentialSubject.identifier[]` IdentityObject
+  (email, unhashed).
+
+### Rebake semantics
+
+The `badge.admin.rebake` mutation (org-scoped, admin-only) regenerates
+`badgeJson`, `badgeJwt` and `bakedSvg` with the **current** generator and
+patches the document in place. It is **idempotent** and refuses nothing except a
+missing or cross-tenant badge.
+
+Stable across a rebake (the badge's public identity):
+
+- **`badgeId`** — so the verification URL and any shared / Credly links keep
+  resolving.
+- **`verificationUrl`** — derived from the preserved `badgeId`.
+- **`issuedAt` / `validFrom`** — the achievement date must not shift.
+
+Re-minted by a rebake:
+
+- **The proof** — a fresh signature; the proof's `created` timestamp is _now_.
+- **`badgeJson` + `badgeJwt`** — regenerated in the current format.
+- **`bakedSvg`** — re-baked; the previous SVG asset is deleted so a rebake does
+  not orphan blobs.
+- **`generatorVersion`** — stamped to `BADGE_GENERATOR_VERSION`.
+
+### Outdated detection
+
+- **Admin badge page** (`/admin/speakers/badge`): a badge whose stored version
+  is below the current one shows an **"Outdated format"** marker with a per-row
+  **Rebake** action, plus a **"Rebake N outdated"** button that re-bakes the
+  conference's outdated badges sequentially and reports the count.
+- **System status** (`/admin/settings`): the `badges.outdated` check counts this
+  conference's outdated badges — `ok` at zero, `warn` with the count and a
+  pointer to the admin action otherwise.
+
 ---
 
 ## Multi-Tenant Support

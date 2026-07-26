@@ -33,6 +33,7 @@ const BADGE_FIELDS = `
   },
   badgeType,
   issuedAt,
+  generatorVersion,
   badgeJson,
   badgeJwt,
   bakedSvg{
@@ -82,11 +83,14 @@ export async function createBadge(params: {
   badgeJwt?: string
   bakedSvgAssetId: string
   verificationUrl: string
+  /** Generator format version stamped at issuance (see lib/badge/version.ts) */
+  generatorVersion: number
 }): Promise<{ badge?: BadgeRecord; error?: Error }> {
   try {
     const doc = {
       _type: 'speakerBadge',
       badgeId: params.badgeId,
+      generatorVersion: params.generatorVersion,
       speaker: {
         _type: 'reference',
         _ref: params.speakerId,
@@ -124,6 +128,77 @@ export async function createBadge(params: {
     return { badge }
   } catch (error) {
     console.error('Failed to create badge:', error)
+    return { error: error as Error }
+  }
+}
+
+/**
+ * Re-bake an existing badge IN PLACE: swap the regenerated artifacts onto the
+ * same document (same `_id`, same `badgeId`, same `verificationUrl`, same
+ * `issuedAt`) and stamp the current `generatorVersion`. The previous baked-SVG
+ * asset is deleted after the patch so a rebake does not orphan blobs. Used by
+ * the rebake flow; issuance uses {@link createBadge}.
+ */
+export async function patchBadgeArtifacts(
+  badgeId: string,
+  params: {
+    badgeJson: string
+    badgeJwt?: string
+    bakedSvgAssetId: string
+    generatorVersion: number
+  },
+): Promise<{ badge?: BadgeRecord; error?: Error }> {
+  try {
+    const existing = await clientRead.fetch<{
+      _id: string
+      bakedSvg?: { asset?: { _ref?: string } }
+    }>(
+      `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id, bakedSvg }`,
+      { badgeId },
+    )
+
+    if (!existing) {
+      return { error: new Error('Badge not found') }
+    }
+
+    const oldAssetId = existing.bakedSvg?.asset?._ref
+
+    const patch: Record<string, unknown> = {
+      badgeJson: params.badgeJson,
+      generatorVersion: params.generatorVersion,
+      bakedSvg: {
+        _type: 'file',
+        asset: { _type: 'reference', _ref: params.bakedSvgAssetId },
+      },
+    }
+    if (params.badgeJwt) {
+      patch.badgeJwt = params.badgeJwt
+    }
+
+    const updated = await clientWrite.patch(existing._id).set(patch).commit()
+
+    // Best-effort cleanup of the superseded SVG asset (never fail the rebake on
+    // this — the doc already points at the new asset).
+    if (oldAssetId && oldAssetId !== params.bakedSvgAssetId) {
+      try {
+        await clientWrite.delete(oldAssetId)
+      } catch (assetError) {
+        console.warn('Failed to delete superseded badge SVG asset:', assetError)
+      }
+    }
+
+    const badge = await clientRead.fetch<BadgeRecord>(
+      `*[_type == "speakerBadge" && _id == $id][0]{${BADGE_FIELDS}}`,
+      { id: updated._id },
+    )
+
+    if (!badge) {
+      return { error: new Error('Failed to fetch rebaked badge') }
+    }
+
+    return { badge }
+  } catch (error) {
+    console.error('Failed to patch badge artifacts:', error)
     return { error: error as Error }
   }
 }

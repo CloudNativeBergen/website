@@ -14,6 +14,7 @@ import {
   platformCheckinCredentials,
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
+import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
 import type {
   CheckGroup,
   CheckStatus,
@@ -744,6 +745,55 @@ async function pushSubscriptionCount(): Promise<SystemCheck> {
 }
 
 /**
+ * Count of this conference's badges baked by an OLDER generator than the current
+ * one (absent generatorVersion ⇒ v1). >0 ⇒ warn with a pointer to the admin
+ * page's "Rebake all outdated" action. TENANT-SCOPED to the conference — this is
+ * a per-conference admin read.
+ */
+async function badgesOutdatedProbe(
+  conferenceId: string | undefined,
+): Promise<SystemCheck> {
+  const meta = {
+    id: 'badges.outdated',
+    group: 'badges' as const,
+    label: 'Outdated-format badges',
+  }
+  if (!conferenceId) {
+    return {
+      ...meta,
+      status: 'off',
+      value: 'unknown',
+      detail: 'No conference resolved to scope the badge count',
+    }
+  }
+  try {
+    const outdated = await clientReadUncached.fetch<number>(
+      `count(*[_type == "speakerBadge" && conference._ref == $conferenceId && coalesce(generatorVersion, 1) < $current])`,
+      { conferenceId, current: BADGE_GENERATOR_VERSION },
+    )
+    const count = outdated ?? 0
+    return count > 0
+      ? {
+          ...meta,
+          status: 'warn',
+          value: `${count} badge${count === 1 ? '' : 's'}`,
+          detail:
+            'Baked before the current credential format (v' +
+            BADGE_GENERATOR_VERSION +
+            '). Re-bake them from /admin/speakers/badge → "Rebake all outdated".',
+        }
+      : {
+          ...meta,
+          status: 'ok',
+          value: 'none',
+          detail: `All badges are on the current format (v${BADGE_GENERATOR_VERSION})`,
+        }
+  } catch (err) {
+    return { ...meta, status: 'warn', value: 'unknown', detail: errMsg(err) }
+  }
+}
+
+/**
  * Full registry: synchronous env/file/conference checks PLUS the live Sanity
  * read probe and the push-subscription count. The live probes are appended into
  * their groups so the UI renders them alongside the static rows.
@@ -752,11 +802,12 @@ export async function buildSystemChecks(
   conference: ConferenceForSystemChecks,
 ): Promise<SystemCheck[]> {
   const staticChecks = buildChecks(conference)
-  const [readProbe, pushCount] = await Promise.all([
+  const [readProbe, pushCount, badgesOutdated] = await Promise.all([
     sanityReadProbe(),
     pushSubscriptionCount(),
+    badgesOutdatedProbe(conference._id),
   ])
-  return [...staticChecks, readProbe, pushCount]
+  return [...staticChecks, readProbe, pushCount, badgesOutdated]
 }
 
 /** Exposed for unit tests: the synchronous, side-effect-light checks only. */

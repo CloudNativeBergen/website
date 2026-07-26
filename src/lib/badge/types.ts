@@ -86,6 +86,11 @@ export interface BadgeRecord {
   badgeType: BadgeType
   issuedAt: string
   /**
+   * Generator format version this badge was baked with. Absent on docs baked
+   * before the field existed ⇒ treated as v1. See lib/badge/version.ts.
+   */
+  generatorVersion?: number
+  /**
    * OpenBadges 3.0 credential. New badges store the embedded-proof JSON-LD
    * credential (stringified). Legacy badges store the raw JWT string —
    * use isJWTFormat() to distinguish.

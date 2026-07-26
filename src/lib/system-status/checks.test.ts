@@ -204,6 +204,66 @@ describe('buildSystemChecks — live probes', () => {
   })
 })
 
+describe('buildSystemChecks — badges.outdated', () => {
+  beforeEach(() => {
+    vi.stubEnv('RESEND_API_KEY', 'x')
+  })
+
+  // Route each async probe's fetch by query shape so the outdated-badge count is
+  // controllable independently of the other live probes.
+  function mockFetch(outdated: number | Error) {
+    fetchMock.mockImplementation((query: string) => {
+      if (query.includes('speakerBadge')) {
+        return outdated instanceof Error
+          ? Promise.reject(outdated)
+          : Promise.resolve(outdated)
+      }
+      if (query.includes('"total"'))
+        return Promise.resolve({ total: 0, speakers: 0 })
+      return Promise.resolve('conf-1')
+    })
+  }
+
+  it('is ok when no badge is on an older format', async () => {
+    mockFetch(0)
+    const check = byId(await buildSystemChecks(CONFERENCE), 'badges.outdated')
+    expect(check.status).toBe('ok')
+    expect(check.value).toBe('none')
+  })
+
+  it('warns with the count when badges are outdated', async () => {
+    mockFetch(3)
+    const check = byId(await buildSystemChecks(CONFERENCE), 'badges.outdated')
+    expect(check.status).toBe('warn')
+    expect(check.value).toBe('3 badges')
+    expect(check.detail).toContain('Rebake all outdated')
+  })
+
+  it('singularizes a single outdated badge', async () => {
+    mockFetch(1)
+    const check = byId(await buildSystemChecks(CONFERENCE), 'badges.outdated')
+    expect(check.value).toBe('1 badge')
+  })
+
+  it('scopes the count to the conference (conference._ref bound)', async () => {
+    mockFetch(0)
+    await buildSystemChecks(CONFERENCE)
+    const call = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes('speakerBadge'),
+    )
+    expect(call).toBeDefined()
+    expect(String(call![0])).toContain('conference._ref == $conferenceId')
+    expect(call![1]).toMatchObject({ conferenceId: 'conf-1' })
+  })
+
+  it('degrades to warn/unknown when the count query throws', async () => {
+    mockFetch(new Error('boom'))
+    const check = byId(await buildSystemChecks(CONFERENCE), 'badges.outdated')
+    expect(check.status).toBe('warn')
+    expect(check.value).toBe('unknown')
+  })
+})
+
 describe('types helpers', () => {
   const sample: SystemCheck[] = [
     { id: 'a', group: 'sanity', label: 'A', status: 'ok' },

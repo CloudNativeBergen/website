@@ -48,6 +48,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'generatorVersion',
+      title: 'Generator Version',
+      type: 'number',
+      description:
+        'Badge generator format version this artifact was baked with (see src/lib/badge/version.ts). Absent ⇒ v1 (pre-#655). Drives outdated-format detection and in-place rebake.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'badgeJson',
       title: 'Badge JSON',
       type: 'text',
