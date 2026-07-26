@@ -5,6 +5,7 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
+import { resolveConferenceFrom, resolveConferenceContact } from './from'
 
 export interface WorkshopConfirmationEmailRequest {
   userEmail: string
@@ -35,14 +36,9 @@ export async function sendBasicWorkshopConfirmation({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference?.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference?.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference?.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
@@ -145,18 +141,13 @@ export async function sendWorkshopSignupInstructions({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const workshopUrl = conference.domains?.[0]
       ? `https://${conference.domains[0]}/workshop`
-      : 'https://cloudnativedays.org/workshop'
+      : ''
 
     const subject = `Workshop Signup Available - ${conference.title}`
 
@@ -183,7 +174,7 @@ export async function sendWorkshopSignupInstructions({
 
                     <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
                     <ol style="margin: 0 0 24px 0; padding-left: 24px;">
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: #1D4ED8; text-decoration: none;">${workshopUrl}</a></li>
+                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: #1D4ED8; text-decoration: none;">${workshopUrl}</a></li>` : ''}
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
@@ -196,7 +187,7 @@ export async function sendWorkshopSignupInstructions({
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
                       <tr>
                         <td align="center">
-                          <a href="${workshopUrl}" style="display: inline-block; background-color: #1D4ED8; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>
+                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: #1D4ED8; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>` : ''}
                         </td>
                       </tr>
                     </table>
@@ -295,14 +286,9 @@ export async function sendWorkshopAnnouncementEmail({
   EmailResult<{ emailId: string }>
 > {
   try {
-    const fromEmail = conference?.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference?.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    const fromEmail = resolveConferenceFrom(conference)
 
-    const contactEmail =
-      conference?.contactEmail || 'contact@cloudnativedays.org'
+    const contactEmail = resolveConferenceContact(conference)
 
     const subject = `Workshop Update: ${workshopTitle}`
     const safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>')

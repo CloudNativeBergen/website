@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { resolveConferenceContact } from '@/lib/email/from'
 import { ErrorDisplay } from '@/components/admin'
 import {
   ShieldCheckIcon,
@@ -73,7 +74,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = conference.contactEmail || 'contact@cloudnativedays.no'
+  const contactEmail = resolveConferenceContact(conference)
   const organizationName = 'Cloud Native Days Norway'
 
   return (

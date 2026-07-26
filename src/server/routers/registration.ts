@@ -25,6 +25,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 export const registrationRouter = router({
   validate: publicProcedure
@@ -266,13 +267,14 @@ export const registrationRouter = router({
         socialLinks: sfc.conference.socialLinks || [],
       })
 
-      const fromEmail =
-        sfc.conference.sponsorEmail || 'sponsors@cloudnativeday.no'
-      const fromName = sfc.conference.organizer || 'Cloud Native Days'
+      const from = resolveConferenceFrom(sfc.conference, {
+        field: 'sponsorEmail',
+        localPart: 'sponsors',
+      })
 
       const result = await retryWithBackoff(async () => {
         return resend.emails.send({
-          from: `${fromName} <${fromEmail}>`,
+          from,
           to: recipients,
           subject: `Sponsor Registration — ${sfc.conference!.title}`,
           react: emailElement,

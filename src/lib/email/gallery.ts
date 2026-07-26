@@ -100,15 +100,12 @@ export async function sendGalleryTagEmail(
     const galleryUrl = buildGalleryImageUrl(domain, image._id)
     const dashboardUrl = `${eventUrl}/cfp/list`
 
-    // Use conference social links if available, otherwise fall back to defaults
-    const defaultSocialLinks = [
-      'https://twitter.com/cloudnativebergen',
-      'https://www.linkedin.com/company/cloudnativebergen',
-    ]
+    // Use the conference's own social links; omit rather than fall back to
+    // another org's hardcoded handles.
     const socialLinks =
       conference.socialLinks && conference.socialLinks.length > 0
         ? conference.socialLinks
-        : defaultSocialLinks
+        : []
 
     const emailHtml = await render(
       React.createElement(GallerySpeakerTaggedTemplate, {

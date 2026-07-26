@@ -1,26 +1,104 @@
 import type { MetadataRoute } from 'next'
+import { headers } from 'next/headers'
+import { cacheLife, cacheTag } from 'next/cache'
+import { normalizeDomain } from '@/lib/conference/domains'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 
 /**
  * Web app manifest (Next.js metadata route → `/manifest.webmanifest`).
  *
- * Next injects `<link rel="manifest">` automatically. The name/id are kept
- * stable across tenants so the installed app identity never changes, while the
- * icons resolve per host via the dynamic `/pwa/icon/*` routes (each conference's
- * own `logomarkBright`, with a static fallback).
+ * Next injects `<link rel="manifest">` automatically. Each tenant domain is its
+ * own PWA origin and the install identity (`id`/`scope`/`start_url`) is
+ * path-based, so per-host `name`/`short_name` are SAFE — a device only ever
+ * sees one host's manifest. `name` therefore reflects the conference resolved
+ * for the request host; when no conference resolves (e.g. localhost) it falls
+ * back to the platform defaults below.
  *
- * `start_url` points at `/launch` (see `src/app/launch/route.ts`): a UI-less
- * Route Handler that resolves the signed-in role server-side and 307-redirects
- * to the right home (organizer → `/admin`, speaker → `/cfp/list`, logged-out
- * attendee → the public `/program`). `id` stays `/` so the installed app
- * identity is unchanged by this start_url move.
+ * `id`/`scope`/`start_url`/`theme_color` are intentionally left host-invariant:
+ * `id`/`scope` anchor the installed app identity and `start_url` points at
+ * `/launch` (a role-aware redirect dispatcher — see `src/app/launch/route.ts`).
+ * `theme_color` stays platform-blue until the design-token wave.
+ *
+ * Icons resolve per host via the dynamic `/pwa/icon/*` routes (each
+ * conference's own `logomarkBright`, with a static fallback).
  */
-export default function manifest(): MetadataRoute.Manifest {
+
+const PLATFORM_NAME = 'Cloud Native Days'
+const PLATFORM_SHORT_NAME = 'CND'
+const PLATFORM_DESCRIPTION =
+  'Community-driven Kubernetes and Cloud Native conferences in the Nordics.'
+
+/** Max length for a PWA `short_name` (kept tight so launchers never truncate). */
+const SHORT_NAME_MAX = 12
+
+/** Derive a `short_name` from a full title by truncating on a word boundary. */
+function toShortName(title: string): string {
+  const trimmed = title.trim()
+  if (trimmed.length <= SHORT_NAME_MAX) return trimmed
+
+  const slice = trimmed.slice(0, SHORT_NAME_MAX)
+  // Only back off to the last word boundary when the budget cuts THROUGH a word
+  // (the next char is not whitespace). A clean fit like "Cloud Native" is kept.
+  if (trimmed[SHORT_NAME_MAX] !== ' ') {
+    const lastSpace = slice.lastIndexOf(' ')
+    if (lastSpace > 0) return slice.slice(0, lastSpace).trim()
+  }
+  return slice.trim()
+}
+
+/**
+ * Resolve the host-specific manifest identity. Cached per host (keyed on the
+ * `domain` argument and tagged `domain:<host>`) so it revalidates with the same
+ * `content:conferences` invalidation as the rest of the per-host surface, while
+ * `manifest()` itself stays a thin dynamic wrapper that only reads the host.
+ */
+async function resolveManifestIdentity(host: string): Promise<{
+  name: string
+  shortName: string
+  description: string
+}> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:conferences')
+  cacheTag(`domain:${host}`)
+
+  try {
+    const { conference, error } = await getConferenceForDomain(host)
+    if (error || !conference?.title) {
+      return {
+        name: PLATFORM_NAME,
+        shortName: PLATFORM_SHORT_NAME,
+        description: PLATFORM_DESCRIPTION,
+      }
+    }
+    return {
+      name: conference.title,
+      shortName: toShortName(conference.title),
+      description: conference.description || PLATFORM_DESCRIPTION,
+    }
+  } catch {
+    // A misconfigured/unreachable Sanity must never break the manifest; fall
+    // back to the platform identity so installs still succeed.
+    return {
+      name: PLATFORM_NAME,
+      shortName: PLATFORM_SHORT_NAME,
+      description: PLATFORM_DESCRIPTION,
+    }
+  }
+}
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  // Normalize BEFORE the cached resolver: the raw Host header can vary in
+  // case/whitespace, and the cache key + domain:<host> tag must match the
+  // normalized form the rest of the per-host surface (and revalidations) use.
+  const host = normalizeDomain((await headers()).get('host') || '')
+  const { name, shortName, description } = await resolveManifestIdentity(host)
+
   return {
     id: '/',
-    name: 'Cloud Native Days',
-    short_name: 'CND',
-    description:
-      'Community-driven Kubernetes and Cloud Native conferences in the Nordics.',
+    name,
+    short_name: shortName,
+    description,
     start_url: '/launch',
     scope: '/',
     display: 'standalone',

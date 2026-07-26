@@ -3,6 +3,7 @@ import { BadgeEmailTemplate } from '@/components/email/BadgeEmailTemplate'
 import { updateBadgeEmailStatus } from '@/lib/badge/sanity'
 import type { BadgeRecord } from '@/lib/badge/types'
 import type { Conference } from '@/lib/conference/types'
+import { resolveConferenceFrom } from '@/lib/email/from'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -46,12 +47,9 @@ export async function sendBadgeEmail({
       downloadUrl,
     })
 
-    // Determine from email using conference data
-    const fromEmail = conference.contactEmail
-      ? `${conference.organizer} <${conference.contactEmail}>`
-      : conference.domains?.[0]
-        ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Days <contact@cloudnativedays.org>'
+    // Determine from email using conference data (neutral platform fallback
+    // when the conference has no contactEmail/domain — never a hardcoded brand).
+    const fromEmail = resolveConferenceFrom(conference)
 
     // Send email using Resend
     const { data, error } = await resend.emails.send({

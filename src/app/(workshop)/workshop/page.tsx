@@ -6,6 +6,7 @@ import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 
 export default async function WorkshopPage() {
@@ -152,7 +153,7 @@ export default async function WorkshopPage() {
 
               <div className="mt-8">
                 <Button
-                  href={`mailto:${conference.contactEmail || 'contact@cloudnativedays.no'}`}
+                  href={`mailto:${resolveConferenceContact(conference)}`}
                   variant="outline"
                 >
                   <EnvelopeIcon className="mr-2 h-5 w-5" />

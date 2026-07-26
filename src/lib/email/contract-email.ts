@@ -119,7 +119,7 @@ export async function renderContractEmail(
   }
 
   const titleColor = TITLE_COLORS[slug] || '#334155'
-  const eventUrl = variables.EVENT_URL || 'https://cloudnativeday.no'
+  const eventUrl = variables.EVENT_URL || ''
   const eventDate = variables.EVENT_DATE || ''
   const eventLocation = variables.EVENT_LOCATION || 'Norway'
 

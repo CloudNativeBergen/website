@@ -54,12 +54,14 @@ export async function sendVolunteerApprovalEmail(
     const eventDate = conference.startDate
       ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
-    const eventUrl = `https://${conference.domains?.[0] || 'cloudnativebergen.no'}`
+    const eventUrl = conference.domains?.[0]
+      ? `https://${conference.domains[0]}`
+      : ''
     const socialLinks = conference.socialLinks?.map((link) => link.url) || []
 
     const result = await retryWithBackoff(async () => {
       const response = await resend.emails.send({
-        from: `${conference.organizer || 'Cloud Native Days'} <${fromEmail}>`,
+        from: `${conference.organizer || conference.title} <${fromEmail}>`,
         to: volunteer.email!,
         subject,
         react: VolunteerApprovalTemplate({

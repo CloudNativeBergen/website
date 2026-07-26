@@ -1,5 +1,6 @@
 import { fetchEventTickets } from '@/lib/tickets/api'
 import type { EventTicket } from '@/lib/tickets/types'
+import { platformFallbackContact } from '@/lib/email/from'
 
 const WORKSHOP_ELIGIBLE_CATEGORIES = [
   'Workshop + Conference (2 days)',
@@ -20,7 +21,7 @@ export async function checkWorkshopEligibility(params: {
   eventId: number
   contactEmail?: string
 }): Promise<WorkshopEligibilityResult> {
-  const contactEmail = params.contactEmail || 'contact@cloudnativedays.no'
+  const contactEmail = params.contactEmail || platformFallbackContact()
 
   try {
     const tickets = await fetchEventTickets(params.customerId, params.eventId)

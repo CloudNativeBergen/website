@@ -29,9 +29,12 @@ function getVapidPrivateKey(): string {
 }
 
 function getVapidSubject(): string {
-  // A syntactically valid contact URL is required by the push spec. Fall back to
-  // a mailto so a misconfigured env fails loudly at send time, not at import.
-  return process.env.VAPID_SUBJECT ?? 'mailto:hei@cloudnativedays.no'
+  // A syntactically valid contact URL is required by the push spec. This is
+  // required config (it exists in prod as VAPID_SUBJECT) — there is NO branded
+  // fallback: an unset value is surfaced as a configuration error by
+  // getConfiguredWebPush() rather than silently sending under another org's
+  // contact address.
+  return process.env.VAPID_SUBJECT?.trim() ?? ''
 }
 
 /** True only when a full, usable VAPID key pair is configured. */
@@ -68,9 +71,16 @@ export function getConfiguredWebPush(): typeof webpush | null {
     return null
   }
   if (!configured) {
+    const subject = getVapidSubject()
+    if (!subject) {
+      configError =
+        'VAPID_SUBJECT is not set (a `mailto:` or `https:` contact URL is required)'
+      console.error('[push] VAPID configuration is invalid:', configError)
+      return null
+    }
     try {
       webpush.setVapidDetails(
-        getVapidSubject(),
+        subject,
         getVapidPublicKey(),
         getVapidPrivateKey(),
       )
