@@ -12,18 +12,24 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
  * REQUEST's organization is in that set. The request's org is ALWAYS derived from
  * the domain-resolved conference — never from client input.
  *
- * THE LEGACY BRIDGE. Production still carries pre-044-backfill data (conferences
- * without an `organization`) and requests can hit domains that don't resolve to a
- * conference. When the request's org cannot be resolved we FAIL OPEN TO THE
- * LEGACY GLOBAL CHECK: the deprecated `speaker.isOrganizer` boolean (organizer of
- * ANY conference). This is a DELIBERATE, TEMPORARY migration bridge so the org
- * tier can roll out without locking legitimate organizers out. Every bridged
- * grant emits a `console.warn('[authz-bridge] …')` so the gap is observable.
+ * BRIDGE (1) — org UNRESOLVABLE — NOW FAILS CLOSED. The 044 backfill has run, so
+ * every live conference has an `organization`; an unresolvable org id therefore no
+ * longer means "pre-backfill data" but an unknown domain or a transient
+ * resolution failure. Granting organizer access there via the deprecated global
+ * `speaker.isOrganizer` was unnecessary permissiveness, so `orgId === null` now
+ * DENIES. A `console.warn('[authz-bridge] …')` is still emitted when a would-be
+ * organizer (global flag set) is denied, so the denial is observable.
  *
- * REMOVAL CONDITION. Delete the bridge (make an unresolvable org deny) once every
- * live conference has an `organization` AND every issued session token carries
- * `organizerOrgIds` (i.e. after all pre-#614 tokens have expired / all users have
- * re-logged-in). At that point `orgId === null` should return `false`.
+ * BRIDGE (2) — LEGACY TOKEN — KEPT (SUNSET). A JWT minted before #635 has NO
+ * `organizerOrgIds` field at all; denying those would 403 every logged-in
+ * organizer until their token expires (session maxAge = 30d default) or they re-
+ * login. We still bridge those via the deprecated global flag. This is the LAST
+ * remaining bridge and is dated for removal — see the `TODO(sunset …)` below.
+ *
+ * REMOVAL CONDITION. Delete bridge (2) — and with it Fix A's `trigger: 'update'`
+ * session refresh becomes the mechanism by which any straggler re-mints a modern
+ * token — once every pre-#635 token has expired (30d after #635). At that point a
+ * present-but-absent `organizerOrgIds` should return `false`. See docs/AUTH.md.
  */
 
 /** The minimum shape these checks read off a speaker/session token. */
@@ -31,10 +37,11 @@ type OrganizerSpeaker = Pick<Speaker, '_id' | 'isOrganizer' | 'organizerOrgIds'>
 
 /**
  * PURE, synchronous org-scoped organizer check. Given a speaker and the already-
- * resolved request org id, decide organizer access. `orgId === null` engages the
- * LEGACY BRIDGE (see module docs): fall back to the global `isOrganizer` flag and
- * warn when that grants. Extracted so the decision is unit-testable without a
- * request context.
+ * resolved request org id, decide organizer access. Order matters: a legacy TOKEN
+ * (no `organizerOrgIds` field) defers wholesale to the deprecated global flag
+ * (bridge (2), sunset) BEFORE org resolution is considered; a MODERN token with an
+ * unresolvable `orgId === null` now FAILS CLOSED post-044-backfill (bridge (1)
+ * removed). Extracted so the decision is unit-testable without a request context.
  */
 export function isOrganizerForOrg(
   speaker: OrganizerSpeaker | null | undefined,
@@ -42,27 +49,39 @@ export function isOrganizerForOrg(
 ): boolean {
   if (!speaker?._id) return false
 
-  if (!orgId) {
-    // LEGACY BRIDGE: org unresolvable → defer to the deprecated global flag.
-    if (speaker.isOrganizer === true) {
-      console.warn(
-        `[authz-bridge] organizer org unresolvable; granting via deprecated global isOrganizer for speaker ${speaker._id}`,
-      )
-      return true
-    }
-    return false
-  }
-
-  // LEGACY-TOKEN BRIDGE: a pre-#614 JWT has NO organizerOrgIds field at all
-  // (undefined). Denying those would 403 every logged-in organizer at deploy
-  // time until re-login — bridge via the deprecated flag instead. A PRESENT
-  // but empty array is the real signal "organizer of no org" and is denied.
+  // BRIDGE (2) — LEGACY-TOKEN (SUNSET): checked FIRST because a pre-#635 JWT
+  // carries NO org-scoped info at all (organizerOrgIds absent), so neither the
+  // membership check nor bridge (1)'s fail-closed posture can meaningfully apply
+  // to it — we defer wholesale to the deprecated global flag REGARDLESS of whether
+  // the request org resolved. Denying these would 403 every logged-in organizer
+  // until their token expires or they re-login. A PRESENT but empty array is a
+  // MODERN token ("organizer of no org") and does NOT take this path — it falls
+  // through to the org-scoped logic below.
+  // TODO(sunset 2026-08-26): remove this block — 30d after #635, by when all
+  // pre-#635 tokens (session maxAge = 30d default) have expired. Removing it,
+  // together with Fix A's `trigger: 'update'` refresh, completes the bridge
+  // removal condition (see the module docs and docs/AUTH.md).
   if (speaker.organizerOrgIds === undefined) {
     if (speaker.isOrganizer === true) {
       console.warn(
         `[authz-bridge] legacy token without organizerOrgIds; granting via deprecated global isOrganizer for speaker ${speaker._id}`,
       )
       return true
+    }
+    return false
+  }
+
+  // From here the token is MODERN (organizerOrgIds present).
+  if (!orgId) {
+    // BRIDGE (1) REMOVED — FAIL CLOSED. Post-044-backfill an unresolvable org is
+    // an unknown domain / transient failure, not pre-backfill data, so a modern
+    // token is denied here rather than bridged via the deprecated global flag.
+    // Warn only when a would-be organizer (global flag set) is denied, so the
+    // denial is observable without spamming on ordinary non-organizer traffic.
+    if (speaker.isOrganizer === true) {
+      console.warn(
+        `[authz-bridge] organizer org unresolvable; DENYING (fail-closed, post-044-backfill) for speaker ${speaker._id}`,
+      )
     }
     return false
   }

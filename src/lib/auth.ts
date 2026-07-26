@@ -157,6 +157,37 @@ export async function jwtSignInCallback({
     return {}
   }
 
+  // --- Session refresh via trigger 'update' (M0) -----------------------------
+  // A client calling next-auth's `useSession().update()` — or POSTing to the
+  // session endpoint — re-invokes this callback with `trigger === 'update'` and
+  // NO account/profile. Re-fetch the speaker with the SAME login-shaped read as
+  // sign-in (`getSpeaker` → `organizerOrgIds` + `isOrganizer` + name/image) and
+  // re-apply its claims via `applySpeakerToToken`, so a fresh grant (e.g. a just-
+  // created org from the org-creation wizard) or a profile change lands WITHOUT a
+  // full re-login. This path is deliberately kept SEPARATE from the sign-in path
+  // and NEVER runs the sign-in-only link-intent handling below.
+  if (trigger === 'update') {
+    const existing = token.speaker as Session['speaker'] | undefined
+    if (existing?._id && token.account) {
+      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { speaker, err } = await getSpeaker(existing._id)
+      // A transient read failure or a vanished document must NEVER invalidate a
+      // live session — return the existing token untouched on any read problem.
+      if (err || !speaker?._id) {
+        if (err) {
+          console.error(
+            'Session update: speaker re-fetch failed; keeping existing token',
+            err,
+          )
+        }
+        return token
+      }
+      // Preserve the authenticated account; re-apply only the speaker claims.
+      applySpeakerToToken(token, speaker, token.account as Account)
+    }
+    return token
+  }
+
   if (trigger === 'signIn') {
     if (!token || !token.email || !token.name) {
       console.error('Invalid auth token', token)

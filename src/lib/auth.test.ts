@@ -409,6 +409,121 @@ describe('jwtSignInCallback — org-scoped session computation (CaaS T1-2, #614)
   })
 })
 
+describe("jwtSignInCallback — session refresh via trigger 'update' (M0)", () => {
+  // A token that already carries a signed-in speaker + account, as decoded on an
+  // `update()` call. organizerOrgIds starts with just org-A.
+  function updateToken(over: Partial<JWT> = {}): JWT {
+    return {
+      sub: 'sub-upd',
+      email: 'x@example.com',
+      name: 'X User',
+      picture: undefined,
+      account: {
+        provider: 'github',
+        providerAccountId: 'gh-1',
+        type: 'oidc',
+      },
+      speaker: {
+        _id: 'spk-1',
+        slug: 'x-user',
+        name: 'X User',
+        email: 'x@example.com',
+        isOrganizer: false,
+        organizerOrgIds: ['org-A'],
+      },
+      ...over,
+    } as unknown as JWT
+  }
+
+  it('re-fetches the speaker and refreshes organizerOrgIds (new org appears)', async () => {
+    getSpeaker.mockResolvedValue({
+      speaker: {
+        _id: 'spk-1',
+        slug: 'x-user',
+        name: 'X User',
+        email: 'x@example.com',
+        isOrganizer: true,
+        // A freshly-created org (org-B) now grants — must land WITHOUT re-login.
+        organizerOrgIds: ['org-A', 'org-B'],
+      },
+      err: null,
+    })
+
+    const token = (await jwtSignInCallback({
+      token: updateToken(),
+      trigger: 'update',
+    })) as JWT & {
+      speaker?: { organizerOrgIds?: string[]; isOrganizer?: boolean }
+    }
+
+    expect(getSpeaker).toHaveBeenCalledWith('spk-1')
+    expect(token.speaker?.organizerOrgIds).toEqual(['org-A', 'org-B'])
+    expect(token.speaker?.isOrganizer).toBe(true)
+    // The update path must NEVER run sign-in-only logic.
+    expect(getOrCreateSpeaker).not.toHaveBeenCalled()
+    expect(attachProviderToSpeaker).not.toHaveBeenCalled()
+  })
+
+  it('keeps the EXISTING token untouched on a transient re-fetch failure', async () => {
+    getSpeaker.mockResolvedValue({
+      speaker: {} as never,
+      err: new Error('sanity read failed'),
+    })
+
+    const token = (await jwtSignInCallback({
+      token: updateToken(),
+      trigger: 'update',
+    })) as JWT & { speaker?: { _id?: string; organizerOrgIds?: string[] } }
+
+    // Session is NOT invalidated: the prior claims survive verbatim.
+    expect(token.speaker?._id).toBe('spk-1')
+    expect(token.speaker?.organizerOrgIds).toEqual(['org-A'])
+  })
+
+  it('keeps the existing token when the speaker document has vanished', async () => {
+    getSpeaker.mockResolvedValue({ speaker: {} as never, err: null })
+
+    const token = (await jwtSignInCallback({
+      token: updateToken(),
+      trigger: 'update',
+    })) as JWT & { speaker?: { _id?: string } }
+
+    expect(token.speaker?._id).toBe('spk-1')
+  })
+
+  it('does NOT run link-intent handling on update (link cookie is ignored, not consumed)', async () => {
+    const intent = signLinkIntent({
+      speakerId: 'spk-1',
+      provider: 'github',
+      initiatorSub: 'sess-1',
+    })
+    currentJar = createJar({
+      [LINK_INTENT_COOKIE]: intent,
+      [SESSION_COOKIE]: 'PRIOR_1',
+    })
+    decodeMap.set('PRIOR_1', priorSession('spk-1', 'sess-1'))
+    getSpeaker.mockResolvedValue({
+      speaker: {
+        _id: 'spk-1',
+        slug: 'x-user',
+        name: 'X User',
+        email: 'x@example.com',
+        isOrganizer: false,
+        organizerOrgIds: ['org-A'],
+      },
+      err: null,
+    })
+
+    await jwtSignInCallback({ token: updateToken(), trigger: 'update' })
+
+    // Sign-in-only link machinery must not run: no attach, no create, and the
+    // single-use intent cookie is left intact (not deleted) by the update path.
+    expect(attachProviderToSpeaker).not.toHaveBeenCalled()
+    expect(getOrCreateSpeaker).not.toHaveBeenCalled()
+    expect(currentJar.delete).not.toHaveBeenCalled()
+  })
+})
+
 describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () => {
   it('contributes NO config keys when AUTH_REDIRECT_PROXY_URL is absent', () => {
     expect(redirectProxyConfig({} as NodeJS.ProcessEnv)).toEqual({})
