@@ -1,4 +1,7 @@
-import { fetchEventTickets } from '@/lib/tickets/api'
+import {
+  getTicketingProvider,
+  platformCheckinCredentials,
+} from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
 import { platformFallbackContact } from '@/lib/email/from'
 
@@ -24,7 +27,14 @@ export async function checkWorkshopEligibility(params: {
   const contactEmail = params.contactEmail || platformFallbackContact()
 
   try {
-    const tickets = await fetchEventTickets(params.customerId, params.eventId)
+    const provider = getTicketingProvider(
+      'checkin',
+      platformCheckinCredentials(),
+    )
+    const tickets = await provider.fetchEventTickets({
+      customerId: params.customerId,
+      eventId: params.eventId,
+    })
 
     const userTickets = tickets.filter(
       (ticket) =>

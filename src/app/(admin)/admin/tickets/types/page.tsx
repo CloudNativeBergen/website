@@ -1,12 +1,15 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDateTimeSafe } from '@/lib/time'
 import {
-  fetchTicketTypesFromCheckin,
   getTicketSaleStatus,
   formatTicketPrice,
   stripHtml,
   type PublicTicketType,
 } from '@/lib/tickets/public'
+import {
+  getTicketingProvider,
+  platformCheckinCredentials,
+} from '@/lib/tickets/provider'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import { EmptyState } from '@/components/EmptyState'
@@ -67,7 +70,13 @@ export default async function TicketTypesAdminPage() {
   let error: string | null = null
 
   try {
-    const data = await fetchTicketTypesFromCheckin(conference.checkinEventId)
+    const provider = getTicketingProvider(
+      'checkin',
+      platformCheckinCredentials(),
+    )
+    const data = await provider.fetchPublicTicketTypes(
+      conference.checkinEventId,
+    )
     tickets = data.tickets.sort((a, b) => a.position - b.position)
   } catch (err) {
     error = (err as Error).message

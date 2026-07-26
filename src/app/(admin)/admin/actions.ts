@@ -12,7 +12,7 @@ import { calculateAverageRating } from '@/lib/proposal/business'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Flags } from '@/lib/speaker/types'
-import { fetchEventTickets } from '@/lib/tickets/api'
+import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
@@ -506,14 +506,14 @@ export async function fetchTicketSales(): Promise<TicketSalesResult> {
   // organizer point the server's Checkin credentials at arbitrary accounts.
   const conference = await resolveConference()
 
-  if (!conference.checkinCustomerId || !conference.checkinEventId) {
+  const ticketing = resolveTicketingProvider(conference)
+  if (!ticketing.configured) {
     return { status: 'unconfigured' }
   }
 
   try {
-    const tickets = await fetchEventTickets(
-      conference.checkinCustomerId,
-      conference.checkinEventId,
+    const tickets = await ticketing.provider.fetchEventTickets(
+      ticketing.eventRef,
     )
 
     const capacity = conference.ticketCapacity || DEFAULT_CAPACITY

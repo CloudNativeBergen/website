@@ -1,4 +1,8 @@
-import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/api'
+import { groupTicketsByOrder } from '@/lib/tickets/api'
+import {
+  getTicketingProvider,
+  platformCheckinCredentials,
+} from '@/lib/tickets/provider'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { EventTicket } from '@/lib/tickets/types'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
@@ -18,7 +22,11 @@ async function getTicketData(
   eventId: number,
 ): Promise<EventTicket[]> {
   try {
-    return await fetchEventTickets(customerId, eventId)
+    const provider = getTicketingProvider(
+      'checkin',
+      platformCheckinCredentials(),
+    )
+    return await provider.fetchEventTickets({ customerId, eventId })
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
   }
