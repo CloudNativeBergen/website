@@ -43,6 +43,13 @@ export type SlackMessage = {
 export interface PostSlackMessageOptions {
   channel?: string
   forceSlack?: boolean
+  /**
+   * Bot token resolved at the caller's boundary (CaaS #617). When omitted, falls
+   * back to the platform env `SLACK_BOT_TOKEN` — today's behavior. A per-org
+   * token is resolved by `resolveConferenceSlackToken` where a conference/org is
+   * in scope and injected here.
+   */
+  botToken?: string
 }
 
 interface SlackApiResponse {
@@ -54,7 +61,7 @@ export async function postSlackMessage(
   message: SlackMessage,
   options: PostSlackMessageOptions = {},
 ): Promise<void> {
-  const { channel, forceSlack = false } = options
+  const { channel, forceSlack = false, botToken: injectedToken } = options
 
   if (process.env.NODE_ENV === 'development' && !forceSlack) {
     console.log('Slack notification (development mode):')
@@ -62,7 +69,7 @@ export async function postSlackMessage(
     return
   }
 
-  const botToken = process.env.SLACK_BOT_TOKEN
+  const botToken = injectedToken ?? process.env.SLACK_BOT_TOKEN
 
   if (!botToken) {
     console.warn('SLACK_BOT_TOKEN is not configured')

@@ -40,7 +40,7 @@ import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
 
 async function getTicketData(conference: Conference) {
-  const ticketing = resolveTicketingProvider(conference)
+  const ticketing = await resolveTicketingProvider(conference)
   if (!ticketing.configured) {
     throw new Error('Missing checkin configuration')
   }

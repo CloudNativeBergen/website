@@ -88,7 +88,7 @@ async function buildTicketSection(conference: Conference): Promise<{
   targetProgress: TargetProgress | null
   error: SectionError | null
 }> {
-  const ticketing = resolveTicketingProvider(conference)
+  const ticketing = await resolveTicketingProvider(conference)
   if (!ticketing.configured) {
     return { tickets: null, targetProgress: null, error: null }
   }

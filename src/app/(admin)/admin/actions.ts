@@ -514,7 +514,7 @@ export async function fetchTicketSales(): Promise<TicketSalesResult> {
   // organizer point the server's Checkin credentials at arbitrary accounts.
   const conference = await resolveConference()
 
-  const ticketing = resolveTicketingProvider(conference)
+  const ticketing = await resolveTicketingProvider(conference)
   if (!ticketing.configured) {
     return { status: 'unconfigured' }
   }

@@ -4,6 +4,7 @@ import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
+import { resolveConferenceSlackToken } from '@/lib/slack/token'
 
 export type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 
@@ -406,8 +407,10 @@ export async function sendWeeklyUpdateToSlack(
   )
 
   const message = { blocks }
+  const botToken = await resolveConferenceSlackToken(conference)
   await postSlackMessage(message, {
     channel: conference.salesNotificationChannel,
     forceSlack,
+    botToken,
   })
 }

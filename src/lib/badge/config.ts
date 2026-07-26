@@ -97,6 +97,13 @@ export async function createBadgeConfiguration(
   conference: Conference,
   domain: string,
 ): Promise<BadgeConfiguration> {
+  // TODO(#617, per-org secrets): signing keys stay ENV-ONLY for now. The issuer
+  // profile / verification-method URLs are already per-domain, but the signing
+  // material threads through this pure config into the credential generator; a
+  // per-org key set would also require per-org issuer key endpoints
+  // (`/api/badge/keys/*`, `/api/badge/issuer`) to serve the matching public JWK.
+  // The resolution seam exists (`resolveTenantSecrets(orgId, 'badge')` → typed
+  // BadgeSigningCredentials); wiring is deferred as higher-risk groundwork.
   // Load RSA keys from environment
   const privateKey = process.env.BADGE_ISSUER_RSA_PRIVATE_KEY
   const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY

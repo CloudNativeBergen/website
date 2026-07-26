@@ -7,6 +7,7 @@ import {
   escapeMrkdwn,
   type SlackMessage,
 } from '@/lib/slack/client'
+import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { clientWrite } from '@/lib/sanity/client'
 import { TRPCError } from '@trpc/server'
 
@@ -102,7 +103,8 @@ export const statusRouter = router({
         blocks: [{ type: 'section', text: { type: 'mrkdwn', text: body } }],
       }
       try {
-        await postSlackMessage(message, { channel, forceSlack: true })
+        const botToken = await resolveConferenceSlackToken(conference)
+        await postSlackMessage(message, { channel, forceSlack: true, botToken })
         return { ok: true as const, channel }
       } catch (err) {
         return { ok: false as const, error: probeError(err) }
