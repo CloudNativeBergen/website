@@ -12,7 +12,11 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
-import { formatDateTimeSafe } from '@/lib/time'
+import {
+  formatDateTimeSafe,
+  instantToOsloLocalInput,
+  osloLocalInputToIso,
+} from '@/lib/time'
 
 interface WorkshopRegistrationSettingsProps {
   workshopRegistrationStart?: string
@@ -36,17 +40,14 @@ export function WorkshopRegistrationSettings({
   const { showNotification } = useNotification()
 
   /**
-   * Stored ISO (UTC) → the LOCAL wall-clock string a `datetime-local` input
+   * Stored ISO instant → the EUROPE/OSLO wall-clock string the input
    * expects. `toISOString().slice(0,16)` would show UTC and shift the time by
    * the admin's timezone offset on every open/save round-trip.
    */
-  const toLocalInput = (value?: string) => {
-    if (!value) return ''
-    const d = new Date(value)
-    if (Number.isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
+  // Edit fields display and accept EUROPE/OSLO wall-clock — the same zone the
+  // read-only rows format in (formatDateTimeSafe) — so an admin outside Oslo
+  // never sees two different times for one stored instant.
+  const toLocalInput = (value?: string) => instantToOsloLocalInput(value)
 
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -94,16 +95,10 @@ export function WorkshopRegistrationSettings({
 
   const handleSave = () => {
     setError(null)
-    // The datetime-local value is a timezone-less LOCAL wall-clock string; the
-    // Date constructor interprets it as local time, and we persist the
-    // unambiguous ISO instant so storage is timezone-stable.
-    const toIso = (v: string) => {
-      if (!v) return null
-      const d = new Date(v)
-      // A malformed input value must degrade to unset, not throw a RangeError
-      // out of toISOString and break the save flow.
-      return Number.isNaN(d.getTime()) ? null : d.toISOString()
-    }
+    // The datetime-local value is entered as Europe/Oslo wall-clock (matching
+    // the read-only rows); persist the unambiguous ISO instant. Malformed
+    // values degrade to unset rather than throwing.
+    const toIso = (v: string) => osloLocalInputToIso(v)
     updateRegistrationTimes.mutate({
       startDate: toIso(startDate),
       endDate: toIso(endDate),
@@ -207,7 +202,7 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-start"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Opens
+              Registration Opens (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-start"
@@ -223,7 +218,7 @@ export function WorkshopRegistrationSettings({
               htmlFor="workshop-reg-end"
               className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Registration Closes
+              Registration Closes (Europe/Oslo)
             </label>
             <input
               id="workshop-reg-end"

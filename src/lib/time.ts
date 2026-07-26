@@ -400,3 +400,66 @@ export function formatRelativeTime(isoDate: string): string {
 export function formatLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
+
+/**
+ * Wall-clock parts of an instant in Europe/Oslo (DST-correct, via Intl).
+ * sv-SE formats as "YYYY-MM-DD HH:mm" which splits cleanly.
+ */
+function osloParts(instant: Date): {
+  date: string
+  time: string
+} {
+  const formatted = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: OSLO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(instant)
+  const [date, time] = formatted.split(' ')
+  return { date, time }
+}
+
+/** Millisecond offset of Europe/Oslo from UTC at the given instant. */
+function osloOffsetMs(instant: Date): number {
+  const { date, time } = osloParts(instant)
+  const asUtc = Date.parse(`${date}T${time}:00Z`)
+  // Truncate the instant to the minute the parts represent before comparing.
+  const truncated = Math.floor(instant.getTime() / 60_000) * 60_000
+  return asUtc - truncated
+}
+
+/**
+ * Stored ISO instant → the Europe/Oslo wall-clock string a `datetime-local`
+ * input should DISPLAY, so edit fields agree with the read-only views (which
+ * format via {@link formatDateTimeSafe} in Oslo time) regardless of the
+ * admin's own timezone.
+ */
+export function instantToOsloLocalInput(value?: string): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const { date, time } = osloParts(d)
+  return `${date}T${time}`
+}
+
+/**
+ * A `datetime-local` string ENTERED AS Europe/Oslo wall-clock → the ISO
+ * instant to persist. DST-correct: the offset is resolved at the target
+ * instant (with one re-check across a transition boundary).
+ */
+export function osloLocalInputToIso(value?: string): string | null {
+  const v = value?.trim()
+  if (!v) return null
+  // Strict datetime-local shape only — engines parse surprising strings
+  // leniently (e.g. bare years), which must not silently become instants.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return null
+  const naiveUtc = Date.parse(`${v}:00Z`)
+  if (Number.isNaN(naiveUtc)) return null
+  let instant = naiveUtc - osloOffsetMs(new Date(naiveUtc))
+  const secondPass = naiveUtc - osloOffsetMs(new Date(instant))
+  if (secondPass !== instant) instant = secondPass
+  return new Date(instant).toISOString()
+}

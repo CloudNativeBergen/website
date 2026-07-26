@@ -14,6 +14,8 @@ import {
   formatChartMonth,
   formatChartDay,
   formatChartDateShort,
+  instantToOsloLocalInput,
+  osloLocalInputToIso,
 } from '@/lib/time'
 
 describe('time.ts', () => {
@@ -231,5 +233,33 @@ describe('time.ts', () => {
       // The fixed helper stays on the 27th.
       expect(formatConferenceDate('2025-10-27', { day: 'numeric' })).toBe('27.')
     })
+  })
+})
+
+describe('instantToOsloLocalInput / osloLocalInputToIso', () => {
+  it('round-trips an instant through Oslo wall-clock (CET, UTC+1)', () => {
+    // 10:00Z in January = 11:00 Oslo (CET)
+    expect(instantToOsloLocalInput('2026-01-15T10:00:00.000Z')).toBe(
+      '2026-01-15T11:00',
+    )
+    expect(osloLocalInputToIso('2026-01-15T11:00')).toBe(
+      '2026-01-15T10:00:00.000Z',
+    )
+  })
+
+  it('is DST-correct in summer (CEST, UTC+2)', () => {
+    expect(instantToOsloLocalInput('2026-07-15T10:00:00.000Z')).toBe(
+      '2026-07-15T12:00',
+    )
+    expect(osloLocalInputToIso('2026-07-15T12:00')).toBe(
+      '2026-07-15T10:00:00.000Z',
+    )
+  })
+
+  it('degrades malformed values instead of throwing', () => {
+    expect(instantToOsloLocalInput('nope')).toBe('')
+    expect(instantToOsloLocalInput(undefined)).toBe('')
+    expect(osloLocalInputToIso('not-a-date')).toBeNull()
+    expect(osloLocalInputToIso('')).toBeNull()
   })
 })
