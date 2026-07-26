@@ -680,47 +680,93 @@ const ORGANIZER_CACHE_TTL_MS = 60_000
 /** Upper bound on the organizer fetch; the organizer set is tiny in practice. */
 const ORGANIZER_FETCH_LIMIT = 200
 
-let organizerCache: { ids: string[]; expiresAt: number } | null = null
+/** Cache-map key for the GLOBAL (legacy-bridge) organizer set. */
+const GLOBAL_ORGANIZER_CACHE_KEY = '__global__'
+
+// Per-org (and global) organizer-id cache, keyed by resolved org id. Keying by
+// org keeps two tenants sharing a warm instance from cross-contaminating each
+// other's recipient sets.
+const organizerCache = new Map<string, { ids: string[]; expiresAt: number }>()
 
 /**
- * The `_id`s of every organizer speaker (bounded to
- * [0...{@link ORGANIZER_FETCH_LIMIT}]). THE CANONICAL ORGANIZER DEFINITION is
- * membership in ANY conference's `organizers[]` array — the same rule the auth
- * session and the admin speaker picker derive `isOrganizer` from
- * (src/lib/speaker/sanity.ts). The speaker schema has NO stored `isOrganizer`
- * field: an earlier version of this query tested `isOrganizer == true`, which
- * matched NOTHING in production — silently emptying the messaging fan-out's
- * organizer recipients, needs-reply, standing checks, and assignee validation
- * while organizers could still browse /admin via the session's DERIVED flag.
- * Organizer-of-one-edition = organizer everywhere (matches auth). Conference
- * scoping happens implicitly because the created notification carries the
- * conference ref. Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}. The
- * returned array is treated as read-only by callers (they wrap it in a Set).
+ * The `_id`s of the organizer speakers for a TENANT (bounded to
+ * [0...{@link ORGANIZER_FETCH_LIMIT}]). An organizer is a speaker in the
+ * `organizers[]` of one of the org's conferences — the org-SCOPED reading of the
+ * canonical organizer definition (CaaS T1-2, #614). This selects MESSAGE
+ * RECIPIENTS (fan-out targets, needs-reply, assignee validation, participant
+ * classification), NOT access — but it must agree with the org-scoped auth
+ * boundary so a cross-org organizer is neither notified about nor allowed to own
+ * another tenant's threads.
+ *
+ * ORG RESOLUTION:
+ *  - `orgId` omitted (default) → resolve the CURRENT domain's org. In a request
+ *    this scopes to that tenant; in a context without a domain (e.g. the stale-
+ *    thread cron) it resolves to `null` and falls through to the GLOBAL set.
+ *  - `orgId` a string → scope to that org (callers with a conference in hand,
+ *    e.g. the message fan-out, pass `conference.organization._ref` so background
+ *    sends don't depend on request domain).
+ *  - `orgId` explicitly `null` → the GLOBAL set (every conference's organizers).
+ *
+ * LEGACY BRIDGE: a `null` resolved org (pre-044-backfill conference / no domain)
+ * yields the GLOBAL organizer set with a `console.warn`, mirroring the auth
+ * bridge in `src/lib/authz/organizer.ts`. This historical behaviour ("organizer
+ * of one edition = organizer everywhere") is retained ONLY as the migration
+ * bridge; remove it under the same condition as the auth bridge.
+ *
+ * Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}, keyed by resolved org.
+ * The returned array is treated as read-only by callers (they wrap it in a Set).
  */
-export async function getOrganizerSpeakerIds(): Promise<string[]> {
+export async function getOrganizerSpeakerIds(
+  orgId?: string | null,
+): Promise<string[]> {
+  const resolvedOrgId =
+    orgId === undefined
+      ? await (
+          await import('@/lib/organization/sanity')
+        ).getOrganizationRefForCurrentConference()
+      : orgId
+
+  const cacheKey = resolvedOrgId ?? GLOBAL_ORGANIZER_CACHE_KEY
+
   const now = Date.now()
-  if (organizerCache && organizerCache.expiresAt > now) {
-    return organizerCache.ids
+  const cached = organizerCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cached.ids
   }
+
+  const organizerScope = resolvedOrgId
+    ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
+    : `*[_type == "conference"].organizers[]._ref`
+
+  if (!resolvedOrgId) {
+    console.warn(
+      '[authz-bridge] getOrganizerSpeakerIds: org unresolvable; using the GLOBAL organizer set (recipient-selection legacy bridge)',
+    )
+  }
+
   // ONLY successes are cached (R2): the `await` throws on a failed read BEFORE
   // the cache assignment below, so a transient Sanity failure is never poisoned
   // into the cache as an empty organizer set (which would, e.g., vacuously empty
   // the needs-reply view or misroute stale nudges for a full TTL). A genuinely
-  // empty result (`null`/`[]` — a conference with no organizers yet) IS a
-  // success and is cached normally.
+  // empty result (`null`/`[]` — a tenant with no organizers yet) IS a success
+  // and is cached normally.
   const ids = await clientReadUncached.fetch<string[]>(
-    `*[_type == "speaker" && _id in *[_type == "conference"].organizers[]._ref][0...${ORGANIZER_FETCH_LIMIT}]._id`,
+    `*[_type == "speaker" && _id in ${organizerScope}][0...${ORGANIZER_FETCH_LIMIT}]._id`,
+    resolvedOrgId ? { orgId: resolvedOrgId } : {},
   )
   const resolved = ids || []
-  organizerCache = { ids: resolved, expiresAt: now + ORGANIZER_CACHE_TTL_MS }
+  organizerCache.set(cacheKey, {
+    ids: resolved,
+    expiresAt: now + ORGANIZER_CACHE_TTL_MS,
+  })
   return resolved
 }
 
 /**
- * Clear the per-instance organizer cache. Exposed for tests (which assert fresh
- * reads) and as a hook if a future admin flow wants to invalidate eagerly after
- * changing organizer membership.
+ * Clear the per-instance organizer cache (all org keys). Exposed for tests (which
+ * assert fresh reads) and as a hook if a future admin flow wants to invalidate
+ * eagerly after changing organizer membership.
  */
 export function clearOrganizerSpeakerIdsCache(): void {
-  organizerCache = null
+  organizerCache.clear()
 }
