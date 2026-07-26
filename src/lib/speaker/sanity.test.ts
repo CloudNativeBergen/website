@@ -43,7 +43,12 @@ vi.mock('@/lib/organization/sanity', () => ({
 const setIfMissingMock = vi.fn()
 const insertMock = vi.fn()
 
-import { attachProviderToSpeaker, getOrCreateSpeaker } from './sanity'
+import {
+  attachProviderToSpeaker,
+  getOrCreateSpeaker,
+  getSpeakers,
+  getOrganizers,
+} from './sanity'
 
 // --- Fetch routing helpers -------------------------------------------------
 
@@ -363,6 +368,123 @@ describe('getOrCreateSpeaker — verified-only security invariant', () => {
   )
 })
 
+describe('getOrCreateSpeaker — email link accrues org membership (#615)', () => {
+  it('stamps the current org after linking via a single verified-email match', async () => {
+    // The email-link path historically linked the provider but never stamped the
+    // tenant membership the provider/create paths do — this covers that fix.
+    orgRefMock.mockResolvedValue('org-1')
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'jane@example.com', verified: true }],
+    })
+    fetchMock.mockImplementation(
+      routeFetch({ provider: {}, emailMatches: [existingSpeaker()] }),
+    )
+
+    const { speaker, err } = await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(err).toBeNull()
+    expect(speaker._id).toBe('spk-existing')
+    // Linked into the existing speaker AND accrued the current-org membership.
+    expect(patchMock).toHaveBeenCalledWith('spk-existing')
+    expect(insertMock).toHaveBeenCalledWith('after', 'organizations[-1]', [
+      { _type: 'reference', _ref: 'org-1', _key: 'org-1' },
+    ])
+  })
+})
+
+describe('getOrCreateSpeaker — org-preference among ambiguous matches (#615)', () => {
+  it('links into the SINGLE current-org member when the global match is ambiguous', async () => {
+    orgRefMock.mockResolvedValue('org-1')
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'jane@example.com', verified: true }],
+    })
+    const member = existingSpeaker({
+      _id: 'spk-member',
+      organizations: ['org-1'],
+    })
+    const nonMember = existingSpeaker({
+      _id: 'spk-other',
+      _createdAt: '2025-01-01T00:00:00Z',
+      organizations: ['org-2'],
+    })
+    fetchMock.mockImplementation(
+      routeFetch({ provider: {}, emailMatches: [member, nonMember] }),
+    )
+
+    const { speaker, err } = await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(err).toBeNull()
+    // Narrowed to the one tenant member -> link into it, do not create a new doc.
+    expect(createMock).not.toHaveBeenCalled()
+    expect(patchMock).toHaveBeenCalledWith('spk-member')
+    expect(speaker._id).toBe('spk-member')
+  })
+
+  it('stays ambiguous (creates new) when multiple matches are current-org members', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    orgRefMock.mockResolvedValue('org-1')
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'jane@example.com', verified: true }],
+    })
+    const memberA = existingSpeaker({
+      _id: 'spk-a',
+      organizations: ['org-1'],
+    })
+    const memberB = existingSpeaker({
+      _id: 'spk-b',
+      _createdAt: '2025-01-01T00:00:00Z',
+      organizations: ['org-1'],
+    })
+    fetchMock.mockImplementation(
+      routeFetch({ provider: {}, emailMatches: [memberA, memberB] }),
+    )
+
+    const { speaker } = await getOrCreateSpeaker(user(), githubAccount())
+
+    // Two org members -> still ambiguous, fall through to a fresh speaker.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('ambiguous verified-email match'),
+    )
+    expect(patchMock).not.toHaveBeenCalledWith('spk-a')
+    expect(patchMock).not.toHaveBeenCalledWith('spk-b')
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(speaker._id).not.toBe('spk-a')
+    expect(speaker._id).not.toBe('spk-b')
+    warnSpy.mockRestore()
+  })
+
+  it('stays ambiguous (creates new) when no org resolves (pre-backfill)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    orgRefMock.mockResolvedValue(null)
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'jane@example.com', verified: true }],
+    })
+    fetchMock.mockImplementation(
+      routeFetch({
+        provider: {},
+        emailMatches: [
+          existingSpeaker({ _id: 'spk-a', organizations: ['org-1'] }),
+          existingSpeaker({ _id: 'spk-b', organizations: ['org-2'] }),
+        ],
+      }),
+    )
+
+    const { speaker } = await getOrCreateSpeaker(user(), githubAccount())
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('ambiguous verified-email match'),
+    )
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(speaker._id).not.toBe('spk-a')
+    expect(speaker._id).not.toBe('spk-b')
+    warnSpy.mockRestore()
+  })
+})
+
 describe('getOrCreateSpeaker — multiple existing matches', () => {
   it('does NOT link into an ambiguous match; creates a new speaker and warns', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -448,6 +570,54 @@ describe('getOrCreateSpeaker — new speaker creation', () => {
   })
 })
 
+// --- Org-scoped admin lookups (#615) ---------------------------------------
+
+describe('getSpeakers — org scoping', () => {
+  it('adds the membership+participation predicate and binds $orgId', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getSpeakers('conf-1', undefined, true, 'org-1')
+
+    const [query, params] = fetchMock.mock.calls[0]
+    // Membership clause OR pre-backfill participation fallback.
+    expect(query).toContain('in coalesce(organizations, [])[]._ref')
+    expect(query).toContain('conference->organization._ref == $orgId')
+    expect(params).toMatchObject({ conferenceId: 'conf-1', orgId: 'org-1' })
+  })
+
+  it('leaves the list unscoped (no org predicate/param) when orgId is null', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getSpeakers('conf-1', undefined, true, null)
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(query).not.toContain('$orgId')
+    expect(params).not.toHaveProperty('orgId')
+  })
+})
+
+describe('getOrganizers — org scoping', () => {
+  it('scopes organizers to the current org conferences and binds $orgId', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getOrganizers('org-1')
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(query).toContain('organization._ref == $orgId')
+    expect(params).toEqual({ orgId: 'org-1' })
+  })
+
+  it('returns the global organizer set when orgId is null', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getOrganizers(null)
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(query).not.toContain('$orgId')
+    expect(params).toEqual({})
+  })
+})
+
 // --- Phase 2: attachProviderToSpeaker (self-service linking) ----------------
 
 interface AttachRoutes {
@@ -509,6 +679,36 @@ describe('attachProviderToSpeaker — explicit self-service link', () => {
     expect(speaker.knownEmails).toEqual(
       expect.arrayContaining(['jane@example.com', 'jane.work@corp.com']),
     )
+  })
+
+  it('accrues the current-org membership on a successful self-service link (#615)', async () => {
+    orgRefMock.mockResolvedValue('org-1')
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+    const target = existingSpeaker({
+      _id: 'spk-x',
+      providers: ['linkedin:li-456'],
+    })
+    // Bespoke routing: the membership-presence count query also contains
+    // `_id == $speakerId`, so it must be matched BEFORE the target lookup and
+    // resolve falsy (not yet a member) for the append to fire.
+    fetchMock.mockImplementation((query: string) => {
+      if (query.includes('$id in providers')) return Promise.resolve({})
+      if (query.includes('in coalesce(organizations, [])[]._ref'))
+        return Promise.resolve(false)
+      if (query.includes('_id == $speakerId')) return Promise.resolve(target)
+      return Promise.resolve(null)
+    })
+
+    const { err } = await attachProviderToSpeaker(
+      'spk-x',
+      user({ email: 'jane@example.com' }),
+      githubAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(insertMock).toHaveBeenCalledWith('after', 'organizations[-1]', [
+      { _type: 'reference', _ref: 'org-1', _key: 'org-1' },
+    ])
   })
 
   it('does NOT merge when the provider is already linked to another speaker', async () => {

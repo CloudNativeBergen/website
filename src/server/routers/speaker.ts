@@ -226,10 +226,15 @@ export const speakerRouter = router({
     list: adminProcedure.query(async () => {
       try {
         const conferenceId = await resolveConferenceId()
+        // Scope the admin list to the current org (#615). Best-effort: a null
+        // orgId (unresolvable tenant / pre-backfill legacy conference) leaves the
+        // list unscoped rather than empty.
+        const orgId = await getOrganizationRefForCurrentConference()
         const { speakers, err } = await getSpeakers(
           conferenceId,
           [Status.submitted, Status.accepted, Status.confirmed],
           true,
+          orgId,
         )
 
         if (err) {
@@ -272,10 +277,14 @@ export const speakerRouter = router({
             })
           }
 
+          // Scope the search corpus to the current org (#615); null orgId falls
+          // back to the prior conference-only scoping.
+          const orgId = await getOrganizationRefForCurrentConference()
           const { speakers, err } = await getSpeakers(
             conference._id,
             [Status.confirmed, Status.accepted],
             true,
+            orgId,
           )
           if (err) {
             throw new TRPCError({
@@ -286,7 +295,7 @@ export const speakerRouter = router({
           }
 
           const { speakers: organizers, err: organizersErr } =
-            await getOrganizers()
+            await getOrganizers(orgId)
           if (organizersErr) {
             console.warn('Could not get organizers:', organizersErr)
           }
