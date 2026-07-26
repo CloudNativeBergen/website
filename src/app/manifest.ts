@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { normalizeDomain } from '@/lib/conference/domains'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 
 /**
@@ -87,7 +88,10 @@ async function resolveManifestIdentity(host: string): Promise<{
 }
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const host = (await headers()).get('host') || ''
+  // Normalize BEFORE the cached resolver: the raw Host header can vary in
+  // case/whitespace, and the cache key + domain:<host> tag must match the
+  // normalized form the rest of the per-host surface (and revalidations) use.
+  const host = normalizeDomain((await headers()).get('host') || '')
   const { name, shortName, description } = await resolveManifestIdentity(host)
 
   return {

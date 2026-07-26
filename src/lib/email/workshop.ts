@@ -174,7 +174,7 @@ export async function sendWorkshopSignupInstructions({
 
                     <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
                     <ol style="margin: 0 0 24px 0; padding-left: 24px;">
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: #1D4ED8; text-decoration: none;">${workshopUrl}</a></li>
+                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: #1D4ED8; text-decoration: none;">${workshopUrl}</a></li>` : ''}
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
@@ -187,7 +187,7 @@ export async function sendWorkshopSignupInstructions({
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
                       <tr>
                         <td align="center">
-                          <a href="${workshopUrl}" style="display: inline-block; background-color: #1D4ED8; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>
+                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: #1D4ED8; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>` : ''}
                         </td>
                       </tr>
                     </table>

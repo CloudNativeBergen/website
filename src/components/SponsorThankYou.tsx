@@ -120,6 +120,9 @@ async function generateQRCode(
     /\/$/,
     '',
   )
+  // A relative CTA with NO resolvable origin would encode a relative URL —
+  // scanning that QR resolves nowhere. Skip QR generation instead.
+  if (!url.startsWith('http') && !origin) return ''
   const fullUrl = url.startsWith('http') ? url : `${origin}${url}`
   const cacheKey = `${fullUrl}_${size}`
 

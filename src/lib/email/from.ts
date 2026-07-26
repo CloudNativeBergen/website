@@ -66,12 +66,19 @@ export function resolveConferenceFrom(
     localPart = 'contact',
   }: { field?: EmailField; localPart?: string } = {},
 ): string {
-  const organizer = conference?.organizer?.trim()
+  // Header-injection hardening: the display name and address are interpolated
+  // into a "Name <address>" From header — strip CR/LF and angle brackets so a
+  // stored value can never smuggle extra headers or nest brackets.
+  const sanitizeHeaderText = (v: string) => v.replace(/[\r\n<>]/g, '').trim()
+  const organizer = conference?.organizer
+    ? sanitizeHeaderText(conference.organizer)
+    : undefined
   const explicit = conference?.[field]?.trim()
   const domain = conference?.domains?.[0]?.trim()
 
   if (explicit) {
-    return organizer ? `${organizer} <${explicit}>` : explicit
+    const safeExplicit = sanitizeHeaderText(explicit)
+    return organizer ? `${organizer} <${safeExplicit}>` : safeExplicit
   }
   if (domain) {
     const address = `${localPart}@${domain}`

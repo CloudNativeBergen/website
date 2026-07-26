@@ -350,6 +350,20 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
         missing: 'conference.cfpEmail is unset',
       },
     ),
+    plainCheck(
+      {
+        id: 'email.platformFallback',
+        group: 'email',
+        label: 'EMAIL_FALLBACK_FROM',
+      },
+      process.env.EMAIL_FALLBACK_FROM,
+      'warn',
+      {
+        present: 'Last-resort sender when a conference has no email config',
+        missing:
+          'Unset — a conference without email config would send from a placeholder address',
+      },
+    ),
   )
 
   // ---- SLACK ----------------------------------------------------------------

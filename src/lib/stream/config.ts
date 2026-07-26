@@ -48,7 +48,22 @@ export function deriveBlueskyHandle(
 
     const profileMatch = link.match(/bsky\.app\/profile\/([^/?#]+)/i)
     if (profileMatch) {
-      return decodeURIComponent(profileMatch[1]).replace(/^@/, '')
+      // decodeURIComponent throws on malformed %-escapes in user-entered
+      // links — treat an undecodable segment as "no handle" rather than
+      // crashing the render.
+      try {
+        return decodeURIComponent(profileMatch[1]).replace(/^@/, '')
+      } catch {
+        continue
+      }
+    }
+
+    // Bare handle entry ("@handle.bsky.social" or "handle.tld"): accept a
+    // non-URL entry that looks like a Bluesky handle (has a dot, no scheme,
+    // no slashes) — matches the doc contract above.
+    if (!link.includes('://') && !link.includes('/')) {
+      const bare = link.replace(/^@/, '')
+      if (/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(bare)) return bare
     }
   }
 
