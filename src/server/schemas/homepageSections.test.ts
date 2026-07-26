@@ -53,6 +53,41 @@ describe('UpdateHomepageSectionsSchema', () => {
     expect(hero._type).toBe('homepageHero')
   })
 
+  it('rejects unsafe link schemes on tenant-entered hrefs (site path or http(s) only)', () => {
+    const withHref = (href: string) =>
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          {
+            _type: 'homepageHero',
+            _key: 'h',
+            ctaOverrides: [{ label: 'X', href }],
+          },
+        ],
+      }).success
+    expect(withHref('/tickets')).toBe(true)
+    expect(withHref('https://example.com/register')).toBe(true)
+    // eslint-disable-next-line no-script-url
+    expect(withHref('javascript:alert(1)')).toBe(false)
+    expect(withHref('data:text/html,x')).toBe(false)
+    expect(withHref('//evil.example')).toBe(false)
+
+    const bannerWith = (buttonHref: string) =>
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          {
+            _type: 'homepageCtaBanner',
+            _key: 'b',
+            heading: 'H',
+            buttonLabel: 'Go',
+            buttonHref,
+          },
+        ],
+      }).success
+    expect(bannerWith('/cfp')).toBe(true)
+    // eslint-disable-next-line no-script-url
+    expect(bannerWith('javascript:alert(1)')).toBe(false)
+  })
+
   it('rejects an unknown section type (closed registry)', () => {
     expect(() =>
       UpdateHomepageSectionsSchema.parse({

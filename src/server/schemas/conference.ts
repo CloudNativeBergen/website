@@ -527,10 +527,36 @@ export const CreateEditionSchema = z
 const sectionKey = z.string().optional()
 const sectionHidden = z.boolean().optional()
 
+/**
+ * A link an ORGANIZER can point a public-page button at: a site-internal path
+ * (`/tickets`) or an absolute http(s) URL. Anything else — `javascript:`,
+ * `data:`, scheme-relative `//host` — is rejected: these are tenant-entered
+ * values rendered into every visitor's page, so the scheme surface must be
+ * closed at the write path (same standard as the legal-page authority URL).
+ */
+const safeLinkHref = z
+  .string()
+  .trim()
+  .min(1, 'Link is required')
+  .refine(
+    (value) => {
+      if (value.startsWith('/') && !value.startsWith('//')) return true
+      try {
+        const parsed = new URL(value)
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      } catch {
+        return false
+      }
+    },
+    {
+      message: 'Enter a site path (e.g. /tickets) or a full http(s) URL',
+    },
+  )
+
 const HeroCtaOverrideSchema = z.object({
   _key: sectionKey,
   label: z.string().trim().min(1, 'Label is required'),
-  href: z.string().trim().min(1, 'Link is required'),
+  href: safeLinkHref,
 })
 
 const HomepageSectionSchema = z.discriminatedUnion('_type', [
@@ -580,7 +606,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     heading: z.string().trim().min(1, 'Heading is required'),
     body: z.string().trim().min(1).nullable().optional(),
     buttonLabel: z.string().trim().min(1, 'Button label is required'),
-    buttonHref: z.string().trim().min(1, 'Button link is required'),
+    buttonHref: safeLinkHref,
   }),
   z.object({
     _type: z.literal('homepageRichText'),
