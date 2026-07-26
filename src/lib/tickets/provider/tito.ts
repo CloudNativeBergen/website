@@ -37,6 +37,8 @@ interface TitoRelease {
   price?: string | number | null
   /** Allocation cap; null/absent ⇒ unlimited. */
   quantity?: number | null
+  /** Tickets already issued against this release (when the API surfaces it). */
+  tickets_count?: number | null
   /** A secret release is reachable only by a direct link/access code. */
   secret?: boolean
   state?: string
@@ -186,7 +188,16 @@ export class TitoProvider implements TicketingProvider {
     let page: number | undefined = 1
     // Follow Tito's cursor (`meta.next_page`) with a hard page cap so a
     // pathological response can never loop forever.
-    for (let guard = 0; page && guard < 100; guard++) {
+    const PAGE_CAP = 100
+    for (let guard = 0; page; guard++) {
+      if (guard >= PAGE_CAP) {
+        // Never silently return a truncated attendee list: partial data would
+        // corrupt eligibility checks and order groupings downstream. A real
+        // event needing >100 pages should raise the cap deliberately.
+        throw new Error(
+          `Tito ticket pagination exceeded ${PAGE_CAP} pages for ${accountSlug}/${eventSlug} — refusing to return partial data`,
+        )
+      }
       const data: { tickets?: TitoTicket[]; meta?: TitoMeta } = await this.get(
         `/${accountSlug}/${eventSlug}/tickets?page[number]=${page}`,
       )
@@ -207,12 +218,18 @@ export class TitoProvider implements TicketingProvider {
     return {
       id: t.id,
       // Tito groups tickets under a "registration" (the order equivalent).
-      order_id: t.registration_id ?? 0,
+      // A missing registration id must NOT collapse to a shared sentinel (0)
+      // or unrelated tickets would merge into one synthetic order — negate the
+      // ticket id so each orphan stays its own group and can never collide
+      // with a real (positive) registration id.
+      order_id: t.registration_id ?? -t.id,
       category,
       customer_name: name || null,
       sum: String(t.price ?? '0'),
-      // Tito settles at purchase; there is no running balance like Checkin's.
-      sum_left: '0',
+      // Checkin semantics: `sum_left` is the outstanding balance. A completed
+      // Tito registration is settled (0); anything else still owes its price
+      // so downstream paid/unpaid logic doesn't treat it as paid.
+      sum_left: paid ? '0' : String(t.price ?? '0'),
       coupon: t.discount_code ?? undefined,
       fields: [],
       crm: {
@@ -309,9 +326,14 @@ export class TitoProvider implements TicketingProvider {
           key: null,
         },
       ],
-      // Tito's `quantity` is the allocation CAP (null ⇒ unlimited); it is not a
-      // live remaining count the way Checkin's `available` is.
-      available: typeof r.quantity === 'number' ? r.quantity : null,
+      // `available` is surfaced as a LIVE remaining count by the UI (low-stock
+      // messaging), and Tito's `quantity` is only the allocation CAP — so
+      // compute remaining (cap minus issued) when the API surfaces both, and
+      // report null (unknown/unlimited) otherwise rather than a misleading cap.
+      available:
+        typeof r.quantity === 'number' && typeof r.tickets_count === 'number'
+          ? Math.max(0, r.quantity - r.tickets_count)
+          : null,
       // A secret/hidden release is effectively invite-only on the public page.
       requiresInvitation: Boolean(r.secret),
       visibleStartsAt: r.start_at ?? null,

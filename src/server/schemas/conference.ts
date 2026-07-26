@@ -150,23 +150,45 @@ export const UpdateCommunicationSchema = z.object({
 // Positive integers; clearing is allowed by sending `null` (unset).
 // Provider-discriminated: `ticketingProvider` selects the vendor (absent/null ⇒
 // Checkin). Checkin uses the numeric ids; Tito uses the two account/event slugs.
-export const UpdateTicketingIdsSchema = z.object({
-  ticketingProvider: z.enum(['checkin', 'tito']).nullable().optional(),
-  checkinCustomerId: z
-    .number()
-    .int('Must be a whole number')
-    .positive('Must be a positive number')
-    .nullable()
-    .optional(),
-  checkinEventId: z
-    .number()
-    .int('Must be a whole number')
-    .positive('Must be a positive number')
-    .nullable()
-    .optional(),
-  titoAccountSlug: z.string().trim().nullable().optional(),
-  titoEventSlug: z.string().trim().nullable().optional(),
-})
+export const UpdateTicketingIdsSchema = z
+  .object({
+    ticketingProvider: z.enum(['checkin', 'tito']).nullable().optional(),
+    checkinCustomerId: z
+      .number()
+      .int('Must be a whole number')
+      .positive('Must be a positive number')
+      .nullable()
+      .optional(),
+    checkinEventId: z
+      .number()
+      .int('Must be a whole number')
+      .positive('Must be a positive number')
+      .nullable()
+      .optional(),
+    titoAccountSlug: z.string().trim().nullable().optional(),
+    titoEventSlug: z.string().trim().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    // A Tito binding is both-or-neither: the resolver requires account AND event
+    // slug, so persisting one alone would strand the conference in a
+    // half-configured state that silently resolves as "unconfigured".
+    const wantsTito =
+      value.ticketingProvider === 'tito' ||
+      Boolean(value.titoAccountSlug) ||
+      Boolean(value.titoEventSlug)
+    if (!wantsTito) return
+    if (Boolean(value.titoAccountSlug) !== Boolean(value.titoEventSlug)) {
+      const missing = value.titoAccountSlug
+        ? 'titoEventSlug'
+        : 'titoAccountSlug'
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [missing],
+        message:
+          'Tito needs both the account slug and the event slug — set both or clear both',
+      })
+    }
+  })
 
 // === CFP & Revenue Goals ===
 // Non-negative numbers; every field is optional and unsettable via `null`.

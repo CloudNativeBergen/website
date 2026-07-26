@@ -123,6 +123,7 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
           description: 'Cheap seats',
           price: '100.0',
           quantity: 50,
+          tickets_count: 12,
           position: 0,
           start_at: '2026-01-01T00:00:00Z',
           end_at: '2026-02-01T00:00:00Z',
@@ -146,7 +147,9 @@ describe('TitoProvider — fetchPublicTicketTypes', () => {
     expect(result.tickets).toHaveLength(1)
     const t = result.tickets[0]
     expect(t.name).toBe('Early Bird')
-    expect(t.available).toBe(50)
+    // Remaining = cap (50) - issued (12); the raw cap alone would mislead the
+    // UI's low-stock messaging.
+    expect(t.available).toBe(38)
     expect(t.requiresInvitation).toBe(false)
     expect(t.visibleStartsAt).toBe('2026-01-01T00:00:00Z')
     // VAT-inclusive bridge: gross price surfaced with vat '0' so incl/excl math
@@ -244,9 +247,33 @@ describe('TitoProvider — fetchEventTickets', () => {
     expect(tickets[0].category).toBe('Speaker ticket')
     expect(tickets[0].order_id).toBe(500)
     expect(tickets[0].order?.paid).toBe(true)
+    // A paid registration owes nothing; an incomplete one still owes its price.
+    expect(tickets[0].sum_left).toBe('0')
     expect(tickets[1].order?.paid).toBe(false)
+    expect(tickets[1].sum_left).toBe(tickets[1].sum)
+    // A missing registration_id gets a per-ticket negative fallback, never a
+    // shared sentinel that would merge unrelated tickets into one order.
+    expect(tickets[1].order_id).toBe(-2)
     // Page 1 then page 2 were both fetched.
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws instead of returning partial data when pagination never ends', async () => {
+    // Every page reports another next_page — a looping/pathological cursor.
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tickets: [{ id: 1, email: 'a@example.com' }],
+            meta: { next_page: 2 },
+          }),
+          { status: 200 },
+        ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+    await expect(
+      getTicketingProvider('tito', CREDS).fetchEventTickets(TITO_REF),
+    ).rejects.toThrow(/refusing to return partial data/)
   })
 
   it('throws a wiring error when handed a Checkin-shaped ref', async () => {
