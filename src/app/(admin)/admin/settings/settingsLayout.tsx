@@ -91,6 +91,22 @@ export function StudioEditLink({ editUrl }: { editUrl?: string | null }) {
   )
 }
 
+/**
+ * Restrict a STORED href to schemes safe to render as a clickable link
+ * (site paths, http(s), mailto) — anything else (javascript:, data:,
+ * scheme-relative) degrades to an inert '#'. Same closed-scheme standard as
+ * the write-path safeLinkHref and the portable-text link guard.
+ */
+function safeDisplayHref(value: unknown): string {
+  if (typeof value !== 'string') return '#'
+  const v = value.trim()
+  if (!v) return '#'
+  if (v.startsWith('/') && !v.startsWith('//')) return v
+  if (/^https?:\/\//i.test(v)) return v
+  if (/^mailto:/i.test(v)) return v
+  return '#'
+}
+
 export function FieldRow({
   label,
   value,
@@ -163,7 +179,7 @@ export function FieldRow({
             {value.map((link, idx) => (
               <div key={idx}>
                 <a
-                  href={link as string}
+                  href={safeDisplayHref(link)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex max-w-full min-w-0 items-start text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
@@ -227,7 +243,7 @@ export function FieldRow({
     case 'url':
       displayValue = value ? (
         <a
-          href={value as string}
+          href={safeDisplayHref(value)}
           target="_blank"
           rel="noopener noreferrer"
           className="flex min-w-0 items-start text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
