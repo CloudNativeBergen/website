@@ -21,7 +21,7 @@ import { PIRSCH_EVENTS } from '@/lib/analytics'
 import {
   hasPublishedSchedule,
   type HomepageSection,
-} from '@/lib/homepage/sections'
+} from '@/lib/homepage'
 
 /** Unknown section `_type`s already warned about (once per process). */
 const warnedUnknownSectionTypes = new Set<string>()

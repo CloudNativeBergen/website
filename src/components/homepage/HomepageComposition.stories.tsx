@@ -3,7 +3,7 @@ import { HomepageSectionRenderer } from './SectionRenderer'
 import {
   getDefaultSections,
   type HomepageSection,
-} from '@/lib/homepage/sections'
+} from '@/lib/homepage'
 import type { Conference } from '@/lib/conference/types'
 import type { TypedObject } from 'sanity'
 

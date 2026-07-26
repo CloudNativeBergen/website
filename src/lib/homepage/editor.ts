@@ -26,7 +26,7 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
  * The block types that carry per-section config worth an inline accordion. The
  * content-free blocks (featured speakers, program, organizers, sponsors,
  * gallery) only source their content from the conference, so they need no form
- * and render a compact one-line note instead of an expandable panel.
+ * — their cards render without an expandable config panel.
  */
 const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageHero',

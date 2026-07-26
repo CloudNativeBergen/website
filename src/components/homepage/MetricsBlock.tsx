@@ -1,6 +1,6 @@
 import { Container } from '@/components/Container'
 import type { Conference } from '@/lib/conference/types'
-import type { MetricsSection } from '@/lib/homepage/sections'
+import type { MetricsSection } from '@/lib/homepage'
 
 /**
  * Standalone vanity-metrics band (front-page builder F2). Content comes from the

@@ -29,7 +29,7 @@ import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
 import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
-import { resolveHomepageSections } from '@/lib/homepage/sections'
+import { resolveHomepageSections } from '@/lib/homepage'
 import {
   CalendarIcon,
   GlobeAltIcon,

@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { HomepageSectionsEditor } from './HomepageSectionsEditor'
 import { NotificationProvider } from './NotificationProvider'
-import type { HomepageSection } from '@/lib/homepage/sections'
+import type { HomepageSection } from '@/lib/homepage'
 
 const handlers = [
   http.post('/api/trpc/conference.updateHomepageSections', () =>

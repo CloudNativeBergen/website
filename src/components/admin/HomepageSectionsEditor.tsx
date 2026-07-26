@@ -43,7 +43,7 @@ import {
   HOMEPAGE_SECTION_TYPES,
   type HomepageSection,
   type HomepageSectionType,
-} from '@/lib/homepage/sections'
+} from '@/lib/homepage'
 import {
   SECTION_LABELS,
   isConfigurable,
@@ -56,7 +56,7 @@ import {
   toPreviewBands,
   type EditorRow,
   type PreviewBand,
-} from '@/lib/homepage/editor'
+} from '@/lib/homepage'
 
 /**
  * Front-page builder (F3) admin editor — a drag-and-drop composition builder
@@ -96,9 +96,14 @@ export function HomepageSectionsEditor({
   const { showNotification } = useNotification()
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
-  const [rows, setRows] = useState<EditorRow[]>(() =>
+  // Rows are materialized ONCE: `toEditorRows` generates keys for keyless
+  // stored sections, so a second call would mint DIFFERENT keys — the dirty
+  // baseline below must be derived from this same array or the form would
+  // read as dirty the moment it opens.
+  const [initialRows] = useState<EditorRow[]>(() =>
     toEditorRows(initialSections),
   )
+  const [rows, setRows] = useState<EditorRow[]>(initialRows)
   const [addType, setAddType] =
     useState<HomepageSectionType>('homepageCtaBanner')
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -111,12 +116,17 @@ export function HomepageSectionsEditor({
   const [overKey, setOverKey] = useState<string | null>(null)
 
   // The composition serialized at open time; the unsaved-changes guard compares
-  // the live rows against it. Recomputed whenever the stored props change.
+  // the live rows against it. Derived from the SAME materialized rows (stable
+  // generated keys) and memoized — serialization must not rerun on the
+  // high-frequency renders dnd emits while dragging.
   const initialSignature = useMemo(
-    () => serializeRows(toEditorRows(initialSections)),
-    [initialSections],
+    () => serializeRows(initialRows),
+    [initialRows],
   )
-  const isDirty = serializeRows(rows) !== initialSignature
+  const isDirty = useMemo(
+    () => serializeRows(rows) !== initialSignature,
+    [rows, initialSignature],
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -147,7 +157,9 @@ export function HomepageSectionsEditor({
   })
 
   const reset = () => {
-    setRows(toEditorRows(initialSections))
+    // Restore the SAME materialized rows (not a fresh toEditorRows call, which
+    // would mint new keys and desync the dirty baseline).
+    setRows(initialRows)
     setSubmitError(null)
     setExpanded(new Set())
     setActiveKey(null)
@@ -234,6 +246,13 @@ export function HomepageSectionsEditor({
     const err = validate()
     if (err) {
       setSubmitError(err)
+      return
+    }
+    // Saving an EMPTY composition is server-side "unset → revert to default" —
+    // route it through the same confirmation as the explicit Revert button
+    // rather than silently discarding the stored composition.
+    if (rows.length === 0) {
+      setConfirmingRevert(true)
       return
     }
     mutation.mutate({ homepageSections: toPayload(rows) as never })
@@ -496,7 +515,7 @@ function SortableSectionCard({
           {...attributes}
           {...listeners}
           aria-label={`Drag ${label} to reorder`}
-          className="hidden h-11 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue active:cursor-grabbing sm:inline-flex dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          className="hidden h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue active:cursor-grabbing sm:inline-flex dark:hover:bg-gray-800 dark:hover:text-gray-300"
         >
           <Bars3Icon className="h-5 w-5" />
         </button>

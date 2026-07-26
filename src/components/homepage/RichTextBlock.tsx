@@ -1,7 +1,7 @@
 import { PortableText } from '@portabletext/react'
 import { Container } from '@/components/Container'
 import { portableTextComponents } from '@/lib/portabletext/components'
-import type { RichTextSection } from '@/lib/homepage/sections'
+import type { RichTextSection } from '@/lib/homepage'
 
 /**
  * Generic portable-text block (front-page builder F2), rendered with the shared

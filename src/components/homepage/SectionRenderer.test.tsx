@@ -42,7 +42,7 @@ import { HomepageSectionRenderer } from './SectionRenderer'
 import {
   getDefaultSections,
   type HomepageSection,
-} from '@/lib/homepage/sections'
+} from '@/lib/homepage'
 import type { Conference } from '@/lib/conference/types'
 
 function makeConference(overrides: Partial<Conference> = {}): Conference {

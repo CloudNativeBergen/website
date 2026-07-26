@@ -1,6 +1,6 @@
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
-import type { CtaBannerSection } from '@/lib/homepage/sections'
+import type { CtaBannerSection } from '@/lib/homepage'
 
 /**
  * Generic call-to-action banner block (front-page builder F2). A closed-registry
