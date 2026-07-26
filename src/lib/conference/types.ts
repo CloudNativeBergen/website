@@ -6,6 +6,7 @@ import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
+import type { ConferenceVisibility } from './visibility'
 
 export interface CrmActivityThreshold {
   _key?: string
@@ -100,6 +101,15 @@ export interface AgentConfiguration {
 export interface Conference {
   _id: string
   title: string
+  /**
+   * Discovery visibility (M0 trial groundwork). `'unlisted'` excludes this
+   * conference from sitemaps/robots/search indexing while keeping it reachable
+   * by direct link; `'live'` is publicly listed and indexed. OPTIONAL because
+   * legacy documents carry no field — server code treats ABSENT as `'live'`
+   * (see `@/lib/conference/visibility`). Projected by the main conference
+   * projection's `...` spread.
+   */
+  visibility?: ConferenceVisibility
   /**
    * Multi-tenant anchor (CaaS T1-1, #613): the organization (tenant) that owns
    * this conference edition. Projected as a raw reference by the main conference

@@ -14,6 +14,13 @@ export default defineType({
       options: { collapsible: true, collapsed: false },
     },
     {
+      name: 'visibility',
+      title: 'Visibility & Discovery',
+      description:
+        'Whether this conference is publicly listed and indexed, or unlisted (reachable by direct link but hidden from search engines).',
+      options: { collapsible: true, collapsed: false },
+    },
+    {
       name: 'branding',
       title: 'Branding',
       description:
@@ -154,6 +161,35 @@ export default defineType({
       title: 'Description',
       type: 'text',
       fieldset: 'basicInfo',
+    }),
+
+    // === Visibility & Discovery ===
+    // M0 trial groundwork: gate a conference's presence on discovery surfaces
+    // (sitemap / robots / search indexing) without hiding it from direct
+    // visitors. ABSENT is treated as `live` by server code (every legacy
+    // conference is public), so this field is intentionally NOT required. The
+    // `initialValue` only stamps Studio-CREATED documents — a fresh conference
+    // starts unlisted ("build free, pay to activate"); it does NOT affect the
+    // absent-means-live rule for existing docs or programmatic writes.
+    defineField({
+      name: 'visibility',
+      title: 'Visibility',
+      type: 'string',
+      fieldset: 'visibility',
+      description:
+        'Unlisted: the site renders for direct visitors so you can preview and share it, but it is excluded from sitemaps, robots and search indexing. Live: publicly listed and indexed.',
+      options: {
+        list: [
+          {
+            title:
+              'Unlisted — reachable by direct link, hidden from search engines',
+            value: 'unlisted',
+          },
+          { title: 'Live — publicly listed and indexed', value: 'live' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'unlisted',
     }),
 
     // === Branding ===

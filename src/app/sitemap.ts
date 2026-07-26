@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { buildSitemap } from '@/lib/seo/sitemap'
 
@@ -19,6 +20,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // No conference resolves for this host → emit only the static public pages.
   if (!conference?._id) {
     return buildSitemap(host)
+  }
+
+  // Unlisted (M0 trial) → emit nothing; the pages still resolve for direct
+  // visitors but contribute no discovery URLs. Skip the speaker fetch entirely.
+  if (isConferenceUnlisted(conference)) {
+    return buildSitemap(host, { unlisted: true })
   }
 
   const { speakers } = await getSpeakers(conference._id)

@@ -23,6 +23,7 @@ import {
 } from '@/lib/conference/edition'
 import {
   UpdateBasicInfoSchema,
+  UpdateVisibilitySchema,
   UpdateVenueSchema,
   UpdateDatesSchema,
   UpdateRegistrationSchema,
@@ -144,6 +145,20 @@ async function applyConferencePatch(
 export const conferenceRouter = router({
   updateBasicInfo: adminProcedure
     .input(UpdateBasicInfoSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Flip the conference's discovery visibility (M0 trial state). Field-scoped
+   * like every other settings mutation: resolves the conference id from the
+   * request domain (never the client) and patches ONLY `visibility`. The shared
+   * `applyConferencePatch` revalidates this conference's scoped cache tag, so
+   * the public sitemap/robots/metadata reflect the flip on the next request.
+   */
+  updateVisibility: adminProcedure
+    .input(UpdateVisibilitySchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)

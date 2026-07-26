@@ -3,6 +3,10 @@ import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
 import { CLONE_FAMILIES } from '@/lib/conference/edition'
+import {
+  CONFERENCE_VISIBILITY_VALUES,
+  type ConferenceVisibility,
+} from '@/lib/conference/visibility'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -34,6 +38,23 @@ export const UpdateBasicInfoSchema = z.object({
   country: z.string().trim().nullable().optional(),
   tagline: z.string().trim().nullable().optional(),
   description: z.string().trim().nullable().optional(),
+})
+
+// === Visibility (M0 trial state) ===
+// A single required enum — the ONLY value that opts a conference out of
+// discovery is the explicit `'unlisted'`; server code treats absent as `'live'`
+// (see `@/lib/conference/visibility`). The mutation always sets an explicit
+// value, so the field is never left absent once an organizer has touched it.
+export const UpdateVisibilitySchema = z.object({
+  // Cast the shared readonly values to zod's mutable-tuple shape WHILE preserving
+  // the literal union (`'unlisted' | 'live'`), so the inferred input type is the
+  // narrow union rather than `string`.
+  visibility: z.enum(
+    CONFERENCE_VISIBILITY_VALUES as unknown as [
+      ConferenceVisibility,
+      ...ConferenceVisibility[],
+    ],
+  ),
 })
 
 // === Venue ===

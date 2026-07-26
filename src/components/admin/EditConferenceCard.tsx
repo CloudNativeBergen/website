@@ -56,6 +56,7 @@ import { useNotification } from './NotificationProvider'
 
 export type ConferenceFieldsetKey =
   | 'basicInfo'
+  | 'visibility'
   | 'venue'
   | 'dates'
   | 'registration'
@@ -77,6 +78,7 @@ export type EditFieldType =
   | 'url'
   | 'number'
   | 'boolean'
+  | 'select'
   | 'string-list'
   | 'object-list'
   | 'rich-text'
@@ -107,6 +109,8 @@ export interface EditFieldDef {
   positive?: boolean
   /** Optional helper text rendered under the control. */
   description?: string
+  /** Options for a scalar `select` field (value stored, title shown). */
+  options?: readonly { value: string; title: string }[]
   // --- list options (`string-list` / `object-list`) ---
   /** Per-row validation for a `string-list`. */
   itemType?: 'text' | 'url' | 'hostname'
@@ -146,6 +150,28 @@ interface FieldsetDef {
  * validators (this table only drives the form + light client-side hints).
  */
 export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
+  visibility: {
+    title: 'Visibility',
+    subtitle: 'Publicly listed, or unlisted (reachable by direct link only)',
+    fields: [
+      {
+        name: 'visibility',
+        label: 'Visibility',
+        type: 'select',
+        required: true,
+        options: [
+          {
+            value: 'unlisted',
+            title:
+              'Unlisted — reachable by direct link, hidden from search engines',
+          },
+          { value: 'live', title: 'Live — publicly listed and indexed' },
+        ],
+        description:
+          'Unlisted conferences still render for direct visitors so you can preview and share them, but they are excluded from sitemaps, robots and search indexing.',
+      },
+    ],
+  },
   basicInfo: {
     title: 'Basic Information',
     subtitle: 'Conference name, host and location',
@@ -507,6 +533,7 @@ const MUTATION_BY_FIELDSET: Record<
   keyof typeof api.conference
 > = {
   basicInfo: 'updateBasicInfo',
+  visibility: 'updateVisibility',
   venue: 'updateVenue',
   dates: 'updateDates',
   registration: 'updateRegistration',
@@ -996,6 +1023,57 @@ function EditField({
           helpText={field.description}
           compact
         />
+      </div>
+    )
+  }
+
+  if (field.type === 'select') {
+    const selectValue = typeof value === 'string' ? value : ''
+    return (
+      <div>
+        <label
+          htmlFor={id}
+          className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          {field.label}
+          {field.required ? (
+            <span className="text-red-500" aria-hidden="true">
+              {' '}
+              *
+            </span>
+          ) : null}
+        </label>
+        <select
+          id={id}
+          value={selectValue}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={inputClass}
+        >
+          {!field.required ? <option value="">— None —</option> : null}
+          {(field.options ?? []).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.title}
+            </option>
+          ))}
+        </select>
+        {error ? (
+          <p
+            id={`${id}-error`}
+            role="alert"
+            className="mt-1 text-sm text-red-600 dark:text-red-400"
+          >
+            {error}
+          </p>
+        ) : field.description ? (
+          <p
+            id={`${id}-desc`}
+            className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+          >
+            {field.description}
+          </p>
+        ) : null}
       </div>
     )
   }

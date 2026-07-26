@@ -63,3 +63,28 @@ describe('buildRobots', () => {
     expect(disallow).not.toContain('/sponsor/terms')
   })
 })
+
+describe('buildRobots — unlisted (M0 trial state)', () => {
+  const robots = buildRobots('trial.cloudnativebergen.dev', { unlisted: true })
+  const rule = Array.isArray(robots.rules) ? robots.rules[0] : robots.rules
+
+  it('serves a blanket Disallow: / for all crawlers', () => {
+    expect(rule?.userAgent).toBe('*')
+    expect(rule?.disallow).toBe('/')
+  })
+
+  it('does not allow the root (no crawl surface)', () => {
+    expect(rule?.allow).toBeUndefined()
+  })
+
+  it('omits the Sitemap line (nothing to enumerate)', () => {
+    expect(robots.sitemap).toBeUndefined()
+  })
+
+  it('a live host (unlisted: false) keeps the normal allow policy', () => {
+    const live = buildRobots('cloudnativebergen.dev', { unlisted: false })
+    const liveRule = Array.isArray(live.rules) ? live.rules[0] : live.rules
+    expect(liveRule?.allow).toBe('/')
+    expect(live.sitemap).toBe('https://cloudnativebergen.dev/sitemap.xml')
+  })
+})
