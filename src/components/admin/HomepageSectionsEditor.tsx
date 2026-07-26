@@ -173,6 +173,8 @@ export function HomepageSectionsEditor({
     const fresh = toEditorRows(initialSections)
     setInitialRows(fresh)
     setRows(fresh)
+    setConfirmingCancel(false)
+    setConfirmingRevert(false)
     setSubmitError(null)
     setExpanded(new Set())
     setActiveKey(null)
@@ -182,6 +184,7 @@ export function HomepageSectionsEditor({
   const close = () => {
     setIsOpen(false)
     setConfirmingCancel(false)
+    setConfirmingRevert(false)
     reset()
   }
   /**
