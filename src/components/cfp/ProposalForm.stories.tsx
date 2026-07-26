@@ -54,9 +54,16 @@ const mockEmails: ProfileEmail[] = [
 // A GET catch-all so no on-mount query (currently only `speaker.getEmails`)
 // hits the network unhandled. Mutations get their own POST handlers per story.
 const queryHandlers = [
-  http.get('/api/trpc/:proc', ({ params }) =>
-    params.proc === 'speaker.getEmails' ? trpc(mockEmails) : trpc(null),
-  ),
+  http.get('/api/trpc/:proc', ({ params }) => {
+    if (params.proc === 'speaker.getEmails') return trpc(mockEmails)
+    // Benign null for procs the form incidentally fires — but SAY SO, so a
+    // missing mock surfaces in the story logs instead of silently rendering
+    // empty (the catch-all must not hide unmocked queries).
+    console.warn(
+      `[ProposalForm.stories] unmocked tRPC query: ${String(params.proc)}`,
+    )
+    return trpc(null)
+  }),
 ]
 
 const okMutationHandlers = [

@@ -65,12 +65,10 @@ const config: StorybookConfig = {
       enforce: 'pre',
       resolveId(id) {
         if (id === '@/app/(cfp)/cfp/profile/link-actions') {
-          return '\0mock:cfp-link-actions'
-        }
-      },
-      load(id) {
-        if (id === '\0mock:cfp-link-actions') {
-          return `export async function startProviderLink() { return { ok: true } }`
+          // A REAL typed file (not a virtual module) so the stub's export
+          // surface is compile-time-pinned to the actual server module via
+          // its `satisfies typeof import(...)` guard — drift breaks typecheck.
+          return join(__dirname, 'mocks/cfp-link-actions.ts')
         }
       },
     })
