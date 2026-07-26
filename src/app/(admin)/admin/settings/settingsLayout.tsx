@@ -80,8 +80,13 @@ export function InfoCard({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {manageLink ? <ManageLink {...manageLink} /> : null}
-          <StudioEditLink editUrl={editUrl} />
+          {/* One or the other, per the contract above: an in-app manage
+              link supersedes the Studio deep-link. */}
+          {manageLink ? (
+            <ManageLink {...manageLink} />
+          ) : (
+            <StudioEditLink editUrl={editUrl} />
+          )}
           {action}
         </div>
       </div>

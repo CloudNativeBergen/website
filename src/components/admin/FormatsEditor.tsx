@@ -44,6 +44,10 @@ export function FormatsEditor({
   const initial = selectedFormats.filter((k): k is Format =>
     ALL_FORMATS.some((f) => f.key === k),
   )
+  // Non-canonical stored keys are shown nowhere but MUST count as a pending
+  // change: baselining on the RAW stored list makes the editor open dirty, so
+  // one Save persists the cleaned canonical set.
+  const hasStaleStoredKeys = initial.length !== selectedFormats.length
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const [selectedKeys, setSelectedKeys] = useState<Format[]>(initial)
@@ -52,6 +56,7 @@ export function FormatsEditor({
 
   const baseline = [...initial].sort()
   const isDirty =
+    hasStaleStoredKeys ||
     JSON.stringify([...selectedKeys].sort()) !== JSON.stringify(baseline)
 
   const saveMutation = api.conference.updateFormats.useMutation({
@@ -102,7 +107,12 @@ export function FormatsEditor({
       setError('At least one format is required.')
       return
     }
-    saveMutation.mutate({ formats: selectedKeys })
+    // Persist in CANONICAL order — interaction order must not reorder the
+    // stored list (it drives display order elsewhere).
+    const canonicalOrder = ALL_FORMATS.map((f) => f.key).filter((k) =>
+      selectedKeys.includes(k),
+    )
+    saveMutation.mutate({ formats: canonicalOrder })
   }
 
   return (

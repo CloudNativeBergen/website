@@ -390,7 +390,6 @@ export const UpdateTopicsSchema = z.object({
  * array may contain. Mirrors the Sanity schema's inline `options.list`
  * (sourced from the same `formats` map), so the editor can never store a key
  * the CFP/agenda code doesn't understand. */
-const FORMAT_VALUES = Object.values(Format) as [Format, ...Format[]]
 
 /**
  * Formats — the conference's `formats[]` array of canonical format KEYS (plain
@@ -400,7 +399,7 @@ const FORMAT_VALUES = Object.values(Format) as [Format, ...Format[]]
  */
 export const UpdateFormatsSchema = z.object({
   formats: z
-    .array(z.enum(FORMAT_VALUES))
+    .array(z.nativeEnum(Format))
     .min(1, 'At least one format is required')
     .refine((keys) => new Set(keys).size === keys.length, {
       message: 'Formats must be unique',
