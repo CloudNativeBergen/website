@@ -17,6 +17,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { useEmailModalStorage } from '@/hooks/useEmailModalStorage'
 import { ModalShell } from '@/components/ModalShell'
+import { AdminButton } from '@/components/admin/AdminButton'
 
 export interface EmailModalProps {
   isOpen: boolean
@@ -319,13 +320,7 @@ export function EmailModal({
   }
 
   return (
-    <ModalShell
-      isOpen={isOpen}
-      onClose={handleClose}
-      size="3xl"
-      padded={false}
-      className="flex max-h-[90dvh] flex-col"
-    >
+    <ModalShell isOpen={isOpen} onClose={handleClose} size="3xl" padded={false}>
       <div className="flex items-center justify-between border-b border-gray-200 p-6 pb-4 dark:border-gray-700">
         <div className="flex-1">
           <div className="flex items-center gap-3">
@@ -366,7 +361,8 @@ export function EmailModal({
         <button
           onClick={handleClose}
           disabled={isLoading}
-          className="cursor-pointer rounded-xl p-2 transition-colors duration-200 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+          aria-label="Close dialog"
+          className="-mr-2 inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors duration-200 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
         >
           <XMarkIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
         </button>
@@ -524,17 +520,21 @@ export function EmailModal({
             </button>
           )}
         </div>
-        <div className="flex space-x-4">
-          <button
+        <div className="flex items-center space-x-3">
+          <AdminButton
             type="button"
+            variant="ghost"
+            size="md"
             onClick={handleClose}
             disabled={isLoading}
-            className="cursor-pointer text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
+            className="min-h-11"
           >
-            <span className="hidden sm:inline">Cancel</span>
-            <span className="sm:hidden">Cancel</span>
-          </button>
-          <button
+            Cancel
+          </AdminButton>
+          <AdminButton
+            type="button"
+            color="brand"
+            size="md"
             onClick={handleSend}
             disabled={
               isLoading ||
@@ -543,9 +543,8 @@ export function EmailModal({
               isLocalhost
             }
             title={isLocalhost ? 'Sending is disabled on localhost' : ''}
-            className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+            className="min-h-11 whitespace-nowrap"
           >
-            {' '}
             {isLoading ? (
               <div className="flex items-center gap-2">
                 <div className="h-4 w-4 animate-pulse rounded bg-white/30" />
@@ -560,7 +559,7 @@ export function EmailModal({
                 <span className="sm:hidden">Send</span>
               </>
             )}
-          </button>
+          </AdminButton>
         </div>
       </div>
     </ModalShell>

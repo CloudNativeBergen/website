@@ -2,21 +2,25 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
 import { EmailModal } from './EmailModal'
 import { NotificationProvider } from './NotificationProvider'
+import { withPortalTheme } from '@/lib/storybook'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Email/EmailModal',
   component: EmailModal,
   tags: ['autodocs'],
   parameters: {
-    layout: 'centered',
+    layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'Generic email composition modal used as the base for all email sending flows. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorIndividualEmailModal and SponsorDiscountEmailModal.',
+          'Generic email composition modal used as the base for all email sending flows. Built on the shared ModalShell (mobile bottom-sheet); keeps a compliant custom header for the draft-saved pill + clear-draft control. Features a rich text editor (PortableText), auto-save drafts to localStorage, email preview, template selector slot, and configurable fields. Used by SponsorIndividualEmailModal and SponsorDiscountEmailModal. Inspect at 393px and in dark mode.',
       },
     },
   },
   decorators: [
+    // ModalShell portals via HeadlessUI to document.body; mirror the toolbar
+    // theme onto <html> so the portalled modal's dark: classes resolve.
+    withPortalTheme,
     (Story: React.ComponentType) => (
       <NotificationProvider>
         <Story />

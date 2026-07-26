@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import { errorCode } from '@/lib/messaging/trpc'
@@ -49,6 +49,11 @@ export interface NewConversationFormProps {
   onCreated?: (conversationId: string) => void
   /** Optional cancel handler (e.g. to collapse the form). */
   onCancel?: () => void
+  /**
+   * Optional: reports whether the form currently holds unsent content (a typed
+   * subject or body). Lets a hosting modal arm a discard-changes guard.
+   */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
@@ -67,6 +72,7 @@ export function NewConversationForm({
   autoFocusFirstField = false,
   onCreated,
   onCancel,
+  onDirtyChange,
 }: NewConversationFormProps) {
   const router = useRouter()
   const utils = api.useUtils()
@@ -76,6 +82,13 @@ export function NewConversationForm({
 
   const isProposalThread = Boolean(proposalId)
   const showPicker = requireRecipient && !fixedRecipient && !isProposalThread
+
+  // Report unsent content upward so a hosting modal can guard the close.
+  const isDirty =
+    body.trim().length > 0 || (!isProposalThread && subject.trim().length > 0)
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const sendMutation = api.message.send.useMutation({
     onSuccess: ({ conversationId }) => {

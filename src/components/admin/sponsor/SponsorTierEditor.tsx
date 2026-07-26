@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useTheme } from 'next-themes'
 import {
   PlusIcon,
@@ -37,6 +37,41 @@ interface SponsorTierModalProps {
   onDelete?: (tierId: string) => void
 }
 
+/** Builds the pristine form state for a tier (or a blank tier). Shared by the
+ *  reset effect and the dirty-close baseline so they never drift. */
+function buildTierFormData(tier?: SponsorTierExisting): SponsorTierInput {
+  if (tier) {
+    return {
+      title: tier.title,
+      tagline: tier.tagline,
+      tierType: tier.tierType,
+      price: tier.price?.map((p) => ({
+        _key: p._key,
+        amount: p.amount,
+        currency: p.currency,
+      })) || [{ amount: 0, currency: 'NOK' }],
+      perks: tier.perks?.map((p) => ({
+        _key: p._key,
+        label: p.label,
+        description: p.description,
+      })) || [{ label: '', description: '' }],
+      soldOut: tier.soldOut,
+      mostPopular: tier.mostPopular,
+      maxQuantity: tier.maxQuantity,
+    }
+  }
+  return {
+    title: '',
+    tagline: '',
+    tierType: 'standard',
+    price: [{ amount: 0, currency: 'NOK' }],
+    perks: [{ label: '', description: '' }],
+    soldOut: false,
+    mostPopular: false,
+    maxQuantity: undefined,
+  }
+}
+
 function SponsorTierModal({
   isOpen,
   onClose,
@@ -46,15 +81,9 @@ function SponsorTierModal({
 }: SponsorTierModalProps) {
   const { showNotification } = useNotification()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [formData, setFormData] = useState<SponsorTierInput>({
-    title: '',
-    tagline: '',
-    tierType: 'standard',
-    price: [{ amount: 0, currency: 'NOK' }],
-    perks: [{ label: '', description: '' }],
-    soldOut: false,
-    mostPopular: false,
-  })
+  const [formData, setFormData] = useState<SponsorTierInput>(() =>
+    buildTierFormData(tier),
+  )
 
   const createMutation = api.sponsor.tiers.create.useMutation({
     onSuccess: (createdTier) => {
@@ -115,38 +144,8 @@ function SponsorTierModal({
   })
 
   useEffect(() => {
-    if (tier) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from tier data
-      setFormData({
-        title: tier.title,
-        tagline: tier.tagline,
-        tierType: tier.tierType,
-        price: tier.price?.map((p) => ({
-          _key: p._key,
-          amount: p.amount,
-          currency: p.currency,
-        })) || [{ amount: 0, currency: 'NOK' }],
-        perks: tier.perks?.map((p) => ({
-          _key: p._key,
-          label: p.label,
-          description: p.description,
-        })) || [{ label: '', description: '' }],
-        soldOut: tier.soldOut,
-        mostPopular: tier.mostPopular,
-        maxQuantity: tier.maxQuantity,
-      })
-    } else {
-      setFormData({
-        title: '',
-        tagline: '',
-        tierType: 'standard',
-        price: [{ amount: 0, currency: 'NOK' }],
-        perks: [{ label: '', description: '' }],
-        soldOut: false,
-        mostPopular: false,
-        maxQuantity: undefined,
-      })
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from tier data
+    setFormData(buildTierFormData(tier))
   }, [tier])
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -290,6 +289,12 @@ function SponsorTierModal({
     updateMutation.isPending ||
     deleteMutation.isPending
 
+  const initialSnapshot = useMemo(
+    () => JSON.stringify(buildTierFormData(tier)),
+    [tier],
+  )
+  const isDirty = JSON.stringify(formData) !== initialSnapshot
+
   return (
     <>
       <ModalShell
@@ -298,6 +303,8 @@ function SponsorTierModal({
         size="4xl"
         title={tier ? 'Edit Sponsor Tier' : 'Create Sponsor Tier'}
         icon={<TagIcon className="h-5 w-5" />}
+        confirmOnDirtyClose
+        isDirty={isDirty && !isLoading}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

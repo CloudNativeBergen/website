@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Combobox,
   ComboboxInput,
@@ -19,6 +19,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { sanityImage } from '@/lib/sanity/client'
 import { ImageHotspotEditor } from './ImageHotspotEditor'
 import { Input } from '@/components/Form'
+import { AdminButton } from '@/components/admin/AdminButton'
 import {
   extractDateFromISO,
   extractTimeFromISO,
@@ -249,29 +250,46 @@ export function ImageMetadataModal({
       (speaker) => !selectedSpeakers.find((s) => s._id === speaker._id),
     ) || []
 
+  // Snapshot the pristine metadata (mirrors the reset effect above) so the
+  // dirty-close guard only arms after a real edit.
+  const initialSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        formData: {
+          photographer: singleImage?.photographer || '',
+          date: singleImage?.date || '',
+          location: singleImage?.location || '',
+          imageAlt: singleImage?.imageAlt || '',
+          featured: singleImage?.featured || false,
+        },
+        speakers: (singleImage?.speakers || []).map((s) => s._id),
+        hotspot: singleImage?.image?.hotspot || null,
+        crop: singleImage?.image?.crop || null,
+      }),
+    [singleImage],
+  )
+
+  const isDirty =
+    JSON.stringify({
+      formData,
+      speakers: selectedSpeakers.map((s) => s._id),
+      hotspot,
+      crop,
+    }) !== initialSnapshot
+
   return (
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
       size="2xl"
-      className="max-h-[90dvh] overflow-y-auto rounded-xl shadow-lg"
+      title={
+        isBulkMode
+          ? `Bulk Update ${images!.length} Images`
+          : 'Edit Image Metadata'
+      }
+      confirmOnDirtyClose
+      isDirty={isDirty && !isSubmitting}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-          {isBulkMode
-            ? `Bulk Update ${images!.length} Images`
-            : 'Edit Image Metadata'}
-        </h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
-        >
-          <span className="sr-only">Close</span>
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
-
       {isBulkMode && (
         <div className="mt-4 space-y-3">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -602,16 +620,20 @@ export function ImageMetadataModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-3 pt-6">
-          <button
+        <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end">
+          <AdminButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold whitespace-nowrap text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700 dark:focus-visible:outline-indigo-500"
+            className="min-h-11"
           >
             Cancel
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
             type="submit"
+            color="brand"
+            size="md"
             disabled={
               isSubmitting ||
               (isBulkMode &&
@@ -619,7 +641,7 @@ export function ImageMetadataModal({
                 !formData.photographer &&
                 !formData.location)
             }
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
+            className="min-h-11"
           >
             {isSubmitting
               ? isBulkMode
@@ -628,7 +650,7 @@ export function ImageMetadataModal({
               : isBulkMode
                 ? 'Update Images'
                 : 'Save Changes'}
-          </button>
+          </AdminButton>
         </div>
       </form>
     </ModalShell>

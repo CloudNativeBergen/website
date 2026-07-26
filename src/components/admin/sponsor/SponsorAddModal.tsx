@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Combobox,
   ComboboxInput,
@@ -10,12 +10,12 @@ import {
 } from '@headlessui/react'
 import {
   BuildingOffice2Icon,
-  XMarkIcon,
   CheckIcon,
   ChevronUpDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { Dropdown } from '@/components/Form'
+import { AdminButton } from '@/components/admin/AdminButton'
 import {
   ConferenceSponsor,
   SponsorTierExisting,
@@ -339,6 +339,40 @@ export function SponsorAddModal({
       )
     : availableSponsors
 
+  const isSaving =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    crmCreateMutation.isPending ||
+    crmUpdateMutation.isPending
+
+  // Snapshot the pristine form (mirrors the open effect above) so the
+  // dirty-close guard only arms once the organizer has actually edited fields.
+  const initialSnapshot = useMemo(() => {
+    if (editingSponsor) {
+      const tierMatch = sponsorTiers.find(
+        (tier) => tier.title === editingSponsor.tier?.title,
+      )
+      return JSON.stringify({
+        name: editingSponsor.sponsor.name,
+        website: editingSponsor.sponsor.website || '',
+        logo: editingSponsor.sponsor.logo || null,
+        logoBright: editingSponsor.sponsor.logoBright || null,
+        tierId: tierMatch?._id || '',
+        orgNumber: '',
+      })
+    }
+    return JSON.stringify({
+      name: '',
+      website: '',
+      logo: null,
+      logoBright: null,
+      tierId: preselectedTierId || '',
+      orgNumber: '',
+    })
+  }, [editingSponsor, preselectedTierId, sponsorTiers])
+
+  const isDirty = JSON.stringify(formData) !== initialSnapshot
+
   const isFormValid = () => {
     if (!formData.tierId) return false
 
@@ -358,23 +392,12 @@ export function SponsorAddModal({
       isOpen={isOpen}
       onClose={onClose}
       size="4xl"
-      className="max-h-[90dvh] overflow-y-auto rounded-xl shadow-lg"
+      title={editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
+      icon={<BuildingOffice2Icon className="h-5 w-5" />}
+      confirmOnDirtyClose
+      isDirty={isDirty && !isSaving}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-          {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
-        </h3>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-11 w-11 items-center justify-center rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
-        >
-          <span className="sr-only">Close</span>
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Dropdown
             name="tier"
@@ -597,34 +620,29 @@ export function SponsorAddModal({
           </>
         )}
 
-        <div className="flex justify-end gap-3 pt-6">
-          <button
+        <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end">
+          <AdminButton
             type="button"
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold whitespace-nowrap text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700 dark:focus-visible:outline-indigo-500"
+            className="min-h-11"
           >
             Cancel
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
             type="submit"
-            disabled={
-              !isFormValid() ||
-              createMutation.isPending ||
-              updateMutation.isPending ||
-              crmCreateMutation.isPending ||
-              crmUpdateMutation.isPending
-            }
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
+            color="brand"
+            size="md"
+            disabled={!isFormValid() || isSaving}
+            className="min-h-11"
           >
-            {createMutation.isPending ||
-            updateMutation.isPending ||
-            crmCreateMutation.isPending ||
-            crmUpdateMutation.isPending
+            {isSaving
               ? 'Saving...'
               : editingSponsor
                 ? 'Update Sponsor'
                 : 'Add Sponsor'}
-          </button>
+          </AdminButton>
         </div>
       </form>
     </ModalShell>

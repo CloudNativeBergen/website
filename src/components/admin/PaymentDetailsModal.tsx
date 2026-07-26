@@ -1,8 +1,6 @@
 'use client'
-import { DialogTitle } from '@headlessui/react'
 import { ModalShell } from '@/components/ModalShell'
 import {
-  XMarkIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
   ClockIcon,
@@ -60,26 +58,10 @@ export function PaymentDetailsModal({
       onClose={onClose}
       size="2xl"
       padded={false}
-      className="overflow-hidden"
+      title="Payment Details"
+      subtitle={paymentDetails ? `Order #${paymentDetails.orderId}` : undefined}
+      icon={<CreditCardIcon className="h-5 w-5" />}
     >
-      <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
-        <DialogTitle className="flex items-center text-lg font-semibold text-gray-900 dark:text-white">
-          <CreditCardIcon className="mr-2 h-6 w-6 text-gray-400 dark:text-gray-500" />
-          Payment Details
-          {paymentDetails && (
-            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
-              Order #{paymentDetails.orderId}
-            </span>
-          )}
-        </DialogTitle>
-        <button
-          onClick={onClose}
-          className="rounded-md text-gray-400 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300 dark:focus:ring-indigo-400"
-        >
-          <XMarkIcon className="h-6 w-6" />
-        </button>
-      </div>
-
       <div className="p-6">
         {isLoading && (
           <div className="py-8">
@@ -291,8 +273,13 @@ export function PaymentDetailsModal({
         )}
       </div>
 
-      <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/50">
-        <AdminButton variant="secondary" size="md" onClick={onClose}>
+      <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 dark:border-gray-700 dark:bg-gray-800/50">
+        <AdminButton
+          variant="secondary"
+          size="md"
+          onClick={onClose}
+          className="min-h-11"
+        >
           Close
         </AdminButton>
       </div>
