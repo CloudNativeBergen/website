@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   EditorRow,
   isConfigurable,
+  isoToLocalInput,
+  localInputToIso,
   moveByIndex,
   reorderByKey,
   serializeRows,
@@ -265,7 +267,7 @@ describe('toEditorRows — new F4 blocks', () => {
         _key: 'cd',
         _type: 'homepageCountdown',
         heading: 'Starts in',
-        targetOverride: '2099-09-15',
+        targetOverride: '2099-09-15T10:00:00.000Z',
         liveMessage: 'We are live!',
       },
       {
@@ -276,7 +278,9 @@ describe('toEditorRows — new F4 blocks', () => {
       },
     ])
     expect(rows[0]).toMatchObject({
-      targetOverride: '2099-09-15',
+      // Stored ISO instants surface as LOCAL wall-clock datetime-local values
+      // (round-tripped back to ISO by toPayload below).
+      targetOverride: isoToLocalInput('2099-09-15T10:00:00.000Z'),
       liveMessage: 'We are live!',
     })
     expect(rows[1]).toMatchObject({ heading: 'Where', description: 'Downtown' })
@@ -322,14 +326,16 @@ describe('toPayload — trimming, omission and item filtering', () => {
         _key: 'cd',
         _type: 'homepageCountdown',
         heading: '   ',
-        targetOverride: '2099-09-15',
+        targetOverride: '2099-09-15T10:00:00.000Z',
         liveMessage: '  ',
       },
       { _key: 'v', _type: 'homepageVenue', description: 'Grieghallen' },
     ])
     expect(cd.heading).toBeUndefined()
     expect(cd.liveMessage).toBeUndefined()
-    expect(cd.targetOverride).toBe('2099-09-15')
+    expect(cd.targetOverride).toBe(
+      localInputToIso(isoToLocalInput('2099-09-15T10:00:00.000Z')),
+    )
     expect(venue.heading).toBeUndefined()
     expect(venue.description).toBe('Grieghallen')
   })

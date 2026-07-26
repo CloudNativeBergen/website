@@ -879,7 +879,7 @@ function SectionConfig({
           aria-label="FAQ source"
           className={inputClass}
         >
-          <option value="own">Use this block’s own items</option>
+          <option value="own">Use this block&rsquo;s own items</option>
           <option value="ticketFaqs">Reuse the ticket FAQs</option>
         </select>
         {source === 'ticketFaqs' ? (

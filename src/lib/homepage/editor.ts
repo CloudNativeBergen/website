@@ -82,6 +82,26 @@ export interface EditorRow {
 }
 
 let keyCounter = 0
+/**
+ * Stored ISO instant → the LOCAL wall-clock string a `datetime-local` input
+ * expects (and back, below). Same round-trip discipline as the workshop
+ * registration editor: local into the input, ISO instant into storage.
+ */
+export function isoToLocalInput(value?: string): string | undefined {
+  if (!value) return undefined
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return undefined
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+export function localInputToIso(value?: string): string | undefined {
+  const v = value?.trim()
+  if (!v) return undefined
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+}
+
 export const nextKey = () => `hp-${Date.now()}-${++keyCounter}`
 
 export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
@@ -119,7 +139,7 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
       }))
     } else if (s._type === 'homepageCountdown') {
       row.heading = s.heading
-      row.targetOverride = s.targetOverride
+      row.targetOverride = isoToLocalInput(s.targetOverride)
       row.liveMessage = s.liveMessage
     } else if (s._type === 'homepageVenue') {
       row.heading = s.heading
@@ -187,8 +207,13 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
       }
       case 'homepageCountdown':
         if (row.heading?.trim()) out.heading = row.heading.trim()
-        if (row.targetOverride?.trim())
-          out.targetOverride = row.targetOverride.trim()
+        {
+          // The datetime-local value is a timezone-less LOCAL wall-clock
+          // string; persist the unambiguous ISO instant so the server-side
+          // target resolution can never re-interpret it in the server's zone.
+          const iso = localInputToIso(row.targetOverride)
+          if (iso) out.targetOverride = iso
+        }
         if (row.liveMessage?.trim()) out.liveMessage = row.liveMessage.trim()
         break
       case 'homepageVenue':

@@ -71,9 +71,15 @@ export function Countdown({
   const [remaining, setRemaining] = useState<number | null>(null)
 
   useEffect(() => {
-    const tick = () => setRemaining(Math.max(0, targetMs - Date.now()))
-    tick()
+    const tick = () => {
+      const next = Math.max(0, targetMs - Date.now())
+      setRemaining(next)
+      // Once the target has passed the display is static — stop ticking
+      // instead of holding a 1s interval for the rest of the page's life.
+      if (next <= 0) clearInterval(id)
+    }
     const id = setInterval(tick, 1000)
+    tick()
     return () => clearInterval(id)
   }, [targetMs])
 

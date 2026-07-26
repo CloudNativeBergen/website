@@ -1,7 +1,35 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { Countdown } from './Countdown'
 
+const FIXED_NOW = new Date('2026-03-01T12:00:00Z').getTime()
+
 const meta = {
+  beforeEach: () => {
+    // Pin the clock (house pattern — see PaymentDetailsModal.stories): the
+    // Countdown reads Date.now() every tick, so an unpinned clock would
+    // drift Chromatic snapshots.
+    const OriginalDate = globalThis.Date
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(FIXED_NOW)
+      return new (
+        Function.prototype.bind.apply(OriginalDate, [
+          null,
+          ...args,
+        ]) as typeof OriginalDate
+      )()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => FIXED_NOW
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
+
   title: 'Systems/Homepage/Public/Countdown',
   component: Countdown,
   parameters: {
@@ -23,13 +51,13 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   args: {
     heading: 'Cloud Native Days Norway starts in',
-    targetMs: Date.now() + 90 * 86_400_000 + 5 * 3_600_000,
+    targetMs: FIXED_NOW + 90 * 86_400_000 + 5 * 3_600_000,
   },
 }
 
 export const NoHeading: Story = {
   args: {
-    targetMs: Date.now() + 3 * 86_400_000,
+    targetMs: FIXED_NOW + 3 * 86_400_000,
   },
 }
 
@@ -37,7 +65,7 @@ export const NoHeading: Story = {
 export const PastWithLiveMessage: Story = {
   args: {
     heading: 'Countdown',
-    targetMs: Date.now() - 3_600_000,
+    targetMs: FIXED_NOW - 3_600_000,
     liveMessage: 'We are live — welcome to the conference!',
   },
 }
