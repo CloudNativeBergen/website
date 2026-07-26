@@ -6,6 +6,7 @@ import {
   reorderByKey,
   serializeRows,
   toEditorRows,
+  toPayload,
   toPreviewBands,
 } from './editor'
 import type { HomepageSection } from './sections'
@@ -162,5 +163,75 @@ describe('toPreviewBands', () => {
     const bands = toPreviewBands(toEditorRows(withHidden), false)
     expect(bands[0].hidden).toBe(false)
     expect(bands[1].hidden).toBe(true)
+  })
+})
+
+describe('toPayload — mapping semantics', () => {
+  it('trims hero copy, omits blank optionals, and filters incomplete CTA overrides', () => {
+    const [hero] = toPayload([
+      {
+        _key: 'h',
+        _type: 'homepageHero',
+        heroHeadline: '  Hello  ',
+        heroSubheadline: '   ',
+        ctaOverrides: [
+          { _key: 'c1', label: ' Tickets ', href: ' /tickets ' },
+          { _key: 'c2', label: '  ', href: '/cfp' },
+          { _key: 'c3', label: 'CFP', href: '  ' },
+        ],
+      },
+    ])
+    expect(hero.heroHeadline).toBe('Hello')
+    // Blank subheadline is OMITTED, not sent as ''.
+    expect('heroSubheadline' in hero).toBe(false)
+    // Only the complete override survives, trimmed.
+    expect(hero.ctaOverrides).toEqual([
+      { _key: 'c1', label: 'Tickets', href: '/tickets' },
+    ])
+  })
+
+  it('keeps CTA-banner required fields present (server rejects empties with its own messages)', () => {
+    const [banner] = toPayload([
+      {
+        _key: 'b',
+        _type: 'homepageCtaBanner',
+        heading: ' Go ',
+        body: '   ',
+        buttonLabel: 'Now',
+        buttonHref: '/x',
+      },
+    ])
+    expect(banner.heading).toBe('Go')
+    expect('body' in banner).toBe(false)
+    expect(banner.buttonLabel).toBe('Now')
+    expect(banner.buttonHref).toBe('/x')
+  })
+
+  it('maps rich-text content through verbatim and defaults to an empty array', () => {
+    const block = { _type: 'block', _key: 'p1', children: [] }
+    const [withContent, without] = toPayload([
+      { _key: 'r1', _type: 'homepageRichText', content: [block] as never },
+      { _key: 'r2', _type: 'homepageRichText' },
+    ])
+    expect(withContent.content).toEqual([block])
+    expect(without.content).toEqual([])
+  })
+
+  it('round-trips toEditorRows → toPayload for a stored composition (keys and flags preserved)', () => {
+    const stored = [
+      { _key: 's1', _type: 'homepageHero' as const, heroHeadline: 'Hi' },
+      { _key: 's2', _type: 'homepageSponsors' as const, hidden: true },
+    ]
+    const payload = toPayload(toEditorRows(stored as never))
+    expect(payload[0]).toMatchObject({
+      _key: 's1',
+      _type: 'homepageHero',
+      heroHeadline: 'Hi',
+    })
+    expect(payload[1]).toEqual({
+      _key: 's2',
+      _type: 'homepageSponsors',
+      hidden: true,
+    })
   })
 })
