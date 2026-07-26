@@ -72,6 +72,37 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
     expect(isOrganizerForOrg(undefined, null)).toBe(false)
   })
 
+  describe('legacy-token bridge (organizerOrgIds absent)', () => {
+    it('GRANTS a pre-#614 token (no organizerOrgIds field) via the global flag and WARNS', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(
+        isOrganizerForOrg({ _id: 'sp-1', isOrganizer: true } as never, 'org-a'),
+      ).toBe(true)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('legacy token without organizerOrgIds'),
+      )
+      warn.mockRestore()
+    })
+
+    it('DENIES a present-but-EMPTY organizerOrgIds (organizer of no org)', () => {
+      expect(
+        isOrganizerForOrg(
+          { _id: 'sp-1', isOrganizer: true, organizerOrgIds: [] } as never,
+          'org-a',
+        ),
+      ).toBe(false)
+    })
+
+    it('DENIES a legacy token whose global flag is false', () => {
+      expect(
+        isOrganizerForOrg(
+          { _id: 'sp-1', isOrganizer: false } as never,
+          'org-a',
+        ),
+      ).toBe(false)
+    })
+  })
+
   describe('legacy bridge (orgId === null)', () => {
     it('GRANTS via the deprecated global isOrganizer and WARNS', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

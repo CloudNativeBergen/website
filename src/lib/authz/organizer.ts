@@ -53,6 +53,20 @@ export function isOrganizerForOrg(
     return false
   }
 
+  // LEGACY-TOKEN BRIDGE: a pre-#614 JWT has NO organizerOrgIds field at all
+  // (undefined). Denying those would 403 every logged-in organizer at deploy
+  // time until re-login — bridge via the deprecated flag instead. A PRESENT
+  // but empty array is the real signal "organizer of no org" and is denied.
+  if (speaker.organizerOrgIds === undefined) {
+    if (speaker.isOrganizer === true) {
+      console.warn(
+        `[authz-bridge] legacy token without organizerOrgIds; granting via deprecated global isOrganizer for speaker ${speaker._id}`,
+      )
+      return true
+    }
+    return false
+  }
+
   return (
     Array.isArray(speaker.organizerOrgIds) &&
     speaker.organizerOrgIds.includes(orgId)

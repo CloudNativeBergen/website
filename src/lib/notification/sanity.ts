@@ -733,6 +733,11 @@ export async function getOrganizerSpeakerIds(
   if (cached && cached.expiresAt > now) {
     return cached.ids
   }
+  // Prune this key's expired entry (and any other expired keys) so a
+  // long-lived warm instance seeing many orgs never grows the map unboundedly.
+  for (const [key, entry] of organizerCache) {
+    if (entry.expiresAt <= now) organizerCache.delete(key)
+  }
 
   const organizerScope = resolvedOrgId
     ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
