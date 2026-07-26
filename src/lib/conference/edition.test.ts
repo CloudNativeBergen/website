@@ -156,6 +156,11 @@ describe('buildEditionDocuments — always-applied invariants', () => {
     expect(conference.registrationEnabled).toBe(false)
   })
 
+  it('creates every new edition unlisted (absent-means-live makes an explicit value mandatory)', () => {
+    const { conference } = build(makeInput())
+    expect(conference.visibility).toBe('unlisted')
+  })
+
   it('always copies identity (city, logos) and normalizes domains', () => {
     const { conference } = build(
       makeInput({ domains: ['2026.CNB.no', 'ALT.example.com'] }),
