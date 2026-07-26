@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import { formatDate } from '@/lib/time'
+import { formatDate, formatDateTimeSafe } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
@@ -115,12 +115,8 @@ export function FieldRow({
 
   switch (type) {
     case 'datetime':
-      displayValue = value
-        ? new Date(value as string).toLocaleString('en-US', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          })
-        : 'Not set'
+      // House formatter — consistent locale/timezone rendering.
+      displayValue = value ? formatDateTimeSafe(value as string) : 'Not set'
       break
     case 'date':
       displayValue = value ? formatDate(value as string) : 'Not set'
@@ -259,7 +255,11 @@ export function FieldRow({
       )
       break
     default:
-      displayValue = (value as string) || 'Not set'
+      // `??`/emptiness check, not `||`: a legitimate 0 must not read as unset.
+      displayValue =
+        value === undefined || value === null || value === ''
+          ? 'Not set'
+          : (value as ReactNode)
   }
 
   return (

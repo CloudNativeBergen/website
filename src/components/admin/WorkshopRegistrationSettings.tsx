@@ -12,6 +12,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { formatDateTimeSafe } from '@/lib/time'
 
 interface WorkshopRegistrationSettingsProps {
   workshopRegistrationStart?: string
@@ -34,8 +35,18 @@ export function WorkshopRegistrationSettings({
   const router = useRouter()
   const { showNotification } = useNotification()
 
-  const toLocalInput = (value?: string) =>
-    value ? new Date(value).toISOString().slice(0, 16) : ''
+  /**
+   * Stored ISO (UTC) → the LOCAL wall-clock string a `datetime-local` input
+   * expects. `toISOString().slice(0,16)` would show UTC and shift the time by
+   * the admin's timezone offset on every open/save round-trip.
+   */
+  const toLocalInput = (value?: string) => {
+    if (!value) return ''
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
 
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,18 +91,21 @@ export function WorkshopRegistrationSettings({
 
   const handleSave = () => {
     setError(null)
+    // The datetime-local value is a timezone-less LOCAL wall-clock string; the
+    // Date constructor interprets it as local time, and we persist the
+    // unambiguous ISO instant so storage is timezone-stable.
+    const toIso = (v: string) => (v ? new Date(v).toISOString() : null)
     updateRegistrationTimes.mutate({
-      startDate: startDate || null,
-      endDate: endDate || null,
+      startDate: toIso(startDate),
+      endDate: toIso(endDate),
     })
   }
 
   const formatDateTime = (dateString?: string) => {
     if (!dateString) return 'Not set'
-    return new Date(dateString).toLocaleString('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })
+    // House formatter: consistent Europe/Oslo rendering regardless of the
+    // admin's locale/timezone.
+    return formatDateTimeSafe(dateString)
   }
 
   const getRegistrationStatus = () => {
