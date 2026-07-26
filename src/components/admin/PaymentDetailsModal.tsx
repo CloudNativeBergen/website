@@ -273,7 +273,7 @@ export function PaymentDetailsModal({
         )}
       </div>
 
-      <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-800/50">
+      <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 dark:border-gray-700 dark:bg-gray-800/50">
         <AdminButton
           variant="secondary"
           size="md"

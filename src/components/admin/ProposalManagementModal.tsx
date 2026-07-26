@@ -460,7 +460,7 @@ export function ProposalManagementModal({
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div className="border-t border-gray-200 px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 dark:border-gray-700">
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <AdminButton
               type="button"

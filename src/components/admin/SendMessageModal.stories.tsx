@@ -63,13 +63,15 @@ export const Default: Story = {}
 
 /** After a successful send: confirmation with a "View conversation" link. */
 export const Sent: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
+  play: async () => {
+    // ModalShell PORTALS the dialog to document.body — the canvas element
+    // no longer contains the modal content, so query the body instead.
+    const body = within(document.body)
     await userEvent.type(
-      canvas.getByLabelText('Message'),
+      await body.findByLabelText('Message'),
       'Quick heads-up about your talk slot.',
     )
-    await userEvent.click(canvas.getByRole('button', { name: /send message/i }))
-    await canvas.findByRole('link', { name: /view conversation/i })
+    await userEvent.click(body.getByRole('button', { name: /send message/i }))
+    await body.findByRole('link', { name: /view conversation/i })
   },
 }
