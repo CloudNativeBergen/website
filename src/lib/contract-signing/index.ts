@@ -28,13 +28,23 @@ export type SigningProviderType = 'self-hosted'
  *   legacy/unknown string). Falls back to the `CONTRACT_SIGNING_PROVIDER` env
  *   var, then `"self-hosted"`.
  */
+/**
+ * Unsupported provider values already warned about — the factory is called
+ * from multiple tRPC paths per request, so a stale env var or legacy
+ * conference field would otherwise spam a warning per call. One warning per
+ * distinct value per process is enough for the operator to notice (the
+ * system-status page surfaces the misconfiguration durably).
+ */
+const warnedUnsupportedProviders = new Set<string>()
+
 export function getSigningProvider(
   providerType?: string | null,
 ): ContractSigningProvider {
   const provider =
     providerType ?? process.env.CONTRACT_SIGNING_PROVIDER ?? 'self-hosted'
 
-  if (provider !== 'self-hosted') {
+  if (provider !== 'self-hosted' && !warnedUnsupportedProviders.has(provider)) {
+    warnedUnsupportedProviders.add(provider)
     console.warn(
       `[contract-signing] Unsupported signing provider "${provider}"; falling back to self-hosted.`,
     )

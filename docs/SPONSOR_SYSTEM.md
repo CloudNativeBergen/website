@@ -288,14 +288,14 @@ sanity/schemaTypes/
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                                         |
-| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                                                   |
-| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                                           |
-| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                                              |
-| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                                               |
-| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`                                                                                                            | Contract template CRUD and PDF generation                        |
+| Namespace                     | Procedures                                                                                                                                                                                             | Purpose                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `sponsor.*`                   | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD                 |
+| `sponsor.tiers.*`             | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                           |
+| `sponsor.crm.*`               | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations                   |
+| `sponsor.crm.activities.*`    | `list`                                                                                                                                                                                                 | Activity log queries                      |
+| `sponsor.emailTemplates.*`    | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                       |
+| `sponsor.contractTemplates.*` | `list`, `get`, `create`, `update`, `delete`, `findBest`, `contractReadiness`, `generatePdf`                                                                                                            | Contract template CRUD and PDF generation |
 
 All procedures are protected by `adminProcedure` (requires `isOrganizer: true`).
 
@@ -482,11 +482,11 @@ The cron endpoint is protected by a `CRON_SECRET` bearer token.
 
 #### Environment Variables
 
-| Variable                    | Required | Purpose                                               |
-| --------------------------- | -------- | ----------------------------------------------------- |
-| `CONTRACT_SIGNING_PROVIDER` | No       | Signing provider selector; defaults to `self-hosted`  |
-| `NEXTAUTH_URL`              | Yes      | Base URL used to construct self-hosted signing links  |
-| `CRON_SECRET`               | Yes      | Bearer token for cron job authentication              |
+| Variable                    | Required | Purpose                                              |
+| --------------------------- | -------- | ---------------------------------------------------- |
+| `CONTRACT_SIGNING_PROVIDER` | No       | Signing provider selector; defaults to `self-hosted` |
+| `NEXTAUTH_URL`              | Yes      | Base URL used to construct self-hosted signing links |
+| `CRON_SECRET`               | Yes      | Bearer token for cron job authentication             |
 
 ### Contract Data Model (on `sponsorForConference`)
 
@@ -669,10 +669,10 @@ The CRM board, activity log, and sponsor portal all reflect the updated status a
 
 #### Self-Hosted Environment Variables
 
-| Variable                    | Required | Default      | Purpose                                      |
-| --------------------------- | -------- | ------------ | -------------------------------------------- |
+| Variable                    | Required | Default       | Purpose                                                     |
+| --------------------------- | -------- | ------------- | ----------------------------------------------------------- |
 | `CONTRACT_SIGNING_PROVIDER` | No       | `self-hosted` | Signing provider selector (only `self-hosted` is supported) |
-| `NEXTAUTH_URL`              | Yes      | —             | Base URL for constructing the signing link   |
+| `NEXTAUTH_URL`              | Yes      | —             | Base URL for constructing the signing link                  |
 
 ## Sponsor Portal
 

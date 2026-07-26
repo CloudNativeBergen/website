@@ -515,13 +515,22 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
   )
 
   // ---- CONTRACTS ------------------------------------------------------------
+  // Self-hosted is the only supported provider; any other value (e.g. a stale
+  // legacy `adobe-sign` env var) silently falls back to self-hosted at
+  // runtime, so surface the misconfiguration here instead of a clean 'ok'.
   const provider = process.env.CONTRACT_SIGNING_PROVIDER ?? 'self-hosted'
+  const providerSupported = provider === 'self-hosted'
   checks.push({
     id: 'contracts.provider',
     group: 'contracts',
     label: 'Signing provider',
-    status: 'ok',
+    status: providerSupported ? 'ok' : 'warn',
     value: provider,
+    ...(providerSupported
+      ? {}
+      : {
+          detail: `Unsupported provider "${provider}" — falling back to self-hosted; delete the stale CONTRACT_SIGNING_PROVIDER value.`,
+        }),
   })
 
   // ---- BADGES (presence only — large keys) ----------------------------------

@@ -206,7 +206,8 @@ export const ContractPending: Story = {
               signatureStatus: 'pending',
               contractStatus: 'contract-sent',
               signerEmail: 'jane@acme.example.com',
-              signingUrl: 'https://cloudnativedays.no/sponsor/contract/sign/example-token',
+              signingUrl:
+                'https://cloudnativedays.no/sponsor/contract/sign/example-token',
               contractValue: 75000,
               contractCurrency: 'NOK',
             }),
@@ -235,7 +236,8 @@ export const ContractSigned: Story = {
               signatureStatus: 'signed',
               contractStatus: 'contract-signed',
               signerEmail: 'jane@acme.example.com',
-              signingUrl: 'https://cloudnativedays.no/sponsor/contract/sign/example-token',
+              signingUrl:
+                'https://cloudnativedays.no/sponsor/contract/sign/example-token',
               contractValue: 75000,
               contractCurrency: 'NOK',
             }),

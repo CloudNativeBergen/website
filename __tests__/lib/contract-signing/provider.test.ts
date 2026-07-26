@@ -22,9 +22,7 @@ describe('getSigningProvider', () => {
       // A conference doc may still carry the removed 'adobe-sign' value.
       const provider = getSigningProvider('adobe-sign')
       expect(provider.name).toBe('Verified Document Signing')
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('adobe-sign'),
-      )
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('adobe-sign'))
     } finally {
       warn.mockRestore()
     }
