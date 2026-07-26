@@ -73,6 +73,15 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'centerGraphicSvg',
+      title: 'Center Graphic SVG (issuance input)',
+      type: 'text',
+      description:
+        'The optional custom center graphic supplied at issuance, stored so an ' +
+        'in-place rebake can reproduce the visual identity. Absent for badges ' +
+        'issued before this field existed — those rebake with the default graphic.',
+    }),
+    defineField({
       name: 'bakedSvg',
       title: 'Baked SVG',
       type: 'file',

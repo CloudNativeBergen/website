@@ -85,6 +85,8 @@ export interface BadgeRecord {
   conference: Conference | { _ref: string; _type: 'reference' }
   badgeType: BadgeType
   issuedAt: string
+  /** Custom center graphic captured at issuance (reused by rebake). */
+  centerGraphicSvg?: string
   /**
    * Generator format version this badge was baked with. Absent on docs baked
    * before the field existed ⇒ treated as v1. See lib/badge/version.ts.

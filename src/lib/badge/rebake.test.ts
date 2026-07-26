@@ -24,7 +24,9 @@ vi.mock('./sanity', () => ({
   patchBadgeArtifacts: (...a: unknown[]) => patchBadgeArtifactsMock(...a),
   uploadBadgeSVGAsset: (...a: unknown[]) => uploadBadgeSVGAssetMock(...a),
 }))
-vi.mock('./artifacts', () => ({
+vi.mock('./artifacts', async (importOriginal) => ({
+  // Keep the REAL pure derivation; mock only the generation I/O boundary.
+  ...(await importOriginal<typeof import('./artifacts')>()),
   generateBadgeArtifacts: (...a: unknown[]) => generateBadgeArtifactsMock(...a),
 }))
 vi.mock('./config', () => ({

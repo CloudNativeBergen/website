@@ -1,5 +1,8 @@
 import type { BadgeType } from './types'
-import { generateBadgeArtifacts } from './artifacts'
+import {
+  deriveBadgeConferenceFields,
+  generateBadgeArtifacts,
+} from './artifacts'
 import { createBadgeConfiguration } from './config'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
@@ -136,13 +139,8 @@ export async function issueBadgeForSpeaker(
     return { success: false, error: 'Conference not found' }
   }
 
-  const conferenceYear = conference.startDate
-    ? new Date(conference.startDate).getFullYear().toString()
-    : new Date().getFullYear().toString()
-
-  const conferenceDate = conference.startDate
-    ? formatConferenceDateForBadge(conference.startDate)
-    : 'TBD'
+  const { conferenceYear, conferenceDate } =
+    deriveBadgeConferenceFields(conference)
 
   const config = await createBadgeConfiguration(conference, domain)
 
@@ -190,6 +188,8 @@ export async function issueBadgeForSpeaker(
     conferenceId: conference._id,
     badgeType,
     issuedAt,
+    // Stored so an in-place rebake reproduces the visual identity.
+    ...(centerGraphicSvg ? { centerGraphicSvg } : {}),
     badgeJson: JSON.stringify(credentialJson),
     badgeJwt: credentialJwt,
     bakedSvgAssetId: assetId,

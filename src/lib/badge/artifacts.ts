@@ -3,6 +3,7 @@ import { generateBadgeSVG } from './svg'
 import { bakeBadge } from '@/lib/openbadges'
 import type { SignedCredential } from '@/lib/openbadges'
 import type { BadgeGenerationParams, BadgeConfiguration } from './types'
+import { formatConferenceDateForBadge } from '@/lib/time'
 
 /**
  * Shared badge GENERATION internals — the code path both issuance and rebake
@@ -18,6 +19,23 @@ import type { BadgeGenerationParams, BadgeConfiguration } from './types'
  * verification URL) and the achievement date stable while the proof and format
  * are re-minted; omit both on a fresh issuance to mint new ones.
  */
+/**
+ * Conference display fields for badge generation — ONE derivation shared by
+ * issuance and rebake so the two paths can never disagree.
+ */
+export function deriveBadgeConferenceFields(conference: {
+  startDate?: string
+}): { conferenceYear: string; conferenceDate: string } {
+  return {
+    conferenceYear: conference.startDate
+      ? new Date(conference.startDate).getFullYear().toString()
+      : new Date().getFullYear().toString(),
+    conferenceDate: conference.startDate
+      ? formatConferenceDateForBadge(conference.startDate)
+      : 'TBD',
+  }
+}
+
 export async function generateBadgeArtifacts(
   params: BadgeGenerationParams,
   config: BadgeConfiguration,

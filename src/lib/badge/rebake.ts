@@ -1,4 +1,7 @@
-import { generateBadgeArtifacts } from './artifacts'
+import {
+  deriveBadgeConferenceFields,
+  generateBadgeArtifacts,
+} from './artifacts'
 import { createBadgeConfiguration } from './config'
 import {
   deleteBadgeSVGAsset,
@@ -8,7 +11,6 @@ import {
 } from './sanity'
 import { resolveAcceptedTalk } from './issuance'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { formatConferenceDateForBadge } from '@/lib/time'
 import { BADGE_GENERATOR_VERSION } from './version'
 import type { BadgeRecord } from './types'
 
@@ -54,6 +56,17 @@ function refId(
  * badgeJwt, the baked SVG and the proof are re-minted, and generatorVersion is
  * stamped to the current version.
  */
+/** The signed credential's own validFrom, when the stored JSON parses. */
+function storedValidFrom(badgeJson?: string): string | undefined {
+  if (!badgeJson) return undefined
+  try {
+    const parsed = JSON.parse(badgeJson) as { validFrom?: unknown }
+    return typeof parsed.validFrom === 'string' ? parsed.validFrom : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function rebakeBadge(
   params: RebakeBadgeParams,
 ): Promise<RebakeBadgeResult> {
@@ -113,12 +126,8 @@ export async function rebakeBadge(
     slug?: string
   }
 
-  const conferenceYear = conference.startDate
-    ? new Date(conference.startDate).getFullYear().toString()
-    : new Date().getFullYear().toString()
-  const conferenceDate = conference.startDate
-    ? formatConferenceDateForBadge(conference.startDate)
-    : 'TBD'
+  const { conferenceYear, conferenceDate } =
+    deriveBadgeConferenceFields(conference)
 
   const config = await createBadgeConfiguration(conference, domain)
 
@@ -154,13 +163,22 @@ export async function rebakeBadge(
           conferenceYear,
           conferenceDate,
           badgeType: badge!.badgeType,
+          // Custom center graphic stored at issuance (absent on badges issued
+          // before the field existed — those rebake with the default).
+          centerGraphicSvg: badge!.centerGraphicSvg,
           talkId,
           talkTitle,
         },
         config,
-        // Preserve the identity: same badgeId (⇒ same verificationUrl) and the
-        // original achievement date. The proof's `created` is minted now.
-        { badgeId: badge!.badgeId, validFrom: badge!.issuedAt },
+        // Preserve the identity: same badgeId (⇒ same verificationUrl) and
+        // the ORIGINAL achievement date — preferring the previously SIGNED
+        // credential's own validFrom (pre-unification badges can have
+        // issuedAt drift from it by milliseconds; the signed value is the
+        // source of truth). The proof's `created` is minted now.
+        {
+          badgeId: badge!.badgeId,
+          validFrom: storedValidFrom(badge!.badgeJson) ?? badge!.issuedAt,
+        },
       )
 
     const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
