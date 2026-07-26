@@ -8,6 +8,23 @@ import {
   TravelExpense,
 } from './types'
 import { AppEnvironment } from '@/lib/environment/config'
+import { isOrganizerForOrg } from '@/lib/authz/organizer'
+
+/**
+ * The minimum speaker shape the travel-support authz needs: identity plus the
+ * ORG-SCOPED organizer capability (`organizerOrgIds`, with `isOrganizer` kept
+ * only for the legacy-token bridge inside {@link isOrganizerForOrg}). Callers pass
+ * `ctx.speaker` (the session speaker). B3 (#642): the organizer grant is decided
+ * against the REQUEST'S OWN org (the travel support's conference org), never the
+ * deprecated global flag — so a cross-tenant organizer cannot reach another
+ * tenant's banking PII.
+ */
+export interface TravelSupportAuthSpeaker {
+  _id: string
+  name?: string
+  isOrganizer?: boolean
+  organizerOrgIds?: string[]
+}
 
 export async function checkSpeakerEligibility(speakerId: string): Promise<{
   isEligible: boolean
@@ -47,12 +64,17 @@ export function canAddExpenses(status: TravelSupportStatus): boolean {
 
 export async function verifyTravelSupportOwnership(
   travelSupportId: string,
-  speakerId: string,
-  isOrganizer: boolean = false,
+  speaker: TravelSupportAuthSpeaker,
 ): Promise<{
   travelSupport:
     (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
   hasAccess: boolean
+  /**
+   * The ORG-SCOPED organizer decision for THIS request (the caller organizes the
+   * travel support's own org). Surfaced so callers (e.g. the `approve` gate) reuse
+   * the same resource-scoped grant rather than the deprecated global flag.
+   */
+  isOrganizer: boolean
   error?: Error
 }> {
   try {
@@ -62,15 +84,28 @@ export async function verifyTravelSupportOwnership(
       return {
         travelSupport: null,
         hasAccess: false,
+        isOrganizer: false,
         error: error || new Error('Travel support request not found'),
       }
     }
 
-    const hasAccess = isOrganizer || travelSupport.speaker._id === speakerId
+    // ORG-SCOPE the organizer grant to the request's OWN org (B3, #642): an
+    // organizer of another tenant is not an organizer HERE and falls back to the
+    // owner check, so cross-tenant banking PII stays inaccessible.
+    const isOrganizer = isOrganizerForOrg(
+      speaker,
+      travelSupport.conferenceOrgId ?? null,
+    )
+    const hasAccess = isOrganizer || travelSupport.speaker._id === speaker._id
 
-    return { travelSupport, hasAccess }
+    return { travelSupport, hasAccess, isOrganizer }
   } catch (error) {
-    return { travelSupport: null, hasAccess: false, error: error as Error }
+    return {
+      travelSupport: null,
+      hasAccess: false,
+      isOrganizer: false,
+      error: error as Error,
+    }
   }
 }
 
@@ -139,8 +174,7 @@ export function auditLog(
 
 export async function authorizeTravelSupportOperation(
   travelSupportId: string,
-  speakerId: string,
-  isOrganizer: boolean,
+  speaker: TravelSupportAuthSpeaker,
   operation: 'read' | 'modify' | 'submit' | 'approve',
 ): Promise<{
   authorized: boolean
@@ -148,12 +182,8 @@ export async function authorizeTravelSupportOperation(
   error?: TRPCError
 }> {
   try {
-    const { travelSupport, hasAccess, error } =
-      await verifyTravelSupportOwnership(
-        travelSupportId,
-        speakerId,
-        isOrganizer,
-      )
+    const { travelSupport, hasAccess, isOrganizer, error } =
+      await verifyTravelSupportOwnership(travelSupportId, speaker)
 
     if (error || !travelSupport) {
       return {
@@ -215,7 +245,7 @@ export async function authorizeTravelSupportOperation(
           }
         }
 
-        if (travelSupport.speaker._id === speakerId) {
+        if (travelSupport.speaker._id === speaker._id) {
           return {
             authorized: false,
             error: createAuthError(

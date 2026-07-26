@@ -121,4 +121,11 @@ export interface TravelSupportWithSpeaker extends Omit<
     _id: string
     name: string
   }
+  /**
+   * The org that owns this request's conference (projected from
+   * `conference->organization`). The tenant key the org-scoped organizer authz
+   * gates on (B3, #642). Null for a pre-044-backfill conference → organizer
+   * access denied (fail closed).
+   */
+  conferenceOrgId?: string | null
 }

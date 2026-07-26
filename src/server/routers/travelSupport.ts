@@ -184,8 +184,7 @@ export const travelSupportRouter = router({
         const { authorized, error: authError } =
           await authorizeTravelSupportOperation(
             input.travelSupportId,
-            ctx.speaker._id,
-            ctx.speaker.isOrganizer,
+            ctx.speaker,
             'modify',
           )
 
@@ -239,8 +238,7 @@ export const travelSupportRouter = router({
           error: authError,
         } = await authorizeTravelSupportOperation(
           input.travelSupportId,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
           'submit',
         )
 
@@ -342,8 +340,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           input.travelSupportId,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -413,8 +410,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -476,8 +472,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           expense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -544,8 +539,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -679,8 +673,7 @@ export const travelSupportRouter = router({
           const { authorized, error: authError } =
             await authorizeTravelSupportOperation(
               input.travelSupportId,
-              ctx.speaker._id,
-              ctx.speaker.isOrganizer,
+              ctx.speaker,
               'approve',
             )
 
