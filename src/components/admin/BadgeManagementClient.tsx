@@ -174,7 +174,9 @@ export function BadgeManagementClient({
     setRebakingBadgeId(badgeId)
     try {
       await rebakeMutation.mutateAsync({ badgeId })
-      await refetchBadges()
+      // Best-effort like the bulk path: a refetch hiccup after a SUCCESSFUL
+      // rebake must not masquerade as a rebake failure.
+      await refetchBadges().catch(() => undefined)
       showNotification({
         type: 'success',
         title: 'Badge Rebaked',
@@ -536,7 +538,7 @@ export function BadgeManagementClient({
             <ActionMenuItem
               onClick={() => handleRebakeBadge(badge.badgeId, speaker.name)}
               icon={ArrowPathIcon}
-              disabled={rebakingBadgeId === badge.badgeId || isRebakingAll}
+              disabled={rebakingBadgeId !== null || isRebakingAll}
             >
               {isBadgeOutdated(badge.generatorVersion)
                 ? 'Rebake (outdated)'
