@@ -202,8 +202,9 @@ The badges are:
 - **Subject ID:** `mailto:speaker@example.com` (email-based recipient
   identity, always lowercased — Credly matches recipients by a
   case-sensitive email hash)
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`
-  (embedded proof) and `{baseUrl}/api/badge/keys/key-1` (JWT `kid`)
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519`
+  (embedded proof — a dereferenceable bare Multikey document, since #655) and
+  `{baseUrl}/api/badge/keys/key-1` (JWT `kid`)
 
 **URLs:**
 
@@ -220,9 +221,12 @@ The badges are:
 - **Type:** `DataIntegrityProof`
 - **Cryptosuite:** `eddsa-rdfc-2022` (Ed25519 signatures)
 - **Proof Purpose:** `assertionMethod`
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519` —
-  verifiers strip the fragment and fetch the issuer profile, which lists the
-  key in its `verificationMethod` array with `controller` = issuer id
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519` — a
+  dereferenceable endpoint returning the bare Multikey document (the 1EdTech
+  EmbeddedProofProbe reads `controller`/`publicKeyMultibase` off the response
+  root; the pre-#655 issuer-profile fragment NPE'd it). The issuer profile
+  lists BOTH the new keys-URL id and the legacy `#key-ed25519` fragment so
+  badges baked before #655 keep verifying against our own routes until rebaked
 
 **JWT Proof (RS256 - Secondary):**
 
@@ -306,8 +310,9 @@ Every badge is signed with both methods:
 - **Document loader:** fully offline — Digital Bazaar's `securityLoader`
   extended with the vendored OB 3.0 context (`/lib/openbadges/data/`); our
   own signing/verification never fetches contexts over the network
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`, listed
-  as a Multikey in the issuer profile with `controller` = issuer id
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519` (bare
+  Multikey document; also listed in the issuer profile with `controller` =
+  issuer id, alongside the legacy fragment id for pre-#655 badges)
 - **Baking:** Credential embedded in SVG as
   `<openbadges:credential><![CDATA[{json}]]></openbadges:credential>`
   (no `verify` attribute)
@@ -323,6 +328,89 @@ Every badge is signed with both methods:
 - **Consumers:** 1EdTech OB30Inspector validator
 - **Baking (legacy badges only):** JWT embedded in SVG using
   `<openbadges:credential verify="{jwt}">`
+
+#### Why the RSA keys stay REQUIRED
+
+`BADGE_ISSUER_RSA_PRIVATE_KEY` and `BADGE_ISSUER_RSA_PUBLIC_KEY` are **not
+optional**, even though the primary (Ed25519 embedded) proof does not use them —
+`createBadgeConfiguration()` throws at issuance if either is unset. They are
+required for two durable reasons:
+
+1. **Dual-format issuance.** Every badge is signed in _both_ formats: the
+   embedded Ed25519 proof (baked into the SVG, stored in `badgeJson`) **and** the
+   RS256 JWT (stored in `badgeJwt`, served from `/api/badge/[id]/jwt`). The JWT
+   is what the 1EdTech OB30Inspector validator consumes. Dropping RSA would
+   silently stop minting the JWT half of every new badge.
+2. **Verifying already-issued JWT badges.** The public RSA key is published as a
+   JWK from the keys endpoint and the issuer profile, and the `badge.verify`
+   path uses `BADGE_ISSUER_RSA_PUBLIC_KEY` to verify **legacy badges whose
+   `badgeJson` is a raw JWT** (`isJWTFormat`). Rotating away the RSA public key
+   would make those historical badges fail verification.
+
+---
+
+## Generator Versioning & Rebaking
+
+Baked badges are **immutable artifacts**: the download route serves the stored
+`bakedSvg` as-is and does not re-prove on download, so a badge issued under an
+older credential format keeps that format forever unless it is explicitly
+re-baked.
+
+### The version constant and bump rule
+
+`src/lib/badge/version.ts` exports `BADGE_GENERATOR_VERSION`. Every
+`speakerBadge` document is stamped with `generatorVersion` at issuance. A stored
+doc with **no** `generatorVersion` is treated as **v1**.
+
+**Bump the constant whenever the credential format changes such that
+already-baked badges become stale** — i.e. a fresh re-issue would produce a
+materially different, more correct credential/proof/SVG. Do **not** bump for
+changes that leave existing baked artifacts valid (copy tweaks on new issuance,
+output-identical refactors). The version is a re-bake trigger, not a build
+number.
+
+Version history:
+
+- **v1** — pre-#655. The embedded proof `verificationMethod` was the
+  issuer-profile _fragment_ (not dereferenceable by the 1EdTech
+  `EmbeddedProofProbe`), and the credential carried no
+  `credentialSubject.identifier[]` block for displayer ownership matching.
+- **v2** — #655. The embedded proof `verificationMethod` is the dereferenceable
+  keys URL (`/api/badge/keys/key-ed25519`) returning a bare Multikey document,
+  and the credential includes a `credentialSubject.identifier[]` IdentityObject
+  (email, unhashed).
+
+### Rebake semantics
+
+The `badge.admin.rebake` mutation (org-scoped, admin-only) regenerates
+`badgeJson`, `badgeJwt` and `bakedSvg` with the **current** generator and
+patches the document in place. It is **idempotent** and refuses nothing except a
+missing or cross-tenant badge.
+
+Stable across a rebake (the badge's public identity):
+
+- **`badgeId`** — so the verification URL and any shared / Credly links keep
+  resolving.
+- **`verificationUrl`** — derived from the preserved `badgeId`.
+- **`issuedAt` / `validFrom`** — the achievement date must not shift.
+
+Re-minted by a rebake:
+
+- **The proof** — a fresh signature; the proof's `created` timestamp is _now_.
+- **`badgeJson` + `badgeJwt`** — regenerated in the current format.
+- **`bakedSvg`** — re-baked; the previous SVG asset is deleted so a rebake does
+  not orphan blobs.
+- **`generatorVersion`** — stamped to `BADGE_GENERATOR_VERSION`.
+
+### Outdated detection
+
+- **Admin badge page** (`/admin/speakers/badge`): a badge whose stored version
+  is below the current one shows an **"Outdated format"** marker with a per-row
+  **Rebake** action, plus a **"Rebake N outdated"** button that re-bakes the
+  conference's outdated badges sequentially and reports the count.
+- **System status** (`/admin/settings`): the `badges.outdated` check counts this
+  conference's outdated badges — `ok` at zero, `warn` with the count and a
+  pointer to the admin action otherwise.
 
 ---
 

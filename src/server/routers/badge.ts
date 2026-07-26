@@ -24,6 +24,7 @@ import {
   ValidateBadgeInputSchema,
 } from '@/server/schemas/badge'
 import { issueBadgeForSpeaker } from '@/lib/badge/issuance'
+import { rebakeBadge } from '@/lib/badge/rebake'
 import { isJWTFormat } from '@/lib/openbadges'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
@@ -237,6 +238,38 @@ export const badgeRouter = router({
             successful: successCount,
             failed: failureCount,
           },
+        }
+      }),
+
+    rebake: adminProcedure
+      .input(BadgeIdInputSchema)
+      .mutation(async ({ input }) => {
+        // Org/tenant scope: resolveConferenceId() is the domain-authoritative
+        // conference; rebakeBadge denies any badge that is not this conference's
+        // (fail closed, mirrors the E11 badge gate).
+        const conferenceId = await resolveConferenceId()
+        const result = await rebakeBadge({
+          badgeId: input.badgeId,
+          conferenceId,
+        })
+
+        if (!result.success) {
+          const code =
+            result.reason === 'not_found'
+              ? 'NOT_FOUND'
+              : result.reason === 'forbidden'
+                ? 'FORBIDDEN'
+                : 'INTERNAL_SERVER_ERROR'
+          throw new TRPCError({ code, message: result.error })
+        }
+
+        // Minimal payload: the client refetches the list; per-badge full
+        // records would just add bulk-rebake bandwidth.
+        return {
+          success: true,
+          badgeId: result.badge.badgeId,
+          generatorVersion: result.badge.generatorVersion,
+          message: 'Badge rebaked with the current generator',
         }
       }),
 

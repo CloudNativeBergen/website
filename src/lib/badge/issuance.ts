@@ -1,12 +1,41 @@
 import type { BadgeType } from './types'
-import { generateBadgeCredential } from './generator'
+import {
+  deriveBadgeConferenceFields,
+  generateBadgeArtifacts,
+} from './artifacts'
 import { createBadgeConfiguration } from './config'
-import { generateBadgeSVG } from './svg'
-import { bakeBadge } from '@/lib/openbadges'
-import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
+import { getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { createBadge, uploadBadgeSVGAsset, checkBadgeExists } from './sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { BADGE_GENERATOR_VERSION } from './version'
+
+/**
+ * The accepted/confirmed talk that seeds a SPEAKER badge's talk evidence.
+ * Shared by issuance and rebake so both derive the same evidence from the same
+ * source of truth. Returns empty fields for organizer badges (no talk) or when
+ * the speaker has no qualifying talk.
+ */
+export async function resolveAcceptedTalk(
+  speakerId: string,
+  conferenceId: string,
+): Promise<{ talkId?: string; talkTitle?: string }> {
+  const { clientReadUncached } = await import('@/lib/sanity/client')
+  const acceptedTalk = await clientReadUncached.fetch<{
+    _id: string
+    title: string
+  } | null>(
+    `*[_type == "talk" &&
+      references($speakerId) &&
+      references($conferenceId) &&
+      status in ["accepted", "confirmed"]
+    ][0]{_id, title}`,
+    { speakerId, conferenceId },
+  )
+  return acceptedTalk
+    ? { talkId: acceptedTalk._id, talkTitle: acceptedTalk.title }
+    : {}
+}
 
 interface IssueBadgeParams {
   speakerId: string
@@ -110,39 +139,22 @@ export async function issueBadgeForSpeaker(
     return { success: false, error: 'Conference not found' }
   }
 
-  const conferenceYear = conference.startDate
-    ? new Date(conference.startDate).getFullYear().toString()
-    : new Date().getFullYear().toString()
-
-  const conferenceDate = conference.startDate
-    ? formatConferenceDateForBadge(conference.startDate)
-    : 'TBD'
+  const { conferenceYear, conferenceDate } =
+    deriveBadgeConferenceFields(conference)
 
   const config = await createBadgeConfiguration(conference, domain)
 
-  let talkId: string | undefined
-  let talkTitle: string | undefined
-  if (badgeType === 'speaker') {
-    const { clientReadUncached } = await import('@/lib/sanity/client')
-    const acceptedTalk = await clientReadUncached.fetch<{
-      _id: string
-      title: string
-    } | null>(
-      `*[_type == "talk" &&
-        references($speakerId) &&
-        references($conferenceId) &&
-        status in ["accepted", "confirmed"]
-      ][0]{_id, title}`,
-      { speakerId: speaker._id, conferenceId },
-    )
-    if (acceptedTalk) {
-      talkId = acceptedTalk._id
-      talkTitle = acceptedTalk.title
-    }
-  }
+  const { talkId, talkTitle } =
+    badgeType === 'speaker'
+      ? await resolveAcceptedTalk(speaker._id, conferenceId)
+      : {}
 
-  const { credentialJson, credentialJwt, badgeId } =
-    await generateBadgeCredential(
+  // ONE timestamp: the credential's validFrom and the stored issuedAt must be
+  // the same instant (a rebake later reuses issuedAt as validFrom).
+  const issuedAt = getCurrentDateTime()
+
+  const { credentialJson, credentialJwt, badgeId, bakedSvg, verificationUrl } =
+    await generateBadgeArtifacts(
       {
         speakerId: speaker._id,
         speakerName: speaker.name,
@@ -158,20 +170,8 @@ export async function issueBadgeForSpeaker(
         talkTitle,
       },
       config,
+      { validFrom: issuedAt },
     )
-
-  const svgContent = generateBadgeSVG({
-    conferenceTitle: conference.title,
-    conferenceYear,
-    conferenceDate,
-    badgeType,
-    centerGraphicSvg,
-  })
-
-  const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
-  // Bake the embedded-proof credential into the SVG — this is the artifact
-  // recipients download and upload to OB 3.0 displayers such as Credly
-  const bakedSvg = bakeBadge(svgContent, credentialJson)
 
   const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
     bakedSvg,
@@ -187,11 +187,14 @@ export async function issueBadgeForSpeaker(
     speakerId: speaker._id,
     conferenceId: conference._id,
     badgeType,
-    issuedAt: getCurrentDateTime(),
+    issuedAt,
+    // Stored so an in-place rebake reproduces the visual identity.
+    ...(centerGraphicSvg ? { centerGraphicSvg } : {}),
     badgeJson: JSON.stringify(credentialJson),
     badgeJwt: credentialJwt,
     bakedSvgAssetId: assetId,
     verificationUrl,
+    generatorVersion: BADGE_GENERATOR_VERSION,
   })
 
   if (createError || !badge) {

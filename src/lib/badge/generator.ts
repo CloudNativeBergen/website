@@ -21,6 +21,12 @@ import type { BadgeGenerationParams, BadgeConfiguration } from './types'
  *
  * @param params - Badge generation parameters (speaker info, talk info, etc.)
  * @param config - Badge configuration (keys, URLs, issuer info)
+ * @param options - Optional identity overrides. On a fresh issuance both are
+ *   omitted and a new `badgeId`/`validFrom` (now) are minted. On a REBAKE the
+ *   caller passes the STORED `badgeId` (so the verification URL and any shared /
+ *   Credly links keep resolving) and the STORED `validFrom` (so the achievement
+ *   date does not shift). The proof's `created` timestamp is always minted now
+ *   by the signing layer — a rebake re-mints the proof but preserves the claim.
  * @returns Promise resolving to both signed formats and the badge ID
  *
  * @example
@@ -35,6 +41,7 @@ import type { BadgeGenerationParams, BadgeConfiguration } from './types'
 export async function generateBadgeCredential(
   params: BadgeGenerationParams,
   config: BadgeConfiguration,
+  options?: { badgeId?: string; validFrom?: string },
 ): Promise<{
   credentialJson: SignedCredential
   credentialJwt: string
@@ -50,8 +57,10 @@ export async function generateBadgeCredential(
     talkTitle,
   } = params
 
-  const badgeId = crypto.randomUUID()
-  const issuedAt = getCurrentDateTime()
+  const badgeId = options?.badgeId ?? crypto.randomUUID()
+  // validFrom is the achievement date. Preserve it verbatim on a rebake; mint
+  // now on a fresh issuance.
+  const issuedAt = options?.validFrom ?? getCurrentDateTime()
 
   const evidence: Array<{
     id: string

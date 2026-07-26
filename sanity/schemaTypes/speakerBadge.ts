@@ -48,6 +48,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'generatorVersion',
+      title: 'Generator Version',
+      type: 'number',
+      description:
+        'Badge generator format version this artifact was baked with (see src/lib/badge/version.ts). Absent ⇒ v1 (pre-#655). Drives outdated-format detection and in-place rebake.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'badgeJson',
       title: 'Badge JSON',
       type: 'text',
@@ -63,6 +71,16 @@ export default defineType({
       description:
         'OpenBadges v3.0 credential as RS256 JWT (Compact JWS) for external validator compatibility',
       readOnly: true,
+    }),
+    defineField({
+      name: 'centerGraphicSvg',
+      title: 'Center Graphic SVG (issuance input)',
+      type: 'text',
+      readOnly: true,
+      description:
+        'The optional custom center graphic supplied at issuance, stored so an ' +
+        'in-place rebake can reproduce the visual identity. Absent for badges ' +
+        'issued before this field existed — those rebake with the default graphic.',
     }),
     defineField({
       name: 'bakedSvg',
