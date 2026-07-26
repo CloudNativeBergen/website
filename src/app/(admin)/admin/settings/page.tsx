@@ -1,7 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
-import { formatDate } from '@/lib/time'
-import { formats, Format } from '@/lib/proposal/types'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
 import {
@@ -29,7 +27,17 @@ import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
 import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { resolveHomepageSections } from '@/lib/homepage'
+import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
+import {
+  InfoCard,
+  FieldRow,
+  StudioEditLink,
+  SectionNav,
+  SectionHeading,
+  SettingsGroupSection,
+} from './settingsLayout'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -38,13 +46,10 @@ import {
   DocumentTextIcon,
   TagIcon,
   CurrencyDollarIcon,
-  CheckCircleIcon,
-  XCircleIcon,
   InformationCircleIcon,
   LinkIcon,
   EnvelopeIcon,
   Cog6ToothIcon,
-  PencilSquareIcon,
   ServerStackIcon,
   BeakerIcon,
   SwatchIcon,
@@ -53,22 +58,16 @@ import {
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 
+/** Group id → group metadata, so tier-1 subsections stay single-sourced. */
+const GROUP: Record<string, SettingsGroup> = Object.fromEntries(
+  SETTINGS_GROUPS.map((g) => [g.id, g]),
+)
+
 /** Read-only labels for the branding-card background-pattern row. */
 const BACKGROUND_PATTERN_LABELS: Record<BackgroundPattern, string> = {
   'cloud-native': 'Cloud Native (animated CNCF logos)',
   subtle: 'Subtle (sparse, faint logos)',
   none: 'None (plain gradient)',
-}
-
-interface NamedItem {
-  name?: string
-  title?: string
-}
-
-type ArrayItem = string | NamedItem
-
-function isValidFormat(key: string): key is Format {
-  return Object.values(Format).includes(key as Format)
 }
 
 /**
@@ -80,289 +79,6 @@ function studioEditUrl(conferenceId: string | undefined): string | null {
   const base = process.env.NEXT_PUBLIC_STUDIO_URL
   if (!base || !conferenceId) return null
   return `${base.replace(/\/$/, '')}/intent/edit/id=${conferenceId};type=conference`
-}
-
-function InfoCard({
-  title,
-  children,
-  icon: Icon,
-  editUrl,
-  action,
-}: {
-  title: string
-  children: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
-  editUrl?: string | null
-  /**
-   * Optional inline edit affordance (an {@link EditConferenceCard} island). When
-   * present it sits beside the Studio deep-link; the card body keeps rendering
-   * the read-only values and refreshes after a save.
-   */
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center">
-          <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            {title}
-          </h3>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {editUrl && (
-            <a
-              href={editUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-            >
-              <PencilSquareIcon className="h-4 w-4" />
-              Edit in Studio
-            </a>
-          )}
-          {action}
-        </div>
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
-  )
-}
-
-function FieldRow({
-  label,
-  value,
-  type = 'text',
-}: {
-  label: string
-  value:
-    string | boolean | Array<string | NamedItem> | number | null | undefined
-  type?:
-    | 'text'
-    | 'date'
-    | 'datetime'
-    | 'boolean'
-    | 'array'
-    | 'links'
-    | 'formats'
-    | 'team'
-    | 'url'
-    | 'email'
-}) {
-  let displayValue: React.ReactNode = value as React.ReactNode
-
-  switch (type) {
-    case 'datetime':
-      displayValue = value
-        ? new Date(value as string).toLocaleString('en-US', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          })
-        : 'Not set'
-      break
-    case 'date':
-      displayValue = value ? formatDate(value as string) : 'Not set'
-      break
-    case 'boolean':
-      displayValue = (
-        <div className="flex items-center">
-          {value ? (
-            <>
-              <CheckCircleIcon className="mr-1 h-4 w-4 text-green-500 dark:text-green-400" />
-              <span className="text-green-700 dark:text-green-300">Yes</span>
-            </>
-          ) : (
-            <>
-              <XCircleIcon className="mr-1 h-4 w-4 text-red-500 dark:text-red-400" />
-              <span className="text-red-700 dark:text-red-300">No</span>
-            </>
-          )}
-        </div>
-      )
-      break
-    case 'array':
-      displayValue =
-        Array.isArray(value) && value.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {value.map((item: ArrayItem, idx) => {
-              const displayText =
-                typeof item === 'string'
-                  ? item
-                  : (item as NamedItem)?.title ||
-                    (item as NamedItem)?.name ||
-                    JSON.stringify(item)
-              return <StatusBadge key={idx} label={displayText} color="gray" />
-            })}
-          </div>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400">None</span>
-        )
-      break
-    case 'links':
-      displayValue =
-        Array.isArray(value) && value.length > 0 ? (
-          <div className="space-y-2">
-            {value.map((link, idx) => (
-              <div key={idx}>
-                <a
-                  href={link as string}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex max-w-full min-w-0 items-start text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                  {/* break-all, not truncate: a URL is an unbreakable token, and
-                      an unconstrained nowrap span dictated the row's intrinsic
-                      width — the whole page scrolled horizontally on mobile. */}
-                  <span className="min-w-0 break-all">{link as string}</span>
-                  <LinkIcon className="mt-1 ml-1 h-3 w-3 shrink-0" />
-                </a>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400">None</span>
-        )
-      break
-    case 'formats':
-      displayValue =
-        Array.isArray(value) && value.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {value.map((format: ArrayItem, idx) => {
-              const formatKey =
-                typeof format === 'string'
-                  ? format
-                  : (format as NamedItem)?.title || (format as NamedItem)?.name
-              const displayText =
-                formatKey && isValidFormat(formatKey)
-                  ? formats.get(formatKey) || formatKey
-                  : formatKey || 'Unknown Format'
-              return <StatusBadge key={idx} label={displayText} color="gray" />
-            })}
-          </div>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400">None</span>
-        )
-      break
-    case 'team':
-      displayValue =
-        Array.isArray(value) && value.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2">
-            {value.map((member: ArrayItem, idx) => {
-              const memberName =
-                typeof member === 'string'
-                  ? member
-                  : (member as NamedItem)?.name || 'Unknown Member'
-              return (
-                <div
-                  key={idx}
-                  className="py-1 text-sm text-gray-900 dark:text-white"
-                >
-                  {memberName}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400">None</span>
-        )
-      break
-    case 'url':
-      displayValue = value ? (
-        <a
-          href={value as string}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-w-0 items-start text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-        >
-          {/* Same overflow class as the 'links' case: an unbreakable URL must
-              break rather than widen the row past the viewport. */}
-          <span className="min-w-0 break-all">{value as string}</span>
-          <LinkIcon className="mt-1 ml-1 h-3 w-3 shrink-0" />
-        </a>
-      ) : (
-        'Not set'
-      )
-      break
-    case 'email':
-      displayValue = value ? (
-        <a
-          href={`mailto:${value}`}
-          className="flex items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-        >
-          {value as string}
-          <EnvelopeIcon className="ml-1 h-3 w-3" />
-        </a>
-      ) : (
-        'Not set'
-      )
-      break
-    default:
-      displayValue = (value as string) || 'Not set'
-  }
-
-  return (
-    <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
-      <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-        {label}
-      </dt>
-      {/* min-w-0 lets the value column actually shrink inside the flex row —
-          without it, wide unbreakable content (URLs) forces the row past the
-          viewport and the page pans horizontally. */}
-      <dd className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
-        {displayValue}
-      </dd>
-    </div>
-  )
-}
-
-function SectionNav() {
-  const items = [
-    { href: '#configuration', label: 'Configuration' },
-    { href: '#system-status', label: 'System status' },
-    { href: '#self-check', label: 'Self-check' },
-  ]
-  return (
-    <nav className="sticky top-0 z-10 -mx-4 mb-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {items.map((item) => (
-          <li key={item.href}>
-            <a
-              href={item.href}
-              className="font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
-            >
-              {item.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  )
-}
-
-function SectionHeading({
-  id,
-  icon: Icon,
-  title,
-  description,
-}: {
-  id: string
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  description: string
-}) {
-  return (
-    <div id={id} className="scroll-mt-16">
-      <div className="flex items-center gap-2">
-        <Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          {title}
-        </h2>
-      </div>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {description}
-      </p>
-    </div>
-  )
 }
 
 export default async function AdminSettings() {
@@ -452,654 +168,727 @@ export default async function AdminSettings() {
           description="Content managed in Sanity for this conference."
         />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <InfoCard
-            title="Visibility"
-            icon={visibility === 'unlisted' ? EyeSlashIcon : EyeIcon}
-            action={
-              <EditConferenceCard
-                fieldset="visibility"
-                initialValues={{ visibility }}
-              />
-            }
-          >
-            <div
-              id="visibility"
-              className="flex scroll-mt-16 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
-            >
-              <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-                Status
-              </dt>
-              <dd className="min-w-0 text-right text-sm">
-                {visibility === 'unlisted' ? (
-                  <StatusBadge label="Unlisted" color="yellow" />
-                ) : (
-                  <StatusBadge label="Live" color="green" />
-                )}
-              </dd>
-            </div>
-            <p className="pt-1 text-sm text-gray-500 dark:text-gray-400">
-              {visibility === 'unlisted'
-                ? 'Reachable by direct link but excluded from sitemaps, robots and search indexing.'
-                : 'Publicly listed and indexed by search engines.'}
-            </p>
-          </InfoCard>
-
-          <InfoCard
-            title="Basic Information"
+        <div className="space-y-10">
+          {/* ---- Identity & Brand ---- */}
+          <SettingsGroupSection
+            group={GROUP['identity-brand']}
             icon={InformationCircleIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="basicInfo"
-                initialValues={{
-                  title: conference.title,
-                  organizer: conference.organizer,
-                  city: conference.city,
-                  country: conference.country,
-                  tagline: conference.tagline,
-                  description: conference.description,
-                }}
-              />
-            }
           >
-            <FieldRow label="Title" value={conference.title} />
-            <FieldRow label="Organizer" value={conference.organizer} />
-            <FieldRow label="City" value={conference.city} />
-            <FieldRow label="Country" value={conference.country} />
-            <FieldRow label="Tagline" value={conference.tagline} />
-            <FieldRow label="Description" value={conference.description} />
-          </InfoCard>
-
-          <InfoCard
-            title="Branding"
-            icon={SwatchIcon}
-            editUrl={editUrl}
-            action={
-              <>
+            <InfoCard
+              title="Basic Information"
+              icon={InformationCircleIcon}
+              editUrl={editUrl}
+              action={
                 <EditConferenceCard
-                  fieldset="branding"
+                  fieldset="basicInfo"
                   initialValues={{
-                    // Normalize (not just null-coalesce) so an invalid stored
-                    // value can't seed an enum-invalid submit.
-                    backgroundPattern: normalizeBackgroundPattern(
-                      conference.backgroundPattern,
-                    ),
+                    title: conference.title,
+                    organizer: conference.organizer,
+                    city: conference.city,
+                    country: conference.country,
+                    tagline: conference.tagline,
+                    description: conference.description,
                   }}
                 />
-                <ThemeEditor initialTheme={conference.theme} />
-                <BrandingEditor
-                  initialValues={{
-                    logoBright: conference.logoBright,
-                    logoDark: conference.logoDark,
-                    logomarkBright: conference.logomarkBright,
-                    logomarkDark: conference.logomarkDark,
-                  }}
-                />
-              </>
-            }
-          >
-            <BrandingPreviewGrid
-              values={{
-                logoBright: conference.logoBright,
-                logoDark: conference.logoDark,
-                logomarkBright: conference.logomarkBright,
-                logomarkDark: conference.logomarkDark,
-              }}
-            />
-            <FieldRow
-              label="Background Pattern"
-              value={
-                BACKGROUND_PATTERN_LABELS[
-                  normalizeBackgroundPattern(conference.backgroundPattern)
-                ]
               }
-            />
-            <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
-              <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                Brand Colors
-              </p>
-              <ThemeSwatchRow theme={conference.theme} />
-            </div>
-          </InfoCard>
+            >
+              <FieldRow label="Title" value={conference.title} />
+              <FieldRow label="Organizer" value={conference.organizer} />
+              <FieldRow label="City" value={conference.city} />
+              <FieldRow label="Country" value={conference.country} />
+              <FieldRow label="Tagline" value={conference.tagline} />
+              <FieldRow label="Description" value={conference.description} />
+            </InfoCard>
 
-          <InfoCard
-            title="Venue Information"
-            icon={MapPinIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="venue"
-                initialValues={{
-                  venueName: conference.venueName,
-                  venueAddress: conference.venueAddress,
-                }}
-              />
-            }
-          >
-            <FieldRow label="Venue Name" value={conference.venueName} />
-            <FieldRow label="Venue Address" value={conference.venueAddress} />
-          </InfoCard>
-
-          <InfoCard
-            title="Dates & Timeline"
-            icon={CalendarIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="dates"
-                initialValues={{
-                  startDate: conference.startDate,
-                  endDate: conference.endDate,
-                  cfpStartDate: conference.cfpStartDate,
-                  cfpEndDate: conference.cfpEndDate,
-                  cfpNotifyDate: conference.cfpNotifyDate,
-                  programDate: conference.programDate,
-                  travelSupportPaymentDate: conference.travelSupportPaymentDate,
-                  travelSupportBudget: conference.travelSupportBudget,
-                }}
-              />
-            }
-          >
-            <FieldRow
-              label="Start Date"
-              value={conference.startDate}
-              type="date"
-            />
-            <FieldRow label="End Date" value={conference.endDate} type="date" />
-            <FieldRow
-              label="CFP Start Date"
-              value={conference.cfpStartDate}
-              type="date"
-            />
-            <FieldRow
-              label="CFP End Date"
-              value={conference.cfpEndDate}
-              type="date"
-            />
-            <FieldRow
-              label="CFP Notify Date"
-              value={conference.cfpNotifyDate}
-              type="date"
-            />
-            <FieldRow
-              label="Program Release Date"
-              value={conference.programDate}
-              type="date"
-            />
-            <FieldRow
-              label="Travel Support Payment Date"
-              value={conference.travelSupportPaymentDate}
-              type="date"
-            />
-            <FieldRow
-              label="Travel Support Budget"
-              value={conference.travelSupportBudget}
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Registration"
-            icon={DocumentTextIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="registration"
-                initialValues={{
-                  registrationEnabled: conference.registrationEnabled,
-                  registrationLink: conference.registrationLink,
-                }}
-              />
-            }
-          >
-            <FieldRow
-              label="Registration Enabled"
-              value={conference.registrationEnabled}
-              type="boolean"
-            />
-            <FieldRow
-              label="Registration Link"
-              value={conference.registrationLink}
-              type="url"
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Communication"
-            icon={EnvelopeIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="communication"
-                initialValues={{
-                  contactEmail: conference.contactEmail,
-                  cfpEmail: conference.cfpEmail,
-                  sponsorEmail: conference.sponsorEmail,
-                  salesNotificationChannel: conference.salesNotificationChannel,
-                  cfpNotificationChannel: conference.cfpNotificationChannel,
-                }}
-              />
-            }
-          >
-            <FieldRow
-              label="Contact Email"
-              value={conference.contactEmail}
-              type="email"
-            />
-            <FieldRow
-              label="CFP Email"
-              value={conference.cfpEmail}
-              type="email"
-            />
-            <FieldRow
-              label="Sponsor Email"
-              value={conference.sponsorEmail}
-              type="email"
-            />
-            <FieldRow
-              label="Sales / Weekly Update Channel"
-              value={conference.salesNotificationChannel}
-            />
-            <FieldRow
-              label="CFP Notification Channel"
-              value={conference.cfpNotificationChannel}
-            />
-          </InfoCard>
-
-          <WorkshopRegistrationSettings
-            workshopRegistrationStart={conference.workshopRegistrationStart}
-            workshopRegistrationEnd={conference.workshopRegistrationEnd}
-          />
-
-          <InfoCard
-            title="Domain Configuration"
-            icon={GlobeAltIcon}
-            editUrl={editUrl}
-            action={
-              <>
-                <EditConferenceCard
-                  fieldset="socialLinks"
-                  initialValues={{ socialLinks: conference.socialLinks }}
-                />
-                <EditConferenceCard
-                  fieldset="domains"
-                  initialValues={{ domains: conference.domains }}
-                  currentDomain={domain}
-                />
-              </>
-            }
-          >
-            <FieldRow label="Domains" value={conference.domains} type="array" />
-            <FieldRow
-              label="Social Links"
-              value={conference.socialLinks}
-              type="links"
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="External Integrations"
-            icon={LinkIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="ticketingIds"
-                initialValues={{
-                  ticketingProvider: conference.ticketingProvider,
-                  checkinCustomerId: conference.checkinCustomerId,
-                  checkinEventId: conference.checkinEventId,
-                  titoAccountSlug: conference.titoAccountSlug,
-                  titoEventSlug: conference.titoEventSlug,
-                }}
-              />
-            }
-          >
-            <FieldRow
-              label="Ticketing Provider"
-              value={conference.ticketingProvider ?? 'checkin'}
-            />
-            {conference.ticketingProvider === 'tito' ? (
-              <>
-                <FieldRow
-                  label="Tito Account Slug"
-                  value={conference.titoAccountSlug}
-                />
-                <FieldRow
-                  label="Tito Event Slug"
-                  value={conference.titoEventSlug}
-                />
-              </>
-            ) : (
-              <>
-                <FieldRow
-                  label="Checkin Customer ID"
-                  value={conference.checkinCustomerId}
-                />
-                <FieldRow
-                  label="Checkin Event ID"
-                  value={conference.checkinEventId}
-                />
-              </>
-            )}
-          </InfoCard>
-
-          <InfoCard
-            title="CFP & Revenue Goals"
-            icon={CurrencyDollarIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="cfpGoals"
-                initialValues={{
-                  cfpSubmissionGoal: conference.cfpSubmissionGoal,
-                  cfpLightningGoal: conference.cfpLightningGoal,
-                  cfpPresentationGoal: conference.cfpPresentationGoal,
-                  cfpWorkshopGoal: conference.cfpWorkshopGoal,
-                  sponsorRevenueGoal: conference.sponsorRevenueGoal,
-                }}
-              />
-            }
-          >
-            <FieldRow
-              label="CFP Submission Goal"
-              value={conference.cfpSubmissionGoal}
-            />
-            <FieldRow
-              label="Lightning Talk Goal"
-              value={conference.cfpLightningGoal}
-            />
-            <FieldRow
-              label="Presentation Goal"
-              value={conference.cfpPresentationGoal}
-            />
-            <FieldRow
-              label="Workshop Goal"
-              value={conference.cfpWorkshopGoal}
-            />
-            <FieldRow
-              label="Sponsor Revenue Goal"
-              value={conference.sponsorRevenueGoal}
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Content Configuration"
-            icon={TagIcon}
-            editUrl={editUrl}
-            action={
-              <TopicsEditor
-                selectedTopics={(conference.topics ?? []).map((t) => ({
-                  _id: t._id,
-                  title: t.title,
-                  color: t.color,
-                }))}
-              />
-            }
-          >
-            <FieldRow
-              label="Available Formats"
-              value={conference.formats}
-              type="formats"
-            />
-            <FieldRow
-              label="Available Topics"
-              value={conference.topics}
-              type="array"
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Announcement"
-            icon={DocumentTextIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="announcement"
-                initialValues={{ announcement: conference.announcement }}
-              />
-            }
-          >
-            <FieldRow
-              label="Landing-page banner"
-              value={
-                Array.isArray(conference.announcement) &&
-                conference.announcement.length > 0
-                  ? 'Configured'
-                  : null
+            <InfoCard
+              title="Branding"
+              icon={SwatchIcon}
+              editUrl={editUrl}
+              action={
+                <>
+                  <EditConferenceCard
+                    fieldset="branding"
+                    initialValues={{
+                      // Normalize (not just null-coalesce) so an invalid stored
+                      // value can't seed an enum-invalid submit.
+                      backgroundPattern: normalizeBackgroundPattern(
+                        conference.backgroundPattern,
+                      ),
+                    }}
+                  />
+                  <ThemeEditor initialTheme={conference.theme} />
+                  <BrandingEditor
+                    initialValues={{
+                      logoBright: conference.logoBright,
+                      logoDark: conference.logoDark,
+                      logomarkBright: conference.logomarkBright,
+                      logomarkDark: conference.logomarkDark,
+                    }}
+                  />
+                </>
               }
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Homepage Composition"
-            icon={DocumentTextIcon}
-            action={
-              <HomepageSectionsEditor
-                initialSections={homepageSectionsForEditor}
-                usingDefault={usingDefaultHomepage}
+            >
+              <BrandingPreviewGrid
+                values={{
+                  logoBright: conference.logoBright,
+                  logoDark: conference.logoDark,
+                  logomarkBright: conference.logomarkBright,
+                  logomarkDark: conference.logomarkDark,
+                }}
               />
-            }
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
-              <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-                Layout
-              </dt>
-              <dd className="min-w-0 text-right text-sm">
-                {usingDefaultHomepage ? (
-                  <StatusBadge label="Default (automatic)" color="gray" />
-                ) : (
-                  <StatusBadge label="Custom composition" color="green" />
-                )}
-              </dd>
-            </div>
-            <ol className="space-y-1 pt-1">
-              {homepageSectionsForEditor.map((section, idx) => (
-                <li
-                  key={section._key}
-                  className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white"
-                >
-                  <span>
-                    {idx + 1}.{' '}
-                    {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
-                  </span>
-                  {section.hidden ? (
-                    <StatusBadge label="Hidden" color="yellow" />
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </InfoCard>
+              <FieldRow
+                label="Background Pattern"
+                value={
+                  BACKGROUND_PATTERN_LABELS[
+                    normalizeBackgroundPattern(conference.backgroundPattern)
+                  ]
+                }
+              />
+              <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
+                <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Brand Colors
+                </p>
+                <ThemeSwatchRow theme={conference.theme} />
+              </div>
+            </InfoCard>
 
-          <InfoCard
-            title="Team"
-            icon={UserGroupIcon}
-            editUrl={editUrl}
-            action={
-              <>
-                <OrganizersEditor
-                  organizers={organizerRows}
-                  currentUserId={currentUserId}
+            <InfoCard
+              title="Visibility"
+              icon={visibility === 'unlisted' ? EyeSlashIcon : EyeIcon}
+              action={
+                <EditConferenceCard
+                  fieldset="visibility"
+                  initialValues={{ visibility }}
                 />
-                <TeamsEditor
-                  teams={(conference.teams ?? []).map((team) => ({
-                    _key: team._key,
-                    key: team.key,
-                    title: team.title,
-                    members: Array.isArray(team.members)
-                      ? (team.members as unknown as string[])
-                      : [],
-                    slackChannel: team.slackChannel,
-                    emailIdentity: team.emailIdentity,
-                  }))}
-                  organizers={organizerRows.map((o) => ({
-                    _id: o._id,
-                    name: o.name,
-                  }))}
-                />
-              </>
-            }
-          >
-            <FieldRow
-              label="Organizers"
-              value={conference.organizers?.map((org) => org.name)}
-              type="team"
-            />
-            {conference.teams && conference.teams.length > 0 && (
-              <div className="border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
-                <dt className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Teams
+              }
+            >
+              <div
+                id="visibility"
+                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+              >
+                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Status
                 </dt>
-                <dd className="space-y-1">
-                  {conference.teams.map((team) => (
-                    <div
-                      key={team._key ?? team.key}
-                      className="min-w-0 text-sm break-words text-gray-900 dark:text-white"
-                    >
-                      {formatTeamSummary(team)}
-                    </div>
-                  ))}
+                <dd className="min-w-0 text-right text-sm">
+                  {visibility === 'unlisted' ? (
+                    <StatusBadge label="Unlisted" color="yellow" />
+                  ) : (
+                    <StatusBadge label="Live" color="green" />
+                  )}
                 </dd>
               </div>
-            )}
-          </InfoCard>
-
-          {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
-            <InfoCard
-              title="Sponsorship Tiers"
-              icon={CurrencyDollarIcon}
-              editUrl={editUrl}
-            >
-              {conference.sponsorTiers.map((tier, idx) => (
-                <div
-                  key={idx}
-                  className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {tier.title}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      {tier.soldOut && (
-                        <StatusBadge label="Sold Out" color="red" />
-                      )}
-                      {tier.mostPopular && (
-                        <StatusBadge label="Popular" color="green" />
-                      )}
-                    </div>
-                  </div>
-                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                    {tier.tagline}
-                  </p>
-                  {tier.price && tier.price.length > 0 && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {tier.price.map((price, pidx) => (
-                        <span key={pidx}>
-                          {price.amount} {price.currency}
-                          {pidx < tier.price!.length - 1 && ', '}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+              <p className="pt-1 text-sm text-gray-500 dark:text-gray-400">
+                {visibility === 'unlisted'
+                  ? 'Reachable by direct link but excluded from sitemaps, robots and search indexing.'
+                  : 'Publicly listed and indexed by search engines.'}
+              </p>
             </InfoCard>
-          )}
 
-          {conference.sponsors && conference.sponsors.length > 0 && (
+            {/* Set-once — collapsed by default. */}
+            <CollapsibleSection
+              title="Venue Information"
+              icon={MapPinIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={editUrl} />
+                  <EditConferenceCard
+                    fieldset="venue"
+                    initialValues={{
+                      venueName: conference.venueName,
+                      venueAddress: conference.venueAddress,
+                    }}
+                  />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow label="Venue Name" value={conference.venueName} />
+                <FieldRow
+                  label="Venue Address"
+                  value={conference.venueAddress}
+                />
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          {/* ---- Schedule ---- */}
+          <SettingsGroupSection group={GROUP['schedule']} icon={CalendarIcon}>
             <InfoCard
-              title="Current Sponsors"
-              icon={CurrencyDollarIcon}
+              title="Dates & Timeline"
+              icon={CalendarIcon}
               editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="dates"
+                  initialValues={{
+                    startDate: conference.startDate,
+                    endDate: conference.endDate,
+                    cfpStartDate: conference.cfpStartDate,
+                    cfpEndDate: conference.cfpEndDate,
+                    cfpNotifyDate: conference.cfpNotifyDate,
+                    programDate: conference.programDate,
+                    travelSupportPaymentDate:
+                      conference.travelSupportPaymentDate,
+                    travelSupportBudget: conference.travelSupportBudget,
+                  }}
+                />
+              }
             >
               <FieldRow
-                label="Sponsors"
-                value={conference.sponsors.map(
-                  (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
+                label="Start Date"
+                value={conference.startDate}
+                type="date"
+              />
+              <FieldRow
+                label="End Date"
+                value={conference.endDate}
+                type="date"
+              />
+              <FieldRow
+                label="CFP Start Date"
+                value={conference.cfpStartDate}
+                type="date"
+              />
+              <FieldRow
+                label="CFP End Date"
+                value={conference.cfpEndDate}
+                type="date"
+              />
+              <FieldRow
+                label="CFP Notify Date"
+                value={conference.cfpNotifyDate}
+                type="date"
+              />
+              <FieldRow
+                label="Program Release Date"
+                value={conference.programDate}
+                type="date"
+              />
+              <FieldRow
+                label="Travel Support Payment Date"
+                value={conference.travelSupportPaymentDate}
+                type="date"
+              />
+              <FieldRow
+                label="Travel Support Budget"
+                value={conference.travelSupportBudget}
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Announcement"
+              icon={DocumentTextIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="announcement"
+                  initialValues={{ announcement: conference.announcement }}
+                />
+              }
+            >
+              <FieldRow
+                label="Landing-page banner"
+                value={
+                  Array.isArray(conference.announcement) &&
+                  conference.announcement.length > 0
+                    ? 'Configured'
+                    : null
+                }
+              />
+            </InfoCard>
+          </SettingsGroupSection>
+
+          {/* ---- Call for Papers ---- */}
+          <SettingsGroupSection
+            group={GROUP['call-for-papers']}
+            icon={DocumentTextIcon}
+          >
+            <InfoCard
+              title="CFP & Revenue Goals"
+              icon={CurrencyDollarIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="cfpGoals"
+                  initialValues={{
+                    cfpSubmissionGoal: conference.cfpSubmissionGoal,
+                    cfpLightningGoal: conference.cfpLightningGoal,
+                    cfpPresentationGoal: conference.cfpPresentationGoal,
+                    cfpWorkshopGoal: conference.cfpWorkshopGoal,
+                    sponsorRevenueGoal: conference.sponsorRevenueGoal,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="CFP Submission Goal"
+                value={conference.cfpSubmissionGoal}
+              />
+              <FieldRow
+                label="Lightning Talk Goal"
+                value={conference.cfpLightningGoal}
+              />
+              <FieldRow
+                label="Presentation Goal"
+                value={conference.cfpPresentationGoal}
+              />
+              <FieldRow
+                label="Workshop Goal"
+                value={conference.cfpWorkshopGoal}
+              />
+              <FieldRow
+                label="Sponsor Revenue Goal"
+                value={conference.sponsorRevenueGoal}
+              />
+            </InfoCard>
+          </SettingsGroupSection>
+
+          {/* ---- Tickets & Registration ---- */}
+          <SettingsGroupSection
+            group={GROUP['tickets-registration']}
+            icon={TagIcon}
+          >
+            <InfoCard
+              title="Registration"
+              icon={DocumentTextIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="registration"
+                  initialValues={{
+                    registrationEnabled: conference.registrationEnabled,
+                    registrationLink: conference.registrationLink,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="Registration Enabled"
+                value={conference.registrationEnabled}
+                type="boolean"
+              />
+              <FieldRow
+                label="Registration Link"
+                value={conference.registrationLink}
+                type="url"
+              />
+            </InfoCard>
+
+            <WorkshopRegistrationSettings
+              workshopRegistrationStart={conference.workshopRegistrationStart}
+              workshopRegistrationEnd={conference.workshopRegistrationEnd}
+            />
+
+            <InfoCard
+              title="Ticketing"
+              icon={LinkIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="ticketingIds"
+                  initialValues={{
+                    ticketingProvider: conference.ticketingProvider,
+                    checkinCustomerId: conference.checkinCustomerId,
+                    checkinEventId: conference.checkinEventId,
+                    titoAccountSlug: conference.titoAccountSlug,
+                    titoEventSlug: conference.titoEventSlug,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="Ticketing Provider"
+                value={conference.ticketingProvider ?? 'checkin'}
+              />
+              {conference.ticketingProvider === 'tito' ? (
+                <>
+                  <FieldRow
+                    label="Tito Account Slug"
+                    value={conference.titoAccountSlug}
+                  />
+                  <FieldRow
+                    label="Tito Event Slug"
+                    value={conference.titoEventSlug}
+                  />
+                </>
+              ) : (
+                <>
+                  <FieldRow
+                    label="Checkin Customer ID"
+                    value={conference.checkinCustomerId}
+                  />
+                  <FieldRow
+                    label="Checkin Event ID"
+                    value={conference.checkinEventId}
+                  />
+                </>
+              )}
+            </InfoCard>
+
+            {/* Set-once — collapsed by default. */}
+            <CollapsibleSection
+              title="Homepage Stats"
+              icon={ChartPieIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={editUrl} />
+                  <EditConferenceCard
+                    fieldset="vanityMetrics"
+                    initialValues={{ vanityMetrics: conference.vanityMetrics }}
+                  />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                {conference.vanityMetrics &&
+                conference.vanityMetrics.length > 0 ? (
+                  conference.vanityMetrics.map((metric, idx) => (
+                    <FieldRow
+                      key={idx}
+                      label={metric.label}
+                      value={metric.value}
+                    />
+                  ))
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    None
+                  </span>
                 )}
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          {/* ---- Sponsors ---- */}
+          <SettingsGroupSection
+            group={GROUP['sponsors']}
+            icon={CurrencyDollarIcon}
+          >
+            {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
+              <InfoCard
+                title="Sponsorship Tiers"
+                icon={CurrencyDollarIcon}
+                editUrl={editUrl}
+              >
+                {conference.sponsorTiers.map((tier, idx) => (
+                  <div
+                    key={idx}
+                    className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {tier.title}
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        {tier.soldOut && (
+                          <StatusBadge label="Sold Out" color="red" />
+                        )}
+                        {tier.mostPopular && (
+                          <StatusBadge label="Popular" color="green" />
+                        )}
+                      </div>
+                    </div>
+                    <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                      {tier.tagline}
+                    </p>
+                    {tier.price && tier.price.length > 0 && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {tier.price.map((price, pidx) => (
+                          <span key={pidx}>
+                            {price.amount} {price.currency}
+                            {pidx < tier.price!.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </InfoCard>
+            )}
+
+            {conference.sponsors && conference.sponsors.length > 0 && (
+              <InfoCard
+                title="Current Sponsors"
+                icon={CurrencyDollarIcon}
+                editUrl={editUrl}
+              >
+                <FieldRow
+                  label="Sponsors"
+                  value={conference.sponsors.map(
+                    (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
+                  )}
+                  type="array"
+                />
+              </InfoCard>
+            )}
+
+            {/* Set-once — collapsed by default. */}
+            <CollapsibleSection
+              title="Sponsor Benefits"
+              icon={CurrencyDollarIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={editUrl} />
+                  <EditConferenceCard
+                    fieldset="sponsorBenefits"
+                    initialValues={{
+                      sponsorBenefits: conference.sponsorBenefits,
+                    }}
+                  />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                {conference.sponsorBenefits &&
+                conference.sponsorBenefits.length > 0 ? (
+                  conference.sponsorBenefits.map((benefit, idx) => (
+                    <FieldRow
+                      key={idx}
+                      label={benefit.title}
+                      value={benefit.description}
+                    />
+                  ))
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    None
+                  </span>
+                )}
+              </div>
+            </CollapsibleSection>
+
+            {/* Set-once — collapsed by default. */}
+            <CollapsibleSection
+              title="Sponsorship Page"
+              icon={DocumentTextIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={editUrl} />
+                  <EditConferenceCard
+                    fieldset="sponsorshipCustomization"
+                    initialValues={
+                      (conference.sponsorshipCustomization ?? {}) as Record<
+                        string,
+                        unknown
+                      >
+                    }
+                  />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow
+                  label="Hero Headline"
+                  value={conference.sponsorshipCustomization?.heroHeadline}
+                />
+                <FieldRow
+                  label="Philosophy Title"
+                  value={conference.sponsorshipCustomization?.philosophyTitle}
+                />
+                <FieldRow
+                  label="Prospectus Link"
+                  value={conference.sponsorshipCustomization?.prospectusUrl}
+                  type="url"
+                />
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          {/* ---- Team & Content ---- */}
+          <SettingsGroupSection
+            group={GROUP['team-content']}
+            icon={UserGroupIcon}
+          >
+            <InfoCard
+              title="Organizers & Teams"
+              icon={UserGroupIcon}
+              editUrl={editUrl}
+              action={
+                <>
+                  <OrganizersEditor
+                    organizers={organizerRows}
+                    currentUserId={currentUserId}
+                  />
+                  <TeamsEditor
+                    teams={(conference.teams ?? []).map((team) => ({
+                      _key: team._key,
+                      key: team.key,
+                      title: team.title,
+                      members: Array.isArray(team.members)
+                        ? (team.members as unknown as string[])
+                        : [],
+                      slackChannel: team.slackChannel,
+                      emailIdentity: team.emailIdentity,
+                    }))}
+                    organizers={organizerRows.map((o) => ({
+                      _id: o._id,
+                      name: o.name,
+                    }))}
+                  />
+                </>
+              }
+            >
+              <FieldRow
+                label="Organizers"
+                value={conference.organizers?.map((org) => org.name)}
+                type="team"
+              />
+              {conference.teams && conference.teams.length > 0 && (
+                <div className="border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+                  <dt className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Teams
+                  </dt>
+                  <dd className="space-y-1">
+                    {conference.teams.map((team) => (
+                      <div
+                        key={team._key ?? team.key}
+                        className="min-w-0 text-sm break-words text-gray-900 dark:text-white"
+                      >
+                        {formatTeamSummary(team)}
+                      </div>
+                    ))}
+                  </dd>
+                </div>
+              )}
+            </InfoCard>
+
+            <InfoCard
+              title="Communication"
+              icon={EnvelopeIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="communication"
+                  initialValues={{
+                    contactEmail: conference.contactEmail,
+                    cfpEmail: conference.cfpEmail,
+                    sponsorEmail: conference.sponsorEmail,
+                    salesNotificationChannel:
+                      conference.salesNotificationChannel,
+                    cfpNotificationChannel: conference.cfpNotificationChannel,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="Contact Email"
+                value={conference.contactEmail}
+                type="email"
+              />
+              <FieldRow
+                label="CFP Email"
+                value={conference.cfpEmail}
+                type="email"
+              />
+              <FieldRow
+                label="Sponsor Email"
+                value={conference.sponsorEmail}
+                type="email"
+              />
+              <FieldRow
+                label="Sales / Weekly Update Channel"
+                value={conference.salesNotificationChannel}
+              />
+              <FieldRow
+                label="CFP Notification Channel"
+                value={conference.cfpNotificationChannel}
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Domains & Social Links"
+              icon={GlobeAltIcon}
+              editUrl={editUrl}
+              action={
+                <>
+                  <EditConferenceCard
+                    fieldset="socialLinks"
+                    initialValues={{ socialLinks: conference.socialLinks }}
+                  />
+                  <EditConferenceCard
+                    fieldset="domains"
+                    initialValues={{ domains: conference.domains }}
+                    currentDomain={domain}
+                  />
+                </>
+              }
+            >
+              <FieldRow
+                label="Domains"
+                value={conference.domains}
+                type="array"
+              />
+              <FieldRow
+                label="Social Links"
+                value={conference.socialLinks}
+                type="links"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Topics & Formats"
+              icon={TagIcon}
+              editUrl={editUrl}
+              action={
+                <TopicsEditor
+                  selectedTopics={(conference.topics ?? []).map((t) => ({
+                    _id: t._id,
+                    title: t.title,
+                    color: t.color,
+                  }))}
+                />
+              }
+            >
+              <FieldRow
+                label="Available Formats"
+                value={conference.formats}
+                type="formats"
+              />
+              <FieldRow
+                label="Available Topics"
+                value={conference.topics}
                 type="array"
               />
             </InfoCard>
-          )}
 
-          <InfoCard
-            title="Sponsor Benefits"
-            icon={CurrencyDollarIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="sponsorBenefits"
-                initialValues={{ sponsorBenefits: conference.sponsorBenefits }}
-              />
-            }
-          >
-            {conference.sponsorBenefits &&
-            conference.sponsorBenefits.length > 0 ? (
-              conference.sponsorBenefits.map((benefit, idx) => (
-                <FieldRow
-                  key={idx}
-                  label={benefit.title}
-                  value={benefit.description}
+            <InfoCard
+              title="Homepage Composition"
+              icon={DocumentTextIcon}
+              action={
+                <HomepageSectionsEditor
+                  initialSections={homepageSectionsForEditor}
+                  usingDefault={usingDefaultHomepage}
                 />
-              ))
-            ) : (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                None
-              </span>
-            )}
-          </InfoCard>
-
-          <InfoCard
-            title="Sponsorship Page"
-            icon={DocumentTextIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="sponsorshipCustomization"
-                initialValues={
-                  (conference.sponsorshipCustomization ?? {}) as Record<
-                    string,
-                    unknown
+              }
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
+                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Layout
+                </dt>
+                <dd className="min-w-0 text-right text-sm">
+                  {usingDefaultHomepage ? (
+                    <StatusBadge label="Default (automatic)" color="gray" />
+                  ) : (
+                    <StatusBadge label="Custom composition" color="green" />
+                  )}
+                </dd>
+              </div>
+              <ol className="space-y-1 pt-1">
+                {homepageSectionsForEditor.map((section, idx) => (
+                  <li
+                    key={section._key}
+                    className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white"
                   >
-                }
-              />
-            }
-          >
-            <FieldRow
-              label="Hero Headline"
-              value={conference.sponsorshipCustomization?.heroHeadline}
-            />
-            <FieldRow
-              label="Philosophy Title"
-              value={conference.sponsorshipCustomization?.philosophyTitle}
-            />
-            <FieldRow
-              label="Prospectus Link"
-              value={conference.sponsorshipCustomization?.prospectusUrl}
-              type="url"
-            />
-          </InfoCard>
-
-          <InfoCard
-            title="Vanity Metrics"
-            icon={ChartPieIcon}
-            editUrl={editUrl}
-            action={
-              <EditConferenceCard
-                fieldset="vanityMetrics"
-                initialValues={{ vanityMetrics: conference.vanityMetrics }}
-              />
-            }
-          >
-            {conference.vanityMetrics && conference.vanityMetrics.length > 0 ? (
-              conference.vanityMetrics.map((metric, idx) => (
-                <FieldRow key={idx} label={metric.label} value={metric.value} />
-              ))
-            ) : (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                None
-              </span>
-            )}
-          </InfoCard>
+                    <span>
+                      {idx + 1}.{' '}
+                      {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
+                    </span>
+                    {section.hidden ? (
+                      <StatusBadge label="Hidden" color="yellow" />
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </InfoCard>
+          </SettingsGroupSection>
         </div>
       </section>
 

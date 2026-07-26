@@ -1,0 +1,460 @@
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import {
+  CalendarIcon,
+  GlobeAltIcon,
+  MapPinIcon,
+  UserGroupIcon,
+  DocumentTextIcon,
+  TagIcon,
+  CurrencyDollarIcon,
+  InformationCircleIcon,
+  LinkIcon,
+  EnvelopeIcon,
+  Cog6ToothIcon,
+  ServerStackIcon,
+  BeakerIcon,
+  SwatchIcon,
+  EyeIcon,
+  PencilSquareIcon,
+  ChartPieIcon,
+} from '@heroicons/react/24/outline'
+import {
+  InfoCard,
+  FieldRow,
+  StudioEditLink,
+  SectionNav,
+  SectionHeading,
+  SettingsGroupSection,
+} from './settingsLayout'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { StatusBadge } from '@/components/StatusBadge'
+import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
+
+/**
+ * Visual-QA harness for the Settings page information architecture: the sticky
+ * jump-nav, the six grouped tier-1 subsections, the collapsed-by-default cards
+ * and the three tiers. Rendered with static mock data and non-functional edit
+ * pencils (the real cards use tRPC-backed editor islands) so the whole layout is
+ * inspectable in isolation without providers.
+ */
+
+const GROUP: Record<string, SettingsGroup> = Object.fromEntries(
+  SETTINGS_GROUPS.map((g) => [g.id, g]),
+)
+
+const EDIT_URL =
+  'https://studio.example.com/intent/edit/id=conf;type=conference'
+
+/** Non-functional stand-in for the EditConferenceCard pencil trigger. */
+function EditPencil() {
+  return (
+    <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 dark:text-gray-400">
+      <PencilSquareIcon className="h-5 w-5" />
+    </span>
+  )
+}
+
+function SettingsIADemo() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Conference Settings
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Configuration settings for Cloud Native Bergen 2026
+          </p>
+        </div>
+      </div>
+
+      <SectionNav />
+
+      {/* ---- TIER 1 ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="configuration"
+          icon={DocumentTextIcon}
+          title="Conference configuration"
+          description="Content managed in Sanity for this conference."
+        />
+
+        <div className="space-y-10">
+          <SettingsGroupSection
+            group={GROUP['identity-brand']}
+            icon={InformationCircleIcon}
+          >
+            <InfoCard
+              title="Basic Information"
+              icon={InformationCircleIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="Title" value="Cloud Native Bergen 2026" />
+              <FieldRow label="Organizer" value="Cloud Native Norway" />
+              <FieldRow label="City" value="Bergen" />
+              <FieldRow label="Country" value="Norway" />
+              <FieldRow label="Tagline" value="Cloud on your terms" />
+            </InfoCard>
+
+            <InfoCard
+              title="Branding"
+              icon={SwatchIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Background Pattern"
+                value="Cloud Native (animated CNCF logos)"
+              />
+            </InfoCard>
+
+            <InfoCard title="Visibility" icon={EyeIcon} action={<EditPencil />}>
+              <div
+                id="visibility"
+                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+              >
+                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Status
+                </dt>
+                <dd className="min-w-0 text-right text-sm">
+                  <StatusBadge label="Live" color="green" />
+                </dd>
+              </div>
+              <p className="pt-1 text-sm text-gray-500 dark:text-gray-400">
+                Publicly listed and indexed by search engines.
+              </p>
+            </InfoCard>
+
+            <CollapsibleSection
+              title="Venue Information"
+              icon={MapPinIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={EDIT_URL} />
+                  <EditPencil />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow label="Venue Name" value="Grieghallen" />
+                <FieldRow label="Venue Address" value="Edvard Griegs plass 1" />
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          <SettingsGroupSection group={GROUP['schedule']} icon={CalendarIcon}>
+            <InfoCard
+              title="Dates & Timeline"
+              icon={CalendarIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="Start Date" value="2026-06-10" type="date" />
+              <FieldRow label="End Date" value="2026-06-11" type="date" />
+              <FieldRow label="CFP End Date" value="2026-03-01" type="date" />
+              <FieldRow label="Travel Support Budget" value={50000} />
+            </InfoCard>
+
+            <InfoCard
+              title="Announcement"
+              icon={DocumentTextIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="Landing-page banner" value="Configured" />
+            </InfoCard>
+          </SettingsGroupSection>
+
+          <SettingsGroupSection
+            group={GROUP['call-for-papers']}
+            icon={DocumentTextIcon}
+          >
+            <InfoCard
+              title="CFP & Revenue Goals"
+              icon={CurrencyDollarIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="CFP Submission Goal" value={120} />
+              <FieldRow label="Presentation Goal" value={40} />
+              <FieldRow label="Sponsor Revenue Goal" value={800000} />
+            </InfoCard>
+          </SettingsGroupSection>
+
+          <SettingsGroupSection
+            group={GROUP['tickets-registration']}
+            icon={TagIcon}
+          >
+            <InfoCard
+              title="Registration"
+              icon={DocumentTextIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="Registration Enabled" value type="boolean" />
+              <FieldRow
+                label="Registration Link"
+                value="https://checkin.no/event/cloud-native-bergen-2026"
+                type="url"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Workshop Registration"
+              icon={CalendarIcon}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Registration Opens"
+                value="2026-04-01T09:00:00Z"
+                type="datetime"
+              />
+              <FieldRow
+                label="Registration Closes"
+                value="2026-05-01T09:00:00Z"
+                type="datetime"
+              />
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Status
+                </span>
+                <StatusBadge label="Not yet open" color="yellow" />
+              </div>
+            </InfoCard>
+
+            <InfoCard
+              title="Ticketing"
+              icon={LinkIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow label="Ticketing Provider" value="checkin" />
+              <FieldRow label="Checkin Customer ID" value={12345} />
+              <FieldRow label="Checkin Event ID" value={67890} />
+            </InfoCard>
+
+            <CollapsibleSection
+              title="Homepage Stats"
+              icon={ChartPieIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={EDIT_URL} />
+                  <EditPencil />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow label="Attendees" value="500+" />
+                <FieldRow label="Speakers" value="60" />
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          <SettingsGroupSection
+            group={GROUP['sponsors']}
+            icon={CurrencyDollarIcon}
+          >
+            <InfoCard
+              title="Sponsorship Tiers"
+              icon={CurrencyDollarIcon}
+              editUrl={EDIT_URL}
+            >
+              <div className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    Gold
+                  </span>
+                  <StatusBadge label="Popular" color="green" />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Prime logo placement and 4 tickets.
+                </p>
+              </div>
+            </InfoCard>
+
+            <InfoCard
+              title="Current Sponsors"
+              icon={CurrencyDollarIcon}
+              editUrl={EDIT_URL}
+            >
+              <FieldRow
+                label="Sponsors"
+                value={['Acme (Gold)', 'Globex (Silver)']}
+                type="array"
+              />
+            </InfoCard>
+
+            <CollapsibleSection
+              title="Sponsor Benefits"
+              icon={CurrencyDollarIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={EDIT_URL} />
+                  <EditPencil />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow
+                  label="Reach"
+                  value="Access to 500+ cloud native engineers."
+                />
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Sponsorship Page"
+              icon={DocumentTextIcon}
+              action={
+                <>
+                  <StudioEditLink editUrl={EDIT_URL} />
+                  <EditPencil />
+                </>
+              }
+            >
+              <div className="space-y-3 px-6 py-4">
+                <FieldRow label="Hero Headline" value="Partner with us" />
+                <FieldRow
+                  label="Prospectus Link"
+                  value="https://example.com/prospectus.pdf"
+                  type="url"
+                />
+              </div>
+            </CollapsibleSection>
+          </SettingsGroupSection>
+
+          <SettingsGroupSection
+            group={GROUP['team-content']}
+            icon={UserGroupIcon}
+          >
+            <InfoCard
+              title="Organizers & Teams"
+              icon={UserGroupIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Organizers"
+                value={['Hans Flaatten', 'Jane Doe', 'John Smith']}
+                type="team"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Communication"
+              icon={EnvelopeIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Contact Email"
+                value="hello@cloudnativebergen.no"
+                type="email"
+              />
+              <FieldRow
+                label="Sales / Weekly Update Channel"
+                value="#conference-updates"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Domains & Social Links"
+              icon={GlobeAltIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Domains"
+                value={['cloudnativebergen.no', '2026.cloudnativebergen.no']}
+                type="array"
+              />
+              <FieldRow
+                label="Social Links"
+                value={['https://bsky.app/profile/cloudnativebergen.no']}
+                type="links"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Topics & Formats"
+              icon={TagIcon}
+              editUrl={EDIT_URL}
+              action={<EditPencil />}
+            >
+              <FieldRow
+                label="Available Topics"
+                value={['Kubernetes', 'Observability', 'Security']}
+                type="array"
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Homepage Composition"
+              icon={DocumentTextIcon}
+              action={<EditPencil />}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
+                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Layout
+                </dt>
+                <dd className="min-w-0 text-right text-sm">
+                  <StatusBadge label="Default (automatic)" color="gray" />
+                </dd>
+              </div>
+            </InfoCard>
+          </SettingsGroupSection>
+        </div>
+      </section>
+
+      {/* ---- TIER 2 ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="system-status"
+          icon={ServerStackIcon}
+          title="System status"
+          description="Environment configuration and live integration health."
+        />
+        <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700">
+          System status checks render here.
+        </div>
+      </section>
+
+      {/* ---- TIER 3 ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="self-check"
+          icon={BeakerIcon}
+          title="Self-check"
+          description="Actively exercise an integration end to end."
+        />
+        <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700">
+          Self-check probes render here.
+        </div>
+      </section>
+    </div>
+  )
+}
+
+const meta = {
+  title: 'Systems/Admin/SettingsIA',
+  component: SettingsIADemo,
+  parameters: {
+    layout: 'fullscreen',
+  },
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 dark:bg-gray-950">
+        <div className="mx-auto max-w-5xl">
+          <Story />
+        </div>
+      </div>
+    ),
+  ],
+} satisfies Meta<typeof SettingsIADemo>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const Default: Story = {}
