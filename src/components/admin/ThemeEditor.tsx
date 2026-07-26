@@ -103,8 +103,16 @@ export function ThemeEditor({
   const handleSave = () => {
     setSubmitError(null)
     if (!canSave) return
+    // Saving the untouched house defaults must NOT persist a theme object:
+    // "no theme" means "follow the evolving house palette" (and no injected
+    // color-mix hover), whereas an explicit theme pins today's values forever.
+    const p = primary.trim()
+    const a = accent.trim()
+    const isHouseDefault =
+      p.toLowerCase() === DEFAULT_PRIMARY_COLOR.toLowerCase() &&
+      a.toLowerCase() === DEFAULT_ACCENT_COLOR.toLowerCase()
     mutation.mutate({
-      theme: { primaryColor: primary.trim(), accentColor: accent.trim() },
+      theme: isHouseDefault ? null : { primaryColor: p, accentColor: a },
     })
   }
 

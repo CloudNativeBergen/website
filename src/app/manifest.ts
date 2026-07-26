@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { DEFAULT_PRIMARY_COLOR, manifestThemeColor } from '@/lib/branding/theme'
@@ -70,6 +71,12 @@ async function resolveManifestIdentity(host: string): Promise<{
 
   try {
     const { conference, error } = await getConferenceForDomain(host)
+    // Tag with the resolved conference so a branding/theme save — which
+    // revalidates `conferenceTag(id)` — busts this cached manifest too;
+    // without it the theme_color would lag by up to the cacheLife window.
+    if (conference?._id) {
+      cacheTag(conferenceTag(conference._id))
+    }
     if (error || !conference?.title) {
       return {
         name: PLATFORM_NAME,

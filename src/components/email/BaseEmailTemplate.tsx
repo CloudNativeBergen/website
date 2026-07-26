@@ -1,14 +1,17 @@
 import * as React from 'react'
 import { iconForLink, titleForLink } from '../SocialIcons'
 
+import { DEFAULT_PRIMARY_COLOR } from '@/lib/branding/theme'
+
 /**
- * The default brand accent (Cloud Native Days blue). Overridable per-send via
- * `brandColor` so a tenant's mail can carry its own accent; full design-token
- * theming lands later — this is the neutral-correctness seam (go-live gate G2,
- * E8). The base template's footer already names the sender via `eventName`, so
- * no hardcoded brand name remains here.
+ * The default brand PRIMARY (Cloud Native Days blue) — re-exported from the
+ * theming core so the email default can never drift from the house palette.
+ * Overridable per-send via `brandColor` so a tenant's mail can carry its own
+ * primary; full design-token theming lands later — this is the
+ * neutral-correctness seam (go-live gate G2, E8). The base template's footer
+ * already names the sender via `eventName`, so no hardcoded brand name remains.
  */
-export const DEFAULT_EMAIL_BRAND_COLOR = '#1D4ED8'
+export const DEFAULT_EMAIL_BRAND_COLOR = DEFAULT_PRIMARY_COLOR
 
 interface BaseEmailTemplateProps {
   title?: string

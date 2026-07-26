@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HEX_COLOR_RE } from '@/lib/branding/theme'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
@@ -81,7 +82,8 @@ export const UpdateVenueSchema = z.object({
 // `theme` is a whole-object override: present → set `{ primaryColor, accentColor }`,
 // explicit `null` → unset (revert to the house palette). Both colours must be
 // 6-digit hex — non-hex is REJECTED (validated here, the write-path authority).
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
+// ONE regex (from the theming core) backs the Zod schema, the runtime guard and
+// the Sanity rule, so the layers cannot drift.
 const hexColor = z
   .string()
   .trim()
