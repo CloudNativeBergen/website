@@ -235,3 +235,113 @@ describe('toPayload — mapping semantics', () => {
     })
   })
 })
+
+describe('toEditorRows — new F4 blocks', () => {
+  it('maps a FAQ block with own items (source defaults to own)', () => {
+    const sections: HomepageSection[] = [
+      {
+        _key: 'faq',
+        _type: 'homepageFaq',
+        heading: 'Questions',
+        items: [{ _key: 'i1', question: 'Q1', answer: 'A1' }],
+      },
+    ]
+    const [row] = toEditorRows(sections)
+    expect(row.source).toBe('own')
+    expect(row.faqItems).toEqual([{ _key: 'i1', question: 'Q1', answer: 'A1' }])
+  })
+
+  it('preserves the ticketFaqs source toggle', () => {
+    const [row] = toEditorRows([
+      { _key: 'faq', _type: 'homepageFaq', source: 'ticketFaqs' },
+    ])
+    expect(row.source).toBe('ticketFaqs')
+    expect(row.faqItems).toEqual([])
+  })
+
+  it('maps countdown and venue fields', () => {
+    const rows = toEditorRows([
+      {
+        _key: 'cd',
+        _type: 'homepageCountdown',
+        heading: 'Starts in',
+        targetOverride: '2099-09-15',
+        liveMessage: 'We are live!',
+      },
+      {
+        _key: 'v',
+        _type: 'homepageVenue',
+        heading: 'Where',
+        description: 'Downtown',
+      },
+    ])
+    expect(rows[0]).toMatchObject({
+      targetOverride: '2099-09-15',
+      liveMessage: 'We are live!',
+    })
+    expect(rows[1]).toMatchObject({ heading: 'Where', description: 'Downtown' })
+  })
+})
+
+describe('toPayload — trimming, omission and item filtering', () => {
+  it('stores own FAQ items (trimmed) and drops blank ones', () => {
+    const rows: EditorRow[] = [
+      {
+        _key: 'faq',
+        _type: 'homepageFaq',
+        heading: '  Questions  ',
+        source: 'own',
+        faqItems: [
+          { _key: 'i1', question: '  Q1  ', answer: '  A1  ' },
+          { _key: 'i2', question: '', answer: 'orphan' },
+        ],
+      },
+    ]
+    const [out] = toPayload(rows)
+    expect(out.heading).toBe('Questions')
+    expect(out.items).toEqual([{ _key: 'i1', question: 'Q1', answer: 'A1' }])
+    expect(out.source).toBeUndefined() // 'own' is implicit
+  })
+
+  it('stores the ticketFaqs source and omits items entirely', () => {
+    const [out] = toPayload([
+      {
+        _key: 'faq',
+        _type: 'homepageFaq',
+        source: 'ticketFaqs',
+        faqItems: [{ _key: 'i1', question: 'ignored', answer: 'ignored' }],
+      },
+    ])
+    expect(out.source).toBe('ticketFaqs')
+    expect(out.items).toBeUndefined()
+  })
+
+  it('omits blank countdown/venue optionals but keeps set ones', () => {
+    const [cd, venue] = toPayload([
+      {
+        _key: 'cd',
+        _type: 'homepageCountdown',
+        heading: '   ',
+        targetOverride: '2099-09-15',
+        liveMessage: '  ',
+      },
+      { _key: 'v', _type: 'homepageVenue', description: 'Grieghallen' },
+    ])
+    expect(cd.heading).toBeUndefined()
+    expect(cd.liveMessage).toBeUndefined()
+    expect(cd.targetOverride).toBe('2099-09-15')
+    expect(venue.heading).toBeUndefined()
+    expect(venue.description).toBe('Grieghallen')
+  })
+
+  it('always carries _type and _key, plus hidden when set', () => {
+    const [out] = toPayload([
+      { _key: 'v', _type: 'homepageVenue', hidden: true },
+    ])
+    expect(out).toMatchObject({
+      _type: 'homepageVenue',
+      _key: 'v',
+      hidden: true,
+    })
+  })
+})

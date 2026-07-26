@@ -46,7 +46,7 @@ const NB_LONG_MONTHS = [
  * Oslo saw the previous day and it hydration-mismatched). Full ISO timestamps
  * are parsed as-is since they already carry an offset.
  */
-function toOsloAnchoredDate(dateString: string): Date {
+export function toOsloAnchoredDate(dateString: string): Date {
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString)
   if (dateOnly) {
     return new Date(

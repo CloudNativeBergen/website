@@ -858,5 +858,164 @@ function SectionConfig({
     )
   }
 
+  if (row._type === 'homepageFaq') {
+    const source = row.source ?? 'own'
+    const items = row.faqItems ?? []
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Frequently asked questions”)"
+          aria-label="FAQ heading"
+          className={inputClass}
+        />
+        <select
+          value={source}
+          onChange={(e) =>
+            onChange({ source: e.target.value as 'own' | 'ticketFaqs' })
+          }
+          aria-label="FAQ source"
+          className={inputClass}
+        >
+          <option value="own">Use this block’s own items</option>
+          <option value="ticketFaqs">Reuse the ticket FAQs</option>
+        </select>
+        {source === 'ticketFaqs' ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Renders the FAQs configured on the tickets page — nothing to edit
+            here.
+          </p>
+        ) : (
+          <>
+            {items.map((item, i) => (
+              <div
+                key={item._key}
+                className="space-y-1 rounded-lg border border-gray-200 p-2 dark:border-gray-700"
+              >
+                <div className="flex items-start gap-1">
+                  <input
+                    type="text"
+                    value={item.question}
+                    onChange={(e) =>
+                      onChange({
+                        faqItems: items.map((it, j) =>
+                          j === i ? { ...it, question: e.target.value } : it,
+                        ),
+                      })
+                    }
+                    placeholder="Question"
+                    aria-label={`FAQ ${i + 1} question`}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    className={`${rowBtnClass} hover:text-red-600`}
+                    onClick={() =>
+                      onChange({ faqItems: items.filter((_, j) => j !== i) })
+                    }
+                    aria-label={`Remove FAQ ${i + 1}`}
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                <textarea
+                  value={item.answer}
+                  onChange={(e) =>
+                    onChange({
+                      faqItems: items.map((it, j) =>
+                        j === i ? { ...it, answer: e.target.value } : it,
+                      ),
+                    })
+                  }
+                  placeholder="Answer"
+                  aria-label={`FAQ ${i + 1} answer`}
+                  rows={2}
+                  className={inputClass}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  faqItems: [
+                    ...items,
+                    { _key: nextKey(), question: '', answer: '' },
+                  ],
+                })
+              }
+              className="inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-brand-cloud-blue"
+            >
+              <PlusIcon className="h-4 w-4" /> Add FAQ item
+            </button>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  if (row._type === 'homepageCountdown') {
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional)"
+          aria-label="Countdown heading"
+          className={inputClass}
+        />
+        <label className="block text-xs text-gray-500 dark:text-gray-400">
+          Target date/time override (optional — defaults to the conference
+          start)
+          <input
+            type="datetime-local"
+            value={row.targetOverride ?? ''}
+            onChange={(e) => onChange({ targetOverride: e.target.value })}
+            aria-label="Countdown target override"
+            className={`${inputClass} mt-1`}
+          />
+        </label>
+        <input
+          type="text"
+          value={row.liveMessage ?? ''}
+          onChange={(e) => onChange({ liveMessage: e.target.value })}
+          placeholder="Live message after the target (blank to hide)"
+          aria-label="Countdown live message"
+          className={inputClass}
+        />
+      </div>
+    )
+  }
+
+  if (row._type === 'homepageVenue') {
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Venue”)"
+          aria-label="Venue heading"
+          className={inputClass}
+        />
+        <textarea
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Description (optional)"
+          aria-label="Venue description"
+          rows={2}
+          className={inputClass}
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Venue name and address come from the conference configuration. “Get
+          directions” links to a map built from the address.
+        </p>
+      </div>
+    )
+  }
+
   return null
 }

@@ -1392,6 +1392,96 @@ export default defineType({
             validation: (Rule) => Rule.required(),
           }),
         ]),
+        defineHomepageSection('homepageFaq', 'FAQ', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description:
+              'Optional heading. Defaults to "Frequently asked questions".',
+          }),
+          defineField({
+            name: 'source',
+            title: 'Source',
+            type: 'string',
+            initialValue: 'own',
+            options: {
+              list: [
+                { title: 'This block’s own items', value: 'own' },
+                { title: 'Ticket FAQs (reuse existing)', value: 'ticketFaqs' },
+              ],
+              layout: 'radio',
+            },
+            description:
+              'Reuse the ticket FAQs instead of duplicating them, or curate your own list below.',
+          }),
+          defineField({
+            name: 'items',
+            title: 'FAQ Items',
+            type: 'array',
+            hidden: ({ parent }) =>
+              (parent as { source?: string })?.source === 'ticketFaqs',
+            of: [
+              {
+                type: 'object',
+                name: 'homepageFaqItem',
+                fields: [
+                  defineField({
+                    name: 'question',
+                    title: 'Question',
+                    type: 'string',
+                    validation: (Rule) => Rule.required(),
+                  }),
+                  defineField({
+                    name: 'answer',
+                    title: 'Answer',
+                    type: 'text',
+                    rows: 3,
+                    validation: (Rule) => Rule.required(),
+                  }),
+                ],
+                preview: { select: { title: 'question', subtitle: 'answer' } },
+              },
+            ],
+          }),
+        ]),
+        defineHomepageSection('homepageCountdown', 'Countdown', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading above the countdown.',
+          }),
+          defineField({
+            name: 'targetOverride',
+            title: 'Target Date/Time Override',
+            type: 'datetime',
+            description:
+              'Leave blank to count down to the conference start date.',
+          }),
+          defineField({
+            name: 'liveMessage',
+            title: 'Live Message',
+            type: 'string',
+            description:
+              'Shown once the countdown reaches zero. Leave blank to hide the block afterwards.',
+          }),
+        ]),
+        defineHomepageSection('homepageVenue', 'Venue', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Venue".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Description',
+            type: 'text',
+            rows: 2,
+            description: 'Optional copy shown above the venue card.',
+          }),
+        ]),
       ],
     }),
   ],

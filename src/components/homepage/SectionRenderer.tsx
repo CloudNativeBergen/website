@@ -10,6 +10,10 @@ import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import { CtaBanner } from '@/components/homepage/CtaBanner'
 import { RichTextBlock } from '@/components/homepage/RichTextBlock'
 import { MetricsBlock } from '@/components/homepage/MetricsBlock'
+import { FaqBlock } from '@/components/homepage/FaqBlock'
+import { Countdown } from '@/components/homepage/Countdown'
+import { VenueBlock } from '@/components/homepage/VenueBlock'
+import { resolveCountdownTarget } from '@/lib/homepage/countdown'
 import {
   InformationCircleIcon,
   MicrophoneIcon,
@@ -289,6 +293,23 @@ function renderSection(
       return <CtaBanner section={section} />
     case 'homepageRichText':
       return <RichTextBlock section={section} />
+    case 'homepageFaq':
+      return <FaqBlock section={section} conference={conference} />
+    case 'homepageCountdown': {
+      // SSR-safe: resolve the target to a stable timestamp server-side; the
+      // client component ticks after hydration. Null target → nothing to show.
+      const targetMs = resolveCountdownTarget(conference, section)
+      if (targetMs === null) return null
+      return (
+        <Countdown
+          targetMs={targetMs}
+          heading={section.heading}
+          liveMessage={section.liveMessage}
+        />
+      )
+    }
+    case 'homepageVenue':
+      return <VenueBlock section={section} conference={conference} />
     default: {
       // Forward compat: an unknown `_type` (data written by a newer schema
       // during deploy skew) is skipped at runtime, never fatal. Warned once per

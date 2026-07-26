@@ -457,6 +457,33 @@ export const conferenceRouter = router({
               base.content = ensureUniqueArrayKeys(section.content, 'block')
               break
             }
+            case 'homepageFaq': {
+              if (section.heading) base.heading = section.heading
+              if (section.source) base.source = section.source
+              if (section.items && section.items.length > 0) {
+                base.items = ensureUniqueArrayKeys(
+                  section.items.map((item) => ({
+                    question: item.question,
+                    answer: item.answer,
+                    ...(item._key ? { _key: item._key } : {}),
+                  })),
+                  'faq',
+                )
+              }
+              break
+            }
+            case 'homepageCountdown': {
+              if (section.heading) base.heading = section.heading
+              if (section.targetOverride)
+                base.targetOverride = section.targetOverride
+              if (section.liveMessage) base.liveMessage = section.liveMessage
+              break
+            }
+            case 'homepageVenue': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              break
+            }
             default:
               // The content-free blocks (featured speakers, program, organizers,
               // sponsors, gallery) carry only `_type`/`_key`/`hidden`.

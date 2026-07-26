@@ -115,4 +115,94 @@ describe('UpdateHomepageSectionsSchema', () => {
       }),
     ).toThrow()
   })
+
+  it('round-trips an FAQ block with own items', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageFaq',
+          _key: 'faq',
+          heading: 'FAQ',
+          source: 'own',
+          items: [{ _key: 'i1', question: 'Q?', answer: 'A.' }],
+        },
+      ],
+    })
+    expect(parsed.homepageSections[0]).toMatchObject({
+      _type: 'homepageFaq',
+      source: 'own',
+    })
+  })
+
+  it('accepts the FAQ ticketFaqs source toggle without items', () => {
+    expect(() =>
+      UpdateHomepageSectionsSchema.parse({
+        homepageSections: [
+          { _type: 'homepageFaq', _key: 'faq', source: 'ticketFaqs' },
+        ],
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects an unknown FAQ source and a blank FAQ item', () => {
+    expect(
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          { _type: 'homepageFaq', _key: 'faq', source: 'somewhereElse' },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          {
+            _type: 'homepageFaq',
+            _key: 'faq',
+            items: [{ _key: 'i1', question: '', answer: 'A' }],
+          },
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('validates the countdown target override as a real date', () => {
+    const withTarget = (targetOverride: string) =>
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          { _type: 'homepageCountdown', _key: 'cd', targetOverride },
+        ],
+      }).success
+    expect(withTarget('2099-09-15')).toBe(true)
+    expect(withTarget('2099-09-15T09:00:00Z')).toBe(true)
+    expect(withTarget('not-a-date')).toBe(false)
+  })
+
+  it('accepts a countdown with just a heading and live message', () => {
+    expect(() =>
+      UpdateHomepageSectionsSchema.parse({
+        homepageSections: [
+          {
+            _type: 'homepageCountdown',
+            _key: 'cd',
+            heading: 'Starts in',
+            liveMessage: 'We are live!',
+          },
+        ],
+      }),
+    ).not.toThrow()
+  })
+
+  it('round-trips a venue block (name/address come from the conference)', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageVenue',
+          _key: 'v',
+          heading: 'Venue',
+          description: 'In the heart of Bergen.',
+        },
+      ],
+    })
+    expect(parsed.homepageSections[0]).toMatchObject({ _type: 'homepageVenue' })
+  })
 })

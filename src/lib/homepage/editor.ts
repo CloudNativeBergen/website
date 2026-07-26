@@ -20,6 +20,9 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
   homepageMetrics: 'Vanity Metrics',
   homepageCtaBanner: 'Call-to-action Banner',
   homepageRichText: 'Rich Text',
+  homepageFaq: 'FAQ',
+  homepageCountdown: 'Countdown',
+  homepageVenue: 'Venue',
 }
 
 /**
@@ -33,6 +36,9 @@ const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageCtaBanner',
   'homepageRichText',
   'homepageMetrics',
+  'homepageFaq',
+  'homepageCountdown',
+  'homepageVenue',
 ])
 
 export function isConfigurable(type: HomepageSectionType): boolean {
@@ -65,6 +71,14 @@ export interface EditorRow {
   buttonLabel?: string
   buttonHref?: string
   content?: PortableTextBlock[]
+  // FAQ block
+  source?: 'own' | 'ticketFaqs'
+  faqItems?: { _key: string; question: string; answer: string }[]
+  // Countdown block
+  targetOverride?: string
+  liveMessage?: string
+  // Venue block
+  description?: string
 }
 
 let keyCounter = 0
@@ -95,6 +109,21 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
       row.content = (s.content as PortableTextBlock[]) ?? []
     } else if (s._type === 'homepageMetrics') {
       row.heading = s.heading
+    } else if (s._type === 'homepageFaq') {
+      row.heading = s.heading
+      row.source = s.source ?? 'own'
+      row.faqItems = (s.items ?? []).map((i) => ({
+        _key: i._key || nextKey(),
+        question: i.question,
+        answer: i.answer,
+      }))
+    } else if (s._type === 'homepageCountdown') {
+      row.heading = s.heading
+      row.targetOverride = s.targetOverride
+      row.liveMessage = s.liveMessage
+    } else if (s._type === 'homepageVenue') {
+      row.heading = s.heading
+      row.description = s.description
     }
     return row
   })
@@ -137,6 +166,34 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
         break
       case 'homepageMetrics':
         if (row.heading?.trim()) out.heading = row.heading.trim()
+        break
+      case 'homepageFaq': {
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        const source = row.source ?? 'own'
+        if (source === 'ticketFaqs') {
+          out.source = 'ticketFaqs'
+        } else {
+          // 'own' is the default; only store items (source stays implicit).
+          const items = (row.faqItems ?? [])
+            .filter((i) => i.question.trim() && i.answer.trim())
+            .map((i) => ({
+              _key: i._key,
+              question: i.question.trim(),
+              answer: i.answer.trim(),
+            }))
+          if (items.length > 0) out.items = items
+        }
+        break
+      }
+      case 'homepageCountdown':
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        if (row.targetOverride?.trim())
+          out.targetOverride = row.targetOverride.trim()
+        if (row.liveMessage?.trim()) out.liveMessage = row.liveMessage.trim()
+        break
+      case 'homepageVenue':
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        if (row.description?.trim()) out.description = row.description.trim()
         break
       default:
         break

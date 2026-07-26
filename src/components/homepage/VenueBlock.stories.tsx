@@ -1,0 +1,70 @@
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { VenueBlock } from './VenueBlock'
+import type { Conference } from '@/lib/conference/types'
+
+const withVenue = {
+  _id: 'conf-1',
+  title: 'Cloud Native Days Norway 2026',
+  venueName: 'Grieghallen',
+  venueAddress: 'Edvard Griegs plass 1\n5015 Bergen\nNorway',
+} as unknown as Conference
+
+const nameOnly = {
+  _id: 'conf-1',
+  title: 'Cloud Native Days Norway 2026',
+  venueName: 'Grieghallen',
+} as unknown as Conference
+
+const meta = {
+  title: 'Systems/Homepage/Public/VenueBlock',
+  component: VenueBlock,
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Front-page builder (F4) venue block. Name/address come from the conference; the "Get directions" link is constructed from the address at render (no map tiles/embeds, no stored URL). Renders nothing without a venue name or address.',
+      },
+    },
+  },
+  tags: ['autodocs'],
+} satisfies Meta<typeof VenueBlock>
+
+export default meta
+type Story = StoryObj<typeof meta>
+
+export const Default: Story = {
+  args: {
+    conference: withVenue,
+    section: {
+      _key: 'venue-1',
+      _type: 'homepageVenue',
+      heading: 'Where to find us',
+      description:
+        'In the heart of Bergen, a short walk from the train station.',
+    },
+  },
+}
+
+/** Edge case: venue name but no address → no "Get directions" for the address. */
+export const NameOnly: Story = {
+  args: {
+    conference: nameOnly,
+    section: {
+      _key: 'venue-2',
+      _type: 'homepageVenue',
+    },
+  },
+}
+
+export const Dark: Story = {
+  args: Default.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  decorators: [
+    (Story) => (
+      <div className="dark bg-gray-950">
+        <Story />
+      </div>
+    ),
+  ],
+}

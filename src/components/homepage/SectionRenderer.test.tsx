@@ -37,6 +37,17 @@ vi.mock('@/components/homepage/RichTextBlock', () => ({
 vi.mock('@/components/homepage/MetricsBlock', () => ({
   MetricsBlock: () => <div data-testid="metrics" />,
 }))
+vi.mock('@/components/homepage/FaqBlock', () => ({
+  FaqBlock: () => <div data-testid="faq" />,
+}))
+vi.mock('@/components/homepage/Countdown', () => ({
+  Countdown: ({ targetMs }: { targetMs: number }) => (
+    <div data-testid="countdown" data-target={targetMs} />
+  ),
+}))
+vi.mock('@/components/homepage/VenueBlock', () => ({
+  VenueBlock: () => <div data-testid="venue" />,
+}))
 
 import { HomepageSectionRenderer } from './SectionRenderer'
 import { getDefaultSections, type HomepageSection } from '@/lib/homepage'
@@ -130,5 +141,36 @@ describe('HomepageSectionRenderer — visibility & forward compat', () => {
       expect.stringContaining('homepageFromTheFuture'),
     )
     warn.mockRestore()
+  })
+})
+
+describe('HomepageSectionRenderer — F4 blocks', () => {
+  it('renders FAQ, countdown (resolved target) and venue in order', () => {
+    const conference = makeConference({ startDate: '2099-09-15' })
+    const sections = [
+      { _key: '1', _type: 'homepageFaq', source: 'ticketFaqs' },
+      { _key: '2', _type: 'homepageCountdown' },
+      { _key: '3', _type: 'homepageVenue' },
+    ] as unknown as HomepageSection[]
+    const { container } = render(
+      <HomepageSectionRenderer sections={sections} conference={conference} />,
+    )
+    expect(testIdsInOrder(container)).toEqual(['faq', 'countdown', 'venue'])
+    expect(
+      container
+        .querySelector('[data-testid="countdown"]')
+        ?.getAttribute('data-target'),
+    ).toBe(String(Date.UTC(2099, 8, 15, 12)))
+  })
+
+  it('renders nothing for a countdown with no resolvable target', () => {
+    const conference = makeConference({ startDate: undefined })
+    const sections = [
+      { _key: '1', _type: 'homepageCountdown' },
+    ] as unknown as HomepageSection[]
+    const { container } = render(
+      <HomepageSectionRenderer sections={sections} conference={conference} />,
+    )
+    expect(container.querySelector('[data-testid="countdown"]')).toBeNull()
   })
 })
