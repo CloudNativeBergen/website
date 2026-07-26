@@ -84,6 +84,21 @@ export async function generateBadgeCredential(
     subject: {
       id: `mailto:${speakerEmail}`,
       type: ['AchievementSubject'],
+      // Recipient identity for ownership matching on import. Displayers such as
+      // Credly match a badge to a signed-in user via credentialSubject
+      // .identifier[] (IdentityObject), not by parsing the mailto: subject id.
+      // The email is lowercased to match the normalized mailto: id and the
+      // case-sensitive comparison some displayers perform. hashed:false keeps
+      // the plaintext value — no new PII exposure since the mailto: id already
+      // carries the email; a salted sha256 hash is the future privacy option.
+      identifier: [
+        {
+          type: 'IdentityObject',
+          hashed: false,
+          identityHash: speakerEmail.toLowerCase(),
+          identityType: 'emailAddress',
+        },
+      ],
     },
     achievement: {
       id: `${config.baseUrl}/api/badge/${badgeId}/achievement`,

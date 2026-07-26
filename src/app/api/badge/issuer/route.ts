@@ -6,10 +6,13 @@
  *
  * Exposes two keys:
  * - RSA JWK (publicKey, #key-1 fragment) for RS256 JWT verification
- * - Ed25519 Multikey (verificationMethod/assertionMethod, #key-ed25519
- *   fragment) for embedded Data Integrity Proof verification — verifiers
- *   strip the fragment from proof.verificationMethod and dereference this
- *   profile, whose controller must equal the credential's issuer.id
+ * - Ed25519 Multikey (verificationMethod/assertionMethod) for embedded Data
+ *   Integrity Proof verification. Two ids point at the same key: the
+ *   dereferenceable /api/badge/keys/key-ed25519 URL that new credentials pin,
+ *   and the legacy #key-ed25519 fragment that older baked SVGs pin. The bare
+ *   Multikey document itself is served by /api/badge/keys/key-ed25519 (the
+ *   1EdTech EmbeddedProofProbe dereferences proof.verificationMethod and reads
+ *   the key off the response root, so it never consults this profile array).
  *
  * Reference: https://www.imsglobal.org/spec/ob/v3p0/impl/
  */
@@ -18,7 +21,12 @@ import { NextResponse } from 'next/server'
 import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceContact } from '@/lib/email/from'
-import { generateErrorResponse, seedToMultikey } from '@/lib/openbadges'
+import { generateErrorResponse } from '@/lib/openbadges'
+import {
+  ed25519VerificationMethodUrl,
+  legacyEd25519VerificationMethod,
+  resolveEd25519PublicKeyMultibase,
+} from '@/lib/badge/verification-method'
 
 export async function GET(request: Request) {
   try {
@@ -62,39 +70,34 @@ export async function GET(request: Request) {
     //
     // External verifiers (Credly, verifybadge.org) dereference this profile to
     // resolve the proof key, so verify-only / preview deployments that hold
-    // only the PUBLIC key must still publish it. Prefer the published public
-    // key directly (it IS the publicKeyMultibase); fall back to deriving the
-    // key from the secret seed when only the seed is present.
+    // only the PUBLIC key must still publish it.
+    //
+    // TWO ids are listed for the SAME key:
+    // - the dereferenceable keys-endpoint URL (`/api/badge/keys/key-ed25519`),
+    //   which new credentials pin in proof.verificationMethod, and
+    // - the legacy issuer-profile fragment (`#key-ed25519`), which older baked
+    //   SVGs pinned. Our own verify paths look the method up by id in this
+    //   array, so keeping both lets previously downloaded badges still resolve.
     const issuerId = `${baseUrl}/api/badge/issuer`
-    const ed25519PublicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
-    const ed25519Seed = process.env.BADGE_ISSUER_ED25519_SEED
-    let publicKeyMultibase: string | undefined
-    if (ed25519PublicKey && ed25519PublicKey.startsWith('z')) {
-      // The published public key is already a multibase Ed25519 Multikey.
-      publicKeyMultibase = ed25519PublicKey
-    } else if (ed25519Seed) {
-      try {
-        publicKeyMultibase = (await seedToMultikey(ed25519Seed))
-          .publicKeyMultibase
-      } catch (seedError) {
-        console.error(
-          'Invalid BADGE_ISSUER_ED25519_SEED; omitting Ed25519 verification method:',
-          seedError,
-        )
-      }
-    } else if (ed25519PublicKey) {
-      console.error(
-        'BADGE_ISSUER_ED25519_PUBLIC_KEY is not a multibase Ed25519 key (expected "z" prefix); omitting Ed25519 verification method',
-      )
-    }
+    const publicKeyMultibase = await resolveEd25519PublicKeyMultibase()
 
-    const ed25519VerificationMethod = publicKeyMultibase
-      ? {
-          id: `${issuerId}#key-ed25519`,
-          type: 'Multikey' as const,
-          controller: issuerId,
-          publicKeyMultibase,
-        }
+    const ed25519KeyDocUrl = ed25519VerificationMethodUrl(baseUrl)
+    const ed25519LegacyId = legacyEd25519VerificationMethod(issuerId)
+    const ed25519VerificationMethods = publicKeyMultibase
+      ? [
+          {
+            id: ed25519KeyDocUrl,
+            type: 'Multikey' as const,
+            controller: issuerId,
+            publicKeyMultibase,
+          },
+          {
+            id: ed25519LegacyId,
+            type: 'Multikey' as const,
+            controller: issuerId,
+            publicKeyMultibase,
+          },
+        ]
       : undefined
 
     // Return issuer profile
@@ -125,9 +128,9 @@ export async function GET(request: Request) {
           publicKeyJwk: jwk,
         },
       ],
-      ...(ed25519VerificationMethod && {
-        verificationMethod: [ed25519VerificationMethod],
-        assertionMethod: [ed25519VerificationMethod.id],
+      ...(ed25519VerificationMethods && {
+        verificationMethod: ed25519VerificationMethods,
+        assertionMethod: ed25519VerificationMethods.map((vm) => vm.id),
       }),
     }
 

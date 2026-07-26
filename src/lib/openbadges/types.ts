@@ -45,9 +45,32 @@ export interface Achievement {
   creator: IssuerProfile // Per OpenBadges 3.0 spec: Achievement uses "creator" property
 }
 
+/**
+ * OB 3.0 IdentityObject — a recipient identifier used by displayers (Credly,
+ * Badgr, …) to match a badge to a signed-in user's verified identity. The
+ * `type` member is the plain string "IdentityObject" (NOT an array) per the
+ * normative schema. `identityHash` carries the plaintext value when
+ * `hashed: false`; a salted hash (sha256$…) is the privacy-preserving variant.
+ *
+ * @see https://www.imsglobal.org/spec/ob/v3p0/#identityobject
+ */
+export interface IdentityObject {
+  type: 'IdentityObject'
+  hashed: boolean
+  identityHash: string
+  identityType: 'emailAddress' | string
+  salt?: string
+}
+
 export interface AchievementSubject {
   id: string
   type: string[]
+  /**
+   * Recipient identifiers. Emitted as an array with a single emailAddress
+   * IdentityObject so ownership matching works on import; either `id` or at
+   * least one `identifier` is required by OB 3.0.
+   */
+  identifier?: IdentityObject[]
   achievement: Achievement
 }
 
@@ -96,6 +119,7 @@ export interface AchievementConfig {
 export interface SubjectProfile {
   id: string
   type: string[]
+  identifier?: IdentityObject[]
 }
 
 export interface IssuerProfileConfig {

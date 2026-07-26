@@ -13,6 +13,7 @@ import {
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { isLocalhostEnvironment } from '@/lib/environment/localhost'
+import { acceptedEd25519VerificationMethods } from '@/lib/badge/verification-method'
 import {
   IssueBadgeInputSchema,
   BulkIssueBadgeInputSchema,
@@ -103,14 +104,17 @@ export const badgeRouter = router({
           if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
             // Pin the verification method to OUR issuer's embedded VM: a badge
             // with a foreign / did:key VM must not report as signature-valid.
+            // Both the current dereferenceable keys URL and the legacy
+            // issuer-profile fragment are accepted (previously baked SVGs).
             const issuerId =
               typeof badgeAssertion.issuer === 'object'
                 ? badgeAssertion.issuer?.id
                 : badgeAssertion.issuer
-            const expectedVm = `${issuerId}#key-ed25519`
             const proofVm = badgeAssertion.proof[0]?.verificationMethod
 
-            if (proofVm === expectedVm) {
+            if (
+              acceptedEd25519VerificationMethods(issuerId).includes(proofVm)
+            ) {
               signatureValid = await verifyCredential(badgeAssertion, publicKey)
             }
           }
