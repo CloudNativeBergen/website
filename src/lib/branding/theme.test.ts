@@ -59,17 +59,9 @@ describe('conferenceThemeCss — token resolution', () => {
     expect(css.endsWith('}')).toBe(true)
   })
 
-  it('emits only the primary when accent is absent', () => {
-    const css = conferenceThemeCss({ primaryColor: '#7C3AED' })
-    expect(css).toContain('--brand-primary:#7C3AED')
-    expect(css).toContain('--brand-primary-hover:')
-    expect(css).not.toContain('--brand-accent')
-  })
-
-  it('emits only the accent when primary is absent', () => {
-    const css = conferenceThemeCss({ accentColor: '#22D3EE' })
-    expect(css).toContain('--brand-accent:#22D3EE')
-    expect(css).not.toContain('--brand-primary')
+  it('emits nothing for a half-theme (all-or-nothing, matching the write-path pair contract)', () => {
+    expect(conferenceThemeCss({ primaryColor: '#7C3AED' })).toBe('')
+    expect(conferenceThemeCss({ accentColor: '#22D3EE' })).toBe('')
   })
 
   it('ignores malformed colours (defence in depth) and emits nothing', () => {
@@ -80,8 +72,12 @@ describe('conferenceThemeCss — token resolution', () => {
   })
 
   it('trims surrounding whitespace before validating', () => {
-    const css = conferenceThemeCss({ primaryColor: '  #1D4ED8  ' })
+    const css = conferenceThemeCss({
+      primaryColor: '  #1D4ED8  ',
+      accentColor: ' #06B6D4 ',
+    })
     expect(css).toContain('--brand-primary:#1D4ED8')
+    expect(css).toContain('--brand-accent:#06B6D4')
   })
 })
 

@@ -52,10 +52,18 @@ export function isHexColor(value: unknown): value is string {
 export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
   if (!theme) return ''
 
+  // ALL-OR-NOTHING, matching the write-path contract (Zod + Studio both
+  // enforce the pair): a half-theme — legacy or malformed data with only one
+  // valid colour — renders NO override at all rather than a half-themed UI.
+  const primary = theme.primaryColor?.trim()
+  const accent = theme.accentColor?.trim()
+  if (!primary || !isHexColor(primary) || !accent || !isHexColor(accent)) {
+    return ''
+  }
+
   const decls: string[] = []
   let hoverMix: string | null = null
 
-  const primary = theme.primaryColor?.trim()
   if (primary && isHexColor(primary)) {
     decls.push(`--brand-primary:${primary}`)
     // Hover fallback for engines without color-mix(): the primary itself. An
@@ -70,7 +78,6 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
     hoverMix = `--brand-primary-hover:color-mix(in srgb, ${primary} 85%, #000)`
   }
 
-  const accent = theme.accentColor?.trim()
   if (accent && isHexColor(accent)) {
     decls.push(`--brand-accent:${accent}`)
   }

@@ -82,8 +82,9 @@ export const UpdateVenueSchema = z.object({
 // `theme` is a whole-object override: present → set `{ primaryColor, accentColor }`,
 // explicit `null` → unset (revert to the house palette). Both colours must be
 // 6-digit hex — non-hex is REJECTED (validated here, the write-path authority).
-// ONE regex (from the theming core) backs the Zod schema, the runtime guard and
-// the Sanity rule, so the layers cannot drift.
+// The regex is shared with the runtime guard via the theming core's
+// HEX_COLOR_RE; the Sanity rule inlines an intentionally identical pattern
+// (schema files stay import-light) — keep them in sync if it ever changes.
 const hexColor = z
   .string()
   .trim()

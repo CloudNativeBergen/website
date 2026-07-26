@@ -18,8 +18,10 @@ export function ThemeStyle({ theme }: { theme?: ConferenceTheme | null }) {
   const css = conferenceThemeCss(theme)
   if (!css) return null
   return (
-    // The content is machine-generated from validated hex colours (see
-    // `conferenceThemeCss`), never raw user markup.
-    <style data-tenant-theme dangerouslySetInnerHTML={{ __html: css }} />
+    // Rendered as text children (not dangerouslySetInnerHTML): the CSS is
+    // machine-generated from validated hex colours and contains none of the
+    // characters React escapes, so children are equivalent — and keep React's
+    // escaping as a backstop if the generator ever grows beyond hex tokens.
+    <style data-tenant-theme>{css}</style>
   )
 }
