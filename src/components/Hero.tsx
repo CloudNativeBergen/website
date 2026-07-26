@@ -1,4 +1,5 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
+import type { HeroCtaOverride } from '@/lib/homepage/sections'
 import { Button } from '@/components/Button'
 import { CollapsibleDescription } from '@/components/CollapsibleDescription'
 import { Container } from '@/components/Container'
@@ -51,8 +52,6 @@ function isPortableTextEmpty(content?: TypedObject[]): boolean {
     return false
   })
 }
-
-import type { HeroCtaOverride } from '@/lib/homepage/sections'
 
 function ActionButtons({
   conference,

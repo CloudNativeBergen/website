@@ -23,6 +23,9 @@ import {
   type HomepageSection,
 } from '@/lib/homepage/sections'
 
+/** Unknown section `_type`s already warned about (once per process). */
+const warnedUnknownSectionTypes = new Set<string>()
+
 /**
  * Front-page builder (F2) renderer: maps each typed section config to its house
  * component. The DEFAULT path (an absent `homepageSections`) is resolved to
@@ -290,12 +293,15 @@ function renderSection(
     case 'homepageRichText':
       return <RichTextBlock section={section} />
     default: {
-      // Forward compat: an unknown `_type` (data from a newer schema) is skipped,
-      // never fatal. `never` here proves the switch is exhaustive for the union.
+      // Forward compat: an unknown `_type` (data written by a newer schema
+      // during deploy skew) is skipped at runtime, never fatal. Warned once per
+      // distinct type per process — this runs on every render of the page.
       const unknown = section as { _type?: string }
-      console.warn(
-        `[homepage] skipping unknown section type: ${String(unknown._type)}`,
-      )
+      const t = String(unknown._type)
+      if (!warnedUnknownSectionTypes.has(t)) {
+        warnedUnknownSectionTypes.add(t)
+        console.warn(`[homepage] skipping unknown section type: ${t}`)
+      }
       return null
     }
   }
