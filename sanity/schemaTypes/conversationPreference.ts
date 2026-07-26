@@ -60,6 +60,20 @@ export default defineType({
       description:
         'PER-USER archive for this participant. Same TIMESTAMP SEMANTICS as conversation.archivedAt: archived IFF archivedAt >= the conversation lastMessageAt, so a new message auto-resurfaces the thread for this participant with no extra write. This is the ONLY archive that hides a thread from a SPEAKER; organizers additionally honor the global conversation.archivedAt.',
     }),
+    // DENORMALIZED multi-tenant owner (CaaS T1-1, #613). This doc hangs off a
+    // conversation (which carries the conference) and has no conference key of
+    // its own. Document-level security (#614) can't traverse references, so the
+    // tenant key is copied down here at creation (derived from the parent
+    // conversation's conference). Additive/optional until the 044 backfill runs.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      description:
+        'Denormalized organization (tenant) owner, copied from the parent conversation at creation for reference-blind document security.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

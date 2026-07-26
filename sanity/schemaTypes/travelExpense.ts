@@ -150,6 +150,20 @@ export default defineType({
       description: 'Admin notes on approval/rejection',
       hidden: ({ document }) => document?.status === 'pending',
     }),
+    // DENORMALIZED multi-tenant owner (CaaS T1-1, #613). This doc hangs off a
+    // travelSupport (which carries the conference) and has no conference key of
+    // its own. Document-level security (#614) can't traverse references, so the
+    // tenant key is copied down here at creation (derived from the parent
+    // travelSupport's conference). Additive/optional until the 044 backfill runs.
+    defineField({
+      name: 'organization',
+      title: 'Organization',
+      type: 'reference',
+      to: [{ type: 'organization' }],
+      description:
+        'Denormalized organization (tenant) owner, copied from the parent travel support request at creation for reference-blind document security.',
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

@@ -13,6 +13,7 @@ import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
+import organization from './schemaTypes/organization'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
@@ -34,6 +35,9 @@ import staff from './schemaTypes/staff'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
+    // Tenancy (multi-tenant foundation, CaaS T1)
+    organization,
+
     // Core content
     blockContent,
     dataProcessingConsent,
