@@ -2,6 +2,7 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { isRegistrationAvailable } from '@/lib/conference/state'
 import { getPublicTicketTypes } from '@/lib/tickets/public'
+import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import { TicketPricingGrid } from '@/components/TicketPricingGrid'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
@@ -104,8 +105,11 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
     return <div>Error loading conference data</div>
   }
 
-  const ticketData = conference.checkinEventId
-    ? await getPublicTicketTypes(conference.checkinEventId)
+  // Gate on the FULL binding (customer + event id — what the resolver
+  // requires) and pass only the minimal binding so the 'use cache' key stays
+  // stable across unrelated conference-field changes.
+  const ticketData = hasTicketingBinding(conference)
+    ? await getPublicTicketTypes(ticketingBinding(conference))
     : null
 
   const hasTicketPricing = ticketData && ticketData.tickets.length > 0

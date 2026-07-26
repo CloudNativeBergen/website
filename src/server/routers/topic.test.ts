@@ -38,6 +38,15 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// E3: topic.list scopes to the current org. Mock the org resolver (and keep
+// organizationField behaving like the real helper for create).
+const getOrgRefMock = vi.fn()
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationRefForCurrentConference: () => getOrgRefMock(),
+  organizationField: (orgId: string | null | undefined) =>
+    orgId ? { organization: { _type: 'reference', _ref: orgId } } : {},
+}))
+
 import { topicRouter } from './topic'
 
 function makeCaller(isOrganizer = true) {
@@ -57,6 +66,7 @@ beforeEach(() => {
   commitMock.mockResolvedValue({ _id: 'topic-1' })
   createMock.mockResolvedValue({ _id: 'topic-new', color: '#2563EB' })
   deleteMock.mockResolvedValue({})
+  getOrgRefMock.mockResolvedValue(null)
   // Default reads: no slug clash, and no references (counts = 0).
   fetchMock.mockImplementation((query: string) => {
     if (query.includes('slug.current')) return Promise.resolve(null)
@@ -71,6 +81,51 @@ describe('topic router — authorization', () => {
       makeCaller(false).create({ title: 'X' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(createMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('topic router — list (org scoping, E3)', () => {
+  it('scopes to the current org, tolerating org-less legacy topics', async () => {
+    getOrgRefMock.mockResolvedValue('org-A')
+    let listQuery = ''
+    let listParams: Record<string, unknown> | undefined
+    fetchMock.mockImplementation(
+      (query: string, params?: Record<string, unknown>) => {
+        if (query.includes('order(title asc)')) {
+          listQuery = query
+          listParams = params
+          return Promise.resolve([])
+        }
+        return Promise.resolve([])
+      },
+    )
+
+    await makeCaller().list()
+
+    expect(listQuery).toContain('!defined(organization)')
+    expect(listQuery).toContain('organization._ref == $orgId')
+    expect(listParams).toEqual({ orgId: 'org-A' })
+  })
+
+  it('is unscoped when the org is unresolvable (legacy-domain bridge)', async () => {
+    getOrgRefMock.mockResolvedValue(null)
+    let listQuery = ''
+    let listParams: Record<string, unknown> | undefined
+    fetchMock.mockImplementation(
+      (query: string, params?: Record<string, unknown>) => {
+        if (query.includes('order(title asc)')) {
+          listQuery = query
+          listParams = params
+          return Promise.resolve([])
+        }
+        return Promise.resolve([])
+      },
+    )
+
+    await makeCaller().list()
+
+    expect(listQuery).not.toContain('organization._ref == $orgId')
+    expect(listParams).toEqual({})
   })
 })
 

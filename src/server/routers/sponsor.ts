@@ -42,6 +42,7 @@ import {
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
@@ -314,11 +315,17 @@ export const sponsorRouter = router({
     .input(z.object({ query: z.string().optional() }).optional())
     .query(async ({ input }) => {
       try {
+        // Scope the sponsor company picker to the current tenant (E10). Both
+        // branches (search + full list) are filtered so neither leaks other
+        // tenants' sponsors; org-less legacy sponsors still surface. Passing the
+        // org here (not deeper) keeps the shared-catalog fallback trivial to
+        // restore if the owner decides sponsors stay global.
+        const orgRef = await getOrganizationRefForCurrentConference()
         let result
         if (input?.query) {
-          result = await searchSponsors(input.query)
+          result = await searchSponsors(input.query, orgRef)
         } else {
-          result = await getAllSponsors()
+          result = await getAllSponsors(orgRef)
         }
 
         const { sponsors, error } = result
@@ -479,7 +486,10 @@ export const sponsorRouter = router({
 
   tiers: router({
     list: adminProcedure.query(async () => {
-      const { sponsorTiers, error } = await getAllSponsorTiers()
+      // Scope to the current conference (E5): sponsorTier carries conference._ref
+      // (the tenant boundary), so an unscoped read leaked every tenant's tiers.
+      const conferenceId = await resolveConferenceId()
+      const { sponsorTiers, error } = await getAllSponsorTiers(conferenceId)
 
       if (error) {
         throw new TRPCError({

@@ -1,6 +1,6 @@
 import {
-  getTicketingProvider,
-  platformCheckinCredentials,
+  resolveTicketingProvider,
+  type ConferenceTicketingBinding,
 } from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
 import { platformFallbackContact } from '@/lib/email/from'
@@ -20,21 +20,28 @@ export interface WorkshopEligibilityResult {
 
 export async function checkWorkshopEligibility(params: {
   userEmail: string
-  customerId: number
-  eventId: number
+  /** The domain-resolved conference; carries the checkin binding + tenant org. */
+  conference: ConferenceTicketingBinding
   contactEmail?: string
 }): Promise<WorkshopEligibilityResult> {
   const contactEmail = params.contactEmail || platformFallbackContact()
 
   try {
-    const provider = getTicketingProvider(
-      'checkin',
-      platformCheckinCredentials(),
+    // Route through the resolver (B7) so this tenant's per-org Checkin key is
+    // honored instead of the platform env creds. An unconfigured conference
+    // soft-fails to the same "unable to verify" result as a provider error.
+    const ticketing = await resolveTicketingProvider(params.conference)
+    if (!ticketing.configured) {
+      return {
+        isEligible: false,
+        tickets: [],
+        eligibleTickets: [],
+        reason: `Unable to verify workshop ticket at this time. Please try again later or contact us at ${contactEmail} for assistance.`,
+      }
+    }
+    const tickets = await ticketing.provider.fetchEventTickets(
+      ticketing.eventRef,
     )
-    const tickets = await provider.fetchEventTickets({
-      customerId: params.customerId,
-      eventId: params.eventId,
-    })
 
     const userTickets = tickets.filter(
       (ticket) =>

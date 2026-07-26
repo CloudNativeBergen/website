@@ -57,11 +57,44 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
 }
 
 /** Just the conference fields the ticketing resolver needs. */
-type ConferenceTicketingBinding = {
+export type ConferenceTicketingBinding = {
   checkinCustomerId?: number
   checkinEventId?: number
   /** The owning organization (tenant), used to resolve per-org credentials. */
   organization?: { _ref?: string } | null
+}
+
+/**
+ * Extract the minimal {@link ConferenceTicketingBinding} from a (potentially
+ * huge) conference object. Callers of CACHED ticketing reads (e.g.
+ * `getPublicTicketTypes`, a `'use cache'` function) must pass THIS rather than
+ * the whole conference: `'use cache'` keys on the serialized arguments, so a
+ * full conference payload (schedules, featured content, …) would fragment the
+ * cache on every unrelated field change.
+ */
+export function ticketingBinding(
+  conference: ConferenceTicketingBinding,
+): ConferenceTicketingBinding {
+  return {
+    checkinCustomerId: conference.checkinCustomerId,
+    checkinEventId: conference.checkinEventId,
+    organization: conference.organization?._ref
+      ? { _ref: conference.organization._ref }
+      : null,
+  }
+}
+
+/**
+ * True when the conference carries the FULL ticketing binding
+ * ({@link resolveTicketingProvider} requires both the customer and event id —
+ * an event id alone is a configuration error, not a supported state). Callers
+ * should gate on this before invoking cached ticketing reads so an
+ * unconfigured conference skips the fetch instead of soft-failing inside it.
+ */
+export function hasTicketingBinding(
+  conference: ConferenceTicketingBinding,
+): boolean {
+  return Boolean(conference.checkinCustomerId && conference.checkinEventId)
 }
 
 /**

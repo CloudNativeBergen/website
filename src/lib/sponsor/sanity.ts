@@ -313,13 +313,40 @@ export async function getSponsor(id: string): Promise<{
   }
 }
 
-export async function searchSponsors(query: string): Promise<{
+/**
+ * Optional tenant filter for the sponsor company pickers (E10). Sponsor entities
+ * are currently global (a shared company catalog), so this is the CONSERVATIVE
+ * scoping: when an org is provided, restrict to that org's sponsors, tolerating
+ * org-less legacy sponsors (pre-044 backfill) via the coalesce fallback. When no
+ * org is provided, behavior is unchanged (every sponsor).
+ *
+ * NOTE (flagged design question): whether sponsor companies should be shared
+ * across tenants or partitioned per-org is an owner decision still pending. This
+ * filter is written so the shared model can be restored by simply passing no
+ * org, and the partitioned model tightened by dropping the coalesce clause.
+ */
+function sponsorOrgFilter(orgId?: string | null): {
+  clause: string
+  params: Record<string, string>
+} {
+  if (!orgId) return { clause: '', params: {} }
+  return {
+    clause: ' && (!defined(organization) || organization._ref == $orgId)',
+    params: { orgId },
+  }
+}
+
+export async function searchSponsors(
+  query: string,
+  orgId?: string | null,
+): Promise<{
   sponsors?: SponsorExisting[]
   error?: Error
 }> {
   try {
+    const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor" && name match $searchQuery]{
+      `*[_type == "sponsor" && name match $searchQuery${clause}]{
         _id,
         _createdAt,
         _updatedAt,
@@ -328,7 +355,7 @@ export async function searchSponsors(query: string): Promise<{
         logo,
         logoBright
       }`,
-      { searchQuery: `${query}*` },
+      { searchQuery: `${query}*`, ...params },
     )
 
     return { sponsors }
@@ -337,13 +364,14 @@ export async function searchSponsors(query: string): Promise<{
   }
 }
 
-export async function getAllSponsors(): Promise<{
+export async function getAllSponsors(orgId?: string | null): Promise<{
   sponsors?: SponsorExisting[]
   error?: Error
 }> {
   try {
+    const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor"] | order(name asc){
+      `*[_type == "sponsor"${clause}] | order(name asc){
         _id,
         _createdAt,
         _updatedAt,
@@ -353,6 +381,7 @@ export async function getAllSponsors(): Promise<{
         logoBright,
         linkedinUrl
       }`,
+      params,
     )
 
     return { sponsors }

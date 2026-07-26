@@ -41,10 +41,18 @@ async function uniqueTopicSlug(title: string): Promise<string> {
 }
 
 export const topicRouter = router({
-  /** Every topic, ordered by title — the pick-list source for the editor. */
+  /** This tenant's topics, ordered by title — the pick-list source for the
+   * editor. Scoped to the current org (E3); org-less legacy topics (pre-044
+   * backfill) still appear via the coalesce fallback so nothing vanishes before
+   * the backfill. When the org is unresolvable (legacy domain), all topics show
+   * — the same migration bridge used elsewhere. */
   list: adminProcedure.query(async () => {
+    const orgRef = await getOrganizationRefForCurrentConference()
+    const filter = orgRef
+      ? `_type == "topic" && (!defined(organization) || organization._ref == $orgId)`
+      : `_type == "topic"`
     const topics = await clientReadUncached.fetch<Topic[]>(
-      `*[_type == "topic"] | order(title asc){
+      `*[${filter}] | order(title asc){
         _id,
         _type,
         title,
@@ -52,6 +60,7 @@ export const topicRouter = router({
         color,
         slug
       }`,
+      orgRef ? { orgId: orgRef } : {},
     )
     return topics ?? []
   }),

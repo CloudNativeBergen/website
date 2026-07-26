@@ -54,9 +54,21 @@ export default async function SpeakerDashboard() {
   const organizerContactEmail =
     currentConference?.cfpEmail || currentConference?.contactEmail
 
-  // Fetch all conferences where speaker has activity (server-side)
+  // Fetch conferences where the speaker has activity (server-side). Scoped to
+  // the CURRENT tenant's org (E4): the speaker dashboard on a tenant domain
+  // lists that org's editions (cross-conference within the org is intended;
+  // cross-ORG is a leak). Org-less legacy conferences (pre-044 backfill) still
+  // appear via the coalesce fallback, and the per-conference activity filter
+  // below further narrows to editions the speaker actually took part in. When
+  // the org is unresolvable (legacy domain) the query is unscoped — the
+  // migration bridge used across the codebase.
+  const orgRef = currentConference?.organization?._ref ?? null
   const conferencesQuery = groq`
-    *[_type == "conference"] | order(startDate desc) {
+    *[_type == "conference"${
+      orgRef
+        ? ' && (!defined(organization) || organization._ref == $orgId)'
+        : ''
+    }] | order(startDate desc) {
       _id,
       title,
       organizer,
@@ -86,7 +98,7 @@ export default async function SpeakerDashboard() {
 
   const conferences = await clientReadCached.fetch<Conference[]>(
     conferencesQuery,
-    {},
+    orgRef ? { orgId: orgRef } : {},
     { next: { revalidate: 300 } },
   )
 
