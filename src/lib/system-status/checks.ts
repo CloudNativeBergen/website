@@ -780,7 +780,7 @@ async function badgesOutdatedProbe(
           detail:
             'Baked before the current credential format (v' +
             BADGE_GENERATOR_VERSION +
-            '). Re-bake them from /admin/speakers/badge → "Rebake all outdated".',
+            '). Re-bake them from /admin/speakers/badge → the "Rebake N outdated" action.',
         }
       : {
           ...meta,

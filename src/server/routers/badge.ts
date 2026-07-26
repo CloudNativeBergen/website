@@ -263,9 +263,12 @@ export const badgeRouter = router({
           throw new TRPCError({ code, message: result.error })
         }
 
+        // Minimal payload: the client refetches the list; per-badge full
+        // records would just add bulk-rebake bandwidth.
         return {
           success: true,
-          badge: result.badge,
+          badgeId: result.badge.badgeId,
+          generatorVersion: result.badge.generatorVersion,
           message: 'Badge rebaked with the current generator',
         }
       }),
