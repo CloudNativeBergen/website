@@ -337,8 +337,20 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
   },
   ticketingIds: {
     title: 'External Integrations',
-    subtitle: 'Checkin.no API identifiers',
+    subtitle: 'Ticketing provider & identifiers',
     fields: [
+      {
+        name: 'ticketingProvider',
+        label: 'Ticketing Provider',
+        type: 'select',
+        nullableWhenEmpty: true,
+        description:
+          'Which ticketing vendor backs this conference. Leave blank for Checkin.no (the default).',
+        options: [
+          { value: 'checkin', title: 'Checkin.no (default)' },
+          { value: 'tito', title: 'Tito (ti.to)' },
+        ],
+      },
       {
         name: 'checkinCustomerId',
         label: 'Checkin Customer ID',
@@ -354,6 +366,20 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         integer: true,
         positive: true,
         nullableWhenEmpty: true,
+      },
+      {
+        name: 'titoAccountSlug',
+        label: 'Tito Account Slug',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description: 'e.g. "ultimateconf" in ti.to/ultimateconf/2026',
+      },
+      {
+        name: 'titoEventSlug',
+        label: 'Tito Event Slug',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description: 'e.g. "2026" in ti.to/ultimateconf/2026',
       },
     ],
   },

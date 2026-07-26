@@ -716,20 +716,42 @@ export default async function AdminSettings() {
               <EditConferenceCard
                 fieldset="ticketingIds"
                 initialValues={{
+                  ticketingProvider: conference.ticketingProvider,
                   checkinCustomerId: conference.checkinCustomerId,
                   checkinEventId: conference.checkinEventId,
+                  titoAccountSlug: conference.titoAccountSlug,
+                  titoEventSlug: conference.titoEventSlug,
                 }}
               />
             }
           >
             <FieldRow
-              label="Checkin Customer ID"
-              value={conference.checkinCustomerId}
+              label="Ticketing Provider"
+              value={conference.ticketingProvider ?? 'checkin'}
             />
-            <FieldRow
-              label="Checkin Event ID"
-              value={conference.checkinEventId}
-            />
+            {conference.ticketingProvider === 'tito' ? (
+              <>
+                <FieldRow
+                  label="Tito Account Slug"
+                  value={conference.titoAccountSlug}
+                />
+                <FieldRow
+                  label="Tito Event Slug"
+                  value={conference.titoEventSlug}
+                />
+              </>
+            ) : (
+              <>
+                <FieldRow
+                  label="Checkin Customer ID"
+                  value={conference.checkinCustomerId}
+                />
+                <FieldRow
+                  label="Checkin Event ID"
+                  value={conference.checkinEventId}
+                />
+              </>
+            )}
           </InfoCard>
 
           <InfoCard

@@ -30,13 +30,13 @@ for every tenant that has not been provisioned with its own.
 `src/lib/secrets/types.ts` defines one typed credential bag per integration,
 unioned as `SecretFamily`:
 
-| Family      | Type                      | Backing env (platform default)                                                                                      |
-| ----------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `ticketing` | `TicketingCredentials`    | `CHECKIN_API_KEY`, `CHECKIN_API_SECRET`, `CHECKIN_WEBHOOK_SECRET`                                                   |
-| `email`     | `EmailCredentials`        | `RESEND_API_KEY` (+ optional per-org `fallbackFrom`)                                                                |
-| `slack`     | `SlackCredentials`        | `SLACK_BOT_TOKEN`                                                                                                   |
-| `push`      | `PushCredentials`         | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`                                                            |
-| `badge`     | `BadgeSigningCredentials` | `BADGE_ISSUER_RSA_PRIVATE_KEY`, `BADGE_ISSUER_RSA_PUBLIC_KEY`, `BADGE_ISSUER_ED25519_SEED`, `BADGE_ISSUER_RSA_ONLY` |
+| Family      | Type                      | Backing env (platform default)                                                                                                                                               |
+| ----------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ticketing` | `TicketingCredentials`    | Checkin: `CHECKIN_API_KEY`, `CHECKIN_API_SECRET`, `CHECKIN_WEBHOOK_SECRET`. Tito: `TITO_API_KEY`, `TITO_WEBHOOK_SECRET` (via `platformTitoCredentials()`, not the env store) |
+| `email`     | `EmailCredentials`        | `RESEND_API_KEY` (+ optional per-org `fallbackFrom`)                                                                                                                         |
+| `slack`     | `SlackCredentials`        | `SLACK_BOT_TOKEN`                                                                                                                                                            |
+| `push`      | `PushCredentials`         | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`                                                                                                                     |
+| `badge`     | `BadgeSigningCredentials` | `BADGE_ISSUER_RSA_PRIVATE_KEY`, `BADGE_ISSUER_RSA_PUBLIC_KEY`, `BADGE_ISSUER_ED25519_SEED`, `BADGE_ISSUER_RSA_ONLY`                                                          |
 
 `TicketingCredentials` is imported from the provider layer (#634), never
 re-declared, so the secret layer and the provider layer cannot drift apart.
@@ -74,7 +74,11 @@ Reads an optional `TENANT_SECRETS_JSON` env var: a JSON map
 ```jsonc
 {
   "<organization-doc-id>": {
+    // Checkin-backed org:
     "ticketing": { "apiKey": "…", "apiSecret": "…", "webhookSecret": "…" },
+    // A Tito-backed org instead sets just the token (opaque record; the provider
+    // is selected by conference.ticketingProvider, not by the secret shape):
+    //   "ticketing": { "apiKey": "tito_secret_…", "webhookSecret": "…" },
     "email": { "apiKey": "re_…", "fallbackFrom": "hello@tenant.example" },
     "slack": { "botToken": "xoxb-…" },
   },
@@ -110,13 +114,13 @@ family, stores)`) for tests and alternate compositions.
 
 ## Wired consumers
 
-| Family    | Boundary                                                                     | Status                                                                                        |
-| --------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| ticketing | `resolveTicketingProvider` (`src/lib/tickets/provider/index.ts`)             | **Wired.** Resolves per-org creds, falls back to `platformCheckinCredentials()`.              |
-| email     | `resolveEmailSender(orgId)` (`src/lib/email/config.ts`)                      | **Wired (seam).** Lazily-constructed per-credentials client factory + cached default.         |
-| slack     | `resolveConferenceSlackToken(conference)` → `postSlackMessage({ botToken })` | **Wired.** Notify paths, weekly-update cron, and the status probe inject the org token.       |
-| push      | `resolveTenantSecrets(orgId, 'push')`                                        | **Seam only.** Env-only; VAPID config is process-global (see the TODO in `push/vapid.ts`).    |
-| badge     | `resolveTenantSecrets(orgId, 'badge')`                                       | **Seam only.** Env-only; signing keys thread through pure config (TODO in `badge/config.ts`). |
+| Family    | Boundary                                                                     | Status                                                                                                                                                                                               |
+| --------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ticketing | `resolveTicketingProvider` (`src/lib/tickets/provider/index.ts`)             | **Wired (Checkin + Tito).** Branches on `conference.ticketingProvider`; Checkin falls back to `platformCheckinCredentials()`, Tito to `platformTitoCredentials()` (per-org via the JSON store only). |
+| email     | `resolveEmailSender(orgId)` (`src/lib/email/config.ts`)                      | **Wired (seam).** Lazily-constructed per-credentials client factory + cached default.                                                                                                                |
+| slack     | `resolveConferenceSlackToken(conference)` → `postSlackMessage({ botToken })` | **Wired.** Notify paths, weekly-update cron, and the status probe inject the org token.                                                                                                              |
+| push      | `resolveTenantSecrets(orgId, 'push')`                                        | **Seam only.** Env-only; VAPID config is process-global (see the TODO in `push/vapid.ts`).                                                                                                           |
+| badge     | `resolveTenantSecrets(orgId, 'badge')`                                       | **Seam only.** Env-only; signing keys thread through pure config (TODO in `badge/config.ts`).                                                                                                        |
 
 Direct `platformCheckinCredentials()` callers that operate **outside** an org
 context (the Checkin webhook, the public event lookup, cross-tenant admin ticket

@@ -64,6 +64,12 @@ export class EnvSecretsStore implements TenantSecretsStore {
     const env = process.env
     switch (family) {
       case 'ticketing': {
+        // The env-backed ticketing family is CHECKIN-SHAPED. Tito's platform
+        // fallback is NOT here — it lives in `platformTitoCredentials()`
+        // (TITO_API_KEY / TITO_WEBHOOK_SECRET) and the Tito resolver branch
+        // skips this env store, because a single (orgId, 'ticketing') lookup
+        // can't know which vendor a conference selected. Per-org Tito secrets
+        // still flow through the provider-agnostic JSON store below.
         const bag: TicketingCredentials = {
           apiKey: env.CHECKIN_API_KEY,
           apiSecret: env.CHECKIN_API_SECRET,

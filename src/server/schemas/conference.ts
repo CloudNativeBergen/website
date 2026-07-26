@@ -148,20 +148,57 @@ export const UpdateCommunicationSchema = z.object({
 
 // === Ticketing IDs ===
 // Positive integers; clearing is allowed by sending `null` (unset).
-export const UpdateTicketingIdsSchema = z.object({
-  checkinCustomerId: z
-    .number()
-    .int('Must be a whole number')
-    .positive('Must be a positive number')
-    .nullable()
-    .optional(),
-  checkinEventId: z
-    .number()
-    .int('Must be a whole number')
-    .positive('Must be a positive number')
-    .nullable()
-    .optional(),
-})
+// Provider-discriminated: `ticketingProvider` selects the vendor (absent/null ⇒
+// Checkin). Checkin uses the numeric ids; Tito uses the two account/event slugs.
+export const UpdateTicketingIdsSchema = z
+  .object({
+    ticketingProvider: z.enum(['checkin', 'tito']).nullable().optional(),
+    checkinCustomerId: z
+      .number()
+      .int('Must be a whole number')
+      .positive('Must be a positive number')
+      .nullable()
+      .optional(),
+    checkinEventId: z
+      .number()
+      .int('Must be a whole number')
+      .positive('Must be a positive number')
+      .nullable()
+      .optional(),
+    titoAccountSlug: z.string().trim().nullable().optional(),
+    titoEventSlug: z.string().trim().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    // A Tito binding is both-or-neither: the resolver requires account AND event
+    // slug, so persisting one alone would strand the conference in a
+    // half-configured state that silently resolves as "unconfigured".
+    const hasAnySlug =
+      Boolean(value.titoAccountSlug) || Boolean(value.titoEventSlug)
+    if (value.ticketingProvider !== 'tito' && !hasAnySlug) return
+    if (Boolean(value.titoAccountSlug) !== Boolean(value.titoEventSlug)) {
+      const missing = value.titoAccountSlug
+        ? 'titoEventSlug'
+        : 'titoAccountSlug'
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [missing],
+        message:
+          'Tito needs both the account slug and the event slug — set both or clear both',
+      })
+    }
+    // Slugs saved while the provider is (or defaults to) Checkin would be
+    // silently ignored by the resolver (absence ⇒ 'checkin') — a stored-but-dead
+    // binding. The fieldset is full-replace, so requiring the provider here is
+    // safe for every caller.
+    if (hasAnySlug && value.ticketingProvider !== 'tito') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ticketingProvider'],
+        message:
+          'Select Tito as the ticketing provider to use these slugs — or clear them',
+      })
+    }
+  })
 
 // === CFP & Revenue Goals ===
 // Non-negative numbers; every field is optional and unsettable via `null`.

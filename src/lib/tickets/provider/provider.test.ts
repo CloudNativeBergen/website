@@ -3,9 +3,12 @@ import { createHmac } from 'node:crypto'
 import {
   getTicketingProvider,
   platformCheckinCredentials,
+  platformTitoCredentials,
   resolveTicketingProvider,
+  hasTicketingBinding,
 } from './index'
 import { CheckinProvider, CHECKIN_API_URL } from './checkin'
+import { TitoProvider } from './tito'
 import type { CheckinWebhookPayload } from './types'
 
 const CREDS = {
@@ -206,6 +209,129 @@ describe('resolveTicketingProvider', () => {
         eventRef: null,
       })
     }
+  })
+
+  it('REGRESSION PIN: an absent ticketingProvider routes to Checkin unchanged', async () => {
+    const resolved = await resolveTicketingProvider({
+      // No `ticketingProvider` field at all — the legacy shape.
+      checkinCustomerId: 42,
+      checkinEventId: 7,
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      expect(resolved.provider).toBeInstanceOf(CheckinProvider)
+      // The eventRef stays the bare Checkin pair (no `provider` key added), so
+      // every existing consumer reading `.eventId` is unaffected.
+      expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+    }
+  })
+
+  it('routes a tito-bound conference to a TitoProvider with a slug eventRef', async () => {
+    vi.stubEnv('TITO_API_KEY', 'env-tito-token')
+    const resolved = await resolveTicketingProvider({
+      ticketingProvider: 'tito',
+      titoAccountSlug: 'acme',
+      titoEventSlug: '2026',
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      expect(resolved.provider).toBeInstanceOf(TitoProvider)
+      expect(resolved.provider.isConfigured()).toBe(true)
+      expect(resolved.eventRef).toEqual({
+        provider: 'tito',
+        accountSlug: 'acme',
+        eventSlug: '2026',
+      })
+    }
+  })
+
+  it('prefers a per-org Tito ticketing secret over the env token', async () => {
+    vi.stubEnv('TITO_API_KEY', 'env-tito-token')
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-tito': { ticketing: { apiKey: 'org-tito-token' } },
+      }),
+    )
+    // Prove the org secret won by observing the Authorization header it sends.
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ tickets: [], meta: { next_page: null } }),
+      text: async () => '',
+    }))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const resolved = await resolveTicketingProvider({
+      ticketingProvider: 'tito',
+      titoAccountSlug: 'acme',
+      titoEventSlug: '2026',
+      organization: { _ref: 'org-tito' },
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      await resolved.provider.fetchEventTickets(resolved.eventRef)
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Token token=org-tito-token',
+          }),
+        }),
+      )
+    }
+  })
+
+  it('returns unconfigured when a tito conference is missing its slugs', async () => {
+    for (const conf of [
+      { ticketingProvider: 'tito' as const },
+      { ticketingProvider: 'tito' as const, titoAccountSlug: 'acme' },
+      { ticketingProvider: 'tito' as const, titoEventSlug: '2026' },
+    ]) {
+      expect(await resolveTicketingProvider(conf)).toEqual({
+        configured: false,
+        provider: null,
+        eventRef: null,
+      })
+    }
+  })
+})
+
+describe('platformTitoCredentials', () => {
+  it('assembles the Tito token + webhook secret from the environment', () => {
+    vi.stubEnv('TITO_API_KEY', 'tito-token')
+    vi.stubEnv('TITO_WEBHOOK_SECRET', 'tito-webhook')
+    expect(platformTitoCredentials()).toEqual({
+      apiKey: 'tito-token',
+      webhookSecret: 'tito-webhook',
+    })
+  })
+})
+
+describe('hasTicketingBinding — provider-discriminated', () => {
+  it('checks Checkin ids when the provider is absent/checkin', () => {
+    expect(
+      hasTicketingBinding({ checkinCustomerId: 1, checkinEventId: 2 }),
+    ).toBe(true)
+    expect(hasTicketingBinding({ checkinCustomerId: 1 })).toBe(false)
+  })
+  it('checks Tito slugs when the provider is tito', () => {
+    expect(
+      hasTicketingBinding({
+        ticketingProvider: 'tito',
+        titoAccountSlug: 'acme',
+        titoEventSlug: '2026',
+      }),
+    ).toBe(true)
+    // Checkin ids do NOT satisfy a tito-bound conference.
+    expect(
+      hasTicketingBinding({
+        ticketingProvider: 'tito',
+        checkinCustomerId: 1,
+        checkinEventId: 2,
+      }),
+    ).toBe(false)
   })
 })
 

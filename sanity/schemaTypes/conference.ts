@@ -344,12 +344,32 @@ export default defineType({
     }),
 
     // === Ticketing & Integrations ===
+    // Provider selector (CaaS, Tito second-provider proof): which ticketing
+    // vendor backs this conference. ABSENT is treated as 'checkin' by server
+    // code (every legacy conference), so this is intentionally NOT required and
+    // has no initialValue that would change existing documents.
+    defineField({
+      name: 'ticketingProvider',
+      title: 'Ticketing Provider',
+      type: 'string',
+      fieldset: 'ticketing',
+      description:
+        'Which ticketing vendor backs this conference. Leave blank for Checkin.no (the default). Choose Tito to use the Tito account/event slugs below.',
+      options: {
+        list: [
+          { title: 'Checkin.no (default)', value: 'checkin' },
+          { title: 'Tito (ti.to)', value: 'tito' },
+        ],
+        layout: 'radio',
+      },
+    }),
     defineField({
       name: 'checkinCustomerId',
       title: 'Checkin.no Customer ID',
       type: 'number',
       fieldset: 'ticketing',
       description: 'Customer ID for Checkin.no API integration',
+      hidden: ({ parent }) => parent?.ticketingProvider === 'tito',
     }),
     defineField({
       name: 'checkinEventId',
@@ -357,6 +377,28 @@ export default defineType({
       type: 'number',
       fieldset: 'ticketing',
       description: 'Event ID for Checkin.no API integration',
+      hidden: ({ parent }) => parent?.ticketingProvider === 'tito',
+    }),
+    // Tito binding: the two URL slugs of the event on ti.to. For an event at
+    // `https://ti.to/ultimateconf/2026`, account slug = "ultimateconf",
+    // event slug = "2026". The API token itself is NOT stored here — it is a
+    // tenant secret (TITO_API_KEY / per-org ticketing secret).
+    defineField({
+      name: 'titoAccountSlug',
+      title: 'Tito Account Slug',
+      type: 'string',
+      fieldset: 'ticketing',
+      description:
+        'Tito account slug (e.g. "ultimateconf" in ti.to/ultimateconf/2026).',
+      hidden: ({ parent }) => parent?.ticketingProvider !== 'tito',
+    }),
+    defineField({
+      name: 'titoEventSlug',
+      title: 'Tito Event Slug',
+      type: 'string',
+      fieldset: 'ticketing',
+      description: 'Tito event slug (e.g. "2026" in ti.to/ultimateconf/2026).',
+      hidden: ({ parent }) => parent?.ticketingProvider !== 'tito',
     }),
     defineField({
       name: 'ticketCapacity',

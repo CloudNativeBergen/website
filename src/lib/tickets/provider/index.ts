@@ -1,12 +1,20 @@
 import { CheckinProvider } from './checkin'
-import { resolveTenantSecrets } from '@/lib/secrets/store'
+import { TitoProvider } from './tito'
+import { resolveTenantSecrets, perOrgSecretsStore } from '@/lib/secrets/store'
 import type {
   EventRef,
   TicketingProvider,
   TicketingProviderCredentials,
 } from './types'
 
-export type { TicketingProvider, TicketingProviderCredentials, EventRef }
+export type {
+  TicketingProvider,
+  TicketingProviderCredentials,
+  EventRef,
+  CheckinEventRef,
+  TitoEventRef,
+}
+export { ProviderUnsupportedError } from './types'
 export type {
   PublicEventInfo,
   PublicTicketType,
@@ -16,10 +24,11 @@ export type {
   CheckinOrderCreatedData,
   CheckinWebhookUser,
 } from './types'
+import type { CheckinEventRef, TitoEventRef } from './types'
 
-/** Provider discriminator. Only Checkin.no exists today; the second provider
- * (a separate PR) extends this union. */
-export type TicketingProviderType = 'checkin'
+/** Provider discriminator. Checkin.no is the default; Tito (this PR) is the
+ * second provider — the proof the adapter generalizes. */
+export type TicketingProviderType = 'checkin' | 'tito'
 
 /**
  * Returns a ticketing provider bound to the given credentials.
@@ -33,6 +42,8 @@ export function getTicketingProvider(
   credentials: TicketingProviderCredentials,
 ): TicketingProvider {
   switch (providerType) {
+    case 'tito':
+      return new TitoProvider(credentials)
     case 'checkin':
     default:
       return new CheckinProvider(credentials)
@@ -56,12 +67,49 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
   }
 }
 
-/** Just the conference fields the ticketing resolver needs. */
+/**
+ * Platform-default TITO credentials, assembled from environment variables —
+ * the Tito mirror of {@link platformCheckinCredentials}. Tito authenticates with
+ * a single API token (`TITO_API_KEY`) and signs webhooks with the endpoint
+ * security token (`TITO_WEBHOOK_SECRET`).
+ *
+ * NOTE on the resolver: the env-backed `ticketing` family in
+ * {@link EnvSecretsStore} is Checkin-shaped (it reads `CHECKIN_*`), so the Tito
+ * branch of {@link resolveTicketingProvider} does NOT use that env store as its
+ * fallback — it resolves per-org Tito secrets through the provider-agnostic
+ * JSON store and falls back to THIS function.
+ */
+export function platformTitoCredentials(): TicketingProviderCredentials {
+  return {
+    apiKey: process.env.TITO_API_KEY,
+    webhookSecret: process.env.TITO_WEBHOOK_SECRET,
+  }
+}
+
+/**
+ * Just the conference fields the ticketing resolver needs.
+ *
+ * PROVIDER-DISCRIMINATED (Tito, this PR): `ticketingProvider` selects the vendor
+ * (ABSENT ⇒ 'checkin', preserving every legacy conference's behavior). Each
+ * provider reads only its own binding fields — Checkin the numeric
+ * customer/event ids, Tito the account/event slugs.
+ */
 export type ConferenceTicketingBinding = {
+  /** Selected vendor. Absent ⇒ 'checkin' (zero behavior change for legacy docs). */
+  ticketingProvider?: TicketingProviderType | null
   checkinCustomerId?: number
   checkinEventId?: number
+  titoAccountSlug?: string | null
+  titoEventSlug?: string | null
   /** The owning organization (tenant), used to resolve per-org credentials. */
   organization?: { _ref?: string } | null
+}
+
+/** The vendor a conference is bound to (absent ⇒ Checkin, the historical default). */
+export function conferenceProviderType(
+  conference: ConferenceTicketingBinding,
+): TicketingProviderType {
+  return conference.ticketingProvider === 'tito' ? 'tito' : 'checkin'
 }
 
 /**
@@ -76,8 +124,11 @@ export function ticketingBinding(
   conference: ConferenceTicketingBinding,
 ): ConferenceTicketingBinding {
   return {
+    ticketingProvider: conference.ticketingProvider ?? undefined,
     checkinCustomerId: conference.checkinCustomerId,
     checkinEventId: conference.checkinEventId,
+    titoAccountSlug: conference.titoAccountSlug ?? undefined,
+    titoEventSlug: conference.titoEventSlug ?? undefined,
     organization: conference.organization?._ref
       ? { _ref: conference.organization._ref }
       : null,
@@ -85,15 +136,18 @@ export function ticketingBinding(
 }
 
 /**
- * True when the conference carries the FULL ticketing binding
- * ({@link resolveTicketingProvider} requires both the customer and event id —
- * an event id alone is a configuration error, not a supported state). Callers
- * should gate on this before invoking cached ticketing reads so an
+ * True when the conference carries the FULL ticketing binding for its selected
+ * provider ({@link resolveTicketingProvider} requires BOTH of a provider's
+ * binding fields — one alone is a configuration error, not a supported state).
+ * Callers should gate on this before invoking cached ticketing reads so an
  * unconfigured conference skips the fetch instead of soft-failing inside it.
  */
 export function hasTicketingBinding(
   conference: ConferenceTicketingBinding,
 ): boolean {
+  if (conferenceProviderType(conference) === 'tito') {
+    return Boolean(conference.titoAccountSlug && conference.titoEventSlug)
+  }
   return Boolean(conference.checkinCustomerId && conference.checkinEventId)
 }
 
@@ -118,22 +172,50 @@ export function hasTicketingBinding(
 export async function resolveTicketingProvider(
   conference: ConferenceTicketingBinding,
 ): Promise<ResolvedTicketing> {
+  const orgId = conference.organization?._ref
+  const providerType = conferenceProviderType(conference)
+
+  if (providerType === 'tito') {
+    if (!conference.titoAccountSlug || !conference.titoEventSlug) {
+      return { configured: false, provider: null, eventRef: null }
+    }
+    // The env-backed `ticketing` family is Checkin-shaped, so the Tito branch
+    // resolves per-org secrets through the provider-agnostic JSON store ONLY,
+    // then falls back to the platform Tito env creds. A per-org Tito ticketing
+    // secret is an opaque `{ apiKey, webhookSecret? }` record.
+    const credentials =
+      (await resolveTenantSecrets(orgId, 'ticketing', [perOrgSecretsStore])) ??
+      platformTitoCredentials()
+
+    const eventRef: TitoEventRef = {
+      provider: 'tito',
+      accountSlug: conference.titoAccountSlug,
+      eventSlug: conference.titoEventSlug,
+    }
+    return {
+      configured: true,
+      provider: getTicketingProvider('tito', credentials),
+      eventRef,
+    }
+  }
+
+  // Checkin (default) — unchanged behavior: requires customer + event id.
   if (!conference.checkinCustomerId || !conference.checkinEventId) {
     return { configured: false, provider: null, eventRef: null }
   }
 
-  const orgId = conference.organization?._ref
   const credentials =
     (await resolveTenantSecrets(orgId, 'ticketing')) ??
     platformCheckinCredentials()
 
+  const eventRef: CheckinEventRef = {
+    customerId: conference.checkinCustomerId,
+    eventId: conference.checkinEventId,
+  }
   return {
     configured: true,
     provider: getTicketingProvider('checkin', credentials),
-    eventRef: {
-      customerId: conference.checkinCustomerId,
-      eventId: conference.checkinEventId,
-    },
+    eventRef,
   }
 }
 
