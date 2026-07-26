@@ -7,6 +7,7 @@ import { TicketPricingGrid } from '@/components/TicketPricingGrid'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
+import { FaqAccordion } from '@/components/FaqAccordion'
 import { formatDatesSafe } from '@/lib/time'
 import {
   MicrophoneIcon,
@@ -32,7 +33,6 @@ import {
   CalendarDaysIcon,
   ClockIcon,
   TicketIcon,
-  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { headers } from 'next/headers'
@@ -263,26 +263,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                 <h2 className="font-jetbrains mb-6 text-center text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
                   Frequently Asked Questions
                 </h2>
-                <div className="mx-auto max-w-3xl space-y-3">
-                  {faqs.map((faq) => (
-                    <details
-                      key={faq._key || faq.question}
-                      className="group rounded-xl bg-white/80 shadow-md ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm dark:bg-gray-800/80 dark:ring-gray-700"
-                    >
-                      <summary className="flex cursor-pointer items-center justify-between px-5 py-4">
-                        <span className="font-space-grotesk pr-4 text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
-                          {faq.question}
-                        </span>
-                        <ChevronDownIcon className="h-4 w-4 shrink-0 text-brand-cloud-blue transition-transform group-open:rotate-180 dark:text-blue-400" />
-                      </summary>
-                      <div className="border-t border-gray-100 px-5 py-4 dark:border-gray-700">
-                        <p className="font-inter text-sm leading-relaxed text-brand-slate-gray/80 dark:text-gray-300">
-                          {faq.answer}
-                        </p>
-                      </div>
-                    </details>
-                  ))}
-                </div>
+                <FaqAccordion faqs={faqs} />
               </div>
             )}
 

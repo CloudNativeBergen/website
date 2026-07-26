@@ -34,7 +34,13 @@ export const HOMEPAGE_SECTION_TYPES = [
   'homepageMetrics',
   'homepageCtaBanner',
   'homepageRichText',
+  'homepageFaq',
+  'homepageCountdown',
+  'homepageVenue',
 ] as const
+
+/** Default heading for the FAQ block when none is configured. */
+export const DEFAULT_FAQ_HEADING = 'Frequently asked questions'
 
 export type HomepageSectionType = (typeof HOMEPAGE_SECTION_TYPES)[number]
 
@@ -116,6 +122,57 @@ export interface RichTextSection extends BaseSection {
   content: TypedObject[]
 }
 
+/**
+ * A single FAQ entry for the block's OWN item source. The answer is plain text,
+ * mirroring how `conference.ticketFaqs` models answers (see `TicketFaq`) so the
+ * `source: 'ticketFaqs'` toggle can render the exact same shape.
+ */
+export interface HomepageFaqItem {
+  _key?: string
+  question: string
+  answer: string
+}
+
+/**
+ * FAQ accordion block. To avoid duplicating content, `source: 'ticketFaqs'`
+ * renders the existing `conference.ticketFaqs`; the default `'own'` renders this
+ * block's own {@link HomepageFaqItem} list.
+ */
+export interface FaqSection extends BaseSection {
+  _type: 'homepageFaq'
+  heading?: string
+  /** `'own'` (default) renders `items`; `'ticketFaqs'` renders the ticket FAQs. */
+  source?: 'own' | 'ticketFaqs'
+  items?: HomepageFaqItem[]
+}
+
+/**
+ * Countdown to the conference start. The target is `conference.startDate` unless
+ * `targetOverride` is set. The renderer resolves the target server-side and the
+ * client component ticks after hydration (SSR-safe — see {@link resolveCountdownTarget}
+ * and the `Countdown` component).
+ */
+export interface CountdownSection extends BaseSection {
+  _type: 'homepageCountdown'
+  heading?: string
+  /** ISO date/timestamp that overrides `conference.startDate` as the target. */
+  targetOverride?: string
+  /** Shown once the target passes. Blank hides the block after the target. */
+  liveMessage?: string
+}
+
+/**
+ * Venue block. Name and address come from `conference.venueName` /
+ * `venueAddress`; the block carries only presentation copy. The "Get directions"
+ * link is CONSTRUCTED from the address at render (no map tiles/embeds, and no
+ * tenant-entered URL is stored).
+ */
+export interface VenueSection extends BaseSection {
+  _type: 'homepageVenue'
+  heading?: string
+  description?: string
+}
+
 export type HomepageSection =
   | HeroSection
   | FeaturedSpeakersSection
@@ -126,6 +183,9 @@ export type HomepageSection =
   | MetricsSection
   | CtaBannerSection
   | RichTextSection
+  | FaqSection
+  | CountdownSection
+  | VenueSection
 
 /** True when the program is published AND at least one schedule day exists. */
 export function hasPublishedSchedule(conference: Conference): boolean {

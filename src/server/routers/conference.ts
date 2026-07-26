@@ -457,6 +457,42 @@ export const conferenceRouter = router({
               base.content = ensureUniqueArrayKeys(section.content, 'block')
               break
             }
+            case 'homepageFaq': {
+              if (section.heading) base.heading = section.heading
+              // Persist only the EFFECTIVE config: `source` only when it's the
+              // non-default 'ticketFaqs', and `items` only when they're what
+              // renders ('own') — a block in ticketFaqs mode must not store
+              // dead item drafts.
+              const usesTicketFaqs = section.source === 'ticketFaqs'
+              if (usesTicketFaqs) base.source = 'ticketFaqs'
+              if (
+                !usesTicketFaqs &&
+                section.items &&
+                section.items.length > 0
+              ) {
+                base.items = ensureUniqueArrayKeys(
+                  section.items.map((item) => ({
+                    question: item.question,
+                    answer: item.answer,
+                    ...(item._key ? { _key: item._key } : {}),
+                  })),
+                  'faq',
+                )
+              }
+              break
+            }
+            case 'homepageCountdown': {
+              if (section.heading) base.heading = section.heading
+              if (section.targetOverride)
+                base.targetOverride = section.targetOverride
+              if (section.liveMessage) base.liveMessage = section.liveMessage
+              break
+            }
+            case 'homepageVenue': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              break
+            }
             default:
               // The content-free blocks (featured speakers, program, organizers,
               // sponsors, gallery) carry only `_type`/`_key`/`hidden`.

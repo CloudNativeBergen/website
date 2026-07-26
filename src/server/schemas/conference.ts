@@ -626,6 +626,28 @@ const HeroCtaOverrideSchema = z.object({
   href: safeLinkHref,
 })
 
+/**
+ * A tenant-entered date for the countdown target. Accepts a bare `YYYY-MM-DD`
+ * (anchored at 12:00 UTC (the house date-anchoring convention) downstream) or any timestamp `Date.parse` understands
+ * (e.g. the datetime-local editor value); anything unparseable is rejected so
+ * the stored value always resolves.
+ */
+const countdownTargetString = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => !Number.isNaN(Date.parse(v)), {
+    message: 'Enter a valid date',
+  })
+  .nullable()
+  .optional()
+
+const HomepageFaqItemSchema = z.object({
+  _key: sectionKey,
+  question: z.string().trim().min(1, 'Question is required'),
+  answer: z.string().trim().min(1, 'Answer is required'),
+})
+
 const HomepageSectionSchema = z.discriminatedUnion('_type', [
   z.object({
     _type: z.literal('homepageHero'),
@@ -683,6 +705,30 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     content: z
       .array(PortableTextBlockSchema)
       .min(1, 'Rich text needs at least one block'),
+  }),
+  z.object({
+    _type: z.literal('homepageFaq'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+    // 'own' (default) renders `items`; 'ticketFaqs' renders conference.ticketFaqs.
+    source: z.enum(['own', 'ticketFaqs']).optional(),
+    items: z.array(HomepageFaqItemSchema).optional(),
+  }),
+  z.object({
+    _type: z.literal('homepageCountdown'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+    targetOverride: countdownTargetString,
+    liveMessage: z.string().trim().min(1).nullable().optional(),
+  }),
+  z.object({
+    _type: z.literal('homepageVenue'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+    description: z.string().trim().min(1).nullable().optional(),
   }),
 ])
 

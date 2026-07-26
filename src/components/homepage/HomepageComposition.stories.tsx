@@ -21,8 +21,16 @@ const baseConference = {
   city: 'Bergen',
   country: 'Norway',
   venueName: 'Grieghallen',
+  venueAddress: 'Edvard Griegs plass 1\n5015 Bergen\nNorway',
   startDate: '2099-09-15',
   endDate: '2099-09-15',
+  ticketFaqs: [
+    {
+      _key: 't1',
+      question: 'Can I get a refund?',
+      answer: 'Tickets are refundable up to 14 days before the event.',
+    },
+  ],
   cfpStartDate: '2020-01-01',
   cfpEndDate: '2020-06-01',
   cfpNotifyDate: '2020-07-01',
@@ -88,6 +96,35 @@ const customSections: HomepageSection[] = [
     content: richContent,
   },
   { _key: 'metrics', _type: 'homepageMetrics', heading: 'By the numbers' },
+  {
+    _key: 'countdown',
+    _type: 'homepageCountdown',
+    heading: 'The doors open in',
+  },
+  {
+    _key: 'faq',
+    _type: 'homepageFaq',
+    heading: 'Frequently asked questions',
+    source: 'own',
+    items: [
+      {
+        _key: 'q1',
+        question: 'Where is the conference held?',
+        answer: 'At Grieghallen in the centre of Bergen, Norway.',
+      },
+      {
+        _key: 'q2',
+        question: 'Will talks be recorded?',
+        answer: 'Yes — every talk is recorded and published afterwards.',
+      },
+    ],
+  },
+  {
+    _key: 'venue',
+    _type: 'homepageVenue',
+    heading: 'Where to find us',
+    description: 'A short walk from Bergen train station.',
+  },
   { _key: 'sponsors', _type: 'homepageSponsors' },
 ]
 
