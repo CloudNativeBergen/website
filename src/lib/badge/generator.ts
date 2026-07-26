@@ -78,12 +78,31 @@ export async function generateBadgeCredential(
     })
   }
 
+  // One normalization for every email-derived member (mailto id + identifier).
+  const normalizedEmail = speakerEmail.trim().toLowerCase()
+
   const credential = createCredential({
     credentialId: `${config.baseUrl}/api/badge/${badgeId}`,
     name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} Badge for ${conferenceTitle}`,
     subject: {
-      id: `mailto:${speakerEmail}`,
+      id: `mailto:${normalizedEmail}`,
       type: ['AchievementSubject'],
+      // Recipient identity for ownership matching on import. Displayers such as
+      // Credly match a badge to a signed-in user via credentialSubject
+      // .identifier[] (IdentityObject), not by parsing the mailto: subject id.
+      // ONE normalization (trim+lowercase) feeds BOTH the mailto: id and this
+      // identifier, so a case-sensitive comparison by a displayer can never
+      // see two spellings of the same address. hashed:false keeps
+      // the plaintext value — no new PII exposure since the mailto: id already
+      // carries the email; a salted sha256 hash is the future privacy option.
+      identifier: [
+        {
+          type: 'IdentityObject',
+          hashed: false,
+          identityHash: normalizedEmail,
+          identityType: 'emailAddress',
+        },
+      ],
     },
     achievement: {
       id: `${config.baseUrl}/api/badge/${badgeId}/achievement`,

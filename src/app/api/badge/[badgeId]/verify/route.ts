@@ -8,6 +8,7 @@ import {
   generateErrorResponse,
   isJWTFormat,
 } from '@/lib/openbadges'
+import { acceptedEd25519VerificationMethods } from '@/lib/badge/verification-method'
 
 /**
  * GET /api/badge/[badgeId]/verify
@@ -18,8 +19,10 @@ import {
  * key; embedded-proof badges are verified with the published Ed25519 public
  * key (BADGE_ISSUER_ED25519_PUBLIC_KEY). Verification never needs the secret
  * seed. The proof's verificationMethod is pinned to OUR issuer's embedded VM
- * (`${issuer.id}#key-ed25519`), so a badge presented with a foreign or
- * did:key verification method is reported as not-issued-by-us.
+ * (the dereferenceable `${baseUrl}/api/badge/keys/key-ed25519` URL, or the
+ * legacy `${issuer.id}#key-ed25519` fragment for previously baked badges), so
+ * a badge presented with a foreign or did:key method is reported as
+ * not-issued-by-us.
  */
 export async function GET(
   request: NextRequest,
@@ -122,15 +125,16 @@ export async function GET(
     try {
       // Pin the verification method to OUR issuer's embedded VM. A badge
       // presented with a foreign / did:key VM must never earn a green check
-      // from this endpoint, even if it is internally self-consistent.
+      // from this endpoint, even if it is internally self-consistent. Both the
+      // current dereferenceable keys URL and the legacy issuer-profile fragment
+      // are accepted so previously baked SVGs still verify.
       const issuerId =
         typeof assertion.issuer === 'object'
           ? assertion.issuer?.id
           : assertion.issuer
-      const expectedVm = `${issuerId}#key-ed25519`
       const proofVm = assertion.proof?.[0]?.verificationMethod
 
-      if (proofVm !== expectedVm) {
+      if (!acceptedEd25519VerificationMethods(issuerId).includes(proofVm)) {
         signatureValid = false
       } else {
         signatureValid = await verifyCredential(

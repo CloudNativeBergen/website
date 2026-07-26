@@ -328,6 +328,12 @@ export function createCredential(config: CredentialConfig): Credential {
   const credentialSubject: AchievementSubject = {
     id: normalizeSubjectId(config.subject.id),
     type: config.subject.type,
+    // Recipient identifiers (IdentityObject[]) let displayers match the badge
+    // to a signed-in user's verified identity; passed through from the caller.
+    ...(config.subject.identifier &&
+      config.subject.identifier.length > 0 && {
+        identifier: config.subject.identifier,
+      }),
     achievement,
   }
 

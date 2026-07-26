@@ -19,6 +19,8 @@ const mockedGetConference = vi.mocked(getConferenceForCurrentDomain)
 
 const DOMAIN = 'example.com'
 const ISSUER_ID = `https://${DOMAIN}/api/badge/issuer`
+const KEY_DOC_ID = `https://${DOMAIN}/api/badge/keys/key-ed25519`
+const LEGACY_VM_ID = `${ISSUER_ID}#key-ed25519`
 
 async function callIssuerRoute() {
   const { GET } = await import('@/app/api/badge/issuer/route')
@@ -74,14 +76,20 @@ describe('GET /api/badge/issuer - Ed25519 verification method', () => {
     expect(response.status).toBe(200)
     const data = await response.json()
 
-    expect(data.verificationMethod).toHaveLength(1)
-    const vm = data.verificationMethod[0]
-    expect(vm.id).toBe(`${ISSUER_ID}#key-ed25519`)
-    expect(vm.type).toBe('Multikey')
-    expect(vm.controller).toBe(ISSUER_ID)
+    // Two ids for the SAME key: the dereferenceable keys-endpoint URL that new
+    // credentials pin, and the legacy issuer-profile fragment older baked SVGs
+    // pin. Both list controller = issuer id.
+    expect(data.verificationMethod).toHaveLength(2)
+    const [keyDocVm, legacyVm] = data.verificationMethod
+    expect(keyDocVm.id).toBe(KEY_DOC_ID)
+    expect(keyDocVm.type).toBe('Multikey')
+    expect(keyDocVm.controller).toBe(ISSUER_ID)
     // The published public key IS the publicKeyMultibase — no seed needed.
-    expect(vm.publicKeyMultibase).toBe(publicKey)
-    expect(data.assertionMethod).toEqual([`${ISSUER_ID}#key-ed25519`])
+    expect(keyDocVm.publicKeyMultibase).toBe(publicKey)
+    expect(legacyVm.id).toBe(LEGACY_VM_ID)
+    expect(legacyVm.controller).toBe(ISSUER_ID)
+    expect(legacyVm.publicKeyMultibase).toBe(publicKey)
+    expect(data.assertionMethod).toEqual([KEY_DOC_ID, LEGACY_VM_ID])
 
     // RSA JWT key is still served alongside.
     expect(data.publicKey[0].type).toBe('JsonWebKey')

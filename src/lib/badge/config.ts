@@ -1,6 +1,7 @@
 import type { Conference } from '@/lib/conference/types'
 import { createPublicKey } from 'crypto'
 import { resolveConferenceContact } from '@/lib/email/from'
+import { ed25519VerificationMethodUrl } from '@/lib/badge/verification-method'
 
 /**
  * Signing configuration for OpenBadges credentials
@@ -29,11 +30,15 @@ export interface SigningConfiguration {
    */
   ed25519Seed: string
   /**
-   * Verification method id for embedded Data Integrity Proofs. Verifiers
-   * strip the fragment and fetch the issuer profile, which lists this id
-   * in its verificationMethod/assertionMethod arrays.
+   * Verification method URL for embedded Data Integrity Proofs — must be a
+   * dereferenceable HTTP URL that returns the bare Multikey document, NOT an
+   * issuer-profile fragment. The 1EdTech EmbeddedProofProbe dereferences this
+   * URL and reads `controller`/`publicKeyMultibase` off the response root; a
+   * fragment URL resolves to the issuer Profile (no top-level `controller`)
+   * and NPEs the validator. Mirrors the JWT `verificationMethod` /keys pattern.
    *
-   * @example "https://cloudnativedays.no/api/badge/issuer#key-ed25519"
+   * @example "https://cloudnativedays.no/api/badge/keys/key-ed25519"
+   * @see src/lib/badge/verification-method.ts
    */
   embeddedVerificationMethod: string
 }
@@ -184,9 +189,10 @@ export async function createBadgeConfiguration(
       // See: https://github.com/1EdTech/digital-credentials-public-validator/blob/main/inspector-vc/src/main/java/org/oneedtech/inspect/vc/probe/ExternalProofProbe.java#L63
       verificationMethod: `${baseUrl}/api/badge/keys/key-1`,
       ed25519Seed: ed25519Seed.trim(),
-      // For embedded proofs, verifiers strip the fragment and dereference
-      // the issuer profile, which lists this verification method
-      embeddedVerificationMethod: `${baseUrl}/api/badge/issuer#key-ed25519`,
+      // For embedded proofs, verifiers dereference this URL and expect the bare
+      // Multikey key document back (NOT the issuer profile). See ExternalProof
+      // note above — the embedded path needs the same dereferenceable endpoint.
+      embeddedVerificationMethod: ed25519VerificationMethodUrl(baseUrl),
     },
   }
 }
@@ -251,7 +257,7 @@ export function createTestConfiguration(
       algorithm: 'RS256',
       verificationMethod: `${baseUrl}/api/badge/keys/key-1`,
       ed25519Seed,
-      embeddedVerificationMethod: `${baseUrl}/api/badge/issuer#key-ed25519`,
+      embeddedVerificationMethod: ed25519VerificationMethodUrl(baseUrl),
     },
   }
 
