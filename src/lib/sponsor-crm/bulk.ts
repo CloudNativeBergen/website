@@ -8,6 +8,10 @@ import {
 } from './types'
 import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
 import { getCurrentDateTime } from '@/lib/time'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 export interface BulkUpdateParams {
   ids: string[]
@@ -38,6 +42,11 @@ export async function bulkUpdateSponsors(
 
   const transaction = clientWrite.transaction()
   let updatedCount = 0
+
+  // A bulk update operates within the CURRENT conference, so every logged
+  // activity shares its organization (CaaS T1-1). Resolve once. Best-effort:
+  // absent before the 044 backfill.
+  const orgRef = await getOrganizationRefForCurrentConference()
 
   // Fetch the new assignee's name if we're assigning someone
   let assigneeName = ''
@@ -122,6 +131,7 @@ export async function bulkUpdateSponsors(
           },
           createdBy: { _type: 'reference', _ref: userId },
           createdAt: getCurrentDateTime(),
+          ...organizationField(orgRef),
         })
       }
 
@@ -143,6 +153,7 @@ export async function bulkUpdateSponsors(
             : 'Unassigned via bulk update',
           createdBy: { _type: 'reference', _ref: userId },
           createdAt: getCurrentDateTime(),
+          ...organizationField(orgRef),
         })
       }
     }

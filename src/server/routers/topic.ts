@@ -9,6 +9,10 @@ import {
 } from '../schemas/topic'
 import { defaultTopicColor, slugifyTopicTitle } from '@/lib/topic/create'
 import type { Topic } from '@/lib/topic/types'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 /**
  * Topic CRUD (SE-2). Topics are standalone documents referenced by
@@ -57,12 +61,16 @@ export const topicRouter = router({
     .mutation(async ({ input }) => {
       try {
         const slug = await uniqueTopicSlug(input.title)
+        // Stamp the current conference's organization (CaaS T1-1) so the topic is
+        // born tenant-owned. Best-effort: absent before the 044 backfill.
+        const orgRef = await getOrganizationRefForCurrentConference()
         const created = await clientWrite.create({
           _type: 'topic',
           title: input.title,
           color: input.color ?? defaultTopicColor(input.title),
           slug: { _type: 'slug', current: slug },
           ...(input.description ? { description: input.description } : {}),
+          ...organizationField(orgRef),
         })
         revalidateTag('content:conferences', 'default')
         return {

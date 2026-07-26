@@ -13,6 +13,10 @@ import {
   TravelSupportStatus,
   ExpenseStatus,
 } from './types'
+import {
+  getOrganizationRefViaParentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 
 export async function getTravelSupport(
   speakerId: string,
@@ -297,6 +301,9 @@ export async function addTravelExpense(
   expense: TravelExpenseInput,
 ): Promise<{ expense: TravelExpense | null; error: Error | null }> {
   try {
+    // DENORMALIZED tenant key (CaaS T1-1): copy the organization down from the
+    // parent travel support request's conference. Best-effort: absent before 044.
+    const orgRef = await getOrganizationRefViaParentConference(travelSupportId)
     const newExpense = await clientWrite.create({
       _type: 'travelExpense',
       ...expense,
@@ -305,6 +312,7 @@ export async function addTravelExpense(
         _ref: travelSupportId,
       },
       status: ExpenseStatus.PENDING,
+      ...organizationField(orgRef),
     })
 
     await updateTravelSupportTotal(travelSupportId)

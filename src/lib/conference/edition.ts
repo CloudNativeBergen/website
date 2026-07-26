@@ -186,6 +186,12 @@ export function nextEditionDefaults(source: {
 export interface SourceConference {
   _id: string
   title?: string
+  /**
+   * The owning organization (tenant, CaaS T1-1). Persists across editions — a
+   * new edition belongs to the SAME organization as its source — so it is
+   * always copied (see {@link buildEditionDocuments}).
+   */
+  organization?: Reference
   organizer?: string
   organizerOrgNumber?: string
   organizerAddress?: string
@@ -318,6 +324,8 @@ export function buildEditionDocuments(
     _type: 'conference',
     // Identity — ALWAYS copied (brand + legal details persist across editions).
     title: input.title,
+    // Tenant ownership (CaaS T1-1): a new edition inherits its source's org.
+    ...(src.organization ? { organization: src.organization } : {}),
     organizer: input.organizer ?? src.organizer,
     ...(src.organizerOrgNumber
       ? { organizerOrgNumber: src.organizerOrgNumber }

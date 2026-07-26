@@ -21,6 +21,7 @@ function minter(prefix: string) {
 const SOURCE: SourceConference = {
   _id: 'source-conf',
   title: 'Cloud Native Days Bergen 2025',
+  organization: { _type: 'reference', _ref: 'org-cnb' },
   organizer: 'Cloud Native Bergen',
   organizerOrgNumber: '123456789',
   city: 'Bergen',
@@ -162,6 +163,14 @@ describe('buildEditionDocuments — always-applied invariants', () => {
     expect(conference.city).toBe('Bergen')
     expect(conference.logoBright).toBe('<svg id="bright" />')
     expect(conference.domains).toEqual(['2026.cnb.no', 'alt.example.com'])
+  })
+
+  it('inherits the source organization (tenant persists across editions)', () => {
+    const { conference } = build(makeInput())
+    expect(conference.organization).toEqual({
+      _type: 'reference',
+      _ref: 'org-cnb',
+    })
   })
 
   it('uses the input organizer when provided, else the source', () => {

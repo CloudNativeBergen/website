@@ -2,6 +2,10 @@ import 'server-only'
 import { nanoid } from 'nanoid'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
+import {
+  getOrganizationRefViaParentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
 import { getViewerTeamKeys } from '@/lib/teams'
 import type {
@@ -1401,6 +1405,11 @@ export async function addMessage({
   const now = new Date().toISOString()
   const messageId = `message.${nanoid()}`
 
+  // DENORMALIZED tenant key (CaaS T1-1): a message has no conference key of its
+  // own, so copy the organization down from the parent conversation's conference
+  // at creation. Best-effort: absent before the 044 backfill.
+  const orgRef = await getOrganizationRefViaParentConference(conversationId)
+
   // Build the author fields for the two shapes. A speaker author keeps the
   // legacy `author` ref + speaker `authorParty` (unchanged); a sponsor author
   // sets a `sponsor` `authorParty` + `authorName` snapshot with NO `author` ref
@@ -1429,6 +1438,7 @@ export async function addMessage({
       conversation: createReference(conversationId),
       body,
       createdAt: now,
+      ...organizationField(orgRef),
       ...authorFields,
     })
     .patch(conversationId, (patch) =>
@@ -1622,6 +1632,11 @@ export async function setConversationPreference({
     else unset.push('archivedAt')
   }
 
+  // DENORMALIZED tenant key (CaaS T1-1): copy the organization down from the
+  // parent conversation's conference at creation. Best-effort: absent before the
+  // 044 backfill. Only stamped on the initial createIfNotExists.
+  const orgRef = await getOrganizationRefViaParentConference(conversationId)
+
   const tx = clientWrite.transaction().createIfNotExists({
     _id: id,
     _type: 'conversationPreference',
@@ -1629,6 +1644,7 @@ export async function setConversationPreference({
     speaker: createReference(speakerId),
     muted: false,
     emailOverride: 'default',
+    ...organizationField(orgRef),
   })
   if (Object.keys(set).length > 0 || unset.length > 0) {
     tx.patch(id, (patch) => {

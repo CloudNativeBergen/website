@@ -24,6 +24,10 @@ import {
 } from '@/lib/speaker/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import {
+  getOrganizationRefForCurrentConference,
+  organizationReference,
+} from '@/lib/organization/sanity'
+import {
   getVerifiedProfileEmails,
   isEmailVerifiedForSession,
 } from '@/lib/profile/server'
@@ -397,6 +401,13 @@ export const speakerRouter = router({
         try {
           const slug = await generateUniqueSlug(input.name)
 
+          // Seed the current conference's organization as the new person's first
+          // membership (CaaS T1-1: speaker = global person, org-scoped
+          // membership). Best-effort: absent before the 044 backfill.
+          const orgRef = organizationReference(
+            await getOrganizationRefForCurrentConference(),
+          )
+
           const speaker = await clientWrite.create({
             _type: 'speaker',
             name: input.name,
@@ -417,6 +428,9 @@ export const speakerRouter = router({
                 },
               },
             }),
+            ...(orgRef
+              ? { organizations: [{ ...orgRef, _key: orgRef._ref }] }
+              : {}),
           })
 
           // Fetch the created speaker to get the proper format

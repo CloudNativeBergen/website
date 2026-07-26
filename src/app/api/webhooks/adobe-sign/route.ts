@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
+import {
+  getOrganizationRefViaParentConference,
+  organizationField,
+} from '@/lib/organization/sanity'
 import type { WebhookEvent } from '@/lib/adobe-sign'
 
 function getExpectedClientIds(): string[] {
@@ -235,6 +239,9 @@ async function logActivity(
   newStatus: string,
 ) {
   try {
+    // DENORMALIZED tenant key (CaaS T1-1): derive the organization from the
+    // parent sponsorForConference's conference. Best-effort: absent before 044.
+    const orgRef = await getOrganizationRefViaParentConference(sfcId)
     await clientWrite.create({
       _type: 'sponsorActivity',
       sponsorForConference: { _type: 'reference', _ref: sfcId },
@@ -246,6 +253,7 @@ async function logActivity(
         timestamp: getCurrentDateTime(),
       },
       createdAt: getCurrentDateTime(),
+      ...organizationField(orgRef),
     })
   } catch (logError) {
     console.error('Failed to log webhook activity:', logError)
