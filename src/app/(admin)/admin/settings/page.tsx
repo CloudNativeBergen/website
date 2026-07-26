@@ -20,7 +20,10 @@ import {
   BrandingEditor,
   BrandingPreviewGrid,
 } from '@/components/admin/BrandingEditor'
-import type { BackgroundPattern } from '@/lib/conference/backgroundPattern'
+import {
+  normalizeBackgroundPattern,
+  type BackgroundPattern,
+} from '@/lib/conference/backgroundPattern'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
@@ -495,8 +498,11 @@ export default async function AdminSettings() {
                 <EditConferenceCard
                   fieldset="branding"
                   initialValues={{
-                    backgroundPattern:
-                      conference.backgroundPattern ?? 'cloud-native',
+                    // Normalize (not just null-coalesce) so an invalid stored
+                    // value can't seed an enum-invalid submit.
+                    backgroundPattern: normalizeBackgroundPattern(
+                      conference.backgroundPattern,
+                    ),
                   }}
                 />
                 <BrandingEditor
@@ -522,7 +528,7 @@ export default async function AdminSettings() {
               label="Background Pattern"
               value={
                 BACKGROUND_PATTERN_LABELS[
-                  conference.backgroundPattern ?? 'cloud-native'
+                  normalizeBackgroundPattern(conference.backgroundPattern)
                 ]
               }
             />

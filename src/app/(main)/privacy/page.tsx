@@ -56,7 +56,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 async function CachedPrivacyContent({ domain }: { domain: string }) {
   'use cache'
-  cacheLife('max')
+  // 'hours', not 'max': the page now renders org-derived legal identity
+  // (controller, jurisdiction, supervisory authority) and organization edits
+  // are Studio-side with no revalidation hook — bounded staleness instead of
+  // serving outdated legal data indefinitely.
+  cacheLife('hours')
   cacheTag('content:privacy')
 
   const { conference, error: conferenceError } =

@@ -47,7 +47,7 @@ export function BackgroundImage({
               animated={true}
               baseSize={100}
               iconCount={settings.iconCount}
-              className="h-full w-full"
+              className="size-full"
               seed={new Date().setHours(0, 0, 0, 0)}
             />
           </div>
@@ -59,7 +59,7 @@ export function BackgroundImage({
               animated={true}
               baseSize={100}
               iconCount={settings.iconCount}
-              className="h-full w-full"
+              className="size-full"
               seed={new Date().setHours(0, 0, 0, 0)}
             />
           </div>
