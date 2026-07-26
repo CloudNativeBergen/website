@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { ThemeProvider } from 'next-themes'
 import { userEvent, within } from 'storybook/test'
 import { SponsorContactTable } from './SponsorContactTable'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
@@ -13,6 +14,19 @@ import {
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactTable',
   tags: ['autodocs'],
+  decorators: [
+    // The edit dialog portals to document.body, outside the toolbar's `.dark`
+    // wrapper. next-themes context crosses the portal, so force it (synced to
+    // the Storybook theme global) for LiveEditDialog's dark QA.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },

@@ -68,6 +68,11 @@ export function SponsorCRMForm({
   // tier-price auto-fill effect keep using setFormData directly so merely
   // opening a sponsor never triggers the "Discard changes?" confirm.
   const [isDirty, setIsDirty] = useState(false)
+  // The Contacts & billing subview edits state INSIDE SponsorContactEditor,
+  // not via updateFormData, so its dirtiness can't ride `isDirty`. The editor
+  // reports its own unsaved-changes state through onDirtyChange; we OR it into
+  // the shell's guard so closing after a contact edit still prompts.
+  const [isContactsDirty, setIsContactsDirty] = useState(false)
 
   const [formData, setFormData] = useState({
     sponsorId: sponsor?.sponsor._id || '',
@@ -131,6 +136,9 @@ export function SponsorCRMForm({
 
   const handleClose = () => {
     setView('pipeline')
+    // Leaving the modal drops the contacts editor's in-progress state, so its
+    // dirty flag must not survive to over-prompt on the next open.
+    setIsContactsDirty(false)
     onClose()
   }
 
@@ -281,7 +289,7 @@ export function SponsorCRMForm({
       }
       subtitle={sponsor ? sponsor.sponsor.name : undefined}
       confirmOnDirtyClose
-      isDirty={isDirty}
+      isDirty={isDirty || isContactsDirty}
       className="border border-brand-frosted-steel bg-brand-glacier-white dark:border-gray-700"
     >
       {showToolbar && (
@@ -289,7 +297,12 @@ export function SponsorCRMForm({
           {view !== 'pipeline' ? (
             <button
               type="button"
-              onClick={() => setView('pipeline')}
+              onClick={() => {
+                // Back to details discards any in-progress contact edits, so
+                // clear their dirty flag as we leave the subview.
+                setIsContactsDirty(false)
+                setView('pipeline')
+              }}
               className="-ml-1 inline-flex cursor-pointer items-center gap-1 rounded px-1 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
             >
               <ChevronLeftIcon className="h-4 w-4" />
@@ -334,6 +347,7 @@ export function SponsorCRMForm({
                 utils.sponsor.crm.healthViolations.invalidate()
               }}
               onCancel={handleClose}
+              onDirtyChange={setIsContactsDirty}
             />
           ) : view === 'logo' ? (
             <SponsorLogoEditor

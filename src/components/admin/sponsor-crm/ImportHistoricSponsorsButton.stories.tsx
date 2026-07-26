@@ -5,6 +5,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
 import { fn, userEvent, within } from 'storybook/test'
 import { ImportHistoricSponsorsButton } from './ImportHistoricSponsorsButton'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
@@ -12,6 +13,19 @@ import { NotificationProvider } from '@/components/admin/NotificationProvider'
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/ImportHistoricSponsorsButton',
   tags: ['autodocs'],
+  decorators: [
+    // The confirm dialog portals to document.body, outside the toolbar's
+    // `.dark` wrapper. next-themes context crosses the portal, so force it
+    // (synced to the Storybook theme global) for LiveConfirmDialog's dark QA.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

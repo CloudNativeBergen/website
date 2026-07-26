@@ -8,12 +8,28 @@ import {
   HomeIcon,
 } from '@heroicons/react/24/outline'
 import { http, HttpResponse } from 'msw'
+import { ThemeProvider } from 'next-themes'
 import { fn, userEvent, waitFor, within } from 'storybook/test'
 import { SkeletonSearchResult } from './LoadingSkeleton'
 import { SearchModal } from './SearchModal'
 
 const meta = {
   title: 'Systems/Proposals/Admin/SearchModal',
+  decorators: [
+    // SearchModal reads `next-themes`; HeadlessUI portals the dialog to
+    // document.body, so the toolbar's `.dark` wrapper never reaches it.
+    // React context DOES cross portals, so forcing next-themes here (synced to
+    // the Storybook theme global) is what actually renders the portalled
+    // dialog dark for the Live* stories.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: {
     // 'padded', not 'centered': the centered layout makes <body> a flex
     // centering context that sizes the story to its min-content width, which
