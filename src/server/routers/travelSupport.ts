@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure, protectedProcedure } from '../trpc'
 import {
-  GetTravelSupportSchema,
   GetTravelSupportByIdSchema,
   TravelSupportClientInputSchema,
   UpdateBankingDetailsSchema,
@@ -623,7 +622,10 @@ export const travelSupportRouter = router({
         }
       }),
 
-    list: adminProcedure.input(GetTravelSupportSchema).query(async () => {
+    // No input: the conference is domain-resolved, and the old schema's
+    // speakerId/status fields were declared-but-never-used on main as well —
+    // an empty contract is honest; add real filters when the UI needs them.
+    list: adminProcedure.query(async () => {
       try {
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()

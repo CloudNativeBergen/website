@@ -439,9 +439,13 @@ export const workshopRouter = router({
         const userEmail = actor.email
         const userName = workshopUserName(actor)
 
-        const { conference } = await getConferenceForCurrentDomain({})
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain({})
 
-        if (!conference) {
+        // The helper NEVER returns null — on failure it returns `{} as
+        // Conference` plus `error`, so a bare `!conference` check can never
+        // fire. Check the error AND a usable _id instead.
+        if (conferenceError || !conference?._id) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Conference not found',

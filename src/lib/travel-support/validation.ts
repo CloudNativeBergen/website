@@ -145,11 +145,6 @@ export const SubmitTravelSupportSchema = z.object({
 // NOTE: deliberately NO conferenceId here — the conference is always resolved
 // server-side from the request domain (see docs/TRPC_SERVER_ARCHITECTURE.md);
 // accepting it as client input would allow cross-tenant reads.
-export const GetTravelSupportSchema = z.object({
-  speakerId: z.string().optional(),
-  status: z.nativeEnum(TravelSupportStatus).optional(),
-})
-
 export const GetTravelSupportByIdSchema = z.object({
   id: z.string(),
 })
