@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
+import Link from 'next/link'
 import { formatDate, formatDateTimeSafe } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -13,6 +14,7 @@ import {
   XCircleIcon,
   LinkIcon,
   EnvelopeIcon,
+  ArrowUpRightIcon,
 } from '@heroicons/react/24/outline'
 
 /**
@@ -34,17 +36,33 @@ function isValidFormat(key: string): key is Format {
   return Object.values(Format).includes(key as Format)
 }
 
+/** A deep-link to a dedicated management page (the in-app editor for this
+ * card's data). Used where a full editor already lives elsewhere in /admin, so
+ * the settings card links to it instead of duplicating the editor (and instead
+ * of a "Edit in Studio" link). */
+export interface ManageLinkTarget {
+  href: string
+  label: string
+}
+
 export function InfoCard({
   title,
   children,
   icon: Icon,
   editUrl,
+  manageLink,
   action,
 }: {
   title: string
   children: ReactNode
   icon: ComponentType<{ className?: string }>
   editUrl?: string | null
+  /**
+   * Optional deep-link to a dedicated /admin management page for this card's
+   * data. Rendered in the header action slot in place of the Studio link (a
+   * card should offer one or the other, not both).
+   */
+  manageLink?: ManageLinkTarget
   /**
    * Optional inline edit affordance (an EditConferenceCard island). When present
    * it sits beside the Studio deep-link; the card body keeps rendering the
@@ -62,12 +80,30 @@ export function InfoCard({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {manageLink ? <ManageLink {...manageLink} /> : null}
           <StudioEditLink editUrl={editUrl} />
           {action}
         </div>
       </div>
       <div className="space-y-3">{children}</div>
     </div>
+  )
+}
+
+/**
+ * Deep-link affordance to a dedicated /admin management page. An INTERNAL link
+ * (Next `Link`, no `target=_blank`) — it stays in the admin app, unlike the
+ * Studio deep-link which opens an external CMS.
+ */
+export function ManageLink({ href, label }: ManageLinkTarget) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+    >
+      {label}
+      <ArrowUpRightIcon className="h-4 w-4" />
+    </Link>
   )
 }
 
@@ -290,6 +326,53 @@ export function FieldRow({
           viewport and the page pans horizontally. */}
       <dd className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
         {displayValue}
+      </dd>
+    </div>
+  )
+}
+
+/** One clickable row in a {@link LinkedBadgeList}. */
+export interface LinkedBadgeItem {
+  key: string
+  label: string
+  href: string
+}
+
+/**
+ * A labelled list of clickable badges, each deep-linking into a management page
+ * (e.g. each current sponsor → its CRM record). The read-only settings card
+ * shows WHAT exists; the links are how an organizer jumps to EDIT it, so the
+ * card never has to embed the CRM. `href` is an internal /admin path.
+ */
+export function LinkedBadgeList({
+  label,
+  items,
+}: {
+  label: string
+  items: LinkedBadgeItem[]
+}) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+      <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </dt>
+      <dd className="max-w-xs min-w-0 text-right text-sm">
+        {items.length > 0 ? (
+          <div className="flex flex-wrap justify-end gap-1">
+            {items.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-300"
+              >
+                <span className="min-w-0 break-words">{item.label}</span>
+                <ArrowUpRightIcon className="h-3 w-3 shrink-0" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <span className="text-gray-500 dark:text-gray-400">None</span>
+        )}
       </dd>
     </div>
   )

@@ -39,6 +39,7 @@ import {
   UpdateDomainsSchema,
   UpdateOrganizersSchema,
   UpdateTopicsSchema,
+  UpdateFormatsSchema,
   UpdateTeamsSchema,
   UpdateAnnouncementSchema,
   UpdateBrandingLogoSchema,
@@ -322,6 +323,21 @@ export const conferenceRouter = router({
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, {
         topics: input.topics.map((id) => createReferenceWithKey(id, 'topic')),
+      })
+    }),
+
+  /**
+   * Formats — the conference's `formats[]` CFP/agenda format keys. Unlike
+   * topics these are plain enum STRINGS (no reference/`_key` wrapping), so the
+   * validated array is stored verbatim. Field-scoped full-array replace; the
+   * Zod schema guarantees ≥1, unique, and only canonical {@link Format} keys.
+   */
+  updateFormats: adminProcedure
+    .input(UpdateFormatsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, {
+        formats: input.formats,
       })
     }),
 

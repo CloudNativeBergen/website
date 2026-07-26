@@ -21,6 +21,7 @@ import {
 import {
   InfoCard,
   FieldRow,
+  LinkedBadgeList,
   StudioEditLink,
   SectionNav,
   SectionHeading,
@@ -259,7 +260,10 @@ function SettingsIADemo() {
             <InfoCard
               title="Sponsorship Tiers"
               icon={CurrencyDollarIcon}
-              editUrl={EDIT_URL}
+              manageLink={{
+                href: '/admin/sponsors/tiers',
+                label: 'Manage tiers',
+              }}
             >
               <div className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700">
                 <div className="mb-2 flex items-center justify-between">
@@ -277,12 +281,22 @@ function SettingsIADemo() {
             <InfoCard
               title="Current Sponsors"
               icon={CurrencyDollarIcon}
-              editUrl={EDIT_URL}
+              manageLink={{ href: '/admin/sponsors/crm', label: 'Open CRM' }}
             >
-              <FieldRow
+              <LinkedBadgeList
                 label="Sponsors"
-                value={['Acme (Gold)', 'Globex (Silver)']}
-                type="array"
+                items={[
+                  {
+                    key: 'acme',
+                    label: 'Acme (Gold)',
+                    href: '/admin/sponsors/crm?sponsor=acme',
+                  },
+                  {
+                    key: 'globex',
+                    label: 'Globex (Silver)',
+                    href: '/admin/sponsors/crm?sponsor=globex',
+                  },
+                ]}
               />
             </InfoCard>
 
@@ -380,9 +394,18 @@ function SettingsIADemo() {
             <InfoCard
               title="Topics & Formats"
               icon={TagIcon}
-              editUrl={EDIT_URL}
-              action={<EditPencil />}
+              action={
+                <>
+                  <EditPencil />
+                  <EditPencil />
+                </>
+              }
             >
+              <FieldRow
+                label="Available Formats"
+                value={['lightning_10', 'presentation_25', 'workshop_120']}
+                type="formats"
+              />
               <FieldRow
                 label="Available Topics"
                 value={['Kubernetes', 'Observability', 'Security']}

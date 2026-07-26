@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HEX_COLOR_RE } from '@/lib/branding/theme'
+import { Format } from '@/lib/proposal/types'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
@@ -382,6 +383,27 @@ export const UpdateTopicsSchema = z.object({
     .min(1, 'At least one topic is required')
     .refine((ids) => new Set(ids).size === ids.length, {
       message: 'Topics must be unique',
+    }),
+})
+
+/** The canonical CFP format keys — the closed set the conference `formats[]`
+ * array may contain. Mirrors the Sanity schema's inline `options.list`
+ * (sourced from the same `formats` map), so the editor can never store a key
+ * the CFP/agenda code doesn't understand. */
+const FORMAT_VALUES = Object.values(Format) as [Format, ...Format[]]
+
+/**
+ * Formats — the conference's `formats[]` array of canonical format KEYS (plain
+ * strings, not references). Mirrors the Sanity schema's `required().min(1)
+ * .unique()` and its enum-constrained `of`: at least one, no duplicates, and
+ * every entry a known {@link Format}. A full-array replace.
+ */
+export const UpdateFormatsSchema = z.object({
+  formats: z
+    .array(z.enum(FORMAT_VALUES))
+    .min(1, 'At least one format is required')
+    .refine((keys) => new Set(keys).size === keys.length, {
+      message: 'Formats must be unique',
     }),
 })
 
