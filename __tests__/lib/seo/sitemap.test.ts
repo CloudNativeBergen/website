@@ -115,4 +115,20 @@ describe('buildSitemap', () => {
       expect(isDisallowed(path)).toBe(false)
     }
   })
+
+  describe('unlisted (M0 trial state)', () => {
+    it('emits NOTHING — no static pages, no speaker profiles', () => {
+      const map = buildSitemap(HOST, {
+        unlisted: true,
+        speakers: [{ slug: 'ada-lovelace' }, { slug: 'alan-turing' }],
+      })
+      expect(map).toEqual([])
+    })
+
+    it('a live conference (unlisted: false) still emits its pages', () => {
+      const map = buildSitemap(HOST, { unlisted: false })
+      expect(map.length).toBeGreaterThan(0)
+      expect(map[0]).toMatchObject({ url: `${BASE}/`, priority: 1 })
+    })
+  })
 })

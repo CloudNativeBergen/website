@@ -22,6 +22,7 @@ import {
 } from '@/components/common/DashboardLayout'
 import { SearchModal } from './SearchModal'
 import { NotificationProvider } from './NotificationProvider'
+import { UnlistedBanner } from './UnlistedBanner'
 
 const navigation: NavigationSection[] = [
   {
@@ -77,9 +78,18 @@ interface ConferenceLogos {
 interface AdminLayoutProps {
   children: React.ReactNode
   conferenceLogos?: ConferenceLogos
+  /**
+   * The current conference is UNLISTED (M0 trial state). Renders a banner above
+   * the admin content; admin access itself is never gated on visibility.
+   */
+  unlisted?: boolean
 }
 
-export function AdminLayout({ children, conferenceLogos }: AdminLayoutProps) {
+export function AdminLayout({
+  children,
+  conferenceLogos,
+  unlisted = false,
+}: AdminLayoutProps) {
   const [searchModalOpen, setSearchModalOpen] = useState(false)
 
   return (
@@ -97,6 +107,7 @@ export function AdminLayout({ children, conferenceLogos }: AdminLayoutProps) {
           />
         }
       >
+        {unlisted ? <UnlistedBanner /> : null}
         {children}
       </DashboardLayout>
     </NotificationProvider>

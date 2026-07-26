@@ -46,11 +46,35 @@ export function getBaseUrl(host: string): string {
   return `${protocol}://${host}`
 }
 
+export interface BuildRobotsOptions {
+  /**
+   * The resolved conference for this host is UNLISTED (M0 trial state). When
+   * true the policy flips to a blanket `Disallow: /` for every crawler — the
+   * robots equivalent of noindex for the whole tenant — and the `Sitemap:` line
+   * is omitted (there is nothing to enumerate). The site still RESOLVES and
+   * renders for direct visitors; only discovery is suppressed.
+   */
+  unlisted?: boolean
+}
+
 /**
- * Produce the per-host robots policy: allow general crawling, disallow the
- * private/portal/token/api prefixes, and point at the host's sitemap.
+ * Produce the per-host robots policy. For a LIVE host: allow general crawling,
+ * disallow the private/portal/token/api prefixes, and point at the host's
+ * sitemap. For an UNLISTED host: disallow everything and emit no sitemap.
  */
-export function buildRobots(host: string): MetadataRoute.Robots {
+export function buildRobots(
+  host: string,
+  { unlisted = false }: BuildRobotsOptions = {},
+): MetadataRoute.Robots {
+  if (unlisted) {
+    return {
+      rules: {
+        userAgent: '*',
+        disallow: '/',
+      },
+    }
+  }
+
   const baseUrl = getBaseUrl(host)
 
   return {

@@ -34,6 +34,14 @@ export interface BuildSitemapInput {
   speakers?: SitemapSpeaker[]
   /** Fallback `<lastmod>` for static pages (e.g. the conference `_updatedAt`). */
   lastModified?: string | Date
+  /**
+   * The resolved conference for this host is UNLISTED (M0 trial state). When
+   * true the sitemap emits NOTHING — neither the curated static pages nor any
+   * speaker profile — so an unlisted conference contributes no discovery URLs.
+   * The pages still resolve for direct visitors; they are simply not enumerated
+   * for crawlers (robots additionally serves a blanket disallow).
+   */
+  unlisted?: boolean
 }
 
 /**
@@ -56,8 +64,11 @@ export function isDisallowed(path: string): boolean {
  */
 export function buildSitemap(
   host: string,
-  { speakers = [], lastModified }: BuildSitemapInput = {},
+  { speakers = [], lastModified, unlisted = false }: BuildSitemapInput = {},
 ): MetadataRoute.Sitemap {
+  // An unlisted conference contributes no discovery URLs at all.
+  if (unlisted) return []
+
   const baseUrl = getBaseUrl(host)
 
   const staticEntries: MetadataRoute.Sitemap = PUBLIC_STATIC_PATHS.filter(

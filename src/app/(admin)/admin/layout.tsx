@@ -3,6 +3,7 @@ import { AdminLayout } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isConferenceUnlisted } from '@/lib/conference/visibility'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -34,5 +35,12 @@ export default async function AdminRootLayout({
       }
     : undefined
 
-  return <AdminLayout conferenceLogos={conferenceLogos}>{children}</AdminLayout>
+  return (
+    <AdminLayout
+      conferenceLogos={conferenceLogos}
+      unlisted={isConferenceUnlisted(conference)}
+    >
+      {children}
+    </AdminLayout>
+  )
 }

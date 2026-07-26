@@ -16,6 +16,7 @@ import { Suspense } from 'react'
 
 import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -79,6 +80,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase,
+    // Unlisted (M0 trial) → tell crawlers not to index any page of this tenant.
+    // The site still resolves for direct visitors; `noindex` (plus the blanket
+    // robots.txt disallow) is what keeps it out of search results. ABSENT
+    // visibility resolves to `live`, so this is omitted for every legacy
+    // conference. Admin/portal routes set their own stricter robots metadata.
+    ...(isConferenceUnlisted(conference)
+      ? { robots: { index: false, follow: false } }
+      : {}),
     title: {
       template: '%s - Cloud Native Days',
       default:

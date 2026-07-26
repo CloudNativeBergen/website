@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { formatDate } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
 import { buildSystemChecks } from '@/lib/system-status/checks'
@@ -41,6 +42,8 @@ import {
   BeakerIcon,
   SwatchIcon,
   SparklesIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 
 interface NamedItem {
@@ -373,6 +376,7 @@ export default async function AdminSettings() {
   }
 
   const editUrl = studioEditUrl(conference._id)
+  const visibility = resolveConferenceVisibility(conference)
   const systemChecks = await buildSystemChecks(conference)
   const session = await getAuthSession()
   const currentUserId = session?.speaker?._id ?? ''
@@ -416,6 +420,38 @@ export default async function AdminSettings() {
         />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <InfoCard
+            title="Visibility"
+            icon={visibility === 'unlisted' ? EyeSlashIcon : EyeIcon}
+            action={
+              <EditConferenceCard
+                fieldset="visibility"
+                initialValues={{ visibility }}
+              />
+            }
+          >
+            <div
+              id="visibility"
+              className="flex scroll-mt-16 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+            >
+              <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                Status
+              </dt>
+              <dd className="min-w-0 text-right text-sm">
+                {visibility === 'unlisted' ? (
+                  <StatusBadge label="Unlisted" color="yellow" />
+                ) : (
+                  <StatusBadge label="Live" color="green" />
+                )}
+              </dd>
+            </div>
+            <p className="pt-1 text-sm text-gray-500 dark:text-gray-400">
+              {visibility === 'unlisted'
+                ? 'Reachable by direct link but excluded from sitemaps, robots and search indexing.'
+                : 'Publicly listed and indexed by search engines.'}
+            </p>
+          </InfoCard>
+
           <InfoCard
             title="Basic Information"
             icon={InformationCircleIcon}

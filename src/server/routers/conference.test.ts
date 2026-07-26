@@ -169,6 +169,54 @@ describe('conference router — field-scoped patch shape', () => {
   })
 })
 
+describe('conference router — visibility (M0 trial state)', () => {
+  it('flips visibility to unlisted, patching ONLY that field', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateVisibility({
+      visibility: 'unlisted',
+    })
+    expect(result.success).toBe(true)
+    expect(lastPatchId).toBe(CONFERENCE_ID)
+    expect(lastSet).toEqual({ visibility: 'unlisted' })
+    expect(lastUnset).toBeUndefined()
+  })
+
+  it('flips visibility to live', async () => {
+    await makeCaller({ isOrganizer: true }).updateVisibility({
+      visibility: 'live',
+    })
+    expect(lastSet).toEqual({ visibility: 'live' })
+  })
+
+  it('revalidates only the edited conference by its scoped tag', async () => {
+    await makeCaller({ isOrganizer: true }).updateVisibility({
+      visibility: 'unlisted',
+    })
+    expect(revalidateTagMock).toHaveBeenCalledWith(
+      `sanity:conference-${CONFERENCE_ID}`,
+      'default',
+    )
+  })
+
+  it('rejects a non-organizer (FORBIDDEN)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: false }).updateVisibility({
+        visibility: 'unlisted',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown visibility value', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateVisibility({
+        // @ts-expect-error — exercising the enum guard with a bad value
+        visibility: 'private',
+      }),
+    ).rejects.toBeDefined()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('conference router — unset semantics', () => {
   it('routes explicit null to .unset() and omits it from .set()', async () => {
     await makeCaller({ isOrganizer: true }).updateTicketingIds({
