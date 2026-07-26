@@ -7,9 +7,7 @@ import { AdminPageHeader } from '@/components/admin'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin'
 import { DataTable, type Column } from '@/components/DataTable'
-import { AdobeSignConfigPanel } from './AdobeSignConfigPanel'
 import { ConferenceOrgInfoPanel } from './ConferenceOrgInfoPanel'
-import { SigningProviderPanel } from './SigningProviderPanel'
 import type { Conference } from '@/lib/conference/types'
 import {
   DocumentTextIcon,
@@ -154,10 +152,6 @@ export function ContractTemplateListPage({
       />
 
       <ConferenceOrgInfoPanel conference={conference} />
-
-      <SigningProviderPanel conference={conference} />
-
-      <AdobeSignConfigPanel />
 
       {isLoading ? (
         <div className="py-12 text-center text-gray-500 dark:text-gray-400">

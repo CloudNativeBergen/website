@@ -21,10 +21,6 @@ CHECKIN_API_SECRET= { provider = "keychain", value = "CHECKIN_API_SECRET" }
 INVITATION_TOKEN_SECRET= { provider = "keychain", value = "INVITATION_TOKEN_SECRET" }
 NEXT_PUBLIC_EXCHANGE_RATE_API_KEY= { provider = "keychain", value = "NEXT_PUBLIC_EXCHANGE_RATE_API_KEY" }
 BLOB_READ_WRITE_TOKEN= { provider = "keychain", value = "BLOB_READ_WRITE_TOKEN" }
-ADOBE_SIGN_BASE_URL= { provider = "keychain", value = "ADOBE_SIGN_BASE_URL" }
-ADOBE_SIGN_CLIENT_ID= { provider = "keychain", value = "ADOBE_SIGN_CLIENT_ID" }
-ADOBE_SIGN_APPLICATION_ID= { provider = "keychain", value = "ADOBE_SIGN_APPLICATION_ID" }
-ADOBE_SIGN_APPLICATION_SECRET= { provider = "keychain", value = "ADOBE_SIGN_APPLICATION_SECRET" }
 BADGE_ISSUER_RSA_PRIVATE_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PRIVATE_KEY" }
 BADGE_ISSUER_RSA_PUBLIC_KEY= { provider = "keychain", value = "BADGE_ISSUER_RSA_PUBLIC_KEY" }
 BADGE_ISSUER_ED25519_SEED= { provider = "keychain", value = "BADGE_ISSUER_ED25519_SEED" }

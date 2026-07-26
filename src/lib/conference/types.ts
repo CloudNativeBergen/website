@@ -154,7 +154,12 @@ export interface Conference {
   cfpLightningGoal?: number
   cfpPresentationGoal?: number
   cfpWorkshopGoal?: number
-  signingProvider?: 'self-hosted' | 'adobe-sign'
+  /**
+   * Contract signing provider. Self-hosted is the only supported value;
+   * legacy documents may still carry a removed value (e.g. 'adobe-sign'),
+   * which the signing-provider factory tolerates and falls back from.
+   */
+  signingProvider?: 'self-hosted'
   sponsorRevenueGoal?: number
   salesNotificationChannel?: string
   cfpNotificationChannel?: string

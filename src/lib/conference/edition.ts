@@ -423,8 +423,8 @@ export function buildEditionDocuments(
       conference.sponsorshipCustomization = { ...src.sponsorshipCustomization }
       copied = true
     }
-    if (src.signingProvider) {
-      conference.signingProvider = src.signingProvider
+    if (src.signingProvider === 'self-hosted') {
+      conference.signingProvider = 'self-hosted'
       copied = true
     }
     if (src.crmInactivityThresholds && src.crmInactivityThresholds.length > 0) {

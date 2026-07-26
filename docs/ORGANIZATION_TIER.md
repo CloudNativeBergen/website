@@ -88,7 +88,7 @@ a request domain), they return `null` and nothing is stamped.
 | `message`                | `addMessage`                                                                                                   | parent conversation → conference                                          |
 | `conversationPreference` | `setConversationPreference`                                                                                    | parent conversation → conference                                          |
 | `travelExpense`          | `addTravelExpense`                                                                                             | parent travelSupport → conference                                         |
-| `sponsorActivity`        | `createSponsorActivity`, `logBulkEmailSent`, `bulkUpdateSponsors`, Adobe Sign webhook, contract-reminders cron | parent sponsorForConference → conference (or current conference for bulk) |
+| `sponsorActivity`        | `createSponsorActivity`, `logBulkEmailSent`, `bulkUpdateSponsors`, contract-reminders cron | parent sponsorForConference → conference (or current conference for bulk) |
 
 - **Global types** take the tenant of the **current-domain conference**
   (`getOrganizationRefForCurrentConference`).

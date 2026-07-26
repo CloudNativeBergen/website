@@ -1,5 +1,4 @@
 import type { ContractSigningProvider } from './types'
-import { AdobeSignProvider } from './adobe-sign'
 import { SelfHostedSigningProvider } from './self-hosted'
 
 export type { ContractSigningProvider } from './types'
@@ -9,25 +8,37 @@ export type {
   SigningProviderStatus,
 } from './types'
 
-export type SigningProviderType = 'self-hosted' | 'adobe-sign'
+/**
+ * The only supported signing provider. Historically this was a union that also
+ * included `'adobe-sign'`; that provider has been removed. Legacy conference
+ * documents may still carry the old stored value — see {@link getSigningProvider}
+ * for how those are handled gracefully.
+ */
+export type SigningProviderType = 'self-hosted'
 
 /**
  * Returns a contract signing provider instance.
  *
- * @param providerType - Explicit provider type (from conference settings).
- *   Falls back to the `CONTRACT_SIGNING_PROVIDER` env var, then `"self-hosted"`.
+ * Self-hosted signing is the only supported provider. Any other value —
+ * including the legacy `'adobe-sign'` stored on older conference documents or
+ * a stale `CONTRACT_SIGNING_PROVIDER` env var — is tolerated and falls back to
+ * self-hosted with a warning. Nothing throws on an unknown value.
+ *
+ * @param providerType - Provider value from conference settings (may be a
+ *   legacy/unknown string). Falls back to the `CONTRACT_SIGNING_PROVIDER` env
+ *   var, then `"self-hosted"`.
  */
 export function getSigningProvider(
-  providerType?: SigningProviderType | null,
+  providerType?: string | null,
 ): ContractSigningProvider {
   const provider =
     providerType ?? process.env.CONTRACT_SIGNING_PROVIDER ?? 'self-hosted'
 
-  switch (provider) {
-    case 'adobe-sign':
-      return new AdobeSignProvider()
-    case 'self-hosted':
-    default:
-      return new SelfHostedSigningProvider()
+  if (provider !== 'self-hosted') {
+    console.warn(
+      `[contract-signing] Unsupported signing provider "${provider}"; falling back to self-hosted.`,
+    )
   }
+
+  return new SelfHostedSigningProvider()
 }

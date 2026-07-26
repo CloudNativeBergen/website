@@ -340,8 +340,8 @@ export const Overview: Story = {
             Contract Signing
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Sponsor-facing contract signing flow. Supports self-hosted signing
-            (built-in signature pad) and Adobe Sign.
+            Sponsor-facing contract signing flow using self-hosted signing
+            (built-in signature pad).
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <ComponentCard
@@ -409,11 +409,6 @@ export const Overview: Story = {
               path="@/components/admin/sponsor/SponsorLogoEditor"
               description="SVG logo upload and preview with light/dark variant support."
               hasStory
-            />
-            <ComponentCard
-              name="AdobeSignConfigPanel"
-              path="@/components/admin/sponsor/AdobeSignConfigPanel"
-              description="Signing provider OAuth connection, webhook registration, and status management panel. Currently implements Adobe Sign."
             />
           </div>
         </section>

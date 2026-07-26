@@ -225,7 +225,7 @@ export const EmailTemplates: Story = {
           </h2>
           <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
             Sent to the designated signer when a sponsorship contract is ready
-            for digital signing via Adobe Sign.
+            for digital signing.
           </p>
           <EmailPreviewFrame
             from="Cloud Native Days Norway <hello@cloudnativedays.no>"
@@ -237,7 +237,7 @@ export const EmailTemplates: Story = {
               sponsorName="Acme Corp"
               signerName="Jane Smith"
               signerEmail="sponsor@acmecorp.com"
-              signingUrl="https://secure.adobesign.com/sign/abc123"
+              signingUrl="https://cloudnativedays.no/sponsor/contract/sign/abc123"
               tierName="Service"
               contractValue="50 000 NOK"
               eventName="Cloud Native Days Norway 2026"
@@ -270,7 +270,7 @@ export const EmailTemplates: Story = {
             <ContractReminderTemplate
               sponsorName="Acme Corp"
               signerName="Jane Smith"
-              signingUrl="https://secure.adobesign.com/sign/abc123"
+              signingUrl="https://cloudnativedays.no/sponsor/contract/sign/abc123"
               reminderNumber={1}
               eventName="Cloud Native Days Norway 2026"
               eventLocation="Oslo, Norway"
