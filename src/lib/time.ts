@@ -8,6 +8,20 @@ const HOUSE_LOCALE = 'nb-NO'
 /** Conference timezone. All dates are anchored/rendered here. */
 const OSLO_TZ = 'Europe/Oslo'
 
+/**
+ * Today's calendar date in the conference timezone (Europe/Oslo) as
+ * YYYY-MM-DD. Use for day-equality/ordering comparisons against stored
+ * date-only strings so "today" doesn't shift with the viewer's timezone.
+ */
+export function osloTodayDateString(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: OSLO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
 /** Lowercase Norwegian long month names (index = month number - 1). */
 const NB_LONG_MONTHS = [
   'januar',
@@ -51,7 +65,9 @@ function toOsloAnchoredDate(dateString: string): Date {
 function dateOnlyParts(
   dateString: string,
 ): { day: number; monthIndex: number; year: number } | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString)
+  // Anchored end-to-end: a timestamp like 2025-10-27T23:00:00Z must NOT match
+  // (its calendar day depends on timezone; callers pass it down other paths).
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString)
   if (!m) return null
   const year = Number(m[1])
   const monthIndex = Number(m[2]) - 1
