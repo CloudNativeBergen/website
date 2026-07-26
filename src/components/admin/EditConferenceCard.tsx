@@ -58,6 +58,7 @@ export type ConferenceFieldsetKey =
   | 'basicInfo'
   | 'visibility'
   | 'venue'
+  | 'branding'
   | 'dates'
   | 'registration'
   | 'communication'
@@ -214,6 +215,28 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         label: 'Venue Address',
         type: 'text',
         nullableWhenEmpty: true,
+      },
+    ],
+  },
+  branding: {
+    title: 'Background Pattern',
+    subtitle: 'The decorative page background',
+    fields: [
+      {
+        name: 'backgroundPattern',
+        label: 'Background Pattern',
+        type: 'select',
+        required: true,
+        options: [
+          {
+            value: 'cloud-native',
+            title: 'Cloud Native — animated CNCF logos',
+          },
+          { value: 'subtle', title: 'Subtle — sparse, faint logos' },
+          { value: 'none', title: 'None — plain gradient, no logos' },
+        ],
+        description:
+          'Cloud Native shows the animated CNCF project logos. Subtle shows the same logos far sparser and fainter. None shows a plain gradient with no logos.',
       },
     ],
   },
@@ -535,6 +558,7 @@ const MUTATION_BY_FIELDSET: Record<
   basicInfo: 'updateBasicInfo',
   visibility: 'updateVisibility',
   venue: 'updateVenue',
+  branding: 'updateBranding',
   dates: 'updateDates',
   registration: 'updateRegistration',
   communication: 'updateCommunication',

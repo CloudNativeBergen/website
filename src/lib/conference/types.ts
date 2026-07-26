@@ -7,6 +7,7 @@ import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import type { ConferenceVisibility } from './visibility'
+import type { BackgroundPattern } from './backgroundPattern'
 
 export interface CrmActivityThreshold {
   _key?: string
@@ -130,6 +131,14 @@ export interface Conference {
   logoDark?: string
   logomarkBright?: string
   logomarkDark?: string
+  /**
+   * Decorative page background (go-live gate G2, #643). ABSENT is treated as
+   * `'cloud-native'` — the animated CNCF ecosystem logos — so legacy documents
+   * are unaffected. `'subtle'` renders the same pattern far sparser/fainter;
+   * `'none'` renders a plain gradient with no logos. Projected by the main
+   * conference projection's `...` spread.
+   */
+  backgroundPattern?: BackgroundPattern
   announcement?: TypedObject[]
   startDate: string
   endDate: string
