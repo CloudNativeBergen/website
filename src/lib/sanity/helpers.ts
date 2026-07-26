@@ -26,7 +26,12 @@ export function ensureArrayKeys<T extends Record<string, unknown>>(
   if (!Array.isArray(array)) return array as Array<T & { _key: string }>
   return array.map((item) => ({
     ...item,
-    _key: (item._key as string) || generateKey(prefix),
+    // Only a non-empty STRING satisfies Sanity's `_key` contract (and this
+    // function's return type) — any other truthy value is replaced.
+    _key:
+      typeof item._key === 'string' && item._key
+        ? item._key
+        : generateKey(prefix),
   }))
 }
 
@@ -44,14 +49,17 @@ export function ensureUniqueArrayKeys<T extends Record<string, unknown>>(
   const seen = new Set<string>()
   return ensureArrayKeys(
     array.map((item) => {
-      const key = item._key as string | undefined
-      if (key && !seen.has(key)) {
+      const key =
+        typeof item._key === 'string' && item._key ? item._key : undefined
+      if (!key) return item
+      if (!seen.has(key)) {
         seen.add(key)
         return item
       }
-      if (!key) return item
-      const { _key: _dropped, ...rest } = item
-      return rest as T
+      // Duplicate: strip the key so ensureArrayKeys regenerates it.
+      const rest = { ...item }
+      delete rest._key
+      return rest
     }),
     prefix,
   )

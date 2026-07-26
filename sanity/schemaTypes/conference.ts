@@ -50,7 +50,14 @@ const safeLinkRule = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
   const v = value.trim()
   if (v.startsWith('/') && !v.startsWith('//')) return true
-  if (/^https?:\/\//i.test(v)) return true
+  if (/^https?:\/\//i.test(v)) {
+    // Prefix alone admits bare 'https://' — require a parseable absolute URL
+    // with a host, matching the server rule.
+    try {
+      const parsed = new URL(v)
+      if (parsed.hostname) return true
+    } catch {}
+  }
   return 'Enter a site path (e.g. /tickets) or a full http(s) URL'
 }
 
