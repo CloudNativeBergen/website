@@ -564,6 +564,8 @@ Self-service portal
 │  cancelAgreement()  sendReminder()              │
 │  getConnectionStatus()  disconnect()            │
 │  getAuthorizeUrl()  registerWebhook()           │
+│  (both no-ops for self-hosted — no OAuth or    │
+│   webhook setup step exists)                    │
 └──────────────────────┬──────────────────────────┘
                        │ SelfHostedSigningProvider
                        ▼

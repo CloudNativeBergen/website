@@ -567,6 +567,8 @@ The contract lifecycle is tracked across several fields on the `sponsorForConfer
 
 **Synchronous status updates.** The self-hosted provider records status transitions directly in Sanity when the sponsor submits their signature — no external webhooks or polling. Legacy provider values stored on older conference documents fall back to self-hosted gracefully.
 
+**Self-hosted is the only supported provider.** `CONTRACT_SIGNING_PROVIDER` is optional and does not need to be set to enable signing — self-hosted is the default. The env var exists only as a legacy knob: any value other than `self-hosted` falls back to self-hosted with a warning, and the system-status page flags it as stale configuration to delete.
+
 **Single source of storage.** The contract PDF is stored in Sanity (permanent, accessible via CMS). When the signed version is submitted, it replaces the original in Sanity.
 
 **Unified send function.** `generateAndSendContract()` is the single entry point for both manual admin sends and automated registration-triggered sends, ensuring consistent behavior and logging.
