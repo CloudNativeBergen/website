@@ -361,3 +361,50 @@ describe('signOutHandler — clears link-flow state', () => {
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
   })
 })
+
+describe('jwtSignInCallback — org-scoped session computation (CaaS T1-2, #614)', () => {
+  it('bakes a DEDUPED organizerOrgIds set into the token on normal sign-in', async () => {
+    // A speaker who organizes several conferences of the SAME org yields
+    // duplicate org refs from the projection; the token must carry each org once.
+    getOrCreateSpeaker.mockResolvedValue({
+      speaker: {
+        _id: 'spk-org',
+        slug: 'spk-org',
+        name: 'Org Person',
+        email: 'org@example.com',
+        isOrganizer: true,
+        organizerOrgIds: ['org-A', 'org-A', 'org-B'],
+      },
+      err: null,
+    })
+
+    const token = (await jwtSignInCallback({
+      token: freshSignInToken(),
+      account: GITHUB,
+      trigger: 'signIn',
+    })) as JWT & { speaker?: { organizerOrgIds?: string[] } }
+
+    expect(token.speaker?.organizerOrgIds).toEqual(['org-A', 'org-B'])
+  })
+
+  it('bakes an EMPTY organizerOrgIds set for a non-organizer / pre-backfill speaker', async () => {
+    getOrCreateSpeaker.mockResolvedValue({
+      speaker: {
+        _id: 'spk-plain',
+        slug: 'spk-plain',
+        name: 'Plain Person',
+        email: 'plain@example.com',
+        // No organizerOrgIds key at all (legacy doc / not an organizer).
+      },
+      err: null,
+    })
+
+    const token = (await jwtSignInCallback({
+      token: freshSignInToken(),
+      account: GITHUB,
+      trigger: 'signIn',
+    })) as JWT & { speaker?: { organizerOrgIds?: string[] } }
+
+    expect(token.speaker?.organizerOrgIds).toEqual([])
+  })
+})
