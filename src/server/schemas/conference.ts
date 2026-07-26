@@ -386,11 +386,6 @@ export const UpdateTopicsSchema = z.object({
     }),
 })
 
-/** The canonical CFP format keys — the closed set the conference `formats[]`
- * array may contain. Mirrors the Sanity schema's inline `options.list`
- * (sourced from the same `formats` map), so the editor can never store a key
- * the CFP/agenda code doesn't understand. */
-
 /**
  * Formats — the conference's `formats[]` array of canonical format KEYS (plain
  * strings, not references). Mirrors the Sanity schema's `required().min(1)
