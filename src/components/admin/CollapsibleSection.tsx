@@ -42,6 +42,7 @@ export function CollapsibleSection({
             content and cannot sit inside phrasing content). */}
         <h2 className="flex min-w-0 flex-1">
           <button
+            type="button"
             onClick={() => setIsOpen(!isOpen)}
             aria-expanded={isOpen}
             className="flex min-w-0 flex-1 items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"

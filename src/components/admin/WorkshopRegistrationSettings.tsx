@@ -94,7 +94,13 @@ export function WorkshopRegistrationSettings({
     // The datetime-local value is a timezone-less LOCAL wall-clock string; the
     // Date constructor interprets it as local time, and we persist the
     // unambiguous ISO instant so storage is timezone-stable.
-    const toIso = (v: string) => (v ? new Date(v).toISOString() : null)
+    const toIso = (v: string) => {
+      if (!v) return null
+      const d = new Date(v)
+      // A malformed input value must degrade to unset, not throw a RangeError
+      // out of toISOString and break the save flow.
+      return Number.isNaN(d.getTime()) ? null : d.toISOString()
+    }
     updateRegistrationTimes.mutate({
       startDate: toIso(startDate),
       endDate: toIso(endDate),

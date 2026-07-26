@@ -245,10 +245,10 @@ export function FieldRow({
       displayValue = value ? (
         <a
           href={`mailto:${value}`}
-          className="flex items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="flex min-w-0 items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
-          {value as string}
-          <EnvelopeIcon className="ml-1 h-3 w-3" />
+          <span className="break-all">{value as string}</span>
+          <EnvelopeIcon className="ml-1 h-3 w-3 shrink-0" />
         </a>
       ) : (
         'Not set'
