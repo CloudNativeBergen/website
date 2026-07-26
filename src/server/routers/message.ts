@@ -7,7 +7,6 @@ import {
 } from '@/server/trpc'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { clientReadUncached } from '@/lib/sanity/client'
 import { runAfterResponse } from '@/server/runAfterResponse'
 import {
   ListConversationsSchema,
@@ -44,6 +43,7 @@ import {
   getSponsorFanoutContext,
   type SponsorFanoutContext,
 } from '@/lib/messaging/sponsor'
+import { speakerHasStandingInConference } from '@/lib/messaging/standing'
 import { z } from 'zod'
 import {
   getOrganizerSpeakerIds,
@@ -105,41 +105,14 @@ function claimSendSlot(speakerId: string): boolean {
   return true
 }
 
-/**
- * Does `speakerId` have standing in `conferenceId` — a proposal (talk) in that
- * conference OR organizer status? This MUST match the population the admin
- * speaker picker offers (`speaker.admin.search` = confirmed/accepted speakers ∪
- * organizers): a stricter server check rejects recipients the UI legitimately
- * suggests. THE ORGANIZER CLAUSE USES THE CANONICAL DEFINITION — membership in
- * a conference's `organizers[]` array, the same rule the session and the picker
- * derive from. (The speaker schema has NO stored `isOrganizer` field: a prior
- * version tested `isOrganizer == true`, which matches nothing in production and
- * kept rejecting picker-offered organizers with "Speaker not found".)
- * Cross-conference targeting stays blocked: a talk-less non-organizer from
- * another edition has no standing here.
- *
- * ANY-CONFERENCE ORGANIZER MATCH — NOT AN ACCESS GRANT (B2, #642). This clause
- * decides only who the admin picker may NAME as a general-thread subject speaker;
- * it does NOT grant thread access. Access is enforced separately by
- * `canAccessConversation`, which post-#642 is ORG-SCOPED (keys on
- * {@link isOrganizerForOrg} against the thread's own org, no longer the global
- * `isOrganizer` short-circuit). So naming an organizer of another edition as a
- * subject speaker confers no cross-tenant read/write — a cross-tenant organizer
- * is still denied by the access check. The clause stays any-conference to keep
- * matching the population the picker offers; narrowing it would reject a
- * legitimate same-org organizer without closing any hole.
- */
-async function speakerHasStandingInConference(
-  speakerId: string,
-  conferenceId: string,
-): Promise<boolean> {
-  const id = await clientReadUncached.fetch<string | null>(
-    `*[_type == "speaker" && _id == $speakerId && (_id in *[_type == "conference"].organizers[]._ref || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
-    { speakerId, conferenceId },
-    { cache: 'no-store' },
-  )
-  return Boolean(id)
-}
+// E9 (go-live gate): the recipient standing check now lives in
+// `@/lib/messaging/standing` and is ORG-SCOPED — an organizer of another
+// TENANT's edition no longer counts as standing here (the pre-#614 "organizer of
+// any edition = global access" premise no longer holds). Same-org cross-edition
+// organizers and talk-holders still qualify. Extracted to its own module so this
+// fix merges cleanly with the parallel messaging-authz work that owns this
+// router's gates. See `speakerHasStandingInConference` there for the full
+// rationale and the legacy (org-less conference) bridge.
 
 /**
  * Load a conversation for an ORGANIZER-ONLY management mutation (status /

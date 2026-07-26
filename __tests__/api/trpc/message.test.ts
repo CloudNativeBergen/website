@@ -422,8 +422,13 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
   })
 
   it('creates an organizer general thread when the recipient HAS standing (A5)', async () => {
-    // The speaker id comes back → proposal in this conference OR organizer.
-    standingFetch.mockResolvedValue('sp-target')
+    // The standing helper now runs two reads: (1) resolve the conference's
+    // owning org, (2) the standing predicate. First returns the org, second the
+    // speaker id → proposal in this conference OR same-org organizer.
+    standingFetch.mockReset()
+    standingFetch
+      .mockResolvedValueOnce('org-1') // conference.organization._ref
+      .mockResolvedValueOnce('sp-target') // standing predicate
     getById.mockResolvedValue(organizerGeneralConv)
     const caller = createAdminCaller()
 
@@ -433,18 +438,20 @@ describe('send — organizer-initiated general threads (subjectSpeaker)', () => 
       body: 'hi',
     })
 
-    // Standing MUST accept organizers without a talk this edition — the picker
-    // (speaker.admin.search) offers them, and a narrower server check regressed
-    // into "Speaker not found" for autocompleted organizers in prod.
-    const standingQuery = standingFetch.mock.calls[0][0] as string
+    // E9 (go-live gate): the organizer arm is ORG-SCOPED — same-org, cross-edition
+    // organizers (which the picker offers) still qualify without a talk this
+    // edition, but a cross-TENANT organizer no longer does. The predicate is the
+    // SECOND read; the first resolves the conference's org.
+    const standingQuery = standingFetch.mock.calls[1][0] as string
     expect(standingQuery).toContain(
-      '_id in *[_type == "conference"].organizers[]._ref',
+      '*[_type == "conference" && organization._ref == $orgId].organizers[]._ref',
     )
     expect(standingQuery).toContain('conference._ref == $conferenceId')
 
-    expect(standingFetch).toHaveBeenCalledWith(
+    expect(standingFetch).toHaveBeenNthCalledWith(
+      2,
       expect.any(String),
-      { speakerId: 'sp-target', conferenceId: 'conf-1' },
+      { speakerId: 'sp-target', conferenceId: 'conf-1', orgId: 'org-1' },
       expect.anything(),
     )
     expect(createGeneral).toHaveBeenCalledWith(
