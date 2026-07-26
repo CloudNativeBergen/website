@@ -3,6 +3,7 @@ import React from 'react'
 import { resend, retryWithBackoff } from '@/lib/email/config'
 import { SponsorMessageNotificationTemplate } from '@/components/email/SponsorMessageNotificationTemplate'
 import type { Conference } from '@/lib/conference/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 
 /** One contact-person recipient of an organizer→sponsor message email. */
@@ -55,7 +56,7 @@ async function sendOne(
             ? formatConferenceDateLong(conference.startDate)
             : '',
           eventUrl: conference.domains?.[0]
-            ? `https://${conference.domains[0]}`
+            ? conferenceBaseUrl(conference)
             : '',
           socialLinks: conference.socialLinks || [],
         }),

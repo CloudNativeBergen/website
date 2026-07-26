@@ -5,6 +5,7 @@ import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
 
 import { Conference } from '@/lib/conference/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 
 interface SpeakerActionsProps {
@@ -63,7 +64,7 @@ export function SpeakerActions({
       eventName={conference.title}
       eventLocation={`${conference.city}, ${conference.country}`}
       eventDate={formatConferenceDateLong(conference.startDate)}
-      eventUrl={`https://${conference.domains[0]}`}
+      eventUrl={conferenceBaseUrl(conference)}
       socialLinks={conference.socialLinks || []}
     />
   )

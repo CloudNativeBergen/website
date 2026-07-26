@@ -3,6 +3,7 @@ import React from 'react'
 import { resend, retryWithBackoff } from '@/lib/email/config'
 import { MessageNotificationTemplate } from '@/components/email/MessageNotificationTemplate'
 import type { Conference } from '@/lib/conference/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
 
 /** One email recipient for a new-message notification. */
@@ -68,7 +69,7 @@ async function sendOne(
           // Settings live on the cfp profile for BOTH audiences; anchor at the
           // notification section so the link matches the in-app gear (A9).
           preferencesUrl: conference.domains?.[0]
-            ? `https://${conference.domains[0]}/cfp/profile#notification-settings`
+            ? `${conferenceBaseUrl(conference)}/cfp/profile#notification-settings`
             : undefined,
           eventName: conference.title,
           eventLocation: `${conference.city}, ${conference.country}`,
@@ -76,7 +77,7 @@ async function sendOne(
             ? formatDate(conference.startDate)
             : '',
           eventUrl: conference.domains?.[0]
-            ? `https://${conference.domains[0]}`
+            ? conferenceBaseUrl(conference)
             : '',
           socialLinks: conference.socialLinks || [],
         }),

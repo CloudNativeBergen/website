@@ -13,6 +13,7 @@ import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
@@ -139,7 +140,7 @@ export function SponsorTiersPageClient({
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}
-        eventUrl={`https://${conference.domains[0]}`}
+        eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
       />
     </>

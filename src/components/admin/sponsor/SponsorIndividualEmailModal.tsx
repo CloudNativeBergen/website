@@ -8,6 +8,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 import { api } from '@/lib/trpc/client'
@@ -126,7 +127,7 @@ export function SponsorIndividualEmailModal({
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}
-        eventUrl={`https://${conference.domains[0]}`}
+        eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
         content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
       />

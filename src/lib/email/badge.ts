@@ -4,6 +4,7 @@ import { updateBadgeEmailStatus } from '@/lib/badge/sanity'
 import type { BadgeRecord } from '@/lib/badge/types'
 import type { Conference } from '@/lib/conference/types'
 import { resolveConferenceFrom } from '@/lib/email/from'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -34,8 +35,11 @@ export async function sendBadgeEmail({
   conference,
 }: SendBadgeEmailParams): Promise<SendBadgeEmailResult> {
   try {
-    // Generate download URL
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    // Generate download URL from the CONFERENCE'S OWN domain — not a global
+    // NEXT_PUBLIC_BASE_URL, which is (a) wrong for every tenant but one and
+    // (b) absent in the Resend send context on production, where it silently
+    // degraded to http://localhost:3000 and shipped dead links to speakers.
+    const baseUrl = conferenceBaseUrl(conference)
     const downloadUrl = `${baseUrl}/api/badge/${badge.badgeId}/download`
 
     // Generate email HTML

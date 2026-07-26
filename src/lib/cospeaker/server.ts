@@ -14,6 +14,7 @@ import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitat
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
 
 const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
@@ -119,9 +120,9 @@ function buildEmailEventContext(
       ? `${conference.city}, ${conference.country || 'Norway'}`
       : 'Location TBA',
     eventDate: conference.startDate ? formatDate(conference.startDate) : 'TBD',
-    eventUrl: conference.domains?.[0]
-      ? `https://${conference.domains[0]}`
-      : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+    // Tenant-derived origin: the conference's own domain, never a global env
+    // var that silently degraded to http://localhost:3000 in the send context.
+    eventUrl: conferenceBaseUrl(conference),
   }
 }
 
