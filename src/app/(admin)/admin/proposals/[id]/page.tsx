@@ -32,10 +32,14 @@ export default async function ProposalDetailPage({
     const { conference, domain } = await getConferenceForCurrentDomain({
       topics: true,
     })
+    // ORG-SCOPE the organizer read to this tenant (B1, #642): a proposal from
+    // another organization's conference must not be reachable by URL id even for a
+    // signed-in organizer. A null org fails closed (proposal → notFound below).
     const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: '',
       isOrganizer: true,
+      organizerOrgId: conference?.organization?._ref ?? null,
       includeReviews: true,
       includePreviousAcceptedTalks: true,
       includeSubmittedTalks: true,

@@ -1,5 +1,11 @@
 import { TRPCError } from '@trpc/server'
-import { router, protectedProcedure, resolveConferenceId } from '@/server/trpc'
+import {
+  router,
+  protectedProcedure,
+  organizerProcedure,
+  resolveConferenceId,
+} from '@/server/trpc'
+import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { runAfterResponse } from '@/server/runAfterResponse'
@@ -112,15 +118,16 @@ function claimSendSlot(speakerId: string): boolean {
  * Cross-conference targeting stays blocked: a talk-less non-organizer from
  * another edition has no standing here.
  *
- * ANY-CONFERENCE ORGANIZER MATCH IS INTENTIONAL (QR-M6, verified not a leak):
- * the organizer clause matches an organizer of ANY edition on purpose because
- * `isOrganizer` is GLOBAL in this app — it is derived as `_id in
- * *[_type == "conference"].organizers[]._ref` (see `lib/speaker/sanity.ts`), and
- * `canAccessConversation` short-circuits `if (speaker.isOrganizer) return true`.
- * So a global organizer can ALREADY read/write every thread; naming them the
- * subjectSpeaker of a new general thread grants no access they lack. Scoping this
- * clause to `$conferenceId` would instead REJECT a legitimate organizer the admin
- * picker offers. Not a cross-tenant leak; do not narrow it.
+ * ANY-CONFERENCE ORGANIZER MATCH — NOT AN ACCESS GRANT (B2, #642). This clause
+ * decides only who the admin picker may NAME as a general-thread subject speaker;
+ * it does NOT grant thread access. Access is enforced separately by
+ * `canAccessConversation`, which post-#642 is ORG-SCOPED (keys on
+ * {@link isOrganizerForOrg} against the thread's own org, no longer the global
+ * `isOrganizer` short-circuit). So naming an organizer of another edition as a
+ * subject speaker confers no cross-tenant read/write — a cross-tenant organizer
+ * is still denied by the access check. The clause stays any-conference to keep
+ * matching the population the picker offers; narrowing it would reject a
+ * legitimate same-org organizer without closing any hole.
  */
 async function speakerHasStandingInConference(
   speakerId: string,
@@ -138,8 +145,13 @@ async function speakerHasStandingInConference(
  * Load a conversation for an ORGANIZER-ONLY management mutation (status /
  * assignee / archive). Collapses absent, non-organizer, and inaccessible into a
  * single NOT_FOUND — no existence oracle, and the ticketing capability itself is
- * not revealed to a non-organizer participant (A3 semantics). `isOrganizer`
- * already implies `canAccessConversation`, but both are asserted per the design.
+ * not revealed to a non-organizer participant (A3 semantics).
+ *
+ * ORG-SCOPED (B2, #642): the organizer gate keys on {@link isOrganizerForOrg}
+ * against the CONVERSATION'S OWN org (`conferenceOrgId`), not the deprecated
+ * global `speaker.isOrganizer` — so a cross-tenant organizer gets NOT_FOUND. This
+ * already implies `canAccessConversation` (which uses the same org-scoped check),
+ * but both are asserted per the design.
  */
 async function loadManageableConversation(
   conversationId: string,
@@ -148,7 +160,7 @@ async function loadManageableConversation(
   const conversation = await getConversationById(conversationId)
   if (
     !conversation ||
-    speaker.isOrganizer !== true ||
+    !isOrganizerForOrg(speaker, conversation.conferenceOrgId ?? null) ||
     !canAccessConversation(conversation, speaker)
   ) {
     throw new TRPCError({
@@ -167,11 +179,13 @@ async function loadManageableConversation(
  */
 export const messageRouter = router({
   /** The caller's conversation inbox (organizers see all; speakers see theirs). */
-  listConversations: protectedProcedure
+  listConversations: organizerProcedure
     .input(ListConversationsSchema)
     .query(async ({ ctx, input }) => {
       const conferenceId = await resolveConferenceId()
-      const isOrganizer = ctx.speaker.isOrganizer === true
+      // ORG-SCOPED (B2, #642): only an organizer OF THIS domain's org gets the
+      // all-conversations inbox; a cross-tenant organizer sees only their own.
+      const isOrganizer = ctx.isOrgOrganizer
       const view = input.view ?? 'active'
       // A non-organizer may only use the speaker-appropriate views; the
       // organizer-only views (needs-reply / mine / resolved) carry organizer
@@ -202,11 +216,11 @@ export const messageRouter = router({
    * conversation set, reusing the same predicates the list views apply — meant to
    * accompany the first inbox page, not to be polled hot.
    */
-  viewCounts: protectedProcedure.query(async ({ ctx }) => {
+  viewCounts: organizerProcedure.query(async ({ ctx }) => {
     const conferenceId = await resolveConferenceId()
     return getConversationViewCounts({
       speakerId: ctx.speaker._id,
-      isOrganizer: ctx.speaker.isOrganizer === true,
+      isOrganizer: ctx.isOrgOrganizer,
       conferenceId,
     })
   }),
@@ -295,7 +309,7 @@ export const messageRouter = router({
    * general thread: it is FORBIDDEN for a non-organizer, and REQUIRED (and must
    * resolve to a real speaker) when an organizer starts a general thread.
    */
-  send: protectedProcedure
+  send: organizerProcedure
     .input(SendMessageSchema)
     .mutation(async ({ ctx, input }) => {
       const { conference, error } = await getConferenceForCurrentDomain()
@@ -307,7 +321,10 @@ export const messageRouter = router({
       }
       const conferenceId = conference._id
       const actorId = ctx.speaker._id
-      const isOrganizer = ctx.speaker.isOrganizer === true
+      // ORG-SCOPED (B2, #642): organizer capabilities (naming a subject speaker,
+      // opening any proposal thread, not reopening on reply) require organizer
+      // standing IN THIS domain's org, not the deprecated global flag.
+      const isOrganizer = ctx.isOrgOrganizer
 
       // `recipientSpeakerId` is an organizer-only capability: a non-organizer
       // must never be able to name the subject speaker of a thread.
@@ -487,10 +504,12 @@ export const messageRouter = router({
    * deterministic id. The sfc MUST belong to the current-domain conference
    * (multi-tenant isolation).
    */
-  ensureSponsorThread: protectedProcedure
+  ensureSponsorThread: organizerProcedure
     .input(z.object({ sponsorForConferenceId: z.string().min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.speaker.isOrganizer !== true) {
+      // ORG-SCOPED (B2, #642): sponsor threads are organizer-only, gated on
+      // organizer standing IN THIS domain's org (not the deprecated global flag).
+      if (!ctx.isOrgOrganizer) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' })
       }
       const conferenceId = await resolveConferenceId()

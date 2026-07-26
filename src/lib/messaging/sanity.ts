@@ -8,6 +8,7 @@ import {
   organizationField,
 } from '@/lib/organization/sanity'
 import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getViewerTeamKeys } from '@/lib/teams'
 import type {
   AccessSpeaker,
@@ -63,6 +64,7 @@ const PAGE_SIZE = 20
 const CONVERSATION_PROJECTION = `{
   "_id": _id,
   "conferenceId": conference._ref,
+  "conferenceOrgId": conference->organization._ref,
   conversationType,
   "proposalId": proposal._ref,
   "proposalTitle": proposal->title,
@@ -522,14 +524,22 @@ export function resolveRecipients(
  * `participants[]` preferred, legacy derive fallback) rather than a direct read
  * of the legacy fields. For a proposal thread the speaker parties ARE the
  * proposal speakers; for a general thread they are the creator (+ subject
- * speaker) — the same set the legacy field checks expressed. Organizer access
- * still short-circuits on the server-derived `isOrganizer` flag (the
- * `organizers` group party is never expanded here).
+ * speaker) — the same set the legacy field checks expressed.
+ *
+ * ORG-SCOPED ORGANIZER (B2, #642): organizer access no longer short-circuits on
+ * the DEPRECATED GLOBAL `isOrganizer` flag (true for an organizer of ANY org,
+ * which let a CNB organizer read an external tenant's thread by id). It now keys
+ * on {@link isOrganizerForOrg} against the CONVERSATION'S OWN org
+ * (`conferenceOrgId`, projected from `conference->organization`) — the same
+ * org-scoped decision (with legacy-token bridge) the middleware waist uses. A
+ * conversation whose org the caller does not organize falls through to the
+ * speaker-party check, so a cross-tenant organizer is denied.
  */
 export function canAccessConversation(
   conversation: Pick<
     ConversationWithContext,
     | 'conversationType'
+    | 'conferenceOrgId'
     | 'proposalSpeakerIds'
     | 'createdById'
     | 'subjectSpeakerId'
@@ -537,7 +547,9 @@ export function canAccessConversation(
   >,
   speaker: AccessSpeaker,
 ): boolean {
-  if (speaker.isOrganizer) return true
+  if (isOrganizerForOrg(speaker, conversation.conferenceOrgId ?? null)) {
+    return true
+  }
   return resolveParticipants(conversation).some(
     (party) => party.partyType === 'speaker' && party.speakerId === speaker._id,
   )

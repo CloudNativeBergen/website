@@ -71,6 +71,7 @@ export async function getTravelSupportById(id: string): Promise<{
           _id,
           name
         },
+        "conferenceOrgId": conference->organization._ref,
         "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
           ...,
           receipts[] {

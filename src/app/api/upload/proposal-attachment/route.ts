@@ -1,7 +1,10 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
 import { NextAuthRequest, auth } from '@/lib/auth'
-import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
+import {
+  isOrganizerForCurrentOrg,
+  resolveCurrentOrgId,
+} from '@/lib/authz/organizer'
 import { getProposal } from '@/lib/proposal/data/sanity'
 
 /**
@@ -100,6 +103,10 @@ export const POST = auth(async (req: NextAuthRequest) => {
           id: proposalId,
           speakerId,
           isOrganizer,
+          // B1 (#642): the organizer branch is org-scoped — pass the current org
+          // so a legitimate current-org organizer resolves (and cross-tenant ids
+          // do not). Non-organizer reads ignore this (speaker-scoped).
+          organizerOrgId: isOrganizer ? await resolveCurrentOrgId() : null,
         })
 
         if (proposalError || !proposal) {

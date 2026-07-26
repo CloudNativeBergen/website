@@ -181,13 +181,15 @@ export const travelSupportRouter = router({
     .input(UpdateBankingDetailsSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { authorized, error: authError } =
-          await authorizeTravelSupportOperation(
-            input.travelSupportId,
-            ctx.speaker._id,
-            ctx.speaker.isOrganizer,
-            'modify',
-          )
+        const {
+          authorized,
+          isOrganizer,
+          error: authError,
+        } = await authorizeTravelSupportOperation(
+          input.travelSupportId,
+          ctx.speaker,
+          'modify',
+        )
 
         if (!authorized || authError) {
           throw authError || createAuthError('FORBIDDEN', 'Access denied')
@@ -199,7 +201,9 @@ export const travelSupportRouter = router({
           ctx.speaker.name,
           {
             travelSupportId: input.travelSupportId,
-            isAdmin: ctx.speaker.isOrganizer,
+            // The ORG-SCOPED grant that was actually enforced — not the
+            // deprecated global flag (B3, #642).
+            isAdmin: isOrganizer === true,
           },
           'info',
         )
@@ -239,8 +243,7 @@ export const travelSupportRouter = router({
           error: authError,
         } = await authorizeTravelSupportOperation(
           input.travelSupportId,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
           'submit',
         )
 
@@ -342,8 +345,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           input.travelSupportId,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -413,8 +415,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -476,8 +477,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           expense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -544,8 +544,7 @@ export const travelSupportRouter = router({
           error: accessError,
         } = await verifyTravelSupportOwnership(
           existingExpense.travelSupport._ref,
-          ctx.speaker._id,
-          ctx.speaker.isOrganizer,
+          ctx.speaker,
         )
 
         if (accessError || !hasAccess || !travelSupport) {
@@ -679,8 +678,7 @@ export const travelSupportRouter = router({
           const { authorized, error: authError } =
             await authorizeTravelSupportOperation(
               input.travelSupportId,
-              ctx.speaker._id,
-              ctx.speaker.isOrganizer,
+              ctx.speaker,
               'approve',
             )
 

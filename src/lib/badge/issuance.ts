@@ -60,10 +60,29 @@ export async function issueBadgeForSpeaker(
     }
   }
 
-  if (badgeType === 'organizer' && !speaker.isOrganizer) {
-    return {
-      success: false,
-      error: `Not eligible: ${speaker.name} is not an organizer`,
+  if (badgeType === 'organizer') {
+    // ORG-SCOPED eligibility (E11, #642): an organizer badge may only be issued
+    // to someone who organizes a conference IN THIS conference's org — not the
+    // deprecated GLOBAL `speaker.isOrganizer` (true for an organizer of ANY org),
+    // which let an org-A admin mint an org-A organizer badge for an org-B-only
+    // organizer. Resolve the org from the (authoritative, domain-derived)
+    // conferenceId; a null org denies (fail closed).
+    const { clientReadUncached } = await import('@/lib/sanity/client')
+    const orgRef = await clientReadUncached.fetch<string | null>(
+      `*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
+      { conferenceId },
+    )
+    const isOrgOrganizer = orgRef
+      ? await clientReadUncached.fetch<boolean>(
+          `count(*[_type == "conference" && organization._ref == $orgRef && $speakerId in organizers[]._ref]) > 0`,
+          { orgRef, speakerId: speaker._id },
+        )
+      : false
+    if (!isOrgOrganizer) {
+      return {
+        success: false,
+        error: `Not eligible: ${speaker.name} is not an organizer`,
+      }
     }
   }
 
