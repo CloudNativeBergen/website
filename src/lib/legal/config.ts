@@ -43,6 +43,25 @@ export const GENERIC_SUPERVISORY_AUTHORITY: SupervisoryAuthority = {
 
 const DEFAULT_JURISDICTION = 'Norway'
 
+/**
+ * Restrict an org-managed URL to http(s) before it is rendered as a link.
+ * The Sanity field is typed `url`, but the client renders whatever is stored —
+ * a `javascript:` (or other scheme) value must never become an executable
+ * anchor on the privacy page. Invalid/unsafe values degrade to no link.
+ */
+function safeHttpUrl(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      ? trimmed
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export interface LegalConfig {
   /** The data controller / legal entity name shown throughout the pages. */
   controllerName: string
@@ -86,12 +105,17 @@ export function buildLegalConfig(
 
   // Legal jurisdiction: an explicit org override wins; otherwise fall back to
   // the conference country, then Norway (the existing tenant's value).
-  const jurisdiction =
+  const rawJurisdiction =
     org?.legalJurisdiction?.trim() ||
     conference?.country?.trim() ||
     DEFAULT_JURISDICTION
 
-  const isNorway = jurisdiction.toLowerCase() === 'norway'
+  const isNorway = rawJurisdiction.toLowerCase() === 'norway'
+  // Canonicalize the casing when it IS Norway so a stored "norway" cannot
+  // render "Bergen, norway" or a lowercase governing-law clause; other
+  // jurisdictions keep the org's own casing (we can't title-case arbitrary
+  // country names correctly).
+  const jurisdiction = isNorway ? DEFAULT_JURISDICTION : rawJurisdiction
 
   // Controller location line ("based in …"): it describes the CONTROLLER's
   // seat, so it follows the resolved jurisdiction. The venue city is included
@@ -112,7 +136,7 @@ export function buildLegalConfig(
   const supervisoryAuthority: SupervisoryAuthority = orgAuthorityName
     ? {
         name: orgAuthorityName,
-        url: org?.supervisoryAuthority?.url?.trim() || undefined,
+        url: safeHttpUrl(org?.supervisoryAuthority?.url),
         email: org?.supervisoryAuthority?.email?.trim() || undefined,
       }
     : isNorway

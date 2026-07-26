@@ -119,9 +119,25 @@ describe('buildLegalConfig — location assembly', () => {
     expect(legal.location).toBe('Germany')
   })
 
-  it('keeps the venue city when the org jurisdiction override matches the conference country', () => {
+  it('keeps the venue city and canonicalizes casing when the org jurisdiction override matches the conference country', () => {
     const legal = buildLegalConfig(conf(), { legalJurisdiction: 'norway' })
-    expect(legal.location).toBe('Bergen, norway')
+    expect(legal.location).toBe('Bergen, Norway')
+    expect(legal.jurisdiction).toBe('Norway')
     expect(legal.isNorway).toBe(true)
+  })
+})
+
+describe('buildLegalConfig — supervisory-authority URL safety', () => {
+  it('keeps http(s) URLs and drops unsafe schemes', () => {
+    const withUrl = (url: string) =>
+      buildLegalConfig(conf(), {
+        supervisoryAuthority: { name: 'Some DPA', url },
+      }).supervisoryAuthority.url
+    expect(withUrl('https://dpa.example')).toBe('https://dpa.example')
+    expect(withUrl('http://dpa.example')).toBe('http://dpa.example')
+    // eslint-disable-next-line no-script-url
+    expect(withUrl('javascript:alert(1)')).toBeUndefined()
+    expect(withUrl('data:text/html,x')).toBeUndefined()
+    expect(withUrl('not a url')).toBeUndefined()
   })
 })

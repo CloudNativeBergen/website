@@ -1,3 +1,4 @@
+import { escapeHtml } from '@/lib/email/escape'
 import {
   resend,
   retryWithBackoff,
@@ -251,20 +252,6 @@ export interface WorkshopAnnouncementEmailRequest {
   authorName: string
   /** Raw announcement text (owner-authored). MUST be HTML-escaped before embed. */
   body: string
-}
-
-/**
- * Escape HTML-significant characters so an announcement's free-text body cannot
- * inject markup into the email. Newlines are converted to <br> AFTER escaping so
- * the participant sees the same line breaks the author typed.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 /**
