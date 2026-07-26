@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HEX_COLOR_RE } from '@/lib/branding/theme'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
@@ -67,18 +68,43 @@ export const UpdateVenueSchema = z.object({
   venueAddress: z.string().trim().nullable().optional(),
 })
 
-// === Branding (background pattern; go-live gate G2, #643) ===
+// === Branding (background pattern + brand theme) ===
 // The logo slots are edited through the dedicated BrandingEditor/updateBrandingLogo
-// path; this scalar fieldset carries only the decorative background switch.
-// A required enum — the mutation always sets an explicit value; absent is
-// treated as `'cloud-native'` by the renderer (see backgroundPattern.ts).
+// path. This fieldset carries the decorative background switch (go-live gate G2,
+// #643) AND the optional per-tenant brand theme (THEMING L1).
+//
+// `backgroundPattern` is now OPTIONAL so the two editors that share this mutation
+// can each patch just their own field: the generic branding fieldset sends
+// `backgroundPattern` alone, the ThemeEditor sends `theme` alone. `undefined`
+// leaves a field untouched (see UNSET SEMANTICS); the renderer still treats an
+// absent stored pattern as `'cloud-native'`.
+//
+// `theme` is a whole-object override: present → set `{ primaryColor, accentColor }`,
+// explicit `null` → unset (revert to the house palette). Both colours must be
+// 6-digit hex — non-hex is REJECTED (validated here, the write-path authority).
+// The regex is shared with the runtime guard via the theming core's
+// HEX_COLOR_RE; the Sanity rule inlines an intentionally identical pattern
+// (schema files stay import-light) — keep them in sync if it ever changes.
+const hexColor = z
+  .string()
+  .trim()
+  .regex(HEX_COLOR_RE, 'Enter a 6-digit hex color, e.g. #1D4ED8')
+
+export const ConferenceThemeSchema = z.object({
+  primaryColor: hexColor,
+  accentColor: hexColor,
+})
+
 export const UpdateBrandingSchema = z.object({
-  backgroundPattern: z.enum(
-    BACKGROUND_PATTERN_VALUES as unknown as [
-      BackgroundPattern,
-      ...BackgroundPattern[],
-    ],
-  ),
+  backgroundPattern: z
+    .enum(
+      BACKGROUND_PATTERN_VALUES as unknown as [
+        BackgroundPattern,
+        ...BackgroundPattern[],
+      ],
+    )
+    .optional(),
+  theme: ConferenceThemeSchema.nullable().optional(),
 })
 
 // === Dates ===

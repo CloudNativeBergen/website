@@ -2,6 +2,7 @@ import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
+import { emailBrandColor } from '@/lib/branding/theme'
 
 export async function handleEmailNotification(
   event: ProposalStatusChangeEvent,
@@ -67,6 +68,8 @@ export async function handleEmailNotification(
           url: `https://${event.metadata.domain}`,
           socialLinks: event.conference.socialLinks,
           contactEmail: event.conference.contactEmail,
+          // THEMING L1: carry the tenant's brand primary into the mail accent.
+          brandColor: emailBrandColor(event.conference.theme),
         },
       }),
     ),

@@ -248,6 +248,64 @@ export default defineType({
         layout: 'radio',
       },
     }),
+    // Per-tenant brand theme (THEMING L1): an optional design-token override for
+    // the primary interactive colour and the gradient accent. ABSENT resolves to
+    // the house palette (Cloud Native Days blue) — existing tenants unchanged.
+    // Colours are used verbatim; contrast is the editor's responsibility (the
+    // admin settings preview shows the result). Edited through the dedicated
+    // ThemeEditor island via `conference.updateBranding`.
+    defineField({
+      name: 'theme',
+      title: 'Brand Theme (colors)',
+      type: 'object',
+      fieldset: 'branding',
+      description:
+        'Optional per-conference brand colors. Leave unset to use the default Cloud Native Days palette.',
+      // Both-or-neither: the server schema and the ThemeEditor treat the theme
+      // as a complete pair, so a Studio edit must not persist a half-theme.
+      validation: (rule) =>
+        rule.custom(
+          (
+            value: { primaryColor?: string; accentColor?: string } | undefined,
+          ) => {
+            if (!value) return true
+            if (Boolean(value.primaryColor) !== Boolean(value.accentColor)) {
+              return 'Set both the primary and the accent color — or clear both'
+            }
+            return true
+          },
+        ),
+      fields: [
+        defineField({
+          name: 'primaryColor',
+          title: 'Primary Color',
+          type: 'string',
+          description:
+            'Primary interactive color (buttons, links, focus rings) and gradient start. 6-digit hex, e.g. #1D4ED8.',
+          validation: (rule) =>
+            rule
+              .regex(/^#[0-9a-fA-F]{6}$/, {
+                name: 'hex color',
+                invert: false,
+              })
+              .error('Enter a 6-digit hex color, e.g. #1D4ED8'),
+        }),
+        defineField({
+          name: 'accentColor',
+          title: 'Accent Color',
+          type: 'string',
+          description:
+            'Gradient endpoint / accent color. 6-digit hex, e.g. #06B6D4.',
+          validation: (rule) =>
+            rule
+              .regex(/^#[0-9a-fA-F]{6}$/, {
+                name: 'hex color',
+                invert: false,
+              })
+              .error('Enter a 6-digit hex color, e.g. #06B6D4'),
+        }),
+      ],
+    }),
 
     // === Important Dates ===
     defineField({
