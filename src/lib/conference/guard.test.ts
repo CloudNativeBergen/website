@@ -28,10 +28,13 @@ describe('isUnknownHost', () => {
     )
   })
 
-  it('treats any error as unknown even if a partial conference is present', () => {
+  it('does NOT treat an error WITH a resolved conference as unknown (partial failures keep page-level error handling)', () => {
     expect(
-      isUnknownHost({ conference: resolved, error: new Error('boom') }),
-    ).toBe(true)
+      isUnknownHost({
+        conference: { _id: 'conf-1' } as never,
+        error: new Error('secondary read failed'),
+      }),
+    ).toBe(false)
   })
 
   it('treats a conference missing an _id as unknown', () => {

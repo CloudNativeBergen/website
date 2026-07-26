@@ -16,6 +16,10 @@ export interface PlatformLandingProps {
  * grab-bag of per-page "Conference not found" errors.
  */
 export function PlatformLanding({ signupUrl }: PlatformLandingProps) {
+  // Scheme hardening: the URL comes from env config, but a misconfigured
+  // value must never become a javascript:/data: anchor. https only.
+  const safeSignupUrl =
+    signupUrl && /^https:\/\//i.test(signupUrl) ? signupUrl : undefined
   return (
     <main className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-brand-glacier-white px-6 py-16 dark:bg-gray-950">
       <div
@@ -38,11 +42,11 @@ export function PlatformLanding({ signupUrl }: PlatformLandingProps) {
           by mistake, double-check the address.
         </p>
 
-        {signupUrl && (
+        {safeSignupUrl && (
           <p className="font-inter mt-8 text-sm text-brand-slate-gray/60 dark:text-gray-500">
             Is this your domain?{' '}
             <a
-              href={signupUrl}
+              href={safeSignupUrl}
               className="font-medium text-brand-cloud-blue underline underline-offset-4 hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300"
             >
               Claim it
