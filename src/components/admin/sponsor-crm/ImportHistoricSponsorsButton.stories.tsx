@@ -5,10 +5,27 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
+import { fn, userEvent, within } from 'storybook/test'
+import { ImportHistoricSponsorsButton } from './ImportHistoricSponsorsButton'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Pipeline/ImportHistoricSponsorsButton',
   tags: ['autodocs'],
+  decorators: [
+    // The confirm dialog portals to document.body, outside the toolbar's
+    // `.dark` wrapper. next-themes context crosses the portal, so force it
+    // (synced to the Storybook theme global) for LiveConfirmDialog's dark QA.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
@@ -224,4 +241,26 @@ export const Documentation: Story = {
       </div>
     </div>
   ),
+}
+
+/**
+ * The REAL component (not the markup replicas above), with its confirmation
+ * dialog opened by the play function. The confirm is built on the canonical
+ * ConfirmationModal/ModalShell stack — shoot this story at 393px for
+ * mobile/dark QA of the live dialog.
+ */
+export const LiveConfirmDialog: Story = {
+  render: () => (
+    <NotificationProvider>
+      <ImportHistoricSponsorsButton conferenceId="conf-2026" onSuccess={fn()} />
+    </NotificationProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /import historic/i }),
+    )
+    // Dialog portals to document.body.
+    await within(document.body).findByText('Sponsors will be tagged:')
+  },
 }

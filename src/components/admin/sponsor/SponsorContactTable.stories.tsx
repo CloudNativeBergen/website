@@ -1,4 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { ThemeProvider } from 'next-themes'
+import { userEvent, within } from 'storybook/test'
+import { SponsorContactTable } from './SponsorContactTable'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { mockSponsor } from '@/__mocks__/sponsor-data'
 import {
   EnvelopeIcon,
   BuildingOffice2Icon,
@@ -9,6 +14,19 @@ import {
 const meta = {
   title: 'Systems/Sponsors/Admin/Contacts/SponsorContactTable',
   tags: ['autodocs'],
+  decorators: [
+    // The edit dialog portals to document.body, outside the toolbar's `.dark`
+    // wrapper. next-themes context crosses the portal, so force it (synced to
+    // the Storybook theme global) for LiveEditDialog's dark QA.
+    (Story, context) => (
+      <ThemeProvider
+        attribute="class"
+        forcedTheme={context.globals.theme === 'dark' ? 'dark' : 'light'}
+      >
+        <Story />
+      </ThemeProvider>
+    ),
+  ],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
@@ -342,4 +360,31 @@ export const Documentation: Story = {
       </div>
     </div>
   ),
+}
+
+/**
+ * The REAL component (not the markup replicas above) with the edit dialog
+ * opened by the play function. The dialog is built on the canonical
+ * ModalShell (house header, mobile sheet, dirty-close guard fed by the
+ * embedded SponsorContactEditor) — shoot this story at 393px for QA.
+ */
+export const LiveEditDialog: Story = {
+  render: () => (
+    <NotificationProvider>
+      <div className="p-4">
+        <SponsorContactTable sponsors={[mockSponsor()]} />
+      </div>
+    </NotificationProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const editButtons = await canvas.findAllByTitle('Manage contacts')
+    // Click whichever affordance is visible at the current viewport
+    // (mobile card button below md, table-row button at md+).
+    const visible =
+      editButtons.find((b) => b.offsetParent !== null) ?? editButtons[0]
+    await userEvent.click(visible)
+    // Dialog portals to document.body.
+    await within(document.body).findByText('Contact Persons')
+  },
 }
