@@ -18,7 +18,7 @@
 
 import { cacheLife, cacheTag } from 'next/cache'
 import { clientReadCached } from '@/lib/sanity/client'
-import { domainTag } from '@/lib/cache/tags'
+import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { normalizeDomain, wildcardFormForHost } from '@/lib/conference/domains'
 
 export type ConferenceVisibility = 'unlisted' | 'live'
@@ -77,6 +77,11 @@ export async function getDiscoveryVisibilityForDomain(
       },
     )
     if (!row?._id) return { discoverable: false }
+    // Tag with the resolved conference so the settings visibility flip —
+    // which revalidates `conferenceTag(id)` via applyConferencePatch — busts
+    // THIS cached discovery read too. Without it, robots/sitemap stayed on
+    // the old visibility for up to the cacheLife window after going live.
+    cacheTag(conferenceTag(row._id))
     return { discoverable: resolveConferenceVisibility(row) === 'live' }
   } catch {
     return { discoverable: false }

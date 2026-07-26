@@ -351,6 +351,11 @@ export function buildEditionDocuments(
     domains: input.domains.map(normalizeDomain),
     // A new edition NEVER opens registration on creation.
     registrationEnabled: false,
+    // …and is NEVER publicly discoverable on creation: absent-means-live
+    // (see lib/conference/visibility.ts), so an explicit 'unlisted' is
+    // required or the clone would be indexed/listed the instant its domains
+    // commit. The organizer flips it to 'live' from settings when ready.
+    visibility: 'unlisted',
   }
 
   if (flags.topics && src.topics && src.topics.length > 0) {
