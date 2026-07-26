@@ -1,3 +1,8 @@
+// PARKED FEATURE: sponsor contract-signing flow.
+// Kept intentionally as the entry point for the parked contract-signing feature
+// (server-side send/reminder/countersign orchestration). Not wired into any live
+// route yet, so it is knip-ignored. Do not delete — this is deliberately retained.
+
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import { getSponsorForConference } from './sanity'

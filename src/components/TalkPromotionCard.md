@@ -125,7 +125,7 @@ For equal height cards in CSS Grid:
 
 ## Example Implementation
 
-See the complete example in `/src/components/examples/TalkGridExample.tsx` which shows:
+A complete talk grid combines these elements:
 
 - Featured talk display
 - Regular sessions grid
