@@ -1,6 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -42,6 +43,12 @@ async function CachedTermsContent({ domain }: { domain: string }) {
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
+  }
+
+  // Unknown host: the (main) layout renders the platform landing in place of
+  // this subtree, so bail before dereferencing an empty conference.
+  if (isUnknownHost({ conference, error: conferenceError })) {
+    return null
   }
 
   if (conferenceError) {

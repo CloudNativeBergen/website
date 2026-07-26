@@ -1,6 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { isProgramPublished } from '@/lib/conference/state'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '@/components/Sponsors'
@@ -44,7 +45,7 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (error || !conference) {
+  if (isUnknownHost({ conference, error })) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <Container>

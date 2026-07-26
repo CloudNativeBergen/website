@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -37,7 +38,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (error || !conference) {
+  if (isUnknownHost({ conference, error })) {
     console.error('Failed to load conference data:', error)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">

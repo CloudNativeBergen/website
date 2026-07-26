@@ -2,13 +2,21 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { Layout } from '@/components/Layout'
+import { PlatformLanding } from '@/components/PlatformLanding'
 import { headers } from 'next/headers'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 
 export default async function NotFound() {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
-  const { conference } = await getConferenceForDomain(domain, {})
+  const { conference, error } = await getConferenceForDomain(domain, {})
+
+  // Unknown host: don't render the tenant chrome (Header/Footer) around empty
+  // conference data — show the same platform landing every other page uses.
+  if (isUnknownHost({ conference, error })) {
+    return <PlatformLanding signupUrl={process.env.PLATFORM_SIGNUP_URL} />
+  }
 
   return (
     <Layout conference={conference} showFooter={false}>

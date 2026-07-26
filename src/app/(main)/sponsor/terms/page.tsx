@@ -1,6 +1,7 @@
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { getTermsForConference } from '@/lib/sponsor-crm/contract-templates'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
@@ -30,7 +31,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (confError || !conference) {
+  if (isUnknownHost({ conference, error: confError })) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <h2 className="mb-4 text-2xl font-bold text-red-600 dark:text-red-400">

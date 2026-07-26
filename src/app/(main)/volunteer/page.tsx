@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import VolunteerForm from '@/components/volunteer/VolunteerForm'
 import { UserGroupIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { Container } from '@/components/Container'
@@ -30,7 +31,7 @@ async function CachedVolunteerContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (error || !conference?._id) {
+  if (isUnknownHost({ conference, error })) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-36 -bottom-14" />

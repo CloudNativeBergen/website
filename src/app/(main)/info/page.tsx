@@ -1,5 +1,6 @@
 import { formatDate } from '@/lib/time'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { InfoContent } from '@/components/info/InfoContent'
@@ -77,7 +78,7 @@ async function CachedInfoContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:info')
 
-  const { conference } = await getConferenceForDomain(domain, {
+  const { conference, error } = await getConferenceForDomain(domain, {
     schedule: true,
   })
 
@@ -85,7 +86,7 @@ async function CachedInfoContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (!conference) {
+  if (isUnknownHost({ conference, error })) {
     return null
   }
 

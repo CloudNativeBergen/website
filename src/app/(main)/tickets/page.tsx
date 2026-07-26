@@ -1,4 +1,5 @@
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { isRegistrationAvailable } from '@/lib/conference/state'
 import { getPublicTicketTypes } from '@/lib/tickets/public'
 import { TicketPricingGrid } from '@/components/TicketPricingGrid'
@@ -98,8 +99,8 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (error) {
-    console.error('Error fetching conference data:', error)
+  if (isUnknownHost({ conference, error })) {
+    if (error) console.error('Error fetching conference data:', error)
     return <div>Error loading conference data</div>
   }
 
