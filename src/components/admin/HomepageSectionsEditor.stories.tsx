@@ -11,11 +11,13 @@ const handlers = [
   ),
 ]
 
+// Mirrors getDefaultSections() with a published schedule: the middle slot is the
+// phase-dependent Program Highlights, which the preview badges as auto-swapping.
 const defaultSections: HomepageSection[] = [
-  { _key: 'hero', _type: 'homepageHero' },
-  { _key: 'gallery', _type: 'homepageGallery' },
-  { _key: 'featured', _type: 'homepageFeaturedSpeakers' },
-  { _key: 'sponsors', _type: 'homepageSponsors' },
+  { _key: 'default-hero', _type: 'homepageHero' },
+  { _key: 'default-gallery', _type: 'homepageGallery' },
+  { _key: 'default-program', _type: 'homepageProgramHighlights' },
+  { _key: 'default-sponsors', _type: 'homepageSponsors' },
 ]
 
 const customSections: HomepageSection[] = [
@@ -32,6 +34,7 @@ const customSections: HomepageSection[] = [
     buttonLabel: 'Submit a talk',
     buttonHref: '/cfp',
   },
+  { _key: 'metrics', _type: 'homepageMetrics', heading: 'By the numbers' },
   { _key: 'gallery', _type: 'homepageGallery', hidden: true },
   { _key: 'sponsors', _type: 'homepageSponsors' },
 ]
@@ -45,7 +48,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Front-page builder (F2) admin editor — plain-form editing of the homepage section composition (F3 adds drag-and-drop). Reorder with up/down, toggle per-section visibility, and edit per-type config (hero copy + CTA overrides, CTA banner, rich text, metrics heading). "Reset to default" clears the stored list so the page falls back to the phase-aware default layout.',
+          'Front-page builder (F3) admin editor — a drag-and-drop composition builder with a live structural preview. Drag a card by its grab handle (pointer + keyboard) or use the up/down buttons (mobile + a11y fallback) to reorder; toggle per-section visibility; open per-type config inline as an accordion. The preview panel maps the composition to labeled bands in order (hidden ones ghosted, the default phase-dependent middle slot badged) and updates live while dragging. "Revert to default" (confirmed) clears the stored list so the page falls back to the phase-aware default layout.',
       },
     },
   },
@@ -90,6 +93,27 @@ export const CustomComposition: Story = {
     initialSections: customSections,
     usingDefault: false,
     defaultOpen: true,
+  },
+}
+
+/** The empty state after every section has been removed. */
+export const EmptyComposition: Story = {
+  args: {
+    initialSections: [],
+    usingDefault: false,
+    defaultOpen: true,
+  },
+}
+
+/** Mobile (393px): drag handles fall back to up/down buttons; preview stacks under the list. */
+export const Mobile: Story = {
+  args: {
+    initialSections: customSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  parameters: {
+    viewport: { defaultViewport: 'mobile1' },
   },
 }
 

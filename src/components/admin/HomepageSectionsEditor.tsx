@@ -1,20 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  PencilSquareIcon,
-  PlusIcon,
-  TrashIcon,
-  ChevronUpIcon,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
+  Bars3Icon,
   ChevronDownIcon,
+  ChevronUpIcon,
+  Cog6ToothIcon,
   EyeIcon,
   EyeSlashIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  Squares2X2Icon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
-import type { PortableTextBlock } from '@portabletext/editor'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import {
@@ -22,119 +44,34 @@ import {
   type HomepageSection,
   type HomepageSectionType,
 } from '@/lib/homepage/sections'
+import {
+  SECTION_LABELS,
+  isConfigurable,
+  moveByIndex,
+  nextKey,
+  reorderByKey,
+  serializeRows,
+  toEditorRows,
+  toPayload,
+  toPreviewBands,
+  type EditorRow,
+  type PreviewBand,
+} from '@/lib/homepage/editor'
 
 /**
- * Front-page builder (F2) admin editor — PLAIN form editing of the homepage
- * section composition. F3 will add drag-and-drop; for now sections reorder with
- * up/down buttons, toggle visibility, and expose per-type config (hero copy +
- * CTA overrides, CTA banner, rich text, metrics heading). Content-free blocks
- * (featured speakers, program, organizers, sponsors, gallery) carry only their
- * visibility flag — their content still comes from the existing conference
- * sources. Saves via `conference.updateHomepageSections` and refreshes the card.
+ * Front-page builder (F3) admin editor — a drag-and-drop composition builder
+ * with a live structural preview.
  *
- * "Reset to default" clears the stored list, so the page falls back to the
- * phase-aware default layout.
+ * Interaction: section cards reorder by dragging their grab handle (pointer +
+ * keyboard via dnd-kit's SortableContext), with the up/down buttons retained as
+ * the mobile + a11y fallback. Per-type config opens inline as an accordion on
+ * the card, so add → configure → reorder stays on one surface. A compact preview
+ * panel maps the composition to labeled bands in order (hidden ones ghosted, the
+ * default phase-dependent middle slot badged) and updates live as you drag.
+ *
+ * Saves via `conference.updateHomepageSections`. "Revert to default" (confirmed)
+ * clears the stored list so the page falls back to the phase-aware default.
  */
-
-const SECTION_LABELS: Record<HomepageSectionType, string> = {
-  homepageHero: 'Hero',
-  homepageFeaturedSpeakers: 'Featured Speakers',
-  homepageProgramHighlights: 'Program Highlights',
-  homepageOrganizers: 'Organizers',
-  homepageSponsors: 'Sponsors',
-  homepageGallery: 'Photo Gallery',
-  homepageMetrics: 'Vanity Metrics',
-  homepageCtaBanner: 'Call-to-action Banner',
-  homepageRichText: 'Rich Text',
-}
-
-/** Working row shape — a superset of every block's fields, keyed for the list. */
-interface EditorRow {
-  _key: string
-  _type: HomepageSectionType
-  hidden?: boolean
-  heroHeadline?: string
-  heroSubheadline?: string
-  ctaOverrides?: { _key: string; label: string; href: string }[]
-  heading?: string
-  body?: string
-  buttonLabel?: string
-  buttonHref?: string
-  content?: PortableTextBlock[]
-}
-
-let keyCounter = 0
-const nextKey = () => `hp-${Date.now()}-${++keyCounter}`
-
-function toEditorRows(sections: HomepageSection[]): EditorRow[] {
-  return sections.map((s) => {
-    const row: EditorRow = {
-      _key: s._key || nextKey(),
-      _type: s._type,
-      hidden: s.hidden,
-    }
-    if (s._type === 'homepageHero') {
-      row.heroHeadline = s.heroHeadline
-      row.heroSubheadline = s.heroSubheadline
-      row.ctaOverrides = (s.ctaOverrides ?? []).map((c) => ({
-        _key: c._key || nextKey(),
-        label: c.label,
-        href: c.href,
-      }))
-    } else if (s._type === 'homepageCtaBanner') {
-      row.heading = s.heading
-      row.body = s.body
-      row.buttonLabel = s.buttonLabel
-      row.buttonHref = s.buttonHref
-    } else if (s._type === 'homepageRichText') {
-      row.heading = s.heading
-      row.content = (s.content as PortableTextBlock[]) ?? []
-    } else if (s._type === 'homepageMetrics') {
-      row.heading = s.heading
-    }
-    return row
-  })
-}
-
-/** Build the mutation payload; empty strings are dropped by the server. */
-function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
-  return rows.map((row) => {
-    const out: Record<string, unknown> = { _type: row._type, _key: row._key }
-    if (row.hidden) out.hidden = true
-    switch (row._type) {
-      case 'homepageHero':
-        if (row.heroHeadline?.trim()) out.heroHeadline = row.heroHeadline.trim()
-        if (row.heroSubheadline?.trim())
-          out.heroSubheadline = row.heroSubheadline.trim()
-        if (row.ctaOverrides && row.ctaOverrides.length > 0) {
-          out.ctaOverrides = row.ctaOverrides
-            .filter((c) => c.label.trim() && c.href.trim())
-            .map((c) => ({
-              _key: c._key,
-              label: c.label.trim(),
-              href: c.href.trim(),
-            }))
-        }
-        break
-      case 'homepageCtaBanner':
-        out.heading = row.heading?.trim() ?? ''
-        if (row.body?.trim()) out.body = row.body.trim()
-        out.buttonLabel = row.buttonLabel?.trim() ?? ''
-        out.buttonHref = row.buttonHref?.trim() ?? ''
-        break
-      case 'homepageRichText':
-        if (row.heading?.trim()) out.heading = row.heading.trim()
-        out.content = row.content ?? []
-        break
-      case 'homepageMetrics':
-        if (row.heading?.trim()) out.heading = row.heading.trim()
-        break
-      default:
-        break
-    }
-    return out
-  })
-}
 
 const inputClass =
   'block w-full min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white'
@@ -165,6 +102,28 @@ export function HomepageSectionsEditor({
   const [addType, setAddType] =
     useState<HomepageSectionType>('homepageCtaBanner')
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [confirmingRevert, setConfirmingRevert] = useState(false)
+  // Live drag state: the id being dragged and the id it is currently over, used
+  // to PROJECT the in-progress order into the preview without disturbing the
+  // sortable list (which animates itself via transforms).
+  const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [overKey, setOverKey] = useState<string | null>(null)
+
+  // The composition serialized at open time; the unsaved-changes guard compares
+  // the live rows against it. Recomputed whenever the stored props change.
+  const initialSignature = useMemo(
+    () => serializeRows(toEditorRows(initialSections)),
+    [initialSections],
+  )
+  const isDirty = serializeRows(rows) !== initialSignature
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   const mutation = api.conference.updateHomepageSections.useMutation({
     onSuccess: () => {
@@ -190,6 +149,9 @@ export function HomepageSectionsEditor({
   const reset = () => {
     setRows(toEditorRows(initialSections))
     setSubmitError(null)
+    setExpanded(new Set())
+    setActiveKey(null)
+    setOverKey(null)
   }
   const open = () => {
     reset()
@@ -200,23 +162,57 @@ export function HomepageSectionsEditor({
     reset()
   }
 
+  const toggleExpanded = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
   const patchRow = (key: string, patch: Partial<EditorRow>) =>
     setRows((prev) =>
       prev.map((r) => (r._key === key ? { ...r, ...patch } : r)),
     )
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= rows.length) return
-    setRows((prev) => {
-      const next = prev.slice()
-      const [item] = next.splice(from, 1)
-      next.splice(to, 0, item)
+  const move = (from: number, to: number) =>
+    setRows((prev) => moveByIndex(prev, from, to))
+  const remove = (key: string) => {
+    setRows((prev) => prev.filter((r) => r._key !== key))
+    setExpanded((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
       return next
     })
   }
-  const remove = (key: string) =>
-    setRows((prev) => prev.filter((r) => r._key !== key))
-  const add = () =>
-    setRows((prev) => [...prev, { _key: nextKey(), _type: addType }])
+  const add = () => {
+    const key = nextKey()
+    setRows((prev) => [...prev, { _key: key, _type: addType }])
+    // Auto-expand a freshly added configurable block so add → configure flows
+    // without a second click.
+    if (isConfigurable(addType)) {
+      setExpanded((prev) => new Set(prev).add(key))
+    }
+  }
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveKey(String(event.active.id))
+    setOverKey(String(event.active.id))
+  }
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverKey(event.over ? String(event.over.id) : null)
+  }
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveKey(null)
+    setOverKey(null)
+    if (!over || active.id === over.id) return
+    setRows((prev) => reorderByKey(prev, String(active.id), String(over.id)))
+  }
+  const handleDragCancel = () => {
+    setActiveKey(null)
+    setOverKey(null)
+  }
 
   const validate = (): string | null => {
     for (const r of rows) {
@@ -240,15 +236,29 @@ export function HomepageSectionsEditor({
       setSubmitError(err)
       return
     }
-    mutation.mutate({
-      homepageSections: toPayload(rows) as never,
-    })
+    mutation.mutate({ homepageSections: toPayload(rows) as never })
   }
 
-  const resetToDefault = () => {
+  const revertToDefault = () => {
+    setConfirmingRevert(false)
     setSubmitError(null)
     mutation.mutate({ homepageSections: [] })
   }
+
+  // The preview reflects the in-progress order while dragging (projected from
+  // active/over) and the committed order otherwise. Cheap: a labeled-box map.
+  const previewRows = useMemo(
+    () => (activeKey ? reorderByKey(rows, activeKey, overKey) : rows),
+    [rows, activeKey, overKey],
+  )
+  const previewBands = useMemo(
+    () => toPreviewBands(previewRows, usingDefault),
+    [previewRows, usingDefault],
+  )
+
+  const activeRow = activeKey
+    ? rows.find((r) => r._key === activeKey)
+    : undefined
 
   return (
     <>
@@ -264,110 +274,111 @@ export function HomepageSectionsEditor({
       <ModalShell
         isOpen={isOpen}
         onClose={close}
-        size="3xl"
+        size="4xl"
         title="Edit Homepage Sections"
-        subtitle="Compose and order the front-page blocks"
+        subtitle="Compose, reorder and preview the front-page blocks"
         icon={<PencilSquareIcon className="h-5 w-5" />}
+        confirmOnDirtyClose
+        isDirty={isDirty}
       >
         <div className="space-y-4">
           {usingDefault ? (
             <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-              This conference uses the default layout. Saving a composition
-              below overrides it; “Reset to default” restores the automatic
-              layout.
+              Using the default layout — customize below to override it. “Revert
+              to default” restores the automatic phase-aware layout at any time.
             </p>
           ) : null}
 
-          <ul className="space-y-3">
-            {rows.map((row, index) => (
-              <li
-                key={row._key}
-                className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                    {index + 1}. {SECTION_LABELS[row._type]}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className={rowBtnClass}
-                      onClick={() =>
-                        patchRow(row._key, { hidden: !row.hidden })
-                      }
-                      aria-label={
-                        row.hidden
-                          ? `Show ${SECTION_LABELS[row._type]}`
-                          : `Hide ${SECTION_LABELS[row._type]}`
-                      }
-                      title={row.hidden ? 'Hidden — click to show' : 'Visible'}
-                    >
-                      {row.hidden ? (
-                        <EyeSlashIcon className="h-5 w-5" />
-                      ) : (
-                        <EyeIcon className="h-5 w-5" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className={rowBtnClass}
-                      onClick={() => move(index, index - 1)}
-                      disabled={index === 0}
-                      aria-label={`Move ${SECTION_LABELS[row._type]} up`}
-                    >
-                      <ChevronUpIcon className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      className={rowBtnClass}
-                      onClick={() => move(index, index + 1)}
-                      disabled={index === rows.length - 1}
-                      aria-label={`Move ${SECTION_LABELS[row._type]} down`}
-                    >
-                      <ChevronDownIcon className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      className={`${rowBtnClass} hover:text-red-600`}
-                      onClick={() => remove(row._key)}
-                      aria-label={`Remove ${SECTION_LABELS[row._type]}`}
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
-                  </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
+            {/* Section list (drag + fallback controls) */}
+            <div className="min-w-0">
+              {rows.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
+                  <Squares2X2Icon className="mx-auto h-10 w-10 text-gray-400" />
+                  <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+                    No sections yet
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Add a section below, or revert to the default layout.
+                  </p>
                 </div>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                  onDragCancel={handleDragCancel}
+                >
+                  <SortableContext
+                    items={rows.map((r) => r._key)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul className="space-y-3">
+                      {rows.map((row, index) => (
+                        <SortableSectionCard
+                          key={row._key}
+                          row={row}
+                          index={index}
+                          total={rows.length}
+                          expanded={expanded.has(row._key)}
+                          onToggleExpanded={() => toggleExpanded(row._key)}
+                          onPatch={(p) => patchRow(row._key, p)}
+                          onToggleHidden={() =>
+                            patchRow(row._key, { hidden: !row.hidden })
+                          }
+                          onMoveUp={() => move(index, index - 1)}
+                          onMoveDown={() => move(index, index + 1)}
+                          onRemove={() => remove(row._key)}
+                        />
+                      ))}
+                    </ul>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeRow ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-brand-cloud-blue bg-white px-3 py-3 shadow-lg ring-2 ring-brand-cloud-blue/30 dark:bg-gray-800">
+                        <Bars3Icon className="h-5 w-5 text-gray-400" />
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {SECTION_LABELS[activeRow._type]}
+                        </span>
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
 
-                <SectionConfig
-                  row={row}
-                  onChange={(p) => patchRow(row._key, p)}
-                />
-              </li>
-            ))}
-          </ul>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select
+                  value={addType}
+                  onChange={(e) =>
+                    setAddType(e.target.value as HomepageSectionType)
+                  }
+                  aria-label="Section type to add"
+                  className={`${inputClass} w-auto`}
+                >
+                  {HOMEPAGE_SECTION_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {SECTION_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={add}
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-300"
+                >
+                  <PlusIcon className="h-5 w-5" />
+                  Add section
+                </button>
+              </div>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={addType}
-              onChange={(e) =>
-                setAddType(e.target.value as HomepageSectionType)
-              }
-              aria-label="Section type to add"
-              className={`${inputClass} w-auto`}
-            >
-              {HOMEPAGE_SECTION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {SECTION_LABELS[t]}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={add}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-300"
-            >
-              <PlusIcon className="h-5 w-5" />
-              Add section
-            </button>
+            {/* Live structural preview */}
+            <CompositionPreview
+              bands={previewBands}
+              usingDefault={usingDefault}
+            />
           </div>
 
           {submitError ? (
@@ -384,11 +395,11 @@ export function HomepageSectionsEditor({
               type="button"
               variant="secondary"
               size="md"
-              onClick={resetToDefault}
+              onClick={() => setConfirmingRevert(true)}
               disabled={mutation.isPending}
               className="min-h-[44px]"
             >
-              Reset to default
+              Revert to default
             </AdminButton>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <AdminButton
@@ -415,11 +426,216 @@ export function HomepageSectionsEditor({
           </div>
         </div>
       </ModalShell>
+
+      <ConfirmationModal
+        isOpen={confirmingRevert}
+        onClose={() => setConfirmingRevert(false)}
+        onConfirm={revertToDefault}
+        title="Revert to default layout?"
+        message="This clears your saved composition and restores the automatic, phase-aware homepage. This cannot be undone."
+        confirmButtonText="Revert to default"
+        variant="warning"
+        isLoading={mutation.isPending}
+      />
     </>
   )
 }
 
-/** Per-type config editor. Content-free blocks render an explanatory line only. */
+/** One draggable/sortable section card, with inline accordion config. */
+function SortableSectionCard({
+  row,
+  index,
+  total,
+  expanded,
+  onToggleExpanded,
+  onPatch,
+  onToggleHidden,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}: {
+  row: EditorRow
+  index: number
+  total: number
+  expanded: boolean
+  onToggleExpanded: () => void
+  onPatch: (patch: Partial<EditorRow>) => void
+  onToggleHidden: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onRemove: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row._key })
+
+  const label = SECTION_LABELS[row._type]
+  const configurable = isConfigurable(row._type)
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`rounded-lg border bg-white dark:bg-gray-800/40 ${
+        isDragging
+          ? 'z-10 border-brand-cloud-blue opacity-50'
+          : 'border-gray-200 dark:border-gray-700'
+      } ${row.hidden ? 'opacity-60' : ''}`}
+    >
+      <div className="flex items-center gap-1 p-2 sm:gap-2 sm:p-3">
+        {/* Grab handle: dnd-kit attributes + listeners on the focusable button so
+            Enter/Space starts a keyboard drag; up/down buttons remain the mobile
+            + a11y fallback. */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Drag ${label} to reorder`}
+          className="hidden h-11 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue active:cursor-grabbing sm:inline-flex dark:hover:bg-gray-800 dark:hover:text-gray-300"
+        >
+          <Bars3Icon className="h-5 w-5" />
+        </button>
+
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-white">
+            <span className="text-gray-400 tabular-nums">{index + 1}.</span>{' '}
+            {label}
+          </span>
+          {row.hidden ? (
+            <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+              Hidden
+            </span>
+          ) : null}
+        </div>
+
+        <div className="flex items-center">
+          {configurable ? (
+            <button
+              type="button"
+              className={rowBtnClass}
+              onClick={onToggleExpanded}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Collapse' : 'Configure'} ${label}`}
+              title="Configure"
+            >
+              <Cog6ToothIcon className="h-5 w-5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onToggleHidden}
+            aria-label={row.hidden ? `Show ${label}` : `Hide ${label}`}
+            title={row.hidden ? 'Hidden — click to show' : 'Visible'}
+          >
+            {row.hidden ? (
+              <EyeSlashIcon className="h-5 w-5" />
+            ) : (
+              <EyeIcon className="h-5 w-5" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onMoveUp}
+            disabled={index === 0}
+            aria-label={`Move ${label} up`}
+          >
+            <ChevronUpIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            aria-label={`Move ${label} down`}
+          >
+            <ChevronDownIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className={`${rowBtnClass} hover:text-red-600`}
+            onClick={onRemove}
+            aria-label={`Remove ${label}`}
+          >
+            <TrashIcon className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {configurable && expanded ? (
+        <div className="border-t border-gray-200 px-3 pt-2 pb-3 dark:border-gray-700">
+          <SectionConfig row={row} onChange={onPatch} />
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+/** Compact structural preview — labeled bands in order, hidden ones ghosted. */
+function CompositionPreview({
+  bands,
+  usingDefault,
+}: {
+  bands: PreviewBand[]
+  usingDefault: boolean
+}) {
+  const visibleCount = bands.filter((b) => !b.hidden).length
+  return (
+    <aside
+      aria-label="Homepage structure preview"
+      className="rounded-lg border border-gray-200 bg-gray-50 p-3 lg:sticky lg:top-0 lg:self-start dark:border-gray-700 dark:bg-gray-900/40"
+    >
+      <p className="mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+        Page structure
+      </p>
+      {bands.length === 0 ? (
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          Nothing to preview.
+        </p>
+      ) : (
+        <ol className="space-y-1.5">
+          {bands.map((band, i) => (
+            <li
+              key={band.key}
+              className={`rounded-md border px-2.5 py-2 text-xs font-medium ${
+                band.hidden
+                  ? 'border-dashed border-gray-300 bg-transparent text-gray-400 dark:border-gray-600 dark:text-gray-500'
+                  : 'border-transparent bg-white text-gray-800 shadow-sm dark:bg-gray-800 dark:text-gray-100'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-400 tabular-nums">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{band.label}</span>
+                {band.hidden ? (
+                  <span className="shrink-0 text-[10px] tracking-wide uppercase">
+                    hidden
+                  </span>
+                ) : null}
+              </div>
+              {band.isPhaseSlot ? (
+                <p className="mt-1 text-[10px] leading-tight text-brand-cloud-blue dark:text-blue-400">
+                  Auto-swaps with the conference phase
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="mt-2 text-[11px] leading-tight text-gray-400 dark:text-gray-500">
+        {visibleCount} visible section{visibleCount === 1 ? '' : 's'}
+        {usingDefault ? ' · default layout' : ''}
+      </p>
+    </aside>
+  )
+}
+
+/** Per-type config editor. Only reached for configurable blocks (accordion). */
 function SectionConfig({
   row,
   onChange,
@@ -430,7 +646,7 @@ function SectionConfig({
   if (row._type === 'homepageHero') {
     const ctas = row.ctaOverrides ?? []
     return (
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         <input
           type="text"
           value={row.heroHeadline ?? ''}
@@ -509,7 +725,7 @@ function SectionConfig({
 
   if (row._type === 'homepageCtaBanner') {
     return (
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         <input
           type="text"
           value={row.heading ?? ''}
@@ -526,7 +742,7 @@ function SectionConfig({
           rows={2}
           className={inputClass}
         />
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={row.buttonLabel ?? ''}
@@ -550,7 +766,7 @@ function SectionConfig({
 
   if (row._type === 'homepageRichText') {
     return (
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         <input
           type="text"
           value={row.heading ?? ''}
@@ -571,7 +787,7 @@ function SectionConfig({
 
   if (row._type === 'homepageMetrics') {
     return (
-      <div className="mt-3">
+      <div>
         <input
           type="text"
           value={row.heading ?? ''}
@@ -587,9 +803,5 @@ function SectionConfig({
     )
   }
 
-  return (
-    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-      Content comes from the existing conference configuration.
-    </p>
-  )
+  return null
 }
