@@ -76,14 +76,16 @@ export function CollapsibleSection({
         ) : null}
       </div>
 
-      {isOpen && (
-        <div
-          id={contentId}
-          className="border-t border-gray-200 dark:border-gray-700"
-        >
-          {children}
-        </div>
-      )}
+      {/* The controlled region keeps its id in the DOM while collapsed so the
+          aria-controls relationship always resolves; children stay
+          conditionally rendered (no hidden work for collapsed cards). */}
+      <div
+        id={contentId}
+        hidden={!isOpen}
+        className="border-t border-gray-200 dark:border-gray-700"
+      >
+        {isOpen ? children : null}
+      </div>
     </div>
   )
 }

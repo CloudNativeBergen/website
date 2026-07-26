@@ -402,8 +402,8 @@ export function formatLabel(value: string): string {
 }
 
 /**
- * Wall-clock parts of an instant in Europe/Oslo (DST-correct, via Intl).
- * sv-SE formats as "YYYY-MM-DD HH:mm" which splits cleanly.
+ * Wall-clock parts of an instant in Europe/Oslo (DST-correct, via Intl),
+ * assembled from formatToParts values — never from a locale-formatted string.
  */
 function osloParts(instant: Date): {
   date: string
