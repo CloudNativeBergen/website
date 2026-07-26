@@ -107,7 +107,7 @@ export function ManageLink({ href, label }: ManageLinkTarget) {
       className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
     >
       {label}
-      <ArrowUpRightIcon className="h-4 w-4" />
+      <ArrowUpRightIcon className="h-4 w-4" aria-hidden="true" />
     </Link>
   )
 }
@@ -371,7 +371,10 @@ export function LinkedBadgeList({
                 className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-300"
               >
                 <span className="min-w-0 break-words">{item.label}</span>
-                <ArrowUpRightIcon className="h-3 w-3 shrink-0" />
+                <ArrowUpRightIcon
+                  className="h-3 w-3 shrink-0"
+                  aria-hidden="true"
+                />
               </Link>
             ))}
           </div>

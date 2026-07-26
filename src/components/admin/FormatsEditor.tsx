@@ -44,13 +44,17 @@ export function FormatsEditor({
   const initial = selectedFormats.filter((k): k is Format =>
     ALL_FORMATS.some((f) => f.key === k),
   )
-  // Non-canonical stored keys are shown nowhere but MUST count as a pending
-  // change: baselining on the RAW stored list makes the editor open dirty, so
-  // one Save persists the cleaned canonical set.
-  const hasStaleStoredKeys = initial.length !== selectedFormats.length
+  // Non-canonical OR duplicate stored keys are shown nowhere but MUST count
+  // as a pending change: the editor opens dirty so one Save persists the
+  // cleaned, unique canonical set.
+  const hasStaleStoredKeys =
+    initial.length !== selectedFormats.length ||
+    new Set(selectedFormats).size !== selectedFormats.length
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
-  const [selectedKeys, setSelectedKeys] = useState<Format[]>(initial)
+  const [selectedKeys, setSelectedKeys] = useState<Format[]>([
+    ...new Set(initial),
+  ])
   const [error, setError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
