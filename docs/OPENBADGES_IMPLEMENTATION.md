@@ -202,8 +202,9 @@ The badges are:
 - **Subject ID:** `mailto:speaker@example.com` (email-based recipient
   identity, always lowercased — Credly matches recipients by a
   case-sensitive email hash)
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`
-  (embedded proof) and `{baseUrl}/api/badge/keys/key-1` (JWT `kid`)
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519`
+  (embedded proof — a dereferenceable bare Multikey document, since #655) and
+  `{baseUrl}/api/badge/keys/key-1` (JWT `kid`)
 
 **URLs:**
 
@@ -220,9 +221,12 @@ The badges are:
 - **Type:** `DataIntegrityProof`
 - **Cryptosuite:** `eddsa-rdfc-2022` (Ed25519 signatures)
 - **Proof Purpose:** `assertionMethod`
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519` —
-  verifiers strip the fragment and fetch the issuer profile, which lists the
-  key in its `verificationMethod` array with `controller` = issuer id
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519` — a
+  dereferenceable endpoint returning the bare Multikey document (the 1EdTech
+  EmbeddedProofProbe reads `controller`/`publicKeyMultibase` off the response
+  root; the pre-#655 issuer-profile fragment NPE'd it). The issuer profile
+  lists BOTH the new keys-URL id and the legacy `#key-ed25519` fragment so
+  badges baked before #655 keep verifying against our own routes until rebaked
 
 **JWT Proof (RS256 - Secondary):**
 
@@ -306,8 +310,9 @@ Every badge is signed with both methods:
 - **Document loader:** fully offline — Digital Bazaar's `securityLoader`
   extended with the vendored OB 3.0 context (`/lib/openbadges/data/`); our
   own signing/verification never fetches contexts over the network
-- **Verification Method:** `{baseUrl}/api/badge/issuer#key-ed25519`, listed
-  as a Multikey in the issuer profile with `controller` = issuer id
+- **Verification Method:** `{baseUrl}/api/badge/keys/key-ed25519` (bare
+  Multikey document; also listed in the issuer profile with `controller` =
+  issuer id, alongside the legacy fragment id for pre-#655 badges)
 - **Baking:** Credential embedded in SVG as
   `<openbadges:credential><![CDATA[{json}]]></openbadges:credential>`
   (no `verify` attribute)
