@@ -139,6 +139,17 @@ export interface Conference {
    * conference projection's `...` spread.
    */
   backgroundPattern?: BackgroundPattern
+  /**
+   * Per-tenant brand theme (THEMING L1). Optional design-token override for the
+   * primary interactive colour and the gradient accent; ABSENT renders the house
+   * palette pixel-identical. Resolved into CSS custom properties by `ThemeStyle`
+   * / `conferenceThemeCss`. Projected by the main conference projection's `...`
+   * spread. See `@/lib/branding/theme`.
+   */
+  theme?: {
+    primaryColor?: string
+    accentColor?: string
+  }
   announcement?: TypedObject[]
   startDate: string
   endDate: string

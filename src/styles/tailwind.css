@@ -158,11 +158,30 @@
   --radius-4xl: 2rem;
   --radius-5xl: 2.5rem;
 
+  /*
+   * Per-tenant theme seam (THEMING L1).
+   *
+   * The three brand tokens a conference may re-skin — the primary interactive
+   * colour, its hover shade and the gradient endpoint (accent) — resolve through
+   * CSS custom properties whose FALLBACK is the current house value. With no
+   * override injected, `var(--brand-primary, #1d4ed8)` computes to exactly
+   * `#1d4ed8`, so the site renders pixel-identical (the L1 hard requirement).
+   *
+   * A per-conference `<style>` (see ThemeStyle / `conferenceThemeCss`) sets
+   * `--brand-primary` / `--brand-primary-hover` / `--brand-accent` on `:root`
+   * when a tenant theme exists. Those variables are ALSO read by the dark-mode
+   * rules below (each with its own darker fallback), so ONE `:root` injection
+   * re-skins both light and dark without a `.dark` redefinition to clobber it.
+   *
+   * L1 does NOT auto-derive contrast: a light primary on white is the admin's
+   * responsibility (the settings preview shows the result). Secondary brand
+   * hues (green/purple/yellow/sky) and per-usage dark tints are NOT L1 knobs.
+   */
   /* Cloud Native Days Norway Brand Colors */
-  --color-brand-cloud-blue: #1d4ed8;
-  --color-brand-cloud-blue-hover: #1e40af;
+  --color-brand-cloud-blue: var(--brand-primary, #1d4ed8);
+  --color-brand-cloud-blue-hover: var(--brand-primary-hover, #1e40af);
   --color-brand-aqua-start: #3b82f6;
-  --color-brand-aqua-end: #06b6d4;
+  --color-brand-aqua-end: var(--brand-accent, #06b6d4);
   --color-brand-sky-mist: #e0f2fe;
   --color-brand-fresh-green: #10b981;
   --color-brand-fresh-green-hover: #059669;
@@ -192,7 +211,11 @@
 
   /* Background Image Utilities */
   --background-image-aqua-gradient: linear-gradient(135deg, #3b82f6, #06b6d4);
-  --background-image-brand-gradient: linear-gradient(135deg, #1d4ed8, #06b6d4);
+  --background-image-brand-gradient: linear-gradient(
+    135deg,
+    var(--brand-primary, #1d4ed8),
+    var(--brand-accent, #06b6d4)
+  );
   --background-image-nordic-gradient: linear-gradient(135deg, #6366f1, #1d4ed8);
   --background-image-cloud-gradient: linear-gradient(135deg, #1d4ed8, #3b82f6);
   --background-image-aqua-gradient-to-r: linear-gradient(
@@ -206,11 +229,11 @@
     #06b6d4
   );
 
-  /* Color System */
-  --color-brand-cloud-blue: #1d4ed8;
-  --color-brand-cloud-blue-hover: #1e40af;
+  /* Color System (duplicate declarations — kept in sync with the seam above) */
+  --color-brand-cloud-blue: var(--brand-primary, #1d4ed8);
+  --color-brand-cloud-blue-hover: var(--brand-primary-hover, #1e40af);
   --color-brand-aqua-start: #3b82f6;
-  --color-brand-aqua-end: #06b6d4;
+  --color-brand-aqua-end: var(--brand-accent, #06b6d4);
   --color-brand-sky-mist: #e0f2fe;
   --color-brand-fresh-green: #10b981;
   --color-brand-fresh-green-hover: #059669;
@@ -316,7 +339,9 @@
 }
 
 .dark .bg-brand-cloud-blue {
-  background-color: #1e40af; /* blue-800 equivalent */
+  /* Reads the tenant override (set once on :root); dark house shade is the
+     fallback, so the default renders identically. */
+  background-color: var(--brand-primary, #1e40af); /* blue-800 equivalent */
 }
 
 .bg-brand-sky-mist {
@@ -373,7 +398,10 @@
 }
 
 .dark .hover\:bg-brand-cloud-blue-hover:hover {
-  background-color: #1e40af; /* blue-700 equivalent */
+  background-color: var(
+    --brand-primary-hover,
+    #1e40af
+  ); /* blue-700 equivalent */
 }
 
 .hover\:bg-brand-fresh-green-hover:hover {
@@ -499,10 +527,11 @@
 }
 
 .dark .bg-brand-gradient {
+  /* Same override vars as light; dark house endpoints are the fallbacks. */
   background-image: linear-gradient(
     135deg,
-    #1e3a8a,
-    #155e75
+    var(--brand-primary, #1e3a8a),
+    var(--brand-accent, #155e75)
   ); /* blue-900 to cyan-800 */
 }
 
@@ -536,7 +565,7 @@
 }
 
 .dark .border-brand-cloud-blue {
-  border-color: #2563eb; /* blue-600 equivalent */
+  border-color: var(--brand-primary, #2563eb); /* blue-600 equivalent */
 }
 
 .border-brand-sky-mist {
@@ -763,7 +792,7 @@
   appearance: none;
   width: 1.25rem;
   height: 1.25rem;
-  background-color: #1d4ed8;
+  background-color: var(--brand-primary, #1d4ed8);
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -776,7 +805,7 @@
 .slider::-moz-range-thumb {
   width: 1.25rem;
   height: 1.25rem;
-  background-color: #1d4ed8;
+  background-color: var(--brand-primary, #1d4ed8);
   border-radius: 50%;
   cursor: pointer;
   border: 0;

@@ -20,6 +20,7 @@ import {
   BrandingEditor,
   BrandingPreviewGrid,
 } from '@/components/admin/BrandingEditor'
+import { ThemeEditor, ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import {
   normalizeBackgroundPattern,
   type BackgroundPattern,
@@ -505,6 +506,7 @@ export default async function AdminSettings() {
                     ),
                   }}
                 />
+                <ThemeEditor initialTheme={conference.theme} />
                 <BrandingEditor
                   initialValues={{
                     logoBright: conference.logoBright,
@@ -532,6 +534,12 @@ export default async function AdminSettings() {
                 ]
               }
             />
+            <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
+              <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                Brand Colors
+              </p>
+              <ThemeSwatchRow theme={conference.theme} />
+            </div>
           </InfoCard>
 
           <InfoCard

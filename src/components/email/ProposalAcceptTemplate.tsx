@@ -18,6 +18,7 @@ export function ProposalAcceptTemplate({
   confirmUrl,
   comment,
   socialLinks = [],
+  brandColor,
 }: ProposalAcceptTemplateProps) {
   const congratsText = (
     <p
@@ -87,6 +88,7 @@ export function ProposalAcceptTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       showMessagesLink
       footer={footer}
     >

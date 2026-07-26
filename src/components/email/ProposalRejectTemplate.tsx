@@ -12,6 +12,7 @@ export function ProposalRejectTemplate({
   eventUrl,
   comment,
   socialLinks = [],
+  brandColor,
 }: ProposalRejectTemplateProps) {
   const decisionText = (
     <p
@@ -81,6 +82,7 @@ export function ProposalRejectTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       showMessagesLink
       footer={footer}
     >

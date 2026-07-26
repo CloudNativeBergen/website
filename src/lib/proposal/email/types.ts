@@ -9,6 +9,12 @@ export interface BaseEmailTemplateProps {
   eventUrl: string
   comment?: string
   socialLinks?: string[]
+  /**
+   * Per-tenant brand accent (THEMING L1). The conference theme's primary hex,
+   * resolved by the sender via `emailBrandColor`; absent falls back to the house
+   * blue inside `BaseEmailTemplate`.
+   */
+  brandColor?: string
 }
 
 export interface ProposalAcceptTemplateProps extends BaseEmailTemplateProps {
@@ -25,6 +31,8 @@ export interface NotificationEventData {
   organizer: string
   socialLinks?: string[]
   contactEmail?: string
+  /** Conference theme primary hex (THEMING L1); see `emailBrandColor`. */
+  brandColor?: string
 }
 
 export interface NotificationParams {
@@ -54,6 +62,7 @@ export function createTemplateProps(
     eventUrl: params.event.url,
     socialLinks: params.event.socialLinks || [],
     comment: params.comment,
+    ...(params.event.brandColor && { brandColor: params.event.brandColor }),
     ...(confirmUrl && { confirmUrl }),
   }
 }

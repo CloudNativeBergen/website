@@ -12,6 +12,7 @@ export function ProposalWaitlistTemplate({
   eventUrl,
   comment,
   socialLinks = [],
+  brandColor,
 }: BaseEmailTemplateProps) {
   const waitlistText = (
     <p
@@ -84,6 +85,7 @@ export function ProposalWaitlistTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       showMessagesLink
       footer={footer}
     >

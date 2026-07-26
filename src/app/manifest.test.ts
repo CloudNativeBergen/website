@@ -95,7 +95,7 @@ describe('manifest — per-host PWA identity', () => {
     expect(result.short_name).toBe('CND')
   })
 
-  it('keeps id/scope/start_url/theme_color host-invariant', async () => {
+  it('keeps id/scope/start_url host-invariant', async () => {
     withHost('2026.cloudnativebergen.dev')
     getConferenceForDomainMock.mockResolvedValue({
       conference: { title: 'Whatever Conf' },
@@ -108,7 +108,51 @@ describe('manifest — per-host PWA identity', () => {
     expect(result.id).toBe('/')
     expect(result.scope).toBe('/')
     expect(result.start_url).toBe('/launch')
-    expect(result.theme_color).toBe('#1d4ed8')
+  })
+
+  it('uses the house primary as theme_color when the conference has no theme', async () => {
+    withHost('2026.cloudnativebergen.dev')
+    getConferenceForDomainMock.mockResolvedValue({
+      conference: { title: 'Whatever Conf' },
+      domain: '2026.cloudnativebergen.dev',
+      error: null,
+    })
+
+    const result = await manifest()
+
+    expect(result.theme_color).toBe('#1D4ED8')
+  })
+
+  it('uses the conference theme primary as theme_color (THEMING L1)', async () => {
+    withHost('purple.example.dev')
+    getConferenceForDomainMock.mockResolvedValue({
+      conference: {
+        title: 'Purple Conf',
+        theme: { primaryColor: '#7C3AED', accentColor: '#22D3EE' },
+      },
+      domain: 'purple.example.dev',
+      error: null,
+    })
+
+    const result = await manifest()
+
+    expect(result.theme_color).toBe('#7C3AED')
+  })
+
+  it('ignores a malformed theme primary and falls back to the house blue', async () => {
+    withHost('bad.example.dev')
+    getConferenceForDomainMock.mockResolvedValue({
+      conference: {
+        title: 'Bad Conf',
+        theme: { primaryColor: 'not-a-color' },
+      },
+      domain: 'bad.example.dev',
+      error: null,
+    })
+
+    const result = await manifest()
+
+    expect(result.theme_color).toBe('#1D4ED8')
   })
 
   it('uses a short title verbatim as short_name', async () => {

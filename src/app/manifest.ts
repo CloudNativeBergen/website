@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { DEFAULT_PRIMARY_COLOR, manifestThemeColor } from '@/lib/branding/theme'
 
 /**
  * Web app manifest (Next.js metadata route → `/manifest.webmanifest`).
@@ -14,10 +15,14 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
  * for the request host; when no conference resolves (e.g. localhost) it falls
  * back to the platform defaults below.
  *
- * `id`/`scope`/`start_url`/`theme_color` are intentionally left host-invariant:
- * `id`/`scope` anchor the installed app identity and `start_url` points at
- * `/launch` (a role-aware redirect dispatcher — see `src/app/launch/route.ts`).
- * `theme_color` stays platform-blue until the design-token wave.
+ * `id`/`scope`/`start_url` are intentionally left host-invariant: `id`/`scope`
+ * anchor the installed app identity and `start_url` points at `/launch` (a
+ * role-aware redirect dispatcher — see `src/app/launch/route.ts`).
+ *
+ * `theme_color` follows the per-tenant brand theme (THEMING L1): the resolved
+ * conference's primary hex, or the house blue when it has no theme (or no
+ * conference resolves). It is safe per-host for the same reason `name` is — a
+ * device only ever sees one host's manifest.
  *
  * Icons resolve per host via the dynamic `/pwa/icon/*` routes (each
  * conference's own `logomarkBright`, with a static fallback).
@@ -56,6 +61,7 @@ async function resolveManifestIdentity(host: string): Promise<{
   name: string
   shortName: string
   description: string
+  themeColor: string
 }> {
   'use cache'
   cacheLife('hours')
@@ -69,12 +75,14 @@ async function resolveManifestIdentity(host: string): Promise<{
         name: PLATFORM_NAME,
         shortName: PLATFORM_SHORT_NAME,
         description: PLATFORM_DESCRIPTION,
+        themeColor: DEFAULT_PRIMARY_COLOR,
       }
     }
     return {
       name: conference.title,
       shortName: toShortName(conference.title),
       description: conference.description || PLATFORM_DESCRIPTION,
+      themeColor: manifestThemeColor(conference.theme),
     }
   } catch {
     // A misconfigured/unreachable Sanity must never break the manifest; fall
@@ -83,6 +91,7 @@ async function resolveManifestIdentity(host: string): Promise<{
       name: PLATFORM_NAME,
       shortName: PLATFORM_SHORT_NAME,
       description: PLATFORM_DESCRIPTION,
+      themeColor: DEFAULT_PRIMARY_COLOR,
     }
   }
 }
@@ -92,7 +101,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   // case/whitespace, and the cache key + domain:<host> tag must match the
   // normalized form the rest of the per-host surface (and revalidations) use.
   const host = normalizeDomain((await headers()).get('host') || '')
-  const { name, shortName, description } = await resolveManifestIdentity(host)
+  const { name, shortName, description, themeColor } =
+    await resolveManifestIdentity(host)
 
   return {
     id: '/',
@@ -102,7 +112,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     start_url: '/launch',
     scope: '/',
     display: 'standalone',
-    theme_color: '#1d4ed8',
+    theme_color: themeColor,
     background_color: '#0b1220',
     icons: [
       {
