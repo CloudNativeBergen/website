@@ -9,7 +9,10 @@ import {
   getConfiguredWebPush,
   getWebPushConfigError,
 } from '@/lib/push/vapid'
-import { checkinGraphQLClient } from '@/lib/tickets/graphql-client'
+import {
+  getTicketingProvider,
+  platformCheckinCredentials,
+} from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import type {
   CheckGroup,
@@ -27,8 +30,9 @@ import type {
  *    cospeaker/server throws on INVITATION_TOKEN_SECRET; badge/config and
  *    adobe-sign/auth getters throw on missing keys). We only import modules that
  *    are provably import-safe: sanity/client (falls back to 'invalid'),
- *    push/vapid (returns '' when unset), tickets/graphql-client (warns, never
- *    throws at import), and auth (providers just get undefined ids).
+ *    push/vapid (returns '' when unset), tickets/provider (a plain factory —
+ *    reads no env at import; the CheckinProvider only warns), and auth
+ *    (providers just get undefined ids).
  *  - SECRETS ARE NEVER ECHOED. A secret is surfaced only as a sha256 fingerprint
  *    plus its length, e.g. `a1b2c3d4 (32 chars)` — never the value itself.
  *    Non-secrets (dataset, project id, from-address, provider names, schedules,
@@ -450,7 +454,10 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
   )
 
   // ---- TICKETS --------------------------------------------------------------
-  const checkinOn = checkinGraphQLClient.isConfigured()
+  const checkinOn = getTicketingProvider(
+    'checkin',
+    platformCheckinCredentials(),
+  ).isConfigured()
   checks.push({
     id: 'tickets.apiCreds',
     group: 'tickets',

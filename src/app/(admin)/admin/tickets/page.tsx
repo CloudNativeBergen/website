@@ -1,4 +1,4 @@
-import { fetchEventTickets } from '@/lib/tickets/api'
+import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -40,15 +40,13 @@ import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
 
 async function getTicketData(conference: Conference) {
-  if (!conference.checkinCustomerId || !conference.checkinEventId) {
+  const ticketing = resolveTicketingProvider(conference)
+  if (!ticketing.configured) {
     throw new Error('Missing checkin configuration')
   }
 
   try {
-    return await fetchEventTickets(
-      conference.checkinCustomerId,
-      conference.checkinEventId,
-    )
+    return await ticketing.provider.fetchEventTickets(ticketing.eventRef)
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
   }

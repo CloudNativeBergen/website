@@ -61,10 +61,30 @@ vi.mock('@/lib/sponsor-crm/activities', () => ({
     mockListActivities(...args),
 }))
 
-// Tickets
+// Tickets — fetchTicketSales now resolves a TicketingProvider from the
+// domain conference; mock the resolver so the provider's fetchEventTickets is
+// the spy. The resolver mirrors the real unconfigured/configured branching.
 const mockFetchEventTickets = vi.fn<AnyFn>()
-vi.mock('@/lib/tickets/api', () => ({
-  fetchEventTickets: (...args: unknown[]) => mockFetchEventTickets(...args),
+vi.mock('@/lib/tickets/provider', () => ({
+  resolveTicketingProvider: (conference: {
+    checkinCustomerId?: number
+    checkinEventId?: number
+  }) => {
+    if (!conference.checkinCustomerId || !conference.checkinEventId) {
+      return { configured: false, provider: null, eventRef: null }
+    }
+    return {
+      configured: true,
+      provider: {
+        fetchEventTickets: (...args: unknown[]) =>
+          mockFetchEventTickets(...args),
+      },
+      eventRef: {
+        customerId: conference.checkinCustomerId,
+        eventId: conference.checkinEventId,
+      },
+    }
+  },
 }))
 
 vi.mock('@/lib/tickets/processor', () => ({
@@ -946,7 +966,10 @@ describe('Dashboard Server Actions', () => {
       // The checkin customer/event ids come from the resolved conference —
       // there is no client argument that could point the server's Checkin
       // credentials at another account.
-      expect(mockFetchEventTickets).toHaveBeenCalledWith(123, 456)
+      expect(mockFetchEventTickets).toHaveBeenCalledWith({
+        customerId: 123,
+        eventId: 456,
+      })
     })
 
     it('returns error (not unconfigured) when the ticket API fails', async () => {

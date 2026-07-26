@@ -15,14 +15,17 @@ import {
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { calculateDiscountUsage } from '@/lib/discounts'
 import {
-  createEventDiscount,
-  getEventDiscounts,
-  deleteEventDiscount,
-  calculateDiscountUsage,
-} from '@/lib/discounts'
-import { fetchEventTickets, fetchOrderPaymentDetails } from '@/lib/tickets/api'
+  getTicketingProvider,
+  platformCheckinCredentials,
+} from '@/lib/tickets/provider'
 import type { DiscountUsageStats } from '@/lib/discounts/types'
+
+/** Platform-credentialed ticketing provider for this request. */
+function checkin() {
+  return getTicketingProvider('checkin', platformCheckinCredentials())
+}
 
 async function updateTicketCapacity(conferenceId: string, capacity: number) {
   try {
@@ -211,7 +214,7 @@ export const ticketsRouter = router({
         }
 
         const eventId = conference.checkinEventId
-        const eventData = await getEventDiscounts(eventId)
+        const eventData = await checkin().listDiscounts(eventId)
 
         return {
           success: true,
@@ -237,7 +240,7 @@ export const ticketsRouter = router({
         const { eventId } = input
 
         try {
-          const eventData = await getEventDiscounts(eventId)
+          const eventData = await checkin().listDiscounts(eventId)
           return {
             success: true,
             discounts: eventData.discounts,
@@ -271,14 +274,17 @@ export const ticketsRouter = router({
         const customerId = conference.checkinCustomerId
         const eventId = conference.checkinEventId
 
-        const eventData = await getEventDiscounts(eventId)
+        const eventData = await checkin().listDiscounts(eventId)
         const discounts = eventData.discounts
 
         let usageStats: DiscountUsageStats = {}
         let totalTickets = 0
 
         try {
-          const tickets = await fetchEventTickets(customerId, eventId)
+          const tickets = await checkin().fetchEventTickets({
+            customerId,
+            eventId,
+          })
           usageStats = calculateDiscountUsage(tickets)
           totalTickets = tickets.length
         } catch (ticketsError) {
@@ -335,7 +341,7 @@ export const ticketsRouter = router({
         } = input
 
         try {
-          const eventData = await getEventDiscounts(eventId)
+          const eventData = await checkin().listDiscounts(eventId)
           const codeExists = eventData.discounts.some(
             (discount) => discount.triggerValue === discountCode,
           )
@@ -347,7 +353,7 @@ export const ticketsRouter = router({
             })
           }
 
-          const result = await createEventDiscount({
+          const result = await checkin().createDiscount({
             eventId,
             discountCode,
             numberOfTickets,
@@ -383,7 +389,7 @@ export const ticketsRouter = router({
       .input(DeleteDiscountCodeSchema)
       .mutation(async ({ input }) => {
         try {
-          const success = await deleteEventDiscount(
+          const success = await checkin().deleteDiscount(
             input.eventId,
             input.discountCode,
           )
@@ -419,7 +425,8 @@ export const ticketsRouter = router({
         const { orderId } = input
 
         try {
-          const paymentDetails = await fetchOrderPaymentDetails(orderId)
+          const paymentDetails =
+            await checkin().fetchOrderPaymentDetails(orderId)
           return {
             success: true,
             paymentDetails,

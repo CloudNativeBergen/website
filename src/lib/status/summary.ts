@@ -13,7 +13,7 @@ import {
 import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
-import { fetchEventTickets } from '@/lib/tickets/api'
+import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
@@ -88,14 +88,14 @@ async function buildTicketSection(conference: Conference): Promise<{
   targetProgress: TargetProgress | null
   error: SectionError | null
 }> {
-  if (!conference.checkinCustomerId || !conference.checkinEventId) {
+  const ticketing = resolveTicketingProvider(conference)
+  if (!ticketing.configured) {
     return { tickets: null, targetProgress: null, error: null }
   }
 
   try {
-    const allTickets = await fetchEventTickets(
-      conference.checkinCustomerId,
-      conference.checkinEventId,
+    const allTickets = await ticketing.provider.fetchEventTickets(
+      ticketing.eventRef,
     )
 
     const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)

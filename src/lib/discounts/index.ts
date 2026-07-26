@@ -9,10 +9,7 @@ export type {
   DeleteEventDiscountResponse,
 } from './types'
 
-export {
-  getEventDiscounts,
-  createEventDiscount,
-  deleteEventDiscount,
-} from './api'
-
+// Discount operations now live on the TicketingProvider (same vendor + event
+// id): see `@/lib/tickets/provider`. This module keeps the discount types and
+// the pure usage aggregation.
 export { calculateDiscountUsage } from './usage'

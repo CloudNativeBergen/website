@@ -1,98 +1,21 @@
 import { formatDateSafe } from '@/lib/time'
-import { checkinQuery } from './graphql-client'
+import { getTicketingProvider, platformCheckinCredentials } from './provider'
 import { cacheLife, cacheTag } from 'next/cache'
 
-export interface TicketPrice {
-  price: string
-  vat: string
-  description: string | null
-  key: string | null
-}
+// Public ticket-type shapes now live with the provider contract (they are
+// Checkin-shaped — see docs/INTEGRATION_ADAPTERS.md). Re-exported here so
+// existing importers of `@/lib/tickets/public` are unaffected.
+export type {
+  TicketPrice,
+  PublicTicketType,
+  PublicEventInfo,
+} from './provider/types'
 
-export interface PublicTicketType {
-  id: number
-  name: string
-  type: string
-  description: string | null
-  price: TicketPrice[]
-  available: number | null
-  requiresInvitation: boolean
-  visibleStartsAt: string | null
-  visibleEndsAt: string | null
-  position: number
-}
-
-export interface PublicEventInfo {
-  id: number
-  name: string
-  registrationOpensAt: string | null
-  registrationClosesAt: string | null
-  currencies: string[]
-}
-
-interface FindEventResponse {
-  findEventById: {
-    id: number
-    name: string
-    registrationOpensAt: string | null
-    registrationClosesAt: string | null
-    currencies: string[]
-    tickets: PublicTicketType[]
-  }
-}
-
-const TICKET_TYPES_QUERY = `
-  query FindEvent($id: Int!) {
-    findEventById(id: $id) {
-      id
-      name
-      registrationOpensAt
-      registrationClosesAt
-      currencies
-      tickets {
-        id
-        name
-        type
-        description
-        price {
-          price
-          vat
-          description
-          key
-        }
-        available
-        requiresInvitation
-        visibleStartsAt
-        visibleEndsAt
-        position
-      }
-    }
-  }
-`
-
-export async function fetchTicketTypesFromCheckin(
-  eventId: number,
-): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
-  const response = await checkinQuery<FindEventResponse>(TICKET_TYPES_QUERY, {
-    id: eventId,
-  })
-
-  const eventData = response.findEventById
-  if (!eventData) {
-    throw new Error(`Event with ID ${eventId} not found`)
-  }
-
-  return {
-    event: {
-      id: eventData.id,
-      name: eventData.name,
-      registrationOpensAt: eventData.registrationOpensAt,
-      registrationClosesAt: eventData.registrationClosesAt,
-      currencies: eventData.currencies,
-    },
-    tickets: eventData.tickets || [],
-  }
-}
+import type {
+  PublicTicketType,
+  PublicEventInfo,
+  TicketPrice,
+} from './provider/types'
 
 export interface ComplimentaryTicketInfo {
   name: string
@@ -110,7 +33,11 @@ export async function getPublicTicketTypes(eventId: number): Promise<{
   cacheTag('content:tickets')
 
   try {
-    const data = await fetchTicketTypesFromCheckin(eventId)
+    const provider = getTicketingProvider(
+      'checkin',
+      platformCheckinCredentials(),
+    )
+    const data = await provider.fetchPublicTicketTypes(eventId)
 
     // Filter to only public tickets: not invite-only, has at least one price > 0
     const publicTickets = data.tickets

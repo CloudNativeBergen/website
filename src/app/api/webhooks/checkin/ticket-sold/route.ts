@@ -1,76 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendWorkshopSignupInstructions } from '@/lib/email/workshop'
 import { getConferenceByCheckinEventId } from '@/lib/conference/sanity'
-import crypto from 'crypto'
+import {
+  getTicketingProvider,
+  platformCheckinCredentials,
+  type CheckinWebhookPayload,
+} from '@/lib/tickets/provider'
 
 const WORKSHOP_ELIGIBLE_CATEGORIES = [
   'Workshop + Conference (2 days)',
   'Sponsor discount (workshop upgrade)',
   'Speaker ticket',
 ]
-
-interface CheckinWebhookPayload {
-  payloadId: string
-  event: string
-  dataType: string
-  data: {
-    id: number
-    eventId: number
-    users: Array<{
-      id: number
-      crm: {
-        id: number
-        firstName: string
-        lastName: string
-        email: {
-          email: string
-        }
-      }
-      ticket: {
-        id: number
-        name: string
-        type: string
-      }
-      isPaid: boolean
-    }>
-    orderContact: {
-      crm: {
-        id: number
-        firstName: string
-        lastName: string
-        email: {
-          email: string
-        }
-      }
-    }
-  }
-}
-
-function verifyCheckinSignature(
-  dataField: unknown,
-  signature: string | null,
-  secret: string,
-): boolean {
-  if (!signature) {
-    return false
-  }
-
-  try {
-    const dataString = JSON.stringify(dataField)
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(dataString)
-      .digest('hex')
-
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature),
-    )
-  } catch (error) {
-    console.error('Checkin webhook signature verification failed:', error)
-    return false
-  }
-}
 
 export async function POST(request: NextRequest) {
   let rawBody: string
@@ -96,23 +37,23 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const webhookSecret = process.env.CHECKIN_WEBHOOK_SECRET
-    if (!webhookSecret) {
-      console.error('Checkin webhook: CHECKIN_WEBHOOK_SECRET not configured')
-      return NextResponse.json(
-        { success: false, error: 'Webhook secret not configured' },
-        { status: 500 },
-      )
-    }
-
-    const signature = request.headers.get('checkin-signature')
-    const isValid = verifyCheckinSignature(
-      payload.data,
-      signature,
-      webhookSecret,
+    // Webhook verification + payload shaping live behind the ticketing
+    // provider; the route keeps the same ordering (verify → order-type gate →
+    // tenant resolution → email fan-out) and HTTP responses as before.
+    const provider = getTicketingProvider(
+      'checkin',
+      platformCheckinCredentials(),
     )
 
-    if (!isValid) {
+    const verification = provider.verifyWebhook(rawBody, request.headers)
+    if (!verification.verified) {
+      if (verification.reason === 'not-configured') {
+        console.error('Checkin webhook: CHECKIN_WEBHOOK_SECRET not configured')
+        return NextResponse.json(
+          { success: false, error: 'Webhook secret not configured' },
+          { status: 500 },
+        )
+      }
       console.error('Checkin webhook: Invalid signature')
       return NextResponse.json(
         { success: false, error: 'Invalid signature' },
@@ -120,14 +61,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (payload.event !== 'event-order-created') {
+    const orderData = provider.parseOrderCreated(payload)
+
+    if (!orderData) {
       return NextResponse.json(
         { success: true, message: 'Event ignored' },
         { status: 200 },
       )
     }
-
-    const orderData = payload.data
 
     if (!orderData.users || orderData.users.length === 0) {
       return NextResponse.json(
