@@ -633,26 +633,36 @@ export class CheckinProvider implements TicketingProvider {
   ): Promise<EventDiscount> {
     const { eventId, discountCode, numberOfTickets, ticketTypes } = input
 
-    const ticketsParam =
-      ticketTypes.length > 0
-        ? `[${ticketTypes.map((id) => id).join(', ')}]`
-        : '[]'
+    // GraphQL VARIABLES, not string interpolation: discountCode and ticketTypes
+    // are user-supplied — interpolating them into the mutation string allowed
+    // crafted values (quotes/braces) to inject arbitrary GraphQL. The enum-typed
+    // literals (trigger/affects/modes/type) stay inline; every user value rides
+    // a typed variable. Defense in depth: numeric inputs are coerced/validated.
+    const safeEventId = Math.trunc(eventId)
+    const safeCount = Math.trunc(numberOfTickets)
+    if (!Number.isFinite(safeEventId) || !Number.isFinite(safeCount)) {
+      throw new Error('createDiscount: eventId/numberOfTickets must be numbers')
+    }
+    const safeTickets = ticketTypes.map((id) => Math.trunc(Number(id)))
+    if (safeTickets.some((n) => !Number.isFinite(n))) {
+      throw new Error('createDiscount: ticketTypes must be numeric ids')
+    }
 
     const mutation = `
-    mutation CreateEventDiscount {
+    mutation CreateEventDiscount($eventId: Int!, $triggerValue: String!, $affectsValue: Int!, $tickets: [Int!]!, $timesTotal: Int!) {
       createEventDiscount(
-        eventId: ${eventId}
+        eventId: $eventId
         input: {
           trigger: coupon
-          triggerValue: "${discountCode}"
+          triggerValue: $triggerValue
           value: "100"
           affects: total
-          affectsValue: ${numberOfTickets}
+          affectsValue: $affectsValue
           includeBooking: false
           modes: default
-          tickets: ${ticketsParam}
+          tickets: $tickets
           ticketsOnly: false
-          timesTotal: ${numberOfTickets}
+          timesTotal: $timesTotal
           type: percent
         }
       ) {
@@ -661,8 +671,16 @@ export class CheckinProvider implements TicketingProvider {
     }
   `
 
-    const responseData =
-      await this.mutate<CreateEventDiscountResponse>(mutation)
+    const responseData = await this.mutate<CreateEventDiscountResponse>(
+      mutation,
+      {
+        eventId: safeEventId,
+        triggerValue: discountCode,
+        affectsValue: safeCount,
+        tickets: safeTickets,
+        timesTotal: safeCount,
+      },
+    )
 
     const result = responseData.createEventDiscount
     if (!result.success) {
@@ -681,7 +699,9 @@ export class CheckinProvider implements TicketingProvider {
       tickets: ticketTypes,
       ticketsOnly: false,
       times: 0,
-      timesTotal: 1,
+      // Mirror what the mutation actually sent — the admin UI displays this as
+      // the usage limit; hardcoding 1 made fresh discounts look nearly used up.
+      timesTotal: safeCount,
     }
   }
 
