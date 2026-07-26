@@ -115,10 +115,24 @@ describe('JsonEnvSecretsStore', () => {
   it('does not throw on malformed JSON — warns once and returns null', async () => {
     vi.stubEnv('TENANT_SECRETS_JSON', '{not valid json')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const store = new JsonEnvSecretsStore()
     expect(await store.get('org-a', 'slack')).toBeNull()
     expect(await store.get('org-a', 'email')).toBeNull()
     expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a non-object or empty per-org entry (env fallback applies)', async () => {
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-1': { ticketing: 'not-an-object', email: {} } }),
+    )
+    const store = new JsonEnvSecretsStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await store.get('org-1', 'ticketing')).toBeNull()
+    expect(await store.get('org-1', 'email')).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
 

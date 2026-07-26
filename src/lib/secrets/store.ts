@@ -164,7 +164,23 @@ export class JsonEnvSecretsStore implements TenantSecretsStore {
     if (!orgId) return null
     const map = this.load()
     const creds = map?.[orgId]?.[family]
-    return (creds ?? null) as FamilyCredentials<F> | null
+    // Shape guard: only a NON-EMPTY plain object counts as a per-org hit. A
+    // non-object or empty entry in TENANT_SECRETS_JSON must not shadow the env
+    // fallback (a "hit" of junk would disable the platform default silently).
+    if (
+      !creds ||
+      typeof creds !== 'object' ||
+      Array.isArray(creds) ||
+      Object.keys(creds).length === 0
+    ) {
+      if (creds !== undefined && creds !== null) {
+        console.warn(
+          `[secrets] TENANT_SECRETS_JSON entry for ${orgId}/${family} is not a non-empty object; ignoring (env fallback applies)`,
+        )
+      }
+      return null
+    }
+    return creds as FamilyCredentials<F>
   }
 }
 
