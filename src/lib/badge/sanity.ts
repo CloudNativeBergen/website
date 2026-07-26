@@ -9,6 +9,7 @@ const BADGE_FIELDS = `
   _createdAt,
   _updatedAt,
   badgeId,
+  centerGraphicSvg,
   speaker->{
     _id,
     name,

@@ -236,7 +236,7 @@ describe('buildSystemChecks — badges.outdated', () => {
     const check = byId(await buildSystemChecks(CONFERENCE), 'badges.outdated')
     expect(check.status).toBe('warn')
     expect(check.value).toBe('3 badges')
-    expect(check.detail).toContain('Rebake all outdated')
+    expect(check.detail).toContain('Rebake N outdated')
   })
 
   it('singularizes a single outdated badge', async () => {
