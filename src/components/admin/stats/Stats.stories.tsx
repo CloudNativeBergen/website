@@ -8,7 +8,7 @@ import {
   TicketIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline'
-import { StatCard, MetricCard, StatsGrid } from './index'
+import { StatCard, MetricCard } from './index'
 
 const meta = {
   title: 'Components/Data Display/Stats',
@@ -23,13 +23,12 @@ A flexible stats display system for admin dashboards.
 
 - **StatCard** - Simple stat card with value, label, optional subtitle, and color
 - **MetricCard** - Enhanced card with icon, trend indicator, and loading state
-- **StatsGrid** - Responsive grid wrapper that auto-calculates columns
 
 ## Usage
 
 Use \`StatCard\` for simple inline statistics in headers or summaries.
 Use \`MetricCard\` for dashboard metrics with visual indicators.
-Use \`StatsGrid\` to wrap multiple cards in a responsive layout.
+Wrap multiple cards in a responsive \`grid\` layout.
         `,
       },
     },
@@ -167,86 +166,11 @@ export const MetricCardLoading: StoryObj = {
   },
 }
 
-// StatsGrid Stories
-
-export const StatsGridAuto: StoryObj = {
-  render: () => (
-    <StatsGrid>
-      <StatCard value={150} label="Attendees" color="blue" />
-      <StatCard value={24} label="Speakers" color="green" />
-      <StatCard value={8} label="Workshops" color="purple" />
-      <StatCard value={12} label="Sponsors" color="indigo" />
-    </StatsGrid>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'StatsGrid automatically calculates responsive columns based on the number of children.',
-      },
-    },
-  },
-}
-
-export const StatsGridFixedColumns: StoryObj = {
-  render: () => (
-    <StatsGrid columns={3}>
-      <StatCard value={100} label="Confirmed" color="green" />
-      <StatCard value={25} label="Pending" color="yellow" />
-      <StatCard value={5} label="Declined" color="red" />
-    </StatsGrid>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'StatsGrid with fixed column count.',
-      },
-    },
-  },
-}
-
-export const StatsGridGapSizes: StoryObj = {
-  render: () => (
-    <div className="space-y-8">
-      <div>
-        <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Small gap
-        </h3>
-        <StatsGrid gap="sm">
-          <StatCard value={10} label="A" />
-          <StatCard value={20} label="B" />
-          <StatCard value={30} label="C" />
-        </StatsGrid>
-      </div>
-      <div>
-        <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Medium gap (default)
-        </h3>
-        <StatsGrid gap="md">
-          <StatCard value={10} label="A" />
-          <StatCard value={20} label="B" />
-          <StatCard value={30} label="C" />
-        </StatsGrid>
-      </div>
-      <div>
-        <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Large gap
-        </h3>
-        <StatsGrid gap="lg">
-          <StatCard value={10} label="A" />
-          <StatCard value={20} label="B" />
-          <StatCard value={30} label="C" />
-        </StatsGrid>
-      </div>
-    </div>
-  ),
-}
-
 // Complete Examples
 
 export const DashboardMetrics: StoryObj = {
   render: () => (
-    <StatsGrid columns={4}>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <MetricCard
         title="Total Revenue"
         value="kr 450,000"
@@ -275,13 +199,13 @@ export const DashboardMetrics: StoryObj = {
         icon={ClockIcon}
         trend="down"
       />
-    </StatsGrid>
+    </div>
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Example dashboard metrics layout using MetricCard with StatsGrid.',
+          'Example dashboard metrics layout using MetricCard in a responsive grid.',
       },
     },
   },
@@ -298,20 +222,20 @@ export const HeaderStats: StoryObj = {
           Overview for Cloud Native Days Norway 2026
         </p>
       </div>
-      <StatsGrid>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <StatCard value={156} label="Total Proposals" color="slate" />
         <StatCard value={42} label="Under Review" color="yellow" />
         <StatCard value={38} label="Accepted" color="green" />
         <StatCard value={24} label="Rejected" color="red" />
         <StatCard value={52} label="Pending" color="blue" />
-      </StatsGrid>
+      </div>
     </div>
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Example of stats used in a page header context with StatCard and StatsGrid.',
+          'Example of stats used in a page header context with StatCard in a responsive grid.',
       },
     },
   },
@@ -351,7 +275,7 @@ export const CompactStats: StoryObj = {
 export const MixedLayout: StoryObj = {
   render: () => (
     <div className="space-y-6">
-      <StatsGrid columns={4}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard
           title="Total Submissions"
           value={156}
@@ -378,28 +302,28 @@ export const MixedLayout: StoryObj = {
           icon={ClockIcon}
           trend="neutral"
         />
-      </StatsGrid>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
           <h3 className="mb-3 font-medium text-gray-900 dark:text-white">
             Proposal Breakdown
           </h3>
-          <StatsGrid columns={3} gap="sm">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatCard value={42} label="Talk" color="blue" />
             <StatCard value={18} label="Workshop" color="purple" />
             <StatCard value={12} label="Lightning" color="green" />
-          </StatsGrid>
+          </div>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
           <h3 className="mb-3 font-medium text-gray-900 dark:text-white">
             Ticket Status
           </h3>
-          <StatsGrid columns={3} gap="sm">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatCard value={324} label="Sold" color="green" />
             <StatCard value={176} label="Available" color="slate" />
             <StatCard value={24} label="Comped" color="indigo" />
-          </StatsGrid>
+          </div>
         </div>
       </div>
     </div>

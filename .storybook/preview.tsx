@@ -161,7 +161,6 @@ const preview: Preview = {
                   'ContractValueInput',
                   'AddonsCheckboxGroup',
                 ],
-                'SponsorCRMFilterBar',
                 'SponsorContactRoleSelect',
               ],
               'Components',

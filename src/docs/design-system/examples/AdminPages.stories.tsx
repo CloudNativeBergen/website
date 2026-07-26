@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { ErrorDisplay } from '@/components/admin/ErrorDisplay'
 import { SkeletonTable } from '@/components/admin/LoadingSkeleton'
-import { StatCard, MetricCard, StatsGrid } from '@/components/admin/stats'
+import { StatCard, MetricCard } from '@/components/admin/stats'
 import {
   ChartBarIcon,
   UserGroupIcon,
@@ -654,7 +654,7 @@ export const DashboardWithStats: Story = {
           <h2 className="mb-4 text-sm font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
             Key Metrics
           </h2>
-          <StatsGrid columns={4}>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <MetricCard
               title="Total Revenue"
               value="kr 450,000"
@@ -683,7 +683,7 @@ export const DashboardWithStats: Story = {
               icon={ClockIcon}
               trend="neutral"
             />
-          </StatsGrid>
+          </div>
         </div>
 
         {/* Breakdowns using StatCard */}
@@ -692,24 +692,24 @@ export const DashboardWithStats: Story = {
             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
               Proposal Status
             </h3>
-            <StatsGrid columns={4} gap="sm">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <StatCard value={156} label="Total" color="slate" />
               <StatCard value={42} label="Under Review" color="yellow" />
               <StatCard value={38} label="Accepted" color="green" />
               <StatCard value={24} label="Rejected" color="red" />
-            </StatsGrid>
+            </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
               Ticket Breakdown
             </h3>
-            <StatsGrid columns={4} gap="sm">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <StatCard value={200} label="Early Bird" color="green" />
               <StatCard value={80} label="Regular" color="blue" />
               <StatCard value={24} label="Speaker" color="purple" />
               <StatCard value={20} label="Sponsor" color="indigo" />
-            </StatsGrid>
+            </div>
           </div>
         </div>
 

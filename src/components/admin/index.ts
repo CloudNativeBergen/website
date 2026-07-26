@@ -7,7 +7,7 @@ export { SearchModal } from './SearchModal'
 export { NotificationProvider, useNotification } from './NotificationProvider'
 export { ConfirmationModal } from './ConfirmationModal'
 
-export { StatCard, MetricCard, StatsGrid } from './stats'
+export { StatCard, MetricCard } from './stats'
 
 export { ProposalsList } from './ProposalsList'
 export { ProposalCard } from './ProposalCard'
@@ -68,10 +68,5 @@ export { useFilterStateWithURL } from './hooks'
 
 export type { FilterState } from './ProposalsFilter'
 export type { AdminPageHeaderProps, StatCardProps } from './AdminPageHeader'
-export type {
-  MetricCardProps,
-  MetricTrend,
-  StatColor,
-  StatsGridProps,
-} from './stats'
+export type { MetricCardProps, MetricTrend, StatColor } from './stats'
 export * from './utils'

@@ -1,3 +1,6 @@
+// PARKED FEATURE: email template for the parked sponsor contract-signing flow.
+// Kept intentionally (knip-ignored); do not delete — see contract-send.ts.
+
 import * as React from 'react'
 import { BaseEmailTemplate } from './BaseEmailTemplate'
 import { EmailButton } from './EmailComponents'
