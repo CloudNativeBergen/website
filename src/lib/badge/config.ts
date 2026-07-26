@@ -1,7 +1,7 @@
 import type { Conference } from '@/lib/conference/types'
 import { createPublicKey } from 'crypto'
 import { resolveConferenceContact } from '@/lib/email/from'
-import { ed25519VerificationMethodUrl } from './verification-method'
+import { ed25519VerificationMethodUrl } from '@/lib/badge/verification-method'
 
 /**
  * Signing configuration for OpenBadges credentials

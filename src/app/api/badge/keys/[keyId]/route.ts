@@ -134,6 +134,14 @@ async function serveEd25519Multikey(): Promise<NextResponse> {
   // byte-match the ids minted into credentials (which derive from the stored,
   // normalized conference domains).
   const host = normalizeDomain((await headers()).get('host') || '')
+  if (!host) {
+    // A missing Host header is a server misconfiguration; a key document with
+    // a malformed id would poison verifier caches, so fail loudly instead.
+    return NextResponse.json(
+      { error: 'Cannot resolve request host for the key document' },
+      { status: 500, headers: { ...CORS_HEADERS } },
+    )
+  }
   const baseUrl = `https://${host}`
 
   const keyDocument = buildEd25519MultikeyDocument(baseUrl, publicKeyMultibase)
