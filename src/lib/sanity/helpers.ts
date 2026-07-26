@@ -30,6 +30,33 @@ export function ensureArrayKeys<T extends Record<string, unknown>>(
   }))
 }
 
+/**
+ * {@link ensureArrayKeys} + UNIQUENESS: client-supplied `_key`s are kept only
+ * for their FIRST occurrence — a duplicate is dropped and regenerated, since
+ * duplicate keys corrupt Sanity array addressing and React reconciliation.
+ * Use this for any array persisted from client input.
+ */
+export function ensureUniqueArrayKeys<T extends Record<string, unknown>>(
+  array: T[],
+  prefix: string = 'item',
+): Array<T & { _key: string }> {
+  if (!Array.isArray(array)) return array as Array<T & { _key: string }>
+  const seen = new Set<string>()
+  return ensureArrayKeys(
+    array.map((item) => {
+      const key = item._key as string | undefined
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        return item
+      }
+      if (!key) return item
+      const { _key: _dropped, ...rest } = item
+      return rest as T
+    }),
+    prefix,
+  )
+}
+
 export function createReference(id: string): Reference {
   return { _type: 'reference', _ref: id }
 }
