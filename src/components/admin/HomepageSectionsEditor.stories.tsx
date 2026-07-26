@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { screen, userEvent } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { HomepageSectionsEditor } from './HomepageSectionsEditor'
@@ -37,6 +38,42 @@ const customSections: HomepageSection[] = [
   { _key: 'metrics', _type: 'homepageMetrics', heading: 'By the numbers' },
   { _key: 'gallery', _type: 'homepageGallery', hidden: true },
   { _key: 'sponsors', _type: 'homepageSponsors' },
+]
+
+// The three F4 blocks (FAQ / Countdown / Venue), each carrying inline config.
+const f4Sections: HomepageSection[] = [
+  { _key: 'hero', _type: 'homepageHero' },
+  {
+    _key: 'faq',
+    _type: 'homepageFaq',
+    heading: 'Frequently asked questions',
+    source: 'own',
+    items: [
+      {
+        _key: 'q1',
+        question: 'Where is the venue?',
+        answer: 'At Grieghallen in central Bergen.',
+      },
+      {
+        _key: 'q2',
+        question: 'Is lunch included?',
+        answer: 'Yes — lunch and coffee are included with every ticket.',
+      },
+    ],
+  },
+  {
+    _key: 'countdown',
+    _type: 'homepageCountdown',
+    heading: 'Doors open in',
+    targetOverride: '2099-09-15T09:00:00.000Z',
+    liveMessage: 'We are live — welcome!',
+  },
+  {
+    _key: 'venue',
+    _type: 'homepageVenue',
+    heading: 'The venue',
+    description: 'A landmark concert hall in the heart of Bergen.',
+  },
 ]
 
 const meta = {
@@ -124,4 +161,33 @@ export const Dark: Story = {
     defaultOpen: true,
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * The three F4 blocks (FAQ / Countdown / Venue) with the FAQ block's inline
+ * config accordion expanded — verifies the new per-type config forms render.
+ */
+export const F4ConfigForms: Story = {
+  args: {
+    initialSections: f4Sections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    const configureFaq = await screen.findByRole('button', {
+      name: 'Configure FAQ',
+    })
+    await userEvent.click(configureFaq)
+  },
+}
+
+/** F4 config forms in dark mode, FAQ accordion expanded. */
+export const F4ConfigFormsDark: Story = {
+  args: {
+    initialSections: f4Sections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  play: F4ConfigForms.play,
 }
