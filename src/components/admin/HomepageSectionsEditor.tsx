@@ -188,9 +188,11 @@ export function HomepageSectionsEditor({
     reset()
   }
   /**
-   * The in-modal Cancel button honors the same dirty guard as the shell's
-   * backdrop/Escape/X close paths — unsaved changes are never discarded
-   * without an explicit choice.
+   * The ONE dirty guard for every close path: the Cancel button AND the
+   * shell's backdrop/Escape/X all route here (the shell's built-in
+   * confirm-on-dirty overlay is intentionally NOT enabled — two mechanisms
+   * would stack confirmations). Unsaved changes are never discarded without
+   * an explicit choice.
    */
   const cancel = () => {
     if (isDirty) {
@@ -318,13 +320,11 @@ export function HomepageSectionsEditor({
 
       <ModalShell
         isOpen={isOpen}
-        onClose={close}
+        onClose={cancel}
         size="4xl"
         title="Edit Homepage Sections"
         subtitle="Compose, reorder and preview the front-page blocks"
         icon={<PencilSquareIcon className="h-5 w-5" />}
-        confirmOnDirtyClose
-        isDirty={isDirty}
       >
         <div className="space-y-4">
           {usingDefault ? (
