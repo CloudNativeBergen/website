@@ -3,12 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // --- Boundary mocks --------------------------------------------------------
 
 const createNotificationsMock = vi.fn().mockResolvedValue(undefined)
+// Per-org organizer sets: the nudge now passes the resolved org id and must get
+// back ONLY that tenant's organizers (B4). The default returns the legacy trio
+// for every org so the routing-chain test below is unaffected.
 const getOrganizerSpeakerIdsMock = vi
   .fn()
   .mockResolvedValue(['org-1', 'org-2', 'org-3'])
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: (...a: unknown[]) => createNotificationsMock(...a),
-  getOrganizerSpeakerIds: () => getOrganizerSpeakerIdsMock(),
+  getOrganizerSpeakerIds: (orgId?: string | null) =>
+    getOrganizerSpeakerIdsMock(orgId),
 }))
 
 // TEAMS-2 teams SOURCE keyed by conference id, so the REAL
@@ -72,7 +76,7 @@ const ROWS: Row[] = [
     conferenceId: 'conf-spon',
     lastMessageAt: '2026-01-01T00:00:00Z',
   },
-  // 4. Unassigned, no team on its conference → ALL organizers.
+  // 4. Unassigned, no team on its conference → ALL organizers (of its org).
   {
     _id: 'c-all',
     conversationType: 'general',
@@ -82,9 +86,29 @@ const ROWS: Row[] = [
   },
 ]
 
+// The conversation-selection rows and the conference→org rows come through the
+// SAME `clientReadUncached.fetch` mock; route by the GROQ so the batched
+// conference→org lookup (B4) can be controlled independently.
+let conversationRows: Row[] = ROWS
+let conferenceOrgRows: { _id: string; orgId: string | null }[] = []
+function routeFetch(query: unknown) {
+  if (typeof query === 'string' && query.includes('_type == "conference"')) {
+    return Promise.resolve(conferenceOrgRows)
+  }
+  return Promise.resolve(conversationRows)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  fetchMock.mockResolvedValue(ROWS)
+  getOrganizerSpeakerIdsMock.mockResolvedValue(['org-1', 'org-2', 'org-3'])
+  conversationRows = ROWS
+  // Every conference resolves to a tenant so the routing-chain test proceeds.
+  conferenceOrgRows = [
+    { _id: 'conf-cfp', orgId: 'org-A' },
+    { _id: 'conf-spon', orgId: 'org-A' },
+    { _id: 'conf-none', orgId: 'org-A' },
+  ]
+  fetchMock.mockImplementation((query: unknown) => routeFetch(query))
 })
 
 /** The recipient ids of the createNotifications call whose inputs target `id`. */
@@ -110,5 +134,74 @@ describe('nudgeStaleConversations — assignee → team → all chain', () => {
     expect(summary.nudged).toBe(4)
     // 1 (assignee) + 1 (cfp team) + 1 (sponsors team) + 3 (all orgs) = 6.
     expect(summary.notifications).toBe(6)
+  })
+})
+
+describe('nudgeStaleConversations — per-org recipient isolation (B4)', () => {
+  it('nudges only the owning org’s organizers for each conversation', async () => {
+    // Two unassigned, team-less threads in DIFFERENT tenants. Each must reach
+    // only its own org's organizers via the team-else-all fallback.
+    conversationRows = [
+      {
+        _id: 'c-a',
+        conversationType: 'general',
+        subject: 'Org A thread',
+        conferenceId: 'conf-a',
+        lastMessageAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        _id: 'c-b',
+        conversationType: 'general',
+        subject: 'Org B thread',
+        conferenceId: 'conf-b',
+        lastMessageAt: '2026-01-01T00:00:00Z',
+      },
+    ]
+    conferenceOrgRows = [
+      { _id: 'conf-a', orgId: 'org-A' },
+      { _id: 'conf-b', orgId: 'org-B' },
+    ]
+    getOrganizerSpeakerIdsMock.mockImplementation((orgId?: string | null) => {
+      if (orgId === 'org-A') return Promise.resolve(['a1', 'a2'])
+      if (orgId === 'org-B') return Promise.resolve(['b1', 'b2'])
+      return Promise.resolve([])
+    })
+
+    const summary = await nudgeStaleConversations()
+
+    expect(recipientsFor('c-a')).toEqual(['a1', 'a2'])
+    expect(recipientsFor('c-b')).toEqual(['b1', 'b2'])
+    // No cross-tenant bleed: org B's organizers are never told about org A's
+    // thread and vice versa.
+    expect(recipientsFor('c-a')).not.toContain('b1')
+    expect(recipientsFor('c-b')).not.toContain('a1')
+    expect(summary.nudged).toBe(2)
+    expect(summary.notifications).toBe(4)
+    // The GLOBAL organizer set is never requested for recipient resolution.
+    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalledWith(undefined)
+  })
+
+  it('skips a conversation whose org is unresolvable — never broadcasts', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    conversationRows = [
+      {
+        _id: 'c-orphan',
+        conversationType: 'general',
+        subject: 'No org',
+        conferenceId: 'conf-orphan',
+        lastMessageAt: '2026-01-01T00:00:00Z',
+      },
+    ]
+    // Conference exists but carries no organization ref (pre-backfill / null).
+    conferenceOrgRows = [{ _id: 'conf-orphan', orgId: null }]
+
+    const summary = await nudgeStaleConversations()
+
+    expect(createNotificationsMock).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(summary.nudged).toBe(0)
+    expect(summary.notifications).toBe(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

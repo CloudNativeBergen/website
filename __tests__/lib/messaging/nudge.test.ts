@@ -81,7 +81,19 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.mocked(getOrganizerSpeakerIds).mockResolvedValue(['org-1', 'org-2'])
+  // B4: the loop now batch-resolves each conversation's conference → owning org
+  // before scoping recipients. That extra read is the ONLY fetch carrying
+  // `organization._ref`; route it to a stable mapping so conf-1 owns org-1 (the
+  // per-test `mockResolvedValueOnce` still supplies the selection rows first).
+  // Everything else (the selection query, the teams read) falls through to [].
+  readMock.fetch.mockImplementation(async (query: unknown) => {
+    if (typeof query === 'string' && query.includes('organization._ref')) {
+      return [{ _id: 'conf-1', orgId: 'org-1' }]
+    }
+    return []
+  })
 })
 
 describe('staleConversationCutoff', () => {

@@ -90,7 +90,13 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
   }
 
   try {
-    const organizerIds = await getOrganizerSpeakerIds()
+    // GLOBAL organizer set — used ONLY as the candidacy filter below (to exclude
+    // threads whose LAST message is from an organizer). It is a conservative
+    // superset for "was the last author an organizer" and is NEVER used as a
+    // recipient list. Recipients are resolved PER-ORG inside the loop (B4): the
+    // prior code reused this global set as the team-else-all fallback, which
+    // push-notified every tenant's organizers about one tenant's threads.
+    const selectionOrganizerIds = await getOrganizerSpeakerIds(null)
     const cutoff = staleConversationCutoff()
 
     // Selection: open (or absent status) AND no activity since the cutoff AND
@@ -118,11 +124,41 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
           "assignedToId": assignedTo._ref,
           lastMessageAt
         }`,
-        { cutoff, organizerIds },
+        { cutoff, organizerIds: selectionOrganizerIds },
         { cache: 'no-store' },
       )) ?? []
 
     summary.scanned = conversations.length
+
+    // Batch-resolve each distinct conference → owning organization once, so the
+    // per-conversation recipient scoping below never re-reads the same
+    // conference. A conference whose organization is unresolvable (pre-backfill
+    // or missing) maps to `null` and its conversations are SKIPPED — never
+    // broadcast to the global organizer set (B4).
+    const conferenceIds = [
+      ...new Set(
+        conversations
+          .map((c) => c.conferenceId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ]
+    const orgByConference = new Map<string, string | null>()
+    if (conferenceIds.length > 0) {
+      const rows =
+        (await clientReadUncached.fetch<
+          { _id: string; orgId: string | null }[]
+        >(
+          `*[_type == "conference" && _id in $conferenceIds]{
+            "_id": _id,
+            "orgId": organization._ref
+          }`,
+          { conferenceIds },
+          { cache: 'no-store' },
+        )) ?? []
+      for (const row of rows) {
+        orgByConference.set(row._id, row.orgId ?? null)
+      }
+    }
 
     for (const conversation of conversations) {
       try {
@@ -130,11 +166,28 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
         // notification requires a conference ref); skip without stamping.
         if (!conversation.conferenceId) continue
 
+        // Resolve THIS conversation's tenant (its conference's organization).
+        // NO global fallback: if the org is unresolvable we must not broadcast
+        // to other tenants' organizers, so skip (without stamping) and warn —
+        // the thread is retried once the conference is backfilled. (B4)
+        const orgId = orgByConference.get(conversation.conferenceId) ?? null
+        if (!orgId) {
+          console.warn(
+            `Stale nudge: conversation ${conversation._id} has no resolvable organization; skipping (never broadcasting to the global organizer set)`,
+          )
+          continue
+        }
+
+        // The organizer set for THIS tenant only — the team-else-all fallback
+        // for an unassigned thread. Cached per-org by getOrganizerSpeakerIds, so
+        // multiple conversations in the same org share one read.
+        const orgOrganizerIds = await getOrganizerSpeakerIds(orgId)
+
         // Route down the TEAMS-2 chain: the assignee when set → else the
         // thread's team (`sponsors` for a sponsor thread, `cfp` otherwise) →
-        // else every organizer (the team-else-all fallback). If nobody can be
-        // notified (no assignee AND no team AND no organizers), skip without
-        // stamping so the thread is retried once organizers exist.
+        // else every organizer OF THIS ORG (the team-else-all fallback). If
+        // nobody can be notified (no assignee AND no team AND no organizers),
+        // skip without stamping so the thread is retried once organizers exist.
         const recipientIds = conversation.assignedToId
           ? [conversation.assignedToId]
           : await resolveRoutedOrganizerIds({
@@ -143,10 +196,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
                 conversation.conversationType === 'sponsor'
                   ? 'sponsors'
                   : 'cfp',
-              // Reuse the organizer set fetched once before the loop as the
-              // team-else-all fallback, so each unassigned conversation does not
-              // re-read it.
-              allOrganizerIds: organizerIds,
+              allOrganizerIds: orgOrganizerIds,
             })
         if (recipientIds.length === 0) continue
 
