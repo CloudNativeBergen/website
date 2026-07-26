@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import { Conference } from '@/lib/conference/types'
 import {
@@ -29,9 +30,10 @@ export interface SaveScheduleResult {
 export async function getValidTalkIds(
   conferenceId: string,
 ): Promise<Set<string>> {
-  const ids = await clientWrite.fetch<string[]>(
-    `*[_type == "talk" && conference._ref == $conferenceId]._id`,
+  const ids = await scopedFetch<string[]>(
+    clientWrite,
     { conferenceId },
+    `*[_type == "talk"]._id`,
   )
   return new Set(ids || [])
 }
@@ -295,9 +297,11 @@ export async function saveScheduleToSanity(
       // forked edits. Check for an existing schedule for this (conference, date)
       // first; if one exists, surface the same conflict UX as a revision mismatch
       // so the client tells the organizer to reload rather than fork the day.
-      const existingId = await clientWrite.fetch<string | null>(
-        `*[_type == "schedule" && conference._ref == $conferenceId && date == $date][0]._id`,
-        { conferenceId: conference._id, date: schedule.date },
+      const existingId = await scopedFetch<string | null>(
+        clientWrite,
+        { conferenceId: conference._id },
+        `*[_type == "schedule" && date == $date][0]._id`,
+        { date: schedule.date },
       )
       if (existingId) {
         return {

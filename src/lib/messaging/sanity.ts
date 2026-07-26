@@ -1,6 +1,7 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { CONFERENCE_FILTER } from '@/lib/sanity/scoped'
 import { createReference } from '@/lib/sanity/helpers'
 import {
   getOrganizationRefViaParentConference,
@@ -1026,7 +1027,10 @@ export async function getConversationViewCounts({
   conferenceId: string
 }): Promise<ConversationViewCounts> {
   const params: Record<string, unknown> = { conferenceId, speakerId }
-  const base = `_type == "conversation" && conference._ref == $conferenceId`
+  // Conference scoping via the shared predicate constant (#616) — the
+  // hand-written path for a dynamic multi-predicate query where scopedFetch's
+  // single-body prepend does not fit.
+  const base = `_type == "conversation" && ${CONFERENCE_FILTER}`
   const scope = isOrganizer ? '' : ` && ${SPEAKER_SCOPE_PREDICATE}`
 
   // Build one `count()` field per relevant view from the shared predicates.
