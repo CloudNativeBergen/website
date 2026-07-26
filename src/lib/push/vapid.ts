@@ -18,6 +18,14 @@ import webpush from 'web-push'
  * Generate a real pair with `pnpm tsx scripts/gen-vapid-keys.ts` (or
  * `npx web-push generate-vapid-keys`). In CI/tests dummy values are fine — no
  * notification is actually delivered there.
+ *
+ * TODO(#617, per-org secrets): these stay ENV-ONLY for now. VAPID config is
+ * process-global — `getConfiguredWebPush()` calls `webpush.setVapidDetails()`
+ * once on a SHARED client — so a per-org key pair cannot simply be injected
+ * without reworking to a per-request web-push instance. The resolution seam
+ * already exists (`resolveTenantSecrets(orgId, 'push')` returns the typed
+ * {@link import('@/lib/secrets/types').PushCredentials}); wiring is deferred as
+ * higher-risk and lower-value than the ticketing/email/slack paths.
  */
 
 export function getVapidPublicKey(): string {

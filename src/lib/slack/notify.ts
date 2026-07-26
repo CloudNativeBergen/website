@@ -10,6 +10,7 @@ import {
   type SlackBlock,
   type SlackMessage,
 } from '@/lib/slack/client'
+import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { resolveTeamSlackChannel } from '@/lib/teams'
 
 /**
@@ -23,7 +24,8 @@ async function sendSlackNotification(
   channel: string | undefined = conference.cfpNotificationChannel,
 ) {
   try {
-    await postSlackMessage(message, { channel })
+    const botToken = await resolveConferenceSlackToken(conference)
+    await postSlackMessage(message, { channel, botToken })
   } catch (error) {
     console.error('Error sending Slack notification:', error)
   }
@@ -47,7 +49,8 @@ async function sendSalesNotification(
   if (!channel) return
 
   try {
-    await postSlackMessage(message, { channel })
+    const botToken = await resolveConferenceSlackToken(conference)
+    await postSlackMessage(message, { channel, botToken })
   } catch (error) {
     console.error('Error sending Slack sales notification:', error)
   }

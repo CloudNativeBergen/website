@@ -132,8 +132,8 @@ describe('platformCheckinCredentials', () => {
 })
 
 describe('resolveTicketingProvider', () => {
-  it('resolves a provider + eventRef when the conference is bound', () => {
-    const resolved = resolveTicketingProvider({
+  it('resolves a provider + eventRef when the conference is bound', async () => {
+    const resolved = await resolveTicketingProvider({
       checkinCustomerId: 42,
       checkinEventId: 7,
     })
@@ -144,14 +144,62 @@ describe('resolveTicketingProvider', () => {
     }
   })
 
-  it('returns the unconfigured soft-fail shape when ids are missing', () => {
+  it('uses the platform env credentials when no per-org secret is present', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', 'env-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'env-secret')
+    const resolved = await resolveTicketingProvider({
+      checkinCustomerId: 42,
+      checkinEventId: 7,
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      // Env creds flow through, so the provider reports itself configured.
+      expect(resolved.provider.isConfigured()).toBe(true)
+    }
+  })
+
+  it('prefers a per-org secret over the env default', async () => {
+    vi.stubEnv('CHECKIN_API_KEY', 'env-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'env-secret')
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        'org-xyz': {
+          ticketing: {
+            apiKey: 'org-key',
+            apiSecret: 'org-secret',
+            apiUrl: 'https://org.example.test/graphql',
+          },
+        },
+      }),
+    )
+    const fetchSpy = stubCheckinFetch({ eventTickets: [] })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const resolved = await resolveTicketingProvider({
+      checkinCustomerId: 42,
+      checkinEventId: 7,
+      organization: { _ref: 'org-xyz' },
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      // The per-org apiUrl override proves the org secret won over the env creds.
+      await resolved.provider.fetchOrderPaymentDetails(1)
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://org.example.test/graphql',
+        expect.anything(),
+      )
+    }
+  })
+
+  it('returns the unconfigured soft-fail shape when ids are missing', async () => {
     for (const conf of [
       {},
       { checkinCustomerId: 42 },
       { checkinEventId: 7 },
       { checkinCustomerId: 0, checkinEventId: 7 },
     ]) {
-      const resolved = resolveTicketingProvider(conf)
+      const resolved = await resolveTicketingProvider(conf)
       expect(resolved).toEqual({
         configured: false,
         provider: null,

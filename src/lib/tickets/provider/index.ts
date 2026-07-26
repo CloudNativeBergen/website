@@ -1,4 +1,5 @@
 import { CheckinProvider } from './checkin'
+import { resolveTenantSecrets } from '@/lib/secrets/store'
 import type {
   EventRef,
   TicketingProvider,
@@ -41,9 +42,11 @@ export function getTicketingProvider(
 /**
  * Platform-default credentials, assembled from environment variables.
  *
- * This is the request boundary's credential source TODAY. TODO(#617): a
- * per-organization secret store plugs in here so each tenant can bring its own
- * ticketing account; the provider itself stays credential-agnostic.
+ * The env-backed default-tenant credential source. Still the direct source for
+ * consumers that operate outside an org context (webhooks, cross-tenant admin
+ * reads). The org-aware request boundary resolves through
+ * {@link resolveTicketingProvider}, which layers a per-org secret store
+ * (CaaS #617) IN FRONT of this via `resolveTenantSecrets`.
  */
 export function platformCheckinCredentials(): TicketingProviderCredentials {
   return {
@@ -57,6 +60,8 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
 type ConferenceTicketingBinding = {
   checkinCustomerId?: number
   checkinEventId?: number
+  /** The owning organization (tenant), used to resolve per-org credentials. */
+  organization?: { _ref?: string } | null
 }
 
 /**
@@ -67,20 +72,31 @@ type ConferenceTicketingBinding = {
  * bound to a customer + event id, or an unconfigured result otherwise. This
  * mirrors today's per-consumer `!checkinCustomerId || !checkinEventId` guard —
  * unconfigured behaves IDENTICALLY to before (callers short-circuit to their
- * existing empty/soft-fail path). Note: like today, this does NOT pre-check API
- * credentials; when those are absent the provider's operations throw at call
- * time and are caught by each consumer's existing error path.
+ * existing empty/soft-fail path).
+ *
+ * CREDENTIALS (CaaS #617): resolved through `resolveTenantSecrets(orgId,
+ * 'ticketing')` — a per-org secret store hit wins, otherwise the platform env
+ * default (`platformCheckinCredentials`), preserved as the terminal fallback so
+ * behavior is UNCHANGED for every tenant until a per-org secret is provisioned.
+ * Like today, this does NOT pre-check API credentials; when those are absent the
+ * provider's operations throw at call time and are caught by each consumer's
+ * existing error path.
  */
-export function resolveTicketingProvider(
+export async function resolveTicketingProvider(
   conference: ConferenceTicketingBinding,
-): ResolvedTicketing {
+): Promise<ResolvedTicketing> {
   if (!conference.checkinCustomerId || !conference.checkinEventId) {
     return { configured: false, provider: null, eventRef: null }
   }
 
+  const orgId = conference.organization?._ref
+  const credentials =
+    (await resolveTenantSecrets(orgId, 'ticketing')) ??
+    platformCheckinCredentials()
+
   return {
     configured: true,
-    provider: getTicketingProvider('checkin', platformCheckinCredentials()),
+    provider: getTicketingProvider('checkin', credentials),
     eventRef: {
       customerId: conference.checkinCustomerId,
       eventId: conference.checkinEventId,
