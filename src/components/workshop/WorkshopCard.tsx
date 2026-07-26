@@ -148,7 +148,12 @@ export default function WorkshopCard({
       subtitle="Complete your registration"
       icon={<AcademicCapIcon className="h-5 w-5" />}
     >
-      <div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleSignupSubmit()
+        }}
+      >
         <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -245,24 +250,22 @@ export default function WorkshopCard({
             </div>
           )}
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Button
-              onClick={handleSignupSubmit}
-              disabled={isLoading}
-              className="flex-1"
-            >
-              {isLoading ? 'Registering...' : 'Confirm Registration'}
-            </Button>
-            <Button
+              type="button"
               onClick={() => setShowSignupModal(false)}
               disabled={isLoading}
               variant="outline"
+              className="min-h-11"
             >
               Cancel
             </Button>
+            <Button type="submit" disabled={isLoading} className="min-h-11">
+              {isLoading ? 'Registering...' : 'Confirm Registration'}
+            </Button>
           </div>
         </div>
-      </div>
+      </form>
     </ModalShell>
   )
 
