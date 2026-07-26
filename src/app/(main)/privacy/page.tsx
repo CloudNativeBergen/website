@@ -3,7 +3,8 @@ import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
-import { resolveConferenceContact } from '@/lib/email/from'
+import { resolveLegalConfig } from '@/lib/legal'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
 import {
   ShieldCheckIcon,
@@ -45,10 +46,10 @@ import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Privacy Policy - Cloud Native Days Norway',
-    description:
-      'Privacy policy and data protection information for Cloud Native Days Norway conference',
+    title: { absolute: `Privacy Policy - ${brand}` },
+    description: `Privacy policy and data protection information for ${brand}`,
     alternates: await canonicalAlternates('/privacy'),
   }
 }
@@ -78,8 +79,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = resolveConferenceContact(conference)
-  const organizationName = 'Cloud Native Days Norway'
+  const legal = await resolveLegalConfig(conference)
+  const contactEmail = legal.contactEmail
+  const organizationName = legal.controllerName
 
   return (
     <>
@@ -126,7 +128,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                   <div className="space-y-4 print:space-y-3">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300 print:leading-relaxed print:text-black">
                       {organizationName} is a technology conference organizer
-                      based in Bergen, Norway. We organize events focused on
+                      based in {legal.location}. We organize events focused on
                       cloud native technologies and related topics.
                     </p>
 
@@ -153,7 +155,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             Location:
                           </span>{' '}
                           <span className="text-gray-700 dark:text-gray-300">
-                            Bergen, Norway
+                            {legal.location}
                           </span>
                         </div>
                       </div>
@@ -1183,8 +1185,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               <span className="font-medium text-purple-600 dark:text-purple-400">
                                 Legal Obligation:
                               </span>{' '}
-                              Norwegian accounting and tax law requirements for
-                              financial records
+                              {legal.isNorway
+                                ? 'Norwegian accounting and tax law requirements for financial records'
+                                : 'Applicable accounting and tax law requirements for financial records'}
                             </td>
                           </tr>
                           <tr>
@@ -1814,24 +1817,35 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       <div className="rounded-lg border border-red-300 bg-red-100 p-3 dark:border-red-700 dark:bg-red-800/30">
                         <p className="mb-2 flex items-center font-semibold text-red-800 dark:text-red-200">
                           <FlagIcon className="mr-2 h-4 w-4" />
-                          Norwegian Data Protection Authority (Datatilsynet)
+                          {legal.supervisoryAuthority.name}
                         </p>
-                        <div className="space-y-1 text-sm text-red-700 dark:text-red-300">
-                          <p>
-                            <strong>Website:</strong>{' '}
-                            <a
-                              href="https://www.datatilsynet.no"
-                              className="text-red-600 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              www.datatilsynet.no
-                            </a>
-                          </p>
-                          <p>
-                            <strong>Email:</strong> postkasse@datatilsynet.no
-                          </p>
-                        </div>
+                        {(legal.supervisoryAuthority.url ||
+                          legal.supervisoryAuthority.email) && (
+                          <div className="space-y-1 text-sm text-red-700 dark:text-red-300">
+                            {legal.supervisoryAuthority.url && (
+                              <p>
+                                <strong>Website:</strong>{' '}
+                                <a
+                                  href={legal.supervisoryAuthority.url}
+                                  className="text-red-600 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {legal.supervisoryAuthority.url.replace(
+                                    /^https?:\/\//,
+                                    '',
+                                  )}
+                                </a>
+                              </p>
+                            )}
+                            {legal.supervisoryAuthority.email && (
+                              <p>
+                                <strong>Email:</strong>{' '}
+                                {legal.supervisoryAuthority.email}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1841,8 +1855,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                 <p className="text-sm text-gray-600 dark:text-gray-400 print:mt-4 print:text-base print:leading-relaxed print:text-black">
                   This privacy policy complies with the EU General Data
-                  Protection Regulation (GDPR) and Norwegian data protection
-                  laws.
+                  Protection Regulation (GDPR)
+                  {legal.isNorway
+                    ? ' and Norwegian data protection laws.'
+                    : ' and applicable local data protection laws.'}
                 </p>
               </div>
             </div>

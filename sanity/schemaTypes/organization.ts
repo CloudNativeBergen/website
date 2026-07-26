@@ -73,6 +73,42 @@ export default defineType({
       description:
         'Optional inline SVG logo for the organization (same mechanism as conference branding).',
     }),
+    // Legal identity (go-live gate G2, #643): drives the tenant's /privacy and
+    // /terms pages. ABSENT resolves to Norway + Datatilsynet (the existing
+    // tenant's values), so legacy orgs are unaffected. Set these for tenants
+    // governed by another country's law.
+    defineField({
+      name: 'legalJurisdiction',
+      title: 'Legal Jurisdiction (Country)',
+      type: 'string',
+      description:
+        'Country whose law governs your Terms of Service and whose accounting/tax law is referenced on the Privacy page (e.g. "Norway", "Germany"). Leave blank to default to the conference country, then Norway. When this is not Norway, the Privacy page renders neutral, non-Norway-specific legal prose.',
+    }),
+    defineField({
+      name: 'supervisoryAuthority',
+      title: 'Data Protection Supervisory Authority',
+      type: 'object',
+      description:
+        'The data protection authority a complaint can be lodged with. Leave blank to default to the Norwegian Data Protection Authority (Datatilsynet) for Norway, or a neutral "your national data protection authority" pointer elsewhere.',
+      fields: [
+        defineField({
+          name: 'name',
+          title: 'Authority Name',
+          type: 'string',
+        }),
+        defineField({
+          name: 'url',
+          title: 'Website',
+          type: 'url',
+        }),
+        defineField({
+          name: 'email',
+          title: 'Contact Email',
+          type: 'string',
+          validation: (Rule) => Rule.email(),
+        }),
+      ],
+    }),
   ],
   preview: {
     select: {

@@ -2,7 +2,8 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
-import { resolveConferenceContact } from '@/lib/email/from'
+import { resolveLegalConfig } from '@/lib/legal'
+import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
 import {
   DocumentTextIcon,
@@ -25,10 +26,10 @@ import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMetadataBrand()
   return {
-    title: 'Terms of Service - Cloud Native Days',
-    description:
-      'Terms of Service for Cloud Native Days conference and workshop services',
+    title: { absolute: `Terms of Service - ${brand}` },
+    description: `Terms of Service for ${brand} conference and workshop services`,
     alternates: await canonicalAlternates('/terms'),
   }
 }
@@ -61,8 +62,9 @@ async function CachedTermsContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = resolveConferenceContact(conference)
-  const organizationName = conference.organizer || 'Cloud Native Days'
+  const legal = await resolveLegalConfig(conference)
+  const contactEmail = legal.contactEmail
+  const organizationName = legal.controllerName
 
   return (
     <>
@@ -474,10 +476,10 @@ async function CachedTermsContent({ domain }: { domain: string }) {
                   <div className="space-y-4">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
                       These Terms of Service are governed by and construed in
-                      accordance with the laws of Norway. Any disputes arising
-                      from these terms or your use of our services shall be
-                      subject to the exclusive jurisdiction of the courts of
-                      Norway.
+                      accordance with the laws of {legal.jurisdiction}. Any
+                      disputes arising from these terms or your use of our
+                      services shall be subject to the exclusive jurisdiction of
+                      the courts of {legal.jurisdiction}.
                     </p>
                     <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                       <p className="text-sm text-blue-700 dark:text-blue-300">
