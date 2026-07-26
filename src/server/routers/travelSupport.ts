@@ -181,12 +181,15 @@ export const travelSupportRouter = router({
     .input(UpdateBankingDetailsSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { authorized, error: authError } =
-          await authorizeTravelSupportOperation(
-            input.travelSupportId,
-            ctx.speaker,
-            'modify',
-          )
+        const {
+          authorized,
+          isOrganizer,
+          error: authError,
+        } = await authorizeTravelSupportOperation(
+          input.travelSupportId,
+          ctx.speaker,
+          'modify',
+        )
 
         if (!authorized || authError) {
           throw authError || createAuthError('FORBIDDEN', 'Access denied')
@@ -198,7 +201,9 @@ export const travelSupportRouter = router({
           ctx.speaker.name,
           {
             travelSupportId: input.travelSupportId,
-            isAdmin: ctx.speaker.isOrganizer,
+            // The ORG-SCOPED grant that was actually enforced — not the
+            // deprecated global flag (B3, #642).
+            isAdmin: isOrganizer === true,
           },
           'info',
         )

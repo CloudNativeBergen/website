@@ -179,6 +179,13 @@ export async function authorizeTravelSupportOperation(
 ): Promise<{
   authorized: boolean
   travelSupport?: TravelSupportWithSpeaker & { expenses: TravelExpense[] }
+  /**
+   * The ORG-SCOPED organizer decision for this request (see
+   * {@link verifyTravelSupportOwnership}), surfaced on success so callers (e.g.
+   * audit logging) record the grant that was actually enforced — not the
+   * deprecated global flag.
+   */
+  isOrganizer?: boolean
   error?: TRPCError
 }> {
   try {
@@ -266,6 +273,7 @@ export async function authorizeTravelSupportOperation(
     return {
       authorized: true,
       travelSupport,
+      isOrganizer,
     }
   } catch (error) {
     return {

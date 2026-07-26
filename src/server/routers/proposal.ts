@@ -1819,9 +1819,9 @@ export const proposalRouter = router({
 
             // The invitee is not yet a speaker on the proposal, so bypass the
             // owner filter (isOrganizer branch) — but STILL org-scope the read to
-            // the current tenant (B1): the respond endpoint is always hit on the
-            // proposal's own conference domain, so `ctx.orgId` matches the
-            // proposal's org; a cross-tenant id cannot be loaded here.
+            // the current tenant (B1): the read is constrained to the REQUEST
+            // org (`ctx.orgId`), so a proposal id from another tenant does not
+            // resolve regardless of which domain the request arrives on.
             const { proposal } = await getProposal({
               id: proposalId,
               speakerId: ctx.speaker._id,
