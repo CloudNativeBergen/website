@@ -3,6 +3,7 @@ import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -27,10 +28,16 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:speakers')
 
-  const { conference } = await getConferenceForDomain(domain)
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
+  }
+
+  // Unknown host: the (main) layout renders the platform landing in place of
+  // this subtree, so bail before dereferencing an empty conference.
+  if (isUnknownHost({ conference, error })) {
+    return null
   }
 
   const { speakers, err } = await getSpeakers(conference._id)

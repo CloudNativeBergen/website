@@ -6,6 +6,7 @@ import {
 } from '@heroicons/react/20/solid'
 import { Button } from '@/components/Button'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
@@ -33,11 +34,21 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   'use cache'
   cacheLife('days')
   cacheTag('content:cfp')
-  const { conference } = await getConferenceForDomain(domain, { topics: true })
+  const { conference, error } = await getConferenceForDomain(domain, {
+    topics: true,
+  })
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
   }
+
+  // Unknown host: the (main) layout renders the platform landing in place of
+  // this subtree, so bail before dereferencing an empty conference (a bare
+  // `conference.formats.filter` here is what crashed the page).
+  if (isUnknownHost({ conference, error })) {
+    return null
+  }
+
   const talkFormats = conference.formats
     .filter((formatId) => !formatId.startsWith('workshop_'))
     .map((formatId) => formats.get(formatId))

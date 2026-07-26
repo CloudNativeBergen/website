@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -64,11 +65,14 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (conferenceError) {
+  if (isUnknownHost({ conference, error: conferenceError })) {
     return (
       <ErrorDisplay
         title="Error Loading Conference"
-        message={conferenceError.message}
+        message={
+          conferenceError?.message ??
+          'No conference is configured for this domain.'
+        }
       />
     )
   }

@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
@@ -22,10 +23,16 @@ async function CachedConductContent({ domain }: { domain: string }) {
   cacheLife('max')
   cacheTag('content:conduct')
 
-  const { conference } = await getConferenceForDomain(domain)
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
+  }
+
+  // Unknown host: the (main) layout renders the platform landing in place of
+  // this subtree, so bail before dereferencing an empty conference.
+  if (isUnknownHost({ conference, error })) {
+    return null
   }
 
   const organizerName = conference?.organizer || 'Cloud Native Days Norway'

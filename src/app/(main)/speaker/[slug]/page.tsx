@@ -15,6 +15,7 @@ import { speakerImageUrl } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
@@ -119,10 +120,16 @@ async function CachedSpeakerContent({
   cacheLife('hours')
   cacheTag('content:speaker-detail')
 
-  const { conference } = await getConferenceForDomain(domain)
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
+  }
+
+  // Unknown host: the (main) layout renders the platform landing in place of
+  // this subtree, so bail before dereferencing an empty conference.
+  if (isUnknownHost({ conference, error })) {
+    return null
   }
 
   const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)

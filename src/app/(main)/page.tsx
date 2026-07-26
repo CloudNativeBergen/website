@@ -4,6 +4,7 @@ import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import {
@@ -198,8 +199,8 @@ async function CachedHomeContent({ domain }: { domain: string }) {
     cacheTag(conferenceTag(conference._id))
   }
 
-  if (error) {
-    console.error('Error fetching conference data:', error)
+  if (isUnknownHost({ conference, error })) {
+    if (error) console.error('Error fetching conference data:', error)
     return <div>Error loading conference data</div>
   }
 
