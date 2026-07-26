@@ -27,6 +27,8 @@ import {
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
+import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
+import { resolveHomepageSections } from '@/lib/homepage/sections'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -369,6 +371,7 @@ export default async function AdminSettings() {
     sponsors: true,
     sponsorTiers: true,
     topics: true,
+    featuredSpeakers: true,
   })
 
   if (error) {
@@ -397,6 +400,24 @@ export default async function AdminSettings() {
     image: org.image,
     title: org.title,
   }))
+
+  // Homepage composition (front-page builder F1/F2). When nothing is stored the
+  // page renders the phase-aware default; seed the editor with that same default
+  // so organizers start from what is actually on the page.
+  const usingDefaultHomepage =
+    !conference.homepageSections || conference.homepageSections.length === 0
+  const homepageSectionsForEditor = resolveHomepageSections(conference)
+  const HOMEPAGE_SECTION_LABELS: Record<string, string> = {
+    homepageHero: 'Hero',
+    homepageFeaturedSpeakers: 'Featured Speakers',
+    homepageProgramHighlights: 'Program Highlights',
+    homepageOrganizers: 'Organizers',
+    homepageSponsors: 'Sponsors',
+    homepageGallery: 'Photo Gallery',
+    homepageMetrics: 'Vanity Metrics',
+    homepageCtaBanner: 'Call-to-action Banner',
+    homepageRichText: 'Rich Text',
+  }
 
   return (
     <div className="space-y-6">
@@ -817,6 +838,46 @@ export default async function AdminSettings() {
                   : null
               }
             />
+          </InfoCard>
+
+          <InfoCard
+            title="Homepage Composition"
+            icon={DocumentTextIcon}
+            action={
+              <HomepageSectionsEditor
+                initialSections={homepageSectionsForEditor}
+                usingDefault={usingDefaultHomepage}
+              />
+            }
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
+              <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                Layout
+              </dt>
+              <dd className="min-w-0 text-right text-sm">
+                {usingDefaultHomepage ? (
+                  <StatusBadge label="Default (automatic)" color="gray" />
+                ) : (
+                  <StatusBadge label="Custom composition" color="green" />
+                )}
+              </dd>
+            </div>
+            <ol className="space-y-1 pt-1">
+              {homepageSectionsForEditor.map((section, idx) => (
+                <li
+                  key={section._key}
+                  className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white"
+                >
+                  <span>
+                    {idx + 1}.{' '}
+                    {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
+                  </span>
+                  {section.hidden ? (
+                    <StatusBadge label="Hidden" color="yellow" />
+                  ) : null}
+                </li>
+              ))}
+            </ol>
           </InfoCard>
 
           <InfoCard

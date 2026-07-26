@@ -1,7 +1,45 @@
 import { formats } from '../../src/lib/proposal/types'
 import { isValidTeamKey, countTeamKey } from '../../src/lib/teams/validation'
-import { defineField, defineType } from 'sanity'
+import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
+
+/**
+ * One block type in the closed homepage-section registry (front-page builder
+ * F1/F2). Every block shares a `hidden` visibility toggle plus any block-specific
+ * `fields`; the object `name` is the `_type` discriminator the renderer switches
+ * on (see `src/lib/homepage/sections.ts`). The preview shows the friendly title
+ * and a "Hidden" flag so organizers can read the composition at a glance.
+ */
+function defineHomepageSection(
+  name: string,
+  title: string,
+  fields: FieldDefinition[] = [],
+) {
+  return {
+    type: 'object' as const,
+    name,
+    title,
+    fields: [
+      defineField({
+        name: 'hidden',
+        title: 'Hidden',
+        type: 'boolean',
+        description: 'Hide this section without deleting it.',
+        initialValue: false,
+      }),
+      ...fields,
+    ],
+    preview: {
+      select: { hidden: 'hidden' },
+      prepare(selection: { hidden?: boolean }) {
+        return {
+          title,
+          subtitle: selection.hidden ? 'Hidden' : undefined,
+        }
+      },
+    },
+  }
+}
 
 export default defineType({
   name: 'conference',
@@ -75,6 +113,15 @@ export default defineType({
     {
       name: 'agents',
       title: 'Agent Configuration (AI)',
+      options: { collapsible: true, collapsed: true },
+    },
+    // Front-page builder (F1/F2). Kept in its OWN fieldset at the end of the
+    // document to minimise merge conflicts with concurrent branches.
+    {
+      name: 'homepage',
+      title: 'Homepage Composition',
+      description:
+        'Ordered list of homepage sections. Leave empty to render the default phase-aware layout (hero, gallery, featured speakers / program, sponsors).',
       options: { collapsible: true, collapsed: true },
     },
   ],
@@ -1106,6 +1153,125 @@ export default defineType({
           description:
             'Behavior and interaction rules for CRM sponsor agents. How should they behave and interact when communicating with sponsors?',
         }),
+      ],
+    }),
+
+    // === Homepage Composition (front-page builder F1/F2) ===
+    // A CLOSED registry of typed section blocks. ABSENT/empty renders the legacy
+    // phase-aware default (see `src/lib/homepage/sections.ts`
+    // `getDefaultSections`). Each block's `_type` is the discriminator; content
+    // still comes from the existing conference sources — sections carry only
+    // their own presentation config. There is no raw-HTML/embed block by design.
+    defineField({
+      name: 'homepageSections',
+      title: 'Homepage Sections',
+      type: 'array',
+      fieldset: 'homepage',
+      description:
+        'Ordered homepage blocks. Leave empty for the default layout. Each block still pulls its content (featured speakers, schedule, sponsors, gallery) from the existing conference configuration.',
+      of: [
+        defineHomepageSection('homepageHero', 'Hero', [
+          defineField({
+            name: 'heroHeadline',
+            title: 'Headline Override',
+            type: 'string',
+            description:
+              'Overrides the tagline in the hero. Leave blank to keep the smart default (with the animated tagline where configured).',
+          }),
+          defineField({
+            name: 'heroSubheadline',
+            title: 'Subheadline Override',
+            type: 'text',
+            rows: 3,
+            description:
+              'Overrides the hero description. Leave blank to use the conference description.',
+          }),
+          defineField({
+            name: 'ctaOverrides',
+            title: 'CTA Button Overrides',
+            type: 'array',
+            description:
+              'When set, replaces the phase-aware hero buttons. Leave empty to keep the smart CFP/tickets/info buttons.',
+            of: [
+              {
+                type: 'object',
+                name: 'heroCta',
+                fields: [
+                  defineField({
+                    name: 'label',
+                    title: 'Label',
+                    type: 'string',
+                    validation: (Rule) => Rule.required(),
+                  }),
+                  defineField({
+                    name: 'href',
+                    title: 'Link',
+                    type: 'string',
+                    validation: (Rule) => Rule.required(),
+                  }),
+                ],
+                preview: { select: { title: 'label', subtitle: 'href' } },
+              },
+            ],
+          }),
+        ]),
+        defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers'),
+        defineHomepageSection(
+          'homepageProgramHighlights',
+          'Program Highlights',
+        ),
+        defineHomepageSection('homepageOrganizers', 'Organizers'),
+        defineHomepageSection('homepageSponsors', 'Sponsors'),
+        defineHomepageSection('homepageGallery', 'Photo Gallery'),
+        defineHomepageSection('homepageMetrics', 'Vanity Metrics', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading above the metrics band.',
+          }),
+        ]),
+        defineHomepageSection('homepageCtaBanner', 'Call-to-action Banner', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            validation: (Rule) => Rule.required(),
+          }),
+          defineField({
+            name: 'body',
+            title: 'Body',
+            type: 'text',
+            rows: 2,
+          }),
+          defineField({
+            name: 'buttonLabel',
+            title: 'Button Label',
+            type: 'string',
+            validation: (Rule) => Rule.required(),
+          }),
+          defineField({
+            name: 'buttonHref',
+            title: 'Button Link',
+            type: 'string',
+            validation: (Rule) => Rule.required(),
+          }),
+        ]),
+        defineHomepageSection('homepageRichText', 'Rich Text', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading above the rich text.',
+          }),
+          defineField({
+            name: 'content',
+            title: 'Content',
+            type: 'array',
+            of: [{ type: 'block' }],
+            validation: (Rule) => Rule.required(),
+          }),
+        ]),
       ],
     }),
   ],
