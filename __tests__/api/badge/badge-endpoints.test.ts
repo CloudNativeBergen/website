@@ -168,7 +168,9 @@ describe('Badge endpoints - dual format', () => {
     })
 
     it('404s an unknown badge', async () => {
-      mockedGetBadgeById.mockResolvedValue({ badge: null, error: null })
+      mockedGetBadgeById.mockResolvedValue({
+        error: new Error('Badge not found'),
+      })
       const { GET } = await import('@/app/api/badge/[badgeId]/route')
       const res = await GET(request, routeParams('nope'))
 

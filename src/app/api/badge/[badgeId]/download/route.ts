@@ -6,6 +6,7 @@ import {
   badgeNotModifiedResponse,
 } from '@/lib/badge/http'
 import { renderBadgeSvgToPng, bakeCredentialIntoPng } from '@/lib/badge/png'
+import { loadBadgeFontFiles } from '@/lib/badge/fonts'
 
 /**
  * GET /api/badge/[badgeId]/download
@@ -73,7 +74,10 @@ export async function GET(
 
     if (wantPng) {
       try {
-        const png = renderBadgeSvgToPng(svgContent)
+        // The badge SVG renders the speaker name via <text>; the serverless
+        // runtime has no system fonts, so provide the self-hosted brand font.
+        const fontFiles = await loadBadgeFontFiles(request.nextUrl.origin)
+        const png = renderBadgeSvgToPng(svgContent, { fontFiles })
         const bakedPng = bakeCredentialIntoPng(png, badge.badgeJson)
         return new NextResponse(Buffer.from(bakedPng), {
           status: 200,

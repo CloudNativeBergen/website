@@ -6,6 +6,7 @@
  * bake→extract untouched (a signed credential cannot tolerate mutation).
  */
 import { describe, it, expect } from 'vitest'
+import path from 'path'
 import {
   OB_PNG_KEYWORD,
   bakeCredentialIntoPng,
@@ -16,7 +17,7 @@ import {
 // A real, multi-chunk PNG produced by the same rasterizer the route uses.
 const TINY_PNG = renderBadgeSvgToPng(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#111"/></svg>',
-  8,
+  { width: 8 },
 )
 
 const CREDENTIAL = JSON.stringify({
@@ -64,12 +65,28 @@ describe('PNG baking', () => {
     ).toThrow(/PNG/)
   })
 
+  it('renders <text> only when a font file is provided (serverless has no system fonts)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">' +
+      '<rect width="200" height="100" fill="#111"/>' +
+      '<text x="20" y="60" font-family="Arial, sans-serif" font-size="40" fill="#fff">Jane Doe</text>' +
+      '</svg>'
+    const fontFile = path.join(process.cwd(), 'public/fonts/Inter-SemiBold.ttf')
+    const withoutFont = renderBadgeSvgToPng(svg, { width: 200 })
+    const withFont = renderBadgeSvgToPng(svg, {
+      width: 200,
+      fontFiles: [fontFile],
+    })
+    // Text glyphs add real pixel data; a fontless render silently drops them.
+    expect(withFont.length).toBeGreaterThan(withoutFont.length)
+  })
+
   it('rasterizes a badge SVG (strips the credential node) then bakes', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0" viewBox="0 0 100 100">' +
       '<openbadges:credential><![CDATA[ {"stale":true} ]]></openbadges:credential>' +
       '<rect width="100" height="100" fill="#3b82f6"/></svg>'
-    const png = renderBadgeSvgToPng(svg, 256)
+    const png = renderBadgeSvgToPng(svg, { width: 256 })
     // Valid PNG, and the drawable-only render carries no credential yet.
     expect(Array.from(png.subarray(0, 4))).toEqual([137, 80, 78, 71])
     expect(extractCredentialFromPng(png)).toBeNull()

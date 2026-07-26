@@ -178,14 +178,28 @@ export function extractCredentialFromPng(png: Uint8Array): string | null {
  * `<openbadges:credential>` node (and its CDATA) is stripped first so the
  * rasterizer only sees drawable markup; the credential is re-baked into the PNG
  * separately via {@link bakeCredentialIntoPng}.
+ *
+ * System fonts are never consulted (there are none on the serverless runtime,
+ * and depending on them makes output differ between environments) — callers
+ * whose SVG contains `<text>` MUST pass `fontFiles` (see lib/badge/fonts.ts)
+ * or the text silently disappears from the render.
  */
-export function renderBadgeSvgToPng(svg: string, width = 1024): Uint8Array {
+export function renderBadgeSvgToPng(
+  svg: string,
+  options: { width?: number; fontFiles?: string[] } = {},
+): Uint8Array {
+  const { width = 1024, fontFiles = [] } = options
   const drawable = svg.replace(
     /<openbadges:credential[\s\S]*?<\/openbadges:credential>\s*/g,
     '',
   )
   const resvg = new Resvg(drawable, {
     fitTo: { mode: 'width', value: width },
+    font: {
+      loadSystemFonts: false,
+      fontFiles,
+      defaultFontFamily: 'Inter',
+    },
   })
   return resvg.render().asPng()
 }
