@@ -336,6 +336,23 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
   // env var anywhere in the codebase today, so there is nothing to surface.
   // If it is later wired as a `process.env.AUTH_COOKIE_DOMAIN` read, add a plain
   // check here that warns when unset.
+  //
+  // Centralized OAuth origin (#619). Informational: 'ok' when configured (opt-in
+  // multi-domain OAuth), 'off' when absent (today's single-domain default). Not
+  // a secret — the proxy URL is a public callback origin, shown plain.
+  const redirectProxy = process.env.AUTH_REDIRECT_PROXY_URL?.trim()
+  checks.push({
+    id: 'auth.redirectProxy',
+    group: 'auth',
+    label: 'AUTH_REDIRECT_PROXY_URL',
+    status: redirectProxy ? 'ok' : 'off',
+    value: redirectProxy
+      ? 'set — multi-domain OAuth enabled'
+      : 'not set — single-domain',
+    detail: redirectProxy
+      ? redirectProxy
+      : 'Optional central OAuth origin (#619) for serving multiple domains from one OAuth app',
+  })
 
   // ---- EMAIL ----------------------------------------------------------------
   checks.push(

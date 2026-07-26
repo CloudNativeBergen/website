@@ -63,7 +63,7 @@ vi.mock('@/lib/sanity/client', () => ({
   speakerImageUrl: (src: string) => `img:${src}`,
 }))
 
-import { jwtSignInCallback, signOutHandler } from './auth'
+import { jwtSignInCallback, signOutHandler, redirectProxyConfig } from './auth'
 import { signLinkIntent, LINK_INTENT_COOKIE } from './auth-link'
 
 const SESSION_COOKIE = 'authjs.session-token'
@@ -406,5 +406,39 @@ describe('jwtSignInCallback — org-scoped session computation (CaaS T1-2, #614)
     })) as JWT & { speaker?: { organizerOrgIds?: string[] } }
 
     expect(token.speaker?.organizerOrgIds).toEqual([])
+  })
+})
+
+describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () => {
+  it('contributes NO config keys when AUTH_REDIRECT_PROXY_URL is absent', () => {
+    expect(redirectProxyConfig({} as NodeJS.ProcessEnv)).toEqual({})
+    // Blank / whitespace-only is treated as absent (single-domain).
+    expect(
+      redirectProxyConfig({
+        AUTH_REDIRECT_PROXY_URL: '   ',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toEqual({})
+  })
+
+  it('sets redirectProxyUrl + trustHost when the env is present', () => {
+    expect(
+      redirectProxyConfig({
+        AUTH_REDIRECT_PROXY_URL: 'https://auth.example.no/api/auth',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toEqual({
+      redirectProxyUrl: 'https://auth.example.no/api/auth',
+      trustHost: true,
+    })
+  })
+
+  it('trims surrounding whitespace on the proxy URL', () => {
+    expect(
+      redirectProxyConfig({
+        AUTH_REDIRECT_PROXY_URL: '  https://auth.example.no/api/auth  ',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toEqual({
+      redirectProxyUrl: 'https://auth.example.no/api/auth',
+      trustHost: true,
+    })
   })
 })

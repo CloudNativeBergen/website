@@ -374,6 +374,32 @@ export async function redirectCallback({
   return target
 }
 
+/**
+ * Optional CENTRALIZED OAUTH ORIGIN (#619), opt-in via `AUTH_REDIRECT_PROXY_URL`.
+ *
+ * A GitHub OAuth app allows exactly ONE callback URL, and cookies cannot span
+ * registrable domains — so a single OAuth app cannot serve conferences on
+ * different domains directly (the provider rejects the mismatched redirect_uri
+ * BEFORE our app runs). Auth.js's `redirectProxyUrl` fixes this: the OAuth
+ * `redirect_uri` is pinned to ONE central auth origin (the value of this env),
+ * which then bounces the signed-`state` round-trip back to the initiating site.
+ * Setting it also AUTO-ENABLES the provider's `state` check (Auth.js contract).
+ *
+ * `trustHost` is enabled ALONGSIDE it because the central origin must trust the
+ * incoming Host to construct callback URLs. Absent env → returns `{}` → today's
+ * single-domain behavior EXACTLY (Vercel already defaults `trustHost` true).
+ *
+ * Env-parameterised + exported so the config wiring is unit-testable under both
+ * env states. Referenced in-file by `config`, so not an unused export.
+ */
+export function redirectProxyConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): Pick<NextAuthConfig, 'redirectProxyUrl' | 'trustHost'> {
+  const url = env.AUTH_REDIRECT_PROXY_URL?.trim()
+  if (!url) return {}
+  return { redirectProxyUrl: url, trustHost: true }
+}
+
 const config = {
   providers: [
     GitHub({
@@ -412,6 +438,10 @@ const config = {
       return redirectCallback(params)
     },
   },
+
+  // Opt-in centralized OAuth origin (#619). Spread LAST so an absent env
+  // contributes no keys and the built config is byte-for-byte today's.
+  ...redirectProxyConfig(),
 } satisfies NextAuthConfig
 
 type ProviderData = { id: string; name: string; type: string }
