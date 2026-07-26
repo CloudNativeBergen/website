@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   SponsorInputSchema,
@@ -560,8 +561,8 @@ export const sponsorRouter = router({
           })
         }
 
-        revalidateTag('content:sponsor', 'default')
-        revalidateTag('content:conferences', 'default')
+        // Sponsor tiers belong to one conference — bust only this tenant.
+        revalidateTag(conferenceTag(conference._id), 'default')
 
         return sponsorTier
       }),
@@ -616,8 +617,8 @@ export const sponsorRouter = router({
             })
           }
 
-          revalidateTag('content:sponsor', 'default')
-          revalidateTag('content:conferences', 'default')
+          // Sponsor tiers belong to one conference — bust only this tenant.
+          revalidateTag(conferenceTag(await resolveConferenceId()), 'default')
 
           return sponsorTier
         } else {
@@ -643,8 +644,8 @@ export const sponsorRouter = router({
         })
       }
 
-      revalidateTag('content:sponsor', 'default')
-      revalidateTag('content:conferences', 'default')
+      // Sponsor tiers belong to one conference — bust only this tenant.
+      revalidateTag(conferenceTag(await resolveConferenceId()), 'default')
 
       return { success: true }
     }),

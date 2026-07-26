@@ -31,20 +31,31 @@ input, opts?)`. Two invariants make it safe:
   `pathPrefix` so the patch writes dot paths under the parent and `setIfMissing`s
   it first — a save never clobbers sibling subfields it doesn't render.
 
-### Cache-tag revalidation
+### Cache-tag revalidation (tenant-scoped)
 
 After a successful commit, `applyConferencePatch` busts the cached conference
-read with **two** revalidations:
+read with a **single, tenant-scoped** revalidation:
 
 ```ts
-revalidateTag('content:conferences', 'default')
-revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+import { conferenceTag } from '@/lib/cache/tags'
+
+revalidateTag(conferenceTag(conferenceId), 'default') // sanity:conference-<id>
 ```
 
-`content:conferences` is the broad tag every `getConferenceForCurrentDomain`
-consumer shares (so the server-rendered settings page and public pages reflect
-the change); `sanity:conference-<id>` is the per-document tag. Both are needed so
-the edit is visible on the next render without waiting out the cache TTL.
+One deploy serves every conference domain, so settings are multi-tenant. Editing
+one conference must not bust another tenant's cache. Every public page that
+renders a conference's content — and the shared `fetchConferenceData` read in
+`src/lib/conference/sanity.ts` — now tags its cache entry with
+`sanity:conference-<id>` (via `conferenceTag`). Revalidating that one scoped tag
+therefore invalidates **only** the edited conference's pages and reads, and the
+edit is visible on the next render without waiting out the cache TTL.
+
+The broad `content:conferences` / `content:*` tags are still present on those
+cache entries for **platform-wide** invalidation (a deploy or a cross-tenant
+content change), but conference-scoped mutations deliberately do **not**
+revalidate them — that would bust every tenant at once (issue #618). Build the
+tag names only through the helpers in `src/lib/cache/tags.ts`
+(`conferenceTag(id)`, `domainTag(domain)`), never as inline strings.
 
 ## The shared fieldset editor (`EditConferenceCard`)
 

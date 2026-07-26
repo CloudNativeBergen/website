@@ -4,6 +4,7 @@ import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
 import type { Metadata } from 'next'
@@ -31,6 +32,10 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
     sponsors: true,
     gallery: { featuredLimit: 8, featuredOnly: true },
   })
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (error || !conference) {
     console.error('Failed to load conference data:', error)

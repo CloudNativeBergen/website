@@ -12,6 +12,7 @@ import { formats } from '@/lib/proposal/types'
 import clsx from 'clsx'
 import Link from 'next/link'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -33,6 +34,10 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   cacheLife('days')
   cacheTag('content:cfp')
   const { conference } = await getConferenceForDomain(domain, { topics: true })
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
   const talkFormats = conference.formats
     .filter((formatId) => !formatId.startsWith('workshop_'))
     .map((formatId) => formats.get(formatId))

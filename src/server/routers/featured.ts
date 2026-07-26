@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure } from '../trpc'
 import {
   FeaturedSpeakerInputSchema,
@@ -114,9 +115,9 @@ export const featuredRouter = router({
             })
           }
 
-          revalidateTag('content:featured', 'default')
-          revalidateTag('content:conferences', 'default')
-          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+          // Featured speakers surface on this conference's homepage — bust only
+          // this tenant (its pages carry `sanity:conference-<id>`).
+          revalidateTag(conferenceTag(conference._id), 'default')
 
           return { success: true }
         } catch (error) {
@@ -156,9 +157,9 @@ export const featuredRouter = router({
             })
           }
 
-          revalidateTag('content:featured', 'default')
-          revalidateTag('content:conferences', 'default')
-          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+          // Featured speakers surface on this conference's homepage — bust only
+          // this tenant (its pages carry `sanity:conference-<id>`).
+          revalidateTag(conferenceTag(conference._id), 'default')
 
           return { success: true }
         } catch (error) {
@@ -198,10 +199,9 @@ export const featuredRouter = router({
             })
           }
 
-          revalidateTag('content:featured', 'default')
-          revalidateTag('content:conferences', 'default')
-          revalidateTag('content:program', 'default')
-          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+          // Featured talks surface on this conference's home/program pages —
+          // bust only this tenant (all those pages carry `sanity:conference-<id>`).
+          revalidateTag(conferenceTag(conference._id), 'default')
 
           return { success: true }
         } catch (error) {
@@ -241,10 +241,9 @@ export const featuredRouter = router({
             })
           }
 
-          revalidateTag('content:featured', 'default')
-          revalidateTag('content:conferences', 'default')
-          revalidateTag('content:program', 'default')
-          revalidateTag(`sanity:conference-${conference._id}`, 'default')
+          // Featured talks surface on this conference's home/program pages —
+          // bust only this tenant (all those pages carry `sanity:conference-<id>`).
+          revalidateTag(conferenceTag(conference._id), 'default')
 
           return { success: true }
         } catch (error) {

@@ -30,6 +30,7 @@ import { PhotoGallerySection } from '@/components/PhotoGallerySection'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { PersonJsonLd } from '@/components/seo/PersonJsonLd'
 import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
 import { canonicalUrl } from '@/lib/seo/canonical'
@@ -119,6 +120,11 @@ async function CachedSpeakerContent({
   cacheTag('content:speaker-detail')
 
   const { conference } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
+
   const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
 
   if (err) {

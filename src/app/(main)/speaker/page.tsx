@@ -5,6 +5,7 @@ import { getSpeakers } from '@/lib/speaker/sanity'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd'
@@ -27,6 +28,10 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
   cacheTag('content:speakers')
 
   const { conference } = await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   const { speakers, err } = await getSpeakers(conference._id)
   if (err) {

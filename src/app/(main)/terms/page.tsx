@@ -17,6 +17,7 @@ import {
 import Link from 'next/link'
 import { ContentCard } from '@/components/ContentCard'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -37,6 +38,10 @@ async function CachedTermsContent({ domain }: { domain: string }) {
 
   const { conference, error: conferenceError } =
     await getConferenceForDomain(domain)
+
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (conferenceError) {
     return (

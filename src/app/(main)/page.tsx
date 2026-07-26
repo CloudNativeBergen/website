@@ -27,6 +27,7 @@ import {
 import { formatDatesSafe } from '@/lib/time'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { EventJsonLd } from '@/components/seo/EventJsonLd'
 import { canonicalUrl } from '@/lib/seo/canonical'
@@ -189,6 +190,13 @@ async function CachedHomeContent({ domain }: { domain: string }) {
     schedule: true,
     gallery: { featuredOnly: true },
   })
+
+  // Tenant-scoped tag: a mutation on THIS conference busts this page without
+  // busting every other tenant's homepage (the generic tag above stays for
+  // platform-wide invalidation).
+  if (conference?._id) {
+    cacheTag(conferenceTag(conference._id))
+  }
 
   if (error) {
     console.error('Error fetching conference data:', error)

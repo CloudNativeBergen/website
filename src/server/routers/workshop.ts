@@ -11,6 +11,7 @@ import {
 } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
+import { conferenceTag } from '@/lib/cache/tags'
 import { clientWrite } from '@/lib/sanity/client'
 import {
   workshopListInputSchema,
@@ -1057,7 +1058,7 @@ export const workshopRouter = router({
             .commit()
 
           revalidateTag('admin:settings', 'default')
-          revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+          revalidateTag(conferenceTag(conferenceId), 'default')
 
           return {
             success: true,
