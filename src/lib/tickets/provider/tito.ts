@@ -91,6 +91,21 @@ function titoRef(ref: EventRef): TitoEventRef {
 }
 
 /**
+ * URL-path-encode the account/event slugs before interpolation. Slugs are
+ * operator-entered strings; a reserved character must not be able to reshape
+ * the request path into a different Tito API endpoint.
+ */
+function encodedSlugs(ref: TitoEventRef): {
+  accountSlug: string
+  eventSlug: string
+} {
+  return {
+    accountSlug: encodeURIComponent(ref.accountSlug),
+    eventSlug: encodeURIComponent(ref.eventSlug),
+  }
+}
+
+/**
  * Tito.io implementation of {@link TicketingProvider} (Admin API v3).
  *
  * The SECOND provider — its purpose is to prove the adapter generalizes past
@@ -179,7 +194,7 @@ export class TitoProvider implements TicketingProvider {
   // ── Tickets & orders ──────────────────────────────────────────────
 
   async fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]> {
-    const { accountSlug, eventSlug } = titoRef(eventRef)
+    const { accountSlug, eventSlug } = encodedSlugs(titoRef(eventRef))
     if (!accountSlug || !eventSlug) {
       throw new Error('Valid Tito account and event slugs are required')
     }
@@ -274,7 +289,7 @@ export class TitoProvider implements TicketingProvider {
         'Tito requires an account/event-slug EventRef, not a bare numeric event id',
       )
     }
-    const { accountSlug, eventSlug } = titoRef(event)
+    const { accountSlug, eventSlug } = encodedSlugs(titoRef(event))
 
     const [eventData, releaseData] = await Promise.all([
       this.get<{ event?: TitoEvent } & TitoEvent>(

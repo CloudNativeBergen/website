@@ -41,6 +41,26 @@ describe('UpdateTicketingIdsSchema — Tito cross-field validation', () => {
     }
   })
 
+  it('rejects complete Tito slugs while the provider is absent (would be silently ignored)', () => {
+    const r = UpdateTicketingIdsSchema.safeParse({
+      titoAccountSlug: 'acme',
+      titoEventSlug: 'acme-2026',
+    })
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues[0].path).toEqual(['ticketingProvider'])
+    }
+  })
+
+  it('rejects complete Tito slugs while the provider is explicitly checkin', () => {
+    const r = UpdateTicketingIdsSchema.safeParse({
+      ticketingProvider: 'checkin',
+      titoAccountSlug: 'acme',
+      titoEventSlug: 'acme-2026',
+    })
+    expect(r.success).toBe(false)
+  })
+
   it('leaves the Checkin path unconstrained by the Tito rule', () => {
     const r = UpdateTicketingIdsSchema.safeParse({
       checkinCustomerId: 1,

@@ -261,3 +261,12 @@ neutral types (`EventTicket`, `CheckinPayOrder`, the webhook envelope, the
 discount input). Those force `parseOrderCreated` / the discount methods to be
 unsupported for Tito; unlocking them is the next generalization, and the mapping
 seams (`parseOrderCreated`, `fetchPublicTicketTypes`) are where it lands.
+
+**Also debt — provider-namespaced per-org secrets:** the per-org `ticketing`
+secret family is a single opaque credential bag with no provider discriminator,
+so an org's Checkin-shaped secret would be handed to a Tito-bound conference
+(and fail loudly at auth time — a 401, not a silent cross-use). Today an org has
+one ticketing provider so the bag is unambiguous in practice; the planned
+layered secrets architecture (per-integration encapsulation) namespaces the
+family per provider (`ticketing.checkin` / `ticketing.tito`) and is where this
+resolves properly.

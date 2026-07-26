@@ -172,11 +172,9 @@ export const UpdateTicketingIdsSchema = z
     // A Tito binding is both-or-neither: the resolver requires account AND event
     // slug, so persisting one alone would strand the conference in a
     // half-configured state that silently resolves as "unconfigured".
-    const wantsTito =
-      value.ticketingProvider === 'tito' ||
-      Boolean(value.titoAccountSlug) ||
-      Boolean(value.titoEventSlug)
-    if (!wantsTito) return
+    const hasAnySlug =
+      Boolean(value.titoAccountSlug) || Boolean(value.titoEventSlug)
+    if (value.ticketingProvider !== 'tito' && !hasAnySlug) return
     if (Boolean(value.titoAccountSlug) !== Boolean(value.titoEventSlug)) {
       const missing = value.titoAccountSlug
         ? 'titoEventSlug'
@@ -186,6 +184,18 @@ export const UpdateTicketingIdsSchema = z
         path: [missing],
         message:
           'Tito needs both the account slug and the event slug — set both or clear both',
+      })
+    }
+    // Slugs saved while the provider is (or defaults to) Checkin would be
+    // silently ignored by the resolver (absence ⇒ 'checkin') — a stored-but-dead
+    // binding. The fieldset is full-replace, so requiring the provider here is
+    // safe for every caller.
+    if (hasAnySlug && value.ticketingProvider !== 'tito') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ticketingProvider'],
+        message:
+          'Select Tito as the ticketing provider to use these slugs — or clear them',
       })
     }
   })
