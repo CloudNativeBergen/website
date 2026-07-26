@@ -261,6 +261,20 @@ export default defineType({
       fieldset: 'branding',
       description:
         'Optional per-conference brand colors. Leave unset to use the default Cloud Native Days palette.',
+      // Both-or-neither: the server schema and the ThemeEditor treat the theme
+      // as a complete pair, so a Studio edit must not persist a half-theme.
+      validation: (rule) =>
+        rule.custom(
+          (
+            value: { primaryColor?: string; accentColor?: string } | undefined,
+          ) => {
+            if (!value) return true
+            if (Boolean(value.primaryColor) !== Boolean(value.accentColor)) {
+              return 'Set both the primary and the accent color — or clear both'
+            }
+            return true
+          },
+        ),
       fields: [
         defineField({
           name: 'primaryColor',

@@ -53,14 +53,21 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
   if (!theme) return ''
 
   const decls: string[] = []
+  let hoverMix: string | null = null
 
   const primary = theme.primaryColor?.trim()
   if (primary && isHexColor(primary)) {
     decls.push(`--brand-primary:${primary}`)
+    // Hover fallback for engines without color-mix(): the primary itself. An
+    // unsupported function in a custom property is only detected at var()
+    // substitution time (the property computes to invalid → the hover rule is
+    // DROPPED entirely), so the safe value must live in the base block and the
+    // color-mix upgrade behind @supports.
+    decls.push(`--brand-primary-hover:${primary}`)
     // L1 hover = a slightly darker primary, derived in pure CSS (no derivation
     // logic in TS). color-mix is only ever emitted here, never on the default
     // path, so it can't affect the no-override pixel-identity guarantee.
-    decls.push(`--brand-primary-hover:color-mix(in srgb, ${primary} 85%, #000)`)
+    hoverMix = `--brand-primary-hover:color-mix(in srgb, ${primary} 85%, #000)`
   }
 
   const accent = theme.accentColor?.trim()
@@ -69,7 +76,10 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
   }
 
   if (decls.length === 0) return ''
-  return `:root{${decls.join(';')}}`
+  const base = `:root{${decls.join(';')}}`
+  return hoverMix
+    ? `${base}@supports (color: color-mix(in srgb, red 50%, blue)){:root{${hoverMix}}}`
+    : base
 }
 
 /**

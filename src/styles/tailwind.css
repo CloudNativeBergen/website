@@ -401,7 +401,7 @@
   background-color: var(
     --brand-primary-hover,
     #1e40af
-  ); /* blue-700 equivalent */
+  ); /* blue-800 (same dark house shade as the non-hover rule) */
 }
 
 .hover\:bg-brand-fresh-green-hover:hover {

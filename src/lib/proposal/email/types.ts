@@ -10,9 +10,9 @@ export interface BaseEmailTemplateProps {
   comment?: string
   socialLinks?: string[]
   /**
-   * Per-tenant brand accent (THEMING L1). The conference theme's primary hex,
-   * resolved by the sender via `emailBrandColor`; absent falls back to the house
-   * blue inside `BaseEmailTemplate`.
+   * Per-tenant brand PRIMARY color (THEMING L1) — the conference theme's
+   * primary hex, resolved by the sender via `emailBrandColor`; absent falls
+   * back to the house blue inside `BaseEmailTemplate`.
    */
   brandColor?: string
 }

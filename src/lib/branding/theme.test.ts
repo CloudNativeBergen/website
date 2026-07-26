@@ -42,9 +42,17 @@ describe('conferenceThemeCss — token resolution', () => {
     })
     expect(css).toContain('--brand-primary:#7C3AED')
     expect(css).toContain('--brand-accent:#22D3EE')
-    // Hover is a darker primary, derived in pure CSS.
+    // Hover is a darker primary, derived in pure CSS — but the color-mix()
+    // upgrade lives behind @supports, with the primary itself as the base
+    // fallback (an unsupported function in a custom property would otherwise
+    // drop the hover rule entirely at var() substitution time).
+    expect(css).toContain('--brand-primary-hover:#7C3AED')
     expect(css).toContain(
-      '--brand-primary-hover:color-mix(in srgb, #7C3AED 85%, #000)',
+      '@supports (color: color-mix(in srgb, red 50%, blue)){:root{--brand-primary-hover:color-mix(in srgb, #7C3AED 85%, #000)}}',
+    )
+    // The safe fallback precedes the @supports upgrade.
+    expect(css.indexOf('--brand-primary-hover:#7C3AED')).toBeLessThan(
+      css.indexOf('@supports'),
     )
     // A single :root block drives both light and dark.
     expect(css.startsWith(':root{')).toBe(true)
