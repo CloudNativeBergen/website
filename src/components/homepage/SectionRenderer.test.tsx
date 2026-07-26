@@ -39,10 +39,7 @@ vi.mock('@/components/homepage/MetricsBlock', () => ({
 }))
 
 import { HomepageSectionRenderer } from './SectionRenderer'
-import {
-  getDefaultSections,
-  type HomepageSection,
-} from '@/lib/homepage/sections'
+import { getDefaultSections, type HomepageSection } from '@/lib/homepage'
 import type { Conference } from '@/lib/conference/types'
 
 function makeConference(overrides: Partial<Conference> = {}): Conference {

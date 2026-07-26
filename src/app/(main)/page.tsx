@@ -14,7 +14,7 @@ import { headers } from 'next/headers'
 import { EventJsonLd } from '@/components/seo/EventJsonLd'
 import { canonicalUrl } from '@/lib/seo/canonical'
 import { HomepageSectionRenderer } from '@/components/homepage/SectionRenderer'
-import { resolveHomepageSections } from '@/lib/homepage/sections'
+import { resolveHomepageSections } from '@/lib/homepage'
 
 function truncateDescription(text: string, maxLength = 160): string {
   const trimmed = text.trim()

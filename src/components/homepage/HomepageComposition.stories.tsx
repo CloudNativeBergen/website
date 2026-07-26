@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { HomepageSectionRenderer } from './SectionRenderer'
-import {
-  getDefaultSections,
-  type HomepageSection,
-} from '@/lib/homepage/sections'
+import { getDefaultSections, type HomepageSection } from '@/lib/homepage'
 import type { Conference } from '@/lib/conference/types'
 import type { TypedObject } from 'sanity'
 

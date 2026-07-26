@@ -1,5 +1,5 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
-import type { HeroCtaOverride } from '@/lib/homepage/sections'
+import type { HeroCtaOverride } from '@/lib/homepage'
 import { Button } from '@/components/Button'
 import { CollapsibleDescription } from '@/components/CollapsibleDescription'
 import { Container } from '@/components/Container'

@@ -18,10 +18,7 @@ import {
 import type { Conference } from '@/lib/conference/types'
 import { isCfpOpen, isRegistrationAvailable } from '@/lib/conference/state'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
-import {
-  hasPublishedSchedule,
-  type HomepageSection,
-} from '@/lib/homepage/sections'
+import { hasPublishedSchedule, type HomepageSection } from '@/lib/homepage'
 
 /** Unknown section `_type`s already warned about (once per process). */
 const warnedUnknownSectionTypes = new Set<string>()
