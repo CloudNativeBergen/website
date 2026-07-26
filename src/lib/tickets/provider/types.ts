@@ -6,18 +6,58 @@ import type {
 } from '@/lib/discounts/types'
 
 /**
- * Neutral reference to an event within a ticketing provider.
+ * Provider-shaped reference to an event.
  *
- * For Checkin.no this is a customer (tenant) id plus an event id, both stored
- * per-conference as `conference.checkinCustomerId` / `conference.checkinEventId`.
+ * GENERALIZED FOR THE SECOND PROVIDER (Tito): `EventRef` is now a discriminated
+ * union keyed by `provider`. Each provider narrows to its own binding shape and
+ * throws (or unsupported-errors) if handed another provider's ref.
  *
- * SECOND-PROVIDER DEBT: the two-number shape is Checkin's. A provider that keys
- * events differently (e.g. a single opaque event slug) will need this
- * generalized — see docs/INTEGRATION_ADAPTERS.md.
+ * BACKWARD COMPATIBILITY: `provider` is OPTIONAL on the Checkin variant and
+ * absent means Checkin, so every pre-existing `{ customerId, eventId }` literal
+ * (admin pages, tRPC router, resolver output) is still a valid `EventRef` with
+ * zero edits — the discriminant `'tito'` appears only on the Tito variant, so
+ * narrowing with `ref.provider === 'tito'` is exhaustive.
  */
-export interface EventRef {
+export interface CheckinEventRef {
+  /** Optional discriminant; absent ⇒ Checkin (the historical default). */
+  provider?: 'checkin'
+  /** Checkin customer (tenant) id — `conference.checkinCustomerId`. */
   customerId: number
+  /** Checkin event id — `conference.checkinEventId`. */
   eventId: number
+}
+
+/** Tito keys an event by two URL slugs: `/:account/:event`. */
+export interface TitoEventRef {
+  provider: 'tito'
+  /** Tito account slug — `conference.titoAccountSlug`. */
+  accountSlug: string
+  /** Tito event slug — `conference.titoEventSlug`. */
+  eventSlug: string
+}
+
+export type EventRef = CheckinEventRef | TitoEventRef
+
+/**
+ * Thrown by a provider for an interface member that has NO faithful equivalent
+ * on that vendor (e.g. Tito has no Checkin-shaped `fetchOrderPaymentDetails`, and
+ * the discount methods carry a Checkin-shaped numeric `eventId` input that can't
+ * address a Tito event). It is a NAMED, typed error — callers can `instanceof`
+ * it — so a provider never fails with a bare/opaque `Error` for an operation it
+ * deliberately does not implement.
+ */
+export class ProviderUnsupportedError extends Error {
+  readonly code = 'provider-unsupported'
+  constructor(
+    readonly providerName: string,
+    readonly operation: string,
+    detail?: string,
+  ) {
+    super(
+      `${providerName} does not support "${operation}"${detail ? `: ${detail}` : ''}`,
+    )
+    this.name = 'ProviderUnsupportedError'
+  }
 }
 
 /**
@@ -141,12 +181,19 @@ export interface TicketingProvider {
   fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder>
 
   /**
-   * Public ticket types for an event. Only the event id is required (the public
-   * event lookup is not tenant-scoped). Throws on transport/not-found; callers
-   * that want soft-fail wrap this (see `getPublicTicketTypes`).
+   * Public ticket types for an event.
+   *
+   * Accepts either a bare numeric event id (the historical Checkin-only form —
+   * Checkin's public lookup is not tenant-scoped, so an id alone suffices) OR a
+   * provider-shaped {@link EventRef}. A provider whose public lookup needs more
+   * than a number (Tito needs `account/event` slugs) requires the ref form and
+   * unsupported-errors on a bare number. The resolver path always passes the
+   * ref; direct Checkin callers may still pass the number. Throws on
+   * transport/not-found; callers that want soft-fail wrap this (see
+   * `getPublicTicketTypes`).
    */
   fetchPublicTicketTypes(
-    eventId: number,
+    event: EventRef | number,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }>
 
   // ── Discounts (same vendor + event id) ────────────────────────────

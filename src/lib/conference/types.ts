@@ -153,8 +153,18 @@ export interface Conference {
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
   contactEmail: string
+  /**
+   * Ticketing vendor selector. ABSENT ⇒ 'checkin' (every legacy conference);
+   * 'tito' routes to the Tito account/event slugs below. Server code must treat
+   * absence as Checkin — see `conferenceProviderType`.
+   */
+  ticketingProvider?: 'checkin' | 'tito'
   checkinCustomerId?: number
   checkinEventId?: number
+  /** Tito account slug (e.g. "ultimateconf" in ti.to/ultimateconf/2026). */
+  titoAccountSlug?: string
+  /** Tito event slug (e.g. "2026" in ti.to/ultimateconf/2026). */
+  titoEventSlug?: string
   ticketCapacity?: number
   ticketTargets?: SalesTargetConfig
   travelSupportPaymentDate?: string

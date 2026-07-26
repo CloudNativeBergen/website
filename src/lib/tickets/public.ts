@@ -48,8 +48,11 @@ export async function getPublicTicketTypes(
     // than resolved-and-refused.
     const ticketing = await resolveTicketingProvider(conference)
     if (!ticketing.configured) return null
+    // Pass the provider-shaped eventRef (not a bare event id) so a Tito-bound
+    // conference routes to its account/event slugs; Checkin ignores the extra
+    // customerId and uses the event id.
     const data = await ticketing.provider.fetchPublicTicketTypes(
-      ticketing.eventRef.eventId,
+      ticketing.eventRef,
     )
 
     // Filter to only public tickets: not invite-only, has at least one price > 0

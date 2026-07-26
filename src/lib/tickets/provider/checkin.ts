@@ -30,6 +30,21 @@ import type {
 /** Default Checkin.no GraphQL endpoint. Overridable via injected credentials. */
 export const CHECKIN_API_URL = 'https://api.checkin.no/graphql'
 
+/**
+ * Narrow a (possibly Tito-shaped) {@link EventRef} to Checkin's customer+event
+ * pair. A ref without `provider`, or `provider: 'checkin'`, is Checkin; a Tito
+ * ref reaching this provider is a wiring bug (the resolver picks the provider
+ * from the same field), so it throws loudly.
+ */
+function checkinRef(ref: EventRef): { customerId: number; eventId: number } {
+  if (ref.provider === 'tito') {
+    throw new Error(
+      'CheckinProvider received a Tito event reference — check the resolver wiring',
+    )
+  }
+  return { customerId: ref.customerId, eventId: ref.eventId }
+}
+
 interface GraphQLError {
   message: string
 }
@@ -201,10 +216,8 @@ export class CheckinProvider implements TicketingProvider {
 
   // ── Tickets & orders ──────────────────────────────────────────────
 
-  async fetchEventTickets({
-    customerId,
-    eventId,
-  }: EventRef): Promise<EventTicket[]> {
+  async fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]> {
+    const { customerId, eventId } = checkinRef(eventRef)
     if (!customerId || customerId <= 0) {
       throw new Error('Valid customer ID is required')
     }
@@ -483,8 +496,12 @@ export class CheckinProvider implements TicketingProvider {
   // ── Public ticket types ───────────────────────────────────────────
 
   async fetchPublicTicketTypes(
-    eventId: number,
+    event: EventRef | number,
   ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
+    // Accept the historical bare-number form or a provider-shaped ref; Checkin's
+    // public lookup only needs the event id.
+    const eventId =
+      typeof event === 'number' ? event : checkinRef(event).eventId
     const query = `
   query FindEvent($id: Int!) {
     findEventById(id: $id) {

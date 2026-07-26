@@ -37,7 +37,7 @@ function pubTicket(over: Record<string, unknown>) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('getPublicTicketTypes — resolver routing (B7)', () => {
-  it('resolves from the conference and fetches with the resolved eventId', async () => {
+  it('resolves from the conference and fetches with the resolved eventRef', async () => {
     const fetchPublicTicketTypes = vi.fn().mockResolvedValue({
       event: { id: 7, name: 'Event' },
       tickets: [pubTicket({})],
@@ -51,7 +51,12 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
     const result = await getPublicTicketTypes(CONF)
 
     expect(resolveTicketingProviderMock).toHaveBeenCalledWith(CONF)
-    expect(fetchPublicTicketTypes).toHaveBeenCalledWith(7)
+    // Now passes the provider-shaped eventRef (not a bare id) so a Tito-bound
+    // conference can route to its account/event slugs.
+    expect(fetchPublicTicketTypes).toHaveBeenCalledWith({
+      customerId: 42,
+      eventId: 7,
+    })
     expect(result?.tickets).toHaveLength(1)
   })
 

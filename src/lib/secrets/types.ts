@@ -20,6 +20,17 @@ import type { TicketingProviderCredentials } from '@/lib/tickets/provider'
  * Ticketing provider credentials. This is the SAME shape #634 injects into a
  * `TicketingProvider` at construction — imported (not duplicated) so the secret
  * layer and the provider layer can never drift apart.
+ *
+ * PROVIDER-AGNOSTIC (opaque record): a single family carries whichever fields a
+ * conference's selected vendor needs.
+ *   - Checkin.no: `{ apiKey, apiSecret, webhookSecret }`
+ *   - Tito:       `{ apiKey, webhookSecret? }`  (apiKey = the Tito API token;
+ *                 webhookSecret = the endpoint's security token)
+ * A per-org Tito secret in TENANT_SECRETS_JSON is thus
+ * `{"<orgId>":{"ticketing":{"apiKey":"tito_secret_..."}}}`. The Tito resolver
+ * branch reads per-org secrets from the JSON store only and falls back to
+ * `TITO_API_KEY` (see `platformTitoCredentials`), because the ENV-backed
+ * ticketing family below is Checkin-shaped.
  */
 export type TicketingCredentials = TicketingProviderCredentials
 

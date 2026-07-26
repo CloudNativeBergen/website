@@ -148,7 +148,10 @@ export const UpdateCommunicationSchema = z.object({
 
 // === Ticketing IDs ===
 // Positive integers; clearing is allowed by sending `null` (unset).
+// Provider-discriminated: `ticketingProvider` selects the vendor (absent/null ⇒
+// Checkin). Checkin uses the numeric ids; Tito uses the two account/event slugs.
 export const UpdateTicketingIdsSchema = z.object({
+  ticketingProvider: z.enum(['checkin', 'tito']).nullable().optional(),
   checkinCustomerId: z
     .number()
     .int('Must be a whole number')
@@ -161,6 +164,8 @@ export const UpdateTicketingIdsSchema = z.object({
     .positive('Must be a positive number')
     .nullable()
     .optional(),
+  titoAccountSlug: z.string().trim().nullable().optional(),
+  titoEventSlug: z.string().trim().nullable().optional(),
 })
 
 // === CFP & Revenue Goals ===
