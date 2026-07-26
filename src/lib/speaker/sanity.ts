@@ -20,6 +20,46 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
 const IS_ORGANIZER_FIELD =
   '"isOrganizer": _id in *[_type == "conference"].organizers[]._ref'
 
+/**
+ * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
+ * `findSpeakersByEmails`). These run on EVERY login and cannot be indexed
+ * (Sanity), so we never spread the full document (`...`) — that dragged along
+ * bio/links/gender and, worse, the web-push blobs. We project exactly the fields
+ * the auth flow needs:
+ *   - token shape (`applySpeakerToToken`): _id, slug, name, email, image, flags,
+ *     isOrganizer
+ *   - account linking (`linkProviderToSpeaker`): providers, knownEmails, email
+ *   - org-preference resolution (#615): organizations (as a flat id array)
+ * `_createdAt` is kept so the email path can order oldest-first deterministically.
+ */
+const LOGIN_SPEAKER_PROJECTION = `{
+    _id,
+    _createdAt,
+    name,
+    email,
+    flags,
+    providers,
+    knownEmails,
+    "organizations": organizations[]._ref,
+    "slug": slug.current,
+    "image": coalesce(image.asset->url, imageURL),
+    ${IS_ORGANIZER_FIELD}
+  }`
+
+/**
+ * Org-membership + participation predicate for ADMIN-facing speaker lists
+ * (#615). A speaker belongs to an org's admin surface when they are either an
+ * explicit member (`organizations[]._ref` — post-044-backfill everyone is) OR,
+ * as a PRE-BACKFILL FALLBACK, they have a talk at any conference owned by the
+ * org. The fallback means org-less legacy speakers who participated still
+ * appear; once the backfill has stamped memberships, the membership clause
+ * carries every speaker and the fallback is a harmless superset. Applied only
+ * when an org id resolves — a null org id (unresolvable tenant) skips scoping
+ * entirely so admin surfaces degrade to the prior global behaviour rather than
+ * showing nothing.
+ */
+const SPEAKER_ORG_FILTER = `($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)`
+
 // Optional string fields that should be removed (unset) from Sanity when the
 // caller sends an empty value, so a user can clear a previously-set value.
 const CLEARABLE_SPEAKER_FIELDS = [
@@ -81,13 +121,7 @@ async function findSpeakerByProvider(
 
   try {
     speaker = await clientRead.fetch(
-      `*[ _type == "speaker" && $id in providers][0]{
-      ...,
-      ${EXCLUDE_PUSH_FIELDS},
-      "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
-      ${IS_ORGANIZER_FIELD}
-    }`,
+      `*[ _type == "speaker" && $id in providers][0]${LOGIN_SPEAKER_PROJECTION}`,
       { id },
     )
   } catch (error) {
@@ -101,6 +135,12 @@ async function findSpeakerByProvider(
  * Find all speakers whose display `email` or `knownEmails` match-set intersects
  * any of the given (already normalized) emails. Ordered oldest-first so the
  * caller can deterministically pick a link target and detect duplicates.
+ *
+ * GLOBAL by design: identity is a global person (a returning speaker from
+ * another org's conference must still resolve to their existing account), so
+ * this cross-tenant join is intentionally not org-scoped. Org PREFERENCE among
+ * ambiguous matches is applied by the caller (`getOrCreateSpeaker`), which is
+ * why `organizations` is projected here. Result set is bounded to 5.
  */
 async function findSpeakersByEmails(
   emails: string[],
@@ -111,13 +151,9 @@ async function findSpeakersByEmails(
 
   try {
     const speakers = (await clientRead.fetch(
-      groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] {
-        ...,
-        ${EXCLUDE_PUSH_FIELDS},
-        "slug": slug.current,
-        "image": coalesce(image.asset->url, imageURL),
-        ${IS_ORGANIZER_FIELD}
-      }`,
+      // groq-global: cross-tenant identity join — a returning global person must
+      // resolve regardless of which org they first belonged to (#615).
+      groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
       { emails },
     )) as Speaker[]
     return { speakers: speakers || [], err: null }
@@ -305,6 +341,31 @@ async function ensureSpeakerOrgMembership(speakerId: string): Promise<void> {
   }
 }
 
+/**
+ * Link an incoming provider into an existing speaker AND accrue the current-org
+ * membership for that person (#615). Closes the gap where the email-match link
+ * path linked the account but never stamped the tenant membership the way the
+ * provider-match and create paths do. Membership stamping is best-effort and is
+ * skipped when the link itself failed.
+ */
+async function linkAndAccrue(
+  speaker: Speaker,
+  providerAccountId: string,
+  verifiedIncoming: string[],
+  primaryEmail: string,
+): Promise<{ speaker: Speaker; err: Error | null }> {
+  const result = await linkProviderToSpeaker(
+    speaker,
+    providerAccountId,
+    verifiedIncoming,
+    primaryEmail,
+  )
+  if (!result.err && result.speaker?._id) {
+    await ensureSpeakerOrgMembership(result.speaker._id)
+  }
+  return result
+}
+
 export async function getOrCreateSpeaker(
   user: User,
   account: Account,
@@ -362,7 +423,7 @@ export async function getOrCreateSpeaker(
 
     if (speakers.length === 1) {
       // Exactly one verified-email match: unambiguously the same person.
-      return linkProviderToSpeaker(
+      return linkAndAccrue(
         speakers[0],
         providerAccountId,
         verifiedIncoming,
@@ -371,13 +432,33 @@ export async function getOrCreateSpeaker(
     }
 
     if (speakers.length > 1) {
-      // H1 — genuinely ambiguous: the verified email matches multiple speakers
-      // (the provider-id short-circuit in step 1 already handled the "same
-      // account" case, so this is not that). Do NOT auto-link into any of them:
-      // silently picking the oldest is attacker-influenceable and could merge a
-      // login into the wrong account. Fall through to create a fresh speaker so
-      // the user still gets a working session, and surface the ambiguous ids for
-      // admin / Phase-4 reconciliation.
+      // Multiple verified-email matches (the provider-id short-circuit in step 1
+      // already handled the "same account" case, so this is a duplicate-account
+      // situation). PREFER the current-org member (#615): a returning person who
+      // is already active in THIS tenant is the unambiguous link target even
+      // when the global match is ambiguous. If the matches narrow to exactly one
+      // current-org member, link into it.
+      const orgRef = await getOrganizationRefForCurrentConference()
+      const orgMembers = orgRef
+        ? speakers.filter((s) => (s.organizations || []).includes(orgRef))
+        : []
+      if (orgMembers.length === 1) {
+        console.info(
+          `ambiguous global email match narrowed to a single current-org member (${orgMembers[0]._id}); linking into it`,
+        )
+        return linkAndAccrue(
+          orgMembers[0],
+          providerAccountId,
+          verifiedIncoming,
+          primaryEmail,
+        )
+      }
+
+      // H1 — still genuinely ambiguous (zero or several current-org members). Do
+      // NOT auto-link into any of them: silently picking the oldest is
+      // attacker-influenceable and could merge a login into the wrong account.
+      // Fall through to create a fresh speaker so the user still gets a working
+      // session, and surface the ambiguous ids for admin / Phase-4 reconciliation.
       console.warn(
         `ambiguous verified-email match for ${verifiedIncoming.join(
           ', ',
@@ -518,6 +599,12 @@ export async function attachProviderToSpeaker(
     verifiedIncoming,
     primaryEmail,
   )
+
+  // Accrue current-org membership for this participating person (#615), mirroring
+  // the login paths. Best-effort; never gates the link.
+  if (!err && speaker?._id) {
+    await ensureSpeakerOrgMembership(speaker._id)
+  }
 
   return { speaker, status: 'linked', err }
 }
@@ -687,6 +774,7 @@ export async function getSpeakers(
   conferenceId?: string,
   statuses: Status[] = [Status.confirmed],
   includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
@@ -707,11 +795,23 @@ export async function getSpeakers(
       : ''
     const statusFilter = statuses.map((status) => `"${status}"`).join(', ')
 
+    // ORG SCOPING (#615): when an org id resolves, restrict the admin list to
+    // speakers who belong to the current org — either by explicit membership or,
+    // pre-backfill, by participation in one of the org's conferences (see
+    // SPEAKER_ORG_FILTER). A null/absent orgId leaves the list unscoped so the
+    // surface degrades to prior behaviour rather than showing nothing.
+    const orgFilter = orgId ? `&& ${SPEAKER_ORG_FILTER}` : ''
+
+    // Crossing conferences must still stay INSIDE the org: without this, an
+    // org-scoped speaker list would expose a shared speaker's proposals from
+    // ANOTHER organization's conferences.
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
-      ? ''
+      ? orgId
+        ? '&& conference->organization._ref == $orgId'
+        : ''
       : conferenceFilter
 
-    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
+    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {
       ...,
       ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
@@ -738,11 +838,11 @@ export async function getSpeakers(
       }
     } | order(name asc)`
 
-    speakers = await clientRead.fetch(
-      query,
-      conferenceId ? { conferenceId } : {},
-      { cache: 'no-store' },
-    )
+    const params: Record<string, unknown> = {}
+    if (conferenceId) params.conferenceId = conferenceId
+    if (orgId) params.orgId = orgId
+
+    speakers = await clientRead.fetch(query, params, { cache: 'no-store' })
   } catch (error) {
     err = error as Error
   }
@@ -753,6 +853,7 @@ export async function getSpeakers(
 export async function getSpeakersWithAcceptedTalks(
   conferenceId?: string,
   includeProposalsFromOtherConferences: boolean = false,
+  orgId?: string | null,
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
@@ -761,6 +862,7 @@ export async function getSpeakersWithAcceptedTalks(
     conferenceId,
     [Status.accepted, Status.confirmed],
     includeProposalsFromOtherConferences,
+    orgId,
   )
 }
 
@@ -781,7 +883,14 @@ export async function getOrganizerCount(): Promise<{
   return { count, err }
 }
 
-export async function getOrganizers(): Promise<{
+/**
+ * All organizers. When `orgId` is provided the set is scoped to organizers of
+ * the CURRENT org's conferences (#615) — an exact scope (organizers are defined
+ * by `conference.organizers`, so no membership fallback is needed). A null orgId
+ * returns the global organizer set (prior behaviour), used only when the tenant
+ * cannot be resolved.
+ */
+export async function getOrganizers(orgId?: string | null): Promise<{
   speakers: Speaker[]
   err: Error | null
 }> {
@@ -789,7 +898,11 @@ export async function getOrganizers(): Promise<{
   let err = null
 
   try {
-    const query = groq`*[_type == "speaker" && _id in *[_type == "conference"].organizers[]._ref] {
+    const organizerScope = orgId
+      ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
+      : `*[_type == "conference"].organizers[]._ref`
+
+    const query = groq`*[_type == "speaker" && _id in ${organizerScope}] {
       ...,
       ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
@@ -797,7 +910,9 @@ export async function getOrganizers(): Promise<{
       "isOrganizer": true
     } | order(name asc)`
 
-    speakers = await clientRead.fetch(query, {}, { cache: 'no-store' })
+    speakers = await clientRead.fetch(query, orgId ? { orgId } : {}, {
+      cache: 'no-store',
+    })
   } catch (error) {
     err = error as Error
   }

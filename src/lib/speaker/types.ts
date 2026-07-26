@@ -102,6 +102,14 @@ export interface Speaker extends SpeakerBase {
   knownEmails?: string[]
   providers?: string[]
   /**
+   * Org-membership refs — the tenants this GLOBAL person belongs to (CaaS T1-1,
+   * #613/#615). Accrues on every login via `ensureSpeakerOrgMembership`. Login
+   * and admin queries project it as a flat id array (`organizations[]._ref`) for
+   * org-preference resolution and org-scoped admin lists. Additive/optional;
+   * legacy documents (pre-044 backfill) have no key and remain valid.
+   */
+  organizations?: string[]
+  /**
    * Read-side image value: a fully-resolved display URL projected by GROQ as
    * `coalesce(image.asset->url, imageURL)`. It is either a Sanity CDN URL (from
    * an uploaded image) or an external OAuth avatar URL (the {@link imageURL}

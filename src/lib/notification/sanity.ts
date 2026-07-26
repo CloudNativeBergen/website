@@ -14,6 +14,7 @@
  *   than CDN caching.
  */
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import { createReference } from '@/lib/sanity/helpers'
 import { sendPushForNotifications } from '@/lib/push/send'
 import {
@@ -358,30 +359,33 @@ export async function getNotificationsForSpeaker({
   // clamp it to a safe integer range — it never reaches the query as free text.
   const safeLimit = Math.min(Math.max(1, Math.floor(limit) || 20), 50)
 
-  const params: Record<string, unknown> = { speakerId, conferenceId }
+  // Conference scope is supplied by `scopedFetch` (#616) — the query body omits
+  // the `conference._ref` predicate and the `$conferenceId` binding; both are
+  // injected from the scope below.
+  const params: Record<string, unknown> = { speakerId }
   let cursor = ''
   if (before) {
     cursor = ' && createdAt < $before'
     params.before = before
   }
 
-  const query = `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId${cursor}] | order(createdAt desc) [0...${safeLimit}] {
-    "id": _id,
-    "type": notificationType,
-    title,
-    message,
-    link,
-    readAt,
-    createdAt,
-    actor->{
-      _id,
-      name,
-      "image": coalesce(image.asset->url, imageURL)
-    }
-  }`
-
-  const results = await clientReadUncached.fetch<NotificationItem[]>(
-    query,
+  const results = await scopedFetch<NotificationItem[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "notification" && recipient._ref == $speakerId${cursor}] | order(createdAt desc) [0...${safeLimit}] {
+      "id": _id,
+      "type": notificationType,
+      title,
+      message,
+      link,
+      readAt,
+      createdAt,
+      actor->{
+        _id,
+        name,
+        "image": coalesce(image.asset->url, imageURL)
+      }
+    }`,
     params,
   )
   return results || []
@@ -395,9 +399,11 @@ export async function getUnreadCount({
   speakerId: string
   conferenceId: string
 }): Promise<number> {
-  const count = await clientReadUncached.fetch<number>(
-    `count(*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && !defined(readAt)])`,
-    { speakerId, conferenceId },
+  const count = await scopedFetch<number>(
+    clientReadUncached,
+    { conferenceId },
+    `count(*[_type == "notification" && recipient._ref == $speakerId && !defined(readAt)])`,
+    { speakerId },
   )
   return count || 0
 }
@@ -572,9 +578,11 @@ export async function markAllRead({
   speakerId: string
   conferenceId: string
 }): Promise<number> {
-  const ids = await clientReadUncached.fetch<string[]>(
-    `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && !defined(readAt)][0...${MARK_ALL_READ_LIMIT}]._id`,
-    { speakerId, conferenceId },
+  const ids = await scopedFetch<string[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "notification" && recipient._ref == $speakerId && !defined(readAt)][0...${MARK_ALL_READ_LIMIT}]._id`,
+    { speakerId },
   )
 
   if (!ids || ids.length === 0) {

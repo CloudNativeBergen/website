@@ -3,6 +3,7 @@ const tseslint = require('typescript-eslint')
 const reactHooksPlugin = require('eslint-plugin-react-hooks')
 const importPlugin = require('eslint-plugin-import')
 const storybookPlugin = require('eslint-plugin-storybook')
+const noUnscopedGroq = require('./eslint-rules/no-unscoped-groq')
 
 const eslintConfig = [
   // Global ignores - these apply to all configurations
@@ -73,9 +74,24 @@ const eslintConfig = [
     },
   },
 
-  // Special rules for ESLint config file
+  // Tenant-scoped query invariant (CaaS #616). WARN, not error: the repo has
+  // ~170 pre-existing unscoped queries, so an error would block CI. This makes
+  // NEW unscoped `*[_type == ...` queries visible in review and keeps the
+  // outstanding count trackable. The rule self-exempts the scoped builder
+  // module, tests, scripts, and migrations. See docs/TENANT_SCOPING.md.
   {
-    files: ['eslint.config.js'],
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: {
+      tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
+    },
+    rules: {
+      'tenancy/no-unscoped-groq': 'warn',
+    },
+  },
+
+  // Special rules for ESLint config file + local ESLint rules (CommonJS).
+  {
+    files: ['eslint.config.js', 'eslint-rules/**/*.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off', // CommonJS required for compatibility
     },

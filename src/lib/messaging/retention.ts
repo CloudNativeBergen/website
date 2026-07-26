@@ -1,5 +1,6 @@
 import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import { conversationLinkPath } from './links'
 
 /**
@@ -185,13 +186,15 @@ async function deleteMessagingDataForConference(
   conferenceId: string,
 ): Promise<Omit<MessagingRetentionSummary, 'conferences'>> {
   const conversations =
-    (await clientReadUncached.fetch<RetentionConversation[]>(
-      `*[_type == "conversation" && conference._ref == $conferenceId]{
+    (await scopedFetch<RetentionConversation[]>(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "conversation"]{
         _id,
         conversationType,
         "proposalId": proposal._ref
       }`,
-      { conferenceId },
+      {},
       { cache: 'no-store' },
     )) ?? []
 
