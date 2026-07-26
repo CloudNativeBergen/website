@@ -111,6 +111,71 @@ describe('Badge endpoints - dual format', () => {
     })
   })
 
+  describe('GET /api/badge/[badgeId] (credential id / hosted verification)', () => {
+    it('serves the same credential bytes as /json (application/ld+json)', async () => {
+      mockedGetBadgeById.mockResolvedValue({
+        badge: badgeRecord({
+          badgeJson: credentialJsonString,
+          badgeJwt: credentialJwt,
+        }),
+      })
+      const { GET: JSON_GET } =
+        await import('@/app/api/badge/[badgeId]/json/route')
+      const jsonBytes = await (await JSON_GET(request, routeParams())).text()
+
+      mockedGetBadgeById.mockResolvedValue({
+        badge: badgeRecord({
+          badgeJson: credentialJsonString,
+          badgeJwt: credentialJwt,
+        }),
+      })
+      const { GET } = await import('@/app/api/badge/[badgeId]/route')
+      const res = await GET(request, routeParams())
+
+      expect(res.status).toBe(200)
+      expect(res.headers.get('Content-Type')).toContain('application/ld+json')
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
+      expect(await res.text()).toBe(jsonBytes)
+    })
+
+    it('uses rebake-aware caching (revalidate + ETag, not immutable)', async () => {
+      mockedGetBadgeById.mockResolvedValue({
+        badge: badgeRecord({ badgeJson: credentialJsonString }),
+      })
+      const { GET } = await import('@/app/api/badge/[badgeId]/route')
+      const res = await GET(request, routeParams())
+
+      expect(res.headers.get('Cache-Control')).toBe(
+        'public, max-age=0, must-revalidate',
+      )
+      expect(res.headers.get('Cache-Control')).not.toContain('immutable')
+      expect(res.headers.get('ETag')).toBeTruthy()
+    })
+
+    it('redirects browsers (Accept: text/html) to the human badge page', async () => {
+      const { GET } = await import('@/app/api/badge/[badgeId]/route')
+      const htmlReq = {
+        headers: {
+          get: (n: string) =>
+            n.toLowerCase() === 'accept' ? 'text/html' : null,
+        },
+        url: 'https://conf.test/api/badge/test-badge-id',
+      } as unknown as NextRequest
+      const res = await GET(htmlReq, routeParams())
+
+      expect(res.status).toBe(302)
+      expect(res.headers.get('Location')).toContain('/badge/test-badge-id')
+    })
+
+    it('404s an unknown badge', async () => {
+      mockedGetBadgeById.mockResolvedValue({ badge: null, error: null })
+      const { GET } = await import('@/app/api/badge/[badgeId]/route')
+      const res = await GET(request, routeParams('nope'))
+
+      expect(res.status).toBe(404)
+    })
+  })
+
   describe('GET /api/badge/[badgeId]/jwt', () => {
     it('serves the JWT from badgeJwt for new badges', async () => {
       mockedGetBadgeById.mockResolvedValue({

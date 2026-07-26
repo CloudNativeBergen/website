@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
 import {
+  BADGE_ARTIFACT_CACHE_CONTROL,
+  badgeArtifactETag,
+  badgeNotModifiedResponse,
+} from '@/lib/badge/http'
+import {
   generateAchievementResponse,
   generateErrorResponse,
   verifyCredentialJWT,
@@ -32,6 +37,10 @@ export async function GET(
         status: 404,
       })
     }
+
+    const etag = badgeArtifactETag(badge, 'achievement')
+    const notModified = badgeNotModifiedResponse(request, etag)
+    if (notModified) return notModified
 
     let badgeAssertion
     if (isJWTFormat(badge.badgeJson)) {
@@ -76,7 +85,8 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'application/ld+json',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
+        ETag: etag,
       },
     })
   } catch (error) {

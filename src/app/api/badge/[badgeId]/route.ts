@@ -1,23 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import { generateErrorResponse } from '@/lib/openbadges'
 import {
   BADGE_ARTIFACT_CACHE_CONTROL,
   badgeArtifactETag,
   badgeNotModifiedResponse,
 } from '@/lib/badge/http'
-import { generateErrorResponse } from '@/lib/openbadges'
 import { badgeCredentialBody } from '@/lib/badge/credential-response'
 
 /**
- * GET /api/badge/[badgeId]/json
+ * GET /api/badge/[badgeId]
  *
- * Returns the OpenBadges 3.0 credential.
+ * The credential's OWN `id` URL (`${baseUrl}/api/badge/{badgeId}`). OB 3.0
+ * displayers dereference the credential id to confirm the badge's authenticity
+ * against hosted data — Credly marks an imported badge "Unverified" when this id
+ * does not resolve. It previously 404'd (only the `/json`, `/jwt`, `/achievement`
+ * sub-paths existed), so this serves the SAME credential bytes as
+ * `/api/badge/[badgeId]/json` (shared via badgeCredentialBody) as
+ * application/ld+json with open CORS.
  *
- * New badges: JSON-LD credential with embedded Data Integrity Proof — this
- * is the .json file recipients can upload directly to Credly and other
- * certified OB 3.0 displayers.
- * Legacy badges (badgeJson holds a JWT string): the JWT as text/plain.
- * The JWT for new badges is served from /api/badge/[badgeId]/jwt.
+ * Content negotiation: a browser (Accept: text/html) is redirected to the human
+ * badge page at `/badge/[badgeId]`; machine clients get the credential.
+ *
+ * @see https://www.imsglobal.org/spec/ob/v3p0/#data-integrity-proof-verification
  */
 export async function GET(
   request: NextRequest,
@@ -33,6 +38,15 @@ export async function GET(
       )
     }
 
+    // Humans get the rendered badge page; verifiers get the credential.
+    const accept = request.headers?.get?.('accept') ?? ''
+    if (accept.includes('text/html')) {
+      return NextResponse.redirect(
+        new URL(`/badge/${badgeId}`, request.url),
+        302,
+      )
+    }
+
     const { badge, error } = await getBadgeById(badgeId)
 
     if (error || !badge) {
@@ -41,13 +55,12 @@ export async function GET(
       })
     }
 
-    const etag = badgeArtifactETag(badge, 'json')
+    const etag = badgeArtifactETag(badge, 'credential')
     const notModified = badgeNotModifiedResponse(request, etag)
     if (notModified) return notModified
 
     let payload: { body: string; isJwt: boolean }
     try {
-      // Shared with the credential-id route so both emit identical bytes.
       payload = badgeCredentialBody(badge)
     } catch {
       return NextResponse.json(
@@ -59,7 +72,7 @@ export async function GET(
     return new NextResponse(payload.body, {
       status: 200,
       headers: {
-        'Content-Type': payload.isJwt ? 'text/plain' : 'application/json',
+        'Content-Type': payload.isJwt ? 'text/plain' : 'application/ld+json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',
         'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
@@ -67,9 +80,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    // Log detail server-side; return a generic message to the client.
-    console.error('Error fetching badge JSON:', error)
-
+    console.error('Error serving badge credential:', error)
     return NextResponse.json(
       generateErrorResponse('Internal server error', 500),
       { status: 500 },

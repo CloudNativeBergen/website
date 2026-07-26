@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import {
+  BADGE_ARTIFACT_CACHE_CONTROL,
+  badgeArtifactETag,
+  badgeNotModifiedResponse,
+} from '@/lib/badge/http'
 import { generateErrorResponse, isJWTFormat } from '@/lib/openbadges'
 
 /**
@@ -32,6 +37,10 @@ export async function GET(
       })
     }
 
+    const etag = badgeArtifactETag(badge, 'jwt')
+    const notModified = badgeNotModifiedResponse(request, etag)
+    if (notModified) return notModified
+
     const jwt =
       badge.badgeJwt ?? (isJWTFormat(badge.badgeJson) ? badge.badgeJson : null)
 
@@ -51,7 +60,8 @@ export async function GET(
         'Content-Type': 'text/plain',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
+        ETag: etag,
       },
     })
   } catch (error) {
