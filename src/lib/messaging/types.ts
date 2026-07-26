@@ -138,7 +138,12 @@ export function validateConversationParticipant(
 /** A speaker as needed for authorization decisions (server-derived). */
 export interface AccessSpeaker {
   _id: string
+  /** DEPRECATED GLOBAL flag — retained only for the legacy-token bridge inside
+   * {@link isOrganizerForOrg}; do NOT branch access on it directly (B2, #642). */
   isOrganizer?: boolean
+  /** ORG-SCOPED organizer capability: the org ids this speaker organizes. The
+   * conversation-access check keys on this against the thread's own org. */
+  organizerOrgIds?: string[]
 }
 
 /**
@@ -155,6 +160,13 @@ export interface AccessSpeaker {
 export interface ConversationWithContext {
   _id: string
   conferenceId: string
+  /**
+   * The org that owns this conversation's conference (projected from
+   * `conference->organization`). The tenant key the org-scoped organizer access
+   * check ({@link canAccessConversation}) gates on (B2, #642). May be null for a
+   * pre-044-backfill conference; a null org denies organizer access (fail closed).
+   */
+  conferenceOrgId?: string | null
   conversationType: ConversationType
   proposalId?: string
   proposalTitle?: string
