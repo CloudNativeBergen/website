@@ -2,7 +2,7 @@ import type { NotificationType } from '@/lib/notification/types'
 
 /**
  * The active conference a reminder run targets, projected down to the date
- * anchors the registry needs. See `resolveActiveReminderConference`.
+ * anchors the registry needs. See `resolveActiveReminderConferences`.
  */
 export interface ReminderConference {
   _id: string

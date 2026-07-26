@@ -20,9 +20,10 @@ schedule is a hardcoded registry, tuned in code, with no Studio UI.
 │                       Speaker Reminders (Phase 1)                      │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Cron:  src/app/api/cron/reminders  (Bearer CRON_SECRET, 06:00 UTC)   │
-│  ├── resolveActiveReminderConference()  → the single active edition    │
-│  ├── runSpeakerReminders(conf)   → the fixed registry, deduped         │
-│  └── runDayOfAgenda(conf)        → "you're presenting today"           │
+│  ├── resolveActiveReminderConferences() → ALL not-yet-ended editions   │
+│  └── for each edition (sequential, isolated):                          │
+│      ├── runSpeakerReminders(conf) → the fixed registry, deduped       │
+│      └── runDayOfAgenda(conf)      → "you're presenting today"         │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Registry (registry.ts): confirm-talk · upload-slides ·               │
 │                          travel-reminder · logistics                  │
@@ -87,14 +88,23 @@ in one transaction).
 ## The cron route & the active conference
 
 `src/app/api/cron/reminders` is the daily entry point. Auth mirrors the other
-crons — a `Bearer ${CRON_SECRET}` header. It resolves **one** active conference
-(`resolveActiveReminderConference`: among editions that have **not** ended
-(`endDate >= today`), the one with the **earliest** `startDate` — a currently
-ongoing edition, else the nearest upcoming one), then runs
-`runSpeakerReminders` followed by `runDayOfAgenda`. Both jobs are wrapped in a
-**never-throw** envelope and isolate every per-speaker emit, so one bad speaker,
-read error or notification failure can never fail the cron. A run is capped at
-`MAX_SENDS_PER_RUN` (500) so a backlog can never fan out unbounded.
+crons — a `Bearer ${CRON_SECRET}` header. The deployment serves **multiple**
+conferences (domain-based resolution), so the cron resolves **every** active
+edition (`resolveActiveReminderConferences`: all editions that have **not** ended
+(`endDate >= today`), ordered by `startDate`) and iterates them
+**sequentially**, running `runSpeakerReminders` followed by `runDayOfAgenda` for
+each. Each conference runs under its own `try/catch` so one tenant's failure
+cannot abort the rest, and the route returns a structured per-conference summary
+(`{ conferenceId, ok, durationMs, … }`) with per-conference duration logged.
+Both jobs are themselves wrapped in a **never-throw** envelope and isolate every
+per-speaker emit, so one bad speaker, read error or notification failure can
+never fail the run. A run is capped at `MAX_SENDS_PER_RUN` (500) **per
+conference** so a backlog can never fan out unbounded.
+
+**Multi-tenant dedup.** Iterating multiple conferences never double-sends: the
+markers are scoped per conference (`reminder.<key>.<conferenceId>.<speakerId>`
+and `reminder.day-of.<conferenceId>.<speakerId>.<date>`), so each edition's
+sends are gated by its own markers, fully independent of the others.
 
 **TZ ASSUMPTION.** The cron is scheduled at **06:00 UTC** (`vercel.json`). Our
 events run in Central European time (CET/CEST), where 06:00 UTC is 07:00–08:00

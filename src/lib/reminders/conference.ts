@@ -3,28 +3,30 @@ import { toDateString } from './dates'
 import type { ReminderConference } from './types'
 
 /**
- * Resolve the single ACTIVE conference the reminder cron targets.
+ * Resolve EVERY active conference the reminder cron targets.
  *
- * SELECTION: among every conference that has NOT yet ended (`endDate >= today`),
- * pick the one with the EARLIEST `startDate`. This yields:
- *   - a currently-ongoing edition (its start is in the past but end is today or
- *     later, and its start precedes any future edition's), or
- *   - otherwise the nearest upcoming edition.
- * A fully-past conference (`endDate < today`) is never selected — its speakers
- * need no prep reminders. When several unrelated editions overlap (multi-tenant
- * domains), the earliest-starting not-yet-ended one wins; Phase 1 deliberately
- * targets ONE active conference per run.
+ * SELECTION: every conference that has NOT yet ended (`endDate >= today`),
+ * ordered by `startDate` ascending. Each yields either a currently-ongoing
+ * edition (start in the past, end today-or-later) or an upcoming one. A
+ * fully-past conference (`endDate < today`) is never selected — its speakers
+ * need no prep reminders.
+ *
+ * The deployment serves MULTIPLE conferences (domain-based resolution), so the
+ * cron must iterate ALL of them: a single-conference resolver would starve every
+ * edition but one whenever unrelated editions overlap. Dedup markers are scoped
+ * per conference (`reminder.<key>.<conferenceId>.<speakerId>`), so iterating the
+ * full set never double-sends across editions.
  *
  * Dates are Sanity `date` values (YYYY-MM-DD) compared lexicographically, which
  * is order-preserving for that format.
  */
-export async function resolveActiveReminderConference(
+export async function resolveActiveReminderConferences(
   now: Date = new Date(),
-): Promise<ReminderConference | null> {
+): Promise<ReminderConference[]> {
   const today = toDateString(now)
-  const conference = await clientReadUncached.fetch<ReminderConference | null>(
+  const conferences = await clientReadUncached.fetch<ReminderConference[]>(
     `*[_type == "conference" && defined(startDate) && defined(endDate) && endDate >= $today]
-      | order(startDate asc)[0]{
+      | order(startDate asc){
         _id,
         title,
         startDate,
@@ -35,5 +37,5 @@ export async function resolveActiveReminderConference(
     { today },
     { cache: 'no-store' },
   )
-  return conference ?? null
+  return conferences ?? []
 }

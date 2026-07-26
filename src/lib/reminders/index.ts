@@ -6,7 +6,7 @@
  * The fixed default reminder schedule lives in `registry.ts` — the one place to
  * tune timing/cadence/copy (no config UI in Phase 1).
  */
-export { resolveActiveReminderConference } from './conference'
+export { resolveActiveReminderConferences } from './conference'
 export { runSpeakerReminders, runDayOfAgenda } from './runner'
 export { notifyScheduleChanges } from './schedule-alerts'
 export type { SlotPlacement } from './types'

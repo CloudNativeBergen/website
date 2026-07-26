@@ -1,6 +1,7 @@
-import { clientWrite } from '../sanity/client'
+import { clientWrite, clientReadUncached } from '../sanity/client'
 import { Conference } from './types'
 import { normalizeDomain } from './domains'
+import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import {
@@ -346,6 +347,49 @@ export async function getConferenceForDomain(
   }
 
   return { conference, domain, error }
+}
+
+/**
+ * Load EVERY conference that qualifies for the weekly Slack update, independent
+ * of the request Host.
+ *
+ * The deployment serves multiple conferences via domain-based resolution, so a
+ * Host-scoped loader (`getConferenceForCurrentDomain`) would only ever update the
+ * one edition that owns the cron request's production domain and silently starve
+ * all the others. The weekly-update cron iterates the set this returns instead.
+ *
+ * QUALIFYING SET: a conference is included when it has a `salesNotificationChannel`
+ * configured (the weekly update has nowhere to post without one) AND it has not
+ * yet ended (`isConferenceOver` — the same "over" rule the single-conference path
+ * used to skip finished editions). Ordered by `startDate` for stable, readable
+ * cron logs. Fetched uncached so the cron always sees current configuration.
+ *
+ * The projection is the full conference document (`...`): `organizers` stays as
+ * references, whose length is all the status summary needs for the organizer
+ * ticket count, so no expansion is required.
+ */
+export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
+  const query = `*[_type == "conference" && defined(endDate) && defined(salesNotificationChannel)] | order(startDate asc){
+    ...,
+    teams[]{
+      _key,
+      key,
+      title,
+      slackChannel,
+      emailIdentity,
+      "members": members[]._ref
+    }
+  }`
+
+  const conferences = await clientReadUncached.fetch<Conference[]>(
+    query,
+    {},
+    { cache: 'no-store' },
+  )
+
+  return (conferences ?? []).filter(
+    (conference) => !isConferenceOver(conference),
+  )
 }
 
 export async function getConferenceByCheckinEventId(eventId: number): Promise<{
