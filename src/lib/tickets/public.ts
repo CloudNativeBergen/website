@@ -39,9 +39,13 @@ export async function getPublicTicketTypes(
 
   try {
     // Route through the request-boundary resolver (B7) so a tenant's per-org
-    // Checkin key is honored end-to-end instead of the platform env creds. An
-    // unconfigured conference (missing customer/event id) soft-fails to null,
-    // matching the prior `checkinEventId ? … : null` behavior at call sites.
+    // Checkin key is honored end-to-end instead of the platform env creds.
+    // The resolver requires the FULL binding (customer + event id) — an event
+    // id alone is a configuration error, not a supported state — and an
+    // unconfigured conference soft-fails to null. Callers gate on
+    // `hasTicketingBinding` (and pass `ticketingBinding(conference)`, keeping
+    // this function's 'use cache' key minimal) so the fetch is skipped rather
+    // than resolved-and-refused.
     const ticketing = await resolveTicketingProvider(conference)
     if (!ticketing.configured) return null
     const data = await ticketing.provider.fetchPublicTicketTypes(

@@ -25,6 +25,7 @@ import {
   getLowestTicketPrice,
   type LowestTicketPrice,
 } from '@/lib/tickets/public'
+import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import { formatDatesSafe } from '@/lib/time'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -208,9 +209,14 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   // back silently to plain labels — the homepage must never fail because
   // checkin.no is unavailable.
   let lowestTicketPrice: LowestTicketPrice | null = null
-  if (conference.checkinEventId) {
+  // Gate on the FULL binding (customer + event id — what the resolver
+  // requires) and pass only the minimal binding so the 'use cache' key stays
+  // stable across unrelated conference-field changes.
+  if (hasTicketingBinding(conference)) {
     try {
-      const ticketData = await getPublicTicketTypes(conference)
+      const ticketData = await getPublicTicketTypes(
+        ticketingBinding(conference),
+      )
       if (ticketData) {
         lowestTicketPrice = getLowestTicketPrice(ticketData.tickets)
       }
