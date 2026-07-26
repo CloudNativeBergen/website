@@ -440,12 +440,21 @@ export const conferenceRouter = router({
               if (section.heroSubheadline)
                 base.heroSubheadline = section.heroSubheadline
               if (section.ctaOverrides && section.ctaOverrides.length > 0) {
+                // Same uniqueness rule as the section keys: duplicate client
+                // keys are dropped and regenerated below.
+                const seenCtaKeys = new Set<string>()
                 base.ctaOverrides = ensureArrayKeys(
-                  section.ctaOverrides.map((cta) => ({
-                    label: cta.label,
-                    href: cta.href,
-                    ...(cta._key ? { _key: cta._key } : {}),
-                  })),
+                  section.ctaOverrides.map((cta) => {
+                    const keep =
+                      cta._key && !seenCtaKeys.has(cta._key)
+                        ? (seenCtaKeys.add(cta._key), cta._key)
+                        : undefined
+                    return {
+                      label: cta.label,
+                      href: cta.href,
+                      ...(keep ? { _key: keep } : {}),
+                    }
+                  }),
                   'cta',
                 )
               }

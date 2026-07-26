@@ -8,7 +8,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { TypedObject } from 'sanity'
 
 /**
- * Whole-homepage composition stories for visual QA (`pnpm shoot`). `Default`
+ * Whole-homepage composition stories for visual QA (`rtk pnpm shoot`). `Default`
  * renders exactly the legacy layout via `getDefaultSections`; `Custom` inserts a
  * CTA banner and rich-text block and hides a section — the two are diffed to
  * confirm the default path is unchanged and the new blocks sit correctly.

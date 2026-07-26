@@ -41,6 +41,19 @@ function defineHomepageSection(
   }
 }
 
+/**
+ * Studio-side mirror of the server `safeLinkHref` rule (defence in depth): a
+ * public-page CTA link must be a site path (`/tickets`) or an explicit
+ * http(s) URL — `javascript:`, `data:` and scheme-relative `//host` rejected.
+ */
+const safeLinkRule = (value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
+  const v = value.trim()
+  if (v.startsWith('/') && !v.startsWith('//')) return true
+  if (/^https?:\/\//i.test(v)) return true
+  return 'Enter a site path (e.g. /tickets) or a full http(s) URL'
+}
+
 export default defineType({
   name: 'conference',
   title: 'Conference',
@@ -1207,7 +1220,7 @@ export default defineType({
                     name: 'href',
                     title: 'Link',
                     type: 'string',
-                    validation: (Rule) => Rule.required(),
+                    validation: (Rule) => Rule.required().custom(safeLinkRule),
                   }),
                 ],
                 preview: { select: { title: 'label', subtitle: 'href' } },
@@ -1254,7 +1267,7 @@ export default defineType({
             name: 'buttonHref',
             title: 'Button Link',
             type: 'string',
-            validation: (Rule) => Rule.required(),
+            validation: (Rule) => Rule.required().custom(safeLinkRule),
           }),
         ]),
         defineHomepageSection('homepageRichText', 'Rich Text', [

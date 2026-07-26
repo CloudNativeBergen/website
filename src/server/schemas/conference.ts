@@ -541,6 +541,10 @@ const safeLinkHref = z
   .refine(
     (value) => {
       if (value.startsWith('/') && !value.startsWith('//')) return true
+      // Require the EXPLICIT scheme prefix: `new URL` also parses degenerate
+      // forms like `https:example.com` (no authority), which are not the
+      // "full http(s) URL" the message promises.
+      if (!/^https?:\/\//i.test(value)) return false
       try {
         const parsed = new URL(value)
         return parsed.protocol === 'https:' || parsed.protocol === 'http:'
