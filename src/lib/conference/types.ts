@@ -56,6 +56,7 @@ export interface ConferenceVanityMetric {
 }
 
 export interface SponsorBenefit {
+  _key?: string
   title: string
   description: string
   icon?: string

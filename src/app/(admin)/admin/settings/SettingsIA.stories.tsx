@@ -21,7 +21,6 @@ import {
 import {
   InfoCard,
   FieldRow,
-  LinkedBadgeList,
   StudioEditLink,
   SectionNav,
   SectionHeading,
@@ -33,7 +32,7 @@ import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
 
 /**
  * Visual-QA harness for the Settings page information architecture: the sticky
- * jump-nav, the six grouped tier-1 subsections, the collapsed-by-default cards
+ * jump-nav, the five grouped tier-1 subsections, the collapsed-by-default cards
  * and the three tiers. Rendered with static mock data and non-functional edit
  * pencils (the real cards use tRPC-backed editor islands) so the whole layout is
  * inspectable in isolation without providers.
@@ -203,29 +202,6 @@ function SettingsIADemo() {
             </InfoCard>
 
             <InfoCard
-              title="Workshop Registration"
-              icon={CalendarIcon}
-              action={<EditPencil />}
-            >
-              <FieldRow
-                label="Registration Opens"
-                value="2026-04-01T09:00:00Z"
-                type="datetime"
-              />
-              <FieldRow
-                label="Registration Closes"
-                value="2026-05-01T09:00:00Z"
-                type="datetime"
-              />
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Status
-                </span>
-                <StatusBadge label="Not yet open" color="yellow" />
-              </div>
-            </InfoCard>
-
-            <InfoCard
               title="Ticketing"
               icon={LinkIcon}
               editUrl={EDIT_URL}
@@ -249,92 +225,6 @@ function SettingsIADemo() {
               <div className="space-y-3 px-6 py-4">
                 <FieldRow label="Attendees" value="500+" />
                 <FieldRow label="Speakers" value="60" />
-              </div>
-            </CollapsibleSection>
-          </SettingsGroupSection>
-
-          <SettingsGroupSection
-            group={GROUP['sponsors']}
-            icon={CurrencyDollarIcon}
-          >
-            <InfoCard
-              title="Sponsorship Tiers"
-              icon={CurrencyDollarIcon}
-              manageLink={{
-                href: '/admin/sponsors/tiers',
-                label: 'Manage tiers',
-              }}
-            >
-              <div className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    Gold
-                  </span>
-                  <StatusBadge label="Popular" color="green" />
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Prime logo placement and 4 tickets.
-                </p>
-              </div>
-            </InfoCard>
-
-            <InfoCard
-              title="Current Sponsors"
-              icon={CurrencyDollarIcon}
-              manageLink={{ href: '/admin/sponsors/crm', label: 'Open CRM' }}
-            >
-              <LinkedBadgeList
-                label="Sponsors"
-                items={[
-                  {
-                    key: 'acme',
-                    label: 'Acme (Gold)',
-                    href: '/admin/sponsors/crm?sponsor=acme',
-                  },
-                  {
-                    key: 'globex',
-                    label: 'Globex (Silver)',
-                    href: '/admin/sponsors/crm?sponsor=globex',
-                  },
-                ]}
-              />
-            </InfoCard>
-
-            <CollapsibleSection
-              title="Sponsor Benefits"
-              icon={<CurrencyDollarIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={EDIT_URL} />
-                  <EditPencil />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow
-                  label="Reach"
-                  value="Access to 500+ cloud native engineers."
-                />
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Sponsorship Page"
-              icon={<DocumentTextIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={EDIT_URL} />
-                  <EditPencil />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow label="Hero Headline" value="Partner with us" />
-                <FieldRow
-                  label="Prospectus Link"
-                  value="https://example.com/prospectus.pdf"
-                  type="url"
-                />
               </div>
             </CollapsibleSection>
           </SettingsGroupSection>

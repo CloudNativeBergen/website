@@ -2,7 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
-import { AdminPageHeader } from '@/components/admin'
+import {
+  AdminPageHeader,
+  WorkshopRegistrationSettings,
+} from '@/components/admin'
 import {
   WorkshopCard,
   SignupDetailsModal,
@@ -53,11 +56,15 @@ interface AnnounceModalState {
 interface WorkshopsClientPageProps {
   conferenceId: string
   initialWorkshops: ProposalWithWorkshopData[]
+  workshopRegistrationStart?: string
+  workshopRegistrationEnd?: string
 }
 
 export function WorkshopsClientPage({
   conferenceId,
   initialWorkshops,
+  workshopRegistrationStart,
+  workshopRegistrationEnd,
 }: WorkshopsClientPageProps) {
   const queryClient = useQueryClient()
   const utils = api.useUtils()
@@ -352,6 +359,11 @@ export function WorkshopsClientPage({
               ]
             : []
         }
+      />
+
+      <WorkshopRegistrationSettings
+        workshopRegistrationStart={workshopRegistrationStart}
+        workshopRegistrationEnd={workshopRegistrationEnd}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">

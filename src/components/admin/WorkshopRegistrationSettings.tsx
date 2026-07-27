@@ -112,16 +112,51 @@ export function WorkshopRegistrationSettings({
     return formatDateTimeSafe(dateString)
   }
 
-  const getRegistrationStatus = () => {
-    if (!workshopRegistrationStart || !workshopRegistrationEnd) {
-      return { label: 'Not configured', color: 'gray' as const }
-    }
+  const getRegistrationStatus = (): {
+    label: string
+    color: 'gray' | 'yellow' | 'red' | 'green'
+    note?: string
+  } => {
     const now = new Date()
-    const start = new Date(workshopRegistrationStart)
-    const end = new Date(workshopRegistrationEnd)
-    if (now < start) return { label: 'Not yet open', color: 'yellow' as const }
-    if (now > end) return { label: 'Closed', color: 'red' as const }
-    return { label: 'Currently open', color: 'green' as const }
+    const start = workshopRegistrationStart
+      ? new Date(workshopRegistrationStart)
+      : null
+    const end = workshopRegistrationEnd
+      ? new Date(workshopRegistrationEnd)
+      : null
+
+    if (start && end) {
+      if (now < start) return { label: 'Not yet open', color: 'yellow' }
+      if (now > end) return { label: 'Closed', color: 'red' }
+      return { label: 'Currently open', color: 'green' }
+    }
+
+    if (!start && !end) {
+      return { label: 'Not configured', color: 'gray' }
+    }
+
+    // Partial window. Enforcement (the workshop signup mutation and the public
+    // workshop list) checks each bound independently — a missing bound is
+    // simply not enforced — so a half-set window still gates signups and must
+    // not read as "Not configured".
+    if (start) {
+      return {
+        label: 'Partially configured',
+        color: 'yellow',
+        note:
+          now < start
+            ? `Signups open ${formatDateTimeSafe(workshopRegistrationStart!)}. No close date is set, so once open they never close.`
+            : 'Signups are open. No close date is set, so they never close.',
+      }
+    }
+    return {
+      label: 'Partially configured',
+      color: 'yellow',
+      note:
+        now > end!
+          ? `Signups closed ${formatDateTimeSafe(workshopRegistrationEnd!)}. No open date is set, so they were open until then.`
+          : `Signups are open now (no open date is set) and close ${formatDateTimeSafe(workshopRegistrationEnd!)}.`,
+    }
   }
 
   const status = getRegistrationStatus()
@@ -170,6 +205,12 @@ export function WorkshopRegistrationSettings({
           </span>
           <StatusBadge label={status.label} color={status.color} />
         </div>
+
+        {status.note ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {status.note}
+          </p>
+        ) : null}
       </div>
 
       <ModalShell
