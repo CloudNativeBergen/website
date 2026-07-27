@@ -7,7 +7,7 @@ import {
   getOrganizationRefViaParentConference,
   organizationField,
 } from '@/lib/organization/sanity'
-import { checkPipelineState, type SponsorState } from './state-machine'
+import { checkPipelineState } from './state-machine'
 
 export async function createSponsorActivity(
   sponsorForConferenceId: string,
@@ -116,14 +116,15 @@ export type PromotionResult = {
 }
 
 /**
- * The slice of a sponsor record the promotion helper reads. The tier arrives in
- * different shapes at each call site (a dereferenced doc `{ _id, title, ... }`,
- * a raw reference `{ _ref }`, or a partial `{ title }`) and only its presence
- * matters to the tier guard, so it is accepted as `unknown`.
+ * The slice of a sponsor record the promotion helper reads. Callers MUST pass
+ * a GROQ-*dereferenced* tier (`tier->{ ... }`), never a raw `{ _ref }`: a
+ * dangling reference then dereferences to `null` and correctly fails the tier
+ * guard instead of passing a truthiness check. All current call sites (the
+ * signing flow and the contract-send paths) select the tier with `tier->`.
  */
 export interface ContractPromotionSponsor {
   status?: string | null
-  tier?: unknown
+  tier?: { _id?: string; title?: string } | null
 }
 
 /**
@@ -135,9 +136,10 @@ export interface ContractPromotionSponsor {
  * pipeline nor spam the activity feed.
  *
  * The `closed-won` tier guard is enforced *before* promoting, so an automated
- * caller (e.g. the Adobe Sign webhook) can never mint a tier-less `closed-won`
- * — which would be silently hidden from the public site. When the tier is
- * missing the promotion is skipped and a note is logged for the audit trail.
+ * caller (e.g. the public signing flow) can never mint a tier-less
+ * `closed-won` — which would be silently hidden from the public site. When the
+ * tier is missing the promotion is skipped and a note is logged for the audit
+ * trail.
  *
  * Fails **closed**: a missing or unrecognised `status` is never treated as an
  * early stage, so a legacy record without a status (or a future call site that
@@ -176,18 +178,26 @@ export async function promoteToClosedWonOnContract(
     return { promoted: false, reason: 'unknown-status' }
   }
 
-  const guard = checkPipelineState('closed-won', {
-    tier: sponsor.tier as SponsorState['tier'],
-  })
+  const guard = checkPipelineState('closed-won', { tier: sponsor.tier })
   if (!guard.ok) {
-    await createSponsorActivity(
+    const { error: noteError } = await createSponsorActivity(
       sponsorForConferenceId,
       'note',
       'Auto-promotion to Won skipped: set a sponsor tier before this deal can be marked Won.',
       createdBy,
       { timestamp: getCurrentDateTime() },
     )
-    return { promoted: false, reason: 'tier-missing' }
+    if (noteError) {
+      console.error(
+        'Failed to log tier-guard skip note for sponsor promotion:',
+        noteError,
+      )
+    }
+    return {
+      promoted: false,
+      reason: 'tier-missing',
+      ...(noteError && { error: noteError }),
+    }
   }
 
   // Conditional write: only advance while the *stored* status is still early.
@@ -218,12 +228,21 @@ export async function promoteToClosedWonOnContract(
     return { promoted: false, reason: 'concurrent-transition' }
   }
 
-  await logStageChange(
+  // The promotion itself succeeded; a failed audit log must not mask that,
+  // but it is surfaced (never dropped) per the PromotionResult contract.
+  const { error: logError } = await logStageChange(
     sponsorForConferenceId,
     currentStatus,
     'closed-won',
     createdBy,
   )
+  if (logError) {
+    console.error(
+      'Promoted sponsor to closed-won but failed to log the stage change:',
+      logError,
+    )
+    return { promoted: true, error: logError }
+  }
 
   return { promoted: true }
 }

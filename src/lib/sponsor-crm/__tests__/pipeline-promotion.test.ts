@@ -34,12 +34,17 @@ const { patch, set, commit, create } = vi.hoisted(() => {
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { patch, create },
+  // Used (indirectly) by createSponsorActivity to denormalize the tenant key;
+  // resolving no org keeps the created activity doc free of an organization.
+  clientReadUncached: { fetch: async () => null },
 }))
 
 import { promoteToClosedWonOnContract } from '../activity'
 
 const SFC_ID = 'sfc-123'
-const TIER = { _ref: 'tier-abc' }
+// Call sites pass a GROQ-dereferenced tier (`tier->{ ... }`), never a raw
+// `{ _ref }` — a dangling reference arrives here as null.
+const TIER = { _id: 'tier-abc', title: 'Gold' }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -174,6 +179,39 @@ describe('promoteToClosedWonOnContract', () => {
     expect(create).toHaveBeenCalledTimes(1)
     const activity = create.mock.calls[0][0] as { activityType: string }
     expect(activity.activityType).toBe('note')
+  })
+
+  it('surfaces the note-write error when the tier-guard skip note fails', async () => {
+    create.mockRejectedValueOnce(new Error('sanity down'))
+
+    const result = await promoteToClosedWonOnContract(
+      SFC_ID,
+      { status: 'negotiating', tier: null },
+      'user-1',
+    )
+
+    // The skip decision stands, and the failed audit write is surfaced per the
+    // PromotionResult contract instead of being silently dropped.
+    expect(result.promoted).toBe(false)
+    expect(result.reason).toBe('tier-missing')
+    expect(result.error).toBeInstanceOf(Error)
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('reports a successful promotion with the log error when the stage-change log fails', async () => {
+    create.mockRejectedValueOnce(new Error('sanity down'))
+
+    const result = await promoteToClosedWonOnContract(
+      SFC_ID,
+      { status: 'negotiating', tier: TIER },
+      'user-1',
+    )
+
+    // The pipeline WAS advanced — that must not be masked — but the dropped
+    // audit entry is surfaced via PromotionResult.error.
+    expect(result.promoted).toBe(true)
+    expect(result.error).toBeInstanceOf(Error)
+    expect(commit).toHaveBeenCalledTimes(1)
   })
 
   it('reports an error without throwing when the patch fails', async () => {
