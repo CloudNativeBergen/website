@@ -1,5 +1,6 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Action } from '@/lib/proposal/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { speakerTicketCode } from '@/lib/speaker/ticket-code'
 import { normalizeEmail } from '@/lib/speaker/email'
@@ -110,9 +111,10 @@ export async function handleSpeakerTicket(
     return
   }
 
-  const registrationUrl =
-    event.conference.registrationLink || `https://${event.metadata.domain}`
-  const eventUrl = `https://${event.metadata.domain}`
+  // Tenant-derived base URL (scheme-aware: http for localhost dev domains,
+  // https otherwise) — never a hard-coded protocol or localhost fallback.
+  const eventUrl = conferenceBaseUrl(event.conference)
+  const registrationUrl = event.conference.registrationLink || eventUrl
 
   // Speakers whose ticket email was already delivered on a previous run,
   // keyed both by speaker id and by normalized email so a duplicate speaker

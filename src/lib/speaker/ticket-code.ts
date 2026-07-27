@@ -15,14 +15,23 @@ export const SPEAKER_TICKET_CODE_PREFIX = 'SPEAKER-'
  * early instead of silently minting forgeable codes.
  */
 function ticketCodeSecret(): string {
-  const secret =
-    process.env.SPEAKER_TICKET_CODE_SECRET || process.env.AUTH_SECRET
-  if (!secret) {
+  const dedicated = process.env.SPEAKER_TICKET_CODE_SECRET
+  if (dedicated) return dedicated
+  const fallback = process.env.AUTH_SECRET
+  if (!fallback) {
     throw new Error(
       'speakerTicketCode requires SPEAKER_TICKET_CODE_SECRET or AUTH_SECRET to be set',
     )
   }
-  return secret
+  // Rotating AUTH_SECRET (a routine operational action) would change every
+  // derived code and break idempotency: already-confirmed speakers would get
+  // NEW coupons minted on the next re-trigger. Warn so deployments are nudged
+  // toward a dedicated secret that stays stable across auth rotations.
+  console.warn(
+    '[speakerTicket] SPEAKER_TICKET_CODE_SECRET is not set; falling back to AUTH_SECRET for ticket-code derivation. ' +
+      'Rotating AUTH_SECRET will change all derived codes and can double-issue coupons — set SPEAKER_TICKET_CODE_SECRET.',
+  )
+  return fallback
 }
 
 /**
