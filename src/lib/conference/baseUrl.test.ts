@@ -15,6 +15,18 @@ describe('conferenceBaseUrl', () => {
     )
   })
 
+  it('sheds a scheme even with surrounding whitespace and casing', () => {
+    expect(conferenceBaseUrl({ domains: ['  HTTPS://Example.com/ '] })).toBe(
+      'https://example.com',
+    )
+  })
+
+  it('skips an unparseable entry and uses the next usable one', () => {
+    expect(
+      conferenceBaseUrl({ domains: ['not a domain!!', 'example.com'] }),
+    ).toBe('https://example.com')
+  })
+
   it('strips a defensively-stored scheme and trailing slash', () => {
     expect(conferenceBaseUrl({ domains: ['https://example.com/'] })).toBe(
       'https://example.com',
@@ -74,6 +86,13 @@ describe('hasConferenceDomain', () => {
     expect(hasConferenceDomain({ domains: ['', '*.x.com'] })).toBe(false)
     expect(hasConferenceDomain({ domains: [] })).toBe(false)
     expect(hasConferenceDomain(undefined)).toBe(false)
+  })
+
+  it('rejects entries the derivation cannot parse — guard and URL builder agree', () => {
+    expect(hasConferenceDomain({ domains: ['not a domain!!'] })).toBe(false)
+    expect(hasConferenceDomain({ domains: ['  HTTPS://Example.com/ '] })).toBe(
+      true,
+    )
   })
 })
 

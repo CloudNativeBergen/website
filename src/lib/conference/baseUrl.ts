@@ -38,29 +38,8 @@ export function conferenceBaseUrl(
     | null
     | undefined,
 ): string {
-  const entry = findOutboundDomain(conference)
-
-  if (entry) {
-    // domains[] stores bare hostnames, but strip a defensive scheme so a
-    // mis-stored `https://x` can never become `https://https://x`.
-    const domain = normalizeDomain(entry.replace(/^https?:\/\//i, '')).replace(
-      /\/+$/,
-      '',
-    )
-    const protocol = isLocalhostDomain(domain)
-      ? 'http'
-      : protocolForDomain(domain)
-    // Enforce the origin contract like platformBaseUrl(): a mis-stored path
-    // segment ("example.com/foo") must not leak into joined outbound URLs.
-    try {
-      return new URL(`${protocol}://${domain}`).origin
-    } catch {
-      console.error(
-        `[baseUrl] conference "${conference?.title ?? 'unknown'}" has an invalid domains[] entry "${entry}"; falling back to the platform base URL.`,
-      )
-      return platformBaseUrl()
-    }
-  }
+  const origin = findOutboundOrigin(conference)
+  if (origin) return origin
 
   console.error(
     `[baseUrl] conference "${conference?.title ?? 'unknown'}" has no usable domains[]; ` +
@@ -71,28 +50,49 @@ export function conferenceBaseUrl(
 }
 
 /**
- * First `domains[]` entry usable for OUTBOUND links: non-empty and not a
- * wildcard routing entry (`*.example.com` matches inbound hosts but is not a
- * concrete host an email link can point at).
+ * Derive the outbound ORIGIN for one `domains[]` entry, or null when the entry
+ * cannot yield one: blank, a wildcard routing entry (`*.example.com` matches
+ * inbound hosts but is not a concrete host an email link can point at), or
+ * unparseable after normalization. Normalizes BEFORE stripping the defensive
+ * scheme so a mis-stored `"  HTTPS://X.com "` still sheds it, and returns
+ * `URL.origin` so a mis-stored path can never leak into joined outbound URLs.
  */
-function findOutboundDomain(
+function deriveOrigin(entry: string): string | null {
+  if (entry.includes('*')) return null
+  const domain = normalizeDomain(entry)
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/+$/, '')
+  if (!domain) return null
+  const protocol = isLocalhostDomain(domain)
+    ? 'http'
+    : protocolForDomain(domain)
+  try {
+    return new URL(`${protocol}://${domain}`).origin
+  } catch {
+    return null
+  }
+}
+
+/** First `domains[]` entry that derives a usable outbound origin. */
+function findOutboundOrigin(
   conference: { domains?: readonly string[] | null } | null | undefined,
-): string | undefined {
-  return conference?.domains?.find(
-    (d): d is string =>
-      typeof d === 'string' && d.trim().length > 0 && !d.includes('*'),
-  )
+): string | null {
+  for (const d of conference?.domains ?? []) {
+    if (typeof d !== 'string') continue
+    const origin = deriveOrigin(d)
+    if (origin) return origin
+  }
+  return null
 }
 
 /**
  * Whether {@link conferenceBaseUrl} would derive a TENANT origin (vs falling
- * back to the platform). Call sites that deliberately want `undefined`/`''`
- * instead of a platform fallback must use THIS guard — checking
- * `domains?.[0]` disagrees with the helper when the first entry is blank or a
- * wildcard and a later entry is usable.
+ * back to the platform). Shares the exact derivation with conferenceBaseUrl()
+ * — including parseability — so a guard that intends to suppress the platform
+ * fallback can never be satisfied by an entry the derivation would reject.
  */
 export function hasConferenceDomain(
   conference: { domains?: readonly string[] | null } | null | undefined,
 ): boolean {
-  return findOutboundDomain(conference) !== undefined
+  return findOutboundOrigin(conference) !== null
 }
