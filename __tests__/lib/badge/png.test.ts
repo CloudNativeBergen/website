@@ -1,0 +1,110 @@
+/**
+ * @vitest-environment node
+ *
+ * OB 3.0 PNG baking: an `openbadgecredential` iTXt chunk carrying the raw
+ * credential, rasterized from the badge SVG. The credential bytes must survive
+ * bake→extract untouched (a signed credential cannot tolerate mutation).
+ */
+import { describe, it, expect } from 'vitest'
+import path from 'path'
+import {
+  OB_PNG_KEYWORD,
+  bakeCredentialIntoPng,
+  extractCredentialFromPng,
+  renderBadgeSvgToPng,
+} from '@/lib/badge/png'
+
+// A real, multi-chunk PNG produced by the same rasterizer the route uses.
+const TINY_PNG = renderBadgeSvgToPng(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#111"/></svg>',
+  { width: 8 },
+)
+
+const CREDENTIAL = JSON.stringify({
+  '@context': ['https://www.w3.org/ns/credentials/v2'],
+  id: 'https://example.com/api/badge/abc',
+  type: ['VerifiableCredential', 'OpenBadgeCredential'],
+  proof: [{ type: 'DataIntegrityProof', proofValue: 'z3Abc]]>weird' }],
+})
+
+describe('PNG baking', () => {
+  it('uses the spec keyword openbadgecredential', () => {
+    expect(OB_PNG_KEYWORD).toBe('openbadgecredential')
+  })
+
+  it('round-trips the credential byte-for-byte through bake → extract', () => {
+    const baked = bakeCredentialIntoPng(TINY_PNG, CREDENTIAL)
+    expect(extractCredentialFromPng(baked)).toBe(CREDENTIAL)
+  })
+
+  it('keeps the PNG valid (signature + IEND preserved)', () => {
+    const baked = bakeCredentialIntoPng(TINY_PNG, CREDENTIAL)
+    expect(Array.from(baked.subarray(0, 8))).toEqual([
+      137, 80, 78, 71, 13, 10, 26, 10,
+    ])
+    const tail = Buffer.from(baked.subarray(baked.length - 8)).toString(
+      'latin1',
+    )
+    expect(tail).toContain('IEND')
+  })
+
+  it('re-bakes idempotently (single credential chunk, not two)', () => {
+    const once = bakeCredentialIntoPng(TINY_PNG, CREDENTIAL)
+    const twice = bakeCredentialIntoPng(once, CREDENTIAL)
+    expect(twice.length).toBe(once.length)
+    expect(extractCredentialFromPng(twice)).toBe(CREDENTIAL)
+  })
+
+  it('returns null when no credential is baked in', () => {
+    expect(extractCredentialFromPng(TINY_PNG)).toBeNull()
+  })
+
+  it('rejects a compressed iTXt credential chunk instead of returning zlib bytes', () => {
+    const baked = bakeCredentialIntoPng(TINY_PNG, CREDENTIAL)
+    // Locate the credential chunk and flip its compression flag to 1.
+    const marker = new TextEncoder().encode(OB_PNG_KEYWORD)
+    const idx = baked.findIndex((_, i) =>
+      marker.every((b, j) => baked[i + j] === b),
+    )
+    expect(idx).toBeGreaterThan(0)
+    const tampered = baked.slice()
+    tampered[idx + marker.length + 1] = 1 // keyword NUL, then compression flag
+    expect(extractCredentialFromPng(tampered)).toBeNull()
+  })
+
+  it('throws on non-PNG input', () => {
+    expect(() =>
+      bakeCredentialIntoPng(new Uint8Array([1, 2, 3]), CREDENTIAL),
+    ).toThrow(/PNG/)
+  })
+
+  it('renders <text> only when a font file is provided (serverless has no system fonts)', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">' +
+      '<rect width="200" height="100" fill="#111"/>' +
+      '<text x="20" y="60" font-family="Arial, sans-serif" font-size="40" fill="#fff">Jane Doe</text>' +
+      '</svg>'
+    const fontFile = path.join(process.cwd(), 'public/fonts/Inter-SemiBold.ttf')
+    const withoutFont = renderBadgeSvgToPng(svg, { width: 200 })
+    const withFont = renderBadgeSvgToPng(svg, {
+      width: 200,
+      fontFiles: [fontFile],
+    })
+    // Text glyphs add real pixel data; a fontless render silently drops them.
+    expect(withFont.length).toBeGreaterThan(withoutFont.length)
+  })
+
+  it('rasterizes a badge SVG (strips the credential node) then bakes', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0" viewBox="0 0 100 100">' +
+      '<openbadges:credential><![CDATA[ {"stale":true} ]]></openbadges:credential>' +
+      '<rect width="100" height="100" fill="#3b82f6"/></svg>'
+    const png = renderBadgeSvgToPng(svg, { width: 256 })
+    // Valid PNG, and the drawable-only render carries no credential yet.
+    expect(Array.from(png.subarray(0, 4))).toEqual([137, 80, 78, 71])
+    expect(extractCredentialFromPng(png)).toBeNull()
+    // Baking the real credential in makes it extractable.
+    const baked = bakeCredentialIntoPng(png, CREDENTIAL)
+    expect(extractCredentialFromPng(baked)).toBe(CREDENTIAL)
+  })
+})

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import {
+  BADGE_ARTIFACT_CACHE_CONTROL,
+  BADGE_CORS_HEADERS,
+  badgeArtifactETag,
+  badgeNotModifiedResponse,
+} from '@/lib/badge/http'
 import { generateErrorResponse, isJWTFormat } from '@/lib/openbadges'
 
 /**
@@ -29,8 +35,15 @@ export async function GET(
     if (error || !badge) {
       return NextResponse.json(generateErrorResponse('Badge not found', 404), {
         status: 404,
+        headers: { ...BADGE_CORS_HEADERS },
       })
     }
+
+    const etag = badgeArtifactETag(badge, 'jwt')
+    const notModified = badgeNotModifiedResponse(request, etag, {
+      ...BADGE_CORS_HEADERS,
+    })
+    if (notModified) return notModified
 
     const jwt =
       badge.badgeJwt ?? (isJWTFormat(badge.badgeJson) ? badge.badgeJson : null)
@@ -41,7 +54,7 @@ export async function GET(
           'No JWT credential available for this badge',
           404,
         ),
-        { status: 404 },
+        { status: 404, headers: { ...BADGE_CORS_HEADERS } },
       )
     }
 
@@ -49,9 +62,9 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'text/plain',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        ...BADGE_CORS_HEADERS,
+        'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
+        ETag: etag,
       },
     })
   } catch (error) {
@@ -60,7 +73,7 @@ export async function GET(
 
     return NextResponse.json(
       generateErrorResponse('Internal server error', 500),
-      { status: 500 },
+      { status: 500, headers: { ...BADGE_CORS_HEADERS } },
     )
   }
 }

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
+import {
+  BADGE_ARTIFACT_CACHE_CONTROL,
+  badgeArtifactETag,
+  badgeNotModifiedResponse,
+} from '@/lib/badge/http'
 
 export async function GET(
   request: NextRequest,
@@ -20,6 +25,10 @@ export async function GET(
     if (error || !badge) {
       return NextResponse.json({ error: 'Badge not found' }, { status: 404 })
     }
+
+    const etag = badgeArtifactETag(badge, 'image')
+    const notModified = badgeNotModifiedResponse(request, etag)
+    if (notModified) return notModified
 
     const svgUrl = getBadgeSVGUrl(badge)
 
@@ -44,7 +53,8 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': 'image/svg+xml',
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
+        ETag: etag,
       },
     })
   } catch (error) {

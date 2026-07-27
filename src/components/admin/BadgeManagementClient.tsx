@@ -533,7 +533,15 @@ export function BadgeManagementClient({
               href={`/api/badge/${badge.badgeId}/download`}
               download
             >
-              Download
+              Download SVG
+            </ActionMenuItem>
+            <ActionMenuItem
+              onClick={() => {}}
+              icon={ArrowDownTrayIcon}
+              href={`/api/badge/${badge.badgeId}/download?format=png`}
+              download
+            >
+              Download PNG
             </ActionMenuItem>
             <ActionMenuItem
               onClick={() => handleRebakeBadge(badge.badgeId, speaker.name)}
