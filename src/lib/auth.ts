@@ -5,6 +5,7 @@ import type { Account, NextAuthConfig, Profile, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import { deriveSessionCookieDomain } from '@/lib/auth-cookie-domain'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
 import type { Speaker } from '@/lib/speaker/types'
@@ -127,9 +128,31 @@ export async function signOutHandler(): Promise<void> {
   try {
     const { LINK_INTENT_COOKIE } = await import('@/lib/auth-link')
     const { cookies } = await import('next/headers')
-    ;(await cookies()).delete(LINK_INTENT_COOKIE)
+    const jar = await cookies()
+    jar.delete(LINK_INTENT_COOKIE)
+
+    // RESIDUAL HOST-ONLY COOKIE CLEANUP: @auth/core clears the session cookie
+    // using the CURRENT cookie options — with the static `Domain` widening (see
+    // `staticSessionCookieDomain`), that clear targets the Domain-scoped cookie.
+    // A browser can additionally hold a HOST-ONLY cookie of the same name (set
+    // before the widening shipped, or across a config/denylist change); a
+    // Set-Cookie with a Domain attribute can never remove it, so it would
+    // SURVIVE sign-out and keep the user signed in on that host. Delete every
+    // session-token cookie (including chunked `<name>.0`, `.1`, … parts)
+    // host-only as well — the two deletes target different cookies, so both are
+    // needed. This is independent of how the Domain is derived (it just walks
+    // the request's own cookie jar), so it is correct under the static config.
+    for (const { name } of jar.getAll()) {
+      if (
+        SESSION_TOKEN_COOKIE_NAMES.some(
+          (base) => name === base || name.startsWith(`${base}.`),
+        )
+      ) {
+        jar.delete(name)
+      }
+    }
   } catch (err) {
-    console.error('Failed to clear link-intent cookie on sign-out', err)
+    console.error('Failed to clear auth cookies on sign-out', err)
   }
 }
 
@@ -431,6 +454,70 @@ export function redirectProxyConfig(
   return { redirectProxyUrl: url, trustHost: true }
 }
 
+/**
+ * STATIC session-cookie `Domain` for the platform's primary domain, derived
+ * ONCE at module load from the configured platform base URL (the same env the
+ * rest of the app treats as canonical — `NEXT_PUBLIC_BASE_URL`, then the legacy
+ * alias `NEXT_PUBLIC_URL`; see `platformBaseUrl` in `@/lib/branding/platform`).
+ *
+ * The host's registrable domain (eTLD+1, via `deriveSessionCookieDomain`) is
+ * used with a leading dot — host `admin.cloudnativedays.no` →
+ * `Domain=.cloudnativedays.no` — so a signed-in user stays signed in across
+ * apex + www + per-year subdomains of the primary domain instead of being
+ * dropped by the default host-only cookie (the #462 bug this re-fixes).
+ *
+ * WHY STATIC (not the reverted per-request/lazy form): feeding `NextAuth` a
+ * CONFIG FUNCTION changes the shape of the returned `auth` in next-auth v5, so
+ * the middleware wrapper `auth((req) => …)` in `src/proxy.ts` becomes a
+ * NON-function and every authenticated route 500s (`nextAuthMiddleware is not a
+ * function`) — the production incident (#671). A single primary domain today
+ * needs no per-request derivation, so we compute the Domain once from config
+ * and keep `NextAuth(config)` (a plain object), which leaves the middleware
+ * wrapper intact. Per-request / multi-tenant derivation is DELIBERATELY
+ * DEFERRED to when auth goes multi-tenant (central-auth-origin work, #619),
+ * where it must be re-introduced WITHOUT the lazy-config form.
+ *
+ * FAIL-SAFE: `deriveSessionCookieDomain` returns `undefined` for localhost, IP
+ * literals, previews on `vercel.app`, platform-shared parents (`konf.run`),
+ * public suffixes, unset/blank env, and anything unparseable — in which case NO
+ * `cookies` key is emitted and today's host-only cookie is kept. It never
+ * throws (so it cannot break module load / `next build`, unlike calling
+ * `platformBaseUrl` which throws when unconfigured in production).
+ *
+ * Env-parameterised + exported so the derivation is unit-testable under both
+ * outcomes. Referenced in-file by `config`, so not an unused export.
+ */
+export function staticSessionCookieDomain(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const configured =
+    env.NEXT_PUBLIC_BASE_URL?.trim() || env.NEXT_PUBLIC_URL?.trim() || ''
+  if (!configured) return undefined
+
+  // The env may be a full URL (`https://host[:port]/path`) or a bare host.
+  // Extract just the host before deriving; `deriveSessionCookieDomain` itself
+  // strips any port. On a parse failure fall through with the raw value — the
+  // derivation is fail-safe and will decline anything it cannot parse.
+  let host = configured
+  try {
+    const withScheme = /^https?:\/\//i.test(configured)
+      ? configured
+      : `https://${configured}`
+    host = new URL(withScheme).host
+  } catch {
+    // keep `host = configured`; derivation will fail-safe to undefined.
+  }
+
+  return deriveSessionCookieDomain(host)
+}
+
+/**
+ * The primary domain's session-cookie `Domain`, resolved once at module load.
+ * `undefined` (localhost / preview / unset env / unparseable) → no `cookies`
+ * override → default host-only cookie.
+ */
+const sessionCookieDomain = staticSessionCookieDomain()
+
 const config = {
   providers: [
     GitHub({
@@ -469,6 +556,23 @@ const config = {
       return redirectCallback(params)
     },
   },
+
+  // STATIC cross-subdomain session-cookie Domain for the primary domain (see
+  // `staticSessionCookieDomain`). Spread CONDITIONALLY: when derivation declines
+  // (localhost / preview / unset env) no `cookies` key is contributed and the
+  // default HOST-ONLY cookie is kept — byte-for-byte today's behavior. Only the
+  // `domain` option is set; @auth/core DEEP-MERGES it onto the cookie defaults,
+  // so the `__Secure-` name prefix + httpOnly / secure / sameSite=lax / path are
+  // all preserved (that prefix permits a Domain attribute, unlike `__Host-`).
+  ...(sessionCookieDomain
+    ? {
+        cookies: {
+          sessionToken: {
+            options: { domain: sessionCookieDomain },
+          },
+        },
+      }
+    : {}),
 
   // Opt-in centralized OAuth origin (#619). Spread LAST so an absent env
   // contributes no keys and the built config is byte-for-byte today's.

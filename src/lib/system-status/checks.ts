@@ -341,10 +341,14 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       { missing: 'JWT signing/verification breaks — no one can sign in' },
     ),
   )
-  // NOTE: AUTH_COOKIE_DOMAIN (the prod subdomain-cookie fix) is NOT read as an
-  // env var anywhere in the codebase today, so there is nothing to surface.
-  // If it is later wired as a `process.env.AUTH_COOKIE_DOMAIN` read, add a plain
-  // check here that warns when unset.
+  // NOTE: the cross-subdomain session cookie needs NO dedicated env check. Its
+  // `Domain` attribute is derived once at module load from the platform's own
+  // base URL (`NEXT_PUBLIC_BASE_URL` / `NEXT_PUBLIC_URL`, already surfaced as
+  // `build.baseUrl`) via `deriveSessionCookieDomain` in
+  // `src/lib/auth-cookie-domain.ts`, so there is no separate configuration to
+  // surface here. (Per-request/multi-tenant derivation is deferred to the
+  // central-auth-origin work; it must NOT re-introduce the lazy-config form
+  // that broke the middleware — see #671.)
   //
   // Centralized OAuth origin (#619). Informational: 'ok' when configured (opt-in
   // multi-domain OAuth), 'off' when absent (today's single-domain default). Not
