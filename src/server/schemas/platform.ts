@@ -28,4 +28,3 @@ export const UpdateEntitlementsSchema = z.object({
   overrides: z.array(FeatureOverrideInputSchema).max(100),
 })
 
-export type UpdateEntitlementsInput = z.infer<typeof UpdateEntitlementsSchema>
