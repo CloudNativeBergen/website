@@ -64,6 +64,18 @@ export function domainServesHost(entry: string, host: string): boolean {
 }
 
 /**
+ * True when two `domains[]` entries could ever route the SAME request host —
+ * they are equal, or one is the single-label wildcard that covers the other
+ * (`*.example.com` overlaps `sub.example.com`, in BOTH directions). This is the
+ * claim-uniqueness predicate: a new entry may only be claimed when it overlaps
+ * NO existing entry, otherwise `getConferenceForDomain` (exact-or-wildcard, see
+ * {@link domainServesHost}) could resolve a host to the wrong tenant.
+ */
+export function domainEntriesOverlap(a: string, b: string): boolean {
+  return domainServesHost(a, b) || domainServesHost(b, a)
+}
+
+/**
  * True when NONE of the entries would serve `host` — i.e. saving this list would
  * strand the current request. The server guard rejects such a payload and the
  * client disables removing the last serving row.

@@ -18,6 +18,7 @@ import { notificationRouter } from './routers/notification'
 import { pushRouter } from './routers/push'
 import { messageRouter } from './routers/message'
 import { conferenceRouter } from './routers/conference'
+import { onboardingRouter } from './routers/onboarding'
 import { topicRouter } from './routers/topic'
 import { staffRouter } from './routers/staff'
 import { sponsorMessagesRouter } from './routers/sponsorMessages'
@@ -42,6 +43,7 @@ export const appRouter = router({
   push: pushRouter,
   message: messageRouter,
   conference: conferenceRouter,
+  onboarding: onboardingRouter,
   topic: topicRouter,
   staff: staffRouter,
   sponsorMessages: sponsorMessagesRouter,
