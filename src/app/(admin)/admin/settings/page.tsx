@@ -2,11 +2,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
 import { formatTeamSummary } from '@/lib/teams'
-import {
-  ErrorDisplay,
-  WorkshopRegistrationSettings,
-  AdminPageHeader,
-} from '@/components/admin'
+import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import {
   SystemStatusSection,
   SelfCheckPanel,
@@ -36,7 +32,6 @@ import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
   InfoCard,
   FieldRow,
-  LinkedBadgeList,
   StudioEditLink,
   SectionNav,
   SectionHeading,
@@ -89,8 +84,6 @@ export default async function AdminSettings() {
   const { conference, domain, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
-    sponsors: true,
-    sponsorTiers: true,
     topics: true,
     featuredSpeakers: true,
   })
@@ -487,11 +480,6 @@ export default async function AdminSettings() {
               />
             </InfoCard>
 
-            <WorkshopRegistrationSettings
-              workshopRegistrationStart={conference.workshopRegistrationStart}
-              workshopRegistrationEnd={conference.workshopRegistrationEnd}
-            />
-
             <InfoCard
               title="Ticketing"
               icon={LinkIcon}
@@ -568,157 +556,6 @@ export default async function AdminSettings() {
                     None
                   </span>
                 )}
-              </div>
-            </CollapsibleSection>
-          </SettingsGroupSection>
-
-          {/* ---- Sponsors ---- */}
-          <SettingsGroupSection
-            group={GROUP['sponsors']}
-            icon={CurrencyDollarIcon}
-          >
-            {conference.sponsorTiers && conference.sponsorTiers.length > 0 && (
-              <InfoCard
-                title="Sponsorship Tiers"
-                icon={CurrencyDollarIcon}
-                manageLink={{
-                  href: '/admin/sponsors/tiers',
-                  label: 'Manage tiers',
-                }}
-              >
-                {conference.sponsorTiers.map((tier, idx) => (
-                  <div
-                    key={idx}
-                    className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {tier.title}
-                      </span>
-                      <div className="flex items-center space-x-2">
-                        {tier.soldOut && (
-                          <StatusBadge label="Sold Out" color="red" />
-                        )}
-                        {tier.mostPopular && (
-                          <StatusBadge label="Popular" color="green" />
-                        )}
-                      </div>
-                    </div>
-                    <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                      {tier.tagline}
-                    </p>
-                    {tier.price && tier.price.length > 0 && (
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {tier.price.map((price, pidx) => (
-                          <span key={pidx}>
-                            {price.amount} {price.currency}
-                            {pidx < tier.price!.length - 1 && ', '}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </InfoCard>
-            )}
-
-            {conference.sponsors && conference.sponsors.length > 0 && (
-              <InfoCard
-                title="Current Sponsors"
-                icon={CurrencyDollarIcon}
-                manageLink={{ href: '/admin/sponsors/crm', label: 'Open CRM' }}
-              >
-                {/* Each sponsor deep-links to its CRM record — the full sponsor
-                    editor lives in /admin/sponsors, so this card surfaces WHO
-                    is signed and jumps you there rather than duplicating the
-                    CRM. Add/remove a sponsor also happens in the CRM. The CRM
-                    matches its `?sponsor=` param against the sponsorForConference
-                    id (`_sfcId`), NOT the sponsor document id; fall back to the
-                    CRM landing page if that id is somehow absent. */}
-                <LinkedBadgeList
-                  label="Sponsors"
-                  items={conference.sponsors.map((s) => ({
-                    key: s._sfcId ?? s.sponsor._id,
-                    label: `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
-                    href: s._sfcId
-                      ? `/admin/sponsors/crm?sponsor=${encodeURIComponent(
-                          s._sfcId,
-                        )}`
-                      : '/admin/sponsors/crm',
-                  }))}
-                />
-              </InfoCard>
-            )}
-
-            {/* Set-once — collapsed by default. */}
-            <CollapsibleSection
-              headingLevel={4}
-              title="Sponsor Benefits"
-              icon={<CurrencyDollarIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={editUrl} />
-                  <EditConferenceCard
-                    fieldset="sponsorBenefits"
-                    initialValues={{
-                      sponsorBenefits: conference.sponsorBenefits,
-                    }}
-                  />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                {conference.sponsorBenefits &&
-                conference.sponsorBenefits.length > 0 ? (
-                  conference.sponsorBenefits.map((benefit, idx) => (
-                    <FieldRow
-                      key={idx}
-                      label={benefit.title}
-                      value={benefit.description}
-                    />
-                  ))
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    None
-                  </span>
-                )}
-              </div>
-            </CollapsibleSection>
-
-            {/* Set-once — collapsed by default. */}
-            <CollapsibleSection
-              headingLevel={4}
-              title="Sponsorship Page"
-              icon={<DocumentTextIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={editUrl} />
-                  <EditConferenceCard
-                    fieldset="sponsorshipCustomization"
-                    initialValues={
-                      (conference.sponsorshipCustomization ?? {}) as Record<
-                        string,
-                        unknown
-                      >
-                    }
-                  />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow
-                  label="Hero Headline"
-                  value={conference.sponsorshipCustomization?.heroHeadline}
-                />
-                <FieldRow
-                  label="Philosophy Title"
-                  value={conference.sponsorshipCustomization?.philosophyTitle}
-                />
-                <FieldRow
-                  label="Prospectus Link"
-                  value={conference.sponsorshipCustomization?.prospectusUrl}
-                  type="url"
-                />
               </div>
             </CollapsibleSection>
           </SettingsGroupSection>

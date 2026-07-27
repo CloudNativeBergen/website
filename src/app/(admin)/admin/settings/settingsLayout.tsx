@@ -336,56 +336,6 @@ export function FieldRow({
   )
 }
 
-/** One clickable row in a {@link LinkedBadgeList}. */
-export interface LinkedBadgeItem {
-  key: string
-  label: string
-  href: string
-}
-
-/**
- * A labelled list of clickable badges, each deep-linking into a management page
- * (e.g. each current sponsor → its CRM record). The read-only settings card
- * shows WHAT exists; the links are how an organizer jumps to EDIT it, so the
- * card never has to embed the CRM. `href` is an internal /admin path.
- */
-export function LinkedBadgeList({
-  label,
-  items,
-}: {
-  label: string
-  items: LinkedBadgeItem[]
-}) {
-  return (
-    <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
-      <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-        {label}
-      </dt>
-      <dd className="max-w-xs min-w-0 text-right text-sm">
-        {items.length > 0 ? (
-          <div className="flex flex-wrap justify-end gap-1">
-            {items.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-300"
-              >
-                <span className="min-w-0 break-words">{item.label}</span>
-                <ArrowUpRightIcon
-                  className="h-3 w-3 shrink-0"
-                  aria-hidden="true"
-                />
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400">None</span>
-        )}
-      </dd>
-    </div>
-  )
-}
-
 export function SectionNav() {
   return (
     <nav className="sticky top-0 z-10 -mx-4 mb-2 space-y-2 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90">

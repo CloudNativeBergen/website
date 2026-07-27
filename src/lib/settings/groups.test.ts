@@ -7,13 +7,12 @@ import {
 } from './groups'
 
 describe('settings IA groups', () => {
-  it('defines the six organizer-facing groups in order', () => {
+  it('defines the five organizer-facing groups in order', () => {
     expect(SETTINGS_GROUPS.map((g) => g.id)).toEqual([
       'identity-brand',
       'schedule',
       'call-for-papers',
       'tickets-registration',
-      'sponsors',
       'team-content',
     ])
   })

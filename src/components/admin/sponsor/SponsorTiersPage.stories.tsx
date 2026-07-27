@@ -1,17 +1,31 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { FieldRow } from '@/app/(admin)/admin/settings/settingsLayout'
 import {
   ChartBarIcon,
   PlusIcon,
   PencilIcon,
+  PencilSquareIcon,
   TrashIcon,
   ArrowDownTrayIcon,
   GlobeAltIcon,
   TagIcon,
   UserGroupIcon,
   TicketIcon,
+  CurrencyDollarIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon } from '@heroicons/react/20/solid'
+
+/** Non-functional stand-in for the EditConferenceCard pencil trigger. */
+function EditPencil() {
+  return (
+    <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 dark:text-gray-400">
+      <PencilSquareIcon className="h-5 w-5" />
+    </span>
+  )
+}
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTiersPage',
@@ -22,7 +36,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Integration example showing the full /admin/sponsors/tiers page layout. Combines AdminPageHeader, SponsorTierEditor (tier configuration cards), SponsorTierManagement (sponsors grouped by tier), and Quick Actions links.',
+          'Integration example showing the full /admin/sponsors/tiers page layout. Combines AdminPageHeader, SponsorTierEditor (tier configuration cards), SponsorTierManagement (sponsors grouped by tier), Quick Actions links, and the collapsed Sponsor Benefits / Sponsorship Page editors.',
       },
     },
   },
@@ -369,6 +383,37 @@ export const Default: Story = {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Sponsor content configuration */}
+        <div className="mt-12 space-y-6">
+          <CollapsibleSection
+            title="Sponsor Benefits"
+            icon={<CurrencyDollarIcon />}
+            action={<EditPencil />}
+          >
+            <div className="space-y-3 px-6 py-4">
+              <FieldRow
+                label="Reach"
+                value="Access to 500+ cloud native engineers."
+              />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Sponsorship Page"
+            icon={<DocumentTextIcon />}
+            action={<EditPencil />}
+          >
+            <div className="space-y-3 px-6 py-4">
+              <FieldRow label="Hero Headline" value="Partner with us" />
+              <FieldRow
+                label="Prospectus Link"
+                value="https://example.com/prospectus.pdf"
+                type="url"
+              />
+            </div>
+          </CollapsibleSection>
         </div>
       </div>
     </div>

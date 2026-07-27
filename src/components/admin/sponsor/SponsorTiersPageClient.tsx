@@ -4,10 +4,15 @@ import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { SponsorTierEditor } from './SponsorTierEditor'
 import { SponsorTierManagement } from './SponsorTierManagement'
+import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { FieldRow } from '@/app/(admin)/admin/settings/settingsLayout'
 import {
   GlobeAltIcon,
   UserGroupIcon,
   ChartBarIcon,
+  CurrencyDollarIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -125,6 +130,70 @@ export function SponsorTiersPageClient({
               </div>
             </Link>
           </div>
+        </div>
+
+        <div className="mt-12 space-y-6">
+          <CollapsibleSection
+            title="Sponsor Benefits"
+            icon={<CurrencyDollarIcon />}
+            action={
+              <EditConferenceCard
+                fieldset="sponsorBenefits"
+                initialValues={{
+                  sponsorBenefits: conference.sponsorBenefits,
+                }}
+              />
+            }
+          >
+            <div className="space-y-3 px-6 py-4">
+              {conference.sponsorBenefits &&
+              conference.sponsorBenefits.length > 0 ? (
+                conference.sponsorBenefits.map((benefit, idx) => (
+                  <FieldRow
+                    key={idx}
+                    label={benefit.title}
+                    value={benefit.description}
+                  />
+                ))
+              ) : (
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  None
+                </span>
+              )}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Sponsorship Page"
+            icon={<DocumentTextIcon />}
+            action={
+              <EditConferenceCard
+                fieldset="sponsorshipCustomization"
+                initialValues={
+                  (conference.sponsorshipCustomization ?? {}) as Record<
+                    string,
+                    unknown
+                  >
+                }
+              />
+            }
+          >
+            <div className="space-y-3 px-6 py-4">
+              <FieldRow
+                label="Hero Headline"
+                value={conference.sponsorshipCustomization?.heroHeadline}
+              />
+              <FieldRow
+                label="Philosophy Title"
+                value={conference.sponsorshipCustomization?.philosophyTitle}
+              />
+              <FieldRow
+                label="Prospectus Link"
+                value={conference.sponsorshipCustomization?.prospectusUrl}
+                type="url"
+              />
+            </div>
+          </CollapsibleSection>
         </div>
       </div>
 

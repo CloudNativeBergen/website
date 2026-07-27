@@ -65,15 +65,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     id: 'tickets-registration',
     navLabel: 'Tickets & Registration',
     title: 'Tickets & Registration',
-    description:
-      'Registration, workshop sign-ups, the ticketing provider and homepage stats.',
-  },
-  {
-    id: 'sponsors',
-    navLabel: 'Sponsors',
-    title: 'Sponsors',
-    description:
-      'Sponsorship tiers, current sponsors, benefits and the public sponsorship page.',
+    description: 'Registration, the ticketing provider and homepage stats.',
   },
   {
     id: 'team-content',
