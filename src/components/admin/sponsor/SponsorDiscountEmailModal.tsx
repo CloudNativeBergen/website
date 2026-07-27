@@ -8,6 +8,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { api } from '@/lib/trpc/client'
 
 interface SponsorWithTierInfo {
@@ -71,7 +72,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize email template on modal open
       setInitialMessage(portableTextBlocks)
 
-      const defaultTicketUrl = `https://${conference.domains[0]}/tickets`
+      const defaultTicketUrl = `${conferenceBaseUrl(conference)}/tickets`
 
       setTicketUrl(defaultTicketUrl)
       setAdditionalFields({ ticketUrl: defaultTicketUrl })
@@ -227,7 +228,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}
-        eventUrl={`https://${conference.domains[0]}`}
+        eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
         content={<div dangerouslySetInnerHTML={{ __html: fullContent }} />}
       />

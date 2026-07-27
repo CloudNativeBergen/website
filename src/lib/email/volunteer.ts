@@ -5,6 +5,7 @@ import {
   createEmailError,
 } from './config'
 import { VolunteerWithConference } from '@/lib/volunteer/types'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 
@@ -54,9 +55,7 @@ export async function sendVolunteerApprovalEmail(
     const eventDate = conference.startDate
       ? formatConferenceDateLong(conference.startDate)
       : 'TBD'
-    const eventUrl = conference.domains?.[0]
-      ? `https://${conference.domains[0]}`
-      : ''
+    const eventUrl = conferenceBaseUrl(conference)
     const socialLinks = conference.socialLinks?.map((link) => link.url) || []
 
     const result = await retryWithBackoff(async () => {

@@ -203,10 +203,18 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
 
   checks.push(
     plainCheck(
-      { id: 'build.baseUrl', group: 'build', label: 'NEXT_PUBLIC_BASE_URL' },
-      process.env.NEXT_PUBLIC_BASE_URL,
+      { id: 'build.baseUrl', group: 'build', label: 'Platform base URL' },
+      // Mirrors the platformBaseUrl() env chain (which trims each value —
+      // whitespace-only must read as missing here too); in production, none
+      // set means platform-level outbound links THROW rather than degrade.
+      process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+        process.env.NEXT_PUBLIC_URL?.trim() ||
+        process.env.VERCEL_URL?.trim(),
       'warn',
-      { missing: 'Absolute links fall back to http://localhost:3000' },
+      {
+        missing:
+          'None of NEXT_PUBLIC_BASE_URL / NEXT_PUBLIC_URL / VERCEL_URL are set — platform-level outbound links fail in production',
+      },
     ),
   )
 

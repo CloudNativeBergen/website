@@ -6,6 +6,10 @@ import {
   processPortableTextVariables,
 } from '@/lib/sponsor/templates'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 import { PortableTextBlock } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
 
@@ -72,8 +76,8 @@ function buildVariables(vars: ContractEmailVariables): Record<string, string> {
     if (year) v.CONFERENCE_YEAR = year
   }
 
-  if (vars.conference.domains?.[0]) {
-    v.EVENT_URL = `https://${vars.conference.domains[0]}`
+  if (hasConferenceDomain(vars.conference)) {
+    v.EVENT_URL = conferenceBaseUrl(vars.conference)
     v.CONFERENCE_URL = v.EVENT_URL
     v.SPONSOR_PAGE_URL = `${v.EVENT_URL}/sponsor`
   }

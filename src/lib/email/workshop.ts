@@ -6,6 +6,10 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
 
 export interface WorkshopConfirmationEmailRequest {
@@ -146,8 +150,8 @@ export async function sendWorkshopSignupInstructions({
 
     const contactEmail = resolveConferenceContact(conference)
 
-    const workshopUrl = conference.domains?.[0]
-      ? `https://${conference.domains[0]}/workshop`
+    const workshopUrl = hasConferenceDomain(conference)
+      ? `${conferenceBaseUrl(conference)}/workshop`
       : ''
 
     const subject = `Workshop Signup Available - ${conference.title}`

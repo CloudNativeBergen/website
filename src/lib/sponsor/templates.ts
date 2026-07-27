@@ -4,6 +4,10 @@ import type {
   TemplateLanguage,
   SponsorEmailTemplate,
 } from './types'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 
 export const CATEGORY_LABELS: Record<string, string> = {
   'cold-outreach': 'Cold Outreach',
@@ -242,9 +246,9 @@ export function buildTemplateVariables(opts: {
     vars.CONFERENCE_CITY = conference.city
   }
 
-  if (conference.domains?.[0]) {
-    vars.CONFERENCE_URL = `https://${conference.domains[0]}`
-    vars.SPONSOR_PAGE_URL = `https://${conference.domains[0]}/sponsor`
+  if (hasConferenceDomain(conference)) {
+    vars.CONFERENCE_URL = conferenceBaseUrl(conference)
+    vars.SPONSOR_PAGE_URL = `${vars.CONFERENCE_URL}/sponsor`
   }
 
   if (conference.prospectusUrl) {

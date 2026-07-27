@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
 import { Conference } from '@/lib/conference/types'
@@ -163,7 +164,8 @@ export async function sendFormattedMultiSpeakerEmail({
   senderName: string
 }): Promise<EmailResult<{ emailId: string }>> {
   try {
-    const proposalUrl = `https://${conference.domains[0]}/admin/proposals/${proposal._id}`
+    const eventUrl = conferenceBaseUrl(conference)
+    const proposalUrl = `${eventUrl}/admin/proposals/${proposal._id}`
 
     const emailTemplate = SpeakerEmailTemplate({
       speakers: speakers.map((s) => ({ name: s.name, email: s.email })),
@@ -172,7 +174,7 @@ export async function sendFormattedMultiSpeakerEmail({
       eventName: conference.title,
       eventLocation: `${conference.city}, ${conference.country}`,
       eventDate: conference.startDate || '',
-      eventUrl: `https://${conference.domains[0]}`,
+      eventUrl,
       subject: subject,
       message: message,
       senderName: senderName,

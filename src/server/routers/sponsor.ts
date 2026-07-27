@@ -42,6 +42,10 @@ import {
   suggestTemplateLanguage,
 } from '@/lib/sponsor/templates'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 import type { Conference } from '@/lib/conference/types'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
@@ -2074,15 +2078,16 @@ export const sponsorRouter = router({
         if (input.signerEmail) {
           try {
             const provider = getSigningProvider(sfc.conference.signingProvider)
-            const conferenceDomain = sfc.conference.domains?.[0]
             const signingResult = await provider.sendForSigning({
               pdf: pdfBuffer,
               filename,
               signerEmail: input.signerEmail,
               agreementName: `Sponsorship Agreement - ${sfc.sponsor.name}`,
               message: `Please sign the sponsorship agreement for ${sfc.conference.title}.`,
-              baseUrl: conferenceDomain
-                ? `https://${conferenceDomain}`
+              // Tenant-derived signing origin; the provider still applies its
+              // own env fallback if a conference somehow has no domain.
+              baseUrl: hasConferenceDomain(sfc.conference)
+                ? conferenceBaseUrl(sfc.conference)
                 : undefined,
             })
 
