@@ -129,13 +129,33 @@ describe('handleSpeakerTicket', () => {
       }),
     )
 
-    // Delivery marker is written only after a successful send.
+    // Delivery marker is written only after a successful send — and never
+    // carries the coupon code: proposal reads project the whole talk to every
+    // co-speaker, so a persisted code would leak a redeemable credential.
     expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
     expect(mockedRecordEmailed).toHaveBeenCalledWith('proposal-1', {
       speakerId: speaker._id,
       email: 'ada@example.com',
-      code: expectedCode,
     })
+  })
+
+  it('never logs the full coupon code or recipient email on success', async () => {
+    const speaker = makeSpeaker()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    try {
+      await handleSpeakerTicket(makeEvent({}, [speaker]))
+
+      const code = speakerTicketCode(speaker.email)
+      const logged = logSpy.mock.calls.map((call) => call.join(' ')).join('\n')
+      // The success line references the speaker by id with a redacted suffix
+      // only — the full single-use credential must never hit info-level logs.
+      expect(logged).toContain(code.slice(-4))
+      expect(logged).not.toContain(code)
+      expect(logged).not.toContain(speaker.email)
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 
   it('derives the code from the email, not the speaker id', () => {
@@ -194,7 +214,6 @@ describe('handleSpeakerTicket', () => {
               {
                 speakerId: speaker._id,
                 email: 'ada@example.com',
-                code: existingCode,
                 emailedAt: '2026-01-01T00:00:00Z',
               },
             ],
@@ -223,7 +242,6 @@ describe('handleSpeakerTicket', () => {
               {
                 speakerId: 'speaker-1',
                 email: 'ada@example.com',
-                code: speakerTicketCode('ada@example.com'),
                 emailedAt: '2026-01-01T00:00:00Z',
               },
             ],
@@ -253,10 +271,12 @@ describe('handleSpeakerTicket', () => {
 
     expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockedSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ discountCode: existingCode }),
+    )
     expect(mockedRecordEmailed).toHaveBeenCalledWith('proposal-1', {
       speakerId: speaker._id,
       email: 'ada@example.com',
-      code: existingCode,
     })
   })
 

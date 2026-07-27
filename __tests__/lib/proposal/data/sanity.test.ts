@@ -1,10 +1,13 @@
 const {
   mockFetch,
+  mockWriteFetch,
   mockTransaction,
   mockTxDelete,
   mockTxCommit,
   mockPatch,
   mockSet,
+  mockSetIfMissing,
+  mockAppend,
   mockUnset,
   mockPatchCommit,
 } = vi.hoisted(() => {
@@ -14,22 +17,36 @@ const {
   mockTxDelete.mockReturnValue(transaction)
   const mockTransaction = vi.fn(() => transaction)
   const mockFetch = vi.fn()
+  const mockWriteFetch = vi.fn()
 
   const mockPatchCommit = vi.fn().mockResolvedValue({ _id: 'proposal-1' })
   const mockUnset = vi.fn()
   const mockSet = vi.fn()
-  const patch = { set: mockSet, unset: mockUnset, commit: mockPatchCommit }
+  const mockSetIfMissing = vi.fn()
+  const mockAppend = vi.fn()
+  const patch = {
+    set: mockSet,
+    setIfMissing: mockSetIfMissing,
+    append: mockAppend,
+    unset: mockUnset,
+    commit: mockPatchCommit,
+  }
   mockSet.mockReturnValue(patch)
+  mockSetIfMissing.mockReturnValue(patch)
+  mockAppend.mockReturnValue(patch)
   mockUnset.mockReturnValue(patch)
   const mockPatch = vi.fn(() => patch)
 
   return {
     mockFetch,
+    mockWriteFetch,
     mockTransaction,
     mockTxDelete,
     mockTxCommit,
     mockPatch,
     mockSet,
+    mockSetIfMissing,
+    mockAppend,
     mockUnset,
     mockPatchCommit,
   }
@@ -51,12 +68,14 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     transaction: mockTransaction,
     patch: mockPatch,
+    fetch: mockWriteFetch,
   },
 }))
 
 import {
   deleteProposal,
   ProposalDeletionBlockedError,
+  recordSpeakerTicketEmailed,
   updateProposalStatus,
 } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -327,6 +346,24 @@ describe('updateProposalStatus', () => {
     expect(mockUnset).toHaveBeenCalledWith(['withdrawnReason'])
   })
 
+  it('gates the patch on the supplied revision and still applies the status', async () => {
+    await updateProposalStatus(
+      'proposal-1',
+      Status.confirmed,
+      undefined,
+      'rev-abc',
+    )
+
+    // The revision gate rides the patch constructor (optimistic concurrency);
+    // the status set/unset chain must still be applied and committed on it.
+    expect(mockPatch).toHaveBeenCalledWith('proposal-1', {
+      ifRevisionID: 'rev-abc',
+    })
+    expect(mockSet).toHaveBeenCalledWith({ status: Status.confirmed })
+    expect(mockUnset).toHaveBeenCalledWith(['withdrawnReason'])
+    expect(mockPatchCommit).toHaveBeenCalled()
+  })
+
   it('returns the error when the patch commit fails', async () => {
     const failure = new Error('patch failed')
     mockPatchCommit.mockRejectedValueOnce(failure)
@@ -334,5 +371,58 @@ describe('updateProposalStatus', () => {
     const { err } = await updateProposalStatus('proposal-1', Status.accepted)
 
     expect(err).toBe(failure)
+  })
+})
+
+describe('recordSpeakerTicketEmailed', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPatchCommit.mockResolvedValue({ _id: 'proposal-1' })
+  })
+
+  it('appends a delivery marker without persisting the coupon code', async () => {
+    mockWriteFetch.mockResolvedValueOnce(null)
+
+    await recordSpeakerTicketEmailed('proposal-1', {
+      speakerId: 'speaker-1',
+      email: 'ada@example.com',
+    })
+
+    expect(mockPatch).toHaveBeenCalledWith('proposal-1')
+    expect(mockSetIfMissing).toHaveBeenCalledWith({ issuedSpeakerTickets: [] })
+    expect(mockAppend).toHaveBeenCalledWith('issuedSpeakerTickets', [
+      {
+        _key: 'speaker-ticket-speaker-1',
+        speakerId: 'speaker-1',
+        email: 'ada@example.com',
+        emailedAt: expect.any(String),
+      },
+    ])
+    // SECURITY: the marker must never carry the coupon code — the talk
+    // document is projected to every co-speaker on the proposal, so a stored
+    // code would leak a redeemable single-use credential.
+    const appended = mockAppend.mock.calls[0][1][0]
+    expect(appended).not.toHaveProperty('code')
+    expect(mockPatchCommit).toHaveBeenCalled()
+  })
+
+  it('upserts in place on the deterministic _key without persisting the coupon code', async () => {
+    mockWriteFetch.mockResolvedValueOnce(['speaker-ticket-speaker-1'])
+
+    await recordSpeakerTicketEmailed('proposal-1', {
+      speakerId: 'speaker-1',
+      email: 'ada@example.com',
+    })
+
+    expect(mockAppend).not.toHaveBeenCalled()
+    expect(mockSet).toHaveBeenCalledWith({
+      'issuedSpeakerTickets[_key=="speaker-ticket-speaker-1"].speakerId':
+        'speaker-1',
+      'issuedSpeakerTickets[_key=="speaker-ticket-speaker-1"].email':
+        'ada@example.com',
+      'issuedSpeakerTickets[_key=="speaker-ticket-speaker-1"].emailedAt':
+        expect.any(String),
+    })
+    expect(mockPatchCommit).toHaveBeenCalled()
   })
 })

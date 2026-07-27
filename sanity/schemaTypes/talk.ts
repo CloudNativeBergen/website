@@ -243,7 +243,7 @@ export default defineType({
       title: 'Issued Speaker Tickets',
       type: 'array',
       description:
-        'System-managed record of complimentary speaker ticket emails that were successfully delivered. Used to avoid re-emailing a speaker while still allowing recovery when a coupon was created but the email failed. Not intended for manual editing.',
+        'System-managed record of complimentary speaker ticket emails that were successfully delivered. Used to avoid re-emailing a speaker while still allowing recovery when a coupon was created but the email failed. The coupon code itself is intentionally never stored here (the ticketing provider is its source of truth) so co-speakers reading the proposal cannot see each other’s codes. Not intended for manual editing.',
       readOnly: true,
       of: [
         {
@@ -251,11 +251,10 @@ export default defineType({
           fields: [
             { name: 'speakerId', title: 'Speaker ID', type: 'string' },
             { name: 'email', title: 'Delivered To (Email)', type: 'string' },
-            { name: 'code', title: 'Coupon Code', type: 'string' },
             { name: 'emailedAt', title: 'Emailed At', type: 'datetime' },
           ],
           preview: {
-            select: { title: 'code', subtitle: 'speakerId' },
+            select: { title: 'email', subtitle: 'speakerId' },
           },
         },
       ],

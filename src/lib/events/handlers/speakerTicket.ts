@@ -7,6 +7,11 @@ import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
 import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
 
+/** Redacts a coupon code for logging: last four characters only. */
+function redactCode(code: string): string {
+  return `…${code.slice(-4)}`
+}
+
 /**
  * Issues each confirmed speaker a single-use 100%-off coupon in the
  * conference's ticketing provider as their complimentary conference ticket and
@@ -47,6 +52,12 @@ import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
  * one speaker's failure from blocking the others. A coupon created but not
  * emailed logs an actionable error (speaker id + code) so an organizer can
  * recover manually if needed.
+ *
+ * The code is a single-use free-ticket credential, so routine log lines only
+ * ever include its last four characters (`redactCode`) — enough to correlate
+ * with the provider's coupon list, useless to redeem. The one exception is the
+ * send-failure error, where the full code is exactly what the operator needs
+ * for manual recovery.
  */
 export async function handleSpeakerTicket(
   event: ProposalStatusChangeEvent,
@@ -190,7 +201,7 @@ export async function handleSpeakerTicket(
       }
     } else {
       console.log(
-        `[speakerTicket] Coupon ${code} already exists for speaker ${speaker._id} but was not yet emailed; resending`,
+        `[speakerTicket] Coupon ${redactCode(code)} already exists for speaker ${speaker._id} but was not yet emailed; resending`,
       )
     }
 
@@ -218,23 +229,26 @@ export async function handleSpeakerTicket(
     emailedEmails.add(emailKey)
 
     // Email delivered — record the marker so we never re-email this speaker.
-    // A failure here only risks a duplicate email on a future re-trigger, which
-    // is far less harmful than the send failure above, so we just log it.
+    // The marker deliberately carries no coupon code: proposal reads project
+    // the whole talk to every co-speaker, so a stored code would leak. The
+    // provider stays the source of truth and the code is re-derivable from the
+    // email. A failure here only risks a duplicate email on a future
+    // re-trigger, which is far less harmful than the send failure above, so we
+    // just log it.
     try {
       await recordSpeakerTicketEmailed(event.proposal._id, {
         speakerId: speaker._id,
         email: emailKey,
-        code,
       })
     } catch (error) {
       console.error(
-        `[speakerTicket] Emailed ticket code ${code} to ${email} but failed to record the delivery marker on proposal ${event.proposal._id}; a re-trigger may re-send`,
+        `[speakerTicket] Emailed ticket code ${redactCode(code)} to speaker ${speaker._id} but failed to record the delivery marker on proposal ${event.proposal._id}; a re-trigger may re-send`,
         error,
       )
     }
 
     console.log(
-      `[speakerTicket] Issued and emailed speaker ticket code ${code} to ${email} for proposal ${event.proposal._id}`,
+      `[speakerTicket] Issued and emailed speaker ticket code ${redactCode(code)} to speaker ${speaker._id} for proposal ${event.proposal._id}`,
     )
   }
 }
