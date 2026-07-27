@@ -746,18 +746,39 @@ export const proposalRouter = router({
         }
 
         // Update proposal status, persisting the withdrawal reason (#212) so it
-        // stays visible to organizers on the proposal itself.
+        // stays visible to organizers on the proposal itself. For confirm we
+        // gate the write on the exact revision we validated against, so two
+        // near-simultaneous confirms (double-click / client retry) can't both
+        // promote accepted→confirmed and fire the speaker-ticket handler twice
+        // (duplicate coupon + email). The loser's patch fails the revision
+        // check and never publishes.
         const { proposal: updatedProposal, err: updateErr } =
           await updateProposalStatus(
             id,
             status,
             action === Action.withdraw ? reason : undefined,
+            action === Action.confirm ? proposal._rev : undefined,
           )
 
         if (updateErr) {
+          // A failed ifRevisionID patch is a Sanity ClientError with
+          // statusCode 409 — key on that (reliable) rather than the message
+          // text, which isn't guaranteed to contain any specific token. Keep a
+          // message match only as a defensive fallback.
+          const conflictStatus =
+            (updateErr as { statusCode?: number }).statusCode === 409
+          const isConcurrentConflict =
+            action === Action.confirm &&
+            (conflictStatus ||
+              /revision|conflict|mismatch|409/i.test(
+                updateErr.message ?? String(updateErr),
+              ))
+
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update proposal status',
+            code: isConcurrentConflict ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
+            message: isConcurrentConflict
+              ? 'This proposal was just updated. Refresh and try again.'
+              : 'Failed to update proposal status',
             cause: updateErr,
           })
         }

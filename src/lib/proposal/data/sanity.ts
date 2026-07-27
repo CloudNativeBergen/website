@@ -523,6 +523,7 @@ export async function updateProposalStatus(
   proposalId: string,
   status: Status,
   withdrawnReason?: string,
+  ifRevisionId?: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
@@ -536,12 +537,20 @@ export async function updateProposalStatus(
   }
 
   try {
-    const patch = clientWrite.patch(proposalId).set(fields)
+    // When a revision is supplied, gate the write on it so two concurrent
+    // transitions can't both succeed (optimistic concurrency). Sanity rejects
+    // the patch with a 409 if the document moved on since it was read, which
+    // the caller surfaces as an error instead of a duplicate status change.
+    let patch = ifRevisionId
+      ? clientWrite.patch(proposalId, { ifRevisionID: ifRevisionId })
+      : clientWrite.patch(proposalId)
+
+    patch = patch.set(fields)
     // Any status change that isn't a withdrawal-with-reason must clear a
     // previous reason so it can't misrepresent a now-active proposal if a
     // transition out of `withdrawn` is ever added.
     if (!trimmedReason) {
-      patch.unset(['withdrawnReason'])
+      patch = patch.unset(['withdrawnReason'])
     }
     updatedProposal = await patch.commit()
   } catch (error) {
@@ -549,6 +558,61 @@ export async function updateProposalStatus(
   }
 
   return { proposal: updatedProposal, err }
+}
+
+/**
+ * Records that a confirmed speaker's complimentary ticket email was
+ * successfully delivered. The write is an UPSERT keyed on the deterministic
+ * per-speaker `_key`: a retry (or a rare concurrent re-trigger) updates the
+ * existing entry in place instead of appending a duplicate-`_key` item, which
+ * Sanity would reject as invalid array data. The caller writes this only after
+ * a successful send so that a coupon created without a delivered email remains
+ * re-emailable.
+ *
+ * SECURITY: the coupon code is deliberately NOT part of the marker. Proposal
+ * reads (`getProposal`/`getProposals`) project the whole talk document to
+ * every speaker on it, so persisting the code would leak each speaker's
+ * single-use 100%-off credential to their co-speakers. The provider holds the
+ * code; the handler re-derives it from the normalized email when needed.
+ */
+export async function recordSpeakerTicketEmailed(
+  proposalId: string,
+  marker: { speakerId: string; email: string },
+): Promise<void> {
+  const key = `speaker-ticket-${marker.speakerId}`
+  const existingKeys = await clientWrite.fetch<string[] | null>(
+    // groq-global: point-read by document _id from a server-side event handler
+    // that already resolved the proposal within its conference.
+    `*[_type == "talk" && _id == $id][0].issuedSpeakerTickets[]._key`,
+    { id: proposalId },
+  )
+
+  const emailedAt = new Date().toISOString()
+
+  if (existingKeys?.includes(key)) {
+    await clientWrite
+      .patch(proposalId)
+      .set({
+        [`issuedSpeakerTickets[_key=="${key}"].speakerId`]: marker.speakerId,
+        [`issuedSpeakerTickets[_key=="${key}"].email`]: marker.email,
+        [`issuedSpeakerTickets[_key=="${key}"].emailedAt`]: emailedAt,
+      })
+      .commit()
+    return
+  }
+
+  await clientWrite
+    .patch(proposalId)
+    .setIfMissing({ issuedSpeakerTickets: [] })
+    .append('issuedSpeakerTickets', [
+      {
+        _key: key,
+        speakerId: marker.speakerId,
+        email: marker.email,
+        emailedAt,
+      },
+    ])
+    .commit()
 }
 
 export async function createProposal(

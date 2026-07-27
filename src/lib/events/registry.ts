@@ -5,6 +5,7 @@ import { handleAudienceUpdate } from './handlers/audienceUpdate'
 import { handleGalleryTagNotification } from './handlers/galleryTagNotification'
 import { handleGalleryTagPersistNotification } from './handlers/galleryTagPersistNotification'
 import { handlePersistNotification } from './handlers/persistNotification'
+import { handleSpeakerTicket } from './handlers/speakerTicket'
 
 let registered = false
 
@@ -16,6 +17,7 @@ export function registerEventHandlers(): void {
   eventBus.subscribe('proposal.status.changed', handleSlackNotification)
   eventBus.subscribe('proposal.status.changed', handleAudienceUpdate)
   eventBus.subscribe('proposal.status.changed', handlePersistNotification)
+  eventBus.subscribe('proposal.status.changed', handleSpeakerTicket)
 
   // Register gallery speaker tagged handlers (email + in-app persistence)
   eventBus.subscribe('gallery.speaker.tagged', handleGalleryTagNotification)
