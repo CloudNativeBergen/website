@@ -27,4 +27,3 @@ export const UpdateEntitlementsSchema = z.object({
   plan: PlanSchema,
   overrides: z.array(FeatureOverrideInputSchema).max(100),
 })
-
