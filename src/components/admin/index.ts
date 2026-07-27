@@ -35,6 +35,7 @@ export { SpeakerImageModal } from './SpeakerImageModal'
 export { EmailModal } from './EmailModal'
 export { SpeakerActions } from './SpeakerActions'
 
+export * from './budget'
 export * from './sponsor'
 export * from './sponsor-crm'
 

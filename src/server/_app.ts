@@ -1,5 +1,6 @@
 import { router } from './trpc'
 import { badgeRouter } from './routers/badge'
+import { budgetRouter } from './routers/budget'
 import { sponsorRouter } from './routers/sponsor'
 import { featuredRouter } from './routers/featured'
 import { speakerRouter } from './routers/speaker'
@@ -26,6 +27,7 @@ import { platformRouter } from './routers/platform'
 
 export const appRouter = router({
   badge: badgeRouter,
+  budget: budgetRouter,
   sponsor: sponsorRouter,
   featured: featuredRouter,
   speaker: speakerRouter,

@@ -141,6 +141,20 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         icon: PresentationChartBarIcon,
         keywords: ['content', 'promotion', 'campaigns'],
       },
+      {
+        name: 'Budget',
+        href: '/admin/budget',
+        icon: BanknotesIcon,
+        keywords: [
+          'finances',
+          'money',
+          'expenses',
+          'income',
+          'scenarios',
+          'margin',
+          'actuals',
+        ],
+      },
     ],
   },
   {
