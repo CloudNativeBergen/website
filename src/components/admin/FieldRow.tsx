@@ -218,15 +218,17 @@ export function FieldRow({
 
   return (
     <div className="flex justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
-      <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+      {/* Plain span/div, not dt/dd: rows render inside arbitrary containers,
+          and dt/dd without an enclosing dl is invalid HTML. */}
+      <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
         {label}
-      </dt>
+      </span>
       {/* min-w-0 lets the value column actually shrink inside the flex row —
           without it, wide unbreakable content (URLs) forces the row past the
           viewport and the page pans horizontally. */}
-      <dd className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
+      <div className="max-w-xs min-w-0 text-right text-sm text-gray-900 dark:text-white">
         {displayValue}
-      </dd>
+      </div>
     </div>
   )
 }

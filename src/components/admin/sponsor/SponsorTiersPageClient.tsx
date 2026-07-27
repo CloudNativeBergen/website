@@ -150,7 +150,7 @@ export function SponsorTiersPageClient({
               conference.sponsorBenefits.length > 0 ? (
                 conference.sponsorBenefits.map((benefit, idx) => (
                   <FieldRow
-                    key={idx}
+                    key={benefit._key ?? `${benefit.title}-${idx}`}
                     label={benefit.title}
                     value={benefit.description}
                   />
