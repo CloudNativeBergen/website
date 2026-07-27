@@ -217,8 +217,8 @@ export const EditingTables: Story = {
     await userEvent.click(
       await canvas.findByRole('button', { name: /edit expenses/i }),
     )
-    // The spreadsheet inputs are now on the page.
-    await canvas.findByRole('textbox', { name: /ticket type name/i })
+    // The spreadsheet inputs are now on the page (one name field per row).
+    await canvas.findAllByRole('textbox', { name: /ticket type name/i })
   },
 }
 

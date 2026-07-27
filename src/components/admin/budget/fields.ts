@@ -13,12 +13,6 @@ export const inputClass =
 export const labelClass =
   'block text-xs font-medium text-gray-600 dark:text-gray-300'
 
-export const checkboxLabelClass =
-  'flex min-h-[44px] items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300'
-
-export const removeButtonClass =
-  'inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30'
-
 export const CATEGORY_OPTIONS: { value: ExpenseCategory; label: string }[] =
   Object.entries(EXPENSE_CATEGORY_LABELS).map(([value, label]) => ({
     value: value as ExpenseCategory,
