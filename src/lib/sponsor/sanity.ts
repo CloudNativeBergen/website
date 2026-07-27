@@ -410,8 +410,13 @@ const EMAIL_TEMPLATE_PROJECTION = `{
  * Sponsor email templates carry an `organization` ref (CaaS T1-1). Every read
  * and mutation below is TENANT-SCOPED (#616/#19) to the current-domain org so an
  * organizer can only see and modify their OWN org's templates — a cross-tenant
- * read OR write (the worse half) is denied. Resolved once per call; a null org
- * (unresolvable tenant / pre-044 backfill) degrades to the prior global read.
+ * read OR write (the worse half) is denied.
+ *
+ * These paths FAIL CLOSED: `scopedFetch` injects no predicate when `orgId` is
+ * null and would degrade to an UNSCOPED global query, re-enabling cross-tenant
+ * reads and (via the existence-only mutation guard) foreign-id writes. So an
+ * unresolvable tenant returns an EMPTY read result and REJECTS every mutation
+ * rather than falling through to a global query.
  */
 export async function getSponsorEmailTemplates(): Promise<{
   templates?: SponsorEmailTemplate[]
@@ -419,6 +424,8 @@ export async function getSponsorEmailTemplates(): Promise<{
 }> {
   try {
     const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#19): no tenant → empty list, never a global read.
+    if (!orgId) return { templates: [] }
     const templates = await scopedFetch<SponsorEmailTemplate[]>(
       clientWrite,
       { orgId },
@@ -435,6 +442,8 @@ export async function getSponsorEmailTemplate(
 ): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
     const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#19): no tenant → not found, never a global read.
+    if (!orgId) return { template: undefined }
     const template = await scopedFetch<SponsorEmailTemplate | null>(
       clientWrite,
       { orgId },
@@ -452,6 +461,8 @@ export async function getSponsorEmailTemplateBySlug(
 ): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
     const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#19): no tenant → not found, never a global read.
+    if (!orgId) return { template: undefined }
     const template = await scopedFetch<SponsorEmailTemplate | null>(
       clientWrite,
       { orgId },
@@ -468,10 +479,14 @@ export async function getSponsorEmailTemplateBySlug(
  * True when `id` names a sponsorEmailTemplate owned by the current-domain org.
  * The mutation guard (#19): a scoped existence probe that returns false for a
  * FOREIGN org's template, so update/delete/set-default reject rather than
- * silently mutating another tenant's data. A null org degrades to existence-only.
+ * silently mutating another tenant's data. FAILS CLOSED: an unresolvable tenant
+ * returns `false` (treated as not-owned) so the mutation is rejected — it never
+ * degrades to an unscoped existence-only probe that would pass any foreign id.
  */
 async function isTemplateInCurrentOrg(id: string): Promise<boolean> {
   const orgId = await getOrganizationRefForCurrentConference()
+  // FAIL CLOSED (#616/#19): no tenant → not-owned, so the caller rejects.
+  if (!orgId) return false
   const found = await scopedFetch<string | null>(
     clientWrite,
     { orgId },
@@ -576,6 +591,10 @@ export async function setDefaultSponsorEmailTemplate(
     // Tenant-scoped (#19): a foreign org's template reads as not-found, so
     // set-default can never toggle another tenant's template.
     const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#19): no tenant → reject, never an unscoped read/write.
+    if (!orgId) {
+      return { error: new Error('Sponsor email template not found') }
+    }
     const current = await scopedFetch<{
       isDefault?: boolean
       category?: string
@@ -621,6 +640,11 @@ export async function reorderSponsorEmailTemplates(
     // org (#19): a foreign template id is not in `valid`, so reorder rejects it
     // and never re-sorts another tenant's templates.
     const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#19): no tenant → reject, never an unscoped validation
+    // that would treat every supplied id as valid and re-sort foreign templates.
+    if (!orgId) {
+      return { error: new Error('Tenant could not be resolved') }
+    }
     const valid = await scopedFetch<{ _id: string }[]>(
       clientWrite,
       { orgId },

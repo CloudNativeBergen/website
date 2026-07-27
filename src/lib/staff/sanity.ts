@@ -10,10 +10,15 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
  *
  * TENANT-SCOPED (#616/#18): `staff` carries an `organization` ref, so the read
  * is constrained to the current-domain tenant — an organizer only ever sees
- * their own org's staff.
+ * their own org's staff. FAILS CLOSED: if the tenant cannot be resolved we
+ * return an EMPTY list rather than letting `scopedFetch` degrade to an unscoped
+ * global read (which would leak every org's staff).
  */
 export async function getAllStaffMembers(): Promise<StaffAdmin[]> {
   const orgId = await getOrganizationRefForCurrentConference()
+  // FAIL CLOSED (#616/#18): `scopedFetch` drops the predicate on a null orgId
+  // and would read GLOBALLY. An unresolvable tenant must never cross-read.
+  if (!orgId) return []
   return await scopedFetch<StaffAdmin[]>(
     clientRead,
     { orgId },
@@ -24,6 +29,7 @@ export async function getAllStaffMembers(): Promise<StaffAdmin[]> {
       role,
       email,
       company,
+      link,
       "imageAssetId": image.asset._ref,
       "imageURL": image.asset->url
     }`,
@@ -34,12 +40,19 @@ export async function getAllStaffMembers(): Promise<StaffAdmin[]> {
  * Public staff listing for a role (rendered on `/staff/[role]`). TENANT-SCOPED
  * (#616/#18): `staff` carries an `organization` ref, so only the current
  * tenant's staff surface — one org's people never leak onto another's site.
+ *
+ * The caller resolves the tenant (`orgId`) OUTSIDE any `'use cache'` boundary
+ * and passes it in, so the cached page can key/tag on the tenant (see
+ * `/staff/[role]/page.tsx`). FAILS CLOSED: a null/undefined `orgId` returns an
+ * EMPTY list — never an unscoped global read.
  */
 export async function getStaffMembers(
   role: string,
+  orgId: string | null,
 ): Promise<{ data: Staff[]; err?: Error }> {
   try {
-    const orgId = await getOrganizationRefForCurrentConference()
+    // FAIL CLOSED (#616/#18): unresolvable tenant → empty, never a global read.
+    if (!orgId) return { data: [] }
     const queryResult = await scopedFetch<Staff[]>(
       clientRead,
       { orgId },

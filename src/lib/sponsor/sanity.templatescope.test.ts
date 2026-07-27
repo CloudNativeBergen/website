@@ -74,6 +74,8 @@ const txPatchIds: string[] = []
 const txCommitMock = vi.fn().mockResolvedValue({})
 
 vi.mock('@/lib/sanity/client', () => ({
+  // Imported (unused in these paths) by the real @/lib/organization/sanity.
+  clientReadUncached: { fetch: vi.fn() },
   clientWrite: {
     fetch: (q: string, p?: Record<string, unknown>) => fetchMock(q, p),
     delete: (id: string) => deleteMock(id),
@@ -100,10 +102,14 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-const getOrgMock = vi.fn<() => Promise<string | null>>()
-vi.mock('@/lib/organization/sanity', () => ({
-  getOrganizationRefForCurrentConference: () => getOrgMock(),
-  organizationField: () => ({}),
+// External boundary: the current-domain conference resolution reads headers() +
+// Sanity. We mock THAT (not the internal `@/lib/organization/sanity`) and let
+// the real `getOrganizationRefForCurrentConference` run on top of it — it reads
+// `.organization._ref` off whatever conference this returns.
+const getConferenceMock = vi.fn()
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: (...args: unknown[]) =>
+    getConferenceMock(...args),
 }))
 
 import {
@@ -115,10 +121,21 @@ import {
   reorderSponsorEmailTemplates,
 } from './sanity'
 
+// Resolve the current tenant to `orgId`, or to no organization (null) to
+// exercise the fail-closed paths.
+function setCurrentOrg(orgId: string | null) {
+  getConferenceMock.mockResolvedValue({
+    conference: orgId
+      ? { organization: { _ref: orgId } }
+      : { organization: null },
+    error: null,
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   txPatchIds.length = 0
-  getOrgMock.mockResolvedValue('org-A') // current tenant = org A
+  setCurrentOrg('org-A') // current tenant = org A
 })
 
 describe('sponsor email templates — read scoping (#19)', () => {
@@ -139,7 +156,7 @@ describe('sponsor email templates — read scoping (#19)', () => {
   })
 
   it('scopes the other direction too (org B cannot read org A)', async () => {
-    getOrgMock.mockResolvedValue('org-B')
+    setCurrentOrg('org-B')
     expect((await getSponsorEmailTemplate('t-A')).template).toBeUndefined()
     expect((await getSponsorEmailTemplate('t-B')).template).toBeTruthy()
   })
@@ -191,5 +208,53 @@ describe('sponsor email templates — mutation deny (#19)', () => {
     const { error } = await deleteSponsorEmailTemplate('t-A')
     expect(error).toBeUndefined()
     expect(deleteMock).toHaveBeenCalledWith('t-A')
+  })
+})
+
+describe('sponsor email templates — fail closed when tenant is unresolvable (#19)', () => {
+  beforeEach(() => {
+    setCurrentOrg(null) // tenant cannot be resolved → must NOT read/write globally
+  })
+
+  it('list returns empty and issues NO query', async () => {
+    const { templates } = await getSponsorEmailTemplates()
+    expect(templates).toEqual([])
+    // The guard must bite: reverting it would issue an unscoped read of both orgs.
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('read by id returns undefined and issues NO query', async () => {
+    const { template } = await getSponsorEmailTemplate('t-A')
+    expect(template).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('update is rejected with no read and no write', async () => {
+    const { error } = await updateSponsorEmailTemplate('t-A', { title: 'x' })
+    expect(error).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(patchSetMock).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('delete is rejected with no read and no delete', async () => {
+    const { error } = await deleteSponsorEmailTemplate('t-A')
+    expect(error).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(deleteMock).not.toHaveBeenCalled()
+  })
+
+  it('set-default is rejected with no read and no write', async () => {
+    const { error } = await setDefaultSponsorEmailTemplate('t-A')
+    expect(error).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(txCommitMock).not.toHaveBeenCalled()
+  })
+
+  it('reorder is rejected with no read and no write', async () => {
+    const { error } = await reorderSponsorEmailTemplates(['t-A', 't-B'])
+    expect(error).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(txCommitMock).not.toHaveBeenCalled()
   })
 })

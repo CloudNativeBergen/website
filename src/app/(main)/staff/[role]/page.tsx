@@ -1,7 +1,10 @@
 import Image from 'next/image'
 import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { getStaffMembers } from '@/lib/staff/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { conferenceTag, organizationTag } from '@/lib/cache/tags'
 import { Container } from '@/components/Container'
 import { canonicalAlternates } from '@/lib/seo/canonical'
 
@@ -16,12 +19,29 @@ export async function generateMetadata({
   }
 }
 
-async function CachedStaffContent({ role }: { role: string }) {
+async function CachedStaffContent({
+  domain,
+  role,
+}: {
+  domain: string
+  role: string
+}) {
   'use cache'
   cacheLife('hours')
   cacheTag('content:staff')
 
-  const staff = await getStaffMembers(role)
+  // Resolve the tenant FROM the domain argument (part of the cache key) — never
+  // via request-time `headers()`, which is unavailable inside `'use cache'` and
+  // would not participate in the key. This keeps org A's staff from ever being
+  // served on org B: the read below is tenant-scoped by `orgId`, and the cache
+  // entry is keyed by `domain` and tagged per-tenant so a mutation busts only
+  // this tenant's page.
+  const { conference } = await getConferenceForDomain(domain)
+  const orgId = conference?.organization?._ref ?? null
+  if (conference?._id) cacheTag(conferenceTag(conference._id))
+  if (orgId) cacheTag(organizationTag(orgId))
+
+  const staff = await getStaffMembers(role, orgId)
 
   return (
     <>
@@ -69,5 +89,9 @@ export default async function StaffPage({
   params: Promise<{ role: string }>
 }) {
   const { role } = await params
-  return <CachedStaffContent role={role} />
+  // Read the host OUTSIDE the cached component and pass it in, so the tenant is
+  // part of the cache key (the wrapper pattern — see AGENTS.md / homepage).
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+  return <CachedStaffContent domain={domain} role={role} />
 }
