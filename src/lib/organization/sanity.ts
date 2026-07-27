@@ -1,6 +1,9 @@
 import 'server-only'
+import { cacheLife, cacheTag } from 'next/cache'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { organizationTag } from '@/lib/cache/tags'
+import type { Organization } from './types'
 
 /**
  * Multi-tenant (CaaS T1-1, #613) organization resolution + stamping helpers.
@@ -80,4 +83,52 @@ export async function getOrganizationRefViaParentConference(
   } catch {
     return null
   }
+}
+
+/**
+ * Projection shared by the organization reads below. `slug` is flattened to a
+ * plain string; `plan`/`featureOverrides` feed the entitlement resolver
+ * (`src/lib/features/entitlements.ts`).
+ */
+const ORGANIZATION_PROJECTION = `{
+  _id,
+  name,
+  "slug": slug.current,
+  contactEmail,
+  plan,
+  featureOverrides
+}`
+
+/**
+ * One organization document by id, CACHED and tagged with the org's own
+ * tenant tag: any mutation that edits the organization (plan or overrides —
+ * see the platform router) revalidates `organizationTag(orgId)` and busts
+ * exactly this read. Returns `null` for an unknown id.
+ */
+export async function getOrganizationById(
+  orgId: string,
+): Promise<Organization | null> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:organizations')
+  cacheTag(organizationTag(orgId))
+  const org = await clientReadUncached.fetch<Organization | null>(
+    // groq-global: the organization document IS the tenant (id-keyed read).
+    `*[_type == "organization" && _id == $orgId][0]${ORGANIZATION_PROJECTION}`,
+    { orgId },
+  )
+  return org ?? null
+}
+
+/**
+ * EVERY organization document, name-ordered — the platform management list.
+ * Deliberately UNCACHED: it is a cross-tenant admin read (platform card only)
+ * and must reflect a just-saved plan/override immediately.
+ */
+export async function getAllOrganizations(): Promise<Organization[]> {
+  const orgs = await clientReadUncached.fetch<Organization[]>(
+    // groq-global: intentionally cross-tenant — the PLATFORM management list, reachable only behind the platform gate (src/lib/features/platform.ts).
+    `*[_type == "organization"] | order(name asc)${ORGANIZATION_PROJECTION}`,
+  )
+  return orgs ?? []
 }

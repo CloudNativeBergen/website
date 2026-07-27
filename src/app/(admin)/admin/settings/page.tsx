@@ -30,6 +30,17 @@ import { resolveHomepageSections } from '@/lib/homepage'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
 import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
+  getAllOrganizations,
+  getOrganizationById,
+} from '@/lib/organization/sanity'
+import {
+  effectivePlan,
+  listEntitledFeatures,
+} from '@/lib/features/entitlements'
+import { isPlatformOrgRequest } from '@/lib/features/platform'
+import { PlanFeaturesCard } from './PlanFeaturesCard'
+import { PlatformOrgManager } from './PlatformOrgManager'
+import {
   InfoCard,
   FieldRow,
   StudioEditLink,
@@ -118,6 +129,30 @@ export default async function AdminSettings() {
     image: org.image,
     title: org.title,
   }))
+
+  // Plan & feature entitlements for the CURRENT org (read-only card). Skipped
+  // entirely when the conference has no organization ref (pre-backfill data).
+  const orgId = conference.organization?._ref ?? null
+  const organization = orgId ? await getOrganizationById(orgId) : null
+  const entitledFeatureRows = organization
+    ? listEntitledFeatures(
+        organization.plan,
+        organization.featureOverrides,
+        new Date(),
+      ).map(({ feature, viaOverride }) => ({
+        id: feature.id,
+        title: feature.title,
+        description: feature.description,
+        readiness: feature.readiness,
+        viaOverride,
+      }))
+    : []
+
+  // Cross-tenant list, fetched ONLY when this request's org is the platform
+  // org (PLATFORM_ORG_SLUG contract, src/lib/features/platform.ts).
+  const platformOrganizations = (await isPlatformOrgRequest())
+    ? await getAllOrganizations()
+    : null
 
   // Homepage composition (front-page builder F1/F2). When nothing is stored the
   // page renders the phase-aware default; seed the editor with that same default
@@ -288,6 +323,20 @@ export default async function AdminSettings() {
                   : 'Publicly listed and indexed by search engines.'}
               </p>
             </InfoCard>
+
+            {organization ? (
+              <PlanFeaturesCard
+                plan={effectivePlan(organization.plan)}
+                features={entitledFeatureRows}
+              />
+            ) : null}
+
+            {/* Cross-tenant management — rendered ONLY for the platform org
+                (PLATFORM_ORG_SLUG contract); the platform router re-enforces
+                the same gate server-side. */}
+            {platformOrganizations ? (
+              <PlatformOrgManager organizations={platformOrganizations} />
+            ) : null}
 
             {/* Set-once — collapsed by default. */}
             <CollapsibleSection

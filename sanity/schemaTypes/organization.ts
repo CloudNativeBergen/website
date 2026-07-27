@@ -10,8 +10,10 @@ import { defineField, defineType } from 'sanity'
  * `organization` reference back to exactly one of these.
  *
  * SCOPE (T1-1): this document is intentionally LEAN — identity + branding +
- * contact only. Billing/plan fields arrive with the billing issue; do not add
- * them here speculatively.
+ * contact, plus the entitlement pair below (`plan` + `featureOverrides`, the
+ * feature-entitlements foundation). Billing mechanics (invoicing, payment
+ * state) still arrive with the billing issue; do not add them here
+ * speculatively.
  */
 export default defineType({
   name: 'organization',
@@ -72,6 +74,87 @@ export default defineType({
       type: 'inlineSvg',
       description:
         'Optional inline SVG logo for the organization (same mechanism as conference branding).',
+    }),
+    // Feature entitlements: the plan sets the baseline of GA features; the
+    // overrides are explicit per-feature grants/denials that always win over
+    // the plan. Resolution semantics live in `src/lib/features/registry.ts` +
+    // `entitlements.ts`. ABSENT plan resolves to `community`, so legacy orgs
+    // are unaffected without a migration.
+    defineField({
+      name: 'plan',
+      title: 'Plan',
+      type: 'string',
+      description:
+        'Commercial tier of this organization. Determines which generally-available features are enabled by default; leave unset to default to Community.',
+      options: {
+        list: [
+          { title: 'Community', value: 'community' },
+          { title: 'Pro', value: 'pro' },
+          { title: 'Enterprise', value: 'enterprise' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'community',
+    }),
+    defineField({
+      name: 'featureOverrides',
+      title: 'Feature Overrides',
+      type: 'array',
+      description:
+        'Explicit per-feature grants or denials that take precedence over the plan (beta/internal opt-ins, pilot grants, temporary revocations). Feature ids must match the code registry in src/lib/features/registry.ts; overrides past their expiry are ignored.',
+      of: [
+        {
+          type: 'object',
+          name: 'featureOverride',
+          title: 'Feature Override',
+          fields: [
+            defineField({
+              name: 'feature',
+              title: 'Feature',
+              type: 'string',
+              description:
+                'Feature id from the code registry (e.g. "graphql-api").',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'enabled',
+              title: 'Enabled',
+              type: 'boolean',
+              description:
+                'On grants the feature regardless of plan; off revokes it regardless of plan.',
+              initialValue: true,
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'note',
+              title: 'Note',
+              type: 'string',
+              description:
+                'Optional audit note — why this override exists (e.g. "beta cohort 2").',
+            }),
+            defineField({
+              name: 'expiresAt',
+              title: 'Expires At',
+              type: 'datetime',
+              description:
+                'Optional expiry; after this instant the override is ignored entirely.',
+            }),
+          ],
+          preview: {
+            select: {
+              title: 'feature',
+              enabled: 'enabled',
+              note: 'note',
+            },
+            prepare({ title, enabled, note }) {
+              return {
+                title: `${title ?? '(unset)'} — ${enabled ? 'enabled' : 'disabled'}`,
+                subtitle: note,
+              }
+            },
+          },
+        },
+      ],
     }),
     // Legal identity (go-live gate G2, #643): drives the tenant's /privacy and
     // /terms pages. ABSENT resolves to Norway + Datatilsynet (the existing
