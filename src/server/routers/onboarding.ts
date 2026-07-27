@@ -7,7 +7,11 @@ import {
   getPlatformOrgId,
   isPlatformOperatorForOrg,
 } from '@/lib/authz/platform'
-import { normalizeDomain } from '@/lib/conference/domains'
+import {
+  normalizeDomain,
+  wildcardFormForHost,
+  domainEntriesOverlap,
+} from '@/lib/conference/domains'
 import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 import {
   CreateOrganizationSchema,
@@ -41,14 +45,53 @@ const platformProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   return next({ ctx: { ...ctx, platformOrgId: platformOrgId! } })
 })
 
-/** Every domain claimed by ANY conference, normalized (global uniqueness). */
-async function fetchClaimedDomains(): Promise<Set<string>> {
-  const all = await clientReadUncached.fetch<string[] | null>(
+/**
+ * The subset of `requested` domains that would collide with an entry some
+ * conference already claims — under the ROUTING matcher's semantics (exact OR
+ * single-label wildcard, {@link domainEntriesOverlap}), NOT mere string
+ * equality: requesting `sub.example.com` collides with an existing
+ * `*.example.com` (the wildcard already serves that host), and requesting
+ * `*.example.com` collides with an existing `sub.example.com` (the new
+ * wildcard would capture the existing host). Either direction misroutes
+ * traffic across tenants, so both are refused.
+ *
+ * BOUNDED: only conferences whose entries could possibly overlap are read
+ * (the wizard's 400ms-debounced validateSetup calls this repeatedly) —
+ *   - `$probes` catches entries EQUAL to a requested domain or to its wildcard
+ *     form (an existing wildcard covering a requested host);
+ *   - the `match` clauses PRUNE for existing hosts under a requested wildcard
+ *     by suffix tokens (`*.example.com` → entries containing `example.com`'s
+ *     tokens — a superset of the true conflicts, never a miss, since a
+ *     conflicting `<label>.example.com` always carries every suffix token).
+ * The GROQ only narrows; the shared JS predicate is the authority.
+ */
+async function findConflictingDomains(requested: string[]): Promise<string[]> {
+  if (requested.length === 0) return []
+
+  const probes = new Set<string>()
+  const params: Record<string, unknown> = {}
+  const clauses = ['@ in $probes']
+  for (const domain of requested) {
+    probes.add(domain)
+    const wildcard = wildcardFormForHost(domain)
+    if (wildcard) probes.add(wildcard)
+    if (domain.startsWith('*.')) {
+      const param = `base${clauses.length - 1}`
+      params[param] = domain.slice(2)
+      clauses.push(`@ match $${param}`)
+    }
+  }
+  params.probes = [...probes]
+
+  const candidates = await clientReadUncached.fetch<string[] | null>(
     // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as SE-5 createEdition).
-    `*[_type == "conference" && defined(domains)].domains[]`,
-    {},
+    `*[_type == "conference" && count(domains[${clauses.join(' || ')}]) > 0].domains[]`,
+    params,
   )
-  return new Set((all ?? []).map(normalizeDomain))
+  const claimed = (candidates ?? []).map(normalizeDomain)
+  return requested.filter((r) =>
+    claimed.some((entry) => domainEntriesOverlap(entry, r)),
+  )
 }
 
 /** Whether an organization already claims this slug. */
@@ -95,17 +138,14 @@ export const onboardingRouter = router({
   validateSetup: platformProcedure
     .input(ValidateOnboardingSchema)
     .query(async ({ input }) => {
-      const [slugTaken, claimed, matches] = await Promise.all([
+      const [slugTaken, taken, matches] = await Promise.all([
         input.slug ? isOrgSlugTaken(input.slug) : Promise.resolve(false),
-        input.domains && input.domains.length > 0
-          ? fetchClaimedDomains()
-          : Promise.resolve(new Set<string>()),
+        // Skips the read entirely for an empty list (returns []).
+        findConflictingDomains(input.domains ?? []),
         input.organizerEmail
           ? findSpeakersByEmail(input.organizerEmail)
           : Promise.resolve([] as SpeakerMatch[]),
       ])
-
-      const taken = (input.domains ?? []).filter((d) => claimed.has(d))
 
       return {
         slugTaken,
@@ -126,8 +166,10 @@ export const onboardingRouter = router({
    *
    * SERVER-SIDE AUTHORITY (the wizard only mirrors these):
    *   - org slug must be globally unique among organizations;
-   *   - every domain must be globally unclaimed (same rule as SE-5 — a
-   *     duplicate would silently steal another tenant's routing);
+   *   - every domain must be globally unclaimed under the ROUTING matcher's
+   *     semantics — exact OR single-label wildcard, in both directions
+   *     ({@link findConflictingDomains}) — an overlap would silently steal
+   *     another tenant's routing;
    *   - the organizer email must resolve to AT MOST one existing speaker; on
    *     several matches the duplicate accounts must be merged first
    *     (BAD_REQUEST) — silently picking one risks binding the tenant to the
@@ -147,9 +189,12 @@ export const onboardingRouter = router({
   createOrganization: platformProcedure
     .input(CreateOrganizationSchema)
     .mutation(async ({ input }) => {
-      const [slugTaken, claimedDomains, speakerMatches] = await Promise.all([
+      const [slugTaken, taken, speakerMatches] = await Promise.all([
         isOrgSlugTaken(input.organization.slug),
-        fetchClaimedDomains(),
+        // Overlap-aware (exact OR wildcard, both directions) and SKIPPED
+        // outright for a domainless tenant — that path must not depend on a
+        // global read it doesn't need.
+        findConflictingDomains(input.domains),
         findSpeakersByEmail(input.organizer.email),
       ])
 
@@ -160,7 +205,6 @@ export const onboardingRouter = router({
         })
       }
 
-      const taken = input.domains.filter((d) => claimedDomains.has(d))
       if (taken.length > 0) {
         throw new TRPCError({
           code: 'BAD_REQUEST',

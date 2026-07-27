@@ -215,6 +215,37 @@ describe('createOrganization — server-side uniqueness authority', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  it('rejects a domain that an existing WILDCARD entry would capture (routing overlap, not just equality)', async () => {
+    claimedDomains = ['*.cloudnativedays.no']
+    const err = await makeCaller(operator)
+      .createOrganization(input({ domains: ['oslo.cloudnativedays.no'] }))
+      .catch((e) => e)
+    expect(err).toMatchObject({ code: 'BAD_REQUEST' })
+    expect(err.message).toContain(DOMAIN_ALREADY_CLAIMED)
+    expect(err.message).toContain('oslo.cloudnativedays.no')
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a WILDCARD that would capture an existing exact host (reverse overlap)', async () => {
+    claimedDomains = ['oslo.cloudnativedays.no']
+    const err = await makeCaller(operator)
+      .createOrganization(input({ domains: ['*.cloudnativedays.no'] }))
+      .catch((e) => e)
+    expect(err).toMatchObject({ code: 'BAD_REQUEST' })
+    expect(err.message).toContain(DOMAIN_ALREADY_CLAIMED)
+    expect(err.message).toContain('*.cloudnativedays.no')
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('skips the claimed-domains read entirely for a domainless tenant', async () => {
+    await makeCaller(operator).createOrganization(input({ domains: [] }))
+    expect(commitMock).toHaveBeenCalledTimes(1)
+    const domainQueries = fetchMock.mock.calls.filter(([q]) =>
+      (q as string).includes('.domains[]'),
+    )
+    expect(domainQueries).toEqual([])
+  })
+
   it('refuses an organizer email matching SEVERAL accounts (duplicates first)', async () => {
     speakerMatches = [{ _id: 'sp-a' }, { _id: 'sp-b' }]
     const err = await makeCaller(operator)
@@ -352,6 +383,24 @@ describe('validateSetup — preflight probe', () => {
       takenDomains: ['taken.example.com'],
       organizer: { matchCount: 1, match: { name: 'Kari' } },
     })
+  })
+
+  it('flags wildcard-overlapping domains as taken (same matcher as routing)', async () => {
+    claimedDomains = ['*.example.com', 'bergen.cloudnative.no']
+    const result = await makeCaller(operator).validateSetup({
+      domains: ['sub.example.com', '*.cloudnative.no', 'free.example.org'],
+    })
+    // sub.example.com is captured by the existing *.example.com; the requested
+    // *.cloudnative.no would capture the existing bergen.cloudnative.no.
+    expect(result.takenDomains).toEqual(['sub.example.com', '*.cloudnative.no'])
+  })
+
+  it('skips the claimed-domains read when no domains are probed', async () => {
+    await makeCaller(operator).validateSetup({ slug: 'some-slug' })
+    const domainQueries = fetchMock.mock.calls.filter(([q]) =>
+      (q as string).includes('.domains[]'),
+    )
+    expect(domainQueries).toEqual([])
   })
 
   it('hides names on an ambiguous match', async () => {
