@@ -42,9 +42,12 @@ export async function GET(
     // Humans get the rendered badge page; verifiers get the credential. Every
     // response of this route content-negotiates on Accept, so all of them
     // carry `Vary: Accept`; the redirect is additionally no-store so a shared
-    // cache can never replay it to a machine client.
+    // cache can never replay it to a machine client. Only a client whose
+    // FIRST media range is text/html (how browsers send it) is redirected — a
+    // verifier listing html as a low-q fallback still gets the credential.
     const accept = request.headers?.get?.('accept') ?? ''
-    if (accept.includes('text/html')) {
+    const primaryType = accept.split(',')[0]?.trim().toLowerCase() ?? ''
+    if (primaryType.startsWith('text/html')) {
       const redirect = NextResponse.redirect(
         new URL(`/badge/${badgeId}`, request.url),
         302,

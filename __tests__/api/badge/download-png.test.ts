@@ -100,10 +100,12 @@ describe('GET /api/badge/[badgeId]/download?format=png', () => {
     })
     const etag = first.headers.get('ETag')!
 
+    // The 304 path returns before rasterization: fonts must NOT be loaded.
+    vi.mocked(loadBadgeFontFiles).mockClear()
     const res = await GET(pngRequest(etag), {
       params: Promise.resolve({ badgeId: 'test-badge-id' }),
     })
     expect(res.status).toBe(304)
-    expect(vi.mocked(loadBadgeFontFiles)).toHaveBeenCalled()
+    expect(vi.mocked(loadBadgeFontFiles)).not.toHaveBeenCalled()
   })
 })
