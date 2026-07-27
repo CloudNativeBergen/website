@@ -342,7 +342,7 @@ export function BudgetPageClient({
       {/* Scenario switcher */}
       <div
         className="flex flex-wrap gap-2"
-        role="tablist"
+        role="group"
         aria-label="Budget scenario"
       >
         {model.scenarios.map((scenario) => {
@@ -351,8 +351,7 @@ export function BudgetPageClient({
             <button
               key={scenario.key}
               type="button"
-              role="tab"
-              aria-selected={selected}
+              aria-pressed={selected}
               onClick={() => setScenarioKey(scenario.key)}
               className={`min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                 selected
