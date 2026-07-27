@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Context } from '@/server/trpc'
+import { Format } from '@/lib/proposal/types'
 
 // --- next/cache -------------------------------------------------------------
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
@@ -603,6 +604,54 @@ describe('conference router — topics', () => {
     await expect(
       makeCaller({ isOrganizer: true }).updateTopics({
         topics: ['topic-a', 'topic-a'],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('conference router — formats', () => {
+  it('replaces the formats array as PLAIN keys (no reference wrapping)', async () => {
+    const result = await makeCaller({ isOrganizer: true }).updateFormats({
+      formats: [Format.lightning_10, Format.presentation_25],
+    })
+    expect(result.success).toBe(true)
+    // Formats are enum strings, not references — stored verbatim, no _key/_ref.
+    expect(lastSet!.formats).toEqual(['lightning_10', 'presentation_25'])
+    // Field-scoped to the resolved conference, never a client-sent id.
+    expect(lastPatchId).toBe(CONFERENCE_ID)
+  })
+
+  it('rejects an empty format list (min 1)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateFormats({ formats: [] }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate format keys', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateFormats({
+        formats: [Format.lightning_10, Format.lightning_10],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown format key (enum-constrained)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateFormats({
+        // @ts-expect-error — deliberately outside the Format enum
+        formats: ['keynote_60'],
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-organizer (adminProcedure)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: false }).updateFormats({
+        formats: [Format.lightning_10],
       }),
     ).rejects.toBeTruthy()
     expect(commitMock).not.toHaveBeenCalled()

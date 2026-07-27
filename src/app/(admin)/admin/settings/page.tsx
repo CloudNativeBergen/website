@@ -25,6 +25,7 @@ import {
 } from '@/lib/conference/backgroundPattern'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
+import { FormatsEditor } from '@/components/admin/FormatsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
 import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
@@ -35,6 +36,7 @@ import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
   InfoCard,
   FieldRow,
+  LinkedBadgeList,
   StudioEditLink,
   SectionNav,
   SectionHeading,
@@ -579,7 +581,10 @@ export default async function AdminSettings() {
               <InfoCard
                 title="Sponsorship Tiers"
                 icon={CurrencyDollarIcon}
-                editUrl={editUrl}
+                manageLink={{
+                  href: '/admin/sponsors/tiers',
+                  label: 'Manage tiers',
+                }}
               >
                 {conference.sponsorTiers.map((tier, idx) => (
                   <div
@@ -621,14 +626,26 @@ export default async function AdminSettings() {
               <InfoCard
                 title="Current Sponsors"
                 icon={CurrencyDollarIcon}
-                editUrl={editUrl}
+                manageLink={{ href: '/admin/sponsors/crm', label: 'Open CRM' }}
               >
-                <FieldRow
+                {/* Each sponsor deep-links to its CRM record — the full sponsor
+                    editor lives in /admin/sponsors, so this card surfaces WHO
+                    is signed and jumps you there rather than duplicating the
+                    CRM. Add/remove a sponsor also happens in the CRM. The CRM
+                    matches its `?sponsor=` param against the sponsorForConference
+                    id (`_sfcId`), NOT the sponsor document id; fall back to the
+                    CRM landing page if that id is somehow absent. */}
+                <LinkedBadgeList
                   label="Sponsors"
-                  value={conference.sponsors.map(
-                    (s) => `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
-                  )}
-                  type="array"
+                  items={conference.sponsors.map((s) => ({
+                    key: s._sfcId ?? s.sponsor._id,
+                    label: `${s.sponsor.name} (${s.tier?.title ?? 'No Tier'})`,
+                    href: s._sfcId
+                      ? `/admin/sponsors/crm?sponsor=${encodeURIComponent(
+                          s._sfcId,
+                        )}`
+                      : '/admin/sponsors/crm',
+                  }))}
                 />
               </InfoCard>
             )}
@@ -840,15 +857,17 @@ export default async function AdminSettings() {
             <InfoCard
               title="Topics & Formats"
               icon={TagIcon}
-              editUrl={editUrl}
               action={
-                <TopicsEditor
-                  selectedTopics={(conference.topics ?? []).map((t) => ({
-                    _id: t._id,
-                    title: t.title,
-                    color: t.color,
-                  }))}
-                />
+                <>
+                  <FormatsEditor selectedFormats={conference.formats ?? []} />
+                  <TopicsEditor
+                    selectedTopics={(conference.topics ?? []).map((t) => ({
+                      _id: t._id,
+                      title: t.title,
+                      color: t.color,
+                    }))}
+                  />
+                </>
               }
             >
               <FieldRow
