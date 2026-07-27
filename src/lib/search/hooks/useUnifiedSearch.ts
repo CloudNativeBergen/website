@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import type { SearchProvider, SearchResults } from '../types'
 import {
-  AdminPagesSearchProvider,
   ProposalsSearchProvider,
   SponsorsSearchProvider,
   SpeakersSearchProvider,
@@ -25,7 +24,6 @@ export function useUnifiedSearch() {
 
   const providers = useMemo<SearchProvider[]>(() => {
     return [
-      new AdminPagesSearchProvider(),
       new ProposalsSearchProvider(async (query) => {
         const result = await utils.proposal.admin.search.fetch({
           query,
@@ -104,6 +102,11 @@ export function useUnifiedSearch() {
   )
 
   const clearSearch = useCallback(() => {
+    // Invalidate any in-flight provider searches: bumping the request id makes
+    // their `currentId` guard fail, so a late response can neither repaint
+    // stale results nor toggle `isSearching` after the clear.
+    requestId.current += 1
+    setIsSearching(false)
     setSearchResults({ groups: [], totalCount: 0 })
     setSearchError(null)
   }, [])

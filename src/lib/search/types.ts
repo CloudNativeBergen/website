@@ -1,4 +1,4 @@
-export type SearchCategory = 'pages' | 'proposals' | 'speakers' | 'sponsors'
+export type SearchCategory = 'proposals' | 'speakers' | 'sponsors'
 
 export interface SearchResultItem {
   id: string

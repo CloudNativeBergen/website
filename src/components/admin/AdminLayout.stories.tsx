@@ -25,7 +25,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Admin shell that wraps DashboardLayout with admin-specific navigation (Core, People, Events & Content, System sections), SearchModal, and NotificationProvider. Stories use a mock wrapper to avoid session/router dependencies.',
+          'Admin shell that wraps DashboardLayout with admin-specific navigation (Core, People, Events & Content, System sections), CommandPalette, and NotificationProvider. Stories use a mock wrapper to avoid session/router dependencies.',
       },
     },
   },

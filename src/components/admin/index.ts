@@ -3,7 +3,7 @@ export { UnlistedBanner } from './UnlistedBanner'
 export { AdminActionBar } from './AdminActionBar'
 export { AdminPageHeader } from './AdminPageHeader'
 export { AdminHeaderActions } from './AdminHeaderActions'
-export { SearchModal } from './SearchModal'
+export { CommandPalette } from './CommandPalette'
 
 export { NotificationProvider, useNotification } from './NotificationProvider'
 export { ConfirmationModal } from './ConfirmationModal'

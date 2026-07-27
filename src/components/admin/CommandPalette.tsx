@@ -16,17 +16,25 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { SkeletonSearchResult } from './LoadingSkeleton'
+import { searchDestinations, type AdminDestination } from '@/lib/admin/registry'
 import { useUnifiedSearch } from '@/lib/search'
 import type { SearchResultItem } from '@/lib/search'
 
-interface SearchModalProps {
+interface CommandPaletteProps {
   open: boolean
   onClose: () => void
 }
 
-export function SearchModal({ open, onClose }: SearchModalProps) {
+/**
+ * ⌘K command palette for the admin dashboard. Destinations from the static
+ * admin registry (pages + settings anchors) rank instantly with local
+ * prefix/subsequence scoring; live data results (proposals, speakers,
+ * sponsors) stream in below them via `useUnifiedSearch`. With an empty query
+ * it lists every destination — a keyboard-first sitemap.
+ */
+export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const { theme } = useTheme()
   const [rawQuery, setRawQuery] = useState('')
   const {
@@ -39,6 +47,8 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   } = useUnifiedSearch()
 
   const query = rawQuery.toLowerCase().trim()
+
+  const destinationGroups = useMemo(() => searchDestinations(query), [query])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -58,13 +68,16 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     onClose()
   }
 
-  const handleSelect = (item: SearchResultItem | null) => {
-    if (!item) {
+  const handleSelect = (value: AdminDestination | SearchResultItem | null) => {
+    if (!value) {
       return
     }
-    navigateTo(item.url)
+    navigateTo('href' in value ? value.href : value.url)
     handleClose()
   }
+
+  const hasDestinations = destinationGroups.length > 0
+  const hasDataResults = Boolean(query) && searchResults.totalCount > 0
 
   return (
     <Transition appear show={open}>
@@ -100,17 +113,17 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               className="mx-auto w-full max-w-xl min-w-0 transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700"
             >
               <Combobox
-                onChange={(item) => {
-                  if (item && typeof item === 'object' && 'id' in item) {
-                    handleSelect(item as SearchResultItem)
+                onChange={(value) => {
+                  if (value && typeof value === 'object' && 'id' in value) {
+                    handleSelect(value as AdminDestination | SearchResultItem)
                   }
                 }}
               >
                 <div className="grid grid-cols-1">
                   <ComboboxInput
                     autoFocus
-                    className="col-start-1 row-start-1 h-12 w-full pr-4 pl-11 text-base text-gray-900 outline-hidden placeholder:text-gray-400 sm:text-sm dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
-                    placeholder="Search pages, proposals, speakers, sponsors..."
+                    className="col-start-1 row-start-1 h-12 w-full pr-4 pl-11 text-base text-ellipsis text-gray-900 outline-hidden placeholder:text-gray-400 sm:text-sm dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+                    placeholder="Search pages, settings, proposals, speakers, sponsors..."
                     value={rawQuery}
                     onChange={(event) => setRawQuery(event.target.value)}
                   />
@@ -120,25 +133,25 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   />
                 </div>
 
-                {!isSearching && query && searchResults.totalCount > 0 && (
+                {(hasDestinations || hasDataResults) && (
                   <ComboboxOptions
                     static
                     as="ul"
                     className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
                   >
-                    {searchResults.groups.map((group) => (
-                      <li key={group.category}>
+                    {destinationGroups.map((group) => (
+                      <li key={group.group}>
                         <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-                          {group.label} ({group.items.length})
+                          {group.group}
                         </h2>
                         <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
-                          {group.items.map((item) => {
-                            const Icon = item.icon || DocumentTextIcon
+                          {group.items.map((destination) => {
+                            const Icon = destination.icon || DocumentTextIcon
                             return (
                               <ComboboxOption
                                 as="li"
-                                key={item.id}
-                                value={item}
+                                key={destination.id}
+                                value={destination}
                                 className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
                               >
                                 <div className="shrink-0">
@@ -146,45 +159,93 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                                     <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
                                   </div>
                                 </div>
-                                {/* min-w-0 on the container + truncate on each
-                                    text line: truncating only the wrapper clips
-                                    child blocks without an ellipsis and lets
-                                    long nowrap titles dictate the row's
-                                    min-content width (mobile overflow). */}
                                 <div className="ml-3 min-w-0 flex-auto">
                                   <div className="truncate font-medium dark:text-white">
-                                    {item.title}
+                                    {destination.title}
                                   </div>
-                                  {item.subtitle && (
-                                    <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
-                                      {item.subtitle}
-                                    </div>
-                                  )}
-                                  {item.description && (
-                                    <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
-                                      {item.description}
-                                    </div>
-                                  )}
                                 </div>
+                                {destination.kind === 'setting' && (
+                                  <span className="ml-3 shrink-0 text-xs text-gray-400 group-data-focus:text-white/70 dark:text-gray-500">
+                                    Settings
+                                  </span>
+                                )}
                               </ComboboxOption>
                             )
                           })}
                         </ul>
                       </li>
                     ))}
+
+                    {hasDataResults &&
+                      searchResults.groups.map((group) => (
+                        <li key={group.category}>
+                          <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
+                            {group.label} ({group.items.length})
+                          </h2>
+                          <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
+                            {group.items.map((item) => {
+                              const Icon = item.icon || DocumentTextIcon
+                              return (
+                                <ComboboxOption
+                                  as="li"
+                                  key={item.id}
+                                  value={item}
+                                  className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
+                                >
+                                  <div className="shrink-0">
+                                    <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20 dark:bg-gray-700 dark:group-data-focus:bg-white/20">
+                                      <Icon className="size-4 text-gray-400 group-data-focus:text-white dark:text-gray-500" />
+                                    </div>
+                                  </div>
+                                  {/* min-w-0 on the container + truncate on
+                                      each text line: truncating only the
+                                      wrapper clips child blocks without an
+                                      ellipsis and lets long nowrap titles
+                                      dictate the row's min-content width
+                                      (mobile overflow). */}
+                                  <div className="ml-3 min-w-0 flex-auto">
+                                    <div className="truncate font-medium dark:text-white">
+                                      {item.title}
+                                    </div>
+                                    {item.subtitle && (
+                                      <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                        {item.subtitle}
+                                      </div>
+                                    )}
+                                    {item.description && (
+                                      <div className="truncate text-xs text-gray-500 group-data-focus:text-white/70 dark:text-gray-400">
+                                        {item.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                </ComboboxOption>
+                              )
+                            })}
+                          </ul>
+                        </li>
+                      ))}
+
+                    {query && isSearching && (
+                      <li className="-mt-2">
+                        <SkeletonSearchResult items={2} />
+                      </li>
+                    )}
                   </ComboboxOptions>
                 )}
 
-                {isSearching && (
-                  <div className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2">
-                    <SkeletonSearchResult items={3} />
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Searching...
-                      </p>
+                {query &&
+                  isSearching &&
+                  !hasDestinations &&
+                  !hasDataResults && (
+                    <div className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2">
+                      <SkeletonSearchResult items={3} />
+                      <div className="text-center">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Searching...
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {searchError && (
                   <div className="px-6 py-14 text-center text-sm sm:px-14">
@@ -201,10 +262,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   </div>
                 )}
 
-                {!isSearching &&
-                  query &&
+                {query &&
+                  !isSearching &&
                   !searchError &&
-                  searchResults.totalCount === 0 && (
+                  !hasDestinations &&
+                  !hasDataResults && (
                     <div className="px-6 py-14 text-center text-sm sm:px-14">
                       <ExclamationTriangleIcon
                         className="mx-auto size-6 text-gray-400 dark:text-gray-500"
@@ -219,22 +281,6 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                       </p>
                     </div>
                   )}
-
-                {!query && (
-                  <div className="px-6 py-14 text-center text-sm sm:px-14">
-                    <DocumentTextIcon
-                      className="mx-auto size-6 text-gray-400 dark:text-gray-500"
-                      aria-hidden="true"
-                    />
-                    <p className="mt-4 font-semibold text-gray-900 dark:text-white">
-                      Search across all admin pages and data
-                    </p>
-                    <p className="mt-2 text-gray-500 dark:text-gray-400">
-                      Search through proposals, speakers, sponsors, pages, and
-                      more.
-                    </p>
-                  </div>
-                )}
 
                 <div className="flex flex-wrap items-center bg-gray-50 px-4 py-2.5 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                   <kbd className="mx-1 flex size-5 w-7 items-center justify-center gap-0.5 rounded border border-gray-400 bg-white font-semibold text-gray-900 sm:mx-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">

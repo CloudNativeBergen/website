@@ -2,71 +2,15 @@
 
 import { useState } from 'react'
 import {
-  Cog6ToothIcon,
-  DocumentTextIcon,
-  HomeIcon,
-  UsersIcon,
-  UserGroupIcon,
-  CalendarDaysIcon,
-  BuildingOfficeIcon,
-  TicketIcon,
-  PresentationChartBarIcon,
-  AcademicCapIcon,
-  CpuChipIcon,
-  EnvelopeIcon,
-  IdentificationIcon,
-} from '@heroicons/react/24/outline'
-import {
   DashboardLayout,
   type NavigationSection,
 } from '@/components/common/DashboardLayout'
-import { SearchModal } from './SearchModal'
+import { ADMIN_NAV_SECTIONS } from '@/lib/admin/registry'
+import { CommandPalette } from './CommandPalette'
 import { NotificationProvider } from './NotificationProvider'
 import { UnlistedBanner } from './UnlistedBanner'
 
-const navigation: NavigationSection[] = [
-  {
-    label: 'Core',
-    items: [
-      { name: 'Dashboard', href: '/admin', icon: HomeIcon },
-      { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
-      { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
-      { name: 'Messages', href: '/admin/messages', icon: EnvelopeIcon },
-    ],
-  },
-  {
-    label: 'People',
-    items: [
-      { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
-      { name: 'Staff', href: '/admin/staff', icon: IdentificationIcon },
-      { name: 'Volunteers', href: '/admin/volunteers', icon: UserGroupIcon },
-      { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
-    ],
-  },
-  {
-    label: 'Events & Content',
-    items: [
-      { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
-      {
-        name: 'Sponsors',
-        href: '/admin/sponsors',
-        icon: BuildingOfficeIcon,
-      },
-      {
-        name: 'Marketing',
-        href: '/admin/marketing',
-        icon: PresentationChartBarIcon,
-      },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { name: 'Agents', href: '/admin/agents', icon: CpuChipIcon },
-      { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
-    ],
-  },
-]
+const navigation: NavigationSection[] = ADMIN_NAV_SECTIONS
 
 interface ConferenceLogos {
   logoBright?: string
@@ -90,7 +34,7 @@ export function AdminLayout({
   conferenceLogos,
   unlisted = false,
 }: AdminLayoutProps) {
-  const [searchModalOpen, setSearchModalOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   return (
     <NotificationProvider>
@@ -99,11 +43,11 @@ export function AdminLayout({
         navigation={navigation}
         title="Admin Dashboard"
         conferenceLogos={conferenceLogos}
-        onSearch={() => setSearchModalOpen(true)}
+        onSearch={() => setPaletteOpen(true)}
         searchComponent={
-          <SearchModal
-            open={searchModalOpen}
-            onClose={() => setSearchModalOpen(false)}
+          <CommandPalette
+            open={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
           />
         }
       >
