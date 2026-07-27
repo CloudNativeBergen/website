@@ -54,12 +54,17 @@ export function PlanFeaturesCard({ plan, features }: PlanFeaturesCardProps) {
         id="plan-features"
         className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700"
       >
-        <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+        {/* Plain span/div, not dt/dd (same fix as the shared FieldRow): dt/dd
+            without an enclosing dl is invalid HTML. FieldRow itself is not
+            reusable here — its value prop takes primitives/arrays, not a
+            ReactNode badge, and this row also carries the #plan-features
+            anchor. */}
+        <span className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
           Plan
-        </dt>
-        <dd className="min-w-0 text-right text-sm">
+        </span>
+        <div className="min-w-0 text-right text-sm">
           <StatusBadge label={planBadge.label} color={planBadge.color} />
-        </dd>
+        </div>
       </div>
 
       {features.length === 0 ? (

@@ -1,4 +1,7 @@
-import type { OrganizationPlan } from '@/lib/organization/types'
+import {
+  isOrganizationPlan,
+  type OrganizationPlan,
+} from '@/lib/organization/types'
 
 /**
  * The CLOSED, typed feature registry — the single source of truth for which
@@ -94,6 +97,18 @@ export function isFeatureId(value: unknown): value is FeatureId {
     typeof value === 'string' &&
     (FEATURE_IDS as readonly string[]).includes(value)
   )
+}
+
+/**
+ * Resolve an org's stored plan to an effective plan (absent/invalid →
+ * community). Lives in this CLIENT-SAFE module (not the server-only
+ * entitlements resolver) because admin UI (the platform org manager) must apply
+ * the same normalization before badge lookups as the resolver does.
+ */
+export function effectivePlan(
+  plan: OrganizationPlan | string | null | undefined,
+): OrganizationPlan {
+  return isOrganizationPlan(plan) ? plan : 'community'
 }
 
 /** The plan ladder: community < pro < enterprise. */

@@ -17,6 +17,7 @@ import { instantToOsloLocalInput, osloLocalInputToIso } from '@/lib/time'
 import {
   FEATURE_LIST,
   FEATURES,
+  effectivePlan,
   isFeatureId,
   type FeatureId,
 } from '@/lib/features/registry'
@@ -64,6 +65,14 @@ const PLAN_BADGES: Record<
   community: { label: 'Community', color: 'gray' },
   pro: { label: 'Pro', color: 'blue' },
   enterprise: { label: 'Enterprise', color: 'purple' },
+}
+
+/**
+ * Registry title for a feature id, falling back to the raw id for anything
+ * outside the closed registry — never an unchecked `FEATURES[...]` dereference.
+ */
+function featureTitle(id: string): string {
+  return isFeatureId(id) ? FEATURES[id].title : id
 }
 
 /** Editable override row: keyed for React identity, expiry as Oslo wall-clock. */
@@ -139,7 +148,7 @@ export function PlatformOrgManager({
     defaultOrg ?? null,
   )
   const [plan, setPlan] = useState<OrganizationPlan>(
-    defaultOrg?.plan ?? 'community',
+    effectivePlan(defaultOrg?.plan),
   )
   const [drafts, setDrafts] = useState<DraftOverride[]>(
     toDrafts(defaultOrg?.featureOverrides),
@@ -150,7 +159,7 @@ export function PlatformOrgManager({
     defaultOrg
       ? staleBaseline(
           defaultOrg,
-          defaultOrg.plan ?? 'community',
+          effectivePlan(defaultOrg.plan),
           toDrafts(defaultOrg.featureOverrides),
         )
       : '',
@@ -176,7 +185,9 @@ export function PlatformOrgManager({
   })
 
   const openEditor = (org: PlatformOrganizationRow) => {
-    const initialPlan = org.plan ?? 'community'
+    // effectivePlan, not a plain `?? 'community'` default: a malformed/legacy
+    // stored plan must normalize exactly as the server resolver does.
+    const initialPlan = effectivePlan(org.plan)
     const initialDrafts = toDrafts(org.featureOverrides)
     setPlan(initialPlan)
     setDrafts(initialDrafts)
@@ -242,7 +253,10 @@ export function PlatformOrgManager({
         </p>
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {organizations.map((org) => {
-            const badge = PLAN_BADGES[org.plan ?? 'community']
+            // Route through effectivePlan (same normalization as the server
+            // resolver) so a malformed/legacy stored plan renders as Community
+            // instead of crashing the badge lookup.
+            const badge = PLAN_BADGES[effectivePlan(org.plan)]
             const overrideCount = (org.featureOverrides ?? []).length
             return (
               <li
@@ -294,7 +308,11 @@ export function PlatformOrgManager({
         subtitle="Plan and per-feature entitlement overrides"
         icon={<BuildingOffice2Icon className="h-5 w-5" />}
         confirmOnDirtyClose
-        isDirty={isDirty && !saveMutation.isPending}
+        // The guard must stay ARMED while the save is in flight: backdrop /
+        // Escape / header-close then hit ModalShell's discard confirm instead
+        // of silently closing mid-save (Cancel is likewise disabled during
+        // pending). ModalShell has no harder prevent-close affordance.
+        isDirty={isDirty || saveMutation.isPending}
       >
         <form
           noValidate
@@ -358,11 +376,15 @@ export function PlatformOrgManager({
                         Feature
                         <select
                           value={draft.feature}
-                          onChange={(e) =>
-                            updateDraft(draft._key, {
-                              feature: e.target.value as FeatureId,
-                            })
-                          }
+                          onChange={(e) => {
+                            // Guard, not cast: only registry ids may enter the
+                            // draft — anything else (tampered/stale DOM value)
+                            // is ignored.
+                            const value = e.target.value
+                            if (isFeatureId(value)) {
+                              updateDraft(draft._key, { feature: value })
+                            }
+                          }}
                           className="mt-1 block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         >
                           {FEATURE_LIST.map((feature) => (
@@ -418,7 +440,7 @@ export function PlatformOrgManager({
                       <button
                         type="button"
                         onClick={() => removeDraft(draft._key)}
-                        aria-label={`Remove override for ${FEATURES[draft.feature].title}`}
+                        aria-label={`Remove override for ${featureTitle(draft.feature)}`}
                         className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                       >
                         <TrashIcon className="h-5 w-5" />

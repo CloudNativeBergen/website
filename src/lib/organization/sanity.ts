@@ -121,14 +121,34 @@ export async function getOrganizationById(
 }
 
 /**
+ * MINIMAL projection for the platform management list: exactly the fields the
+ * `PlatformOrgManager` card renders/edits and nothing else. Deliberately NOT
+ * {@link ORGANIZATION_PROJECTION} — that one carries `contactEmail`, and a
+ * cross-tenant list must not ship every org's contact email to the client
+ * (data minimization, even for an operator-only surface).
+ */
+const PLATFORM_ORG_LIST_PROJECTION = `{
+  _id,
+  name,
+  "slug": slug.current,
+  plan,
+  featureOverrides
+}`
+
+/** What {@link getAllOrganizations} returns — the org sans contact details. */
+type PlatformOrganizationSummary = Omit<Organization, 'contactEmail'>
+
+/**
  * EVERY organization document, name-ordered — the platform management list.
  * Deliberately UNCACHED: it is a cross-tenant admin read (platform card only)
  * and must reflect a just-saved plan/override immediately.
  */
-export async function getAllOrganizations(): Promise<Organization[]> {
-  const orgs = await clientReadUncached.fetch<Organization[]>(
+export async function getAllOrganizations(): Promise<
+  PlatformOrganizationSummary[]
+> {
+  const orgs = await clientReadUncached.fetch<PlatformOrganizationSummary[]>(
     // groq-global: intentionally cross-tenant — the PLATFORM management list, reachable only behind the platform gate (src/lib/features/platform.ts).
-    `*[_type == "organization"] | order(name asc)${ORGANIZATION_PROJECTION}`,
+    `*[_type == "organization"] | order(name asc)${PLATFORM_ORG_LIST_PROJECTION}`,
   )
   return orgs ?? []
 }

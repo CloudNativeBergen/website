@@ -4,32 +4,47 @@
  * `platform` router — the cross-tenant management surface. The critical
  * property is the SERVER-SIDE platform gate: an ordinary tenant organizer
  * (admin of a non-platform org) gets FORBIDDEN on every procedure, because the
- * client hiding the card is presentation, not security. Also covers the
- * updateEntitlements write path: keyed overrides, empty-optional stripping,
- * and the `organizationTag` revalidation that busts the cached entitlements
- * read.
+ * client hiding the card is presentation, not security. The gate runs FOR REAL
+ * here — `PLATFORM_ORG_SLUG` env + the request org's document slug drive
+ * `isPlatformOrganization`; only the external boundaries (the Sanity client,
+ * Next's cache API, the domain-conference resolution) are mocked. Also covers
+ * the updateEntitlements write path: keyed overrides, empty-optional
+ * stripping, and the `organizationTag` revalidation that busts the cached
+ * entitlements read.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
-
-const isPlatformOrganizationMock = vi.fn()
-vi.mock('@/lib/features/platform', () => ({
-  isPlatformOrganization: (...args: unknown[]) =>
-    isPlatformOrganizationMock(...args),
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+  cacheLife: vi.fn(),
+  cacheTag: vi.fn(),
 }))
 
-const getAllOrganizationsMock = vi.fn()
-const getOrganizationByIdMock = vi.fn()
-vi.mock('@/lib/organization/sanity', () => ({
-  getAllOrganizations: (...args: unknown[]) => getAllOrganizationsMock(...args),
-  getOrganizationById: (...args: unknown[]) => getOrganizationByIdMock(...args),
-  // Imported by the authz waist's module graph; not exercised here.
-  getOrganizationRefForCurrentConference: vi.fn(),
-  getOrganizationRefViaParentConference: vi.fn(),
-  organizationField: vi.fn(() => ({})),
-  organizationReference: vi.fn(),
-}))
+// The Sanity CLIENT is the external boundary: reads (org documents) and writes
+// (the entitlements patch) are stubbed here, and everything above it —
+// `getOrganizationById` / `getAllOrganizations`, `isPlatformOrganization`, the
+// platform middleware — runs for real.
+const ORG_DOCS: Record<
+  string,
+  { _id: string; name: string; slug: string; plan?: string }
+> = {
+  'org-A': {
+    _id: 'org-A',
+    name: 'Platform Org',
+    slug: 'platform',
+    plan: 'enterprise',
+  },
+  'org-B': { _id: 'org-B', name: 'Tenant Org', slug: 'tenant' },
+}
+
+const fetchMock = vi.fn(
+  async (_query: string, params?: Record<string, unknown>) => {
+    if (params && typeof params.orgId === 'string') {
+      return ORG_DOCS[params.orgId] ?? null
+    }
+    return Object.values(ORG_DOCS)
+  },
+)
 
 const commitMock = vi.fn()
 const setMock = vi.fn<
@@ -39,6 +54,10 @@ const patchMock = vi.fn<(id: string) => { set: typeof setMock }>(() => ({
   set: setMock,
 }))
 vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: (query: string, params?: Record<string, unknown>) =>
+      fetchMock(query, params),
+  },
   clientWrite: { patch: (id: string) => patchMock(id) },
 }))
 
@@ -62,52 +81,61 @@ function callerFor(orgIds: string[]) {
   } as unknown as Context)
 }
 
-beforeEach(() => {
-  vi.clearAllMocks()
+/** Point the request's domain-resolved conference at `orgId`'s organization. */
+function requestResolvesToOrg(orgId: string) {
   getConferenceMock.mockResolvedValue({
-    conference: { _id: 'conf-A', organization: { _ref: 'org-A' } },
+    conference: { _id: 'conf-1', organization: { _ref: orgId } },
     error: null,
   })
-  getAllOrganizationsMock.mockResolvedValue([
-    {
-      _id: 'org-A',
-      name: 'Platform Org',
-      slug: 'platform',
-      plan: 'enterprise',
-    },
-    { _id: 'org-B', name: 'Tenant Org', slug: 'tenant', plan: 'community' },
-  ])
-  getOrganizationByIdMock.mockResolvedValue({
-    _id: 'org-B',
-    name: 'Tenant Org',
-    slug: 'tenant',
-  })
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  // The env contract: org-A ("platform" slug) IS the platform org.
+  vi.stubEnv('PLATFORM_ORG_SLUG', 'platform')
+  requestResolvesToOrg('org-A')
   commitMock.mockResolvedValue({})
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('platform gate', () => {
   it('FORBIDDEN for an organizer whose request org is not the platform org', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(false)
+    // A real tenant organizer on the tenant's own domain: the request resolves
+    // to org-B, whose stored slug ("tenant") does not match the contract.
+    requestResolvesToOrg('org-B')
+    const caller = callerFor(['org-B'])
+    await expect(caller.listOrganizations()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+  })
+
+  it('fails closed for everyone when PLATFORM_ORG_SLUG is unset', async () => {
+    vi.stubEnv('PLATFORM_ORG_SLUG', '')
     const caller = callerFor(['org-A'])
     await expect(caller.listOrganizations()).rejects.toMatchObject({
       code: 'FORBIDDEN',
     })
-    expect(getAllOrganizationsMock).not.toHaveBeenCalled()
   })
 
   it('lists every organization for the platform org', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(true)
     const caller = callerFor(['org-A'])
     const orgs = await caller.listOrganizations()
     expect(orgs).toHaveLength(2)
-    expect(isPlatformOrganizationMock).toHaveBeenCalledWith('org-A')
+    // The gate resolved the REQUEST org's document (slug check), not client input.
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('_id == $orgId'),
+      { orgId: 'org-A' },
+    )
   })
 })
 
 describe('updateEntitlements', () => {
   it('is gated exactly like the list (no cross-tenant write for tenants)', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(false)
-    const caller = callerFor(['org-A'])
+    requestResolvesToOrg('org-B')
+    const caller = callerFor(['org-B'])
     await expect(
       caller.updateEntitlements({
         organizationId: 'org-B',
@@ -119,8 +147,6 @@ describe('updateEntitlements', () => {
   })
 
   it('NOT_FOUND for an unknown target organization', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(true)
-    getOrganizationByIdMock.mockResolvedValue(null)
     const caller = callerFor(['org-A'])
     await expect(
       caller.updateEntitlements({
@@ -133,7 +159,6 @@ describe('updateEntitlements', () => {
   })
 
   it('rejects an override for a feature outside the closed registry', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(true)
     const caller = callerFor(['org-A'])
     await expect(
       caller.updateEntitlements({
@@ -148,7 +173,6 @@ describe('updateEntitlements', () => {
   })
 
   it('patches plan + keyed overrides and revalidates the org tag', async () => {
-    isPlatformOrganizationMock.mockResolvedValue(true)
     const caller = callerFor(['org-A'])
     const res = await caller.updateEntitlements({
       organizationId: 'org-B',

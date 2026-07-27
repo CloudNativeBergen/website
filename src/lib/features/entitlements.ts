@@ -4,9 +4,9 @@ import type {
   OrganizationFeatureOverride,
   OrganizationPlan,
 } from '@/lib/organization/types'
-import { isOrganizationPlan } from '@/lib/organization/types'
 import {
   FEATURE_LIST,
+  effectivePlan,
   planSatisfies,
   isFeatureId,
   type FeatureDefinition,
@@ -34,13 +34,6 @@ import {
  * `now`, so expiry is evaluated per call while the document read itself is
  * cached until a plan/override mutation revalidates the tag.
  */
-
-/** Resolve an org's stored plan to an effective plan (absent/invalid → community). */
-export function effectivePlan(
-  plan: OrganizationPlan | string | null | undefined,
-): OrganizationPlan {
-  return isOrganizationPlan(plan) ? plan : 'community'
-}
 
 /** Whether an override is active at `now` (see the module doc, rule 3). */
 function isOverrideActive(

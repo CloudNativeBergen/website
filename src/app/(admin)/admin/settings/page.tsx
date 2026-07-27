@@ -33,10 +33,8 @@ import {
   getAllOrganizations,
   getOrganizationById,
 } from '@/lib/organization/sanity'
-import {
-  effectivePlan,
-  listEntitledFeatures,
-} from '@/lib/features/entitlements'
+import { effectivePlan } from '@/lib/features/registry'
+import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { PlatformOrgManager } from './PlatformOrgManager'

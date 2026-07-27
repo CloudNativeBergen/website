@@ -8,12 +8,8 @@
  * registry facts.
  */
 import { describe, it, expect } from 'vitest'
-import {
-  computeEntitlements,
-  listEntitledFeatures,
-  effectivePlan,
-} from './entitlements'
-import { FEATURES } from './registry'
+import { computeEntitlements, listEntitledFeatures } from './entitlements'
+import { FEATURES, effectivePlan } from './registry'
 import type { OrganizationFeatureOverride } from '@/lib/organization/types'
 
 const NOW = new Date('2026-07-01T12:00:00Z')
