@@ -41,7 +41,7 @@ const meta = {
     // to document.body — a wrapper `.dark` class never reaches it. ModalShell
     // reads next-themes instead, so force the theme (synced to the Storybook
     // theme global) here; React context crosses the portal. Mirrors
-    // SearchModal.stories.
+    // CommandPalette.stories.
     (Story, ctx) => (
       <ThemeProvider
         attribute="class"

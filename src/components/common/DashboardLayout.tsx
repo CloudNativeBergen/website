@@ -445,7 +445,7 @@ export function DashboardLayout({
                     className="h-5 w-5 shrink-0"
                     aria-hidden="true"
                   />
-                  <span className="flex-1 text-left">Search proposals...</span>
+                  <span className="flex-1 text-left">Search admin...</span>
                   <kbd className="ml-auto flex h-5 items-center gap-0.5 rounded border border-gray-200 bg-gray-50 px-1.5 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
                     <span className="text-xs">⌘</span>K
                   </kbd>

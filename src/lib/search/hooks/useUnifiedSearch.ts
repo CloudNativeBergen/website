@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { api } from '@/lib/trpc/client'
 import type { SearchProvider, SearchResults } from '../types'
 import {
-  AdminPagesSearchProvider,
   ProposalsSearchProvider,
   SponsorsSearchProvider,
   SpeakersSearchProvider,
@@ -25,7 +24,6 @@ export function useUnifiedSearch() {
 
   const providers = useMemo<SearchProvider[]>(() => {
     return [
-      new AdminPagesSearchProvider(),
       new ProposalsSearchProvider(async (query) => {
         const result = await utils.proposal.admin.search.fetch({
           query,

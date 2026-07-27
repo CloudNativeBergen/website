@@ -1,6 +1,6 @@
 # Admin Search Architecture
 
-This document describes the unified search system for the admin interface, which enables searching across multiple data types and admin pages from a single search modal (⌘K / Ctrl+K).
+This document describes the unified search system for the admin interface, which enables searching across multiple data types from the admin command palette (⌘K / Ctrl+K). Static admin destinations (pages and settings anchors) are not a provider — they come from the registry in `src/lib/admin/registry.ts` and are scored locally by the palette.
 
 ## Overview
 
@@ -12,7 +12,7 @@ The search system uses a provider-based architecture that makes it easy to add n
 
 Located in `src/lib/search/types.ts`:
 
-- **`SearchCategory`**: Enum of searchable categories (pages, proposals, speakers, sponsors, etc.)
+- **`SearchCategory`**: Enum of searchable categories (proposals, speakers, sponsors, etc.)
 - **`SearchResultItem`**: Standardized result item with id, title, subtitle, description, category, url, and optional icon
 - **`SearchResultGroup`**: Group of results from a single category
 - **`SearchProvider`**: Interface that all providers must implement
@@ -21,25 +21,19 @@ Located in `src/lib/search/types.ts`:
 
 Located in `src/lib/search/providers/`:
 
-1. **`AdminPagesSearchProvider`**
-   - Priority: 1 (highest)
-   - Searches: Static admin page list
-   - Implementation: Client-side filtering
-   - Use case: Quick navigation to admin pages
-
-2. **`ProposalsSearchProvider`**
+1. **`ProposalsSearchProvider`**
    - Priority: 2
    - Searches: Proposal titles, descriptions, speakers, topics
    - Implementation: tRPC `proposal.admin.search` query
    - Use case: Finding talks and workshops
 
-3. **`SponsorsSearchProvider`**
+2. **`SponsorsSearchProvider`**
    - Priority: 3
    - Searches: Sponsor company names
    - Implementation: tRPC `sponsor.list({ query })` mutation
    - Use case: Finding sponsor organizations
 
-4. **`SpeakersSearchProvider`**
+3. **`SpeakersSearchProvider`**
    - Priority: 4
    - Searches: Speaker names, titles, emails, bios
    - Implementation: tRPC `speakers.search({ query })` mutation
@@ -57,15 +51,16 @@ The `useUnifiedSearch` hook:
 - Groups and sorts results by priority
 - Provides navigation functionality
 
-### Search Modal Component
+### Command Palette Component
 
-Located in `src/components/admin/SearchModal.tsx`:
+Located in `src/components/admin/CommandPalette.tsx`:
 
-The `SearchModal` component:
+The `CommandPalette` component:
 
 - Uses Headless UI's Combobox for keyboard navigation
-- Implements 300ms debounce for search queries
-- Displays results grouped by category with section headers
+- Ranks static admin destinations instantly from `@/lib/admin/registry`
+- Implements 300ms debounce for provider (data) search queries
+- Displays results grouped by destination group / category with section headers
 - Shows appropriate icons for each result type
 - Maintains keyboard navigation across all result groups
 - Supports dark mode
@@ -133,7 +128,7 @@ export class MyNewSearchProvider implements SearchProvider {
 
 ```typescript
 export type SearchCategory =
-  'pages' | 'proposals' | 'speakers' | 'sponsors' | 'myCategory' // Add your new category
+  'proposals' | 'speakers' | 'sponsors' | 'myCategory' // Add your new category
 // ...
 ```
 
@@ -143,7 +138,6 @@ export type SearchCategory =
 const providers = useMemo<SearchProvider[]>(
   () => {
     return [
-      new AdminPagesSearchProvider(),
       new ProposalsSearchProvider(),
       new SponsorsSearchProvider(/* ... */),
       new SpeakersSearchProvider(/* ... */),
@@ -213,19 +207,12 @@ const items = STATIC_DATA.filter((item) =>
 
 Unit tests for each provider are in `__tests__/lib/search/`:
 
-- `AdminPagesSearchProvider.test.ts`
 - `ProposalsSearchProvider.test.ts`
 - `SponsorsSearchProvider.test.ts`
 - `SpeakersSearchProvider.test.ts`
 
-Storybook stories in `SearchModal.stories.tsx`:
-
-- **EmptyState**: Initial state before search
-- **WithResults**: Example multi-category results
-- **Loading**: Skeleton loading state
-- **NoResults**: Empty results state
-- **SearchError**: Error state
-- **PagesOnly**: Single-category results
+The destination registry has its own tests in `src/lib/admin/registry.test.ts`,
+and the palette has Storybook stories in `CommandPalette.stories.tsx`.
 
 ## Future Enhancements
 
