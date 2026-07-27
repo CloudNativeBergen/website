@@ -163,3 +163,42 @@ export const OrganizationValidation: Story = {
     await expect(next).toBeDisabled()
   },
 }
+
+/**
+ * Ambiguity gate — an organizer email matching SEVERAL speaker accounts is a
+ * deterministic server rejection, so the step blocks (not just warns) until
+ * the duplicates are merged.
+ */
+export const OrganizationAmbiguousOrganizer: Story = {
+  args: {
+    initialStep: 'organization',
+    initialState: { organization: filledOrganization },
+    initialOrganizer: organizer,
+  },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/onboarding.validateSetup', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                slugTaken: false,
+                takenDomains: [],
+                organizer: { matchCount: 2, match: null },
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await canvas.findByText(/matches several speaker accounts/i, undefined, {
+      timeout: 5000,
+    })
+    await expect(
+      await canvas.findByRole('button', { name: /next/i }),
+    ).toBeDisabled()
+  },
+}

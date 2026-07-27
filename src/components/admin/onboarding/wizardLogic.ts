@@ -175,19 +175,28 @@ export function organizerComplete(o: OrganizerState): boolean {
   return Object.keys(validateOrganizer(o)).length === 0
 }
 
-/** Whether the wizard may advance FROM `step`. Review has no "next". */
+/**
+ * Whether the wizard may advance FROM `step`. Review has no "next".
+ *
+ * `organizerAmbiguous` mirrors the server's AMBIGUOUS_ORGANIZER_EMAIL rule
+ * (the probe's `matchCount > 1`): createOrganization deterministically rejects
+ * such an email, so the Organization step must not let the operator walk into
+ * a guaranteed failure — the duplicates have to be merged first.
+ */
 export function canProceed(
   step: WizardStepId,
   state: WizardState,
   organizer: OrganizerState,
   slugTaken: boolean,
   takenDomains: readonly string[],
+  organizerAmbiguous: boolean,
 ): boolean {
   switch (step) {
     case 'organization':
       return (
         organizationComplete(state.organization, slugTaken) &&
-        organizerComplete(organizer)
+        organizerComplete(organizer) &&
+        !organizerAmbiguous
       )
     case 'conference':
       return conferenceComplete(state.conference)
@@ -198,16 +207,18 @@ export function canProceed(
   }
 }
 
-/** The final gate on the Create button. */
+/** The final gate on the Create button (same ambiguity rule as `canProceed`). */
 export function canCreate(
   state: WizardState,
   organizer: OrganizerState,
   slugTaken: boolean,
   takenDomains: readonly string[],
+  organizerAmbiguous: boolean,
 ): boolean {
   return (
     organizationComplete(state.organization, slugTaken) &&
     organizerComplete(organizer) &&
+    !organizerAmbiguous &&
     conferenceComplete(state.conference) &&
     domainsComplete(state.domains, takenDomains)
   )

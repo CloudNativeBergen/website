@@ -156,7 +156,9 @@ describe('step gating', () => {
   })
 
   it('gates each step on its own validation', () => {
-    expect(canProceed('organization', state, organizer, false, [])).toBe(true)
+    expect(canProceed('organization', state, organizer, false, [], false)).toBe(
+      true,
+    )
     expect(
       canProceed(
         'organization',
@@ -164,29 +166,52 @@ describe('step gating', () => {
         organizer,
         false,
         [],
+        false,
       ),
     ).toBe(false)
     expect(
-      canProceed('organization', state, { name: '', email: '' }, false, []),
+      canProceed(
+        'organization',
+        state,
+        { name: '', email: '' },
+        false,
+        [],
+        false,
+      ),
     ).toBe(false)
-    expect(canProceed('conference', state, organizer, false, [])).toBe(true)
-    expect(canProceed('domains', state, organizer, false, [])).toBe(true)
-    expect(canProceed('review', state, organizer, false, [])).toBe(false)
+    expect(canProceed('conference', state, organizer, false, [], false)).toBe(
+      true,
+    )
+    expect(canProceed('domains', state, organizer, false, [], false)).toBe(true)
+    expect(canProceed('review', state, organizer, false, [], false)).toBe(false)
   })
 
   it('a slug-taken verdict blocks the organization step', () => {
-    expect(canProceed('organization', state, organizer, true, [])).toBe(false)
+    expect(canProceed('organization', state, organizer, true, [], false)).toBe(
+      false,
+    )
+  })
+
+  it('an AMBIGUOUS organizer email blocks the organization step (server would deterministically reject)', () => {
+    expect(canProceed('organization', state, organizer, false, [], true)).toBe(
+      false,
+    )
+    // The ambiguity gate only bites on the step that owns the organizer.
+    expect(canProceed('conference', state, organizer, false, [], true)).toBe(
+      true,
+    )
   })
 
   it('canCreate requires every step to be complete', () => {
-    expect(canCreate(state, organizer, false, [])).toBe(true)
-    expect(canCreate(state, organizer, true, [])).toBe(false)
+    expect(canCreate(state, organizer, false, [], false)).toBe(true)
+    expect(canCreate(state, organizer, true, [], false)).toBe(false)
     expect(
       canCreate(
         { ...state, conference: { ...conference, title: '' } },
         organizer,
         false,
         [],
+        false,
       ),
     ).toBe(false)
     expect(
@@ -195,7 +220,12 @@ describe('step gating', () => {
         organizer,
         false,
         ['taken.example.com'],
+        false,
       ),
     ).toBe(false)
+  })
+
+  it('canCreate is blocked by an ambiguous organizer email', () => {
+    expect(canCreate(state, organizer, false, [], true)).toBe(false)
   })
 })

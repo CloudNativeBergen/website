@@ -19,7 +19,7 @@ export const metadata = {
  * domain's org; on top of that this page — like the tRPC mutation it drives —
  * requires the caller to be an organizer of the CONFIGURED platform org
  * (`PLATFORM_ORG_SLUG`, see `@/lib/authz/platform`). Non-operators get a 404
- * so the surface's existence isn't disclosed. The SERVER mutation re-enforces
+ * so the surface's existence isn't disclosed. The SERVER mutation reinforces
  * the same gate; this page check is UX, not the security boundary.
  */
 export default async function NewOrganizationPage() {

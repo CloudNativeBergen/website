@@ -14,6 +14,8 @@ import {
 import { api } from '@/lib/trpc/client'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
+import { formatDatesSafe } from '@/lib/time'
+import { ORG_SLUG_RE } from '@/lib/onboarding/create'
 import {
   WIZARD_STEPS,
   WIZARD_STEP_TITLES,
@@ -151,10 +153,17 @@ export function OnboardingWizard({
     organizerMatchedName: string | null
   } | null>(null)
 
-  // Debounce the availability probe inputs so keystrokes don't spam the server.
+  // Debounce the availability probe inputs so keystrokes don't spam the
+  // server — and only probe values that already pass the server schema's SHAPE
+  // rules (slug regex/length, valid hostnames, well-formed email): a partially
+  // typed value would only bounce off input validation as BAD_REQUEST noise.
   const slug = derivedSlug(state.organization)
   const cleanedDomains = useMemo(
     () => cleanDomains(state.domains),
+    [state.domains],
+  )
+  const domainsShapeValid = useMemo(
+    () => Object.keys(domainsLocalErrors(state.domains)).length === 0,
     [state.domains],
   )
   const organizerEmail = organizer.email.trim().toLowerCase()
@@ -167,8 +176,11 @@ export function OnboardingWizard({
     const t = setTimeout(
       () =>
         setProbe({
-          slug: slug || undefined,
-          domains: cleanedDomains.length > 0 ? cleanedDomains : undefined,
+          slug: ORG_SLUG_RE.test(slug) && slug.length <= 96 ? slug : undefined,
+          domains:
+            domainsShapeValid && cleanedDomains.length > 0
+              ? cleanedDomains
+              : undefined,
           organizerEmail: EMAIL_RE.test(organizerEmail)
             ? organizerEmail
             : undefined,
@@ -176,7 +188,7 @@ export function OnboardingWizard({
       400,
     )
     return () => clearTimeout(t)
-  }, [slug, cleanedDomains, organizerEmail])
+  }, [slug, cleanedDomains, domainsShapeValid, organizerEmail])
 
   const availability = api.onboarding.validateSetup.useQuery(probe, {
     enabled: Boolean(probe.slug || probe.domains || probe.organizerEmail),
@@ -194,6 +206,9 @@ export function OnboardingWizard({
     probe.organizerEmail === organizerEmail && EMAIL_RE.test(organizerEmail)
       ? availability.data?.organizer
       : undefined
+  // An ambiguous email (several speaker accounts) is a DETERMINISTIC server
+  // rejection — gate progression/creation on it, don't just warn.
+  const organizerAmbiguous = (organizerProbe?.matchCount ?? 0) > 1
 
   const createMutation = api.onboarding.createOrganization.useMutation({
     onSuccess: (data) => {
@@ -246,7 +261,10 @@ export function OnboardingWizard({
   }
 
   function submit() {
-    if (!canCreate(state, organizer, slugTaken, takenDomains)) return
+    if (
+      !canCreate(state, organizer, slugTaken, takenDomains, organizerAmbiguous)
+    )
+      return
     createMutation.mutate({
       organization: {
         name: state.organization.name.trim(),
@@ -282,7 +300,14 @@ export function OnboardingWizard({
   }
 
   const idx = stepIndex(step)
-  const canGoNext = canProceed(step, state, organizer, slugTaken, takenDomains)
+  const canGoNext = canProceed(
+    step,
+    state,
+    organizer,
+    slugTaken,
+    takenDomains,
+    organizerAmbiguous,
+  )
 
   return (
     <div className="space-y-6">
@@ -535,8 +560,11 @@ export function OnboardingWizard({
               <ReviewRow
                 label="Dates"
                 value={
-                  state.conference.startDate
-                    ? `${state.conference.startDate} → ${state.conference.endDate}`
+                  state.conference.startDate && state.conference.endDate
+                    ? formatDatesSafe(
+                        state.conference.startDate,
+                        state.conference.endDate,
+                      )
                     : 'Not set yet'
                 }
               />
@@ -585,8 +613,13 @@ export function OnboardingWizard({
           ) : (
             <AdminButton
               disabled={
-                !canCreate(state, organizer, slugTaken, takenDomains) ||
-                createMutation.isPending
+                !canCreate(
+                  state,
+                  organizer,
+                  slugTaken,
+                  takenDomains,
+                  organizerAmbiguous,
+                ) || createMutation.isPending
               }
               onClick={submit}
             >
