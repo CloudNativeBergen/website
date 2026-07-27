@@ -17,17 +17,31 @@ import type { BudgetTicketTypeItem } from './types'
  * Nothing here writes or stores anything.
  */
 
-export interface SponsorIncomeActuals {
-  /** Sum of `contractValue` for closed-won deals (NOK ex VAT). */
+/** Per-currency sponsor income totals (all amounts ex VAT). */
+export interface SponsorIncomeCurrencyTotals {
+  /** ISO currency code (e.g. 'NOK', 'USD'). */
+  currency: string
+  /** Sum of closed-won deal values in this currency. */
   signedRevenue: number
   /** Subset of signed revenue whose invoice is paid. */
   paidRevenue: number
-  /** Sum of `contractValue` for open deals (prospect/contacted/negotiating). */
+  /** Sum of open deals (prospect/contacted/negotiating) in this currency. */
   openPipelineRevenue: number
+}
+
+export interface SponsorIncomeActuals {
+  /**
+   * Totals GROUPED BY CURRENCY (NOK first, then alphabetical). Amounts in
+   * different currencies are never summed together: the sponsor CRM board
+   * converts to NOK client-side with live exchange rates for its informal
+   * column totals, but a budget readout must not bake a fluctuating rate
+   * into "actual income" — the UI renders each currency separately with a
+   * mixed-currencies note instead. A single-currency pipeline (the normal
+   * case) has exactly one entry; an empty pipeline has none.
+   */
+  byCurrency: SponsorIncomeCurrencyTotals[]
   signedCount: number
   totalSponsors: number
-  /** Naive currency passthrough (matches `aggregateSponsorPipeline`). */
-  currency: string
 }
 
 const OPEN_STATUSES = new Set(['prospect', 'contacted', 'negotiating'])
@@ -38,8 +52,9 @@ const OPEN_STATUSES = new Set(['prospect', 'contacted', 'negotiating'])
  * (ex VAT). Deals without a TRUTHY contract value fall back to their tier's
  * first listed price - the exact semantics of `calculateSponsorValue`
  * (src/components/admin/sponsor-crm/utils.ts), so the budget page and the
- * sponsor dashboard report the same per-deal value (a stored 0 falls back
- * to the tier price there too).
+ * sponsor dashboard report the same per-deal value AND currency (a stored 0
+ * falls back to the tier price there too, and the fallback carries the
+ * TIER's currency, not the deal's).
  */
 export function deriveSponsorIncome(
   sponsors: Pick<
@@ -47,31 +62,61 @@ export function deriveSponsorIncome(
     'status' | 'invoiceStatus' | 'contractValue' | 'contractCurrency' | 'tier'
   >[],
 ): SponsorIncomeActuals {
-  let signedRevenue = 0
-  let paidRevenue = 0
-  let openPipelineRevenue = 0
+  const buckets = new Map<string, SponsorIncomeCurrencyTotals>()
+  const bucket = (currency: string): SponsorIncomeCurrencyTotals => {
+    let totals = buckets.get(currency)
+    if (!totals) {
+      totals = {
+        currency,
+        signedRevenue: 0,
+        paidRevenue: 0,
+        openPipelineRevenue: 0,
+      }
+      buckets.set(currency, totals)
+    }
+    return totals
+  }
   let signedCount = 0
 
   for (const sponsor of sponsors) {
-    const value = sponsor.contractValue || sponsor.tier?.price?.[0]?.amount || 0
+    // Value + currency resolve together (calculateSponsorValue precedence):
+    // a tier-price fallback is denominated in the TIER price's currency.
+    let value = 0
+    let currency = 'NOK'
+    if (sponsor.contractValue) {
+      value = sponsor.contractValue
+      currency = sponsor.contractCurrency || 'NOK'
+    } else if (sponsor.tier?.price?.[0]?.amount) {
+      value = sponsor.tier.price[0].amount
+      currency = sponsor.tier.price[0].currency || 'NOK'
+    }
+
     if (sponsor.status === 'closed-won') {
       signedCount++
-      signedRevenue += value
-      if (sponsor.invoiceStatus === 'paid') {
-        paidRevenue += value
+      if (value > 0) {
+        const totals = bucket(currency)
+        totals.signedRevenue += value
+        if (sponsor.invoiceStatus === 'paid') {
+          totals.paidRevenue += value
+        }
       }
-    } else if (OPEN_STATUSES.has(sponsor.status)) {
-      openPipelineRevenue += value
+    } else if (OPEN_STATUSES.has(sponsor.status) && value > 0) {
+      bucket(currency).openPipelineRevenue += value
     }
   }
 
+  const byCurrency = [...buckets.values()].sort((a, b) =>
+    a.currency === 'NOK'
+      ? -1
+      : b.currency === 'NOK'
+        ? 1
+        : a.currency.localeCompare(b.currency),
+  )
+
   return {
-    signedRevenue,
-    paidRevenue,
-    openPipelineRevenue,
+    byCurrency,
     signedCount,
     totalSponsors: sponsors.length,
-    currency: sponsors[0]?.contractCurrency || 'NOK',
   }
 }
 

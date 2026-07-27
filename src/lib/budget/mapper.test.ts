@@ -33,6 +33,26 @@ describe('budgetDocumentToModel', () => {
     expect(sponsorIncluded?.key).toBe('sponsor-included')
   })
 
+  it('keeps the FIRST entry when scenario count arrays carry duplicate refs', () => {
+    // Duplicates are rejected by the Sanity schema validation on writes;
+    // mapping stays deterministic (keep first) for documents that predate
+    // or bypass it — last-write-wins would silently swap projections.
+    const doc = seedDocument()
+    const scenario = doc.scenarios![1]
+    scenario.ticketCounts = [
+      ...(scenario.ticketCounts ?? []),
+      { _key: 'dup-ticket', ticketType: 'conf-standard', quantity: 999 },
+    ]
+    scenario.tierCounts = [
+      ...(scenario.tierCounts ?? []),
+      { _key: 'dup-tier', tier: 'community-partner', count: 999 },
+    ]
+    const model = budgetDocumentToModel(doc)
+    const baseline = model.scenarios[1]
+    expect(baseline.ticketCounts['conf-standard']).toBe(75)
+    expect(baseline.tierCounts['community-partner']).toBe(15)
+  })
+
   it('defaults dinner participation when absent', () => {
     const doc = seedDocument()
     delete doc.dinnerParticipation

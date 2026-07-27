@@ -80,8 +80,13 @@ export interface BudgetTicketType {
   workshopCrew: boolean
   /**
    * Quantity is auto-derived from sponsor tier counts x included tickets
-   * (the "Sponsor Included" row in the source model). At most one ticket
-   * type should set this; its scenario quantity input is ignored.
+   * (the "Sponsor Included" row in the source model). EXACTLY ONE ticket
+   * type should set this; its scenario quantity input is ignored. The
+   * invariant is enforced on every write path (tRPC Zod refinement, Sanity
+   * schema validation), and the model itself is defensive: the FIRST
+   * flagged row is the single sink for the derived quantity, extra flagged
+   * rows get 0, and misconfiguration (zero or multiple flags) surfaces as
+   * an explicit {@link ScenarioWarning} on the computation result.
    */
   sponsorIncluded?: boolean
 }
@@ -192,9 +197,32 @@ export interface ScenarioExpenseLine {
   cut: boolean
 }
 
+/**
+ * Model-level misconfiguration surfaced by {@link computeScenario} instead of
+ * silently mis-counting. `message` is the single display source; `code` (and
+ * the structured fields) are for tests and programmatic handling.
+ */
+export type ScenarioWarning =
+  | {
+      code: 'multiple-sponsor-included'
+      /** Row that receives the derived quantity (the first flagged row). */
+      usedTicketTypeName: string
+      /** Extra flagged rows, which receive a quantity of 0. */
+      ignoredTicketTypeNames: string[]
+      message: string
+    }
+  | {
+      code: 'no-sponsor-included'
+      /** Derived sponsor tickets that no row receives. */
+      excludedTickets: number
+      message: string
+    }
+
 export interface ScenarioResult {
   scenarioKey: string
   headcounts: ScenarioHeadcounts
+  /** Misconfiguration warnings (e.g. sponsor-included flag issues). */
+  warnings: ScenarioWarning[]
   /** All revenue excl VAT, NOK. */
   ticketRevenue: number
   sponsorTierRevenue: number
@@ -243,21 +271,60 @@ export function sponsorIncludedTickets(
 function resolveTicketQuantities(
   model: BudgetModel,
   scenario: BudgetScenario,
-): { quantities: Map<string, number>; sponsorIncluded: number } {
+): {
+  quantities: Map<string, number>
+  sponsorIncluded: number
+  warnings: ScenarioWarning[]
+} {
   const included = sponsorIncludedTickets(
     model.sponsorTiers,
     scenario.tierCounts,
   )
+
+  // EXACTLY ONE row should be flagged sponsor-included (enforced on writes).
+  // Be defensive against documents that bypassed validation: the FIRST
+  // flagged row is the single sink for the derived quantity — applying it to
+  // every flagged row would multiply headcounts/costs, and extra rows would
+  // double-count. Both misconfigurations surface as warnings.
+  const flagged = model.ticketTypes.filter((t) => t.sponsorIncluded)
+  const sink = flagged[0]
+  const warnings: ScenarioWarning[] = []
+  if (flagged.length > 1) {
+    const ignored = flagged.slice(1).map((t) => t.name)
+    warnings.push({
+      code: 'multiple-sponsor-included',
+      usedTicketTypeName: sink.name,
+      ignoredTicketTypeNames: ignored,
+      message:
+        `Multiple ticket types are marked sponsor-included; only the first ` +
+        `("${sink.name}") receives the derived quantity — ${ignored
+          .map((name) => `"${name}"`)
+          .join(', ')} counts as 0. Keep exactly one sponsor-included row.`,
+    })
+  } else if (flagged.length === 0 && included > 0) {
+    warnings.push({
+      code: 'no-sponsor-included',
+      excludedTickets: included,
+      message:
+        `No ticket type is marked sponsor-included, so ${included} derived ` +
+        `sponsor ticket${included === 1 ? '' : 's'} are excluded from ` +
+        `headcounts and per-person costs. Mark exactly one ticket type as ` +
+        `sponsor-included.`,
+    })
+  }
+
   const quantities = new Map<string, number>()
   for (const ticket of model.ticketTypes) {
     quantities.set(
       ticket.key,
       ticket.sponsorIncluded
-        ? included
+        ? ticket === sink
+          ? included
+          : 0
         : (scenario.ticketCounts[ticket.key] ?? 0),
     )
   }
-  return { quantities, sponsorIncluded: included }
+  return { quantities, sponsorIncluded: included, warnings }
 }
 
 /**
@@ -269,7 +336,7 @@ export function computeScenario(
   model: BudgetModel,
   scenario: BudgetScenario,
 ): ScenarioResult {
-  const { quantities, sponsorIncluded } = resolveTicketQuantities(
+  const { quantities, sponsorIncluded, warnings } = resolveTicketQuantities(
     model,
     scenario,
   )
@@ -355,6 +422,7 @@ export function computeScenario(
 
   return {
     scenarioKey: scenario.key,
+    warnings,
     headcounts: {
       conference,
       workshop,

@@ -5,6 +5,13 @@ import {
 } from './model'
 import type { BudgetScenarioItem, ConferenceBudgetDocument } from './types'
 
+/**
+ * Keyed count array -> record. Duplicate references keep the FIRST entry
+ * (deterministic; last-write-wins would silently swap projections around).
+ * Duplicates are rejected at the write boundary (Sanity schema validation on
+ * the scenario count arrays), so no logging here — this is defense in depth
+ * for documents that predate or bypass that validation.
+ */
 function toRecord<T>(
   items: T[] | undefined,
   key: (item: T) => string,
@@ -12,7 +19,10 @@ function toRecord<T>(
 ): Record<string, number> {
   const record: Record<string, number> = {}
   for (const item of items ?? []) {
-    record[key(item)] = value(item)
+    const k = key(item)
+    if (!(k in record)) {
+      record[k] = value(item)
+    }
   }
   return record
 }

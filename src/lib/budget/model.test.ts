@@ -26,9 +26,9 @@ import {
  * (TICKET_TYPES / SPONSOR_LEVELS / SPONSOR_ADDONS / UNIT_COSTS /
  * FIXED_COSTS / SCENARIOS) in a checkout of CloudNativeBergen/budget to
  * match this fixture (sponsor prices there are incl VAT = priceExVat *
- * 1.25), then run `mise exec -- python budget.py` +
- * `mise exec -- python validate_budget.py --update-snapshot` (Baseline via
- * expected_values.json) and a calc_sections.py-style full-precision dump
+ * 1.25), then run `rtk mise exec -- python budget.py` +
+ * `rtk mise exec -- python validate_budget.py --update-snapshot` (Baseline
+ * via expected_values.json) and a calc_sections.py-style full-precision dump
  * for the per-scenario values. Both paths must agree before updating the
  * numbers below.
  */
@@ -398,6 +398,73 @@ describe('budget domain model (ported from CloudNativeBergen/budget)', () => {
     )
     expect(r.totalFixedExpenses).toBeCloseTo(expected.totalFixedExpenses, 2)
     expect(r.netResult).toBeCloseTo(expected.netResult, 2)
+  })
+
+  describe('sponsor-included flag semantics (exactly one sink row)', () => {
+    it('applies the derived count to the single flagged row without warnings', () => {
+      const r = computeScenario(referenceModel, baseline)
+      expect(r.warnings).toEqual([])
+      // 15 tiers x 2 included tickets land on the one flagged row only.
+      expect(r.headcounts.sponsorIncludedTickets).toBe(30)
+      expect(r.headcounts.totalTickets).toBe(360)
+    })
+
+    it('warns and excludes the derived count when NO row is flagged', () => {
+      const model: BudgetModel = {
+        ...referenceModel,
+        ticketTypes: referenceModel.ticketTypes.map((t) => ({
+          ...t,
+          sponsorIncluded: false,
+        })),
+      }
+      const r = computeScenario(model, baseline)
+      // The derived quantity is still reported, but no longer lands on any
+      // row: the undercount is EXPLICIT, not silent.
+      expect(r.headcounts.sponsorIncludedTickets).toBe(30)
+      expect(r.headcounts.totalTickets).toBe(330)
+      expect(r.headcounts.conference).toBe(315)
+      expect(r.warnings).toEqual([
+        expect.objectContaining({
+          code: 'no-sponsor-included',
+          excludedTickets: 30,
+        }),
+      ])
+      expect(r.warnings[0].message).toContain('No ticket type is marked')
+    })
+
+    it('does not warn about a missing flag when nothing derives (0 tiers)', () => {
+      const model: BudgetModel = {
+        ...referenceModel,
+        ticketTypes: referenceModel.ticketTypes.map((t) => ({
+          ...t,
+          sponsorIncluded: false,
+        })),
+      }
+      const noTiers = { ...baseline, tierCounts: {} }
+      expect(computeScenario(model, noTiers).warnings).toEqual([])
+    })
+
+    it('warns and uses only the FIRST flagged row when several are flagged', () => {
+      const model: BudgetModel = {
+        ...referenceModel,
+        ticketTypes: referenceModel.ticketTypes.map((t) =>
+          t.key === 'sponsor-disc' ? { ...t, sponsorIncluded: true } : t,
+        ),
+      }
+      const r = computeScenario(model, baseline)
+      // First flagged row ('sponsor-incl') is the sink; the extra flagged
+      // row counts 0 (its scenario quantity of 60 is ignored, NOT doubled).
+      expect(r.headcounts.sponsorIncludedTickets).toBe(30)
+      expect(r.headcounts.totalTickets).toBe(300)
+      expect(r.warnings).toEqual([
+        expect.objectContaining({
+          code: 'multiple-sponsor-included',
+          usedTicketTypeName: 'Sponsor Included',
+          ignoredTicketTypeNames: ['Sponsor Discount (20%)'],
+        }),
+      ])
+      expect(r.warnings[0].message).toContain('Multiple ticket types')
+    })
   })
 
   it('derives sponsor-included tickets from tier counts', () => {

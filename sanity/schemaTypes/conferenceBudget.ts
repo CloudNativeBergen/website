@@ -34,6 +34,26 @@ const BASIS_LIST = Object.entries(VARIABLE_COST_BASIS_LABELS).map(
   ([value, title]) => ({ title, value }),
 )
 
+/**
+ * Array-level uniqueness of a reference field inside scenario count rows:
+ * duplicate refs would collapse in the computation model (the mapper keeps
+ * the first entry), so Studio edits must not create them.
+ */
+const uniqueRefValidation =
+  (field: string, label: string) =>
+  (items: Record<string, unknown>[] | undefined) => {
+    const refs = (items ?? []).map((item) => item?.[field])
+    const seen = new Set<unknown>()
+    for (const ref of refs) {
+      if (ref == null) continue
+      if (seen.has(ref)) {
+        return `Each ${label} can only be referenced once per scenario (duplicate: "${ref}").`
+      }
+      seen.add(ref)
+    }
+    return true
+  }
+
 export default defineType({
   name: 'conferenceBudget',
   title: 'Conference Budget',
@@ -102,6 +122,16 @@ export default defineType({
       type: 'array',
       description:
         'Ticket-mix assumptions. Attendance flags drive per-person variable costs. "Actual sold" is the manual fallback when no ticketing provider is connected.',
+      // Cross-row invariant (mirrors the tRPC UpdateTicketTypesSchema
+      // refinement so Studio edits cannot bypass it): the derived
+      // sponsor-included quantity has exactly one sink row — multiple
+      // flagged rows would double-count sponsor tickets in projections.
+      validation: (Rule) =>
+        Rule.custom((items?: { sponsorIncluded?: boolean }[]) =>
+          (items ?? []).filter((item) => item?.sponsorIncluded).length > 1
+            ? 'At most one ticket type can be marked "Sponsor-included tickets" — its quantity is auto-derived from sponsor tier counts, and multiple rows would double-count those tickets.'
+            : true,
+        ),
       of: [
         {
           type: 'object',
@@ -382,6 +412,8 @@ export default defineType({
               name: 'ticketCounts',
               title: 'Ticket quantities',
               type: 'array',
+              validation: (Rule) =>
+                Rule.custom(uniqueRefValidation('ticketType', 'ticket type')),
               of: [
                 {
                   type: 'object',
@@ -413,6 +445,8 @@ export default defineType({
               name: 'tierCounts',
               title: 'Sponsor tier counts',
               type: 'array',
+              validation: (Rule) =>
+                Rule.custom(uniqueRefValidation('tier', 'sponsor tier')),
               of: [
                 {
                   type: 'object',
@@ -444,6 +478,8 @@ export default defineType({
               name: 'addonCounts',
               title: 'Sponsor add-on counts',
               type: 'array',
+              validation: (Rule) =>
+                Rule.custom(uniqueRefValidation('addon', 'add-on')),
               of: [
                 {
                   type: 'object',

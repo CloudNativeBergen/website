@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { BanknotesIcon } from '@heroicons/react/24/outline'
+import {
+  BanknotesIcon,
+  ExclamationTriangleIcon,
+} from '@heroicons/react/24/outline'
 
 import {
   budgetDocumentToModel,
@@ -92,6 +95,7 @@ function BudgetVsActualRow({
   sublabel,
   budget,
   actual,
+  actualText,
   actualNote,
   emphasize = false,
   kind = 'income',
@@ -101,6 +105,12 @@ function BudgetVsActualRow({
   sublabel?: string
   budget: number
   actual: number | null
+  /**
+   * Preformatted replacement for the Actual cell (e.g. per-currency sums
+   * that must not be collapsed into one NOK number). No delta is computed
+   * against it — pass `actual: null` alongside.
+   */
+  actualText?: string
   actualNote?: string
   emphasize?: boolean
   /** Delta coloring: for income, above budget is good; for expenses, bad. */
@@ -125,7 +135,7 @@ function BudgetVsActualRow({
         {nok(budget)}
       </td>
       <td className="py-2 pr-4 text-right text-sm whitespace-nowrap text-gray-900 tabular-nums dark:text-white">
-        {actual !== null ? nok(actual) : '—'}
+        {actualText ?? (actual !== null ? nok(actual) : '—')}
         {actualNote ? (
           <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">
             {actualNote}
@@ -230,13 +240,32 @@ export function BudgetPageClient({
   )
 
   const actualTicketRevenue = ticketIncome?.revenue ?? null
+  // Sponsor income is grouped BY CURRENCY (see deriveSponsorIncome): only
+  // the NOK share enters combined NOK totals — summing across currencies
+  // (or converting at a fluctuating rate) would fabricate a number on a
+  // budget page. Non-NOK shares render per-currency with a note.
+  const sponsorByCurrency = useMemo(
+    () => sponsorIncome?.byCurrency ?? [],
+    [sponsorIncome],
+  )
+  const sponsorAllNok = sponsorByCurrency.every((c) => c.currency === 'NOK')
+  const sponsorNok = sponsorByCurrency.find((c) => c.currency === 'NOK')
+  const sponsorSignedNok = sponsorNok?.signedRevenue ?? 0
+  /** Per-currency formatted sums for a field, e.g. "kr 250 000 + US$ 10 000". */
+  const sponsorAmounts = (
+    field: 'signedRevenue' | 'paidRevenue' | 'openPipelineRevenue',
+  ) => {
+    const parts = sponsorByCurrency
+      .filter((c) => c[field] > 0)
+      .map((c) => formatCurrency(Math.round(c[field]), c.currency))
+    return parts.length > 0 ? parts.join(' + ') : nok(0)
+  }
   // Partial by nature: missing sources contribute 0 but are called out in
   // the UI, and deltas against full budgets are suppressed when a source
   // is missing (a fabricated comparison would mislead).
-  const actualIncomeTotal =
-    (sponsorIncome?.signedRevenue ?? 0) + (actualTicketRevenue ?? 0)
+  const actualIncomeTotal = sponsorSignedNok + (actualTicketRevenue ?? 0)
   const incomeActualsComplete =
-    sponsorIncome !== null && actualTicketRevenue !== null
+    sponsorIncome !== null && actualTicketRevenue !== null && sponsorAllNok
   const hasExpenseActuals = expenseActuals.size > 0
   const actualExpenseTotal = [...expenseActuals.values()].reduce(
     (sum, v) => sum + v,
@@ -272,7 +301,7 @@ export function BudgetPageClient({
                       ticketIncome
                         ? ` · ${ticketIncome.ticketCount} tickets`
                         : ''
-                    }`
+                    }${sponsorAllNok ? '' : ' · non-NOK sponsor income excluded'}`
                   : 'sponsor data unavailable',
                 color: 'green',
               },
@@ -337,6 +366,25 @@ export function BudgetPageClient({
         })}
       </div>
 
+      {/* Model misconfiguration warnings (e.g. sponsor-included flags) —
+          computed by the model instead of silently mis-counting. */}
+      {result && result.warnings.length > 0 ? (
+        <div
+          role="alert"
+          className="flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-900/20"
+        >
+          <ExclamationTriangleIcon
+            className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <div className="space-y-1 text-sm text-amber-900 dark:text-amber-200">
+            {result.warnings.map((warning) => (
+              <p key={warning.code}>{warning.message}</p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {result && selectedScenario ? (
         <>
           {/* Headcounts */}
@@ -398,10 +446,23 @@ export function BudgetPageClient({
                     label="Sponsorships"
                     sublabel={`tiers ${nok(result.sponsorTierRevenue)} + add-ons ${nok(result.sponsorAddonRevenue)}`}
                     budget={result.sponsorRevenue}
-                    actual={sponsorIncome ? sponsorIncome.signedRevenue : null}
+                    actual={
+                      sponsorIncome && sponsorAllNok ? sponsorSignedNok : null
+                    }
+                    actualText={
+                      sponsorIncome && !sponsorAllNok
+                        ? sponsorAmounts('signedRevenue')
+                        : undefined
+                    }
                     actualNote={
                       sponsorIncome
-                        ? `${sponsorIncome.signedCount} signed · ${nok(sponsorIncome.paidRevenue)} paid · ${nok(sponsorIncome.openPipelineRevenue)} in pipeline`
+                        ? `${sponsorIncome.signedCount} signed · ${sponsorAmounts('paidRevenue')} paid · ${sponsorAmounts('openPipelineRevenue')} in pipeline${
+                            sponsorAllNok
+                              ? ''
+                              : sponsorByCurrency.length > 1
+                                ? ' · mixed currencies — amounts not combined'
+                                : ' · non-NOK income — not compared to the NOK budget'
+                          }`
                         : 'sponsor data unavailable'
                     }
                   />

@@ -23,12 +23,16 @@ budget.fixedCosts = budget.fixedCosts?.map((cost) =>
 )
 
 const sponsorIncome = {
-  signedRevenue: 350000,
-  paidRevenue: 225000,
-  openPipelineRevenue: 125000,
+  byCurrency: [
+    {
+      currency: 'NOK',
+      signedRevenue: 350000,
+      paidRevenue: 225000,
+      openPipelineRevenue: 125000,
+    },
+  ],
   signedCount: 14,
   totalSponsors: 23,
-  currency: 'NOK',
 }
 
 const ticketIncome = {
@@ -132,4 +136,52 @@ export const ManualTicketCounts: Story = {
 
 export const Empty: Story = {
   args: { budget: null, sponsorIncome, ticketIncome: null },
+}
+
+/**
+ * Misconfigured sponsor-included flags: no ticket type is flagged, so the
+ * derived sponsor tickets have no row to land on — the model surfaces an
+ * explicit warning instead of silently undercounting headcounts.
+ */
+export const SponsorIncludedMisconfigured: Story = {
+  args: {
+    budget: {
+      ...budget,
+      ticketTypes: budget.ticketTypes?.map((t) =>
+        t.sponsorIncluded ? { ...t, sponsorIncluded: false } : t,
+      ),
+    },
+    sponsorIncome,
+    ticketIncome,
+  },
+}
+
+/**
+ * Sponsor deals signed in several currencies: per-currency sums render
+ * separately with a mixed-currencies note — they are never collapsed into
+ * one NOK figure, and only the NOK share enters combined totals.
+ */
+export const MixedCurrencySponsorIncome: Story = {
+  args: {
+    budget,
+    sponsorIncome: {
+      byCurrency: [
+        {
+          currency: 'NOK',
+          signedRevenue: 275000,
+          paidRevenue: 225000,
+          openPipelineRevenue: 125000,
+        },
+        {
+          currency: 'USD',
+          signedRevenue: 10000,
+          paidRevenue: 0,
+          openPipelineRevenue: 5000,
+        },
+      ],
+      signedCount: 15,
+      totalSponsors: 24,
+    },
+    ticketIncome,
+  },
 }

@@ -53,11 +53,30 @@ export default async function AdminBudgetPage() {
       }
     }
 
-  const [budget, sponsorsResult, liveTicketIncome] = await Promise.all([
-    getBudgetForConference(conference._id),
+  // The budget read soft-fails like the sponsor/ticket reads: a transient
+  // Sanity failure must render a controlled "unavailable" state, not the
+  // framework error boundary. It is kept DISTINCT from the "no budget yet"
+  // empty state (budget === null) — a transient failure must never offer
+  // "Create budget".
+  const [budgetResult, sponsorsResult, liveTicketIncome] = await Promise.all([
+    getBudgetForConference(conference._id).then(
+      (budget) => ({ budget, error: null as Error | null }),
+      (error: unknown) => ({ budget: null, error: error as Error }),
+    ),
     listSponsorsForConference(conference._id),
     fetchLiveTicketIncome(),
   ])
+
+  if (budgetResult.error) {
+    console.error('Budget: failed to load budget document', budgetResult.error)
+    return (
+      <ErrorDisplay
+        title="Budget Unavailable"
+        message="The budget could not be loaded right now. This is usually transient — reload the page to try again."
+      />
+    )
+  }
+  const budget = budgetResult.budget
 
   // A failed sponsor read must surface as "unavailable", not as 0 signed
   // revenue - fabricated zeros on a budget page mislead.
