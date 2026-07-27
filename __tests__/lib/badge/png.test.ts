@@ -59,6 +59,19 @@ describe('PNG baking', () => {
     expect(extractCredentialFromPng(TINY_PNG)).toBeNull()
   })
 
+  it('rejects a compressed iTXt credential chunk instead of returning zlib bytes', () => {
+    const baked = bakeCredentialIntoPng(TINY_PNG, CREDENTIAL)
+    // Locate the credential chunk and flip its compression flag to 1.
+    const marker = new TextEncoder().encode(OB_PNG_KEYWORD)
+    const idx = baked.findIndex((_, i) =>
+      marker.every((b, j) => baked[i + j] === b),
+    )
+    expect(idx).toBeGreaterThan(0)
+    const tampered = baked.slice()
+    tampered[idx + marker.length + 1] = 1 // keyword NUL, then compression flag
+    expect(extractCredentialFromPng(tampered)).toBeNull()
+  })
+
   it('throws on non-PNG input', () => {
     expect(() =>
       bakeCredentialIntoPng(new Uint8Array([1, 2, 3]), CREDENTIAL),

@@ -20,6 +20,16 @@ import type { BadgeRecord } from './types'
  */
 export const BADGE_ARTIFACT_CACHE_CONTROL = 'public, max-age=0, must-revalidate'
 
+/**
+ * CORS headers for the publicly-verifiable credential routes. Shared between
+ * the 200 and 304 paths — a 304 without Access-Control-Allow-Origin fails the
+ * browser CORS check on revalidation even though the cached 200 was usable.
+ */
+export const BADGE_CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET',
+} as const
+
 /** Weak ETag that changes whenever the badge doc is (re)baked. */
 export function badgeArtifactETag(
   badge: Pick<BadgeRecord, '_updatedAt' | 'generatorVersion'>,
@@ -35,10 +45,14 @@ export function badgeArtifactETag(
  * A 304 Not Modified response when the client's `If-None-Match` already holds
  * this exact artifact version, otherwise null. Comparison is lenient over a
  * comma-separated list and tolerates the optional weak-validator prefix.
+ *
+ * `extraHeaders` must mirror any header the route's 200 response needs on
+ * revalidation too (CORS headers, `Vary`).
  */
 export function badgeNotModifiedResponse(
   request: { headers?: { get(name: string): string | null } } | undefined,
   etag: string,
+  extraHeaders?: Record<string, string>,
 ): NextResponse | null {
   const inm = request?.headers?.get?.('if-none-match') ?? null
   if (!inm) return null
@@ -48,6 +62,10 @@ export function badgeNotModifiedResponse(
   if (!matches) return null
   return new NextResponse(null, {
     status: 304,
-    headers: { ETag: etag, 'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL },
+    headers: {
+      ETag: etag,
+      'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
+      ...extraHeaders,
+    },
   })
 }

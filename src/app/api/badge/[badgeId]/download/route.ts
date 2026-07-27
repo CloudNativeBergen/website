@@ -65,12 +65,20 @@ export async function GET(
 
     const svgContent = await svgResponse.text()
 
-    const speakerName =
+    // Header-safe filename token: names can hold quotes/unicode/punctuation
+    // that would break the Content-Disposition filename parameter.
+    const rawName =
       badge.speaker &&
       typeof badge.speaker === 'object' &&
       'name' in badge.speaker
-        ? badge.speaker.name.replace(/\s+/g, '-').toLowerCase()
+        ? badge.speaker.name
         : 'speaker'
+    const speakerName =
+      rawName
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^[-.]+|[-.]+$/g, '') || 'speaker'
 
     if (wantPng) {
       try {

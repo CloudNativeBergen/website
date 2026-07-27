@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
 import {
   BADGE_ARTIFACT_CACHE_CONTROL,
+  BADGE_CORS_HEADERS,
   badgeArtifactETag,
   badgeNotModifiedResponse,
 } from '@/lib/badge/http'
@@ -42,7 +43,9 @@ export async function GET(
     }
 
     const etag = badgeArtifactETag(badge, 'json')
-    const notModified = badgeNotModifiedResponse(request, etag)
+    const notModified = badgeNotModifiedResponse(request, etag, {
+      ...BADGE_CORS_HEADERS,
+    })
     if (notModified) return notModified
 
     let payload: { body: string; isJwt: boolean }
@@ -60,8 +63,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': payload.isJwt ? 'text/plain' : 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
+        ...BADGE_CORS_HEADERS,
         'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
         ETag: etag,
       },

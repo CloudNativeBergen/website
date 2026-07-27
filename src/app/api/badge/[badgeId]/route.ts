@@ -3,6 +3,7 @@ import { getBadgeById } from '@/lib/badge/sanity'
 import { generateErrorResponse } from '@/lib/openbadges'
 import {
   BADGE_ARTIFACT_CACHE_CONTROL,
+  BADGE_CORS_HEADERS,
   badgeArtifactETag,
   badgeNotModifiedResponse,
 } from '@/lib/badge/http'
@@ -38,13 +39,19 @@ export async function GET(
       )
     }
 
-    // Humans get the rendered badge page; verifiers get the credential.
+    // Humans get the rendered badge page; verifiers get the credential. Every
+    // response of this route content-negotiates on Accept, so all of them
+    // carry `Vary: Accept`; the redirect is additionally no-store so a shared
+    // cache can never replay it to a machine client.
     const accept = request.headers?.get?.('accept') ?? ''
     if (accept.includes('text/html')) {
-      return NextResponse.redirect(
+      const redirect = NextResponse.redirect(
         new URL(`/badge/${badgeId}`, request.url),
         302,
       )
+      redirect.headers.set('Vary', 'Accept')
+      redirect.headers.set('Cache-Control', 'no-store')
+      return redirect
     }
 
     const { badge, error } = await getBadgeById(badgeId)
@@ -56,7 +63,10 @@ export async function GET(
     }
 
     const etag = badgeArtifactETag(badge, 'credential')
-    const notModified = badgeNotModifiedResponse(request, etag)
+    const notModified = badgeNotModifiedResponse(request, etag, {
+      ...BADGE_CORS_HEADERS,
+      Vary: 'Accept',
+    })
     if (notModified) return notModified
 
     let payload: { body: string; isJwt: boolean }
@@ -73,8 +83,8 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': payload.isJwt ? 'text/plain' : 'application/ld+json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
+        ...BADGE_CORS_HEADERS,
+        Vary: 'Accept',
         'Cache-Control': BADGE_ARTIFACT_CACHE_CONTROL,
         ETag: etag,
       },

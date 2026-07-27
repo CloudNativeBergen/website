@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   BADGE_ARTIFACT_CACHE_CONTROL,
+  BADGE_CORS_HEADERS,
   badgeArtifactETag,
   badgeNotModifiedResponse,
 } from '@/lib/badge/http'
@@ -77,5 +78,16 @@ describe('badge artifact caching', () => {
     expect(
       badgeNotModifiedResponse(req('W/"badge-download-v2-stale"'), etag),
     ).toBeNull()
+  })
+
+  it('mirrors extra headers (CORS, Vary) onto the 304', () => {
+    const etag = badgeArtifactETag(base, 'credential')
+    const res = badgeNotModifiedResponse(req(etag), etag, {
+      ...BADGE_CORS_HEADERS,
+      Vary: 'Accept',
+    })
+    expect(res?.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(res?.headers.get('Access-Control-Allow-Methods')).toBe('GET')
+    expect(res?.headers.get('Vary')).toBe('Accept')
   })
 })

@@ -107,7 +107,9 @@ export function bakeCredentialIntoPng(
       break
     }
     // Drop any prior baked credential chunk (idempotent re-bake).
-    if (!(type === 'iTXt' && chunkKeyword(png, offset) === OB_PNG_KEYWORD)) {
+    if (!(
+      type === 'iTXt' && chunkKeyword(png, offset, length) === OB_PNG_KEYWORD
+    )) {
       chunks.push(chunk)
     }
     offset += total
@@ -133,11 +135,20 @@ export function bakeCredentialIntoPng(
   return result
 }
 
-/** Read the iTXt keyword at a chunk offset (up to its first NUL). */
-function chunkKeyword(png: Uint8Array, offset: number): string {
+/**
+ * Read the iTXt keyword at a chunk offset (up to its first NUL), never scanning
+ * past the chunk's declared data length — a malformed chunk without a NUL must
+ * not bleed into subsequent chunks.
+ */
+function chunkKeyword(
+  png: Uint8Array,
+  offset: number,
+  dataLength: number,
+): string {
   const dataStart = offset + 8
+  const dataEnd = Math.min(dataStart + dataLength, png.length)
   let end = dataStart
-  while (end < png.length && png[end] !== 0) end++
+  while (end < dataEnd && png[end] !== 0) end++
   return new TextDecoder().decode(png.subarray(dataStart, end))
 }
 
@@ -152,13 +163,19 @@ export function extractCredentialFromPng(png: Uint8Array): string | null {
   while (offset + 8 <= png.length) {
     const length = view.getUint32(offset)
     const type = new TextDecoder().decode(png.subarray(offset + 4, offset + 8))
-    if (type === 'iTXt' && chunkKeyword(png, offset) === OB_PNG_KEYWORD) {
+    if (
+      type === 'iTXt' &&
+      chunkKeyword(png, offset, length) === OB_PNG_KEYWORD
+    ) {
       const dataStart = offset + 8
       const data = png.subarray(dataStart, dataStart + length)
       // keyword \0 compFlag compMethod langTag \0 transKw \0 text
       let p = 0
       while (p < data.length && data[p] !== 0) p++ // keyword
       p++ // NUL
+      // Only the uncompressed form this module writes is supported — a
+      // compressed chunk's payload would be zlib bytes, not the credential.
+      if (data[p] !== 0) return null
       p++ // compression flag
       p++ // compression method
       while (p < data.length && data[p] !== 0) p++ // language tag
@@ -174,7 +191,8 @@ export function extractCredentialFromPng(png: Uint8Array): string | null {
 }
 
 /**
- * Rasterize a badge SVG to a square PNG. The non-rendering
+ * Rasterize a badge SVG to a PNG at the given width (aspect ratio is
+ * preserved; badge SVGs are square so output is too). The non-rendering
  * `<openbadges:credential>` node (and its CDATA) is stripped first so the
  * rasterizer only sees drawable markup; the credential is re-baked into the PNG
  * separately via {@link bakeCredentialIntoPng}.
