@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
-import { FieldRow } from '@/app/(admin)/admin/settings/settingsLayout'
+import { FieldRow } from '@/components/admin/FieldRow'
 import {
   ChartBarIcon,
   PlusIcon,

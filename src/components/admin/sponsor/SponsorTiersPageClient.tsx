@@ -6,7 +6,7 @@ import { SponsorTierEditor } from './SponsorTierEditor'
 import { SponsorTierManagement } from './SponsorTierManagement'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
-import { FieldRow } from '@/app/(admin)/admin/settings/settingsLayout'
+import { FieldRow } from '@/components/admin/FieldRow'
 import {
   GlobeAltIcon,
   UserGroupIcon,

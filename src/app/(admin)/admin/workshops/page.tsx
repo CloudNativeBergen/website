@@ -22,8 +22,10 @@ export default async function WorkshopAdminPage() {
     <WorkshopsClientPage
       conferenceId={conference._id}
       initialWorkshops={workshops}
-      workshopRegistrationStart={conference.workshopRegistrationStart}
-      workshopRegistrationEnd={conference.workshopRegistrationEnd}
+      workshopRegistrationStart={
+        conference.workshopRegistrationStart ?? undefined
+      }
+      workshopRegistrationEnd={conference.workshopRegistrationEnd ?? undefined}
     />
   )
 }
