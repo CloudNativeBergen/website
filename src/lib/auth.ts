@@ -5,6 +5,7 @@ import type { Account, NextAuthConfig, Profile, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import { deriveSessionCookieDomain } from '@/lib/auth-cookie-domain'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
 import type { Speaker } from '@/lib/speaker/types'
@@ -492,7 +493,55 @@ export const providerMap = config.providers.map((provider: Provider) => {
   }
 })
 
-export const { handlers, auth: _auth, signIn } = NextAuth(config)
+/**
+ * Per-request NextAuth config (Auth.js "lazy initialization"): the static
+ * `config` plus a session-cookie `Domain` derived from the REQUEST HOST's
+ * registrable domain (eTLD+1) — host `admin.cloudnativedays.no` →
+ * `Domain=.cloudnativedays.no` — so a signed-in user stays signed in across
+ * apex + www + per-year subdomains instead of being dropped by the default
+ * host-only cookie. Deriving per request (rather than from a deploy-wide env
+ * var) makes this scale to every tenant domain with zero configuration.
+ *
+ * `deriveSessionCookieDomain` is FAIL-SAFE and tenant-aware: localhost, IP
+ * literals, previews on `vercel.app`, platform-shared parents (`konf.run`),
+ * public suffixes, and unparseable hosts all yield `undefined` → NO override →
+ * today's host-only cookie. See `SHARED_PARENT_DOMAIN_DENYLIST` for the
+ * security rationale. The same derivation runs in the route handlers AND the
+ * `auth`-wrapped middleware, so set / refresh / clear all carry an identical
+ * Domain attribute.
+ *
+ * Only the `domain` option is set — @auth/core deep-merges it onto the
+ * defaults, so httpOnly / secure / sameSite=lax / path and the `__Secure-`
+ * name prefix are preserved (that prefix permits a Domain attribute, unlike
+ * `__Host-`). The CSRF cookie deliberately stays host-only (`__Host-`), which
+ * is fine as the sign-in POST happens on a single host. `x-forwarded-host` is
+ * preferred over `host` (Vercel sets it authoritatively; Auth.js itself trusts
+ * it under `trustHost`); a spoofed value cannot widen the cookie beyond the
+ * denylist checks, and the browser drops any Set-Cookie whose Domain does not
+ * cover the real request host. No request (e.g. `auth()` in a server
+ * component, which cannot write cookies anyway) → static config unchanged.
+ *
+ * Exported for unit tests; referenced in-file by `NextAuth(...)` below.
+ */
+export function requestScopedConfig(
+  req: Pick<NextRequest, 'headers'> | undefined,
+): NextAuthConfig {
+  const host =
+    req?.headers.get('x-forwarded-host') ?? req?.headers.get('host') ?? null
+  const domain = deriveSessionCookieDomain(host)
+  if (!domain) return config
+
+  return {
+    ...config,
+    cookies: {
+      sessionToken: {
+        options: { domain },
+      },
+    },
+  }
+}
+
+export const { handlers, auth: _auth, signIn } = NextAuth(requestScopedConfig)
 
 export const auth = _auth as typeof _auth &
   (<HandlerResponse extends Response | Promise<Response>>(

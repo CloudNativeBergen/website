@@ -197,6 +197,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.1
         version: 4.3.1
+      tldts:
+        specifier: ^7.4.0
+        version: 7.4.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3284,6 +3287,7 @@ packages:
   '@qodo/command@0.36.0':
     resolution: {integrity: sha512-JjnIhH7YCHXjl1RzMvHOZ4SXo4vZi7psrc4h/a4/Gid8KNZlEab3omWQQiNpcyyKQzxMG72+4+t15dAxkrku0Q==}
     engines: {node: '>=18.0.0'}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     hasBin: true
 
   '@react-aria/focus@3.22.1':

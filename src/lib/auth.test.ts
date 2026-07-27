@@ -63,7 +63,12 @@ vi.mock('@/lib/sanity/client', () => ({
   speakerImageUrl: (src: string) => `img:${src}`,
 }))
 
-import { jwtSignInCallback, signOutHandler, redirectProxyConfig } from './auth'
+import {
+  jwtSignInCallback,
+  signOutHandler,
+  redirectProxyConfig,
+  requestScopedConfig,
+} from './auth'
 import { signLinkIntent, LINK_INTENT_COOKIE } from './auth-link'
 
 const SESSION_COOKIE = 'authjs.session-token'
@@ -555,5 +560,57 @@ describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () =>
       redirectProxyUrl: 'https://auth.example.no/api/auth',
       trustHost: true,
     })
+  })
+})
+
+describe('requestScopedConfig — per-request session-cookie Domain (#462)', () => {
+  const reqFor = (headers: Record<string, string>) =>
+    ({ headers: new Headers(headers) }) as unknown as Parameters<
+      typeof requestScopedConfig
+    >[0]
+
+  it('derives the Domain from the request host (registrable domain)', () => {
+    const config = requestScopedConfig(
+      reqFor({ host: 'admin.cloudnativedays.no' }),
+    )
+    expect(config.cookies).toEqual({
+      sessionToken: { options: { domain: '.cloudnativedays.no' } },
+    })
+  })
+
+  it('prefers x-forwarded-host over host', () => {
+    const config = requestScopedConfig(
+      reqFor({
+        host: 'internal.upstream.example',
+        'x-forwarded-host': '2026.cloudnativebergen.dev',
+      }),
+    )
+    expect(config.cookies).toEqual({
+      sessionToken: { options: { domain: '.cloudnativebergen.dev' } },
+    })
+  })
+
+  it('returns the base config UNCHANGED (no cookies key) when derivation declines', () => {
+    // No request at all (e.g. `auth()` from a server component).
+    expect(requestScopedConfig(undefined).cookies).toBeUndefined()
+    // Denylisted shared parents and localhost → host-only cookie.
+    for (const host of [
+      'tenant.konf.run',
+      'my-app.vercel.app',
+      'localhost:3000',
+      '127.0.0.1:3000',
+    ]) {
+      const config = requestScopedConfig(reqFor({ host }))
+      expect(config.cookies, host).toBeUndefined()
+    }
+  })
+
+  it('overrides ONLY the sessionToken domain, leaving other options to @auth/core defaults', () => {
+    const config = requestScopedConfig(reqFor({ host: 'cloudnativedays.no' }))
+    expect(config.cookies?.sessionToken?.options).toEqual({
+      domain: '.cloudnativedays.no',
+    })
+    // Same providers/callbacks object as the static config — a shallow overlay.
+    expect(config.providers).toBe(requestScopedConfig(undefined).providers)
   })
 })
