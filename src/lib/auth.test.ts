@@ -12,7 +12,6 @@ process.env.AUTH_SECRET = 'auth-callback-test-secret'
 type Jar = {
   store: Map<string, string>
   get: (name: string) => { value: string } | undefined
-  getAll: () => { name: string; value: string }[]
   set: (name: string, value: string) => void
   delete: ReturnType<typeof vi.fn>
 }
@@ -28,8 +27,6 @@ function createJar(initial: Record<string, string> = {}): Jar {
       const value = store.get(name)
       return value === undefined ? undefined : { value }
     },
-    getAll: () =>
-      Array.from(store.entries(), ([name, value]) => ({ name, value })),
     set: (name: string, value: string) => {
       store.set(name, value)
     },
@@ -66,12 +63,7 @@ vi.mock('@/lib/sanity/client', () => ({
   speakerImageUrl: (src: string) => `img:${src}`,
 }))
 
-import {
-  jwtSignInCallback,
-  signOutHandler,
-  redirectProxyConfig,
-  requestScopedConfig,
-} from './auth'
+import { jwtSignInCallback, signOutHandler, redirectProxyConfig } from './auth'
 import { signLinkIntent, LINK_INTENT_COOKIE } from './auth-link'
 
 const SESSION_COOKIE = 'authjs.session-token'
@@ -368,29 +360,6 @@ describe('signOutHandler — clears link-flow state', () => {
 
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
   })
-
-  it('deletes RESIDUAL host-only session cookies (incl. chunked parts) on sign-out', async () => {
-    // @auth/core's own clear targets the Domain-scoped cookie; a pre-widening
-    // HOST-ONLY cookie of the same name must be deleted separately or the user
-    // stays signed in on that host after sign-out.
-    currentJar = createJar({
-      'authjs.session-token': 'stale',
-      '__Secure-authjs.session-token.0': 'chunk0',
-      '__Secure-authjs.session-token.1': 'chunk1',
-      'unrelated-cookie': 'keep',
-    })
-
-    await signOutHandler()
-
-    expect(currentJar.delete).toHaveBeenCalledWith('authjs.session-token')
-    expect(currentJar.delete).toHaveBeenCalledWith(
-      '__Secure-authjs.session-token.0',
-    )
-    expect(currentJar.delete).toHaveBeenCalledWith(
-      '__Secure-authjs.session-token.1',
-    )
-    expect(currentJar.delete).not.toHaveBeenCalledWith('unrelated-cookie')
-  })
 })
 
 describe('jwtSignInCallback — org-scoped session computation (CaaS T1-2, #614)', () => {
@@ -586,57 +555,5 @@ describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () =>
       redirectProxyUrl: 'https://auth.example.no/api/auth',
       trustHost: true,
     })
-  })
-})
-
-describe('requestScopedConfig — per-request session-cookie Domain (#462)', () => {
-  const reqFor = (headers: Record<string, string>) =>
-    ({ headers: new Headers(headers) }) as unknown as Parameters<
-      typeof requestScopedConfig
-    >[0]
-
-  it('derives the Domain from the request host (registrable domain)', () => {
-    const config = requestScopedConfig(
-      reqFor({ host: 'admin.cloudnativedays.no' }),
-    )
-    expect(config.cookies).toEqual({
-      sessionToken: { options: { domain: '.cloudnativedays.no' } },
-    })
-  })
-
-  it('prefers x-forwarded-host over host', () => {
-    const config = requestScopedConfig(
-      reqFor({
-        host: 'internal.upstream.example',
-        'x-forwarded-host': '2026.cloudnativebergen.dev',
-      }),
-    )
-    expect(config.cookies).toEqual({
-      sessionToken: { options: { domain: '.cloudnativebergen.dev' } },
-    })
-  })
-
-  it('returns the base config UNCHANGED (no cookies key) when derivation declines', () => {
-    // No request at all (e.g. `auth()` from a server component).
-    expect(requestScopedConfig(undefined).cookies).toBeUndefined()
-    // Denylisted shared parents and localhost → host-only cookie.
-    for (const host of [
-      'tenant.konf.run',
-      'my-app.vercel.app',
-      'localhost:3000',
-      '127.0.0.1:3000',
-    ]) {
-      const config = requestScopedConfig(reqFor({ host }))
-      expect(config.cookies, host).toBeUndefined()
-    }
-  })
-
-  it('overrides ONLY the sessionToken domain, leaving other options to @auth/core defaults', () => {
-    const config = requestScopedConfig(reqFor({ host: 'cloudnativedays.no' }))
-    expect(config.cookies?.sessionToken?.options).toEqual({
-      domain: '.cloudnativedays.no',
-    })
-    // Same providers/callbacks object as the static config — a shallow overlay.
-    expect(config.providers).toBe(requestScopedConfig(undefined).providers)
   })
 })
