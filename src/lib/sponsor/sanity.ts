@@ -7,6 +7,7 @@ import {
   SponsorEmailTemplate,
 } from './types'
 import { prepareArrayWithKeys, createReference } from '@/lib/sanity/helpers'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import {
   getOrganizationRefForCurrentConference,
   organizationField,
@@ -405,12 +406,22 @@ const EMAIL_TEMPLATE_PROJECTION = `{
   sortOrder
 }`
 
+/**
+ * Sponsor email templates carry an `organization` ref (CaaS T1-1). Every read
+ * and mutation below is TENANT-SCOPED (#616/#19) to the current-domain org so an
+ * organizer can only see and modify their OWN org's templates — a cross-tenant
+ * read OR write (the worse half) is denied. Resolved once per call; a null org
+ * (unresolvable tenant / pre-044 backfill) degrades to the prior global read.
+ */
 export async function getSponsorEmailTemplates(): Promise<{
   templates?: SponsorEmailTemplate[]
   error?: Error
 }> {
   try {
-    const templates = await clientWrite.fetch(
+    const orgId = await getOrganizationRefForCurrentConference()
+    const templates = await scopedFetch<SponsorEmailTemplate[]>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate"] | order(category asc, sortOrder asc) ${EMAIL_TEMPLATE_PROJECTION}`,
     )
     return { templates }
@@ -423,7 +434,10 @@ export async function getSponsorEmailTemplate(
   id: string,
 ): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
-    const template = await clientWrite.fetch(
+    const orgId = await getOrganizationRefForCurrentConference()
+    const template = await scopedFetch<SponsorEmailTemplate | null>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate" && _id == $id][0] ${EMAIL_TEMPLATE_PROJECTION}`,
       { id },
     )
@@ -437,7 +451,10 @@ export async function getSponsorEmailTemplateBySlug(
   slug: string,
 ): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
-    const template = await clientWrite.fetch(
+    const orgId = await getOrganizationRefForCurrentConference()
+    const template = await scopedFetch<SponsorEmailTemplate | null>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate" && slug.current == $slug][0] ${EMAIL_TEMPLATE_PROJECTION}`,
       { slug },
     )
@@ -445,6 +462,23 @@ export async function getSponsorEmailTemplateBySlug(
   } catch (error) {
     return { error: error as Error }
   }
+}
+
+/**
+ * True when `id` names a sponsorEmailTemplate owned by the current-domain org.
+ * The mutation guard (#19): a scoped existence probe that returns false for a
+ * FOREIGN org's template, so update/delete/set-default reject rather than
+ * silently mutating another tenant's data. A null org degrades to existence-only.
+ */
+async function isTemplateInCurrentOrg(id: string): Promise<boolean> {
+  const orgId = await getOrganizationRefForCurrentConference()
+  const found = await scopedFetch<string | null>(
+    clientWrite,
+    { orgId },
+    `*[_type == "sponsorEmailTemplate" && _id == $id][0]._id`,
+    { id },
+  )
+  return Boolean(found)
 }
 
 export async function createSponsorEmailTemplate(data: {
@@ -496,6 +530,10 @@ export async function updateSponsorEmailTemplate(
   },
 ): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
   try {
+    // Tenant guard (#19): reject a write to another org's template.
+    if (!(await isTemplateInCurrentOrg(id))) {
+      return { error: new Error('Sponsor email template not found') }
+    }
     const patch: Record<string, unknown> = {}
     if (data.title !== undefined) patch.title = data.title
     if (data.slug !== undefined)
@@ -519,6 +557,10 @@ export async function deleteSponsorEmailTemplate(
   id: string,
 ): Promise<{ error?: Error }> {
   try {
+    // Tenant guard (#19): reject a delete of another org's template.
+    if (!(await isTemplateInCurrentOrg(id))) {
+      return { error: new Error('Sponsor email template not found') }
+    }
     await clientWrite.delete(id)
     return {}
   } catch (error) {
@@ -530,11 +572,16 @@ export async function setDefaultSponsorEmailTemplate(
   id: string,
 ): Promise<{ error?: Error }> {
   try {
-    // Fetch template to derive category server-side (don't trust client)
-    const current = await clientWrite.fetch<{
+    // Fetch template to derive category server-side (don't trust client).
+    // Tenant-scoped (#19): a foreign org's template reads as not-found, so
+    // set-default can never toggle another tenant's template.
+    const orgId = await getOrganizationRefForCurrentConference()
+    const current = await scopedFetch<{
       isDefault?: boolean
       category?: string
-    }>(
+    } | null>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate" && _id == $id][0]{ isDefault, category }`,
       { id },
     )
@@ -545,8 +592,11 @@ export async function setDefaultSponsorEmailTemplate(
       return { error: new Error('Sponsor email template has no category') }
     }
 
-    // Unset is_default for all other templates in the same category
-    const others = await clientWrite.fetch<{ _id: string }[]>(
+    // Unset is_default for all OTHER templates in the same category — scoped to
+    // this org so a shared category name across tenants can't cross-clear.
+    const others = await scopedFetch<{ _id: string }[]>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate" && category == $category && _id != $id && isDefault == true]{ _id }`,
       { category: current.category, id },
     )
@@ -567,8 +617,13 @@ export async function reorderSponsorEmailTemplates(
   orderedIds: string[],
 ): Promise<{ error?: Error }> {
   try {
-    // Validate all IDs belong to sponsorEmailTemplate documents
-    const valid = await clientWrite.fetch<{ _id: string }[]>(
+    // Validate all IDs belong to sponsorEmailTemplate documents OWNED BY this
+    // org (#19): a foreign template id is not in `valid`, so reorder rejects it
+    // and never re-sorts another tenant's templates.
+    const orgId = await getOrganizationRefForCurrentConference()
+    const valid = await scopedFetch<{ _id: string }[]>(
+      clientWrite,
+      { orgId },
       `*[_type == "sponsorEmailTemplate" && _id in $ids]{ _id }`,
       { ids: orderedIds },
     )
