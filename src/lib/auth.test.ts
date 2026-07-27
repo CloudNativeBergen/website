@@ -590,8 +590,10 @@ describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () =>
 })
 
 describe('staticSessionCookieDomain — primary-domain cookie Domain (#462 re-fix)', () => {
+  // The override is production-only (see below), so the derivation cases default
+  // to a production env; individual tests override NODE_ENV/VERCEL_ENV.
   const env = (vars: Record<string, string>) =>
-    vars as unknown as NodeJS.ProcessEnv
+    ({ NODE_ENV: 'production', ...vars }) as unknown as NodeJS.ProcessEnv
 
   it('derives the registrable domain from NEXT_PUBLIC_BASE_URL (full URL)', () => {
     expect(
@@ -663,6 +665,67 @@ describe('staticSessionCookieDomain — primary-domain cookie Domain (#462 re-fi
     // Unparseable.
     expect(
       staticSessionCookieDomain(env({ NEXT_PUBLIC_BASE_URL: 'not a url' })),
+    ).toBeUndefined()
+  })
+
+  it('applies the Domain ONLY in a genuine production deployment', () => {
+    const raw = (vars: Record<string, string>) =>
+      vars as unknown as NodeJS.ProcessEnv
+
+    // Off-Vercel production (NODE_ENV=production, no VERCEL_ENV) → Domain set.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBe('.cloudnativedays.no')
+
+    // Vercel production → Domain set.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          VERCEL_ENV: 'production',
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBe('.cloudnativedays.no')
+  })
+
+  it('stays host-only (no Domain) in any NON-production env even when NEXT_PUBLIC_URL is set', () => {
+    const raw = (vars: Record<string, string>) =>
+      vars as unknown as NodeJS.ProcessEnv
+
+    // Local dev.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          NODE_ENV: 'development',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBeUndefined()
+
+    // Vercel PREVIEW — NODE_ENV is 'production' here, so only VERCEL_ENV can
+    // distinguish it; a preview must NOT inherit the production Domain even if
+    // NEXT_PUBLIC_URL leaks into the preview scope (the mismatch the gate guards).
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          VERCEL_ENV: 'preview',
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBeUndefined()
+
+    // No env markers at all → not production → host-only.
+    expect(
+      staticSessionCookieDomain(
+        raw({ NEXT_PUBLIC_URL: 'https://cloudnativedays.no' }),
+      ),
     ).toBeUndefined()
   })
 })

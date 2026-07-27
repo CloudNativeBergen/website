@@ -477,6 +477,23 @@ export function redirectProxyConfig(
  * DEFERRED to when auth goes multi-tenant (central-auth-origin work, #619),
  * where it must be re-introduced WITHOUT the lazy-config form.
  *
+ * PRODUCTION-ONLY: the derived `Domain` is baked into the static config and
+ * therefore applies to EVERY request host. On a single-domain deployment that
+ * is exactly right, but a request for a DIFFERENT registrable domain (a Vercel
+ * preview, or a future tenant on another apex — deferred to #619) would receive
+ * a `Set-Cookie` whose `Domain` the browser rejects, silently dropping auth.
+ * We therefore only emit the override in a real PRODUCTION deployment, where
+ * `NEXT_PUBLIC_URL` is production-scoped and matches the sole production host.
+ * Note Vercel sets `NODE_ENV=production` for BOTH production AND preview builds,
+ * so `NODE_ENV` alone cannot tell them apart — `VERCEL_ENV` does. We treat it as
+ * production when `VERCEL_ENV === 'production'`, or — OFF Vercel (self-hosted /
+ * CI, where `VERCEL_ENV` is unset) — when `NODE_ENV === 'production'`. A Vercel
+ * PREVIEW (`VERCEL_ENV='preview'`, `NODE_ENV='production'`) is thus NOT treated
+ * as production and stays host-only, which is what protects preview/other-host
+ * auth from a mismatched `Domain` even if `NEXT_PUBLIC_URL` is ever set more
+ * broadly than the production scope. True multi-tenant per-request derivation
+ * is DELIBERATELY DEFERRED to #619.
+ *
  * FAIL-SAFE: `deriveSessionCookieDomain` returns `undefined` for localhost, IP
  * literals, previews on `vercel.app`, platform-shared parents (`konf.run`),
  * public suffixes, unset/blank env, and anything unparseable — in which case NO
@@ -490,6 +507,15 @@ export function redirectProxyConfig(
 export function staticSessionCookieDomain(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
+  // Production-only gate (see doc comment): apply the cross-subdomain Domain
+  // ONLY in a genuine production deployment. `VERCEL_ENV` is authoritative on
+  // Vercel (preview also has `NODE_ENV=production`); off Vercel we fall back to
+  // `NODE_ENV`. Any non-production env stays host-only.
+  const isProduction =
+    env.VERCEL_ENV === 'production' ||
+    (!env.VERCEL_ENV && env.NODE_ENV === 'production')
+  if (!isProduction) return undefined
+
   const configured =
     env.NEXT_PUBLIC_BASE_URL?.trim() || env.NEXT_PUBLIC_URL?.trim() || ''
   if (!configured) return undefined

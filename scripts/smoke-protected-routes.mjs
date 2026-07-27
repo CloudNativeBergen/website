@@ -18,19 +18,28 @@
  * Hitting a protected route UNAUTHENTICATED runs the middleware and should
  * redirect to sign-in (3xx) WITHOUT needing Sanity/WorkOS/any backend.
  *
- * Usage: node scripts/smoke-protected-routes.mjs [--port 3123] [--start-cmd "…"]
- * Assumes a production build already exists in `.next` (run `next build` first).
+ * Usage: node scripts/smoke-protected-routes.mjs [--port 3123]
+ *   (or set SMOKE_PORT). Assumes a production build already exists in `.next`
+ *   (run `next build` first).
  */
 
 import { spawn } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-const PORT = Number(
+const RAW_PORT =
   process.env.SMOKE_PORT ??
-    (process.argv.includes('--port')
-      ? process.argv[process.argv.indexOf('--port') + 1]
-      : 3123),
-)
+  (process.argv.includes('--port')
+    ? process.argv[process.argv.indexOf('--port') + 1]
+    : '3123')
+const PORT = Number(RAW_PORT)
+// A bare `--port` with no value, or a non-numeric SMOKE_PORT, yields NaN — fail
+// loudly instead of booting `next start` against an invalid `http://…:NaN` URL.
+if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
+  process.stderr.write(
+    `[smoke] invalid port: ${JSON.stringify(RAW_PORT)} — pass a valid --port <1-65535> or SMOKE_PORT.\n`,
+  )
+  process.exit(1)
+}
 const BASE = `http://127.0.0.1:${PORT}`
 const BOOT_TIMEOUT_MS = 90_000
 const POLL_INTERVAL_MS = 750
@@ -127,10 +136,26 @@ function stopServer() {
   }
 }
 
-// Kill the server whatever happens.
-for (const sig of ['exit', 'SIGINT', 'SIGTERM', 'uncaughtException']) {
-  process.on(sig, stopServer)
+// Best-effort cleanup on NORMAL process exit — the 'exit' handler runs
+// synchronously and cannot change the exit code or run async work.
+process.on('exit', stopServer)
+
+// On a SIGNAL or an UNCAUGHT EXCEPTION we must exit EXPLICITLY: installing a
+// handler overrides Node's default behavior of terminating the process, so if
+// we only stopped the child the process would hang (child killed, parent alive
+// with nothing left to do). Stop the child, then exit non-zero.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    log(`received ${sig} — stopping server and exiting`)
+    stopServer()
+    process.exit(1)
+  })
 }
+process.on('uncaughtException', (err) => {
+  log(`uncaught exception: ${err?.stack ?? err}`)
+  stopServer()
+  process.exit(1)
+})
 
 async function waitForReady() {
   const deadline = Date.now() + BOOT_TIMEOUT_MS
