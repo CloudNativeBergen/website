@@ -7,6 +7,10 @@ import type { Resvg as ResvgType } from '@resvg/resvg-js'
  * module is imported by the contract-PDF pipeline, that would take down ALL
  * contract generation, not just the logo. Loading it inside the try/catch
  * below keeps any load failure contained to "generate the PDF without a logo".
+ *
+ * Same house pattern as `loadResvg` in `src/lib/pwa/icons.ts` (type-only
+ * imports are legal in `typeof` type queries, so the annotation typechecks
+ * without pulling the native module into the import graph).
  */
 function loadResvg(): typeof ResvgType {
   // Deliberate lazy CommonJS require so a native-binary load failure surfaces
@@ -23,7 +27,7 @@ function loadResvg(): typeof ResvgType {
 const DEFAULT_RASTER_WIDTH = 600
 
 /** Raster data URLs that `@react-pdf/renderer`'s <Image> already supports. */
-const RASTER_DATA_URL_RE = /^data:image\/(png|jpe?g|jpg)/i
+const RASTER_DATA_URL_RE = /^data:image\/(png|jpe?g)/i
 
 /**
  * Heuristic for detecting inline SVG markup. Allows any combination of a
