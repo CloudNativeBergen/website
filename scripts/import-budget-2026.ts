@@ -23,32 +23,47 @@
  *   arithmetically identical.
  *
  * USAGE
- *   pnpm tsx scripts/import-budget-2026.ts            # dry-run (default): prints
+ *   rtk pnpm tsx scripts/import-budget-2026.ts        # dry-run (default): prints
  *                                                     # resolved conference, full
  *                                                     # document JSON and the
  *                                                     # parity table. Writes nothing.
- *   pnpm tsx scripts/import-budget-2026.ts --write    # after parity PASSES, does a
+ *   rtk pnpm tsx scripts/import-budget-2026.ts --write # after parity PASSES, does a
  *                                                     # createOrReplace of the doc.
+ *
+ *   --write refuses to run if the model reports any structural warnings; add
+ *   --allow-warnings to proceed once they have been reviewed and are expected.
  *
  *   Idempotent: the document _id is deterministic (budgetDocumentId(conferenceId)),
  *   so re-running --write replaces the same document rather than creating duplicates.
  *
  * ENVIRONMENT
  *   Reads NEXT_PUBLIC_SANITY_PROJECT_ID / NEXT_PUBLIC_SANITY_DATASET and a Sanity
- *   token from .env / .env.local. Resolving the conference needs read access;
+ *   token from .env / .env.local. Precedence is shell/CI > .env.local > .env:
+ *   explicitly exported variables always win, so a CI job or an operator export
+ *   cannot be silently overridden by a stale .env.local (which would risk writing
+ *   to the wrong dataset). The resolved projectId/dataset are printed before any
+ *   --write for confirmation. Resolving the conference needs read access;
  *   --write needs SANITY_API_TOKEN_WRITE. If no read token is configured you can
  *   still exercise the parity proof by passing the target id explicitly:
- *     CONFERENCE_ID=<id> pnpm tsx scripts/import-budget-2026.ts
- *   (the default path queries Sanity for the id and does NOT need this).
+ *     CONFERENCE_ID=<id> rtk pnpm tsx scripts/import-budget-2026.ts
+ *   (the default path queries Sanity for the id and does NOT need this). With
+ *   --write, a CONFERENCE_ID whose conference cannot be read is refused (fail
+ *   closed) so a typo'd id can never create a dangling budget document.
  */
 
 // Load env BEFORE importing anything that constructs the Sanity client at module
 // load time (client.ts reads process.env eagerly). App modules are pulled in via
 // dynamic import() below so they are not hoisted above this config() call.
+//
+// Precedence: shell/CI (already-set process.env) > .env.local > .env. dotenv never
+// overwrites an existing key, so loading .env.local before .env gives .env.local
+// priority over .env while both defer to anything the operator/CI exported. We do
+// NOT pass override:true — that would let a stale .env.local clobber a deliberate
+// shell/CI SANITY_* value and mis-target the write.
 import { config } from 'dotenv'
 import { resolve } from 'path'
+config({ path: resolve(process.cwd(), '.env.local') })
 config({ path: resolve(process.cwd(), '.env') })
-config({ path: resolve(process.cwd(), '.env.local'), override: true })
 
 import type {
   BudgetFixedCostItem,
@@ -474,7 +489,55 @@ const RAW_SCENARIOS: RawScenario[] = [
   },
 ]
 
+/**
+ * Assert a raw scenario's positional arrays line up with the key lists they are
+ * mapped against. `raw.tickets[i]` etc. assume exact index alignment; a length or
+ * order drift would yield `undefined` quantities/counts that the mapper treats as
+ * 0 (parity may still pass) and then fail Sanity validation on --write. Fail loud
+ * and early instead, with a message naming the offending scenario and array.
+ */
+function assertScenarioAlignment(raw: RawScenario): void {
+  const checks: Array<{ name: string; got: number; want: number }> = [
+    {
+      name: 'tickets',
+      got: raw.tickets.length,
+      want: SCENARIO_TICKET_KEYS.length,
+    },
+    {
+      name: 'tiers',
+      got: raw.tiers.length,
+      want: sponsorTierAssumptions.length,
+    },
+    {
+      name: 'addons',
+      got: raw.addons.length,
+      want: SCENARIO_ADDON_KEYS.length,
+    },
+  ]
+  for (const { name, got, want } of checks) {
+    if (got !== want) {
+      throw new Error(
+        `Scenario "${raw.key}": ${name} array has ${got} entries but ${want} ` +
+          `are required (must align 1:1 with its key list). Fix the ${name} ` +
+          `array so every position maps to a known key.`,
+      )
+    }
+  }
+  // Every ticket quantity must be a finite integer — an undefined/NaN slot would
+  // otherwise silently become 0 and later fail the Sanity `quantity` requirement.
+  raw.tickets.forEach((q, i) => {
+    if (!Number.isInteger(q)) {
+      throw new Error(
+        `Scenario "${raw.key}": tickets[${i}] (${SCENARIO_TICKET_KEYS[i]}) is ` +
+          `${q}, expected an integer quantity.`,
+      )
+    }
+  })
+}
+
 function buildScenario(raw: RawScenario): BudgetScenarioItem {
+  assertScenarioAlignment(raw)
+
   const ticketCounts = SCENARIO_TICKET_KEYS.map((ticketType, i) => ({
     ticketType,
     quantity: raw.tickets[i],
@@ -585,11 +648,20 @@ const MONEY_EPSILON = 0.01 // 1 øre; identical IEEE-754 ops match far tighter.
 // SCRIPT
 // ===========================================================================
 
-async function resolveConference(): Promise<{
+interface ResolvedConference {
   _id: string
   title: string
   startDate?: string
-}> {
+  /**
+   * True only when the conference was confirmed to exist via a successful Sanity
+   * read. False when a CONFERENCE_ID override was supplied but the confirmatory
+   * read failed or returned nothing — such an id is safe for the parity proof
+   * (dry-run) but must NOT back a --write (see main()).
+   */
+  resolved: boolean
+}
+
+async function resolveConference(): Promise<ResolvedConference> {
   const override = process.env.CONFERENCE_ID
   if (override) {
     const { clientReadUncached } = await import('../src/lib/sanity/client')
@@ -599,9 +671,15 @@ async function resolveConference(): Promise<{
         { id: override },
       )
       .catch(() => null)
-    if (doc) return doc
-    // Read may be unauthorized in this environment; trust the explicit override.
-    return { _id: override, title: '(unresolved — CONFERENCE_ID override)' }
+    if (doc) return { ...doc, resolved: true }
+    // Read may be unauthorized in this environment (or the id is a typo). Trust
+    // the override for the dry-run parity proof, but mark it UNRESOLVED so the
+    // write path can fail closed rather than create a dangling budget document.
+    return {
+      _id: override,
+      title: '(unresolved — CONFERENCE_ID override)',
+      resolved: false,
+    }
   }
 
   const { clientReadUncached } = await import('../src/lib/sanity/client')
@@ -623,7 +701,7 @@ async function resolveConference(): Promise<{
   const y2026 = editions.filter(
     (e) => e.startDate?.startsWith('2026') || /2026/.test(e.title),
   )
-  if (y2026.length === 1) return y2026[0]
+  if (y2026.length === 1) return { ...y2026[0], resolved: true }
   if (y2026.length > 1) {
     throw new Error(
       `Ambiguous 2026 edition — multiple matches:\n${y2026
@@ -670,20 +748,40 @@ interface ParityRow {
   pass: boolean
 }
 
-async function runParity(
-  doc: ConferenceBudgetDocument,
-): Promise<{ rows: ParityRow[]; allPass: boolean }> {
+interface ScenarioWarningRow {
+  scenario: string
+  code: string
+  message: string
+}
+
+async function runParity(doc: ConferenceBudgetDocument): Promise<{
+  rows: ParityRow[]
+  warnings: ScenarioWarningRow[]
+  allPass: boolean
+}> {
   const { budgetDocumentToModel } = await import('../src/lib/budget/mapper')
   const { computeScenario } = await import('../src/lib/budget/model')
   const model = budgetDocumentToModel(doc)
 
   const rows: ParityRow[] = []
+  const warnings: ScenarioWarningRow[] = []
   for (const scenario of model.scenarios) {
     const expected = EXPECTED[scenario.key]
     if (!expected) {
       throw new Error(`No expected values for scenario "${scenario.key}".`)
     }
     const r = computeScenario(model, scenario)
+    // The production model flags structural misconfiguration (e.g. no
+    // sponsor-included sink for derived sponsor tickets) via `warnings`. A
+    // scenario can match every number yet still carry a warning, so collect
+    // them and surface prominently — parity numbers alone are not a full proof.
+    for (const w of r.warnings) {
+      warnings.push({
+        scenario: scenario.name,
+        code: w.code,
+        message: w.message,
+      })
+    }
     const actual: ExpectedScenario = {
       conference: r.headcounts.conference,
       workshop: r.headcounts.workshop,
@@ -709,8 +807,11 @@ async function runParity(
       const act = actual[field]
       const diff = act - exp
       const isHeadcount = (headcountFields as readonly string[]).includes(field)
+      // Headcounts are integers by definition: require EXACT integer equality —
+      // no rounding tolerance, so 309.6 can never pass as 310. Only money floats
+      // get the small IEEE-754 epsilon.
       const pass = isHeadcount
-        ? Math.round(act) === Math.round(exp)
+        ? Number.isInteger(act) && act === exp
         : Math.abs(diff) <= MONEY_EPSILON
       rows.push({
         scenario: scenario.name,
@@ -722,7 +823,22 @@ async function runParity(
       })
     }
   }
-  return { rows, allPass: rows.every((row) => row.pass) }
+  return { rows, warnings, allPass: rows.every((row) => row.pass) }
+}
+
+function printScenarioWarnings(warnings: ScenarioWarningRow[]): void {
+  if (warnings.length === 0) return
+  console.log(
+    '\n' +
+      '!'.repeat(88) +
+      `\nMODEL WARNINGS (${warnings.length}) — the production budget model flags ` +
+      `structural\nmisconfiguration in the constructed document. The numbers may ` +
+      `still match, but\nthese MUST be reviewed before trusting the import:`,
+  )
+  for (const w of warnings) {
+    console.log(`\n  [${w.scenario}] ${w.code}\n    ${w.message}`)
+  }
+  console.log('\n' + '!'.repeat(88))
 }
 
 function printParityTable(rows: ParityRow[]): void {
@@ -757,6 +873,7 @@ function printParityTable(rows: ParityRow[]): void {
 
 async function main(): Promise<void> {
   const write = process.argv.includes('--write')
+  const allowWarnings = process.argv.includes('--allow-warnings')
 
   const { budgetDocumentId } = await import('../src/lib/budget/sanity')
 
@@ -776,8 +893,9 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(doc, null, 2))
 
   console.log('\nParity check (production TS model vs Python expected values):')
-  const { rows, allPass } = await runParity(doc)
+  const { rows, warnings, allPass } = await runParity(doc)
   printParityTable(rows)
+  printScenarioWarnings(warnings)
 
   if (!allPass) {
     console.error(
@@ -793,12 +911,58 @@ async function main(): Promise<void> {
       '\nDry-run complete. No changes written. Re-run with --write to commit ' +
         `the document (createOrReplace on ${documentId}).`,
     )
+    if (warnings.length > 0) {
+      console.log(
+        `NOTE: ${warnings.length} model warning(s) above — a --write would be ` +
+          'refused until they are resolved (or explicitly acknowledged with ' +
+          '--allow-warnings).',
+      )
+    }
     return
   }
 
+  // --write safety gate 1: never write against a conference we could not confirm
+  // exists. A typo'd/unauthorized CONFERENCE_ID is fine for the dry-run proof but
+  // would otherwise create a dangling budget document pointing at a bad _ref.
+  if (!conference.resolved) {
+    console.error(
+      '\nRefusing to --write: the conference could not be confirmed to exist ' +
+        `(CONFERENCE_ID="${process.env.CONFERENCE_ID ?? ''}" read failed or ` +
+        'returned nothing). Configure SANITY_API_TOKEN_READ so the id can be ' +
+        'verified, or fix the id. Not writing to an unverified conference.',
+    )
+    process.exit(1)
+  }
+
+  // --write safety gate 2: the model flagged structural misconfiguration. Numbers
+  // match, but do not silently write a document the model considers misconfigured
+  // unless the operator has seen the warnings and explicitly acknowledged them.
+  if (warnings.length > 0 && !allowWarnings) {
+    console.error(
+      `\nRefusing to --write: the model reported ${warnings.length} warning(s) ` +
+        '(shown above). Review them; if they are expected, re-run with ' +
+        '--write --allow-warnings to proceed.',
+    )
+    process.exit(1)
+  }
+
+  const { clientWrite } = await import('../src/lib/sanity/client')
+  // Print the exact write target for operator confirmation — this is what env
+  // precedence actually resolved to, so a mis-targeted dataset is caught by eye
+  // before anything is committed.
+  const writeConfig = clientWrite.config()
+  console.log(
+    `\n--write target:\n` +
+      `  projectId:  ${writeConfig.projectId ?? '(unset!)'}\n` +
+      `  dataset:    ${writeConfig.dataset ?? '(unset!)'}\n` +
+      `  document:   ${documentId}` +
+      (allowWarnings && warnings.length > 0
+        ? `\n  (proceeding past ${warnings.length} acknowledged warning(s))`
+        : ''),
+  )
+
   console.log(`\n--write: committing ${documentId}…`)
   try {
-    const { clientWrite } = await import('../src/lib/sanity/client')
     const written = await clientWrite.createOrReplace(
       doc as unknown as Record<string, unknown> & {
         _id: string
