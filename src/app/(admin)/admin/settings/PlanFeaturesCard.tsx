@@ -1,7 +1,7 @@
 import { SparklesIcon } from '@heroicons/react/24/outline'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 import type { OrganizationPlan } from '@/lib/organization/types'
-import type { FeatureReadiness } from '@/lib/features/registry'
+import type { FeatureId, FeatureReadiness } from '@/lib/features/registry'
 import { InfoCard } from './settingsLayout'
 
 /**
@@ -15,7 +15,7 @@ import { InfoCard } from './settingsLayout'
  */
 
 export interface PlanFeatureRow {
-  id: string
+  id: FeatureId
   title: string
   description: string
   readiness: FeatureReadiness
