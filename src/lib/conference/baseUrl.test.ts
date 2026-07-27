@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { conferenceBaseUrl } from './baseUrl'
+import { conferenceBaseUrl, hasConferenceDomain } from './baseUrl'
 import { platformBaseUrl } from '@/lib/branding/platform'
 
 describe('conferenceBaseUrl', () => {
@@ -25,6 +25,12 @@ describe('conferenceBaseUrl', () => {
     expect(conferenceBaseUrl({ domains: ['', '   ', 'second.example'] })).toBe(
       'https://second.example',
     )
+  })
+
+  it('skips wildcard routing entries — outbound links need a concrete host', () => {
+    expect(
+      conferenceBaseUrl({ domains: ['*.example.com', 'example.com'] }),
+    ).toBe('https://example.com')
   })
 
   it('uses http for an actual localhost dev domain (with port)', () => {
@@ -54,6 +60,17 @@ describe('conferenceBaseUrl', () => {
   })
 })
 
+describe('hasConferenceDomain', () => {
+  it('agrees with conferenceBaseUrl on blanks and wildcards', () => {
+    expect(hasConferenceDomain({ domains: ['', '*.x.com', 'x.com'] })).toBe(
+      true,
+    )
+    expect(hasConferenceDomain({ domains: ['', '*.x.com'] })).toBe(false)
+    expect(hasConferenceDomain({ domains: [] })).toBe(false)
+    expect(hasConferenceDomain(undefined)).toBe(false)
+  })
+})
+
 describe('platformBaseUrl', () => {
   afterEach(() => vi.unstubAllEnvs())
 
@@ -65,6 +82,16 @@ describe('platformBaseUrl', () => {
   it('adds an https scheme when the configured value has none', () => {
     vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'platform.example')
     expect(platformBaseUrl()).toBe('https://platform.example')
+  })
+
+  it('returns the ORIGIN only when a path is misconfigured', () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://platform.example/app/')
+    expect(platformBaseUrl()).toBe('https://platform.example')
+  })
+
+  it('uses http for a scheme-less localhost value', () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'localhost:3000')
+    expect(platformBaseUrl()).toBe('http://localhost:3000')
   })
 
   it('falls back to the legacy NEXT_PUBLIC_URL', () => {

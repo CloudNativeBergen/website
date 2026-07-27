@@ -1,3 +1,5 @@
+import { isLocalhostDomain } from '@/lib/environment/localhost'
+
 /**
  * The neutral, brand-free PLATFORM name (CaaS de-branding, go-live gate G2).
  *
@@ -38,10 +40,18 @@ export function platformBaseUrl(): string {
     ''
   ).trim()
   if (configured) {
+    // Enforce the origin contract: strip any configured path, and give a
+    // scheme-less value the right scheme (`http` for a localhost dev origin).
     const withScheme = /^https?:\/\//i.test(configured)
       ? configured
-      : `https://${configured}`
-    return withScheme.replace(/\/+$/, '')
+      : `${isLocalhostDomain(configured) ? 'http' : 'https'}://${configured}`
+    try {
+      return new URL(withScheme).origin
+    } catch {
+      console.error(
+        `[baseUrl] Configured platform base URL is not a valid URL: "${configured}"`,
+      )
+    }
   }
 
   const vercel = process.env.VERCEL_URL?.trim()

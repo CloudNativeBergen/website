@@ -2,7 +2,10 @@ import React from 'react'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 import { getProposals } from '@/lib/proposal/server'
 import { formatConferenceDateLong } from '@/lib/time'
 import { Status } from '@/lib/proposal/types'
@@ -529,7 +532,7 @@ export default async function MarketingPage() {
                           eventName={conference.title}
                           eventDate={eventDate}
                           baseUrl={
-                            conference.domains?.[0]
+                            hasConferenceDomain(conference)
                               ? conferenceBaseUrl(conference)
                               : undefined
                           }

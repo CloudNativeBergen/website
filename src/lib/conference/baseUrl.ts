@@ -38,9 +38,7 @@ export function conferenceBaseUrl(
     | null
     | undefined,
 ): string {
-  const entry = conference?.domains?.find(
-    (d): d is string => typeof d === 'string' && d.trim().length > 0,
-  )
+  const entry = findOutboundDomain(conference)
 
   if (entry) {
     // domains[] stores bare hostnames, but strip a defensive scheme so a
@@ -56,9 +54,36 @@ export function conferenceBaseUrl(
   }
 
   console.error(
-    `[baseUrl] conference "${conference?.title ?? 'unknown'}" has no domains[]; ` +
+    `[baseUrl] conference "${conference?.title ?? 'unknown'}" has no usable domains[]; ` +
       'falling back to the platform base URL for outbound links. This is a ' +
       'misconfiguration — add a primary domain to this conference.',
   )
   return platformBaseUrl()
+}
+
+/**
+ * First `domains[]` entry usable for OUTBOUND links: non-empty and not a
+ * wildcard routing entry (`*.example.com` matches inbound hosts but is not a
+ * concrete host an email link can point at).
+ */
+function findOutboundDomain(
+  conference: { domains?: readonly string[] | null } | null | undefined,
+): string | undefined {
+  return conference?.domains?.find(
+    (d): d is string =>
+      typeof d === 'string' && d.trim().length > 0 && !d.includes('*'),
+  )
+}
+
+/**
+ * Whether {@link conferenceBaseUrl} would derive a TENANT origin (vs falling
+ * back to the platform). Call sites that deliberately want `undefined`/`''`
+ * instead of a platform fallback must use THIS guard — checking
+ * `domains?.[0]` disagrees with the helper when the first entry is blank or a
+ * wildcard and a later entry is usable.
+ */
+export function hasConferenceDomain(
+  conference: { domains?: readonly string[] | null } | null | undefined,
+): boolean {
+  return findOutboundDomain(conference) !== undefined
 }

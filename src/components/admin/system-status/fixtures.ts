@@ -32,10 +32,11 @@ export const fixtureChecks: SystemCheck[] = [
   {
     id: 'build.baseUrl',
     group: 'build',
-    label: 'NEXT_PUBLIC_BASE_URL',
+    label: 'Platform base URL',
     status: 'warn',
     value: 'not set',
-    detail: 'Absolute links fall back to http://localhost:3000',
+    detail:
+      'None of NEXT_PUBLIC_BASE_URL / NEXT_PUBLIC_URL / VERCEL_URL are set — platform-level outbound links fail in production',
   },
   {
     id: 'build.nodeEnv',
