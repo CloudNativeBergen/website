@@ -96,7 +96,7 @@ export async function GET(
     console.error('Error serving badge credential:', error)
     return NextResponse.json(
       generateErrorResponse('Internal server error', 500),
-      { status: 500 },
+      { status: 500, headers: { ...BADGE_CORS_HEADERS, Vary: 'Accept' } },
     )
   }
 }

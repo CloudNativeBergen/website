@@ -73,7 +73,7 @@ export async function GET(
 
     return NextResponse.json(
       generateErrorResponse('Internal server error', 500),
-      { status: 500 },
+      { status: 500, headers: { ...BADGE_CORS_HEADERS } },
     )
   }
 }
