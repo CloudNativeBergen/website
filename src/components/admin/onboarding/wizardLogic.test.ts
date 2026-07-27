@@ -85,6 +85,19 @@ describe('validateOrganization', () => {
   it('layers the server slug-taken verdict on top', () => {
     expect(validateOrganization(org, true).slug).toContain('Already used')
   })
+  it('caps a hand-edited slug at 96 characters (matches the server schema)', () => {
+    const errs = validateOrganization(
+      {
+        name: 'X',
+        slug: 'a'.repeat(97),
+        slugTouched: true,
+        contactEmail: 'x@example.com',
+        billingEmail: '',
+      },
+      false,
+    )
+    expect(errs.slug).toMatch(/96/)
+  })
 })
 
 describe('validateOrganizer', () => {

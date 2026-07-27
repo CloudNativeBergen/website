@@ -78,6 +78,8 @@ export function validateOrganization(
   else if (!ORG_SLUG_RE.test(slug))
     errs.slug =
       'Use lowercase letters, digits and single dashes (no leading/trailing dash)'
+  else if (slug.length > 96)
+    errs.slug = 'Keep the slug at 96 characters or fewer'
   else if (slugTaken) errs.slug = 'Already used by another organization'
   if (org.contactEmail.trim() === '')
     errs.contactEmail = 'Contact email is required'
