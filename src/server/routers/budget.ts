@@ -8,7 +8,10 @@ import {
 } from '@/lib/budget/sanity'
 import { ensureUniqueArrayKeys } from '@/lib/sanity/helpers'
 import {
+  UpdateConfigSchema,
   UpdateExpensesSchema,
+  UpdateScenariosSchema,
+  UpdateSponsorAssumptionsSchema,
   UpdateTicketTypesSchema,
 } from '../schemas/budget'
 import { adminProcedure, resolveConferenceId, router } from '../trpc'
@@ -83,6 +86,74 @@ export const budgetRouter = router({
         return { success: true, budget }
       } catch (error) {
         wrapUnknown(error, 'Failed to update ticket types')
+      }
+    }),
+
+  updateSponsorAssumptions: adminProcedure
+    .input(UpdateSponsorAssumptionsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      try {
+        const budget = await patchBudgetForConference(conferenceId, {
+          sponsorTierAssumptions: ensureUniqueArrayKeys(
+            input.sponsorTierAssumptions,
+            'sponsortier',
+          ),
+          sponsorAddonAssumptions: ensureUniqueArrayKeys(
+            input.sponsorAddonAssumptions,
+            'sponsoraddon',
+          ),
+        })
+        return { success: true, budget }
+      } catch (error) {
+        wrapUnknown(error, 'Failed to update sponsor assumptions')
+      }
+    }),
+
+  updateConfig: adminProcedure
+    .input(UpdateConfigSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      try {
+        const budget = await patchBudgetForConference(conferenceId, {
+          vatRate: input.vatRate,
+          ticketingFeeRate: input.ticketingFeeRate,
+          dinnerParticipation: input.dinnerParticipation,
+        })
+        return { success: true, budget }
+      } catch (error) {
+        wrapUnknown(error, 'Failed to update budget configuration')
+      }
+    }),
+
+  updateScenarios: adminProcedure
+    .input(UpdateScenariosSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      try {
+        // Each scenario AND its nested count arrays are keyed for Sanity.
+        const scenarios = ensureUniqueArrayKeys(
+          input.scenarios,
+          'scenario',
+        ).map((scenario) => ({
+          ...scenario,
+          ticketCounts: ensureUniqueArrayKeys(
+            scenario.ticketCounts ?? [],
+            'ticket',
+          ),
+          tierCounts: ensureUniqueArrayKeys(scenario.tierCounts ?? [], 'tier'),
+          addonCounts: ensureUniqueArrayKeys(
+            scenario.addonCounts ?? [],
+            'addon',
+          ),
+          cutCosts: scenario.cutCosts ?? [],
+        }))
+        const budget = await patchBudgetForConference(conferenceId, {
+          scenarios,
+        })
+        return { success: true, budget }
+      } catch (error) {
+        wrapUnknown(error, 'Failed to update scenarios')
       }
     }),
 })

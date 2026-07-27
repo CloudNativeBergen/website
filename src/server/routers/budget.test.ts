@@ -322,4 +322,74 @@ describe('budget router — mutations', () => {
     const tickets = lastSet?.ticketTypes as { actualCount?: number | null }[]
     expect(tickets[0].actualCount).toBe(42)
   })
+
+  it('saves sponsor tier + add-on assumptions with unique keys', async () => {
+    const result = await makeCaller(orgOrganizer).updateSponsorAssumptions({
+      sponsorTierAssumptions: [
+        { _key: 'dup', name: 'Gold', priceExVat: 50000, includedTickets: 4 },
+        { _key: 'dup', name: 'Silver', priceExVat: 25000, includedTickets: 2 },
+      ],
+      sponsorAddonAssumptions: [{ name: 'Streaming', priceExVat: 20000 }],
+    })
+    expect(result?.success).toBe(true)
+    const tiers = lastSet?.sponsorTierAssumptions as { _key: string }[]
+    expect(new Set(tiers.map((t) => t._key)).size).toBe(2)
+    const addons = lastSet?.sponsorAddonAssumptions as { _key: string }[]
+    expect(addons[0]._key).toBeTruthy()
+  })
+
+  it('saves scalar config (rates + dinner participation)', async () => {
+    const result = await makeCaller(orgOrganizer).updateConfig({
+      vatRate: 0.25,
+      ticketingFeeRate: 0.045,
+      dinnerParticipation: { floor: 0.4, base: 0.9, decay: 1000 },
+    })
+    expect(result?.success).toBe(true)
+    expect(lastSet?.vatRate).toBe(0.25)
+    expect(lastSet?.ticketingFeeRate).toBe(0.045)
+    expect(lastSet?.dinnerParticipation).toEqual({
+      floor: 0.4,
+      base: 0.9,
+      decay: 1000,
+    })
+  })
+
+  it('rejects a dinner decay of zero (division guard)', async () => {
+    await expect(
+      makeCaller(orgOrganizer).updateConfig({
+        vatRate: 0.25,
+        ticketingFeeRate: 0.045,
+        dinnerParticipation: { floor: 0.4, base: 0.9, decay: 0 },
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('keys scenarios AND their nested count arrays', async () => {
+    const result = await makeCaller(orgOrganizer).updateScenarios({
+      scenarios: [
+        {
+          name: 'Baseline',
+          description: 'Full costs',
+          ticketCounts: [{ ticketType: 'standard', quantity: 75 }],
+          tierCounts: [{ tier: 'gold', count: 10 }],
+          addonCounts: [{ addon: 'streaming', count: 1 }],
+          cutCosts: ['photography'],
+        },
+      ],
+    })
+    expect(result?.success).toBe(true)
+    const scenarios = lastSet?.scenarios as {
+      _key: string
+      ticketCounts: { _key: string }[]
+      tierCounts: { _key: string }[]
+      addonCounts: { _key: string }[]
+      cutCosts: string[]
+    }[]
+    expect(scenarios[0]._key).toBeTruthy()
+    expect(scenarios[0].ticketCounts[0]._key).toBeTruthy()
+    expect(scenarios[0].tierCounts[0]._key).toBeTruthy()
+    expect(scenarios[0].addonCounts[0]._key).toBeTruthy()
+    expect(scenarios[0].cutCosts).toEqual(['photography'])
+  })
 })

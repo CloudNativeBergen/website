@@ -58,6 +58,7 @@ import {
   LinkIcon,
   EnvelopeIcon,
   Cog6ToothIcon,
+  CpuChipIcon,
   ServerStackIcon,
   BeakerIcon,
   SwatchIcon,
@@ -806,6 +807,28 @@ export default async function AdminSettings() {
               </ol>
             </InfoCard>
           </SettingsGroupSection>
+        </div>
+      </section>
+
+      {/* ---- Tools ---- */}
+      <section className="space-y-4">
+        <SectionHeading
+          id="tools"
+          icon={CpuChipIcon}
+          title="Tools"
+          description="Standalone admin tools that live on their own pages, kept off the sidebar to keep navigation short."
+        />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <InfoCard
+            title="Agents"
+            icon={CpuChipIcon}
+            manageLink={{ href: '/admin/agents', label: 'Open Agents' }}
+          >
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              AI agents and automations for this conference — moved here from
+              the sidebar to keep the navigation compact.
+            </p>
+          </InfoCard>
         </div>
       </section>
 

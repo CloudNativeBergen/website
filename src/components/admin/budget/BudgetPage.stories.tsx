@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
+import { expect, userEvent, within } from 'storybook/test'
 
 import { defaultBudgetSeed } from '@/lib/budget/defaults'
 import type { ConferenceBudgetDocument } from '@/lib/budget/types'
@@ -56,6 +57,21 @@ const handlers = [
     }),
   ),
   http.post('/api/trpc/budget.updateTicketTypes', () =>
+    HttpResponse.json({
+      result: { data: { success: true, budget } },
+    }),
+  ),
+  http.post('/api/trpc/budget.updateSponsorAssumptions', () =>
+    HttpResponse.json({
+      result: { data: { success: true, budget } },
+    }),
+  ),
+  http.post('/api/trpc/budget.updateConfig', () =>
+    HttpResponse.json({
+      result: { data: { success: true, budget } },
+    }),
+  ),
+  http.post('/api/trpc/budget.updateScenarios', () =>
     HttpResponse.json({
       result: { data: { success: true, budget } },
     }),
@@ -183,5 +199,47 @@ export const MixedCurrencySponsorIncome: Story = {
       totalSponsors: 24,
     },
     ticketIncome,
+  },
+}
+
+/**
+ * Editing state: the ticket-type and expense cards toggled into their inline
+ * spreadsheet tables (one row per line item, cells edit in place). Drives the
+ * "Edit" affordance so the wide-table editing surface is captured for review.
+ */
+export const EditingTables: Story = {
+  args: { budget, sponsorIncome, ticketIncome },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /edit ticket types/i }),
+    )
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /edit expenses/i }),
+    )
+    // The spreadsheet inputs are now on the page.
+    await canvas.findByRole('textbox', { name: /ticket type name/i })
+  },
+}
+
+/**
+ * Regression net for the section collapse (task 1): clicking the Income
+ * section's Hide toggle collapses ONLY that section — its body unmounts and
+ * `aria-expanded` flips to false — while Expenses stays open independently.
+ */
+export const CollapseIncome: Story = {
+  args: { budget, sponsorIncome, ticketIncome },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const toggles = await canvas.findAllByRole('button', { expanded: true })
+    const incomeToggle = toggles.find((b) => /Income/.test(b.textContent ?? ''))
+    if (!incomeToggle) throw new Error('Income toggle not found')
+    await userEvent.click(incomeToggle)
+    await expect(incomeToggle).toHaveAttribute('aria-expanded', 'false')
+    // Expenses remains open — the two sections collapse independently.
+    const stillOpen = await canvas.findAllByRole('button', { expanded: true })
+    await expect(
+      stillOpen.some((b) => /Expenses/.test(b.textContent ?? '')),
+    ).toBe(true)
   },
 }

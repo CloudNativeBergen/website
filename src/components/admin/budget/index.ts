@@ -1,4 +1,7 @@
 export { BudgetPageClient } from './BudgetPageClient'
 export type { BudgetPageClientProps } from './BudgetPageClient'
+export { BudgetConfigPageClient } from './BudgetConfigPageClient'
+export type { BudgetConfigPageClientProps } from './BudgetConfigPageClient'
 export { BudgetExpensesEditor } from './BudgetExpensesEditor'
 export { BudgetTicketTypesEditor } from './BudgetTicketTypesEditor'
+export { BudgetSponsorAssumptionsEditor } from './BudgetSponsorAssumptionsEditor'

@@ -1,26 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  PencilSquareIcon,
-  PlusIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline'
+import { PlusIcon } from '@heroicons/react/24/outline'
 
 import type { BudgetTicketTypeItem } from '@/lib/budget'
 import { generateKey } from '@/lib/sanity/helpers'
 import { api } from '@/lib/trpc/client'
-import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { numberOrNull } from './fields'
+import { EditableTableCard } from './EditableTableCard'
 import {
-  checkboxLabelClass,
-  inputClass,
-  labelClass,
-  numberOrNull,
-  removeButtonClass,
-} from './fields'
+  CheckboxCell,
+  DeleteRowButton,
+  NumberCell,
+  TextCell,
+  tableClass,
+  tableWrapClass,
+  tbodyRowClass,
+  tdClass,
+  theadClass,
+  thClass,
+} from './BudgetTableCells'
 
 export interface BudgetTicketTypesEditorProps {
   ticketTypes: BudgetTicketTypeItem[]
@@ -32,27 +34,30 @@ export interface BudgetTicketTypesEditorProps {
    * second click.
    */
   scenarioReferencedKeys?: string[]
-  defaultOpen?: boolean
+  /** Read-only summary shown when not editing (the budget-vs-actual rows). */
+  display: ReactNode
+  /** Force edit mode on mount (Storybook / deep links). */
+  defaultEditing?: boolean
 }
 
 /**
- * Ticket-mix editor island. Edits the budget's ticket-type assumptions
- * (price incl VAT + attendance flags that drive per-person costs) and the
- * manual "actual sold" counts used as the ticket-income fallback when no
- * ticketing provider is connected.
+ * Ticket-mix editor: edits the budget's ticket-type assumptions (price incl
+ * VAT + attendance flags that drive per-person costs) and the manual "actual
+ * sold" counts used as the ticket-income fallback. Edits INLINE ON THE PAGE
+ * as a full-width spreadsheet table (one row per ticket type) — no modal.
  */
 export function BudgetTicketTypesEditor({
   ticketTypes,
   manualActualsInUse = false,
   scenarioReferencedKeys = [],
-  defaultOpen = false,
+  display,
+  defaultEditing = false,
 }: BudgetTicketTypesEditorProps) {
   const router = useRouter()
   const { showNotification } = useNotification()
   const referencedKeys = new Set(scenarioReferencedKeys)
 
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-  // Referenced row awaiting delete confirmation (second click removes).
+  const [editing, setEditing] = useState(defaultEditing)
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null)
   const [items, setItems] = useState<BudgetTicketTypeItem[]>(() =>
     structuredClone(ticketTypes),
@@ -69,7 +74,7 @@ export function BudgetTicketTypesEditor({
         title: 'Ticket types updated',
         message: 'Budget ticket mix saved.',
       })
-      setIsOpen(false)
+      setEditing(false)
     },
     onError: (err) => {
       setError(err.message || 'Failed to save ticket types.')
@@ -86,12 +91,12 @@ export function BudgetTicketTypesEditor({
     setError(null)
     setPendingRemoval(null)
   }
-  const openModal = () => {
+  const startEdit = () => {
     reset()
-    setIsOpen(true)
+    setEditing(true)
   }
-  const closeModal = () => {
-    setIsOpen(false)
+  const cancel = () => {
+    setEditing(false)
     reset()
   }
 
@@ -100,6 +105,30 @@ export function BudgetTicketTypesEditor({
       prev.map((item) => (item._key === key ? { ...item, ...patch } : item)),
     )
   }
+
+  const removeRow = (key: string) => {
+    if (referencedKeys.has(key) && pendingRemoval !== key) {
+      setPendingRemoval(key)
+      return
+    }
+    setPendingRemoval(null)
+    setItems((prev) => prev.filter((x) => x._key !== key))
+  }
+
+  const addRow = () =>
+    setItems((prev) => [
+      ...prev,
+      {
+        _key: generateKey('tickettype'),
+        name: '',
+        priceInclVat: 0,
+        attendsConference: true,
+        attendsWorkshop: false,
+        workshopCrew: false,
+        sponsorIncluded: false,
+        actualCount: null,
+      },
+    ])
 
   const handleSave = () => {
     setError(null)
@@ -132,233 +161,130 @@ export function BudgetTicketTypesEditor({
   }
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Edit ticket types"
-        onClick={openModal}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-      >
-        <PencilSquareIcon className="h-5 w-5" />
-      </button>
-      <ModalShell
-        isOpen={isOpen}
-        onClose={closeModal}
-        size="xl"
-        title="Edit ticket types"
-        subtitle={
-          manualActualsInUse
-            ? 'Prices in NOK incl VAT. "Actual sold" feeds ticket income (no ticketing provider connected).'
-            : 'Prices in NOK incl VAT. Attendance flags drive per-person costs; scenario quantities live on scenarios.'
-        }
-        icon={<PencilSquareIcon className="h-5 w-5" />}
-        confirmOnDirtyClose
-        isDirty={isDirty && !saveMutation.isPending}
-      >
-        <form
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault()
-            handleSave()
-          }}
-          className="space-y-4"
-        >
-          <div className="space-y-3">
+    <EditableTableCard
+      editing={editing}
+      onStartEdit={startEdit}
+      onSave={handleSave}
+      onCancel={cancel}
+      isDirty={isDirty}
+      isSaving={saveMutation.isPending}
+      saveLabel="Save ticket types"
+      editLabel="Edit ticket types"
+      error={error}
+      display={display}
+    >
+      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+        {manualActualsInUse
+          ? 'Prices in NOK incl VAT. “Actual sold” feeds ticket income (no ticketing provider connected).'
+          : 'Prices in NOK incl VAT. Attendance flags drive per-person costs; scenario quantities live on the config page.'}
+      </p>
+      <div className={tableWrapClass}>
+        <table className={tableClass}>
+          <thead className={theadClass}>
+            <tr>
+              <th className={thClass}>Name</th>
+              <th className={`${thClass} text-right`}>Price incl VAT</th>
+              <th className={`${thClass} text-center`}>Conf</th>
+              <th className={`${thClass} text-center`}>Workshop</th>
+              <th className={`${thClass} text-center`}>Crew</th>
+              <th className={`${thClass} text-center`}>Sponsor-incl</th>
+              <th className={`${thClass} text-right`}>Actual sold</th>
+              <th className={`${thClass} text-center`}>
+                <span className="sr-only">Delete</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
             {items.map((item) => (
-              <div
-                key={item._key}
-                className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-              >
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-12">
-                  <div className="col-span-2 sm:col-span-4">
-                    <label className={labelClass}>
-                      Name
-                      <input
-                        type="text"
-                        className={inputClass}
-                        value={item.name}
-                        onChange={(e) =>
-                          update(item._key, { name: e.target.value })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>
-                      Price (incl VAT)
-                      <input
-                        type="number"
-                        min={0}
-                        className={inputClass}
-                        value={item.priceInclVat}
-                        onChange={(e) =>
-                          update(item._key, {
-                            priceInclVat: numberOrNull(e.target.value) ?? 0,
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>
-                      Actual sold
-                      <input
-                        type="number"
-                        min={0}
-                        className={inputClass}
-                        value={item.actualCount ?? ''}
-                        onChange={(e) =>
-                          update(item._key, {
-                            actualCount: numberOrNull(e.target.value),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="col-span-2 flex flex-wrap items-end gap-x-4 sm:col-span-4">
-                    <label className={checkboxLabelClass}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={item.attendsConference ?? false}
-                        onChange={(e) =>
-                          update(item._key, {
-                            attendsConference: e.target.checked,
-                          })
-                        }
-                      />
-                      Conference
-                    </label>
-                    <label className={checkboxLabelClass}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={item.attendsWorkshop ?? false}
-                        onChange={(e) =>
-                          update(item._key, {
-                            attendsWorkshop: e.target.checked,
-                          })
-                        }
-                      />
-                      Workshop
-                    </label>
-                    <label className={checkboxLabelClass}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={item.workshopCrew ?? false}
-                        onChange={(e) =>
-                          update(item._key, { workshopCrew: e.target.checked })
-                        }
-                      />
-                      Crew
-                    </label>
-                    <label className={checkboxLabelClass}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300"
-                        checked={item.sponsorIncluded ?? false}
-                        onChange={(e) =>
-                          update(item._key, {
-                            sponsorIncluded: e.target.checked,
-                          })
-                        }
-                      />
-                      Sponsor-incl
-                    </label>
-                    <button
-                      type="button"
-                      aria-label={
-                        referencedKeys.has(item._key) &&
-                        pendingRemoval === item._key
-                          ? `Confirm removing ${item.name || 'ticket type'} (used by scenarios)`
-                          : `Remove ${item.name || 'ticket type'}`
-                      }
-                      onClick={() => {
-                        if (
-                          referencedKeys.has(item._key) &&
-                          pendingRemoval !== item._key
-                        ) {
-                          setPendingRemoval(item._key)
-                          return
-                        }
-                        setPendingRemoval(null)
-                        setItems((prev) =>
-                          prev.filter((x) => x._key !== item._key),
-                        )
-                      }}
-                      className={`ml-auto ${removeButtonClass}`}
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <tr key={item._key} className={tbodyRowClass}>
+                <td className={tdClass}>
+                  <TextCell
+                    ariaLabel="Ticket type name"
+                    value={item.name}
+                    onChange={(v) => update(item._key, { name: v })}
+                  />
+                </td>
+                <td className={`${tdClass} text-right`}>
+                  <NumberCell
+                    ariaLabel={`Price incl VAT for ${item.name || 'ticket type'}`}
+                    value={item.priceInclVat}
+                    onChange={(v) =>
+                      update(item._key, {
+                        priceInclVat: numberOrNull(v) ?? 0,
+                      })
+                    }
+                  />
+                </td>
+                <td className={`${tdClass} text-center`}>
+                  <CheckboxCell
+                    ariaLabel={`${item.name || 'Ticket type'} attends conference`}
+                    checked={item.attendsConference ?? false}
+                    onChange={(c) =>
+                      update(item._key, { attendsConference: c })
+                    }
+                  />
+                </td>
+                <td className={`${tdClass} text-center`}>
+                  <CheckboxCell
+                    ariaLabel={`${item.name || 'Ticket type'} attends workshop`}
+                    checked={item.attendsWorkshop ?? false}
+                    onChange={(c) => update(item._key, { attendsWorkshop: c })}
+                  />
+                </td>
+                <td className={`${tdClass} text-center`}>
+                  <CheckboxCell
+                    ariaLabel={`${item.name || 'Ticket type'} is workshop-day crew`}
+                    checked={item.workshopCrew ?? false}
+                    onChange={(c) => update(item._key, { workshopCrew: c })}
+                  />
+                </td>
+                <td className={`${tdClass} text-center`}>
+                  <CheckboxCell
+                    ariaLabel={`${item.name || 'Ticket type'} is sponsor-included`}
+                    checked={item.sponsorIncluded ?? false}
+                    onChange={(c) => update(item._key, { sponsorIncluded: c })}
+                  />
+                </td>
+                <td className={`${tdClass} text-right`}>
+                  <NumberCell
+                    ariaLabel={`Actual sold for ${item.name || 'ticket type'}`}
+                    value={item.actualCount ?? ''}
+                    placeholder="—"
+                    widthClass="w-24"
+                    onChange={(v) =>
+                      update(item._key, { actualCount: numberOrNull(v) })
+                    }
+                  />
+                </td>
+                <td className={`${tdClass} text-center`}>
+                  <DeleteRowButton
+                    ariaLabel={
+                      referencedKeys.has(item._key) &&
+                      pendingRemoval === item._key
+                        ? `Confirm removing ${item.name || 'ticket type'} (used by scenarios)`
+                        : `Remove ${item.name || 'ticket type'}`
+                    }
+                    pending={pendingRemoval === item._key}
+                    onClick={() => removeRow(item._key)}
+                  />
+                </td>
+              </tr>
             ))}
-          </div>
+          </tbody>
+        </table>
+      </div>
 
-          <AdminButton
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() =>
-              setItems((prev) => [
-                ...prev,
-                {
-                  _key: generateKey('tickettype'),
-                  name: '',
-                  priceInclVat: 0,
-                  attendsConference: true,
-                  attendsWorkshop: false,
-                  workshopCrew: false,
-                  sponsorIncluded: false,
-                  actualCount: null,
-                },
-              ])
-            }
-          >
-            <PlusIcon className="mr-1 h-4 w-4" /> Add ticket type
-          </AdminButton>
-
-          {pendingRemoval && (
-            <p
-              role="alert"
-              className="text-sm text-amber-700 dark:text-amber-400"
-            >
-              This ticket type is referenced by one or more scenarios &mdash;
-              click remove again to confirm. Its scenario quantities will be
-              dropped.
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {error}
-            </p>
-          )}
-
-          <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row sm:justify-end">
-            <AdminButton
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={closeModal}
-              disabled={saveMutation.isPending}
-              className="min-h-[44px]"
-            >
-              Cancel
-            </AdminButton>
-            <AdminButton
-              type="submit"
-              color="blue"
-              size="md"
-              disabled={saveMutation.isPending || !isDirty}
-              className="min-h-[44px]"
-            >
-              {saveMutation.isPending ? 'Saving…' : 'Save ticket types'}
-            </AdminButton>
-          </div>
-        </form>
-      </ModalShell>
-    </>
+      <div className="mt-3 flex items-center gap-3">
+        <AdminButton variant="secondary" size="sm" onClick={addRow}>
+          <PlusIcon className="h-4 w-4" /> Add ticket type
+        </AdminButton>
+        {pendingRemoval ? (
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            That ticket type is referenced by a scenario — click delete again to
+            confirm; its scenario quantities will be dropped.
+          </span>
+        ) : null}
+      </div>
+    </EditableTableCard>
   )
 }
