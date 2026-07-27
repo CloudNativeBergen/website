@@ -128,9 +128,29 @@ export async function signOutHandler(): Promise<void> {
   try {
     const { LINK_INTENT_COOKIE } = await import('@/lib/auth-link')
     const { cookies } = await import('next/headers')
-    ;(await cookies()).delete(LINK_INTENT_COOKIE)
+    const jar = await cookies()
+    jar.delete(LINK_INTENT_COOKIE)
+
+    // RESIDUAL HOST-ONLY COOKIE CLEANUP: @auth/core clears the session cookie
+    // using the CURRENT cookie options — since the per-request Domain widening
+    // (`requestScopedConfig`), that clear targets the Domain-scoped cookie. A
+    // browser can additionally hold a HOST-ONLY cookie of the same name (set
+    // before the widening shipped, or across a denylist change); a Set-Cookie
+    // with a Domain attribute can never remove it, so it would SURVIVE sign-out
+    // and keep the user signed in on that host. Delete every session-token
+    // cookie (including chunked `<name>.0`, `.1`, … parts) host-only as well —
+    // the two deletes target different cookies, so both are needed.
+    for (const { name } of jar.getAll()) {
+      if (
+        SESSION_TOKEN_COOKIE_NAMES.some(
+          (base) => name === base || name.startsWith(`${base}.`),
+        )
+      ) {
+        jar.delete(name)
+      }
+    }
   } catch (err) {
-    console.error('Failed to clear link-intent cookie on sign-out', err)
+    console.error('Failed to clear auth cookies on sign-out', err)
   }
 }
 

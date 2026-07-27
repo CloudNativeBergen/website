@@ -12,6 +12,7 @@ process.env.AUTH_SECRET = 'auth-callback-test-secret'
 type Jar = {
   store: Map<string, string>
   get: (name: string) => { value: string } | undefined
+  getAll: () => { name: string; value: string }[]
   set: (name: string, value: string) => void
   delete: ReturnType<typeof vi.fn>
 }
@@ -27,6 +28,8 @@ function createJar(initial: Record<string, string> = {}): Jar {
       const value = store.get(name)
       return value === undefined ? undefined : { value }
     },
+    getAll: () =>
+      Array.from(store.entries(), ([name, value]) => ({ name, value })),
     set: (name: string, value: string) => {
       store.set(name, value)
     },
@@ -364,6 +367,29 @@ describe('signOutHandler — clears link-flow state', () => {
     await signOutHandler()
 
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
+  })
+
+  it('deletes RESIDUAL host-only session cookies (incl. chunked parts) on sign-out', async () => {
+    // @auth/core's own clear targets the Domain-scoped cookie; a pre-widening
+    // HOST-ONLY cookie of the same name must be deleted separately or the user
+    // stays signed in on that host after sign-out.
+    currentJar = createJar({
+      'authjs.session-token': 'stale',
+      '__Secure-authjs.session-token.0': 'chunk0',
+      '__Secure-authjs.session-token.1': 'chunk1',
+      'unrelated-cookie': 'keep',
+    })
+
+    await signOutHandler()
+
+    expect(currentJar.delete).toHaveBeenCalledWith('authjs.session-token')
+    expect(currentJar.delete).toHaveBeenCalledWith(
+      '__Secure-authjs.session-token.0',
+    )
+    expect(currentJar.delete).toHaveBeenCalledWith(
+      '__Secure-authjs.session-token.1',
+    )
+    expect(currentJar.delete).not.toHaveBeenCalledWith('unrelated-cookie')
   })
 })
 
