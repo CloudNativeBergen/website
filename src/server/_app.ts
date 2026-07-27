@@ -22,6 +22,7 @@ import { onboardingRouter } from './routers/onboarding'
 import { topicRouter } from './routers/topic'
 import { staffRouter } from './routers/staff'
 import { sponsorMessagesRouter } from './routers/sponsorMessages'
+import { platformRouter } from './routers/platform'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -47,6 +48,7 @@ export const appRouter = router({
   topic: topicRouter,
   staff: staffRouter,
   sponsorMessages: sponsorMessagesRouter,
+  platform: platformRouter,
 })
 
 export type AppRouter = typeof appRouter

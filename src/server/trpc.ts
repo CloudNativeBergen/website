@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
+import type { FeatureId } from '@/lib/features/registry'
 import { AppEnvironment } from '@/lib/environment/config'
 import { structuredErrorData, type StructuredErrorData } from './errors'
 
@@ -200,6 +201,44 @@ export const organizerProcedure = t.procedure
   .use(requireAuth)
   .use(withOrgOrganizer)
 export const router = t.router
+
+/**
+ * Per-organization FEATURE gate. Composes onto the org-scoped procedures —
+ * `adminProcedure.use(requireFeature('some-feature'))` — and throws FORBIDDEN
+ * (naming the feature) unless the request org's resolved entitlements include
+ * it. The org is taken from the upstream middleware's `ctx.orgId` when present
+ * (the authz waist already resolved it) and resolved from the domain otherwise;
+ * an unresolvable org FAILS CLOSED, matching the waist's posture. Entitlement
+ * resolution semantics live in `src/lib/features/registry.ts` +
+ * `entitlements.ts` (plan ladder, override-only beta/internal, overrides win,
+ * expiry). Imported lazily so this module keeps zero static dependency on the
+ * cached entitlements read.
+ */
+export function requireFeature(featureId: FeatureId) {
+  return t.middleware(async ({ ctx, next }) => {
+    const upstreamOrgId = (ctx as { orgId?: string | null }).orgId
+    const orgId =
+      upstreamOrgId !== undefined
+        ? upstreamOrgId
+        : await resolveOrganizationId()
+    if (!orgId) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `The "${featureId}" feature requires a resolvable organization`,
+      })
+    }
+    const { getEntitlementsForOrganization } =
+      await import('@/lib/features/entitlements')
+    const entitled = await getEntitlementsForOrganization(orgId)
+    if (!entitled.has(featureId)) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `The "${featureId}" feature is not enabled for this organization`,
+      })
+    }
+    return next({ ctx: { ...ctx, orgId } })
+  })
+}
 
 const CLIENT_ERROR_CODES = new Set([
   'NOT_FOUND',

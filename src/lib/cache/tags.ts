@@ -13,6 +13,10 @@
  *   fetch). This is the tag mutations should revalidate.
  * - `domainTag(domain)` — a per-domain fallback for the rare spot where a
  *   conference id is not available but the host is.
+ * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
+ *   reads keyed on the tenant itself rather than one of its conference
+ *   editions (plan/entitlement resolution). Mutations that edit an
+ *   organization document must revalidate this tag.
  */
 
 export function conferenceTag(conferenceId: string): string {
@@ -21,4 +25,8 @@ export function conferenceTag(conferenceId: string): string {
 
 export function domainTag(domain: string): string {
   return `domain:${domain}`
+}
+
+export function organizationTag(orgId: string): string {
+  return `sanity:organization-${orgId}`
 }

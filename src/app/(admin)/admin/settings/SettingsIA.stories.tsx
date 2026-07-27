@@ -27,8 +27,11 @@ import {
   SettingsGroupSection,
 } from './settingsLayout'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { StatusBadge } from '@/components/StatusBadge'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
+import { PlanFeaturesCard } from './PlanFeaturesCard'
+import { PlatformOrgManager } from './PlatformOrgManager'
 
 /**
  * Visual-QA harness for the Settings page information architecture: the sticky
@@ -126,6 +129,42 @@ function SettingsIADemo() {
                 Publicly listed and indexed by search engines.
               </p>
             </InfoCard>
+
+            <PlanFeaturesCard
+              plan="community"
+              features={[
+                {
+                  id: 'graphql-api',
+                  title: 'GraphQL API',
+                  description:
+                    'Programmatic read access to conference content over a public GraphQL endpoint.',
+                  readiness: 'internal',
+                  viaOverride: true,
+                },
+              ]}
+            />
+
+            {/* Platform-only card — in the app it renders ONLY when the
+                current org matches PLATFORM_ORG_SLUG. */}
+            <PlatformOrgManager
+              organizations={[
+                {
+                  _id: 'org-platform',
+                  name: 'Cloud Native Days',
+                  slug: 'cloud-native-days',
+                  plan: 'enterprise',
+                  featureOverrides: [
+                    { _key: 'ov-1', feature: 'graphql-api', enabled: true },
+                  ],
+                },
+                {
+                  _id: 'org-bergen',
+                  name: 'Cloud Native Bergen',
+                  slug: 'cloud-native-bergen',
+                  plan: 'community',
+                },
+              ]}
+            />
 
             <CollapsibleSection
               title="Venue Information"
@@ -358,11 +397,15 @@ const meta = {
   },
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 dark:bg-gray-950">
-        <div className="mx-auto max-w-5xl">
-          <Story />
+      // NotificationProvider: the PlatformOrgManager island calls
+      // useNotification for its save toast (never fired in this static story).
+      <NotificationProvider>
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6 dark:bg-gray-950">
+          <div className="mx-auto max-w-5xl">
+            <Story />
+          </div>
         </div>
-      </div>
+      </NotificationProvider>
     ),
   ],
 } satisfies Meta<typeof SettingsIADemo>

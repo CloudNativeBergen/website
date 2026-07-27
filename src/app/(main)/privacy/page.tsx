@@ -82,7 +82,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 31, 2025'
+  const lastUpdated = 'July 27, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
   const organizationName = legal.controllerName
@@ -552,6 +552,37 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           profiles
                         </li>
                       </ul>
+                    </div>
+
+                    {/* Organization Account & Plan Data */}
+                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-6 dark:border-cyan-800 dark:bg-cyan-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-cyan-800 dark:text-cyan-200">
+                        <BuildingOfficeIcon className="mr-3 h-5 w-5" />
+                        Organization Account & Plan Data
+                      </h3>
+                      <ul className="space-y-2 text-sm text-cyan-700 dark:text-cyan-300">
+                        <li>
+                          • Organization plan tier (community, pro, enterprise)
+                        </li>
+                        <li>
+                          • Feature configuration (per-feature enablement
+                          overrides with optional expiry dates)
+                        </li>
+                        <li>
+                          • Administrative notes recorded by platform operators
+                          about an organization&apos;s plan or feature access
+                        </li>
+                      </ul>
+                      <div className="mt-3 rounded-lg bg-cyan-100 p-2 dark:bg-cyan-800/30">
+                        <p className="text-xs text-cyan-800 dark:text-cyan-200">
+                          <strong>Purpose & Legal Basis:</strong> Platform
+                          administration and service provisioning (contract
+                          performance / legitimate interest). This data
+                          describes the organization&apos;s account, is visible
+                          only to platform operators, and is retained for as
+                          long as the organization uses the platform.
+                        </p>
+                      </div>
                     </div>
                   </div>
                   {/* Volunteer Information */}
