@@ -27,6 +27,12 @@ describe('conferenceBaseUrl', () => {
     )
   })
 
+  it('returns the origin only when an entry is mis-stored with a path', () => {
+    expect(conferenceBaseUrl({ domains: ['example.com/foo'] })).toBe(
+      'https://example.com',
+    )
+  })
+
   it('skips wildcard routing entries — outbound links need a concrete host', () => {
     expect(
       conferenceBaseUrl({ domains: ['*.example.com', 'example.com'] }),
@@ -92,6 +98,12 @@ describe('platformBaseUrl', () => {
   it('uses http for a scheme-less localhost value', () => {
     vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'localhost:3000')
     expect(platformBaseUrl()).toBe('http://localhost:3000')
+  })
+
+  it('a whitespace-only primary does not shadow the fallback var', () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', '   ')
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://legacy.example')
+    expect(platformBaseUrl()).toBe('https://legacy.example')
   })
 
   it('falls back to the legacy NEXT_PUBLIC_URL', () => {

@@ -34,11 +34,12 @@ export const PLATFORM_NAME = 'Cloud Native Days'
  * dev URL into a real email/notification.
  */
 export function platformBaseUrl(): string {
-  const configured = (
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    process.env.NEXT_PUBLIC_URL ||
+  // Trim BEFORE precedence: a whitespace-only primary must not shadow a
+  // configured fallback.
+  const configured =
+    process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_URL?.trim() ||
     ''
-  ).trim()
   if (configured) {
     // Enforce the origin contract: strip any configured path, and give a
     // scheme-less value the right scheme (`http` for a localhost dev origin).

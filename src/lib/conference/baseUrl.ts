@@ -50,7 +50,16 @@ export function conferenceBaseUrl(
     const protocol = isLocalhostDomain(domain)
       ? 'http'
       : protocolForDomain(domain)
-    return `${protocol}://${domain}`
+    // Enforce the origin contract like platformBaseUrl(): a mis-stored path
+    // segment ("example.com/foo") must not leak into joined outbound URLs.
+    try {
+      return new URL(`${protocol}://${domain}`).origin
+    } catch {
+      console.error(
+        `[baseUrl] conference "${conference?.title ?? 'unknown'}" has an invalid domains[] entry "${entry}"; falling back to the platform base URL.`,
+      )
+      return platformBaseUrl()
+    }
   }
 
   console.error(
