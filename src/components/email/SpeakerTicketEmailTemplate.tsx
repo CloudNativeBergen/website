@@ -16,6 +16,8 @@ export interface SpeakerTicketEmailTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  /** Per-tenant brand primary (THEMING L1); falls back to the house blue. */
+  brandColor?: string
 }
 
 export function SpeakerTicketEmailTemplate({
@@ -27,6 +29,7 @@ export function SpeakerTicketEmailTemplate({
   eventDate,
   eventUrl,
   socialLinks = [],
+  brandColor,
 }: SpeakerTicketEmailTemplateProps) {
   const intro = (
     <p
@@ -104,6 +107,8 @@ export function SpeakerTicketEmailTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
+      showMessagesLink
       footer={footer}
     >
       {intro}

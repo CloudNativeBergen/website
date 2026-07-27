@@ -2,6 +2,7 @@ import { SpeakerTicketEmailTemplate } from '@/components/email'
 import { resend, retryWithBackoff, isTransientError } from '@/lib/email/config'
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
+import { emailBrandColor } from '@/lib/branding/theme'
 
 export interface SendSpeakerTicketEmailParams {
   speaker: { name: string; email: string }
@@ -17,6 +18,7 @@ export interface SendSpeakerTicketEmailParams {
     | 'cfpEmail'
     | 'startDate'
     | 'socialLinks'
+    | 'theme'
   >
 }
 
@@ -51,6 +53,8 @@ export async function sendSpeakerTicketEmail({
     eventDate: formatDate(conference.startDate),
     eventUrl,
     socialLinks: conference.socialLinks,
+    // THEMING L1: carry the tenant's brand primary into the mail accent.
+    brandColor: emailBrandColor(conference.theme),
   })
 
   // Retry not just rate limits but any transient provider (5xx) or network

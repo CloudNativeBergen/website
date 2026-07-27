@@ -562,24 +562,50 @@ export async function updateProposalStatus(
 
 /**
  * Records that a confirmed speaker's complimentary ticket email was
- * successfully delivered. Appended additively so the marker survives alongside
- * any existing entries; the caller writes this only after a successful send so
- * that a coupon created without a delivered email remains re-emailable.
+ * successfully delivered. The write is an UPSERT keyed on the deterministic
+ * per-speaker `_key`: a retry (or a rare concurrent re-trigger) updates the
+ * existing entry in place instead of appending a duplicate-`_key` item, which
+ * Sanity would reject as invalid array data. The caller writes this only after
+ * a successful send so that a coupon created without a delivered email remains
+ * re-emailable.
  */
 export async function recordSpeakerTicketEmailed(
   proposalId: string,
-  speakerId: string,
-  code: string,
+  marker: { speakerId: string; email: string; code: string },
 ): Promise<void> {
+  const key = `speaker-ticket-${marker.speakerId}`
+  const existingKeys = await clientWrite.fetch<string[] | null>(
+    // groq-global: point-read by document _id from a server-side event handler
+    // that already resolved the proposal within its conference.
+    `*[_type == "talk" && _id == $id][0].issuedSpeakerTickets[]._key`,
+    { id: proposalId },
+  )
+
+  const emailedAt = new Date().toISOString()
+
+  if (existingKeys?.includes(key)) {
+    await clientWrite
+      .patch(proposalId)
+      .set({
+        [`issuedSpeakerTickets[_key=="${key}"].speakerId`]: marker.speakerId,
+        [`issuedSpeakerTickets[_key=="${key}"].email`]: marker.email,
+        [`issuedSpeakerTickets[_key=="${key}"].code`]: marker.code,
+        [`issuedSpeakerTickets[_key=="${key}"].emailedAt`]: emailedAt,
+      })
+      .commit()
+    return
+  }
+
   await clientWrite
     .patch(proposalId)
     .setIfMissing({ issuedSpeakerTickets: [] })
     .append('issuedSpeakerTickets', [
       {
-        _key: `speaker-ticket-${speakerId}`,
-        speakerId,
-        code,
-        emailedAt: new Date().toISOString(),
+        _key: key,
+        speakerId: marker.speakerId,
+        email: marker.email,
+        code: marker.code,
+        emailedAt,
       },
     ])
     .commit()

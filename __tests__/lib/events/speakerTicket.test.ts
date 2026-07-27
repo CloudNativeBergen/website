@@ -2,23 +2,21 @@
  * @vitest-environment node
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
 import { speakerTicketCode } from '@/lib/speaker/ticket-code'
 import { Action, Status } from '@/lib/proposal/types'
 import type { ProposalStatusChangeEvent } from '@/lib/events/types'
 import type { Speaker } from '@/lib/speaker/types'
+import type { ResolvedTicketing } from '@/lib/tickets/provider'
 import { createMockConference } from '../../testdata/conference'
 
-vi.mock('@/lib/tickets/graphql-client', () => ({
-  checkinGraphQLClient: {
-    isConfigured: vi.fn(() => true),
-  },
-}))
+// The ticket codes are HMAC-derived; a stable secret keeps them deterministic
+// within the test run without ever asserting a hardcoded digest.
+process.env.SPEAKER_TICKET_CODE_SECRET = 'speaker-ticket-test-secret'
 
-vi.mock('@/lib/discounts/api', () => ({
-  getEventDiscounts: vi.fn(),
-  createEventDiscount: vi.fn(),
+vi.mock('@/lib/tickets/provider', () => ({
+  resolveTicketingProvider: vi.fn(),
 }))
 
 vi.mock('@/lib/speaker/ticket-email', () => ({
@@ -29,16 +27,29 @@ vi.mock('@/lib/proposal/data/sanity', () => ({
   recordSpeakerTicketEmailed: vi.fn(),
 }))
 
-import { checkinGraphQLClient } from '@/lib/tickets/graphql-client'
-import { getEventDiscounts, createEventDiscount } from '@/lib/discounts/api'
+import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
 import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
 
-const mockedIsConfigured = vi.mocked(checkinGraphQLClient.isConfigured)
-const mockedGetEventDiscounts = vi.mocked(getEventDiscounts)
-const mockedCreateEventDiscount = vi.mocked(createEventDiscount)
+const mockedResolveProvider = vi.mocked(resolveTicketingProvider)
 const mockedSendEmail = vi.mocked(sendSpeakerTicketEmail)
 const mockedRecordEmailed = vi.mocked(recordSpeakerTicketEmailed)
+
+const mockProvider = {
+  name: 'Checkin.no',
+  isConfigured: vi.fn(() => true),
+  listDiscounts: vi.fn(),
+  createDiscount: vi.fn(),
+}
+
+function resolvedCheckin(): ResolvedTicketing {
+  return {
+    configured: true,
+    // Only the members the handler touches are mocked.
+    provider: mockProvider as never,
+    eventRef: { customerId: 99, eventId: 4242 },
+  }
+}
 
 function makeSpeaker(overrides: Partial<Speaker> = {}): Speaker {
   return {
@@ -61,7 +72,10 @@ function makeEvent(
     previousStatus: Status.accepted,
     newStatus: Status.confirmed,
     action: Action.confirm,
-    conference: createMockConference({ checkinEventId: 4242 }),
+    conference: createMockConference({
+      checkinCustomerId: 99,
+      checkinEventId: 4242,
+    }),
     speakers,
     metadata: {
       triggeredBy: { speakerId: 'speaker-1', isOrganizer: false },
@@ -74,24 +88,31 @@ function makeEvent(
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockedIsConfigured.mockReturnValue(true)
-  mockedGetEventDiscounts.mockResolvedValue({ discounts: [], ticketTypes: [] })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mockedCreateEventDiscount.mockResolvedValue({} as any)
+  mockedResolveProvider.mockResolvedValue(resolvedCheckin())
+  mockProvider.isConfigured.mockReturnValue(true)
+  mockProvider.listDiscounts.mockResolvedValue({
+    discounts: [],
+    ticketTypes: [],
+  })
+  mockProvider.createDiscount.mockResolvedValue({})
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockedSendEmail.mockResolvedValue({} as any)
   mockedRecordEmailed.mockResolvedValue(undefined)
 })
 
+afterEach(() => {
+  process.env.SPEAKER_TICKET_CODE_SECRET = 'speaker-ticket-test-secret'
+})
+
 describe('handleSpeakerTicket', () => {
-  it('issues a single-use 100%-off code and emails it on confirm', async () => {
+  it('issues a single-use 100%-off code via the ticketing provider and emails it on confirm', async () => {
     const speaker = makeSpeaker()
     await handleSpeakerTicket(makeEvent({}, [speaker]))
 
-    const expectedCode = speakerTicketCode(speaker._id)
+    const expectedCode = speakerTicketCode(speaker.email)
 
-    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(1)
-    expect(mockedCreateEventDiscount).toHaveBeenCalledWith({
+    expect(mockProvider.createDiscount).toHaveBeenCalledTimes(1)
+    expect(mockProvider.createDiscount).toHaveBeenCalledWith({
       eventId: 4242,
       discountCode: expectedCode,
       numberOfTickets: 1,
@@ -110,14 +131,25 @@ describe('handleSpeakerTicket', () => {
 
     // Delivery marker is written only after a successful send.
     expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
-    expect(mockedRecordEmailed).toHaveBeenCalledWith(
-      'proposal-1',
-      speaker._id,
-      expectedCode,
-    )
+    expect(mockedRecordEmailed).toHaveBeenCalledWith('proposal-1', {
+      speakerId: speaker._id,
+      email: 'ada@example.com',
+      code: expectedCode,
+    })
   })
 
-  it('issues a code for each speaker on the proposal', async () => {
+  it('derives the code from the email, not the speaker id', () => {
+    // Two duplicate speaker documents for the same person share one code…
+    expect(speakerTicketCode('ada@example.com')).toBe(
+      speakerTicketCode('  Ada@Example.com '),
+    )
+    // …and different secrets yield different codes (non-derivable without it).
+    const withDefaultSecret = speakerTicketCode('ada@example.com')
+    process.env.SPEAKER_TICKET_CODE_SECRET = 'a-rotated-secret'
+    expect(speakerTicketCode('ada@example.com')).not.toBe(withDefaultSecret)
+  })
+
+  it('issues a code for each distinct speaker email on the proposal', async () => {
     const speakers = [
       makeSpeaker({ _id: 'speaker-1', email: 'a@example.com' }),
       makeSpeaker({ _id: 'speaker-2', email: 'b@example.com' }),
@@ -125,17 +157,30 @@ describe('handleSpeakerTicket', () => {
 
     await handleSpeakerTicket(makeEvent({}, speakers))
 
-    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(2)
+    expect(mockProvider.createDiscount).toHaveBeenCalledTimes(2)
     expect(mockedSendEmail).toHaveBeenCalledTimes(2)
+  })
+
+  it('de-duplicates by email: duplicate speaker docs sharing an address get one code and one email', async () => {
+    const speakers = [
+      makeSpeaker({ _id: 'speaker-1', email: 'ada@example.com' }),
+      makeSpeaker({ _id: 'speaker-1-dup', email: 'Ada@Example.com' }),
+      makeSpeaker({ _id: 'speaker-1-again', email: ' ada@example.com ' }),
+    ]
+
+    await handleSpeakerTicket(makeEvent({}, speakers))
+
+    expect(mockProvider.createDiscount).toHaveBeenCalledTimes(1)
+    expect(mockedSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
   })
 
   it('is idempotent: skips entirely when the speaker was already emailed', async () => {
     const speaker = makeSpeaker()
-    const existingCode = speakerTicketCode(speaker._id)
+    const existingCode = speakerTicketCode(speaker.email)
     // Both the coupon exists AND a delivery marker was recorded.
-    mockedGetEventDiscounts.mockResolvedValue({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      discounts: [{ triggerValue: existingCode } as any],
+    mockProvider.listDiscounts.mockResolvedValue({
+      discounts: [{ triggerValue: existingCode }],
       ticketTypes: [],
     })
 
@@ -148,6 +193,7 @@ describe('handleSpeakerTicket', () => {
             issuedSpeakerTickets: [
               {
                 speakerId: speaker._id,
+                email: 'ada@example.com',
                 code: existingCode,
                 emailedAt: '2026-01-01T00:00:00Z',
               },
@@ -159,31 +205,59 @@ describe('handleSpeakerTicket', () => {
       ),
     )
 
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
     expect(mockedRecordEmailed).not.toHaveBeenCalled()
   })
 
+  it('skips a duplicate speaker doc whose email already has a delivery marker under another id', async () => {
+    const dupDoc = makeSpeaker({ _id: 'speaker-1-dup' })
+
+    await handleSpeakerTicket(
+      makeEvent(
+        {
+          proposal: {
+            _id: 'proposal-1',
+            title: 'A great talk',
+            issuedSpeakerTickets: [
+              {
+                speakerId: 'speaker-1',
+                email: 'ada@example.com',
+                code: speakerTicketCode('ada@example.com'),
+                emailedAt: '2026-01-01T00:00:00Z',
+              },
+            ],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        },
+        [dupDoc],
+      ),
+    )
+
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
+    expect(mockedSendEmail).not.toHaveBeenCalled()
+  })
+
   it('resends the email without re-creating the coupon when it exists but was never emailed', async () => {
     const speaker = makeSpeaker()
-    const existingCode = speakerTicketCode(speaker._id)
+    const existingCode = speakerTicketCode(speaker.email)
     // Coupon exists (previous run created it) but there is NO delivery marker,
     // meaning the earlier email never went out. Recovery = resend, no dup coupon.
-    mockedGetEventDiscounts.mockResolvedValue({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      discounts: [{ triggerValue: existingCode } as any],
+    // The stored code differs in case — the vendor matches case-insensitively.
+    mockProvider.listDiscounts.mockResolvedValue({
+      discounts: [{ triggerValue: existingCode.toLowerCase() }],
       ticketTypes: [],
     })
 
     await handleSpeakerTicket(makeEvent({}, [speaker]))
 
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).toHaveBeenCalledTimes(1)
-    expect(mockedRecordEmailed).toHaveBeenCalledWith(
-      'proposal-1',
-      speaker._id,
-      existingCode,
-    )
+    expect(mockedRecordEmailed).toHaveBeenCalledWith('proposal-1', {
+      speakerId: speaker._id,
+      email: 'ada@example.com',
+      code: existingCode,
+    })
   })
 
   it('does not record a delivery marker and stays recoverable when the email fails after coupon creation', async () => {
@@ -196,7 +270,7 @@ describe('handleSpeakerTicket', () => {
 
     // Coupon was created, but because the email failed we must NOT mark the
     // speaker as done — a re-trigger has to be able to resend.
-    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(1)
+    expect(mockProvider.createDiscount).toHaveBeenCalledTimes(1)
     expect(mockedRecordEmailed).not.toHaveBeenCalled()
   })
 
@@ -208,51 +282,82 @@ describe('handleSpeakerTicket', () => {
       handleSpeakerTicket(makeEvent({}, [speaker])),
     ).resolves.toBeUndefined()
 
-    expect(mockedCreateEventDiscount).toHaveBeenCalledTimes(1)
+    expect(mockProvider.createDiscount).toHaveBeenCalledTimes(1)
     expect(mockedSendEmail).toHaveBeenCalledTimes(1)
   })
 
-  it('no-ops (no lookups) when checkin is not configured', async () => {
-    mockedIsConfigured.mockReturnValue(false)
+  it('no-ops when the conference has no ticketing binding', async () => {
+    mockedResolveProvider.mockResolvedValue({
+      configured: false,
+      provider: null,
+      eventRef: null,
+    })
 
     await handleSpeakerTicket(makeEvent())
 
-    expect(mockedGetEventDiscounts).not.toHaveBeenCalled()
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockProvider.listDiscounts).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
   })
 
-  it('no-ops when the conference has no checkinEventId', async () => {
-    await handleSpeakerTicket(
-      makeEvent({
-        conference: createMockConference({ checkinEventId: undefined }),
-      }),
-    )
+  it('no-ops (no lookups) when the provider has no API credentials', async () => {
+    mockProvider.isConfigured.mockReturnValue(false)
 
-    expect(mockedGetEventDiscounts).not.toHaveBeenCalled()
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    await handleSpeakerTicket(makeEvent())
+
+    expect(mockProvider.listDiscounts).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
+    expect(mockedSendEmail).not.toHaveBeenCalled()
+  })
+
+  it('no-ops for a provider without a discount surface (Tito)', async () => {
+    mockedResolveProvider.mockResolvedValue({
+      configured: true,
+      provider: { ...mockProvider, name: 'Tito' } as never,
+      eventRef: { provider: 'tito', accountSlug: 'acct', eventSlug: 'evt' },
+    })
+
+    await handleSpeakerTicket(makeEvent())
+
+    expect(mockProvider.listDiscounts).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
+    expect(mockedSendEmail).not.toHaveBeenCalled()
   })
 
   it('ignores non-confirm actions', async () => {
     await handleSpeakerTicket(makeEvent({ action: Action.accept }))
 
-    expect(mockedGetEventDiscounts).not.toHaveBeenCalled()
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockedResolveProvider).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
   })
 
   it('does not throw when issuing/emailing fails for a speaker', async () => {
-    mockedCreateEventDiscount.mockRejectedValue(new Error('checkin down'))
+    mockProvider.createDiscount.mockRejectedValue(new Error('provider down'))
 
     await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
     expect(mockedSendEmail).not.toHaveBeenCalled()
   })
 
   it('aborts without issuing when the existing-discount lookup fails', async () => {
-    mockedGetEventDiscounts.mockRejectedValue(new Error('lookup failed'))
+    mockProvider.listDiscounts.mockRejectedValue(new Error('lookup failed'))
 
     await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
-    expect(mockedCreateEventDiscount).not.toHaveBeenCalled()
+    expect(mockProvider.createDiscount).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
+  })
+
+  it('aborts without issuing when no code-derivation secret is configured', async () => {
+    const authSecret = process.env.AUTH_SECRET
+    delete process.env.SPEAKER_TICKET_CODE_SECRET
+    delete process.env.AUTH_SECRET
+
+    try {
+      await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+      expect(mockProvider.createDiscount).not.toHaveBeenCalled()
+      expect(mockedSendEmail).not.toHaveBeenCalled()
+    } finally {
+      if (authSecret !== undefined) process.env.AUTH_SECRET = authSecret
+    }
   })
 })

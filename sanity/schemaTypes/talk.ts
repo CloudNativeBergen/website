@@ -250,6 +250,7 @@ export default defineType({
           type: 'object',
           fields: [
             { name: 'speakerId', title: 'Speaker ID', type: 'string' },
+            { name: 'email', title: 'Delivered To (Email)', type: 'string' },
             { name: 'code', title: 'Coupon Code', type: 'string' },
             { name: 'emailedAt', title: 'Emailed At', type: 'datetime' },
           ],

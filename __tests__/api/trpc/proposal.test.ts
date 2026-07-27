@@ -485,6 +485,7 @@ describe('proposal router', () => {
         'proposal-1',
         Status.withdrawn,
         'I can no longer attend the conference.',
+        undefined,
       )
     })
 
@@ -648,6 +649,7 @@ describe('proposal router', () => {
       expect(updateProposalStatus).toHaveBeenCalledWith(
         'proposal-1',
         Status.confirmed,
+        undefined,
         'rev-accepted',
       )
       expect(eventBus.publish).toHaveBeenCalledTimes(1)
@@ -669,7 +671,7 @@ describe('proposal router', () => {
       // is rejected with a 409-style error.
       const consumedRevs = new Set<string>()
       vi.mocked(updateProposalStatus).mockImplementation(
-        async (_id, status, ifRevisionId) => {
+        async (_id, status, _withdrawnReason, ifRevisionId) => {
           if (ifRevisionId && consumedRevs.has(ifRevisionId)) {
             return {
               proposal: {} as any,

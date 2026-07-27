@@ -105,6 +105,8 @@ export interface AudienceFeedback {
 export interface IssuedSpeakerTicket {
   _key?: string
   speakerId: string
+  /** Normalized (trimmed, lowercased) email the code was delivered to. */
+  email?: string
   code: string
   emailedAt: string
 }
