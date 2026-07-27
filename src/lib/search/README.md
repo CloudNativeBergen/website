@@ -30,13 +30,13 @@ Located in `src/lib/search/providers/`:
 2. **`SponsorsSearchProvider`**
    - Priority: 3
    - Searches: Sponsor company names
-   - Implementation: tRPC `sponsor.list({ query })` mutation
+   - Implementation: tRPC `sponsor.list({ query })` query
    - Use case: Finding sponsor organizations
 
 3. **`SpeakersSearchProvider`**
    - Priority: 4
    - Searches: Speaker names, titles, emails, bios
-   - Implementation: tRPC `speakers.search({ query })` mutation
+   - Implementation: tRPC `speaker.admin.search({ query })` query
    - Use case: Finding individual speakers
 
 ### Unified Search Hook
