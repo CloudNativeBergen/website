@@ -39,6 +39,7 @@ export async function GET(
     if (error || !badge) {
       return NextResponse.json(generateErrorResponse('Badge not found', 404), {
         status: 404,
+        headers: { ...BADGE_CORS_HEADERS },
       })
     }
 
@@ -55,7 +56,7 @@ export async function GET(
     } catch {
       return NextResponse.json(
         generateErrorResponse('Invalid badge JSON', 500),
-        { status: 500 },
+        { status: 500, headers: { ...BADGE_CORS_HEADERS } },
       )
     }
 

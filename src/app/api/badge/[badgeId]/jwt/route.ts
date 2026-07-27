@@ -35,6 +35,7 @@ export async function GET(
     if (error || !badge) {
       return NextResponse.json(generateErrorResponse('Badge not found', 404), {
         status: 404,
+        headers: { ...BADGE_CORS_HEADERS },
       })
     }
 
@@ -53,7 +54,7 @@ export async function GET(
           'No JWT credential available for this badge',
           404,
         ),
-        { status: 404 },
+        { status: 404, headers: { ...BADGE_CORS_HEADERS } },
       )
     }
 

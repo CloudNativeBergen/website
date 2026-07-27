@@ -57,8 +57,11 @@ export async function GET(
     const { badge, error } = await getBadgeById(badgeId)
 
     if (error || !badge) {
+      // CORS on errors too: a cross-origin verifier should see a readable
+      // 404, not an opaque CORS failure.
       return NextResponse.json(generateErrorResponse('Badge not found', 404), {
         status: 404,
+        headers: { ...BADGE_CORS_HEADERS, Vary: 'Accept' },
       })
     }
 
@@ -75,7 +78,7 @@ export async function GET(
     } catch {
       return NextResponse.json(
         generateErrorResponse('Invalid badge JSON', 500),
-        { status: 500 },
+        { status: 500, headers: { ...BADGE_CORS_HEADERS, Vary: 'Accept' } },
       )
     }
 
