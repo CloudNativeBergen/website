@@ -410,9 +410,11 @@ const fixedCosts: BudgetFixedCostItem[] = [
   },
 ]
 
-// Scenario ticket order in budget.py SCENARIOS["…"]["tickets"] (index 7 =
-// Sponsor Included, which is auto-derived and therefore omitted here — the model
-// ignores any scenario quantity for a sponsor-included row).
+// Scenario ticket order in budget.py SCENARIOS["…"]["tickets"]. The
+// sponsor-included key (index 7) is KEPT here for positional parity with the
+// raw `tickets` arrays, but its scenario quantity is filtered out when building
+// `ticketCounts` — the model auto-derives that row's count from sponsor tiers
+// and ignores any per-scenario quantity for it.
 const SCENARIO_TICKET_KEYS = [
   'conf-early-bird',
   'conf-standard',
