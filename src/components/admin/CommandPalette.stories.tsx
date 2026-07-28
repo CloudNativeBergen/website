@@ -55,7 +55,11 @@ const emptyTrpcHandlers = [
  */
 export const Open: Story = {
   render: () => (
-    <CommandPalette open={true} onClose={fn()} enabledFeatures={['workshops']} />
+    <CommandPalette
+      open={true}
+      onClose={fn()}
+      enabledFeatures={['workshops']}
+    />
   ),
   parameters: { msw: { handlers: emptyTrpcHandlers } },
 }
