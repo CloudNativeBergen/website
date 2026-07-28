@@ -32,9 +32,17 @@ const revalidateTagMock = revalidateTag as unknown as Mock
 
 const CONFERENCE_ID = 'conf-bergen'
 const OTHER_CONFERENCE_ID = 'conf-oslo'
+const ORG_ID = 'org-test'
 
 function makeCaller() {
-  const speaker = { _id: 'sp-1', name: 'Org', isOrganizer: true }
+  // Org-scoped authz: the admin waist grants only when `organizerOrgIds`
+  // contains the org the domain conference resolves to (see `getConferenceMock`).
+  const speaker = {
+    _id: 'sp-1',
+    name: 'Org',
+    isOrganizer: true,
+    organizerOrgIds: [ORG_ID],
+  }
   const ctx = {
     session: { speaker, user: { name: 'Org' } },
     speaker,
@@ -47,7 +55,10 @@ const validPayload = { _id: '', date: '2026-10-10', tracks: [] }
 beforeEach(() => {
   vi.clearAllMocks()
   getConferenceMock.mockResolvedValue({
-    conference: { _id: CONFERENCE_ID },
+    conference: {
+      _id: CONFERENCE_ID,
+      organization: { _type: 'reference', _ref: ORG_ID },
+    },
     error: null,
   })
   getValidTalkIdsMock.mockResolvedValue(new Set<string>())

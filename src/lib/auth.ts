@@ -679,7 +679,17 @@ export async function getAuthSession(req?: {
   headers?: Headers
 }): Promise<Session | null> {
   if (AppEnvironment.isTestMode) {
-    return AppEnvironment.createMockAuthContext()
+    const mock = AppEnvironment.createMockAuthContext()
+    // DEV-ONLY. The mock speaker used to reach `/admin` through the deprecated
+    // global `isOrganizer` flag, via the (now deleted) legacy-token bridge.
+    // Authorization is org-scoped, so stamp it with the CURRENT domain's org
+    // instead. Best-effort: an unresolvable org leaves `organizerOrgIds` empty
+    // and the mock session is denied organizer access — fail closed, same as any
+    // other caller.
+    const { resolveCurrentOrgId } = await import('@/lib/authz/organizer')
+    const orgId = await resolveCurrentOrgId()
+    if (mock.speaker) mock.speaker.organizerOrgIds = orgId ? [orgId] : []
+    return mock
   }
 
   const session = await _auth()
@@ -703,8 +713,9 @@ export async function getAuthSession(req?: {
   }
 
   // SECURITY: Only organizers can impersonate — ORG-SCOPED (CaaS T1-2, #614): the
-  // impersonator must be an organizer of the CURRENT domain's org (legacy-bridged
-  // to the deprecated global flag when the org can't be resolved). Dynamically
+  // impersonator must be an organizer of the CURRENT domain's org, decided from
+  // `organizerOrgIds` alone (no bridge to the deprecated global flag; an
+  // unresolvable org denies). Dynamically
   // imported to keep the org/conference read out of the edge middleware bundle,
   // mirroring the `getSpeaker` import below.
   const { isOrganizerForCurrentOrg } = await import('@/lib/authz/organizer')

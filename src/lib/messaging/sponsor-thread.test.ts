@@ -51,6 +51,8 @@ function sponsorConversation(): ConversationWithContext {
   return {
     _id: sponsorConversationId(SFC),
     conferenceId: 'conf-1',
+    // Organizer access is ORG-SCOPED: it keys on the thread's OWN org.
+    conferenceOrgId: 'org-test',
     conversationType: 'sponsor',
     proposalSpeakerIds: [],
     createdById: '',
@@ -87,11 +89,11 @@ describe('sponsor thread — id scheme + links', () => {
 })
 
 describe('sponsor thread — authorization', () => {
-  it('lets any organizer access a sponsor thread', () => {
+  it('lets an organizer of the owning org access a sponsor thread', () => {
     expect(
       canAccessConversation(sponsorConversation(), {
         _id: 'org-1',
-        isOrganizer: true,
+        organizerOrgIds: ['org-test'],
       }),
     ).toBe(true)
   })

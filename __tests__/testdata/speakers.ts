@@ -1,5 +1,14 @@
 import { Flags, Speaker } from '@/lib/speaker/types'
 
+/**
+ * The organization every shared fixture belongs to. Org-scoped authz keys on
+ * `organizerOrgIds` ALONE — both bridges to the deprecated global `isOrganizer`
+ * flag are gone — so an organizer fixture must carry this id AND the test's
+ * domain-resolved conference must resolve to it (see `__tests__/helpers/trpc.ts`,
+ * which mocks the domain conference onto this org).
+ */
+export const TEST_ORG_ID = 'org-test'
+
 const speakers: Speaker[] = [
   {
     _id: '92a2ad7c-d831-48e2-aff1-ff81f9561388',
@@ -27,6 +36,10 @@ const speakers: Speaker[] = [
     slug: 'jane-doe',
     flags: [Flags.diverseSpeaker, Flags.requiresTravelFunding],
     isOrganizer: true,
+    // The org-scoped capability the authz waist actually reads. `isOrganizer`
+    // above is the deprecated global flag, kept for the non-authz code (badge
+    // sorting, recipient selection) that still reads it.
+    organizerOrgIds: [TEST_ORG_ID],
     // No image field - should use MissingAvatar
   },
 ] as Speaker[]

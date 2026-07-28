@@ -127,12 +127,13 @@ export interface Speaker extends SpeakerBase {
   /**
    * @deprecated GLOBAL organizer flag — true iff this speaker is in ANY
    * conference's `organizers[]`. Superseded by {@link organizerOrgIds} for
-   * authorization (CaaS T1-2, #614): access is now org-SCOPED. Retained in the
-   * token as a backward-compat/migration bridge — the org-scoped middleware and
-   * gates fall back to this ONLY when the request's organization cannot be
-   * resolved (pre-044-backfill data / unknown domain). Prefer
+   * authorization (CaaS T1-2, #614): access is org-SCOPED, and this flag takes NO
+   * part in any authorization decision — both migration bridges that once fell
+   * back to it are removed. NEVER gate access on it: being an organizer of ANY org
+   * is not being an organizer of THIS one. Use
    * `isOrganizerForOrg`/`isOrganizerForCurrentOrg` (src/lib/authz/organizer.ts).
-   * UI still reads it this wave; a follow-up removes both the reads and the bridge.
+   * Still minted into the token and read by UI/recipient-selection code; a
+   * follow-up removes those reads and the field.
    */
   isOrganizer?: boolean
   /**
@@ -142,8 +143,9 @@ export interface Speaker extends SpeakerBase {
    * speaker. The authorization boundary keys on membership of the REQUEST's org
    * in this set; the request's org always comes from the domain-resolved
    * conference, never from client input. A handful of ids at most, so it is safe
-   * to bake into the JWT. Additive/optional; a legacy token without it degrades
-   * to the {@link isOrganizer} bridge.
+   * to bake into the JWT. Additive/optional in the type, but REQUIRED in practice:
+   * a legacy token minted before #635 lacks it and is therefore denied organizer
+   * access everywhere until the holder signs in again.
    */
   organizerOrgIds?: string[]
   /**

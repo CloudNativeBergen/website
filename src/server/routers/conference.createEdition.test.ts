@@ -14,6 +14,8 @@ vi.mock('@/lib/conference/sanity', () => ({
 }))
 
 const SOURCE_ID = 'source-conf'
+/** The org the domain-resolved source conference belongs to. */
+const ORG_ID = 'org-test'
 
 const SOURCE_DOC = {
   _id: SOURCE_ID,
@@ -75,9 +77,19 @@ vi.mock('@/lib/sanity/client', () => ({
 import { conferenceRouter } from './conference'
 import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
+/**
+ * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
+ * bridge is gone), so an "organizer" caller must carry the SAME org the
+ * request's domain conference resolves to — hence `ORG_ID` on both sides.
+ */
 function makeCaller(opts: { isOrganizer?: boolean } | null) {
   const speaker = opts
-    ? { _id: 'sp-1', name: 'Org', isOrganizer: opts.isOrganizer ?? false }
+    ? {
+        _id: 'sp-1',
+        name: 'Org',
+        isOrganizer: opts.isOrganizer ?? false,
+        organizerOrgIds: opts.isOrganizer ? [ORG_ID] : [],
+      }
     : undefined
   const ctx = {
     session: speaker ? { speaker, user: { name: 'Org' } } : null,
@@ -101,8 +113,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   claimedDomains = ['cloudnativebergen.no', '2025.cnb.no']
   commitMock.mockResolvedValue({})
+  // The domain conference carries the org the authz waist gates on, so
+  // `resolveOrganizationId()` yields ORG_ID for every request in this file.
   getConferenceMock.mockResolvedValue({
-    conference: { _id: SOURCE_ID },
+    conference: {
+      _id: SOURCE_ID,
+      organization: { _type: 'reference', _ref: ORG_ID },
+    },
+    domain: 'cloudnativebergen.no',
     error: null,
   })
 })

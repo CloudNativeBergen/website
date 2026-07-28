@@ -14,15 +14,13 @@ import { clientReadUncached } from '@/lib/sanity/client'
  *
  * THE MODEL. A caller is a platform operator iff their session token's
  * `organizerOrgIds` contains the id of the org whose `slug.current` equals
- * `PLATFORM_ORG_SLUG`. This is deliberately STRICTER than the tenant-admin
- * waist (`isOrganizerForOrg`):
- *
- *   - NO legacy-token bridge: a pre-#635 token (no `organizerOrgIds`) is DENIED
- *     even when the deprecated global `isOrganizer` flag is set — that flag is
- *     true for an organizer of ANY org and must never mint cross-tenant
- *     creation powers. Operators on legacy tokens simply re-login once.
- *   - FAIL CLOSED on every unresolvable input: env unset, org slug not found,
- *     transient read failure → deny.
+ * `PLATFORM_ORG_SLUG`. Like the tenant-admin waist (`isOrganizerForOrg`) it reads
+ * `organizerOrgIds` and nothing else — a pre-#635 token (no `organizerOrgIds`) is
+ * DENIED even when the deprecated global `isOrganizer` flag is set, since that
+ * flag is true for an organizer of ANY org and must never mint cross-tenant
+ * creation powers. Operators on legacy tokens simply re-login once. It FAILS
+ * CLOSED on every unresolvable input: env unset, org slug not found, transient
+ * read failure → deny.
  */
 
 /** The minimum shape the platform check reads off a session speaker. */
@@ -57,7 +55,7 @@ export async function getPlatformOrgId(): Promise<string | null> {
 
 /**
  * PURE platform-operator decision for an already-resolved platform org id.
- * STRICT membership only — no legacy-token bridge, fail closed on `null`.
+ * STRICT membership only — fail closed on `null`.
  */
 export function isPlatformOperatorForOrg(
   speaker: PlatformSpeaker | null | undefined,

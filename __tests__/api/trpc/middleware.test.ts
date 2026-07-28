@@ -4,6 +4,22 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/events/registry', () => ({}))
 
+// The authz waist derives the request's org from the DOMAIN conference, and a
+// test process has no request domain — so resolve it explicitly onto the org the
+// organizer fixture's `organizerOrgIds` names (`TEST_ORG_ID`, duplicated as a
+// literal because `vi.mock` factories are hoisted above imports).
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
+
 import { describe, it, expect, vi } from 'vitest'
 import { TRPCError } from '@trpc/server'
 import {

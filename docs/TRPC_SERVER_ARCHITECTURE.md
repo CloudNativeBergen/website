@@ -311,26 +311,26 @@ requires `organizerOrgIds` to include that org id (`isOrganizerForOrg` in
 `src/lib/authz/organizer.ts`). It **fails closed**: a resolvable org whose id is
 not in the caller's set is denied (`FORBIDDEN`), including a cross-org organizer.
 
-**The legacy bridge.** When the request's org **cannot** be resolved
-(pre-`044`-backfill conference without an `organization`, or an unknown domain),
-the check falls back to the **deprecated global** `speaker.isOrganizer` boolean
-(organizer of _any_ conference) and emits a `console.warn('[authz-bridge] …')`.
-This is a deliberate, temporary migration bridge so the org tier can roll out
-without locking legitimate organizers out; a resolution _throw_ also maps to the
-bridge rather than erroring the waist.
+**The legacy bridges are GONE.** Both fallbacks to the **deprecated global**
+`speaker.isOrganizer` boolean (organizer of _any_ conference) have been removed:
 
-**Removal condition.** Delete the bridge (make an unresolvable org **deny**) once
-every live conference has an `organization` **and** every issued token carries
-`organizerOrgIds` (all pre-#614 tokens expired / all users re-logged-in). At that
-point `resolveOrganizationId() === null` should produce `FORBIDDEN`, and the
-deprecated `isOrganizer` field (plus its UI reads) can be removed.
+- an **unresolvable** request org (unknown domain, or a resolution throw) now
+  **denies** (`FORBIDDEN`), emitting a `console.warn('[authz-bridge] …')` when the
+  denied caller organizes at least one org, so the failure mode stays observable;
+- a **legacy token** minted before #635 (no `organizerOrgIds` claim at all) now
+  **denies** too. Deferring to the global flag there granted organizer rights on
+  **any host**, since that flag is not org-scoped. Holders re-login (or hit the
+  `trigger === 'update'` session refresh) to get a modern token.
+
+The deprecated `isOrganizer` field is still minted and read by UI/non-authz code,
+but takes no part in any authorization decision.
 
 **Shared gates.** Handler/layout/route-handler gates that previously read
 `session.speaker.isOrganizer` (the `(admin)` layout, admin server actions'
 `requireOrganizer`, the `/launch` dispatcher, the `speaker-image` / `gallery` /
 upload API routes, the `(cfp)` organizer-view pages, and the
 dev-only impersonation gate in `src/lib/auth.ts`) all go through the **same**
-`isOrganizerForOrg` / `isOrganizerForCurrentOrg` helpers with the **same** bridge.
+`isOrganizerForOrg` / `isOrganizerForCurrentOrg` helpers.
 UI components still read the deprecated `isOrganizer` boolean this wave (a
 follow-up rewrites them).
 

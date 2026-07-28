@@ -67,6 +67,7 @@ import {
   createAuthenticatedCaller,
   createAdminCaller,
   speakers,
+  TEST_ORG_ID,
 } from '../../helpers/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
@@ -101,6 +102,10 @@ const mockConference = {
   cfpStartDate: '2026-01-01',
   cfpEndDate: '2026-05-01',
   domains: ['localhost'],
+  // Org-scoped authz derives the REQUEST's org from this conference and grants
+  // only when the caller's `organizerOrgIds` contains it, so the domain
+  // conference must belong to the fixture organizer's org.
+  organization: { _type: 'reference', _ref: TEST_ORG_ID },
 }
 
 const validProposalData = {

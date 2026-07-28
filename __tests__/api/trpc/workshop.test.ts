@@ -31,6 +31,10 @@ vi.mock('@/lib/conference/sanity', () => ({
     conference: {
       _id: 'conf-1',
       title: 'CNDN',
+      // The admin waist derives the REQUEST's org from this conference and grants
+      // only when the caller's `organizerOrgIds` contains it — so the domain
+      // conference must point at the fixture organizer's org (TEST_ORG_ID).
+      organization: { _type: 'reference', _ref: 'org-test' },
       workshopRegistrationStart: null,
       workshopRegistrationEnd: null,
     },

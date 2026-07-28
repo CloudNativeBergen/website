@@ -150,8 +150,17 @@ export async function createCoSpeakerInvitation(params: {
     // Hence `canonicalEmail`, NOT `normalizeEmail`: NFKC compatibility folding
     // would rewrite the local part (`oﬀice@ex.com` -> `office@ex.com`) and could
     // deliver the token to a different mailbox than the inviter typed. Case is
-    // safe to fold; compatibility codepoints are not. Acceptance compares with
-    // `normalizeEmail` on both sides, so matching is unaffected.
+    // safe to fold; compatibility codepoints are not.
+    //
+    // Acceptance (`proposal.respondToInvitation`) compares with `canonicalEmail`
+    // on both sides too, deliberately: that check GRANTS, so its key must be no
+    // WIDER than the set of mailboxes the token could have been delivered to —
+    // NFKC folding is not delivery-safe, and a wider key there would fail OPEN,
+    // letting a holder whose address merely folds to the same value claim an
+    // invitation never sent to them. The caller-side creation guards in
+    // `proposal.inviteCoSpeaker` (self-invite, duplicate-pending,
+    // already-a-speaker) keep `normalizeEmail` because they REJECT: a wider key
+    // rejects more, which fails CLOSED.
     const invitedEmail = canonicalEmail(params.invitedEmail)
 
     const tokenPayload: InvitationTokenPayload = {
