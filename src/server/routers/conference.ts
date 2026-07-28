@@ -63,7 +63,8 @@ export const CANNOT_REMOVE_SELF_ORGANIZER =
 export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
 
 /**
- * Every domain claimed by ANY conference document, normalized. Drives the
+ * Every domain claimed by ANY conference document, normalized and deduped (two
+ * conferences may spell the same host differently, or one may repeat it). Drives the
  * wizard's GLOBAL-uniqueness rule: a new edition must never shadow an existing
  * edition's routing (`getConferenceForDomain` picks the FIRST conference whose
  * `domains[]` matches the host — a duplicate would silently steal traffic).
@@ -73,7 +74,7 @@ async function fetchClaimedDomains(): Promise<string[]> {
     // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as onboarding's createOrganization).
     `*[_type == "conference" && defined(domains)].domains[]`,
   )
-  return (all ?? []).map(normalizeDomain)
+  return Array.from(new Set((all ?? []).map(normalizeDomain)))
 }
 
 /**
@@ -589,10 +590,12 @@ export const conferenceRouter = router({
 
   /**
    * Availability probe for the wizard's Domains step. Given the typed hostnames,
-   * returns which are ALREADY claimed by some conference (global uniqueness,
-   * routing-overlap semantics) and which are not valid bare hostnames — so the
-   * editor can flag them inline before the maintainer reaches the confirm step.
-   * Read-only, and only a mirror: `createEdition` is the authority.
+   * returns which are ALREADY `taken` — claimed by some conference under the
+   * same routing-overlap rule the mutation enforces — so the editor can flag
+   * them inline before the maintainer reaches the confirm step. Hostname SHAPE
+   * is validated client-side (`domainsLocalErrors`) and by the mutation's
+   * schema, not here. Read-only, and only a mirror: `createEdition` is the
+   * authority.
    */
   validateNewDomains: adminProcedure
     .input(ValidateNewDomainsSchema)
