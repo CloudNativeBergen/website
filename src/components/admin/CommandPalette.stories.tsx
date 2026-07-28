@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
-import { fn, userEvent, waitFor, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { CommandPalette } from './CommandPalette'
 
 const meta = {
@@ -54,8 +54,26 @@ const emptyTrpcHandlers = [
  * check width containment and overflow.
  */
 export const Open: Story = {
+  render: () => (
+    <CommandPalette open={true} onClose={fn()} enabledFeatures={['workshops']} />
+  ),
+  parameters: { msw: { handlers: emptyTrpcHandlers } },
+}
+
+/**
+ * FEATURE-GATED destinations (#689): for an org with no entitlements, every
+ * destination tagged with a `feature` in the admin registry disappears from the
+ * palette — matching the sidebar, which hides the same entries. Today that is
+ * the workshop admin page.
+ */
+export const WithoutGatedFeatures: Story = {
   render: () => <CommandPalette open={true} onClose={fn()} />,
   parameters: { msw: { handlers: emptyTrpcHandlers } },
+  play: async () => {
+    const body = within(document.body)
+    await body.findByText('Speakers')
+    expect(body.queryByText('Workshops')).toBeNull()
+  },
 }
 
 /**

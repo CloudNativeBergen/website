@@ -6,13 +6,23 @@ import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
+import { notFound } from 'next/navigation'
 
 export default async function WorkshopPage() {
+  const { conference, error } = await getConferenceForCurrentDomain()
+
+  // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
+  // but the check lands here first so a disabled tenant never starts a WorkOS
+  // session round-trip it cannot complete. Fail-closed on an unresolvable org.
+  if (!(await isWorkshopsEnabledForConference(conference))) {
+    notFound()
+  }
+
   const { user } = await withAuth()
 
-  const { conference, error } = await getConferenceForCurrentDomain()
   if (error || !conference?._id) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">

@@ -100,6 +100,71 @@ describe('middleware — path routing', () => {
   })
 })
 
+/**
+ * The workshop portal's AuthKit round-trip can only complete on the ONE host
+ * the global WorkOS client is configured for — on any other tenant domain the
+ * session cookie is sealed where that tenant can never read it, so the attendee
+ * loops forever (#689). Starting that bounce from a foreign host is never
+ * useful, and it would happen BEFORE the request reaches the portal's own
+ * feature gate, so the middleware refuses it outright.
+ */
+describe('middleware — /workshop host guard', () => {
+  const CALLBACK = 'https://platform.test/api/auth/callback'
+
+  /** Request `path` with an explicit Host header. */
+  function reqOnHost(path: string, host: string): NextRequest {
+    return new NextRequest(`https://${host}${path}`, {
+      headers: new Headers({ host }),
+    })
+  }
+
+  it('404s /workshop on a host that is not the WorkOS callback host', () => {
+    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
+    const res = middleware(
+      reqOnHost('/workshop', 'tenant2.no'),
+      event,
+    ) as Response
+    expect(res.status).toBe(404)
+    expect(h.workOSMiddleware).not.toHaveBeenCalled()
+  })
+
+  it('404s nested /workshop/* on a foreign host too', () => {
+    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
+    const res = middleware(
+      reqOnHost('/workshop/agenda', 'tenant2.no'),
+      event,
+    ) as Response
+    expect(res.status).toBe(404)
+    expect(h.workOSMiddleware).not.toHaveBeenCalled()
+  })
+
+  it('still routes the WorkOS host itself to the WorkOS middleware', () => {
+    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
+    const result = middleware(reqOnHost('/workshop', 'platform.test'), event)
+    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
+    expect(result).toBe(h.workOSResult)
+  })
+
+  it('accepts the host from NEXT_PUBLIC_URL as well', () => {
+    vi.stubEnv('WORKOS_REDIRECT_URI', CALLBACK)
+    vi.stubEnv('NEXT_PUBLIC_URL', 'https://portal.example.org')
+    const result = middleware(
+      reqOnHost('/workshop', 'portal.example.org'),
+      event,
+    )
+    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
+    expect(result).toBe(h.workOSResult)
+  })
+
+  it('falls back to the existing routing when nothing usable is configured', () => {
+    vi.stubEnv('WORKOS_REDIRECT_URI', '')
+    vi.stubEnv('NEXT_PUBLIC_URL', 'not a url')
+    const result = middleware(reqOnHost('/workshop', 'anything.test'), event)
+    expect(h.workOSMiddleware).toHaveBeenCalledOnce()
+    expect(result).toBe(h.workOSResult)
+  })
+})
+
 describe('middleware — NextAuth gate (unauthenticated)', () => {
   it.each(['/cfp/list', '/admin/sponsors', '/cli/token'])(
     'redirects an unauthenticated request to %s to sign-in with callbackUrl',

@@ -8,6 +8,12 @@
  * searchable and the two can never drift apart. Settings destinations are
  * derived from `SETTINGS_GROUPS` / `SETTINGS_TIERS` in `@/lib/settings/groups`
  * for the same reason.
+ *
+ * An entry may carry an optional `feature` (a `FeatureId` from the per-org
+ * feature registry). Both consumers filter through `visibleNavSections` /
+ * `visibleDestinations`, so a destination for a feature the current org is not
+ * entitled to disappears from the sidebar AND the palette at once. Hiding is
+ * presentation, never security — the page re-checks the entitlement server-side.
  */
 
 import {
@@ -34,13 +40,24 @@ import {
 } from '@heroicons/react/24/outline'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
+import type { FeatureId } from '@/lib/features/registry'
 
 export type AdminDestinationKind = 'page' | 'setting' | 'action'
 
 /** Icon component type, matching how the admin nav stores Heroicons. */
 export type AdminDestinationIcon = NavigationItem['icon']
 
-export interface AdminDestination {
+/**
+ * The per-organization feature an admin destination belongs to
+ * (`src/lib/features/registry.ts`). ABSENT means "always available" — the vast
+ * majority. When present, the destination is hidden from the sidebar and the
+ * ⌘K palette unless the current org is entitled (see {@link visibleNavSections}
+ * / {@link visibleDestinations}); hiding is presentation only — the page itself
+ * re-checks the entitlement server-side.
+ */
+type AdminDestinationFeature = { feature?: FeatureId }
+
+export interface AdminDestination extends AdminDestinationFeature {
   id: string
   title: string
   keywords: string[]
@@ -51,7 +68,7 @@ export interface AdminDestination {
   icon?: AdminDestinationIcon
 }
 
-interface AdminNavEntry extends NavigationItem {
+interface AdminNavEntry extends NavigationItem, AdminDestinationFeature {
   keywords: string[]
 }
 
@@ -117,6 +134,7 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         href: '/admin/workshops',
         icon: AcademicCapIcon,
         keywords: ['training', 'sessions', 'capacity', 'signups'],
+        feature: 'workshops',
       },
     ],
   },
@@ -431,6 +449,7 @@ export const ADMIN_DESTINATIONS: AdminDestination[] = [
       group: section.label,
       kind: 'page',
       icon: item.icon,
+      ...(item.feature ? { feature: item.feature } : {}),
     })),
   ),
   ...ADMIN_SUB_PAGES.map((page): AdminDestination => ({
@@ -467,6 +486,46 @@ export const ADMIN_DESTINATIONS: AdminDestination[] = [
     icon: card.icon,
   })),
 ]
+
+/**
+ * Whether a feature-tagged entry is visible to an org with `enabledFeatures`.
+ * Untagged entries are always visible; a tagged one requires the entitlement,
+ * so an empty/omitted set hides every gated destination (fail-closed).
+ */
+function isFeatureVisible(
+  entry: AdminDestinationFeature,
+  enabledFeatures: readonly FeatureId[],
+): boolean {
+  return !entry.feature || enabledFeatures.includes(entry.feature)
+}
+
+/**
+ * The sidebar sections an org with `enabledFeatures` may see — feature-gated
+ * items are dropped, and a section left with no items disappears entirely.
+ */
+export function visibleNavSections(
+  enabledFeatures: readonly FeatureId[],
+  sections: readonly AdminNavSection[] = ADMIN_NAV_SECTIONS,
+): AdminNavSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        isFeatureVisible(item, enabledFeatures),
+      ),
+    }))
+    .filter((section) => section.items.length > 0)
+}
+
+/** The ⌘K destinations an org with `enabledFeatures` may see. */
+export function visibleDestinations(
+  enabledFeatures: readonly FeatureId[],
+  destinations: readonly AdminDestination[] = ADMIN_DESTINATIONS,
+): AdminDestination[] {
+  return destinations.filter((destination) =>
+    isFeatureVisible(destination, enabledFeatures),
+  )
+}
 
 export interface AdminDestinationGroup {
   group: string
