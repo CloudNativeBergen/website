@@ -1,4 +1,5 @@
 import { clientWrite } from '../sanity/client'
+import { canonicalEmail } from '../speaker/email'
 
 /**
  * Set a speaker's display `email`.
@@ -14,13 +15,21 @@ import { clientWrite } from '../sanity/client'
  * Callers are responsible for proving the caller owns `email` before invoking
  * this (see `isEmailVerifiedForSession`, used by `speaker.updateEmail`). Because
  * the display email is itself a login match key, it must always be verified-owned.
+ *
+ * The value is CANONICALIZED before it is written (#684): trimmed + lowercased,
+ * deliberately WITHOUT NFKC, because this field is a real recipient address that
+ * the app sends mail to. `isEmailVerifiedForSession` compares with the fuller
+ * `normalizeEmail`, and NFKC is a no-op for ASCII, so matching is unaffected.
  */
 export async function updateProfileEmail(
   email: string,
   speakerId: string,
 ): Promise<{ error: Error | null }> {
   try {
-    await clientWrite.patch(speakerId).set({ email }).commit()
+    await clientWrite
+      .patch(speakerId)
+      .set({ email: canonicalEmail(email) })
+      .commit()
 
     return { error: null }
   } catch (error) {

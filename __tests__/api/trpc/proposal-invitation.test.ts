@@ -142,6 +142,34 @@ describe('proposal.invitation router', () => {
       expect(sendInvitationEmail).toHaveBeenCalled()
     })
 
+    // #684 — the router must hand the address to the invitation service AS
+    // TYPED. The service applies the recipient-safe `canonicalEmail`; the
+    // router's fully-normalized comparison key must never become the mailbox a
+    // bearer token is delivered to. (Canonicalization itself is covered against
+    // the real service in __tests__/lib/cospeaker/server.test.ts.)
+    it('passes the address as typed to the invitation service', async () => {
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(createCoSpeakerInvitation).mockResolvedValue({
+        ...mockInvitation,
+        _id: 'inv-1',
+      } as any)
+      vi.mocked(sendInvitationEmail).mockResolvedValue(true)
+
+      const caller = createCaller(regularSpeaker)
+      await caller.proposal.invitation.send({
+        proposalId: 'proposal-1',
+        invitedEmail: 'Invited@Test.com',
+        invitedName: 'Invited Co-Speaker',
+      })
+
+      expect(createCoSpeakerInvitation).toHaveBeenCalledWith(
+        expect.objectContaining({ invitedEmail: 'Invited@Test.com' }),
+      )
+    })
+
     it('should not leak the invitation bearer token to the inviter (regression)', async () => {
       vi.mocked(getProposal).mockResolvedValue({
         proposal: mockProposal as any,
@@ -477,6 +505,71 @@ describe('proposal.invitation router', () => {
       const wrongSpeaker = { _id: 'speaker-3', email: 'wrong@test.com' }
       const caller = createCaller(wrongSpeaker)
 
+      await expect(
+        caller.proposal.invitation.respond({
+          token: 'valid-token',
+          accept: true,
+        }),
+      ).rejects.toThrow(/sent to a different email address/)
+    })
+
+    // #684 — the invitee must not be locked out of their own invitation by a
+    // casing/whitespace difference between the stored address and the address
+    // their login provider hands back.
+    it('accepts when the stored invite email differs only in case/whitespace', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        invitedEmail: '  Invited@Test.com ',
+      } as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createCaller(invitedSpeaker)
+      const result = await caller.proposal.invitation.respond({
+        token: 'valid-token',
+        accept: true,
+      })
+
+      expect(result.success).toBe(true)
+    })
+
+    // #684 follow-up — the ownership check GRANTS, so its key must be no wider
+    // than the set of mailboxes the token was actually delivered to. NFKC
+    // compatibility folding rewrites the local part (`oﬀice@` -> `office@`)
+    // and is NOT delivery-safe, so it must not be used here even though the
+    // creation guards (which REJECT, and therefore fail closed when wider) do
+    // use it.
+    it('rejects a responder whose address only NFKC-folds to the invited one', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        // U+FB00 LATIN SMALL LIGATURE FF — folds to "office@test.com"
+        invitedEmail: 'oﬀice@test.com',
+      } as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const folded = { _id: 'speaker-9', email: 'office@test.com' }
+      const caller = createCaller(folded)
+
+      await expect(
+        caller.proposal.invitation.respond({
+          token: 'valid-token',
+          accept: true,
+        }),
+      ).rejects.toThrow(/sent to a different email address/)
+    })
+
+    it('fails CLOSED when either side has an empty email', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        invitedEmail: '   ',
+      } as any)
+
+      const caller = createCaller({ _id: 'speaker-4', email: '' })
       await expect(
         caller.proposal.invitation.respond({
           token: 'valid-token',

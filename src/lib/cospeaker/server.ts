@@ -13,6 +13,7 @@ import { getProposalAbstract } from './sanity'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
+import { canonicalEmail } from '@/lib/speaker/email'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
@@ -140,9 +141,22 @@ export async function createCoSpeakerInvitation(params: {
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
 
+    // Store the invitee address CANONICALIZED (#684): trimmed + lowercased.
+    // `invitedEmail` does double duty — it is the acceptance match key (a stored
+    // `Sofia@Example.com` would reject the very person it was sent to, and the
+    // pending-duplicate guard would miss a re-invite) AND the address this
+    // invitation's bearer token is emailed to.
+    //
+    // Hence `canonicalEmail`, NOT `normalizeEmail`: NFKC compatibility folding
+    // would rewrite the local part (`oﬀice@ex.com` -> `office@ex.com`) and could
+    // deliver the token to a different mailbox than the inviter typed. Case is
+    // safe to fold; compatibility codepoints are not. Acceptance compares with
+    // `normalizeEmail` on both sides, so matching is unaffected.
+    const invitedEmail = canonicalEmail(params.invitedEmail)
+
     const tokenPayload: InvitationTokenPayload = {
       invitationId: '',
-      invitedEmail: params.invitedEmail,
+      invitedEmail,
       proposalId: params.proposalId,
       expiresAt: expiresAt.getTime(),
     }
@@ -152,7 +166,7 @@ export async function createCoSpeakerInvitation(params: {
       proposal: createReference(params.proposalId),
       conference: createReference(params.conferenceId),
       invitedBy: createReference(params.invitedBySpeakerId),
-      invitedEmail: params.invitedEmail,
+      invitedEmail,
       invitedName: params.invitedName,
       status: 'pending',
       expiresAt: expiresAt.toISOString(),

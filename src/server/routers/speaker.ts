@@ -50,6 +50,7 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { generateUniqueSlug } from '@/lib/speaker/sanity'
+import { canonicalEmail } from '@/lib/speaker/email'
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -209,7 +210,9 @@ export const speakerRouter = router({
           })
         }
 
-        return { success: true, email: input.email }
+        // Echo back the value that was actually STORED (#684), not the raw
+        // casing, so the UI never renders an address that differs from the doc.
+        return { success: true, email: canonicalEmail(input.email) }
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
@@ -420,7 +423,13 @@ export const speakerRouter = router({
           const speaker = await clientWrite.create({
             _type: 'speaker',
             name: input.name,
-            email: input.email,
+            // The display `email` is a login match key (`getOrCreateSpeaker`),
+            // so an admin-created placeholder must be stored in the same
+            // canonical form the login path writes (#684) — otherwise the
+            // person it was created for signs in and gets a second, duplicate
+            // speaker document. `canonicalEmail` (not `normalizeEmail`): this
+            // field is also a real recipient address.
+            email: canonicalEmail(input.email),
             slug: { _type: 'slug', current: slug },
             title: input.title,
             bio: input.bio,
@@ -601,7 +610,9 @@ export const speakerRouter = router({
             })
           }
 
-          return { success: true, email: input.email }
+          // Echo back the value that was actually STORED (#684), not the raw
+          // casing, so the UI never renders an address that differs from the doc.
+          return { success: true, email: canonicalEmail(input.email) }
         } catch (error) {
           if (error instanceof TRPCError) throw error
 

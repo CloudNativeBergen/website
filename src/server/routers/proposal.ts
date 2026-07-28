@@ -65,6 +65,7 @@ import {
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
+import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
@@ -1643,10 +1644,14 @@ export const proposalRouter = router({
             })
           }
 
-          const invitedEmail = input.invitedEmail.toLowerCase()
+          // Identity match key — normalize both sides (#684) so casing and
+          // whitespace can never smuggle a duplicate invitation past the guards
+          // below (or, at acceptance time, lock the invitee out of their own
+          // invitation).
+          const invitedEmail = normalizeEmail(input.invitedEmail)
 
           // Reject self-invitations
-          if (invitedEmail === ctx.speaker.email?.toLowerCase()) {
+          if (invitedEmail === normalizeEmail(ctx.speaker.email)) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'You cannot invite yourself as a co-speaker.',
@@ -1658,7 +1663,7 @@ export const proposalRouter = router({
           const existingSpeakers = extractSpeakersFromProposal(proposal)
           if (
             existingSpeakers.some(
-              (s) => s.email?.toLowerCase() === invitedEmail,
+              (s) => normalizeEmail(s.email) === invitedEmail,
             )
           ) {
             throw new TRPCError({
@@ -1674,7 +1679,7 @@ export const proposalRouter = router({
           ).filter((inv) => inv.status === 'pending')
           if (
             pendingInvitations.some(
-              (inv) => inv.invitedEmail?.toLowerCase() === invitedEmail,
+              (inv) => normalizeEmail(inv.invitedEmail) === invitedEmail,
             )
           ) {
             throw new TRPCError({
@@ -1709,6 +1714,10 @@ export const proposalRouter = router({
           const invitation = await createCoSpeakerInvitation({
             invitedByEmail: ctx.speaker.email,
             invitedByName: ctx.speaker.name,
+            // Pass the address AS TYPED — `createCoSpeakerInvitation` applies the
+            // recipient-safe `canonicalEmail` (trim + lowercase, no NFKC). The
+            // fully-normalized `invitedEmail` above is a comparison key only and
+            // must never become the mailbox an invitation token is sent to.
             invitedEmail: input.invitedEmail,
             invitedName: input.invitedName,
             proposalId: input.proposalId,
@@ -1785,10 +1794,31 @@ export const proposalRouter = router({
 
           // Verify ownership before revealing or mutating expiry state:
           // a non-invitee holding a leaked token must not trigger the
-          // expired write or learn whether the invitation has expired
+          // expired write or learn whether the invitation has expired.
+          // Normalized on both sides (#684) so the invitee is not locked out of
+          // their own invitation by provider casing; an empty address on either
+          // side fails CLOSED rather than matching another empty one.
+          //
+          // Deliberately `canonicalEmail` (trim + lowercase), NOT the
+          // NFKC-folding `normalizeEmail` used by the creation guards above.
+          // The direction of failure differs:
+          //   - the guards above REJECT (self-invite, duplicate, already a
+          //     speaker), so a WIDER key rejects more and fails CLOSED;
+          //   - this check GRANTS, so a wider key would accept more and fail
+          //     OPEN.
+          // NFKC rewrites the local part (`oﬀice@ex.com` -> `office@ex.com`),
+          // and nothing guarantees the folded address reaches the same mailbox
+          // (see `canonicalEmail`'s own docs). The token was delivered to the
+          // literal `invitedEmail`, which is STORED canonically — so folding
+          // here would let a holder whose address merely folds to the same
+          // value claim an invitation that was never delivered to them. Keep
+          // the claim set no wider than the delivery set.
+          const invitationEmail = canonicalEmail(invitation.invitedEmail)
+          const responderEmail = canonicalEmail(ctx.speaker.email)
           if (
-            invitation.invitedEmail.toLowerCase() !==
-            ctx.speaker.email.toLowerCase()
+            !invitationEmail ||
+            !responderEmail ||
+            invitationEmail !== responderEmail
           ) {
             throw new TRPCError({
               code: 'FORBIDDEN',
