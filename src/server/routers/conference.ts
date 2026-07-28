@@ -13,6 +13,7 @@ import {
 import { clearConferenceTeamsCache } from '@/lib/teams'
 import {
   CANNOT_REMOVE_CURRENT_DOMAIN,
+  DOMAIN_ALREADY_CLAIMED,
   domainEntriesOverlap,
   domainsWouldStrandHost,
   normalizeDomain,
@@ -59,8 +60,16 @@ import {
 export const CANNOT_REMOVE_SELF_ORGANIZER =
   'You cannot remove yourself from the organizer team'
 
-/** Prefix for the BAD_REQUEST thrown when a new-edition domain is already taken. */
-export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
+/**
+ * Both id forms a Sanity conference document can appear under — the published id
+ * and its `drafts.` counterpart. Self-exclusion must drop BOTH, otherwise a
+ * conference that also has a draft would collide with its own draft's copy of
+ * the same `domains[]` and every domain edit would be rejected.
+ */
+function conferenceIdVariants(conferenceId: string): string[] {
+  const published = conferenceId.replace(/^drafts\./, '')
+  return [published, `drafts.${published}`]
+}
 
 /**
  * Every domain claimed by ANY conference document, normalized and deduped (two
@@ -68,12 +77,32 @@ export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
  * wizard's GLOBAL-uniqueness rule: a new edition must never shadow an existing
  * edition's routing (`getConferenceForDomain` picks the FIRST conference whose
  * `domains[]` matches the host — a duplicate would silently steal traffic).
+ *
+ * SELF-EXCLUSION: `excludeConferenceId` drops the document under edit (and its
+ * draft) from the claimed set. The create paths claim domains no document owns
+ * yet and pass nothing; `updateDomains` MUST pass its own id, or re-saving a
+ * conference's unchanged `domains[]` would collide with itself and brick every
+ * domain edit.
  */
-async function fetchClaimedDomains(): Promise<string[]> {
-  const all = await clientReadUncached.fetch<string[] | null>(
-    // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as onboarding's createOrganization).
-    `*[_type == "conference" && defined(domains)].domains[]`,
-  )
+async function fetchClaimedDomains(
+  excludeConferenceId?: string,
+): Promise<string[]> {
+  const excludeIds = excludeConferenceId
+    ? conferenceIdVariants(excludeConferenceId)
+    : []
+  // The exclusion predicate is appended ONLY when there is something to
+  // exclude, so the create paths keep running the exact query they always have
+  // — an `_id in []` term is never introduced where it could only ever widen
+  // the risk of the claimed set coming back empty (which would fail OPEN).
+  const query =
+    excludeIds.length > 0
+      ? // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as onboarding's createOrganization).
+        `*[_type == "conference" && defined(domains) && !(_id in $excludeIds)].domains[]`
+      : // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as onboarding's createOrganization).
+        `*[_type == "conference" && defined(domains)].domains[]`
+  const all = await clientReadUncached.fetch<string[] | null>(query, {
+    excludeIds,
+  })
   return Array.from(new Set((all ?? []).map(normalizeDomain)))
 }
 
@@ -293,6 +322,20 @@ export const conferenceRouter = router({
    * payload that would strand it (BAD_REQUEST). The client mirrors this with a
    * locked, non-removable row + a type-to-confirm gate, but the server is the
    * authority — a crafted request cannot bypass the guard.
+   *
+   * GLOBAL UNIQUENESS (#680): editing `domains[]` claims routing exactly like
+   * creating an edition does, so the same overlap rule applies here — an entry
+   * that ROUTING-OVERLAPS another conference's claim (exact, or a single-label
+   * wildcard in either direction, see {@link findClaimedOverlaps}) is rejected
+   * BAD_REQUEST naming it. Without this an organizer could add another tenant's
+   * host — or a `*.` wildcard capturing it — to their own list and steal that
+   * tenant's traffic (`getConferenceForDomain` serves the FIRST match).
+   *
+   * SELF-EXCLUSION: THIS conference's own entries are excluded from the claimed
+   * set, so re-saving unchanged domains, reordering them, or removing one all
+   * still succeed — only OTHER conferences' claims can collide.
+   *
+   * Both guards run BEFORE any write: a rejection patches nothing.
    */
   updateDomains: adminProcedure
     .input(UpdateDomainsSchema)
@@ -303,6 +346,14 @@ export const conferenceRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: CANNOT_REMOVE_CURRENT_DOMAIN,
+        })
+      }
+      const claimedElsewhere = await fetchClaimedDomains(conferenceId)
+      const taken = findClaimedOverlaps(input.domains, claimedElsewhere)
+      if (taken.length > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
         })
       }
       return applyConferencePatch(conferenceId, { domains: input.domains })
@@ -601,6 +652,31 @@ export const conferenceRouter = router({
     .input(ValidateNewDomainsSchema)
     .query(async ({ input }) => {
       const claimed = await fetchClaimedDomains()
+      const normalized = input.domains.map(normalizeDomain).filter((d) => d)
+      const taken = findClaimedOverlaps(
+        Array.from(new Set(normalized)),
+        claimed,
+      )
+      return { taken }
+    }),
+
+  /**
+   * Availability probe for the SETTINGS Domains editor — the mirror of
+   * {@link conferenceRouter.updateDomains} exactly as `validateNewDomains`
+   * mirrors `createEdition`, so a cross-tenant conflict surfaces inline instead
+   * of failing on save. Same `{ taken }` shape and same routing-overlap rule.
+   *
+   * Differs from `validateNewDomains` in ONE way, and it is the whole point:
+   * the CURRENT conference (resolved from the request domain, never from
+   * client input) is excluded from the claimed set — its own entries are not
+   * conflicts with itself. Read-only, and only a mirror: the mutation is the
+   * authority.
+   */
+  validateUpdatedDomains: adminProcedure
+    .input(ValidateNewDomainsSchema)
+    .query(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      const claimed = await fetchClaimedDomains(conferenceId)
       const normalized = input.domains.map(normalizeDomain).filter((d) => d)
       const taken = findClaimedOverlaps(
         Array.from(new Set(normalized)),

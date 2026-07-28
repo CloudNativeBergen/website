@@ -25,6 +25,17 @@ const handlers = [
   http.post('/api/trpc/conference.updateAnnouncement', ok),
 ]
 
+/**
+ * The Domains availability probe (#680) with a canned `taken` list. Default: no
+ * hostname is claimed elsewhere, so the Domains stories behave as before.
+ */
+const handlersWithProbe = (taken: string[] = []) => [
+  ...handlers,
+  http.get('/api/trpc/conference.validateUpdatedDomains', () =>
+    HttpResponse.json({ result: { data: { taken } } }),
+  ),
+]
+
 const announcementInitial = {
   announcement: [
     {
@@ -49,7 +60,7 @@ const meta = {
   component: EditConferenceCard,
   parameters: {
     layout: 'fullscreen',
-    msw: { handlers },
+    msw: { handlers: handlersWithProbe() },
     docs: {
       description: {
         component:
@@ -290,6 +301,48 @@ export const DomainsDangerousDark: Story = {
     defaultOpen: true,
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * #680 — the organizer types a hostname ANOTHER conference already routes. The
+ * availability probe reports it, the row carries the inline conflict message and
+ * the red Save stays disabled even with the confirm token typed, because
+ * `updateDomains` would refuse the payload anyway.
+ */
+export const DomainsTakenElsewhere: Story = {
+  args: {
+    fieldset: 'domains',
+    initialValues: { domains: ['cloudnativebergen.no'] },
+    currentDomain: 'cloudnativebergen.no',
+    defaultOpen: true,
+  },
+  parameters: {
+    msw: { handlers: handlersWithProbe(['2026.cloudnativeday.no']) },
+  },
+  play: async () => {
+    await userEvent.click(screen.getByRole('button', { name: 'Add domain' }))
+    await userEvent.type(
+      screen.getByLabelText('domain 2'),
+      '2026.cloudnativeday.no',
+    )
+    await userEvent.type(
+      screen.getByLabelText(/Type cloudnativebergen\.no to confirm/),
+      'cloudnativebergen.no',
+    )
+    expect(
+      await screen.findByText('Already used by another conference'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save domains' })).toBeDisabled()
+  },
+}
+
+export const DomainsTakenElsewhereDark: Story = {
+  ...DomainsTakenElsewhere,
+  parameters: {
+    msw: { handlers: handlersWithProbe(['2026.cloudnativeday.no']) },
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
 }
 
 /** The rich-text Announcement fieldset — the portable-text editor + toolbar. */

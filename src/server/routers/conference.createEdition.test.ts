@@ -72,7 +72,8 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { conferenceRouter, DOMAIN_ALREADY_CLAIMED } from './conference'
+import { conferenceRouter } from './conference'
+import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
 function makeCaller(opts: { isOrganizer?: boolean } | null) {
   const speaker = opts

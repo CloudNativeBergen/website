@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   PencilSquareIcon,
@@ -17,7 +17,11 @@ import { PortableTextEditor } from '@/components/PortableTextEditor'
 import type { PortableTextBlock } from '@portabletext/editor'
 import { api } from '@/lib/trpc/client'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
-import { domainServesHost } from '@/lib/conference/domains'
+import {
+  DOMAIN_ALREADY_CLAIMED,
+  domainServesHost,
+  normalizeDomain,
+} from '@/lib/conference/domains'
 import {
   type ListRow,
   TEMP_KEY_PREFIX,
@@ -745,6 +749,44 @@ export function EditConferenceCard({
   const confirmSatisfied =
     !dangerous || (confirmToken !== '' && confirmInput.trim() === confirmToken)
 
+  // --- Domains: global-uniqueness availability probe (#680) ----------------
+  // Mirrors `updateDomains`' cross-tenant guard so a domain another conference
+  // already routes is flagged inline instead of blowing up on save. The server
+  // stays the authority (and self-excludes THIS conference, so the rows already
+  // stored here never report as taken). Hooks run for every fieldset — the
+  // query is simply disabled outside `domains` — so hook order stays stable.
+  const isDomains = fieldset === 'domains'
+  const probeDomains = useMemo(() => {
+    if (!isDomains) return [] as string[]
+    const list = Array.isArray(values.domains)
+      ? (values.domains as string[])
+      : []
+    return Array.from(
+      new Set(list.map((d) => normalizeDomain(String(d))).filter((d) => d)),
+    )
+  }, [isDomains, values.domains])
+  // Debounced so keystrokes don't spam the server (same 400ms as the wizard).
+  const [domainCheckList, setDomainCheckList] = useState<string[]>([])
+  const probeKey = probeDomains.join('\n')
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDomainCheckList(probeKey === '' ? [] : probeKey.split('\n')),
+      400,
+    )
+    return () => clearTimeout(t)
+  }, [probeKey])
+  const domainAvailability = api.conference.validateUpdatedDomains.useQuery(
+    { domains: domainCheckList },
+    { enabled: isDomains && isOpen && domainCheckList.length > 0 },
+  )
+  const takenDomains = useMemo(
+    () => (isDomains ? (domainAvailability.data?.taken ?? []) : []),
+    [isDomains, domainAvailability.data],
+  )
+  // Only block on entries still present in the CURRENT list — a stale probe
+  // result must never wedge the Save button after the row was edited away.
+  const liveTakenDomains = takenDomains.filter((d) => probeDomains.includes(d))
+
   // `api.conference[procName]` narrows to a union of procedures; select the
   // proc first (plain property access, not a hook) then call `.useMutation`
   // exactly once so the hook order is stable regardless of `fieldset`.
@@ -896,6 +938,7 @@ export function EditConferenceCard({
   const handleSave = () => {
     setSubmitError(null)
     if (!confirmSatisfied) return
+    if (liveTakenDomains.length > 0) return
     const errs = validate()
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
@@ -952,9 +995,16 @@ export function EditConferenceCard({
               error={errors[f.name]}
               rowErrors={errors}
               currentDomain={currentDomain}
+              unavailableValues={liveTakenDomains}
               onChange={(v) => setValue(f.name, v)}
             />
           ))}
+
+          {isDomains && domainAvailability.isFetching ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Checking availability…
+            </p>
+          ) : null}
 
           {dangerous ? (
             <DangerousConfirm
@@ -988,7 +1038,12 @@ export function EditConferenceCard({
               type="submit"
               color={dangerous ? 'red' : 'blue'}
               size="md"
-              disabled={mutation.isPending || !isDirty || !confirmSatisfied}
+              disabled={
+                mutation.isPending ||
+                !isDirty ||
+                !confirmSatisfied ||
+                liveTakenDomains.length > 0
+              }
               className="min-h-[44px]"
             >
               {mutation.isPending
@@ -1013,6 +1068,7 @@ function EditField({
   error,
   rowErrors,
   currentDomain,
+  unavailableValues,
   onChange,
 }: {
   field: EditFieldDef
@@ -1021,6 +1077,8 @@ function EditField({
   /** The full error map, so list editors can pull their `<name>.<row>` keys. */
   rowErrors?: Record<string, string>
   currentDomain?: string
+  /** Normalized `string-list` values a server probe reported as unavailable. */
+  unavailableValues?: readonly string[]
   onChange: (value: FormValue) => void
 }) {
   const id = `conf-field-${field.name}`
@@ -1037,6 +1095,7 @@ function EditField({
         rows={(value as string[]) ?? []}
         errors={rowErrors ?? {}}
         currentDomain={currentDomain}
+        unavailableValues={unavailableValues}
         onChange={(rows) => onChange(rows)}
       />
     )
@@ -1308,16 +1367,20 @@ function StringListEditor({
   rows,
   errors,
   currentDomain,
+  unavailableValues,
   onChange,
 }: {
   field: EditFieldDef
   rows: string[]
   errors: Record<string, string>
   currentDomain?: string
+  /** Normalized values a server probe reported as claimed elsewhere (#680). */
+  unavailableValues?: readonly string[]
   onChange: (rows: string[]) => void
 }) {
   const noun = field.itemLabel ?? 'entry'
   const listErr = errors[field.name]
+  const unavailable = new Set(unavailableValues ?? [])
   const knownValues = field.knownValues ?? []
   const knownSet = new Set(knownValues.map((k) => k.value))
   // Rows shown as editable text inputs — known values are represented by the
@@ -1381,7 +1444,14 @@ function StringListEditor({
 
       <ul className="space-y-2">
         {visible.map(({ value, index }, pos) => {
-          const rowErr = errors[`${field.name}.${index}`]
+          // A probe hit renders as a row error too. The local shape error wins
+          // when both apply — it explains the value itself, and a malformed
+          // hostname could never have been claimed by anyone.
+          const rowErr =
+            errors[`${field.name}.${index}`] ??
+            (unavailable.has(normalizeDomain(value))
+              ? DOMAIN_ALREADY_CLAIMED
+              : undefined)
           const locked = Boolean(
             field.lockCurrent &&
             currentDomain &&
