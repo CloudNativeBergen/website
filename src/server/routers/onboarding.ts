@@ -8,6 +8,7 @@ import {
   isPlatformOperatorForOrg,
 } from '@/lib/authz/platform'
 import {
+  DOMAIN_ALREADY_CLAIMED,
   normalizeDomain,
   wildcardFormForHost,
   domainEntriesOverlap,
@@ -17,7 +18,6 @@ import {
   CreateOrganizationSchema,
   ValidateOnboardingSchema,
 } from '../schemas/onboarding'
-import { DOMAIN_ALREADY_CLAIMED } from './conference'
 
 /** Message prefix when the organization slug is already taken. */
 export const ORG_SLUG_ALREADY_TAKEN = 'Already used by another organization'

@@ -85,7 +85,7 @@ import {
   ORG_SLUG_ALREADY_TAKEN,
   AMBIGUOUS_ORGANIZER_EMAIL,
 } from './onboarding'
-import { DOMAIN_ALREADY_CLAIMED } from './conference'
+import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
 type CallerSpeaker = {
   _id: string

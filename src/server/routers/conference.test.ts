@@ -22,8 +22,18 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 // --- Sanity write client: capture the patch shape ---------------------------
 const commitMock = vi.fn()
-// Drives clientReadUncached.fetch — updateTeams reads the current organizer ids.
+// Drives clientReadUncached.fetch — updateTeams reads the current organizer ids
+// and updateDomains reads the domains claimed by OTHER conferences.
 const uncachedFetchMock = vi.fn()
+/**
+ * Stand-in datastore for the claimed-domains GROQ: every conference document's
+ * `domains[]`, keyed by `_id` (drafts included, under their `drafts.` id). The
+ * mock APPLIES the query's `$excludeIds` itself rather than returning a canned
+ * list, so a router that forgets to self-exclude really does see its OWN
+ * domains come back — which is what makes the self-exclusion tests bite.
+ */
+let domainsByConference: Record<string, string[]> = {}
+let lastClaimedParams: Record<string, unknown> | undefined
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
 let lastUnset: string[] | undefined
@@ -64,6 +74,7 @@ vi.mock('@/lib/teams', () => ({
 
 import { revalidateTag } from 'next/cache'
 import { conferenceRouter } from './conference'
+import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
 const revalidateTagMock = revalidateTag as unknown as ReturnType<typeof vi.fn>
 
@@ -88,8 +99,24 @@ beforeEach(() => {
   lastSetIfMissing = undefined
   hostMock.mockReturnValue('cloudnativebergen.no')
   commitMock.mockResolvedValue({ _id: CONFERENCE_ID })
+  // This conference already owns the host every test is served on.
+  domainsByConference = { [CONFERENCE_ID]: ['cloudnativebergen.no'] }
+  lastClaimedParams = undefined
   // Default organizer set for the teams subset check: the caller (sp-1) + sp-2.
-  uncachedFetchMock.mockResolvedValue(['sp-1', 'sp-2'])
+  // The domains claimed-set query is answered from `domainsByConference`, with
+  // the query's own `$excludeIds` applied.
+  uncachedFetchMock.mockImplementation(
+    async (query: string, params?: Record<string, unknown>) => {
+      if (query.includes('.domains[]')) {
+        lastClaimedParams = params
+        const excluded = new Set((params?.excludeIds as string[]) ?? [])
+        return Object.entries(domainsByConference)
+          .filter(([id]) => !excluded.has(id))
+          .flatMap(([, domains]) => domains)
+      }
+      return ['sp-1', 'sp-2']
+    },
+  )
   getConferenceMock.mockResolvedValue({
     conference: { _id: CONFERENCE_ID },
     error: null,
@@ -535,6 +562,119 @@ describe('conference router — domains (safeguarded)', () => {
       domains: [`${CURRENT.toUpperCase()}`, 'Other.Example.COM'],
     })
     expect(lastSet).toEqual({ domains: [CURRENT, 'other.example.com'] })
+  })
+})
+
+describe('conference router — domains global uniqueness (#680)', () => {
+  const CURRENT = 'cloudnativebergen.no'
+  const OTHER_CONFERENCE = 'other-conf'
+
+  it('rejects an exact host another conference already routes via a WILDCARD', async () => {
+    domainsByConference[OTHER_CONFERENCE] = ['*.cnb.no']
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [CURRENT, '2026.cnb.no'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: `${DOMAIN_ALREADY_CLAIMED}: 2026.cnb.no`,
+    })
+    // Fail CLOSED: no patch is opened when the claim is refused.
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+  })
+
+  it('rejects a WILDCARD that would capture the exact host of another conference', async () => {
+    domainsByConference[OTHER_CONFERENCE] = ['2025.cnb.no']
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [CURRENT, '*.cnb.no'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: `${DOMAIN_ALREADY_CLAIMED}: *.cnb.no`,
+    })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+  })
+
+  it('rejects an exact host another conference claims exactly', async () => {
+    domainsByConference[OTHER_CONFERENCE] = ['2025.cnb.no']
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [CURRENT, '2025.cnb.no'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  // --- SELF-EXCLUSION: the false-positive guard ----------------------------
+
+  it('SELF-EXCLUSION: re-saving its OWN unchanged domains succeeds', async () => {
+    // A wildcard + the hosts it covers, all owned by THIS conference — every
+    // pair overlaps, so a claimed set that failed to drop the document under
+    // edit would reject this no-op save and brick all domain editing.
+    const own = [CURRENT, '*.cnb.no', '2025.cnb.no']
+    domainsByConference[CONFERENCE_ID] = own
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: own,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: own })
+  })
+
+  it('SELF-EXCLUSION: excludes BOTH the published and the draft id', async () => {
+    const own = [CURRENT, '*.cnb.no']
+    domainsByConference[CONFERENCE_ID] = own
+    // An unpublished draft carries its own copy of the same list.
+    domainsByConference[`drafts.${CONFERENCE_ID}`] = own
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: own,
+    })
+    expect(result.success).toBe(true)
+    expect(lastClaimedParams?.excludeIds).toEqual([
+      CONFERENCE_ID,
+      `drafts.${CONFERENCE_ID}`,
+    ])
+  })
+
+  it('SELF-EXCLUSION: reordering its own domains succeeds', async () => {
+    const own = [CURRENT, '*.cnb.no', '2025.cnb.no']
+    domainsByConference[CONFERENCE_ID] = own
+    const reordered = ['2025.cnb.no', CURRENT, '*.cnb.no']
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: reordered,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: reordered })
+  })
+
+  it('SELF-EXCLUSION: removing one of its own domains succeeds', async () => {
+    domainsByConference[CONFERENCE_ID] = [CURRENT, '*.cnb.no', '2025.cnb.no']
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [CURRENT, '*.cnb.no'],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: [CURRENT, '*.cnb.no'] })
+  })
+
+  it('accepts a legitimate, non-overlapping addition', async () => {
+    domainsByConference[OTHER_CONFERENCE] = ['*.cnb.no', '2025.cndn.no']
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [CURRENT, '2027.example.com'],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: [CURRENT, '2027.example.com'] })
+  })
+
+  it('validateUpdatedDomains mirrors the rule and self-excludes', async () => {
+    domainsByConference[CONFERENCE_ID] = [CURRENT, '2025.cnb.no']
+    domainsByConference[OTHER_CONFERENCE] = ['*.cndn.no']
+    const res = await makeCaller({ isOrganizer: true }).validateUpdatedDomains({
+      domains: ['2025.cnb.no', '2026.cndn.no', 'fresh.example.com'],
+    })
+    // Own entry is NOT reported; the other tenant's wildcard match is.
+    expect(res.taken).toEqual(['2026.cndn.no'])
   })
 })
 

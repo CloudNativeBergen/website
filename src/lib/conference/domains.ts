@@ -16,6 +16,15 @@
 export const CANNOT_REMOVE_CURRENT_DOMAIN =
   'You cannot remove the domain you are currently using'
 
+/**
+ * Prefix for the BAD_REQUEST thrown when a requested domain overlaps a claim
+ * some OTHER conference already holds. Lives here, next to the matcher, because
+ * both sides render it: the server mutations (`createEdition`, `updateDomains`,
+ * onboarding) throw it, and the client editors show it inline next to the
+ * offending row.
+ */
+export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
+
 // A bare hostname, lowercase, optionally with a `:port` (dev entries such as
 // `localhost:3000`) or a leading `*.` wildcard label (the routing matches a
 // request's `*.<rest>` subdomain form against such entries). No scheme, no path,

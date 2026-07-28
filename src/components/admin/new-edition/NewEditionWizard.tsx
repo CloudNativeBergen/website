@@ -13,6 +13,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
+import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 import {
   CLONE_FAMILIES,
   CLONE_FAMILY_META,
@@ -355,7 +356,7 @@ export function NewEditionWizard({
                     </div>
                     {(localErr || isTaken) && (
                       <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                        {localErr ?? 'Already used by another conference'}
+                        {localErr ?? DOMAIN_ALREADY_CLAIMED}
                       </p>
                     )}
                   </div>
