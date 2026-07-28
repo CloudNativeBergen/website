@@ -120,7 +120,7 @@ export async function signOutHandler(): Promise<void> {
     const jar = await cookies()
     jar.delete(LINK_INTENT_COOKIE)
 
-    // RESIDUAL HOST-ONLY COOKIE CLEANUP (belt to the braces of the per-response
+    // RESIDUAL HOST-ONLY COOKIE CLEANUP (belt and braces alongside the per-response
     // rewriter): @auth/core clears the session cookie with the CURRENT cookie
     // options, and `rewriteSessionCookieDomains` duplicates that clear into BOTH
     // scopes (host-only + `Domain`-scoped) so neither can survive. This loop is
@@ -454,6 +454,9 @@ export function redirectProxyConfig(
  * `trustHost` cover it) and the OAuth-origin need is served by
  * `AUTH_REDIRECT_PROXY_URL` instead.
  *
+ * Named `warn…`, not `assert…`, precisely because it does NOT throw — every
+ * `assert*` helper in this codebase does.
+ *
  * Deliberately a LOUD LOG, not a throw: throwing at module load would take the
  * whole deployment down (and the same module is imported by the middleware), and
  * CI + `scripts/smoke-protected-routes.mjs` legitimately set these to point a
@@ -462,7 +465,7 @@ export function redirectProxyConfig(
  * always-on, environment-independent surface is the `auth.fixedOrigin` check on
  * /admin/settings (`src/lib/system-status/checks.ts`).
  */
-function assertNoFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
+function warnOnFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
   if (env.VERCEL_ENV !== 'production') return
   const offenders = (['AUTH_URL', 'NEXTAUTH_URL'] as const).filter((name) =>
     env[name]?.trim(),
@@ -478,7 +481,7 @@ function assertNoFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
   )
 }
 
-assertNoFixedAuthOrigin()
+warnOnFixedAuthOrigin()
 
 const config = {
   providers: [
