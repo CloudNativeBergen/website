@@ -143,6 +143,33 @@ describe('collectStaticChecks — paired OAuth provider', () => {
   })
 })
 
+describe('collectStaticChecks — fixed auth origin (#682)', () => {
+  it("flags AUTH_URL/NEXTAUTH_URL as an ERROR — they pin EVERY request's origin", () => {
+    vi.stubEnv('AUTH_URL', 'https://one-host.example')
+    const check = byId(collectStaticChecks(CONFERENCE), 'auth.fixedOrigin')
+    expect(check.status).toBe('error')
+    // The origin is public, not a secret — showing WHICH host every tenant is
+    // being pinned to is the whole point of the check.
+    expect(check.value).toContain('https://one-host.example')
+    expect(check.detail).toMatch(/every other conference domain/i)
+  })
+
+  it('is ok when neither is set (per-request origin, the multi-tenant default)', () => {
+    vi.stubEnv('AUTH_URL', '')
+    vi.stubEnv('NEXTAUTH_URL', '')
+    const check = byId(collectStaticChecks(CONFERENCE), 'auth.fixedOrigin')
+    expect(check.status).toBe('ok')
+  })
+
+  it('names BOTH variables when both are set', () => {
+    vi.stubEnv('AUTH_URL', 'https://a.example')
+    vi.stubEnv('NEXTAUTH_URL', 'https://b.example')
+    const check = byId(collectStaticChecks(CONFERENCE), 'auth.fixedOrigin')
+    expect(check.value).toContain('AUTH_URL=https://a.example')
+    expect(check.value).toContain('NEXTAUTH_URL=https://b.example')
+  })
+})
+
 describe('collectStaticChecks — contract provider', () => {
   it('reports the configured signing provider', () => {
     vi.stubEnv('CONTRACT_SIGNING_PROVIDER', 'self-hosted')

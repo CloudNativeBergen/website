@@ -103,8 +103,8 @@ describe('middleware — path routing', () => {
 describe('middleware — NextAuth gate (unauthenticated)', () => {
   it.each(['/cfp/list', '/admin/sponsors', '/cli/token'])(
     'redirects an unauthenticated request to %s to sign-in with callbackUrl',
-    (path) => {
-      const res = middleware(req(path), event) as Response
+    async (path) => {
+      const res = (await middleware(req(path), event)) as Response
       expect(res.status).toBe(307)
       const location = res.headers.get('location')!
       const url = new URL(location)
@@ -117,11 +117,11 @@ describe('middleware — NextAuth gate (unauthenticated)', () => {
 })
 
 describe('middleware — NextAuth gate (authenticated)', () => {
-  it('forwards an authenticated request and sets the x-url header', () => {
-    const res = middleware(
+  it('forwards an authenticated request and sets the x-url header', async () => {
+    const res = (await middleware(
       req('/admin/sponsors', { authUser: ORGANIZER_ID }),
       event,
-    ) as Response
+    )) as Response
     expect(res.headers.get('x-middleware-next')).toBe('1')
     expect(res.headers.get('x-middleware-request-x-url')).toBe(
       'http://localhost:3000/admin/sponsors',
@@ -136,20 +136,20 @@ describe('middleware — production guards', () => {
 
   it.each(['/admin/debug', '/admin/clear-storage', '/admin/test-mode'])(
     'returns 404 for dev-tools path %s in production',
-    (path) => {
-      const res = middleware(
+    async (path) => {
+      const res = (await middleware(
         req(path, { authUser: ORGANIZER_ID }),
         event,
-      ) as Response
+      )) as Response
       expect(res.status).toBe(404)
     },
   )
 
-  it('strips the impersonate param and redirects in production', () => {
-    const res = middleware(
+  it('strips the impersonate param and redirects in production', async () => {
+    const res = (await middleware(
       req('/admin/sponsors?impersonate=someone', { authUser: ORGANIZER_ID }),
       event,
-    ) as Response
+    )) as Response
     expect(res.status).toBe(307)
     const url = new URL(res.headers.get('location')!)
     expect(url.searchParams.has('impersonate')).toBe(false)
@@ -159,22 +159,22 @@ describe('middleware — production guards', () => {
     )
   })
 
-  it('forwards a clean authenticated admin request in production', () => {
-    const res = middleware(
+  it('forwards a clean authenticated admin request in production', async () => {
+    const res = (await middleware(
       req('/admin/sponsors', { authUser: ORGANIZER_ID }),
       event,
-    ) as Response
+    )) as Response
     expect(res.headers.get('x-middleware-next')).toBe('1')
     expect(console.error).not.toHaveBeenCalled()
   })
 
-  it('does NOT strip impersonate outside production', () => {
+  it('does NOT strip impersonate outside production', async () => {
     // NODE_ENV is stubbed to production in this describe; override back.
     vi.stubEnv('NODE_ENV', 'development')
-    const res = middleware(
+    const res = (await middleware(
       req('/admin/sponsors?impersonate=someone', { authUser: ORGANIZER_ID }),
       event,
-    ) as Response
+    )) as Response
     // Authenticated + no production strip → forwarded, not redirected.
     expect(res.headers.get('x-middleware-next')).toBe('1')
     expect(console.error).not.toHaveBeenCalled()
@@ -182,19 +182,54 @@ describe('middleware — production guards', () => {
 })
 
 describe('middleware — dev test-mode bypass', () => {
-  it('bypasses auth when dev test-mode is active, even unauthenticated', () => {
+  it('bypasses auth when dev test-mode is active, even unauthenticated', async () => {
     h.env.isDevelopment = true
     h.env.isTestMode = true
-    const res = middleware(req('/admin/sponsors'), event) as Response
+    const res = (await middleware(req('/admin/sponsors'), event)) as Response
     // Bypass → NextResponse.next, no sign-in redirect despite no auth.
     expect(res.headers.get('x-middleware-next')).toBe('1')
     expect(res.status).not.toBe(307)
   })
 
-  it('honours the ?test=true param in development', () => {
+  it('honours the ?test=true param in development', async () => {
     h.env.isDevelopment = true
     h.env.isTestMode = false
-    const res = middleware(req('/admin/sponsors?test=true'), event) as Response
+    const res = (await middleware(
+      req('/admin/sponsors?test=true'),
+      event,
+    )) as Response
     expect(res.headers.get('x-middleware-next')).toBe('1')
+  })
+})
+
+describe('middleware — per-request session cookie Domain (#682)', () => {
+  // next-auth's middleware wrapper appends the Set-Cookie headers of its
+  // internal `session` action onto the response, and the JWT strategy re-issues
+  // the session cookie on every one of those calls. The mock reproduces that via
+  // `x-mock-set-cookie`, so this exercises the middleware's real cookie seam.
+  const SESSION =
+    '__Secure-authjs.session-token=rolling; Path=/; HttpOnly; Secure; SameSite=Lax'
+
+  async function domainForHost(host: string): Promise<string | undefined> {
+    const headers = new Headers()
+    headers.set('x-test-auth-user', ORGANIZER_ID)
+    headers.set('x-forwarded-host', host)
+    headers.set('x-mock-set-cookie', JSON.stringify([SESSION]))
+    const res = (await middleware(
+      new NextRequest('http://localhost:3000/admin/sponsors', { headers }),
+      event,
+    )) as Response
+    const [cookie] = res.headers.getSetCookie()
+    return /;\s*Domain=([^;]+)/i.exec(cookie)?.[1]
+  }
+
+  it('scopes the rolling session cookie to the ACTUAL host, per request', async () => {
+    // Three hosts, one process: the module-load derivation this replaced would
+    // hand all three the same Domain — and the browser would reject two of them.
+    expect(await domainForHost('admin.cloudnativedays.no')).toBe(
+      '.cloudnativedays.no',
+    )
+    expect(await domainForHost('www.someconf.com')).toBe('.someconf.com')
+    expect(await domainForHost('tenant.konf.app')).toBeUndefined()
   })
 })
