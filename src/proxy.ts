@@ -5,10 +5,6 @@ import {
   type NextFetchEvent,
 } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
-import {
-  applySessionCookieDomain,
-  sessionCookieRequestHost,
-} from '@/lib/auth-cookie-domain'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 
 const workOSMiddleware = authkitMiddleware({
@@ -19,7 +15,13 @@ const workOSMiddleware = authkitMiddleware({
   debug: process.env.NODE_ENV === 'development',
 })
 
-const rawNextAuthMiddleware = auth((req) => {
+// The session cookie's `Domain` is rewritten PER REQUEST for every response
+// this produces: `auth` itself applies it to its handler-wrapper form (see
+// `perRequestAuth` in `@/lib/auth`), so the middleware's rolling session
+// refresh is scoped to the ACTUAL request host, not a module-load constant
+// (#682). Wrapping inside `auth` rather than around it also leaves the
+// `auth((req) => …)` call shape — the one the #671 outage broke — untouched.
+const nextAuthMiddleware = auth((req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
@@ -68,28 +70,6 @@ const rawNextAuthMiddleware = auth((req) => {
     },
   })
 })
-
-/**
- * The NextAuth middleware, with the session cookie's `Domain` rewritten PER
- * REQUEST from the actual host.
- *
- * next-auth's middleware wrapper appends the Set-Cookie headers of its internal
- * `session` action onto the response (`handleAuth` in `next-auth/lib/index.js`),
- * and the JWT session strategy RE-ISSUES the session cookie on every such call
- * to slide its expiry. Without this pass those rolling refreshes would be
- * host-only while the `/api/auth/*` responses were `Domain`-scoped, so a signed
- * in user on a subdomain would end up with two competing cookies. The wrapper
- * is applied OUTSIDE `auth(...)` so the `auth((req) => …)` call shape — the one
- * the #671 outage broke — is completely untouched.
- */
-const nextAuthMiddleware = async (
-  req: NextRequest,
-  ctx: { params: Promise<Record<string, string | string[] | undefined>> },
-) => {
-  const res = await rawNextAuthMiddleware(req, ctx)
-  if (!res) return res
-  return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
-}
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const { pathname } = req.nextUrl

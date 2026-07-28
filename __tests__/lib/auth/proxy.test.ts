@@ -219,7 +219,11 @@ describe('middleware — per-request session cookie Domain (#682)', () => {
       new NextRequest('http://localhost:3000/admin/sponsors', { headers }),
       event,
     )) as Response
-    const [cookie] = res.headers.getSetCookie()
+    // A widened/narrowed write is accompanied by a counter-scope CLEAR; the
+    // cookie under test is the one that still carries the token.
+    const cookie = res.headers
+      .getSetCookie()
+      .find((value) => value.includes('=rolling;'))!
     return /;\s*Domain=([^;]+)/i.exec(cookie)?.[1]
   }
 

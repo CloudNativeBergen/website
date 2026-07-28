@@ -151,7 +151,10 @@ describe('collectStaticChecks — fixed auth origin (#682)', () => {
     // The origin is public, not a secret — showing WHICH host every tenant is
     // being pinned to is the whole point of the check.
     expect(check.value).toContain('https://one-host.example')
-    expect(check.detail).toMatch(/every other conference domain/i)
+    expect(check.detail).toMatch(/breaks on every conference domain except/i)
+    // Remediation must not tell an operator to blindly delete a var another
+    // subsystem still reads (self-hosted contract-signing base URL).
+    expect(check.detail).toMatch(/NEXT_PUBLIC_BASE_URL/)
   })
 
   it('is ok when neither is set (per-request origin, the multi-tenant default)', () => {

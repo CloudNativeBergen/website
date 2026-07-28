@@ -470,9 +470,10 @@ function assertNoFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
   if (offenders.length === 0) return
   console.error(
     `[auth] ${offenders.join(' and ')} is set in production. next-auth rewrites ` +
-      'EVERY request origin to it, which breaks sign-in on every tenant domain ' +
-      'except that one. Unset it; use AUTH_REDIRECT_PROXY_URL for a central ' +
-      'OAuth origin.',
+      'EVERY request origin to it, which breaks sign-in on every conference ' +
+      'domain except that one. Unset it; use AUTH_REDIRECT_PROXY_URL for a ' +
+      'central OAuth origin, and NEXT_PUBLIC_BASE_URL for the self-hosted ' +
+      'contract-signing base URL that also reads NEXTAUTH_URL.',
   )
 }
 
@@ -580,7 +581,37 @@ function wrapAuthHandler(
   }
 }
 
-export const auth = _auth as typeof _auth &
+/**
+ * `auth`, with the session cookie's `Domain` rewritten PER REQUEST on every
+ * response it produces in its HANDLER-WRAPPER form — `auth((req) => …)`.
+ *
+ * That form is used by the middleware (`src/proxy.ts`) AND by standalone API
+ * routes (`export const POST = auth(async (req) => …)`). next-auth's `handleAuth`
+ * appends the Set-Cookie headers of its internal `session` action to whatever
+ * the wrapped handler returns, and the JWT strategy re-issues the session cookie
+ * on every one of those calls to slide its expiry — so ALL of these responses
+ * emit the cookie and all of them need the right scope. Wrapping here, rather
+ * than at each call site, means a new `auth(...)` route cannot silently opt out
+ * and start issuing a competing host-only cookie.
+ *
+ * The other call forms (`auth()` in RSC, `auth(req, ev)` inline, `auth(req, res)`
+ * in API routes) return a PROMISE, not a function, and are passed through
+ * untouched — as is the wrapper form's shape: `auth(handler)` still returns a
+ * FUNCTION, which is the exact contract the #671 outage broke.
+ */
+const perRequestAuth = ((...args: unknown[]) => {
+  const result = (_auth as (...callArgs: unknown[]) => unknown)(...args)
+  if (typeof result !== 'function') return result
+
+  const handler = result as (req: NextRequest, ctx: unknown) => unknown
+  return async (req: NextRequest, ctx: unknown) => {
+    const res = await handler(req, ctx)
+    if (!(res instanceof Response)) return res
+    return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
+  }
+}) as typeof _auth
+
+export const auth = perRequestAuth as typeof _auth &
   (<HandlerResponse extends Response | Promise<Response>>(
     ...args: [
       (

@@ -368,7 +368,7 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
         : 'not set (correct)',
     detail:
       fixedOrigins.length > 0
-        ? 'next-auth rewrites EVERY request origin to this host — sign-in breaks on every other conference domain. Unset it; use AUTH_REDIRECT_PROXY_URL for a central OAuth origin.'
+        ? 'next-auth rewrites EVERY request origin to this host — sign-in breaks on every conference domain except this one (harmless ONLY on a strictly single-domain deployment). Unset it; use AUTH_REDIRECT_PROXY_URL for a central OAuth origin, and NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL that also reads NEXTAUTH_URL.'
         : 'Request origin comes from the actual host, so every conference domain signs in on itself',
   })
   //

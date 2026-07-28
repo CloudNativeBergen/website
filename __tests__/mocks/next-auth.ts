@@ -37,7 +37,7 @@ function mockAuthRouteResponse(req?: { headers?: Headers }): Response {
 
 const NextAuth = () => ({
   auth: vi.fn((handler: (req: NextAuthRequest, ctx: any) => any) => {
-    return (req: NextAuthRequest, ctx: any) => {
+    return async (req: NextAuthRequest, ctx: any) => {
       if (!req) req = {} as NextAuthRequest
 
       let user: Speaker | undefined
@@ -71,7 +71,9 @@ const NextAuth = () => ({
         }
       }
 
-      const res = handler(req, ctx)
+      // `handleAuth` AWAITS the wrapped handler before merging cookies — real
+      // routes are `auth(async (req) => …)`, so the mock must await too.
+      const res = await handler(req, ctx)
 
       // Mirror next-auth's `handleAuth`, which APPENDS the Set-Cookie headers of
       // its internal `session` action (the JWT strategy re-issues the session

@@ -100,9 +100,11 @@ const COOKIE_DOMAIN_HOSTS = [
   // A tenant on their OWN apex — the host the old module-load derivation broke.
   { host: 'someconf.com', expect: '.someconf.com' },
   // Platform-shared parents: host-only, or one tenant could read another's
-  // session cookie (and every tenant apex would break).
-  { host: 'tenant.konf.run', expect: null },
-  { host: 'tenant.konf.app', expect: null },
+  // session cookie (and every tenant apex would break). `legacy` is the scope a
+  // pre-denylist release could have used, which sign-out must ALSO clean up —
+  // the only extra Domain these hosts may emit.
+  { host: 'tenant.konf.run', expect: null, legacy: '.konf.run' },
+  { host: 'tenant.konf.app', expect: null, legacy: '.konf.app' },
 ]
 
 /** Session-token cookie names @auth/core may use (https adds `__Secure-`). */
@@ -343,7 +345,7 @@ async function signOutSessionCookies(host) {
  * load would give every host below the SAME value, which the browser rejects on
  * all but one of them — dropping the cookie and failing sign-in silently.
  */
-async function probeCookieDomain({ host, expect }) {
+async function probeCookieDomain({ host, expect, legacy }) {
   const failures = []
   const cookies = await signOutSessionCookies(host)
 
@@ -359,10 +361,19 @@ async function probeCookieDomain({ host, expect }) {
   const widened = domains.filter((domain) => domain !== null)
 
   if (expect === null) {
-    if (widened.length > 0) {
+    // A platform-shared parent must never be WIDENED. Sign-out may additionally
+    // clear the legacy pre-denylist scope — that is cleanup, not widening.
+    if (!domains.includes(null)) {
       failures.push(
         `expected a HOST-ONLY cookie on a platform-shared parent, got Domain=${widened.join(', ')}`,
       )
+    }
+    for (const domain of widened) {
+      if (domain !== legacy) {
+        failures.push(
+          `unexpected Domain=${domain} on a platform-shared parent (only the legacy ${legacy} cleanup is allowed)`,
+        )
+      }
     }
   } else {
     if (!domains.includes(expect)) {

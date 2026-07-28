@@ -62,34 +62,54 @@ export function deriveSessionCookieDomain(
   host: string | null | undefined,
 ): string | undefined {
   try {
-    if (!host) return undefined
-
-    // `x-forwarded-host` may carry a comma-separated chain — use the first
-    // (client-facing) entry. Strip any port; reject IPv6 literals outright.
-    let hostname = host.split(',')[0].trim().toLowerCase()
-    if (hostname.startsWith('[')) return undefined
-    hostname = hostname.split(':')[0]
+    const hostname = normalizeCookieHost(host)
     if (!hostname) return undefined
-
     if (isDenylistedHost(hostname)) return undefined
 
-    const registrable = getDomain(hostname, { allowPrivateDomains: true })
-    if (!registrable) return undefined
+    const domain = registrableCookieDomain(hostname)
+    if (!domain) return undefined
+    // Belt and braces: never widen to — or under — a denylisted parent, even if
+    // PSL data or derivation drift says otherwise.
+    if (isDenylistedHost(domain.slice(1))) return undefined
 
-    // Belt and braces: the derived domain must domain-match the request host
-    // (equal or a parent), contain a dot (never a bare TLD), and must not be —
-    // or sit under — a denylisted parent even if PSL data says otherwise.
-    if (registrable !== hostname && !hostname.endsWith(`.${registrable}`)) {
-      return undefined
-    }
-    if (!registrable.includes('.')) return undefined
-    if (isDenylistedHost(registrable)) return undefined
-
-    return `.${registrable}`
+    return domain
   } catch {
     // FAIL-SAFE: any unexpected derivation error → host-only cookie.
     return undefined
   }
+}
+
+/**
+ * A request host reduced to a bare hostname: first entry of an `x-forwarded-host`
+ * chain, lowercased, port stripped, IPv6 literals rejected.
+ */
+function normalizeCookieHost(
+  host: string | null | undefined,
+): string | undefined {
+  if (!host) return undefined
+  const first = host.split(',')[0].trim().toLowerCase()
+  if (first.startsWith('[')) return undefined
+  const hostname = first.split(':')[0]
+  return hostname || undefined
+}
+
+/**
+ * `.<eTLD+1>` for a normalized hostname, WITHOUT consulting the denylist.
+ * `undefined` for IP literals, single-label hosts and hosts that are themselves
+ * a public suffix. Used both by {@link deriveSessionCookieDomain} (which then
+ * applies the denylist) and by the counter-scope migration below, which needs
+ * the domain a DENYLISTED host would otherwise have been widened to.
+ */
+function registrableCookieDomain(hostname: string): string | undefined {
+  const registrable = getDomain(hostname, { allowPrivateDomains: true })
+  if (!registrable) return undefined
+  // The derived domain must domain-match the request host (equal or a parent)
+  // and contain a dot (never a bare TLD).
+  if (registrable !== hostname && !hostname.endsWith(`.${registrable}`)) {
+    return undefined
+  }
+  if (!registrable.includes('.')) return undefined
+  return `.${registrable}`
 }
 
 /** True when `hostname` equals or is a subdomain of a denylisted parent. */
@@ -218,12 +238,24 @@ function withoutDomainAttribute(setCookie: string): string {
  * authenticated route 500s — the production incident (#671). Rewriting the
  * response header keeps `NextAuth(config)` a plain static object.
  *
- * SIGN-OUT: a CLEARING cookie is emitted TWICE — once host-only and once
- * `Domain`-scoped — because a `Set-Cookie` carrying a `Domain` can never delete
- * a host-only cookie of the same name (and vice versa). Both scopes may exist in
- * the browser (host-only cookies predate this feature, and a host can move on or
- * off the denylist), so sign-out must clear both or a stale cookie keeps the
- * user signed in.
+ * TWO SCOPES CAN COEXIST. A cookie is keyed by (name, domain, path) PLUS its
+ * host-only flag, so `authjs.session-token` host-only and the same name at
+ * `Domain=.example.com` are DIFFERENT cookies — a browser holds both and sends
+ * both, and Auth.js reads whichever the browser lists first (the older one).
+ * A host's correct scope does change: adding a parent to
+ * {@link SHARED_PARENT_DOMAIN_DENYLIST} (as `konf.app` is here) flips a host
+ * from widened to host-only, and this fix flips previously-broken tenant hosts
+ * the other way. Every emission therefore also targets the OTHER scope:
+ *
+ * - a SET is preceded by a CLEAR of the counter scope, so the stale copy cannot
+ *   linger and shadow the token we just issued (it decays unrefreshed until it
+ *   expires, freezing the user's session);
+ * - a CLEAR (sign-out) is emitted for BOTH scopes, because a `Set-Cookie`
+ *   carrying a `Domain` can never delete a host-only cookie, nor vice versa.
+ *
+ * The counter-scope clear is inert once migration has happened — deleting a
+ * cookie that does not exist is a no-op — and can never touch the cookie being
+ * set, precisely because the two scopes are distinct cookies.
  */
 export function rewriteSessionCookieDomains(
   setCookies: readonly string[],
@@ -235,6 +267,8 @@ export function rewriteSessionCookieDomains(
     if (!out.includes(value)) out.push(value)
   }
 
+  const counter = counterScopeDomain(host, domain)
+
   for (const setCookie of setCookies) {
     if (!isSessionTokenSetCookie(setCookie)) {
       add(setCookie)
@@ -242,14 +276,73 @@ export function rewriteSessionCookieDomains(
     }
     const hostOnly = withoutDomainAttribute(setCookie)
     if (isClearingSetCookie(setCookie)) {
+      // Clear EVERY scope the cookie could live in: host-only, the scope in
+      // effect now, and the counter scope a previous release may have used.
       add(hostOnly)
       if (domain) add(`${hostOnly}; Domain=${domain}`)
+      if (counter?.domain) add(`${hostOnly}; Domain=${counter.domain}`)
       continue
     }
+    // Clear the counter scope FIRST, then set. Order is immaterial to the
+    // browser (they are different cookies) but keeps the intent readable.
+    if (counter !== undefined) add(clearingVariantOf(hostOnly, counter.domain))
     add(domain ? `${hostOnly}; Domain=${domain}` : hostOnly)
   }
 
   return out
+}
+
+/**
+ * The OTHER scope a browser may still hold this host's session cookie in, or
+ * `undefined` when there is no distinct one.
+ *
+ * - Widening (`applied` set) → the counter scope is HOST-ONLY (`domain:
+ *   undefined`): the scope every host used before the cross-subdomain fix.
+ * - Staying host-only → the counter scope is the domain the host WOULD have been
+ *   widened to if it were not denylisted (`tenant.konf.app` → `.konf.app`).
+ *   That is exactly the cookie a denylist addition orphans. `undefined` for
+ *   localhost, IP literals and anything with no registrable domain — nothing
+ *   could ever have been widened there.
+ */
+function counterScopeDomain(
+  host: string | null | undefined,
+  applied: string | undefined,
+): { domain: string | undefined } | undefined {
+  if (applied) return { domain: undefined }
+  try {
+    const hostname = normalizeCookieHost(host)
+    if (!hostname) return undefined
+    const legacy = registrableCookieDomain(hostname)
+    return legacy ? { domain: legacy } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Turn a `Set-Cookie` into a DELETE for the same cookie name at `domain`: same
+ * `Path` (a delete must match the path), empty value, expiry in the past. Any
+ * existing `Domain`/`Expires`/`Max-Age` is dropped first so the caller's scope
+ * and expiry are the only ones present.
+ */
+function clearingVariantOf(
+  setCookie: string,
+  domain: string | undefined,
+): string {
+  const parts = setCookie.split(';')
+  const name = setCookieName(setCookie)
+  const attributes = parts.slice(1).filter((part) => {
+    const eq = part.indexOf('=')
+    const key = (eq === -1 ? part : part.slice(0, eq)).trim().toLowerCase()
+    return key !== 'domain' && key !== 'expires' && key !== 'max-age'
+  })
+  return [
+    `${name}=`,
+    ...attributes,
+    ' Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    ' Max-Age=0',
+    ...(domain ? [` Domain=${domain}`] : []),
+  ].join(';')
 }
 
 /**
