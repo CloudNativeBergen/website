@@ -10,6 +10,7 @@ import conversationParticipant from './schemaTypes/conversationParticipant'
 import conversationPreference from './schemaTypes/conversationPreference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
+import domainVerification from './schemaTypes/domainVerification'
 import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
@@ -48,6 +49,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Conference
     conference,
     conferenceBudget,
+    domainVerification,
     schedule,
     scheduledReminderLog,
     dashboardConfig,
