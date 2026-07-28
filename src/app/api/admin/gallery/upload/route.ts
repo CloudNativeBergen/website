@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createGalleryImage } from '@/lib/gallery/sanity'
-import { getSpeakerByEmail } from '@/lib/sanity/speaker'
 import { galleryImageCreateSchema } from '@/server/schemas/gallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
@@ -18,14 +17,20 @@ interface UploadResult {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user?.email) {
+    if (!session?.speaker?._id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // ORG-SCOPED (CaaS T1-2, #614): organizer of the current domain's org.
-    // `getSpeakerByEmail` now projects `organizerOrgIds` for this check.
-    const speaker = await getSpeakerByEmail(session.user.email)
-    if (!(await isOrganizerForCurrentOrg(speaker))) {
+    //
+    // Authorize the SESSION's speaker directly, matching every sibling upload
+    // route. This previously re-resolved the speaker from `session.user.email`,
+    // which is unsound for an authz decision (#684): where legacy duplicate
+    // accounts share an address the lookup returns one of several documents,
+    // and their `organizerOrgIds` can differ — so access could be granted or
+    // denied based on a record that is not the authenticated identity. The
+    // session token already carries the exact speaker and its `organizerOrgIds`.
+    if (!(await isOrganizerForCurrentOrg(session.speaker))) {
       return NextResponse.json(
         { error: 'Admin access required' },
         { status: 403 },
