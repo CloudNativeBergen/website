@@ -197,6 +197,9 @@ importers:
       tailwindcss:
         specifier: ^4.3.1
         version: 4.3.1
+      tldts:
+        specifier: ^7.4.0
+        version: 7.4.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

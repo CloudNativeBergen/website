@@ -203,3 +203,78 @@ jobs:
           VAPID_PUBLIC_KEY: ci_vapid_public_key_not_for_production
           VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
           VAPID_SUBJECT: mailto:ci@example.com
+
+  # POST-BUILD RUNTIME SMOKE TEST (#671). `next build` COMPILES the broken
+  # lazy-auth-config form fine and vitest mocks next-auth, so neither the Build
+  # nor the Tests job can catch a runtime middleware regression like #462
+  # (`nextAuthMiddleware is not a function`, 500 on every authenticated route).
+  # This job boots the REAL production server and curls PROTECTED routes (which
+  # run the middleware — the exact failure surface), failing loudly on any 500
+  # or `is not a function` / `TypeError` signature. Kept a separate, distinctly
+  # NAMED job so it can be added to the required-status ruleset in branch
+  # protection. A protected-route redirect needs no real backend/secrets.
+  smoke:
+    name: Runtime Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # ratchet:pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm run build
+        env:
+          # Same placeholder env as the Build job — a `next build` must compile
+          # with these dummy Auth.js v5 secrets (no real backend is contacted).
+          NODE_ENV: production
+          AUTH_SECRET: ci-build-secret-not-for-production
+          AUTH_GITHUB_ID: ci-build-github-id-not-for-production
+          AUTH_GITHUB_SECRET: ci-build-github-secret-not-for-production
+          AUTH_LINKEDIN_ID: ci-build-linkedin-id-not-for-production
+          AUTH_LINKEDIN_SECRET: ci-build-linkedin-secret-not-for-production
+          NEXTAUTH_URL: http://localhost:3000
+          RESEND_API_KEY: re_ci_build_key_not_for_production
+          INVITATION_TOKEN_SECRET: ci_invitation_token_secret_not_for_production
+          VAPID_PUBLIC_KEY: ci_vapid_public_key_not_for_production
+          VAPID_PRIVATE_KEY: ci_vapid_private_key_not_for_production
+          VAPID_SUBJECT: mailto:ci@example.com
+
+      - name: Smoke-test protected routes against a live server
+        run: node scripts/smoke-protected-routes.mjs
+        env:
+          # `next start` runs the production bundle. A protected-route redirect
+          # needs no real secrets; these dummy values just satisfy config reads.
+          NODE_ENV: production
+          AUTH_SECRET: ci-build-secret-not-for-production
+          AUTH_GITHUB_ID: ci-build-github-id-not-for-production
+          AUTH_GITHUB_SECRET: ci-build-github-secret-not-for-production
+          AUTH_LINKEDIN_ID: ci-build-linkedin-id-not-for-production
+          AUTH_LINKEDIN_SECRET: ci-build-linkedin-secret-not-for-production
+          NEXTAUTH_URL: http://localhost:3000

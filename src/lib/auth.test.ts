@@ -12,6 +12,7 @@ process.env.AUTH_SECRET = 'auth-callback-test-secret'
 type Jar = {
   store: Map<string, string>
   get: (name: string) => { value: string } | undefined
+  getAll: () => { name: string; value: string }[]
   set: (name: string, value: string) => void
   delete: ReturnType<typeof vi.fn>
 }
@@ -27,6 +28,8 @@ function createJar(initial: Record<string, string> = {}): Jar {
       const value = store.get(name)
       return value === undefined ? undefined : { value }
     },
+    getAll: () =>
+      Array.from(store.entries(), ([name, value]) => ({ name, value })),
     set: (name: string, value: string) => {
       store.set(name, value)
     },
@@ -63,7 +66,12 @@ vi.mock('@/lib/sanity/client', () => ({
   speakerImageUrl: (src: string) => `img:${src}`,
 }))
 
-import { jwtSignInCallback, signOutHandler, redirectProxyConfig } from './auth'
+import {
+  jwtSignInCallback,
+  signOutHandler,
+  redirectProxyConfig,
+  staticSessionCookieDomain,
+} from './auth'
 import { signLinkIntent, LINK_INTENT_COOKIE } from './auth-link'
 
 const SESSION_COOKIE = 'authjs.session-token'
@@ -360,6 +368,29 @@ describe('signOutHandler — clears link-flow state', () => {
 
     expect(currentJar.delete).toHaveBeenCalledWith(LINK_INTENT_COOKIE)
   })
+
+  it('deletes RESIDUAL host-only session cookies (incl. chunked parts) on sign-out', async () => {
+    // @auth/core's own clear targets the Domain-scoped cookie; a pre-widening
+    // HOST-ONLY cookie of the same name must be deleted separately or the user
+    // stays signed in on that host after sign-out.
+    currentJar = createJar({
+      'authjs.session-token': 'stale',
+      '__Secure-authjs.session-token.0': 'chunk0',
+      '__Secure-authjs.session-token.1': 'chunk1',
+      'unrelated-cookie': 'keep',
+    })
+
+    await signOutHandler()
+
+    expect(currentJar.delete).toHaveBeenCalledWith('authjs.session-token')
+    expect(currentJar.delete).toHaveBeenCalledWith(
+      '__Secure-authjs.session-token.0',
+    )
+    expect(currentJar.delete).toHaveBeenCalledWith(
+      '__Secure-authjs.session-token.1',
+    )
+    expect(currentJar.delete).not.toHaveBeenCalledWith('unrelated-cookie')
+  })
 })
 
 describe('jwtSignInCallback — org-scoped session computation (CaaS T1-2, #614)', () => {
@@ -555,5 +586,146 @@ describe('redirectProxyConfig — centralized OAuth origin wiring (#619)', () =>
       redirectProxyUrl: 'https://auth.example.no/api/auth',
       trustHost: true,
     })
+  })
+})
+
+describe('staticSessionCookieDomain — primary-domain cookie Domain (#462 re-fix)', () => {
+  // The override is production-only (see below), so the derivation cases default
+  // to a production env; individual tests override NODE_ENV/VERCEL_ENV.
+  const env = (vars: Record<string, string>) =>
+    ({ NODE_ENV: 'production', ...vars }) as unknown as NodeJS.ProcessEnv
+
+  it('derives the registrable domain from NEXT_PUBLIC_BASE_URL (full URL)', () => {
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'https://cloudnativedays.no' }),
+      ),
+    ).toBe('.cloudnativedays.no')
+    // Subdomain host in the base URL still widens to eTLD+1.
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'https://2026.cloudnativebergen.dev/cfp' }),
+      ),
+    ).toBe('.cloudnativebergen.dev')
+  })
+
+  it('accepts a bare host (no scheme) and strips ports', () => {
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'admin.cloudnativedays.no' }),
+      ),
+    ).toBe('.cloudnativedays.no')
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'cloudnativedays.no:8443' }),
+      ),
+    ).toBe('.cloudnativedays.no')
+  })
+
+  it('falls back to the legacy NEXT_PUBLIC_URL alias', () => {
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_URL: 'https://cloudnativedays.no' }),
+      ),
+    ).toBe('.cloudnativedays.no')
+    // NEXT_PUBLIC_BASE_URL takes precedence when both are set.
+    expect(
+      staticSessionCookieDomain(
+        env({
+          NEXT_PUBLIC_BASE_URL: 'https://cloudnativebergen.dev',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBe('.cloudnativebergen.dev')
+  })
+
+  it('returns undefined (host-only) for localhost, previews, unset, and garbage', () => {
+    // Unset / blank → no domain (fail-safe; never throws at module load).
+    expect(staticSessionCookieDomain(env({}))).toBeUndefined()
+    expect(
+      staticSessionCookieDomain(env({ NEXT_PUBLIC_BASE_URL: '   ' })),
+    ).toBeUndefined()
+    // localhost dev origin.
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'http://localhost:3000' }),
+      ),
+    ).toBeUndefined()
+    // Vercel preview + platform-shared parent (tenant isolation).
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'https://website-abc123.vercel.app' }),
+      ),
+    ).toBeUndefined()
+    expect(
+      staticSessionCookieDomain(
+        env({ NEXT_PUBLIC_BASE_URL: 'https://tenant.konf.run' }),
+      ),
+    ).toBeUndefined()
+    // Unparseable.
+    expect(
+      staticSessionCookieDomain(env({ NEXT_PUBLIC_BASE_URL: 'not a url' })),
+    ).toBeUndefined()
+  })
+
+  it('applies the Domain ONLY in a genuine production deployment', () => {
+    const raw = (vars: Record<string, string>) =>
+      vars as unknown as NodeJS.ProcessEnv
+
+    // Off-Vercel production (NODE_ENV=production, no VERCEL_ENV) → Domain set.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBe('.cloudnativedays.no')
+
+    // Vercel production → Domain set.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          VERCEL_ENV: 'production',
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBe('.cloudnativedays.no')
+  })
+
+  it('stays host-only (no Domain) in any NON-production env even when NEXT_PUBLIC_URL is set', () => {
+    const raw = (vars: Record<string, string>) =>
+      vars as unknown as NodeJS.ProcessEnv
+
+    // Local dev.
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          NODE_ENV: 'development',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBeUndefined()
+
+    // Vercel PREVIEW — NODE_ENV is 'production' here, so only VERCEL_ENV can
+    // distinguish it; a preview must NOT inherit the production Domain even if
+    // NEXT_PUBLIC_URL leaks into the preview scope (the mismatch the gate guards).
+    expect(
+      staticSessionCookieDomain(
+        raw({
+          VERCEL_ENV: 'preview',
+          NODE_ENV: 'production',
+          NEXT_PUBLIC_URL: 'https://cloudnativedays.no',
+        }),
+      ),
+    ).toBeUndefined()
+
+    // No env markers at all → not production → host-only.
+    expect(
+      staticSessionCookieDomain(
+        raw({ NEXT_PUBLIC_URL: 'https://cloudnativedays.no' }),
+      ),
+    ).toBeUndefined()
   })
 })
