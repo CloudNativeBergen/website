@@ -126,9 +126,7 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
       expect(
         isOrganizerForOrg(speaker({ organizerOrgIds: ['org-A'] }), null),
       ).toBe(false)
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[authz-bridge]'),
-      )
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[authz-deny]'))
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('DENYING (fail-closed'),
       )

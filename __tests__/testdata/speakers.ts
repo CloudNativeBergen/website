@@ -3,9 +3,12 @@ import { Flags, Speaker } from '@/lib/speaker/types'
 /**
  * The organization every shared fixture belongs to. Org-scoped authz keys on
  * `organizerOrgIds` ALONE — both bridges to the deprecated global `isOrganizer`
- * flag are gone — so an organizer fixture must carry this id AND the test's
- * domain-resolved conference must resolve to it (see `__tests__/helpers/trpc.ts`,
- * which mocks the domain conference onto this org).
+ * flag are gone — so an organizer fixture must carry this id AND the test file
+ * must make the request's DOMAIN CONFERENCE resolve to it, by mocking
+ * `getConferenceForCurrentDomain` (`@/lib/conference/sanity`, the tRPC waist) or
+ * `getOrganizationRefForCurrentConference` (`@/lib/organization/sanity`, the
+ * handler/server-action gates). `vi.mock` factories are hoisted above imports, so
+ * inline the literal there rather than referencing this constant.
  */
 export const TEST_ORG_ID = 'org-test'
 

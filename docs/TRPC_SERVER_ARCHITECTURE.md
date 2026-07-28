@@ -315,7 +315,7 @@ not in the caller's set is denied (`FORBIDDEN`), including a cross-org organizer
 `speaker.isOrganizer` boolean (organizer of _any_ conference) have been removed:
 
 - an **unresolvable** request org (unknown domain, or a resolution throw) now
-  **denies** (`FORBIDDEN`), emitting a `console.warn('[authz-bridge] …')` when the
+  **denies** (`FORBIDDEN`), emitting a `console.warn('[authz-deny] …')` when the
   denied caller organizes at least one org, so the failure mode stays observable;
 - a **legacy token** minted before #635 (no `organizerOrgIds` claim at all) now
   **denies** too. Deferring to the global flag there granted organizer rights on

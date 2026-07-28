@@ -156,7 +156,7 @@ org-scoped rather than a single global boolean.
 The old `isOrganizer` boolean is **kept in the token, marked deprecated**, but it
 **no longer takes part in authorization**. The two migration bridges that once
 fell back to it are both deleted: an **unresolvable** request org now denies
-(with a `console.warn('[authz-bridge] …')` when the denied caller organizes at
+(with a `console.warn('[authz-deny] …')` when the denied caller organizes at
 least one org), and a **legacy token** with no `organizerOrgIds` claim denies too
 — bridging that granted organizer on **any host**, because the global flag is
 true for an organizer of any org. Holders of a pre-#635 token re-login once.

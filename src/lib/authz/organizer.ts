@@ -26,9 +26,13 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
  *     non-organizer until they sign in again (or the `trigger === 'update'`
  *     session refresh re-mints a modern token). See docs/AUTH.md.
  *
- * A `console.warn('[authz-bridge] …')` still records the unresolvable-org denial
- * of a caller who organizes at least one org, so that failure mode stays
- * observable without spamming on ordinary non-organizer traffic.
+ * A `console.warn('[authz-deny] …')` records the unresolvable-org denial of a
+ * caller who organizes at least one org, so that failure mode stays observable
+ * without spamming on ordinary non-organizer traffic. (It was `[authz-bridge]`
+ * while the bridges existed; the tag is now `[authz-deny]` because nothing here
+ * bridges — the remaining `[authz-bridge]` logs belong to the RECIPIENT-selection
+ * fallbacks in `src/lib/notification/sanity.ts` and `src/lib/messaging/standing.ts`,
+ * which select who to notify rather than grant access.)
  */
 
 /** The minimum shape these checks read off a speaker/session token. */
@@ -58,7 +62,7 @@ export function isOrganizerForOrg(
     // ordinary non-organizer traffic.
     if (organizerOrgIds.length > 0) {
       console.warn(
-        `[authz-bridge] organizer org unresolvable; DENYING (fail-closed, post-044-backfill) for speaker ${speaker._id}`,
+        `[authz-deny] organizer org unresolvable; DENYING (fail-closed, post-044-backfill) for speaker ${speaker._id}`,
       )
     }
     return false

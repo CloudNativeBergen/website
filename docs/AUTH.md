@@ -283,7 +283,7 @@ global `isOrganizer` flag once softened it; both are now gone:
 - **Org UNRESOLVABLE (`orgId === null`) &mdash; FAILS CLOSED.** The 044 backfill has
   run (every live conference has an `organization`), so an unresolvable org is now
   an unknown domain / transient failure rather than pre-backfill data. It **denies**
-  (a `console.warn('[authz-bridge] …')` records the denial of a caller who
+  (a `console.warn('[authz-deny] …')` records the denial of a caller who
   organizes at least one org, so the failure mode stays observable).
 - **Legacy TOKEN (no `organizerOrgIds` field) &mdash; REMOVED.** Tokens minted before
   #635 lack the field, and the bridge deferred wholesale to the global flag. That

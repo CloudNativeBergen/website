@@ -147,7 +147,7 @@ describe('adminProcedure waist — org-scoped organizer authorization', () => {
         }).speaker.admin.list(),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('[authz-bridge]'),
+        expect.stringContaining('[authz-deny]'),
       )
     })
 
