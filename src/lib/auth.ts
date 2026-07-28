@@ -469,11 +469,12 @@ function assertNoFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
   )
   if (offenders.length === 0) return
   console.error(
-    `[auth] ${offenders.join(' and ')} is set in production. next-auth rewrites ` +
-      'EVERY request origin to it, which breaks sign-in on every conference ' +
-      'domain except that one. Unset it; use AUTH_REDIRECT_PROXY_URL for a ' +
-      'central OAuth origin, and NEXT_PUBLIC_BASE_URL for the self-hosted ' +
-      'contract-signing base URL that also reads NEXTAUTH_URL.',
+    `[auth] Fixed auth origin configured in production: ${offenders.join(', ')}. ` +
+      'next-auth rewrites EVERY request origin to that host, which breaks ' +
+      'sign-in on every conference domain except that one. Remove the ' +
+      'variable(s); use AUTH_REDIRECT_PROXY_URL for a central OAuth origin, and ' +
+      'NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL that ' +
+      'also reads NEXTAUTH_URL.',
   )
 }
 
