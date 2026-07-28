@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { CollapsibleSection } from './CollapsibleSection'
 
 const meta = {
@@ -114,4 +115,35 @@ export const MultipleSections: Story = {
       </CollapsibleSection>
     </div>
   ),
+}
+
+/**
+ * Regression net for the Hide/Show toggle: an open section collapses on click
+ * (body content leaves the DOM, `aria-expanded` flips to false, the label
+ * reads "Show") and re-expands on a second click.
+ */
+export const TogglesOpenAndClosed: Story = {
+  args: {
+    title: 'Collapsible',
+    defaultOpen: true,
+    children: (
+      <div className="p-6">
+        <p className="text-gray-600 dark:text-gray-400">Collapsible body.</p>
+      </div>
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const toggle = canvas.getByRole('button', { name: /collapsible/i })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(canvas.getByText('Collapsible body.')).toBeVisible()
+
+    await userEvent.click(toggle)
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(canvas.queryByText('Collapsible body.')).toBeNull()
+
+    await userEvent.click(toggle)
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(canvas.getByText('Collapsible body.')).toBeVisible()
+  },
 }

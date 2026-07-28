@@ -161,12 +161,6 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     label: 'System',
     items: [
       {
-        name: 'Agents',
-        href: '/admin/agents',
-        icon: CpuChipIcon,
-        keywords: ['ai', 'automation', 'bots'],
-      },
-      {
         name: 'Settings',
         href: '/admin/settings',
         icon: Cog6ToothIcon,
@@ -178,6 +172,32 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
 
 /** Admin pages reachable only from within a section (no sidebar entry). */
 const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
+  {
+    // Moved out of the sidebar (the nav had grown tall enough to scroll);
+    // reachable from the Settings page and still ⌘K-searchable here.
+    id: 'agents',
+    title: 'Agents',
+    href: '/admin/agents',
+    group: 'System',
+    keywords: ['ai', 'automation', 'bots', 'agents'],
+    icon: CpuChipIcon,
+  },
+  {
+    id: 'budget-config',
+    title: 'Budget Configuration',
+    href: '/admin/budget/config',
+    group: 'Events & Content',
+    keywords: [
+      'budget config',
+      'vat',
+      'rates',
+      'ticketing fee',
+      'scenarios',
+      'dinner',
+      'assumptions',
+    ],
+    icon: BanknotesIcon,
+  },
   {
     id: 'speakers-badge',
     title: 'Speaker Badges',

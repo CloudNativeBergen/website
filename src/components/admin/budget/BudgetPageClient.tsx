@@ -1,9 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   BanknotesIcon,
+  Cog6ToothIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
@@ -23,6 +25,7 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { BudgetExpensesEditor } from './BudgetExpensesEditor'
+import { BudgetSponsorAssumptionsEditor } from './BudgetSponsorAssumptionsEditor'
 import { BudgetTicketTypesEditor } from './BudgetTicketTypesEditor'
 
 export interface BudgetPageClientProps {
@@ -238,6 +241,26 @@ export function BudgetPageClient({
     ],
     [budget],
   )
+  const scenarioTierKeys = useMemo(
+    () => [
+      ...new Set(
+        (budget?.scenarios ?? []).flatMap((scenario) =>
+          (scenario.tierCounts ?? []).map((count) => count.tier),
+        ),
+      ),
+    ],
+    [budget],
+  )
+  const scenarioAddonKeys = useMemo(
+    () => [
+      ...new Set(
+        (budget?.scenarios ?? []).flatMap((scenario) =>
+          (scenario.addonCounts ?? []).map((count) => count.addon),
+        ),
+      ),
+    ],
+    [budget],
+  )
 
   const actualTicketRevenue = ticketIncome?.revenue ?? null
   // Sponsor income is grouped BY CURRENCY (see deriveSponsorIncome): only
@@ -278,6 +301,15 @@ export function BudgetPageClient({
       icon={<BanknotesIcon className="h-8 w-8" />}
       title="Budget"
       description="Budget vs actuals: expense plan and scenario projections against live sponsor and ticket income."
+      actions={
+        <Link
+          href="/admin/budget/config"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+        >
+          <Cog6ToothIcon className="h-5 w-5" />
+          Configure
+        </Link>
+      }
       stats={
         result
           ? [
@@ -410,177 +442,193 @@ export function BudgetPageClient({
           </div>
 
           {/* Income */}
-          <CollapsibleSection
-            title="Income"
-            defaultOpen
-            action={
-              <BudgetTicketTypesEditor
-                ticketTypes={budget.ticketTypes ?? []}
-                manualActualsInUse={ticketIncome?.source === 'manual'}
-                scenarioReferencedKeys={scenarioTicketKeys}
-              />
-            }
-          >
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              All amounts in NOK, excluding VAT.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                {TABLE_HEAD}
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
-                  <BudgetVsActualRow
-                    label="Ticket revenue"
-                    sublabel={`${result.headcounts.totalTickets} tickets in scenario`}
-                    budget={result.ticketRevenue}
-                    actual={actualTicketRevenue}
-                    actualNote={
-                      ticketIncome
-                        ? ticketIncome.source === 'live'
-                          ? `live: ${ticketIncome.ticketCount} tickets, ${ticketIncome.orderCount} orders`
-                          : `manual: ${ticketIncome.ticketCount} tickets entered`
-                        : 'no ticketing data'
-                    }
-                  />
-                  <BudgetVsActualRow
-                    label="Sponsorships"
-                    sublabel={`tiers ${nok(result.sponsorTierRevenue)} + add-ons ${nok(result.sponsorAddonRevenue)}`}
-                    budget={result.sponsorRevenue}
-                    actual={
-                      sponsorIncome && sponsorAllNok ? sponsorSignedNok : null
-                    }
-                    actualText={
-                      sponsorIncome && !sponsorAllNok
-                        ? sponsorAmounts('signedRevenue')
-                        : undefined
-                    }
-                    actualNote={
-                      sponsorIncome
-                        ? `${sponsorIncome.signedCount} signed · ${sponsorAmounts('paidRevenue')} paid · ${sponsorAmounts('openPipelineRevenue')} in pipeline${
-                            sponsorAllNok
-                              ? ''
-                              : sponsorByCurrency.length > 1
-                                ? ' · mixed currencies — amounts not combined'
-                                : ' · non-NOK income — not compared to the NOK budget'
-                          }`
-                        : 'sponsor data unavailable'
-                    }
-                  />
-                  <BudgetVsActualRow
-                    label="Total income"
-                    budget={result.totalIncome}
-                    actual={actualIncomeTotal}
-                    actualNote={
-                      incomeActualsComplete ? undefined : 'partial — see rows'
-                    }
-                    emphasize
-                    hideDelta={!incomeActualsComplete}
-                  />
-                </tbody>
-              </table>
-            </div>
+          <CollapsibleSection title="Income" defaultOpen>
+            <BudgetTicketTypesEditor
+              ticketTypes={budget.ticketTypes ?? []}
+              manualActualsInUse={ticketIncome?.source === 'manual'}
+              scenarioReferencedKeys={scenarioTicketKeys}
+              display={
+                <>
+                  <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                    All amounts in NOK, excluding VAT.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      {TABLE_HEAD}
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                        <BudgetVsActualRow
+                          label="Ticket revenue"
+                          sublabel={`${result.headcounts.totalTickets} tickets in scenario`}
+                          budget={result.ticketRevenue}
+                          actual={actualTicketRevenue}
+                          actualNote={
+                            ticketIncome
+                              ? ticketIncome.source === 'live'
+                                ? `live: ${ticketIncome.ticketCount} tickets, ${ticketIncome.orderCount} orders`
+                                : `manual: ${ticketIncome.ticketCount} tickets entered`
+                              : 'no ticketing data'
+                          }
+                        />
+                        <BudgetVsActualRow
+                          label="Sponsorships"
+                          sublabel={`tiers ${nok(result.sponsorTierRevenue)} + add-ons ${nok(result.sponsorAddonRevenue)}`}
+                          budget={result.sponsorRevenue}
+                          actual={
+                            sponsorIncome && sponsorAllNok
+                              ? sponsorSignedNok
+                              : null
+                          }
+                          actualText={
+                            sponsorIncome && !sponsorAllNok
+                              ? sponsorAmounts('signedRevenue')
+                              : undefined
+                          }
+                          actualNote={
+                            sponsorIncome
+                              ? `${sponsorIncome.signedCount} signed · ${sponsorAmounts('paidRevenue')} paid · ${sponsorAmounts('openPipelineRevenue')} in pipeline${
+                                  sponsorAllNok
+                                    ? ''
+                                    : sponsorByCurrency.length > 1
+                                      ? ' · mixed currencies — amounts not combined'
+                                      : ' · non-NOK income — not compared to the NOK budget'
+                                }`
+                              : 'sponsor data unavailable'
+                          }
+                        />
+                        <BudgetVsActualRow
+                          label="Total income"
+                          budget={result.totalIncome}
+                          actual={actualIncomeTotal}
+                          actualNote={
+                            incomeActualsComplete
+                              ? undefined
+                              : 'partial — see rows'
+                          }
+                          emphasize
+                          hideDelta={!incomeActualsComplete}
+                        />
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              }
+            />
           </CollapsibleSection>
 
           {/* Expenses */}
-          <CollapsibleSection
-            title="Expenses"
-            defaultOpen
-            action={
-              <BudgetExpensesEditor
-                variableCosts={budget.variableCosts ?? []}
-                fixedCosts={budget.fixedCosts ?? []}
-                scenarioReferencedKeys={scenarioCutCostKeys}
-              />
-            }
-          >
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              All amounts in NOK, including VAT (what the organization pays).
-            </p>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                {TABLE_HEAD}
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
-                  {categories.map((category) => {
-                    const lines = expenseLines.filter(
-                      (line) => line.category === category,
-                    )
-                    const subtotal = lines.reduce(
-                      (sum, line) => sum + line.amount,
-                      0,
-                    )
-                    const actualSubtotal = lines.reduce(
-                      (sum, line) => sum + (expenseActuals.get(line.key) ?? 0),
-                      0,
-                    )
-                    const hasActuals = lines.some((line) =>
-                      expenseActuals.has(line.key),
-                    )
-                    // A delta against the FULL category budget is only
-                    // honest once every (non-cut) line has a recorded
-                    // actual - otherwise partially-recorded spend reads as
-                    // a big underspend.
-                    const actualsComplete = lines.every(
-                      (line) => line.cut || expenseActuals.has(line.key),
-                    )
-                    return (
-                      <BudgetVsActualRow
-                        key={category}
-                        label={EXPENSE_CATEGORY_LABELS[category]}
-                        sublabel={lines
-                          .map(
-                            (line) => `${line.name}${line.cut ? ' (cut)' : ''}`,
+          <CollapsibleSection title="Expenses" defaultOpen>
+            <BudgetExpensesEditor
+              variableCosts={budget.variableCosts ?? []}
+              fixedCosts={budget.fixedCosts ?? []}
+              scenarioReferencedKeys={scenarioCutCostKeys}
+              display={
+                <>
+                  <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                    All amounts in NOK, including VAT (what the organization
+                    pays).
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      {TABLE_HEAD}
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                        {categories.map((category) => {
+                          const lines = expenseLines.filter(
+                            (line) => line.category === category,
                           )
-                          .join(' · ')}
-                        budget={subtotal}
-                        actual={hasActuals ? actualSubtotal : null}
-                        actualNote={
-                          hasActuals && !actualsComplete
-                            ? 'recorded so far'
-                            : undefined
-                        }
-                        kind="expense"
-                        hideDelta={!actualsComplete}
-                      />
-                    )
-                  })}
-                  <BudgetVsActualRow
-                    label={`Ticketing platform fee (${(model.ticketingFeeRate * 100).toFixed(1)}%)`}
-                    sublabel="computed on gross ticket revenue"
-                    budget={result.ticketingFee}
-                    actual={null}
-                    kind="expense"
-                  />
-                  <BudgetVsActualRow
-                    label="Variable expenses"
-                    sublabel="headcount-driven + ticketing fee"
-                    budget={result.totalVariableExpenses}
-                    actual={null}
-                    kind="expense"
-                  />
-                  <BudgetVsActualRow
-                    label="Fixed expenses"
-                    sublabel={
-                      selectedScenario.cutCostKeys.length > 0
-                        ? `${selectedScenario.cutCostKeys.length} optional cost(s) cut in this scenario`
-                        : undefined
-                    }
-                    budget={result.totalFixedExpenses}
-                    actual={null}
-                    kind="expense"
-                  />
-                  <BudgetVsActualRow
-                    label="Total expenses"
-                    budget={result.totalExpenses}
-                    actual={hasExpenseActuals ? actualExpenseTotal : null}
-                    actualNote={
-                      hasExpenseActuals ? 'recorded so far' : undefined
-                    }
-                    emphasize
-                    kind="expense"
-                    hideDelta
-                  />
-                </tbody>
-              </table>
-            </div>
+                          const subtotal = lines.reduce(
+                            (sum, line) => sum + line.amount,
+                            0,
+                          )
+                          const actualSubtotal = lines.reduce(
+                            (sum, line) =>
+                              sum + (expenseActuals.get(line.key) ?? 0),
+                            0,
+                          )
+                          const hasActuals = lines.some((line) =>
+                            expenseActuals.has(line.key),
+                          )
+                          // A delta against the FULL category budget is only
+                          // honest once every (non-cut) line has a recorded
+                          // actual - otherwise partially-recorded spend reads as
+                          // a big underspend.
+                          const actualsComplete = lines.every(
+                            (line) => line.cut || expenseActuals.has(line.key),
+                          )
+                          return (
+                            <BudgetVsActualRow
+                              key={category}
+                              label={EXPENSE_CATEGORY_LABELS[category]}
+                              sublabel={lines
+                                .map(
+                                  (line) =>
+                                    `${line.name}${line.cut ? ' (cut)' : ''}`,
+                                )
+                                .join(' · ')}
+                              budget={subtotal}
+                              actual={hasActuals ? actualSubtotal : null}
+                              actualNote={
+                                hasActuals && !actualsComplete
+                                  ? 'recorded so far'
+                                  : undefined
+                              }
+                              kind="expense"
+                              hideDelta={!actualsComplete}
+                            />
+                          )
+                        })}
+                        <BudgetVsActualRow
+                          label={`Ticketing platform fee (${(model.ticketingFeeRate * 100).toFixed(1)}%)`}
+                          sublabel="computed on gross ticket revenue"
+                          budget={result.ticketingFee}
+                          actual={null}
+                          kind="expense"
+                        />
+                        <BudgetVsActualRow
+                          label="Variable expenses"
+                          sublabel="headcount-driven + ticketing fee"
+                          budget={result.totalVariableExpenses}
+                          actual={null}
+                          kind="expense"
+                        />
+                        <BudgetVsActualRow
+                          label="Fixed expenses"
+                          sublabel={
+                            selectedScenario.cutCostKeys.length > 0
+                              ? `${selectedScenario.cutCostKeys.length} optional cost(s) cut in this scenario`
+                              : undefined
+                          }
+                          budget={result.totalFixedExpenses}
+                          actual={null}
+                          kind="expense"
+                        />
+                        <BudgetVsActualRow
+                          label="Total expenses"
+                          budget={result.totalExpenses}
+                          actual={hasExpenseActuals ? actualExpenseTotal : null}
+                          actualNote={
+                            hasExpenseActuals ? 'recorded so far' : undefined
+                          }
+                          emphasize
+                          kind="expense"
+                          hideDelta
+                        />
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              }
+            />
+          </CollapsibleSection>
+
+          {/* Sponsor assumptions — tier & add-on price lists that drive the
+              scenario sponsor-revenue projections. */}
+          <CollapsibleSection title="Sponsor assumptions" defaultOpen>
+            <BudgetSponsorAssumptionsEditor
+              sponsorTierAssumptions={budget.sponsorTierAssumptions ?? []}
+              sponsorAddonAssumptions={budget.sponsorAddonAssumptions ?? []}
+              scenarioReferencedTierKeys={scenarioTierKeys}
+              scenarioReferencedAddonKeys={scenarioAddonKeys}
+            />
           </CollapsibleSection>
 
           {/* Margin readout */}
