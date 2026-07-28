@@ -95,8 +95,14 @@ const SURFACES = [
  * that is exactly what a module-load-time constant cannot satisfy.
  */
 const COOKIE_DOMAIN_HOSTS = [
-  { host: 'admin.cloudnativedays.no', expect: '.cloudnativedays.no' },
-  { host: 'www.someconf.com', expect: '.someconf.com' },
+  // The two LIVE production registrable domains, each with year subdomains.
+  // One module-level constant cannot serve both — whichever it picked, the
+  // other domain's browser would reject the cookie and drop sign-in silently.
+  { host: '2026.cloudnativedays.no', expect: '.cloudnativedays.no' },
+  { host: '2025.cloudnativebergen.dev', expect: '.cloudnativebergen.dev' },
+  // A second year under the SAME registrable domain: must share (2)'s Domain,
+  // which is the whole point of the cross-subdomain fix (#462).
+  { host: '2024.cloudnativebergen.dev', expect: '.cloudnativebergen.dev' },
   // A tenant on their OWN apex — the host the old module-load derivation broke.
   { host: 'someconf.com', expect: '.someconf.com' },
   // Platform-shared parents: host-only, or one tenant could read another's
@@ -435,14 +441,29 @@ async function runCookieDomainProbes() {
     }
   }
 
-  // THE core regression: two different registrable domains, one process, one
-  // build — they MUST NOT share a cookie Domain. A module-load constant does.
-  const a = observed.get('admin.cloudnativedays.no')
-  const b = observed.get('www.someconf.com')
-  if (a !== undefined && b !== undefined && a === b) {
+  // THE core regression, on the two LIVE production domains: different
+  // registrable domains, one process, one build — they MUST NOT share a cookie
+  // Domain. A module-load constant gives them the same one.
+  const days = observed.get('2026.cloudnativedays.no')
+  const bergen = observed.get('2025.cloudnativebergen.dev')
+  if (days !== undefined && bergen !== undefined && days === bergen) {
     failed = true
     log(
-      `FAIL  two different hosts received the SAME cookie Domain (${a}) — the Domain is not per-request`,
+      `FAIL  2026.cloudnativedays.no and 2025.cloudnativebergen.dev received the SAME cookie Domain (${days}) — the Domain is not per-request`,
+    )
+  }
+
+  // …and the mirror image: two YEAR subdomains of ONE registrable domain MUST
+  // share a Domain, or a returning speaker is signed out between years (#462).
+  const bergen2024 = observed.get('2024.cloudnativebergen.dev')
+  if (
+    bergen !== undefined &&
+    bergen2024 !== undefined &&
+    bergen !== bergen2024
+  ) {
+    failed = true
+    log(
+      `FAIL  2025 (${bergen}) and 2024 (${bergen2024}) .cloudnativebergen.dev do NOT share a cookie Domain — cross-subdomain sign-in is broken`,
     )
   }
 

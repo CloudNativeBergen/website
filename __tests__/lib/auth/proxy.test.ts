@@ -228,12 +228,15 @@ describe('middleware — per-request session cookie Domain (#682)', () => {
   }
 
   it('scopes the rolling session cookie to the ACTUAL host, per request', async () => {
-    // Three hosts, one process: the module-load derivation this replaced would
-    // hand all three the same Domain — and the browser would reject two of them.
-    expect(await domainForHost('admin.cloudnativedays.no')).toBe(
+    // The two LIVE production domains plus a denylisted one, in one process: the
+    // module-load derivation this replaced would hand all three the same Domain
+    // — and the browser would reject it on two of them.
+    expect(await domainForHost('2026.cloudnativedays.no')).toBe(
       '.cloudnativedays.no',
     )
-    expect(await domainForHost('www.someconf.com')).toBe('.someconf.com')
+    expect(await domainForHost('2025.cloudnativebergen.dev')).toBe(
+      '.cloudnativebergen.dev',
+    )
     expect(await domainForHost('tenant.konf.app')).toBeUndefined()
   })
 })

@@ -9,12 +9,21 @@
  * received a `Set-Cookie` whose `Domain` the browser REJECTS — OAuth succeeded,
  * the cookie was dropped, and the user bounced back to sign-in with NO error.
  *
- * These tests run TWO different hosts through ONE process. That is precisely
- * what a module-load-time constant cannot satisfy: with the old code every
- * assertion below that compares two hosts fails by construction.
+ * The fixtures are the LIVE production hosts, not invented ones. Two registrable
+ * domains are deployed today, each with YEAR SUBDOMAINS beneath it:
  *
- * They drive the app's REAL exported `handlers` (the wrapper in `src/lib/auth.ts`
- * around what `NextAuth(config)` returns), not a re-implementation.
+ *   - `2026.cloudnativedays.no`     → must get `Domain=.cloudnativedays.no`
+ *   - `2025.cloudnativebergen.dev`  → must get `Domain=.cloudnativebergen.dev`
+ *   - `2024.cloudnativebergen.dev`  → must SHARE (2)'s Domain, so a returning
+ *                                     speaker stays signed in across years
+ *
+ * (1) and (2) together are the regression: ONE module-level constant cannot
+ * satisfy both, and whichever it picked, the other domain's browser would REJECT
+ * the cookie outright. This is the deployed configuration, not a hypothetical.
+ *
+ * The tests drive the app's REAL exported `handlers` (the wrapper in
+ * `src/lib/auth.ts` around what `NextAuth(config)` returns) and the REAL `auth`
+ * route wrapper — not a re-implementation.
  */
 import { describe, it, expect } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -88,18 +97,38 @@ function domainOf(setCookieValue: string): string | undefined {
 }
 
 describe('session cookie Domain is derived PER REQUEST (#682)', () => {
-  it('gives TWO different hosts TWO different Domains in one process', async () => {
-    // THE core regression: a module-load constant physically cannot do this.
-    const platform = settingCookie(
-      await getForHost('admin.cloudnativedays.no', [setCookie()]),
+  it('scopes BOTH live production domains correctly in ONE process', async () => {
+    // THE core regression, on the real deployed hosts: a module-load constant
+    // physically cannot give these two different Domains, and the one it did not
+    // pick would have its cookie REJECTED by the browser.
+    const days = settingCookie(
+      await getForHost('2026.cloudnativedays.no', [setCookie()]),
     )
-    const tenant = settingCookie(
-      await getForHost('www.someconf.com', [setCookie()]),
+    const bergen = settingCookie(
+      await getForHost('2025.cloudnativebergen.dev', [setCookie()]),
     )
 
-    expect(domainOf(platform)).toBe('.cloudnativedays.no')
-    expect(domainOf(tenant)).toBe('.someconf.com')
-    expect(domainOf(platform)).not.toBe(domainOf(tenant))
+    expect(domainOf(days)).toBe('.cloudnativedays.no')
+    expect(domainOf(bergen)).toBe('.cloudnativebergen.dev')
+    expect(domainOf(days)).not.toBe(domainOf(bergen))
+  })
+
+  it('shares one Domain across YEAR subdomains of the same registrable domain', async () => {
+    // The #462 requirement: a speaker signed in on 2025 stays signed in on 2024
+    // (and on a future 2027), because both sit under `.cloudnativebergen.dev`.
+    const y2025 = settingCookie(
+      await getForHost('2025.cloudnativebergen.dev', [setCookie()]),
+    )
+    const y2024 = settingCookie(
+      await getForHost('2024.cloudnativebergen.dev', [setCookie()]),
+    )
+    const apex = settingCookie(
+      await getForHost('cloudnativebergen.dev', [setCookie()]),
+    )
+
+    expect(domainOf(y2025)).toBe('.cloudnativebergen.dev')
+    expect(domainOf(y2024)).toBe(domainOf(y2025))
+    expect(domainOf(apex)).toBe(domainOf(y2025))
   })
 
   it('gives a tenant apex a Domain the browser ACCEPTS, never the platform’s', async () => {
@@ -112,6 +141,7 @@ describe('session cookie Domain is derived PER REQUEST (#682)', () => {
     // browser stores it. The platform's own domain would be REJECTED outright.
     expect(domain).toBe('.someconf.com')
     expect(domain).not.toBe('.cloudnativedays.no')
+    expect(domain).not.toBe('.cloudnativebergen.dev')
     expect(domain).not.toBe('.konf.app')
     expect(`someconf.com`.endsWith(domain!.slice(1))).toBe(true)
   })
@@ -131,16 +161,16 @@ describe('session cookie Domain is derived PER REQUEST (#682)', () => {
   it('never carries a stale Domain over from a previous request', async () => {
     // Order matters: a widened host first, then a denylisted one. A cached or
     // module-level value would leak `.cloudnativedays.no` onto the konf.app host.
-    await getForHost('admin.cloudnativedays.no', [setCookie()])
+    await getForHost('2026.cloudnativedays.no', [setCookie()])
     const konf = settingCookie(
       await getForHost('tenant.konf.app', [setCookie()]),
     )
     expect(domainOf(konf)).toBeUndefined()
 
     const back = settingCookie(
-      await getForHost('cloudnativedays.no', [setCookie()]),
+      await getForHost('2025.cloudnativebergen.dev', [setCookie()]),
     )
-    expect(domainOf(back)).toBe('.cloudnativedays.no')
+    expect(domainOf(back)).toBe('.cloudnativebergen.dev')
   })
 
   it('replaces a Domain already present rather than appending a second one', async () => {
