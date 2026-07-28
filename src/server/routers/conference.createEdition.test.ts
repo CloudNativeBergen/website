@@ -126,9 +126,42 @@ describe('createEdition — domain global uniqueness', () => {
     expect(createSpy).not.toHaveBeenCalled()
   })
 
+  it('rejects a domain an existing WILDCARD entry already routes (overlap, not equality)', async () => {
+    claimedDomains = ['*.cnb.no']
+    const err = await makeCaller({ isOrganizer: true })
+      .createEdition(input({ domains: ['2026.cnb.no'] }))
+      .catch((e) => e)
+    expect(err.code).toBe('BAD_REQUEST')
+    expect(err.message).toContain(DOMAIN_ALREADY_CLAIMED)
+    expect(err.message).toContain('2026.cnb.no')
+    expect(createSpy).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a WILDCARD that would capture an existing exact host (reverse overlap)', async () => {
+    claimedDomains = ['2025.cnb.no']
+    const err = await makeCaller({ isOrganizer: true })
+      .createEdition(input({ domains: ['*.cnb.no'] }))
+      .catch((e) => e)
+    expect(err.code).toBe('BAD_REQUEST')
+    expect(err.message).toContain(DOMAIN_ALREADY_CLAIMED)
+    expect(err.message).toContain('*.cnb.no')
+    expect(createSpy).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('accepts a domain not claimed by anyone', async () => {
     const res = await makeCaller({ isOrganizer: true }).createEdition(input())
     expect(res.conferenceId).toBeTruthy()
+  })
+
+  it('accepts a host under a DIFFERENT apex than an existing wildcard (no overlap)', async () => {
+    claimedDomains = ['*.cnb.no']
+    const res = await makeCaller({ isOrganizer: true }).createEdition(
+      input({ domains: ['2026.cndn.no'] }),
+    )
+    expect(res.conferenceId).toBeTruthy()
+    expect(commitMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -189,5 +222,13 @@ describe('validateNewDomains', () => {
       domains: ['2025.cnb.no', 'fresh.example.com'],
     })
     expect(res.taken).toEqual(['2025.cnb.no'])
+  })
+
+  it('reports a host an existing wildcard routes, and a wildcard capturing an existing host', async () => {
+    claimedDomains = ['*.cnb.no', '2025.cndn.no']
+    const res = await makeCaller({ isOrganizer: true }).validateNewDomains({
+      domains: ['2026.cnb.no', '*.cndn.no', 'fresh.example.com'],
+    })
+    expect(res.taken).toEqual(['2026.cnb.no', '*.cndn.no'])
   })
 })
