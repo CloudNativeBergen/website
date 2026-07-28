@@ -89,6 +89,13 @@ function startServer() {
     env: {
       ...process.env,
       NODE_ENV: 'production',
+      // Force the auth base URL to THIS smoke server's port so next-auth's
+      // host/URL construction matches where we actually boot — the ambient
+      // NEXTAUTH_URL/AUTH_URL (CI sets localhost:3000) would mismatch our port
+      // and make the smoke flaky. Self-contained over inherited.
+      NEXTAUTH_URL: `http://localhost:${PORT}`,
+      AUTH_URL: `http://localhost:${PORT}`,
+      AUTH_TRUST_HOST: 'true',
       // Minimal dummy env — a protected-route redirect never needs real
       // secrets. Mirrors the CI Build job's placeholder env. Real env wins.
       AUTH_SECRET:
