@@ -1,4 +1,5 @@
 import { clientWrite } from '../sanity/client'
+import { normalizeEmail } from '../speaker/email'
 
 /**
  * Set a speaker's display `email`.
@@ -14,13 +15,20 @@ import { clientWrite } from '../sanity/client'
  * Callers are responsible for proving the caller owns `email` before invoking
  * this (see `isEmailVerifiedForSession`, used by `speaker.updateEmail`). Because
  * the display email is itself a login match key, it must always be verified-owned.
+ *
+ * The value is NORMALIZED before it is written (#684). `isEmailVerifiedForSession`
+ * already compares normalized, so storing the raw casing would let the stored
+ * match key drift from the form every comparison uses.
  */
 export async function updateProfileEmail(
   email: string,
   speakerId: string,
 ): Promise<{ error: Error | null }> {
   try {
-    await clientWrite.patch(speakerId).set({ email }).commit()
+    await clientWrite
+      .patch(speakerId)
+      .set({ email: normalizeEmail(email) })
+      .commit()
 
     return { error: null }
   } catch (error) {

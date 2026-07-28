@@ -777,3 +777,186 @@ describe('attachProviderToSpeaker — explicit self-service link', () => {
     expect(patchMock).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// #684 — email identity matching must be normalization-insensitive.
+//
+// These tests drive the WHOLE login path against an in-memory store whose fetch
+// stub is an honest emulator of the GROQ predicate the query actually asks for:
+// it folds the STORED side with `toLowerCase()` only when the query text
+// contains `lower(`. Combined with the store recording what gets written, this
+// bites on both axes — drop `lower()` from the query, or stop normalizing the
+// incoming address, and the "one speaker, not two" assertions fail.
+// ---------------------------------------------------------------------------
+
+interface StoreDoc {
+  _id: string
+  email?: string
+  knownEmails?: string[]
+  providers?: string[]
+  slug?: string
+}
+
+function loginRouteFetch(store: StoreDoc[]) {
+  return (query: string, params: Record<string, unknown> = {}) => {
+    if (query.includes('$id in providers')) {
+      const id = params.id as string
+      return Promise.resolve(
+        store.find((doc) => (doc.providers ?? []).includes(id)) ?? {},
+      )
+    }
+    if (query.includes('in $emails')) {
+      const emails = params.emails as string[]
+      // Fold the stored side ONLY if the query asked for it (`lower(...)`).
+      const folds = query.includes('lower(')
+      const fold = (value: string) => (folds ? value.toLowerCase() : value)
+      return Promise.resolve(
+        store.filter(
+          (doc) =>
+            (doc.email !== undefined && emails.includes(fold(doc.email))) ||
+            (doc.knownEmails ?? []).some((known) =>
+              emails.includes(fold(known)),
+            ),
+        ),
+      )
+    }
+    if (query.includes('slug.current == $slug')) {
+      return Promise.resolve(null)
+    }
+    return Promise.resolve(null)
+  }
+}
+
+/**
+ * Wire `clientWrite.create` so created documents land in `store` in the shape
+ * the login PROJECTION returns them (`"slug": slug.current`), which is what a
+ * subsequent login reads back.
+ */
+function recordCreatesInto(store: StoreDoc[]) {
+  createMock.mockImplementation((doc: Record<string, unknown>) => {
+    const slug = doc.slug as { current?: string } | string | undefined
+    store.push({
+      ...(doc as unknown as StoreDoc),
+      slug: typeof slug === 'string' ? slug : slug?.current,
+    })
+    return Promise.resolve({ ...doc })
+  })
+}
+
+describe('getOrCreateSpeaker — email identity matching is normalized (#684)', () => {
+  it('resolves two provider casings of one mailbox to ONE speaker', async () => {
+    const store: StoreDoc[] = []
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+
+    // First login: GitHub hands back the mixed-case form.
+    verifiedEmailsMock.mockResolvedValue({
+      error: null,
+      emails: [{ email: 'Hans@Example.com', verified: true, primary: true }],
+    })
+    const first = await getOrCreateSpeaker(
+      user({ name: 'Hans Doe', email: 'Hans@Example.com' }),
+      githubAccount(),
+    )
+    expect(first.err).toBeNull()
+    expect(store).toHaveLength(1)
+
+    // Second login: LinkedIn hands back the SAME mailbox, all lowercase.
+    createMock.mockClear()
+    const second = await getOrCreateSpeaker(
+      user({ name: 'Hans Doe', email: 'hans@example.com' }),
+      linkedinAccount(),
+    )
+
+    expect(second.err).toBeNull()
+    // The duplicate-account defect: a second document must NOT be created.
+    expect(createMock).not.toHaveBeenCalled()
+    expect(store).toHaveLength(1)
+    expect(second.speaker._id).toBe(first.speaker._id)
+  })
+
+  it('matches a LEGACY record whose stored display email is mixed-case', async () => {
+    // Pre-existing document, never migrated — exactly what production holds.
+    const store: StoreDoc[] = [
+      {
+        _id: 'spk-legacy',
+        email: 'Hans@Example.com',
+        providers: ['github:gh-999'],
+      },
+    ]
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      user({ name: 'Hans Doe', email: 'hans@example.com' }),
+      linkedinAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(speaker._id).toBe('spk-legacy')
+  })
+
+  it('does not create a second record for a whitespace-padded address', async () => {
+    const store: StoreDoc[] = [
+      {
+        _id: 'spk-legacy',
+        email: 'hans@example.com',
+        providers: ['github:gh-999'],
+      },
+    ]
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      user({ name: 'Hans Doe', email: '  hans@example.com \n' }),
+      linkedinAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(speaker._id).toBe('spk-legacy')
+  })
+
+  it('still creates a separate speaker for a genuinely different address', async () => {
+    const store: StoreDoc[] = [
+      {
+        _id: 'spk-legacy',
+        email: 'hans@example.com',
+        knownEmails: ['hans@example.com'],
+        providers: ['github:gh-999'],
+      },
+    ]
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+
+    const { speaker, err } = await getOrCreateSpeaker(
+      user({ name: 'Other Person', email: 'hans@example.org' }),
+      linkedinAccount(),
+    )
+
+    expect(err).toBeNull()
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(speaker._id).not.toBe('spk-legacy')
+    expect(store).toHaveLength(2)
+  })
+
+  it('stores the display email of a NEW speaker in normalized form', async () => {
+    const store: StoreDoc[] = []
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+
+    await getOrCreateSpeaker(
+      user({ name: 'Hans Doe', email: '  Hans@Example.COM ' }),
+      linkedinAccount(),
+    )
+
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'hans@example.com' }),
+    )
+  })
+})

@@ -50,6 +50,7 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { generateUniqueSlug } from '@/lib/speaker/sanity'
+import { normalizeEmail } from '@/lib/speaker/email'
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -420,7 +421,12 @@ export const speakerRouter = router({
           const speaker = await clientWrite.create({
             _type: 'speaker',
             name: input.name,
-            email: input.email,
+            // The display `email` is a login match key (`getOrCreateSpeaker`),
+            // so an admin-created placeholder must be stored in the same
+            // normalized form the login path writes and compares (#684) —
+            // otherwise the person it was created for signs in and gets a
+            // second, duplicate speaker document.
+            email: normalizeEmail(input.email),
             slug: { _type: 'slug', current: slug },
             title: input.title,
             bio: input.bio,

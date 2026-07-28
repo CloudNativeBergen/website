@@ -49,6 +49,14 @@ describe('updateProfileEmail — C1: never writes the verified match-set', () =>
     expect(patchArg).not.toHaveProperty('knownEmails')
   })
 
+  // #684 — the display email is a login match key, so the stored value must be
+  // the same normalized form every comparison uses.
+  it('writes the NORMALIZED address', async () => {
+    await updateProfileEmail('  Hans@Example.COM ', 'spk-4')
+
+    expect(setMock).toHaveBeenCalledWith({ email: 'hans@example.com' })
+  })
+
   it('returns the error when the write fails', async () => {
     const boom = new Error('write failed')
     commitMock.mockRejectedValueOnce(boom)

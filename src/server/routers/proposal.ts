@@ -65,6 +65,7 @@ import {
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
+import { normalizeEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
@@ -1643,10 +1644,14 @@ export const proposalRouter = router({
             })
           }
 
-          const invitedEmail = input.invitedEmail.toLowerCase()
+          // Identity match key — normalize both sides (#684) so casing and
+          // whitespace can never smuggle a duplicate invitation past the guards
+          // below (or, at acceptance time, lock the invitee out of their own
+          // invitation).
+          const invitedEmail = normalizeEmail(input.invitedEmail)
 
           // Reject self-invitations
-          if (invitedEmail === ctx.speaker.email?.toLowerCase()) {
+          if (invitedEmail === normalizeEmail(ctx.speaker.email)) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'You cannot invite yourself as a co-speaker.',
@@ -1658,7 +1663,7 @@ export const proposalRouter = router({
           const existingSpeakers = extractSpeakersFromProposal(proposal)
           if (
             existingSpeakers.some(
-              (s) => s.email?.toLowerCase() === invitedEmail,
+              (s) => normalizeEmail(s.email) === invitedEmail,
             )
           ) {
             throw new TRPCError({
@@ -1674,7 +1679,7 @@ export const proposalRouter = router({
           ).filter((inv) => inv.status === 'pending')
           if (
             pendingInvitations.some(
-              (inv) => inv.invitedEmail?.toLowerCase() === invitedEmail,
+              (inv) => normalizeEmail(inv.invitedEmail) === invitedEmail,
             )
           ) {
             throw new TRPCError({
@@ -1709,7 +1714,7 @@ export const proposalRouter = router({
           const invitation = await createCoSpeakerInvitation({
             invitedByEmail: ctx.speaker.email,
             invitedByName: ctx.speaker.name,
-            invitedEmail: input.invitedEmail,
+            invitedEmail,
             invitedName: input.invitedName,
             proposalId: input.proposalId,
             proposalTitle: proposal.title,
@@ -1785,10 +1790,16 @@ export const proposalRouter = router({
 
           // Verify ownership before revealing or mutating expiry state:
           // a non-invitee holding a leaked token must not trigger the
-          // expired write or learn whether the invitation has expired
+          // expired write or learn whether the invitation has expired.
+          // Normalized on both sides (#684) so the invitee is not locked out of
+          // their own invitation by provider casing; an empty address on either
+          // side fails CLOSED rather than matching another empty one.
+          const invitationEmail = normalizeEmail(invitation.invitedEmail)
+          const responderEmail = normalizeEmail(ctx.speaker.email)
           if (
-            invitation.invitedEmail.toLowerCase() !==
-            ctx.speaker.email.toLowerCase()
+            !invitationEmail ||
+            !responderEmail ||
+            invitationEmail !== responderEmail
           ) {
             throw new TRPCError({
               code: 'FORBIDDEN',

@@ -142,6 +142,31 @@ describe('proposal.invitation router', () => {
       expect(sendInvitationEmail).toHaveBeenCalled()
     })
 
+    // #684 — `invitedEmail` is an identity match key at acceptance time, so the
+    // stored value must be the normalized form, not the raw typed casing.
+    it('stores the invited email NORMALIZED', async () => {
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(createCoSpeakerInvitation).mockResolvedValue({
+        ...mockInvitation,
+        _id: 'inv-1',
+      } as any)
+      vi.mocked(sendInvitationEmail).mockResolvedValue(true)
+
+      const caller = createCaller(regularSpeaker)
+      await caller.proposal.invitation.send({
+        proposalId: 'proposal-1',
+        invitedEmail: 'Invited@Test.com',
+        invitedName: 'Invited Co-Speaker',
+      })
+
+      expect(createCoSpeakerInvitation).toHaveBeenCalledWith(
+        expect.objectContaining({ invitedEmail: 'invited@test.com' }),
+      )
+    })
+
     it('should not leak the invitation bearer token to the inviter (regression)', async () => {
       vi.mocked(getProposal).mockResolvedValue({
         proposal: mockProposal as any,
@@ -477,6 +502,43 @@ describe('proposal.invitation router', () => {
       const wrongSpeaker = { _id: 'speaker-3', email: 'wrong@test.com' }
       const caller = createCaller(wrongSpeaker)
 
+      await expect(
+        caller.proposal.invitation.respond({
+          token: 'valid-token',
+          accept: true,
+        }),
+      ).rejects.toThrow(/sent to a different email address/)
+    })
+
+    // #684 — the invitee must not be locked out of their own invitation by a
+    // casing/whitespace difference between the stored address and the address
+    // their login provider hands back.
+    it('accepts when the stored invite email differs only in case/whitespace', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        invitedEmail: '  Invited@Test.com ',
+      } as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const caller = createCaller(invitedSpeaker)
+      const result = await caller.proposal.invitation.respond({
+        token: 'valid-token',
+        accept: true,
+      })
+
+      expect(result.success).toBe(true)
+    })
+
+    it('fails CLOSED when either side has an empty email', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        invitedEmail: '   ',
+      } as any)
+
+      const caller = createCaller({ _id: 'speaker-4', email: '' })
       await expect(
         caller.proposal.invitation.respond({
           token: 'valid-token',

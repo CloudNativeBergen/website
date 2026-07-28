@@ -13,6 +13,7 @@ import { getProposalAbstract } from './sanity'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
+import { normalizeEmail } from '@/lib/speaker/email'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatDate } from '@/lib/time'
@@ -140,9 +141,15 @@ export async function createCoSpeakerInvitation(params: {
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
 
+    // Store the invitee address NORMALIZED (#684). `invitedEmail` is an identity
+    // match key: acceptance compares it against the signed-in speaker's email,
+    // so a stored `Sofia@Example.com` would reject the very person it was sent
+    // to (and the pending-duplicate guard would miss a re-invite).
+    const invitedEmail = normalizeEmail(params.invitedEmail)
+
     const tokenPayload: InvitationTokenPayload = {
       invitationId: '',
-      invitedEmail: params.invitedEmail,
+      invitedEmail,
       proposalId: params.proposalId,
       expiresAt: expiresAt.getTime(),
     }
@@ -152,7 +159,7 @@ export async function createCoSpeakerInvitation(params: {
       proposal: createReference(params.proposalId),
       conference: createReference(params.conferenceId),
       invitedBy: createReference(params.invitedBySpeakerId),
-      invitedEmail: params.invitedEmail,
+      invitedEmail,
       invitedName: params.invitedName,
       status: 'pending',
       expiresAt: expiresAt.toISOString(),

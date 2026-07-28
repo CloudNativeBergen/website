@@ -1,13 +1,36 @@
 import { groq } from 'next-sanity'
 import { clientReadCached } from '@/lib/sanity/client'
+import { normalizeEmail } from '@/lib/speaker/email'
 import type { Speaker } from '@/lib/speaker/types'
 
+/**
+ * Resolve a speaker from a session email.
+ *
+ * IDENTITY MATCHING (#684): the comparison is normalization-insensitive on BOTH
+ * sides — the argument is run through {@link normalizeEmail} (NFKC + trim +
+ * lowercase) and the stored value is folded with GROQ `lower()`. A raw `==`
+ * here missed `Hans@Example.com` against a stored `hans@example.com`, which is
+ * how the same human ends up with two speaker documents.
+ *
+ * `knownEmails` (the verified match-set maintained by the login path) is
+ * searched alongside the display `email`, mirroring `findSpeakersByEmails` in
+ * `@/lib/speaker/sanity`, so a speaker who changed their display address still
+ * resolves from their provider's primary. Legacy rows are never mutated —
+ * folding happens at query time, so no backfill is required.
+ */
 export async function getSpeakerByEmail(
   email: string,
 ): Promise<Speaker | null> {
+  const normalized = normalizeEmail(email)
+  if (!normalized) return null
+
   try {
-    const query = groq`
-      *[_type == "speaker" && email == $email][0] {
+    // Identity resolution is a GLOBAL person lookup: the signed-in human must
+    // resolve to their one speaker document regardless of which tenant they
+    // first belonged to (#615). Org-scoped authorization is applied by the
+    // caller from the projected `organizerOrgIds`.
+    // groq-global: cross-tenant identity join (#615).
+    const query = groq`*[_type == "speaker" && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0] {
         _id,
         name,
         email,
@@ -18,7 +41,7 @@ export async function getSpeakerByEmail(
       }
     `
 
-    const speaker = await clientReadCached.fetch(query, { email })
+    const speaker = await clientReadCached.fetch(query, { email: normalized })
     return speaker || null
   } catch (error) {
     console.error('Error fetching speaker by email:', error)

@@ -484,13 +484,19 @@ export async function getOrCreateSpeaker(
   // 4. No (unambiguous) verified match: create a brand-new speaker with a unique
   //    slug. Seed `knownEmails` ONLY from verified emails so a new doc never
   //    starts life with an unverified match key.
+  //
+  //    The display `email` is stored NORMALIZED (#684) rather than as the raw
+  //    provider value: it is also a login match key, so writing the canonical
+  //    form keeps new documents self-consistent with `knownEmails` and with
+  //    every comparison performed elsewhere. Only new writes are affected —
+  //    existing documents are left untouched and are folded at query time.
   const _id = randomUUID()
   const knownEmails = uniqueEmails(verifiedIncoming)
   const slugValue = await generateUniqueSlug(user.name, _id)
 
   const speaker = {
     _id,
-    email: user.email,
+    email: primaryEmail,
     name: user.name,
     imageURL: user.image || '',
     providers: [providerAccountId],
