@@ -10,6 +10,7 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InstallGuidePanel } from '@/components/pwa/InstallGuide'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 afterEach(cleanup)
 
@@ -26,7 +27,7 @@ describe('InstallGuidePanel', () => {
     const onInstall = vi.fn()
     render(<InstallGuidePanel view="chromium" onInstall={onInstall} />)
     const button = screen.getByRole('button', {
-      name: /install cloud native days/i,
+      name: new RegExp(`install ${PLATFORM_NAME}`, 'i'),
     })
     fireEvent.click(button)
     expect(onInstall).toHaveBeenCalledOnce()

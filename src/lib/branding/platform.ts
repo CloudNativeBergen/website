@@ -1,7 +1,11 @@
 import { isLocalhostDomain } from '@/lib/environment/localhost'
 
 /**
- * The neutral, brand-free PLATFORM name (CaaS de-branding, go-live gate G2).
+ * The TENANT-NEUTRAL, platform-default name (CaaS de-branding, go-live gate G2).
+ *
+ * "Tenant-neutral", NOT "brand-free": this is deliberately the platform's OWN
+ * brand ('Konf') — it is simply never a tenant's. It is what a surface shows
+ * when that surface belongs to the platform rather than to any one conference.
  *
  * This is the last-resort fallback used ONLY when no tenant conference resolves
  * for the current request (e.g. the apex/platform host, localhost, a preview
@@ -12,7 +16,7 @@ import { isLocalhostDomain } from '@/lib/environment/localhost'
  * Kept as ONE source of truth so the manifest, root metadata, per-page
  * metadata and OpenGraph alt text all agree on the platform label.
  */
-export const PLATFORM_NAME = 'Cloud Native Days'
+export const PLATFORM_NAME = 'Konf'
 
 /**
  * The PLATFORM-level base URL (origin, no trailing slash) for genuinely

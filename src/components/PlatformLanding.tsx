@@ -1,4 +1,5 @@
 import { Logo } from '@/components/Logo'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface PlatformLandingProps {
   /**
@@ -30,7 +31,7 @@ export function PlatformLanding({ signupUrl }: PlatformLandingProps) {
         <Logo
           variant="monochrome"
           className="h-16 w-auto text-brand-cloud-blue dark:text-white"
-          aria-label="Cloud Native Days platform"
+          aria-label={`${PLATFORM_NAME} platform`}
         />
 
         <h1 className="font-jetbrains mt-10 text-3xl font-bold tracking-tighter text-brand-slate-gray sm:text-4xl dark:text-white">

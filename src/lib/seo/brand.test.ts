@@ -33,12 +33,12 @@ describe('resolveMetadataBrand', () => {
   it('falls back to the neutral platform name when no conference resolves', async () => {
     headersMock.mockResolvedValue(headersWithHost('localhost:3000'))
     getConferenceForDomainMock.mockResolvedValue({ conference: null })
-    expect(await resolveMetadataBrand()).toBe('Cloud Native Days')
+    expect(await resolveMetadataBrand()).toBe('Konf')
   })
 
   it('falls back to the platform name on a resolution error', async () => {
     headersMock.mockResolvedValue(headersWithHost('x.example'))
     getConferenceForDomainMock.mockRejectedValue(new Error('sanity down'))
-    expect(await resolveMetadataBrand()).toBe('Cloud Native Days')
+    expect(await resolveMetadataBrand()).toBe('Konf')
   })
 })

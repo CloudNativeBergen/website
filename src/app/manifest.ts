@@ -5,6 +5,7 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { DEFAULT_PRIMARY_COLOR, manifestThemeColor } from '@/lib/branding/theme'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 /**
  * Web app manifest (Next.js metadata route → `/manifest.webmanifest`).
@@ -29,8 +30,10 @@ import { DEFAULT_PRIMARY_COLOR, manifestThemeColor } from '@/lib/branding/theme'
  * conference's own `logomarkBright`, with a static fallback).
  */
 
-const PLATFORM_NAME = 'Cloud Native Days'
-const PLATFORM_SHORT_NAME = 'CND'
+// Platform-default launcher label. Must stay consistent with PLATFORM_NAME:
+// a platform install showing name 'Konf' but short_name 'CND' is mixed
+// branding. Short enough already that no truncation helper is needed.
+const PLATFORM_SHORT_NAME = 'Konf'
 const PLATFORM_DESCRIPTION =
   'Community-driven Kubernetes and Cloud Native conferences in the Nordics.'
 

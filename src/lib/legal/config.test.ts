@@ -40,7 +40,7 @@ describe('buildLegalConfig — defaults (existing tenant, no org fields)', () =>
       conf({ organizer: '' as unknown as string }),
       null,
     )
-    expect(legal.controllerName).toBe('Cloud Native Days')
+    expect(legal.controllerName).toBe('Konf')
   })
 })
 

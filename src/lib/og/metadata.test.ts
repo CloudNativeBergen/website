@@ -28,12 +28,12 @@ describe('ogImageMetadata', () => {
   it('uses the neutral platform name when no conference resolves', async () => {
     getConferenceForCurrentDomainMock.mockResolvedValue({ conference: null })
     const [meta] = await ogImageMetadata((brand) => `Program - ${brand}`)
-    expect(meta.alt).toBe('Program - Cloud Native Days')
+    expect(meta.alt).toBe('Program - Konf')
   })
 
   it('falls back to the platform name on error', async () => {
     getConferenceForCurrentDomainMock.mockRejectedValue(new Error('boom'))
     const [meta] = await ogImageMetadata((brand) => brand)
-    expect(meta.alt).toBe('Cloud Native Days')
+    expect(meta.alt).toBe('Konf')
   })
 })
