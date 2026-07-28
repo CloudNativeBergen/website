@@ -61,6 +61,15 @@ describe('isWorkshopsEnabledForOrg — fail closed', () => {
     await expect(isWorkshopsEnabledForOrg('org-missing')).resolves.toBe(false)
   })
 
+  it('is DISABLED — not thrown — when the organization read REJECTS', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getOrganizationById.mockRejectedValue(new Error('sanity unavailable'))
+
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+
   it('is DISABLED for an ordinary tenant on every plan', async () => {
     for (const plan of ['community', 'pro', 'enterprise'] as const) {
       getOrganizationById.mockResolvedValue(org({ plan }))

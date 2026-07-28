@@ -2,9 +2,11 @@
  * @vitest-environment node
  *
  * The ORGANIZER-side workshop surface (#689). Hiding the sidebar entry is
- * presentation (see src/lib/admin/registry.test.ts); this asserts the page
- * itself refuses to render for a tenant without the workshop feature, and that
- * it still loads normally for the platform org.
+ * presentation (see src/lib/admin/registry.test.ts) and the tRPC procedures are
+ * gated separately (src/server/routers/workshop.feature.test.ts); this asserts
+ * the page itself refuses to render for a tenant without the workshop feature,
+ * and that it still loads normally for the platform org. Only the Sanity
+ * boundary is mocked — the page's real component composition renders.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -34,14 +36,6 @@ vi.mock('@/lib/organization/sanity', () => ({
 
 vi.mock('@/lib/workshop/sanity', () => ({
   getWorkshopsByConference: (...args: unknown[]) => mockGetWorkshops(...args),
-}))
-
-vi.mock('@/components/admin', () => ({
-  ErrorDisplay: () => null,
-}))
-
-vi.mock('@/components/admin/workshop/WorkshopsClientPage', () => ({
-  WorkshopsClientPage: () => null,
 }))
 
 import WorkshopAdminPage from '@/app/(admin)/admin/workshops/page'

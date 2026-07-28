@@ -6,8 +6,9 @@
  * tenant without the feature gets a 404 — never a sign-in button that leads
  * into a WorkOS round-trip its own host can never complete.
  *
- * Only the Sanity boundary (conference + organization documents) is mocked, so
- * the REAL entitlement resolution decides; `notFound()` is mocked to throw the
+ * Only EXTERNAL boundaries are mocked — the Sanity documents (conference +
+ * organization) and WorkOS AuthKit — so the real entitlement resolution and the
+ * page's real component composition decide. `notFound()` is mocked to throw the
  * way Next.js does, which is how these assertions detect the 404.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -40,23 +41,12 @@ vi.mock('@workos-inc/authkit-nextjs', () => ({
   withAuth: (...args: unknown[]) => mockWithAuth(...args),
 }))
 
+// External boundary too: the AuthKit client provider cannot be imported under
+// vitest (its ESM build resolves `next/cache` extensionless). Everything the
+// app owns — the real Layout, WorkshopList and eligibility modules — is left
+// alone so this exercises the page's actual composition.
 vi.mock('@workos-inc/authkit-nextjs/components', () => ({
   AuthKitProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
-
-vi.mock('@/components/Layout', () => ({
-  Layout: ({ children }: { children: React.ReactNode }) => children,
-}))
-
-vi.mock('@/components/workshop/WorkshopList', () => ({
-  default: () => null,
-}))
-
-vi.mock('@/lib/workshop/eligibility', () => ({
-  checkWorkshopEligibility: vi.fn(async () => ({
-    isEligible: true,
-    tickets: [],
-  })),
 }))
 
 import WorkshopLayout from '@/app/(workshop)/layout'

@@ -21,12 +21,17 @@ import { isPlatformOrgSlug } from './platform'
  *
  * RESOLUTION ORDER — fail-CLOSED at every step:
  *
- *  1. No resolvable org (unknown domain, transient read failure, missing org
- *     document) → DISABLED. An unresolvable tenant must never degrade into
+ *  1. No resolvable org (unknown domain, missing org document, or a REJECTED
+ *     org read) → DISABLED. An unresolvable tenant must never degrade into
  *     "serve it anyway"; this mirrors the org-scoped authz waist's posture.
  *  2. An ACTIVE `featureOverrides` entry for `workshops` wins, in BOTH
  *     directions — `enabled: true` grants it to a pilot org, `enabled: false`
- *     revokes it even from the platform org (rule 3).
+ *     revokes it even from the platform org (rule 3). NOTE: a grant asserts
+ *     that the org is served ON the WorkOS host — the AuthKit round-trip is
+ *     still host-bound (see `isWorkOSAuthHost` in `src/proxy.ts`), so granting
+ *     it to an org on its own domain re-opens the very link this gate closes.
+ *     Until attendee auth is tenant-aware, the override is for pilots on the
+ *     platform deployment.
  *  3. The org named by `PLATFORM_ORG_SLUG` keeps workshops by default. The
  *     single WorkOS client and its redirect URI belong to the platform
  *     deployment, so the platform org is the one tenant the feature is known to
@@ -56,7 +61,20 @@ export async function isWorkshopsEnabledForOrg(
 ): Promise<boolean> {
   if (!orgId) return false
 
-  const org = await getOrganizationById(orgId)
+  // A REJECTED read (transient Sanity failure) must resolve to DISABLED like
+  // any other unresolvable org — never propagate, or one flaky read would 500
+  // the whole admin dashboard through the nav's entitlement lookup and turn a
+  // deliberately suppressed webhook delivery into a retried 500.
+  let org
+  try {
+    org = await getOrganizationById(orgId)
+  } catch (error) {
+    console.error(
+      `[workshops] organization read failed for ${orgId}; treating workshops as DISABLED`,
+      error,
+    )
+    return false
+  }
   if (!org) return false
 
   const now = new Date()
