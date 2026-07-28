@@ -210,7 +210,9 @@ export const speakerRouter = router({
           })
         }
 
-        return { success: true, email: input.email }
+        // Echo back the value that was actually STORED (#684), not the raw
+        // casing, so the UI never renders an address that differs from the doc.
+        return { success: true, email: normalizeEmail(input.email) }
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
@@ -607,7 +609,9 @@ export const speakerRouter = router({
             })
           }
 
-          return { success: true, email: input.email }
+          // Echo back the value that was actually STORED (#684), not the raw
+          // casing, so the UI never renders an address that differs from the doc.
+          return { success: true, email: normalizeEmail(input.email) }
         } catch (error) {
           if (error instanceof TRPCError) throw error
 

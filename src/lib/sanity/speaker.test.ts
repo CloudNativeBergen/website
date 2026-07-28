@@ -12,6 +12,7 @@ interface StoredSpeaker {
   _id: string
   email?: string
   knownEmails?: string[]
+  _createdAt?: string
 }
 
 /**
@@ -32,7 +33,7 @@ function groqEmulator(store: StoredSpeaker[]) {
     const searchesKnownEmails = query.includes('knownEmails')
     const fold = (value: string) => (foldsStored ? value.toLowerCase() : value)
 
-    const match = store.find((doc) => {
+    const matches = store.filter((doc) => {
       if (doc.email !== undefined && fold(doc.email) === params.email) {
         return true
       }
@@ -41,7 +42,15 @@ function groqEmulator(store: StoredSpeaker[]) {
         (doc.knownEmails ?? []).some((known) => fold(known) === params.email)
       )
     })
-    return Promise.resolve(match ?? null)
+
+    // Honour `| order(_createdAt asc)` when the query asks for it; otherwise
+    // return dataset order, which is what an unordered `[0]` would pick.
+    if (query.includes('order(_createdAt asc)')) {
+      matches.sort((a, b) =>
+        (a._createdAt ?? '').localeCompare(b._createdAt ?? ''),
+      )
+    }
+    return Promise.resolve(matches[0] ?? null)
   }
 }
 
@@ -115,6 +124,25 @@ describe('getSpeakerByEmail — normalization-insensitive identity match (#684)'
     expect(fetchMock).toHaveBeenCalledWith(expect.any(String), {
       email: 'hans@example.com',
     })
+  })
+
+  it('resolves PRE-EXISTING duplicates deterministically (oldest wins)', async () => {
+    // Two accounts already exist for one human — the exact state this bug
+    // created. The lookup must not flap between them request to request.
+    const newer: StoredSpeaker = {
+      _id: 'spk-newer',
+      email: 'hans@example.com',
+      _createdAt: '2025-01-01T00:00:00Z',
+    }
+    const older: StoredSpeaker = {
+      _id: 'spk-older',
+      email: 'Hans@Example.com',
+      _createdAt: '2024-01-01T00:00:00Z',
+    }
+    // Dataset order deliberately puts the NEWER document first.
+    fetchMock.mockImplementation(groqEmulator([newer, older]))
+
+    expect((await getSpeakerByEmail('hans@example.com'))?._id).toBe('spk-older')
   })
 
   it('short-circuits an empty address instead of querying', async () => {

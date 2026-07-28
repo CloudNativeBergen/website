@@ -17,6 +17,10 @@ import type { Speaker } from '@/lib/speaker/types'
  * `@/lib/speaker/sanity`, so a speaker who changed their display address still
  * resolves from their provider's primary. Legacy rows are never mutated —
  * folding happens at query time, so no backfill is required.
+ *
+ * Ordered oldest-first before taking `[0]`: where PRE-EXISTING duplicate
+ * accounts share an address, the caller must resolve to the same document on
+ * every request rather than whichever one the dataset happened to return first.
  */
 export async function getSpeakerByEmail(
   email: string,
@@ -30,7 +34,7 @@ export async function getSpeakerByEmail(
     // first belonged to (#615). Org-scoped authorization is applied by the
     // caller from the projected `organizerOrgIds`.
     // groq-global: cross-tenant identity join (#615).
-    const query = groq`*[_type == "speaker" && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0] {
+    const query = groq`*[_type == "speaker" && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)] | order(_createdAt asc) [0] {
         _id,
         name,
         email,
