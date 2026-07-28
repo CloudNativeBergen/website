@@ -11,7 +11,7 @@ import { ProposalExisting, Status } from '../proposal/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { generateUniqueSpeakerSlug } from './slug'
-import { normalizeEmail, uniqueEmails } from './email'
+import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
@@ -411,7 +411,11 @@ export async function getOrCreateSpeaker(
 
   // 2. Gather the VERIFIED emails for this login. Only verified emails may
   //    auto-link into an existing speaker (never link on an unverified email).
-  const primaryEmail = normalizeEmail(user.email)
+  // DISPLAY/recipient form (`canonicalEmail`, no NFKC) — `primaryEmail` is only
+  // ever written to the deliverable `email` field, never used as a match key
+  // (matching runs on `verifiedIncoming`). See `./email` for why the two forms
+  // differ.
+  const primaryEmail = canonicalEmail(user.email)
   const verifiedIncoming = await computeVerifiedEmails(user, account, profile)
 
   // 3. Attempt to match an existing speaker by verified email intersection.
@@ -607,7 +611,11 @@ export async function attachProviderToSpeaker(
   }
 
   // Attach the provider + this login's verified emails to the existing speaker.
-  const primaryEmail = normalizeEmail(user.email)
+  // DISPLAY/recipient form (`canonicalEmail`, no NFKC) — `primaryEmail` is only
+  // ever written to the deliverable `email` field, never used as a match key
+  // (matching runs on `verifiedIncoming`). See `./email` for why the two forms
+  // differ.
+  const primaryEmail = canonicalEmail(user.email)
   const verifiedIncoming = await computeVerifiedEmails(user, account, profile)
   const { speaker, err } = await linkProviderToSpeaker(
     target,

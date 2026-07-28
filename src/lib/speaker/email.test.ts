@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeEmail, uniqueEmails } from './email'
+import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 
 describe('normalizeEmail — identity canonicalization (#684)', () => {
   it('folds case so two provider casings of one mailbox collapse', () => {
@@ -45,6 +45,36 @@ describe('normalizeEmail — identity canonicalization (#684)', () => {
     expect(normalizeEmail(undefined)).toBe('')
     expect(normalizeEmail(null)).toBe('')
     expect(normalizeEmail('   ')).toBe('')
+  })
+})
+
+describe('canonicalEmail — storage/recipient form (#684)', () => {
+  it('folds case and trims, like normalizeEmail', () => {
+    expect(canonicalEmail('  Hans@Example.COM ')).toBe('hans@example.com')
+  })
+
+  it('does NOT apply NFKC — a stored address is a real mailbox', () => {
+    // The whole point of the split: NFKC would rewrite the local part and could
+    // send an invitation bearer token to a different mailbox.
+    expect(canonicalEmail('oﬀice@ex.com')).toBe('oﬀice@ex.com')
+    expect(canonicalEmail('oﬀice@ex.com')).not.toBe(
+      normalizeEmail('oﬀice@ex.com'),
+    )
+  })
+
+  it('agrees with normalizeEmail for the ASCII addresses providers issue', () => {
+    for (const address of [
+      'Hans@Example.com',
+      '  HANS@example.COM  ',
+      'hans+cfp@example.co.uk',
+    ]) {
+      expect(canonicalEmail(address)).toBe(normalizeEmail(address))
+    }
+  })
+
+  it('maps absent values to the empty string', () => {
+    expect(canonicalEmail(undefined)).toBe('')
+    expect(canonicalEmail(null)).toBe('')
   })
 })
 

@@ -1,5 +1,5 @@
 import { clientWrite } from '../sanity/client'
-import { normalizeEmail } from '../speaker/email'
+import { canonicalEmail } from '../speaker/email'
 
 /**
  * Set a speaker's display `email`.
@@ -16,9 +16,10 @@ import { normalizeEmail } from '../speaker/email'
  * this (see `isEmailVerifiedForSession`, used by `speaker.updateEmail`). Because
  * the display email is itself a login match key, it must always be verified-owned.
  *
- * The value is NORMALIZED before it is written (#684). `isEmailVerifiedForSession`
- * already compares normalized, so storing the raw casing would let the stored
- * match key drift from the form every comparison uses.
+ * The value is CANONICALIZED before it is written (#684): trimmed + lowercased,
+ * deliberately WITHOUT NFKC, because this field is a real recipient address that
+ * the app sends mail to. `isEmailVerifiedForSession` compares with the fuller
+ * `normalizeEmail`, and NFKC is a no-op for ASCII, so matching is unaffected.
  */
 export async function updateProfileEmail(
   email: string,
@@ -27,7 +28,7 @@ export async function updateProfileEmail(
   try {
     await clientWrite
       .patch(speakerId)
-      .set({ email: normalizeEmail(email) })
+      .set({ email: canonicalEmail(email) })
       .commit()
 
     return { error: null }

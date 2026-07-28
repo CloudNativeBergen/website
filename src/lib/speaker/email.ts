@@ -37,6 +37,32 @@ export function normalizeEmail(email?: string | null): string {
 }
 
 /**
+ * Canonical form for an address that will be STORED and later DELIVERED to:
+ * trim + lowercase, deliberately WITHOUT NFKC.
+ *
+ * Lowercasing is safe to deliver to — domains are case-insensitive by RFC 1035
+ * and no mailbox provider distinguishes local-part case (that premise is the
+ * whole point of this module). NFKC is NOT: compatibility folding rewrites the
+ * bytes of the local part (`oﬀice@ex.com` -> `office@ex.com`), and nothing
+ * guarantees the folded address reaches the same mailbox. Applying it to a
+ * stored recipient could route a co-speaker invitation — which carries a bearer
+ * token — to a different person.
+ *
+ * So the two forms have different jobs, and mixing them up is the bug:
+ *  - {@link normalizeEmail} — MATCH key. Never deliver to it. Also the form
+ *    stored in `knownEmails`, which is a pure match-set and never a recipient.
+ *  - {@link canonicalEmail} — STORED recipient (`speaker.email`,
+ *    `coSpeakerInvitation.invitedEmail`). Safe to send mail to.
+ *
+ * Matching still works across the two because every comparison runs both sides
+ * through `normalizeEmail`, and NFKC is a no-op for the ASCII addresses real
+ * providers issue.
+ */
+export function canonicalEmail(email?: string | null): string {
+  return (email ?? '').trim().toLowerCase()
+}
+
+/**
  * Build a deduplicated, normalized list of emails, dropping empty values.
  * Preserves first-seen order.
  */

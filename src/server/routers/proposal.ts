@@ -1714,7 +1714,11 @@ export const proposalRouter = router({
           const invitation = await createCoSpeakerInvitation({
             invitedByEmail: ctx.speaker.email,
             invitedByName: ctx.speaker.name,
-            invitedEmail,
+            // Pass the address AS TYPED — `createCoSpeakerInvitation` applies the
+            // recipient-safe `canonicalEmail` (trim + lowercase, no NFKC). The
+            // fully-normalized `invitedEmail` above is a comparison key only and
+            // must never become the mailbox an invitation token is sent to.
+            invitedEmail: input.invitedEmail,
             invitedName: input.invitedName,
             proposalId: input.proposalId,
             proposalTitle: proposal.title,

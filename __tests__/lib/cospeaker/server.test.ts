@@ -1,10 +1,35 @@
-const { mockSend, mockGetConference, mockGetProposalAbstract } = vi.hoisted(
-  () => ({
+const {
+  mockSend,
+  mockGetConference,
+  mockGetProposalAbstract,
+  mockCreate,
+  mockPatch,
+  mockPatchSet,
+  mockPatchCommit,
+} = vi.hoisted(() => {
+  const mockPatchCommit = vi.fn()
+  const mockPatchSet = vi.fn((_fields: Record<string, unknown>) => ({
+    commit: mockPatchCommit,
+  }))
+  return {
     mockSend: vi.fn(),
     mockGetConference: vi.fn(),
     mockGetProposalAbstract: vi.fn(),
-  }),
-)
+    mockCreate: vi.fn(),
+    mockPatch: vi.fn((_id: string) => ({ set: mockPatchSet })),
+    mockPatchSet,
+    mockPatchCommit,
+  }
+})
+
+// Boundary mock only: the real `createCoSpeakerInvitation` logic runs, and we
+// observe the document it actually writes.
+vi.mock('@/lib/sanity/client', () => ({
+  clientWrite: {
+    create: (doc: Record<string, unknown>) => mockCreate(doc),
+    patch: (id: string) => mockPatch(id),
+  },
+}))
 
 vi.mock('@/lib/email/config', () => ({
   resend: { emails: { send: mockSend } },
@@ -21,6 +46,7 @@ vi.mock('@/lib/cospeaker/sanity', () => ({
 
 import React from 'react'
 import {
+  createCoSpeakerInvitation,
   sendInvitationEmail,
   truncateAbstract,
   ABSTRACT_MAX_LENGTH,
@@ -190,5 +216,60 @@ describe('sendInvitationEmail', () => {
     expect(result).toBe(true)
     expect(mockGetProposalAbstract).not.toHaveBeenCalled()
     expect(sentEmailProps().proposalAbstract).toBe(FALLBACK_ABSTRACT)
+  })
+})
+
+// #684 — the stored `invitedEmail` is BOTH the acceptance match key and the
+// mailbox the invitation bearer token is delivered to. It must be canonicalized
+// (trim + lowercase) but must NOT be NFKC-folded, which would rewrite the local
+// part and could deliver the token to a different person. Exercises the real
+// service against a mocked Sanity boundary.
+describe('createCoSpeakerInvitation — stored recipient address', () => {
+  const params = {
+    invitedByEmail: 'sam@example.com',
+    invitedByName: 'Sam Speaker',
+    invitedName: 'Ida Invitee',
+    proposalId: 'proposal-1',
+    proposalTitle: 'GitOps for Everyone',
+    invitedBySpeakerId: 'speaker-1',
+    conferenceId: 'conf-1',
+  }
+
+  function writtenDoc(): Record<string, unknown> {
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+    return mockCreate.mock.calls[0][0] as Record<string, unknown>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCreate.mockImplementation((doc: Record<string, unknown>) =>
+      Promise.resolve({ ...doc, _id: 'inv-1' }),
+    )
+    mockPatchCommit.mockResolvedValue({
+      _id: 'inv-1',
+      invitedEmail: 'ida@example.com',
+      status: 'pending',
+      token: 'tok',
+    })
+  })
+
+  it('trims and lowercases the stored address', async () => {
+    await createCoSpeakerInvitation({
+      ...params,
+      invitedEmail: '  Ida@Example.COM ',
+    })
+
+    expect(writtenDoc().invitedEmail).toBe('ida@example.com')
+  })
+
+  it('does NOT NFKC-fold the stored address (it is a real mailbox)', async () => {
+    // U+FB00 LATIN SMALL LIGATURE FF. NFKC would turn this into
+    // `office@ex.com`, a potentially different mailbox — and this address
+    // receives the invitation bearer token.
+    const ligature = 'oﬀice@ex.com'
+
+    await createCoSpeakerInvitation({ ...params, invitedEmail: ligature })
+
+    expect(writtenDoc().invitedEmail).toBe(ligature)
   })
 })

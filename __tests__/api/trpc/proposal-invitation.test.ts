@@ -142,9 +142,12 @@ describe('proposal.invitation router', () => {
       expect(sendInvitationEmail).toHaveBeenCalled()
     })
 
-    // #684 — `invitedEmail` is an identity match key at acceptance time, so the
-    // stored value must be the normalized form, not the raw typed casing.
-    it('stores the invited email NORMALIZED', async () => {
+    // #684 — the router must hand the address to the invitation service AS
+    // TYPED. The service applies the recipient-safe `canonicalEmail`; the
+    // router's fully-normalized comparison key must never become the mailbox a
+    // bearer token is delivered to. (Canonicalization itself is covered against
+    // the real service in __tests__/lib/cospeaker/server.test.ts.)
+    it('passes the address as typed to the invitation service', async () => {
       vi.mocked(getProposal).mockResolvedValue({
         proposal: mockProposal as any,
         proposalError: null,
@@ -163,7 +166,7 @@ describe('proposal.invitation router', () => {
       })
 
       expect(createCoSpeakerInvitation).toHaveBeenCalledWith(
-        expect.objectContaining({ invitedEmail: 'invited@test.com' }),
+        expect.objectContaining({ invitedEmail: 'Invited@Test.com' }),
       )
     })
 
