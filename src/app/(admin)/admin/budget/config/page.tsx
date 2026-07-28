@@ -27,7 +27,25 @@ export default async function AdminBudgetConfigPage() {
     )
   }
 
-  const budget = await getBudgetForConference(conference._id).catch(() => null)
+  // Distinguish a transient read failure from a genuine "no budget yet" state,
+  // matching /admin/budget/page.tsx: a Sanity outage must render a controlled
+  // "unavailable" error (and log), never the "create one first" empty state.
+  const { budget, error: budgetError } = await getBudgetForConference(
+    conference._id,
+  ).then(
+    (budget) => ({ budget, error: null as Error | null }),
+    (error: unknown) => ({ budget: null, error: error as Error }),
+  )
+
+  if (budgetError) {
+    console.error('Budget config: failed to load budget document', budgetError)
+    return (
+      <ErrorDisplay
+        title="Budget Unavailable"
+        message="The budget could not be loaded right now. This is usually transient — reload the page to try again."
+      />
+    )
+  }
 
   if (!budget) {
     return (

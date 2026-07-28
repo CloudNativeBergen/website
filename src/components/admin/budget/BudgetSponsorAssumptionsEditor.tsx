@@ -30,6 +30,15 @@ import {
 export interface BudgetSponsorAssumptionsEditorProps {
   sponsorTierAssumptions: BudgetSponsorTierItem[]
   sponsorAddonAssumptions: BudgetSponsorAddonItem[]
+  /**
+   * Tier `_key`s referenced by scenario `tierCounts`. Deleting a referenced
+   * tier orphans those scenario counts (its projected sponsor revenue and
+   * included tickets silently drop), so it takes a confirming second click —
+   * the same guard the ticket-type and expense editors use.
+   */
+  scenarioReferencedTierKeys?: string[]
+  /** Add-on `_key`s referenced by scenario `addonCounts` (see above). */
+  scenarioReferencedAddonKeys?: string[]
   defaultEditing?: boolean
 }
 
@@ -43,12 +52,17 @@ const nok = (amount: number) => formatCurrency(Math.round(amount), 'NOK')
 export function BudgetSponsorAssumptionsEditor({
   sponsorTierAssumptions,
   sponsorAddonAssumptions,
+  scenarioReferencedTierKeys = [],
+  scenarioReferencedAddonKeys = [],
   defaultEditing = false,
 }: BudgetSponsorAssumptionsEditorProps) {
   const router = useRouter()
   const { showNotification } = useNotification()
+  const referencedTierKeys = new Set(scenarioReferencedTierKeys)
+  const referencedAddonKeys = new Set(scenarioReferencedAddonKeys)
 
   const [editing, setEditing] = useState(defaultEditing)
+  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null)
   const [tiers, setTiers] = useState<BudgetSponsorTierItem[]>(() =>
     structuredClone(sponsorTierAssumptions),
   )
@@ -88,6 +102,7 @@ export function BudgetSponsorAssumptionsEditor({
     setTiers(structuredClone(sponsorTierAssumptions))
     setAddons(structuredClone(sponsorAddonAssumptions))
     setError(null)
+    setPendingRemoval(null)
   }
   const startEdit = () => {
     reset()
@@ -106,6 +121,23 @@ export function BudgetSponsorAssumptionsEditor({
     setAddons((prev) =>
       prev.map((a) => (a._key === key ? { ...a, ...patch } : a)),
     )
+
+  const removeTier = (key: string) => {
+    if (referencedTierKeys.has(key) && pendingRemoval !== key) {
+      setPendingRemoval(key)
+      return
+    }
+    setPendingRemoval(null)
+    setTiers((prev) => prev.filter((x) => x._key !== key))
+  }
+  const removeAddon = (key: string) => {
+    if (referencedAddonKeys.has(key) && pendingRemoval !== key) {
+      setPendingRemoval(key)
+      return
+    }
+    setPendingRemoval(null)
+    setAddons((prev) => prev.filter((x) => x._key !== key))
+  }
 
   const handleSave = () => {
     setError(null)
@@ -134,7 +166,7 @@ export function BudgetSponsorAssumptionsEditor({
         <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
           Tiers
         </h3>
-        {tiers.length === 0 ? (
+        {sponsorTierAssumptions.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No tiers defined.
           </p>
@@ -248,10 +280,14 @@ export function BudgetSponsorAssumptionsEditor({
                 </td>
                 <td className={`${tdClass} text-center`}>
                   <DeleteRowButton
-                    ariaLabel={`Remove ${t.name || 'tier'}`}
-                    onClick={() =>
-                      setTiers((prev) => prev.filter((x) => x._key !== t._key))
+                    ariaLabel={
+                      referencedTierKeys.has(t._key) &&
+                      pendingRemoval === t._key
+                        ? `Confirm removing ${t.name || 'tier'} (used by scenarios)`
+                        : `Remove ${t.name || 'tier'}`
                     }
+                    pending={pendingRemoval === t._key}
+                    onClick={() => removeTier(t._key)}
                   />
                 </td>
               </tr>
@@ -259,7 +295,7 @@ export function BudgetSponsorAssumptionsEditor({
           </tbody>
         </table>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-3">
         <AdminButton
           variant="secondary"
           size="sm"
@@ -277,6 +313,12 @@ export function BudgetSponsorAssumptionsEditor({
         >
           <PlusIcon className="h-4 w-4" /> Add tier
         </AdminButton>
+        {pendingRemoval && tiers.some((t) => t._key === pendingRemoval) ? (
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            That tier is referenced by a scenario — click delete again to
+            confirm; its scenario counts will be dropped.
+          </span>
+        ) : null}
       </div>
 
       <h3 className="mt-6 mb-2 text-sm font-semibold text-gray-900 dark:text-white">
@@ -314,10 +356,14 @@ export function BudgetSponsorAssumptionsEditor({
                 </td>
                 <td className={`${tdClass} text-center`}>
                   <DeleteRowButton
-                    ariaLabel={`Remove ${a.name || 'add-on'}`}
-                    onClick={() =>
-                      setAddons((prev) => prev.filter((x) => x._key !== a._key))
+                    ariaLabel={
+                      referencedAddonKeys.has(a._key) &&
+                      pendingRemoval === a._key
+                        ? `Confirm removing ${a.name || 'add-on'} (used by scenarios)`
+                        : `Remove ${a.name || 'add-on'}`
                     }
+                    pending={pendingRemoval === a._key}
+                    onClick={() => removeAddon(a._key)}
                   />
                 </td>
               </tr>
@@ -325,7 +371,7 @@ export function BudgetSponsorAssumptionsEditor({
           </tbody>
         </table>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-3">
         <AdminButton
           variant="secondary"
           size="sm"
@@ -338,6 +384,12 @@ export function BudgetSponsorAssumptionsEditor({
         >
           <PlusIcon className="h-4 w-4" /> Add add-on
         </AdminButton>
+        {pendingRemoval && addons.some((a) => a._key === pendingRemoval) ? (
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            That add-on is referenced by a scenario — click delete again to
+            confirm; its scenario counts will be dropped.
+          </span>
+        ) : null}
       </div>
     </EditableTableCard>
   )

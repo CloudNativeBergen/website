@@ -38,6 +38,28 @@ const toPercent = (fraction: number) =>
   String(Number((fraction * 100).toFixed(4)))
 const fromPercent = (value: string) => (numberOrNull(value) ?? 0) / 100
 
+/**
+ * Normalized percent-facing form values for the global parameters, derived
+ * from a budget document. Normalizing through {@link toPercent} means "4.50"
+ * and "4.5" collapse to the same string, so re-deriving this after a save
+ * clears the dirty flag instead of leaving Save stuck enabled.
+ */
+function budgetToGlobals(budget: ConferenceBudgetDocument) {
+  return {
+    vat: toPercent(budget.vatRate),
+    fee: toPercent(budget.ticketingFeeRate),
+    floor: toPercent(
+      budget.dinnerParticipation?.floor ?? DEFAULT_DINNER_PARTICIPATION.floor,
+    ),
+    base: toPercent(
+      budget.dinnerParticipation?.base ?? DEFAULT_DINNER_PARTICIPATION.base,
+    ),
+    decay: String(
+      budget.dinnerParticipation?.decay ?? DEFAULT_DINNER_PARTICIPATION.decay,
+    ),
+  }
+}
+
 interface ScenarioDraft {
   _key: string
   name: string
@@ -51,11 +73,22 @@ interface ScenarioDraft {
 function toDraft(
   scenario: NonNullable<ConferenceBudgetDocument['scenarios']>[number],
 ): ScenarioDraft {
+  // Duplicate references keep the FIRST entry, matching the computation mapper
+  // (`src/lib/budget/mapper.ts`). `Object.fromEntries` would be last-write-wins
+  // and could silently change projections when saving legacy/bypassed docs
+  // that carry duplicate count rows.
   const record = <T,>(
     items: T[] | undefined,
     key: (t: T) => string,
     value: (t: T) => number,
-  ) => Object.fromEntries((items ?? []).map((i) => [key(i), value(i)]))
+  ) => {
+    const out: Record<string, number> = {}
+    for (const item of items ?? []) {
+      const k = key(item)
+      if (!(k in out)) out[k] = value(item)
+    }
+    return out
+  }
   return {
     _key: scenario._key,
     name: scenario.name,
@@ -92,29 +125,17 @@ export function BudgetConfigPageClient({
   const optionalFixed = (budget.fixedCosts ?? []).filter((c) => c.optional)
 
   // --- Global parameters (percent-facing inputs) ---------------------------
-  const initialGlobals = useMemo(
-    () => ({
-      vat: toPercent(budget.vatRate),
-      fee: toPercent(budget.ticketingFeeRate),
-      floor: toPercent(
-        budget.dinnerParticipation?.floor ?? DEFAULT_DINNER_PARTICIPATION.floor,
-      ),
-      base: toPercent(
-        budget.dinnerParticipation?.base ?? DEFAULT_DINNER_PARTICIPATION.base,
-      ),
-      decay: String(
-        budget.dinnerParticipation?.decay ?? DEFAULT_DINNER_PARTICIPATION.decay,
-      ),
-    }),
-    [budget],
-  )
+  const initialGlobals = useMemo(() => budgetToGlobals(budget), [budget])
   const [globals, setGlobals] = useState(initialGlobals)
   const [globalsError, setGlobalsError] = useState<string | null>(null)
   const globalsDirty =
     JSON.stringify(globals) !== JSON.stringify(initialGlobals)
 
   const configMutation = api.budget.updateConfig.useMutation({
-    onSuccess: () => {
+    onSuccess: ({ budget: saved }) => {
+      // Re-seed the form from the persisted document so equivalent percent
+      // strings (e.g. "4.50" → "4.5") normalize and the dirty flag clears.
+      setGlobals(budgetToGlobals(saved))
       router.refresh()
       showNotification({
         type: 'success',
@@ -128,6 +149,21 @@ export function BudgetConfigPageClient({
 
   const saveGlobals = () => {
     setGlobalsError(null)
+    // Percent-facing inputs map to fractions ≤ 1 server-side; block > 100 here
+    // with a clear message instead of surfacing a "fraction" error on save.
+    const percentFields: [label: string, value: string][] = [
+      ['VAT rate', globals.vat],
+      ['Ticketing fee', globals.fee],
+      ['Dinner floor', globals.floor],
+      ['Dinner base', globals.base],
+    ]
+    for (const [label, value] of percentFields) {
+      const pct = numberOrNull(value)
+      if (pct !== null && (pct < 0 || pct > 100)) {
+        setGlobalsError(`${label} must be between 0 and 100%.`)
+        return
+      }
+    }
     const decay = numberOrNull(globals.decay) ?? 0
     if (decay <= 0) {
       setGlobalsError('Dinner decay must be greater than 0.')
@@ -157,7 +193,12 @@ export function BudgetConfigPageClient({
     JSON.stringify(scenarios) !== JSON.stringify(initialScenarios)
 
   const scenariosMutation = api.budget.updateScenarios.useMutation({
-    onSuccess: () => {
+    onSuccess: ({ budget: saved }) => {
+      // `updateScenarios` runs `ensureUniqueArrayKeys`, which can rewrite
+      // scenario (and nested count) `_key`s server-side. Re-seed local state
+      // from the persisted document so later edits target the persisted keys
+      // and the dirty flag reflects the normalized data.
+      setScenarios((saved.scenarios ?? []).map(toDraft))
       router.refresh()
       showNotification({
         type: 'success',
@@ -269,6 +310,7 @@ export function BudgetConfigPageClient({
             <input
               type="number"
               min={0}
+              max={100}
               step="0.1"
               className={inputClass}
               value={globals.vat}
@@ -282,6 +324,7 @@ export function BudgetConfigPageClient({
             <input
               type="number"
               min={0}
+              max={100}
               step="0.1"
               className={inputClass}
               value={globals.fee}
@@ -296,6 +339,7 @@ export function BudgetConfigPageClient({
             <input
               type="number"
               min={0}
+              max={100}
               step="1"
               className={inputClass}
               value={globals.floor}
@@ -309,6 +353,7 @@ export function BudgetConfigPageClient({
             <input
               type="number"
               min={0}
+              max={100}
               step="1"
               className={inputClass}
               value={globals.base}

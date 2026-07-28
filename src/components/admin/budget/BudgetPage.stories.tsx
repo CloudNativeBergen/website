@@ -223,6 +223,48 @@ export const EditingTables: Story = {
 }
 
 /**
+ * Reference-aware delete guard on the sponsor assumptions editor: the seeded
+ * scenarios reference the "Community Partner" tier, so a first delete click
+ * only arms a confirm (row stays, amber hint shows) — the same two-click guard
+ * the ticket-type and expense editors use — and a second click removes it.
+ */
+export const SponsorDeleteGuard: Story = {
+  args: { budget, sponsorIncome, ticketIncome },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /edit assumptions/i }),
+    )
+    const del = await canvas.findByRole('button', {
+      name: /^Remove Community Partner$/i,
+    })
+    await userEvent.click(del)
+    // First click only arms the confirm: the row is still present and the
+    // guard affordance appears.
+    await expect(
+      await canvas.findByRole('button', {
+        name: /Confirm removing Community Partner/i,
+      }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByText(/referenced by a scenario/i),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByDisplayValue('Community Partner'),
+    ).toBeInTheDocument()
+    // Second click confirms the removal.
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: /Confirm removing Community Partner/i,
+      }),
+    )
+    await expect(
+      canvas.queryByDisplayValue('Community Partner'),
+    ).not.toBeInTheDocument()
+  },
+}
+
+/**
  * Regression net for the section collapse (task 1): clicking the Income
  * section's Hide toggle collapses ONLY that section — its body unmounts and
  * `aria-expanded` flips to false — while Expenses stays open independently.

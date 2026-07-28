@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { PencilSquareIcon } from '@heroicons/react/24/outline'
 
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -40,6 +40,12 @@ export function EditableTableCard({
   children: ReactNode
 }) {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
+
+  // Leaving edit mode (via Save, or any parent-driven toggle) must clear a
+  // pending discard prompt so it can never re-appear in a later edit session.
+  useEffect(() => {
+    if (!editing) setConfirmingCancel(false)
+  }, [editing])
 
   const requestCancel = () => {
     if (isDirty && !isSaving) {
@@ -85,8 +91,7 @@ export function EditableTableCard({
 
       {editing && confirmingCancel ? (
         <div
-          role="alertdialog"
-          aria-label="Discard unsaved changes?"
+          role="alert"
           className="mb-3 flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/40 dark:bg-amber-900/20"
         >
           <span className="text-amber-900 dark:text-amber-200">

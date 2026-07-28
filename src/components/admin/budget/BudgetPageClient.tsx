@@ -241,6 +241,26 @@ export function BudgetPageClient({
     ],
     [budget],
   )
+  const scenarioTierKeys = useMemo(
+    () => [
+      ...new Set(
+        (budget?.scenarios ?? []).flatMap((scenario) =>
+          (scenario.tierCounts ?? []).map((count) => count.tier),
+        ),
+      ),
+    ],
+    [budget],
+  )
+  const scenarioAddonKeys = useMemo(
+    () => [
+      ...new Set(
+        (budget?.scenarios ?? []).flatMap((scenario) =>
+          (scenario.addonCounts ?? []).map((count) => count.addon),
+        ),
+      ),
+    ],
+    [budget],
+  )
 
   const actualTicketRevenue = ticketIncome?.revenue ?? null
   // Sponsor income is grouped BY CURRENCY (see deriveSponsorIncome): only
@@ -606,6 +626,8 @@ export function BudgetPageClient({
             <BudgetSponsorAssumptionsEditor
               sponsorTierAssumptions={budget.sponsorTierAssumptions ?? []}
               sponsorAddonAssumptions={budget.sponsorAddonAssumptions ?? []}
+              scenarioReferencedTierKeys={scenarioTierKeys}
+              scenarioReferencedAddonKeys={scenarioAddonKeys}
             />
           </CollapsibleSection>
 
