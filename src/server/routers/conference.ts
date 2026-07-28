@@ -13,6 +13,7 @@ import {
 import { clearConferenceTeamsCache } from '@/lib/teams'
 import {
   CANNOT_REMOVE_CURRENT_DOMAIN,
+  domainEntriesOverlap,
   domainsWouldStrandHost,
   normalizeDomain,
 } from '@/lib/conference/domains'
@@ -67,11 +68,30 @@ export const DOMAIN_ALREADY_CLAIMED = 'Already used by another conference'
  * edition's routing (`getConferenceForDomain` picks the FIRST conference whose
  * `domains[]` matches the host — a duplicate would silently steal traffic).
  */
-async function fetchClaimedDomains(): Promise<Set<string>> {
+async function fetchClaimedDomains(): Promise<string[]> {
   const all = await clientReadUncached.fetch<string[] | null>(
+    // groq-global: domain uniqueness is a GLOBAL routing invariant across every tenant's conferences (same rule as onboarding's createOrganization).
     `*[_type == "conference" && defined(domains)].domains[]`,
   )
-  return new Set((all ?? []).map(normalizeDomain))
+  return (all ?? []).map(normalizeDomain)
+}
+
+/**
+ * The subset of `requested` entries that collide with an already-claimed one
+ * under the ROUTING matcher's semantics (exact OR single-label wildcard, see
+ * {@link domainEntriesOverlap}) — NOT mere string equality, which would let a
+ * new edition claim `2026.cnb.no` while another tenant's `*.cnb.no` already
+ * routes that host (or claim `*.cnb.no` and capture that tenant's existing
+ * exact hosts). Either direction misroutes traffic across tenants, so both are
+ * refused. Same predicate the onboarding path uses, so the two agree.
+ */
+function findClaimedOverlaps(
+  requested: readonly string[],
+  claimed: readonly string[],
+): string[] {
+  return requested.filter((r) =>
+    claimed.some((entry) => domainEntriesOverlap(entry, r)),
+  )
 }
 
 /**
@@ -569,17 +589,19 @@ export const conferenceRouter = router({
 
   /**
    * Availability probe for the wizard's Domains step. Given the typed hostnames,
-   * returns which are ALREADY claimed by some conference (global uniqueness) and
-   * which are not valid bare hostnames — so the editor can flag them inline
-   * before the maintainer reaches the confirm step. Read-only.
+   * returns which are ALREADY claimed by some conference (global uniqueness,
+   * routing-overlap semantics) and which are not valid bare hostnames — so the
+   * editor can flag them inline before the maintainer reaches the confirm step.
+   * Read-only, and only a mirror: `createEdition` is the authority.
    */
   validateNewDomains: adminProcedure
     .input(ValidateNewDomainsSchema)
     .query(async ({ input }) => {
       const claimed = await fetchClaimedDomains()
       const normalized = input.domains.map(normalizeDomain).filter((d) => d)
-      const taken = Array.from(new Set(normalized)).filter((d) =>
-        claimed.has(d),
+      const taken = findClaimedOverlaps(
+        Array.from(new Set(normalized)),
+        claimed,
       )
       return { taken }
     }),
@@ -591,7 +613,8 @@ export const conferenceRouter = router({
    * SOURCE and is NEVER modified (no patch/set touches its id).
    *
    * DOMAIN VALIDATION: shape/duplicate/hostname come from the schema; here we
-   * add the GLOBAL-uniqueness rule (a domain claimed by any conference is
+   * add the GLOBAL-uniqueness rule (a domain that ROUTING-OVERLAPS any
+   * conference's claim — exact or single-label wildcard, either direction — is
    * rejected, BAD_REQUEST naming it) — the server is the authority, the wizard
    * only mirrors it.
    *
@@ -632,8 +655,9 @@ export const conferenceRouter = router({
       }
 
       // GLOBAL domain uniqueness — the authority. `input.domains` is already
-      // normalized/validated for shape by the schema.
-      const taken = input.domains.filter((d) => claimedDomains.has(d))
+      // normalized/validated for shape by the schema. Uniqueness is judged by
+      // ROUTING overlap, not string equality (see {@link findClaimedOverlaps}).
+      const taken = findClaimedOverlaps(input.domains, claimedDomains)
       if (taken.length > 0) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
