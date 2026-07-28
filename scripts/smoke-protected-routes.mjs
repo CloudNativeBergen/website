@@ -18,6 +18,16 @@
  * Hitting a protected route UNAUTHENTICATED runs the middleware and should
  * redirect to sign-in (3xx) WITHOUT needing Sanity/WorkOS/any backend.
  *
+ * PART 2 — PER-REQUEST SESSION-COOKIE DOMAIN (#682). The same lesson applies to
+ * the multi-tenant cookie fix: unit tests cannot see what the real bundle puts
+ * on the wire. The session cookie's `Domain` used to be computed ONCE at module
+ * load and applied to every host, so a tenant on their own apex got a `Domain`
+ * the browser REJECTS — sign-in failed SILENTLY (OAuth succeeded, cookie
+ * dropped, back to the sign-in page with no error). This script therefore drives
+ * a real sign-OUT (the only route that emits a session `Set-Cookie` without a
+ * live OAuth round-trip) against SEVERAL simulated hosts in ONE server process
+ * and asserts each gets the `Domain` that host's browser would accept.
+ *
  * Usage: node scripts/smoke-protected-routes.mjs [--port 3123]
  *   (or set SMOKE_PORT). Assumes a production build already exists in `.next`
  *   (run `next build` first).
@@ -74,6 +84,39 @@ const SURFACES = [
     path: '/api/auth/providers',
     expect: 'ok',
   },
+]
+
+/**
+ * Hosts to drive the sign-out cookie probe with, and the `Domain` each MUST get.
+ * `null` means "no Domain attribute" (host-only) — the correct, safe answer for
+ * a platform-shared parent whose subdomains belong to different tenants.
+ *
+ * Two DIFFERENT registrable domains are deliberately probed in ONE process:
+ * that is exactly what a module-load-time constant cannot satisfy.
+ */
+const COOKIE_DOMAIN_HOSTS = [
+  // The two LIVE production registrable domains, each with year subdomains.
+  // One module-level constant cannot serve both — whichever it picked, the
+  // other domain's browser would reject the cookie and drop sign-in silently.
+  { host: '2026.cloudnativedays.no', expect: '.cloudnativedays.no' },
+  { host: '2025.cloudnativebergen.dev', expect: '.cloudnativebergen.dev' },
+  // A second year under the SAME registrable domain: must share (2)'s Domain,
+  // which is the whole point of the cross-subdomain fix (#462).
+  { host: '2024.cloudnativebergen.dev', expect: '.cloudnativebergen.dev' },
+  // A tenant on their OWN apex — the host the old module-load derivation broke.
+  { host: 'someconf.com', expect: '.someconf.com' },
+  // Platform-shared parents: host-only, or one tenant could read another's
+  // session cookie (and every tenant apex would break). `legacy` is the scope a
+  // pre-denylist release could have used, which sign-out must ALSO clean up —
+  // the only extra Domain these hosts may emit.
+  { host: 'tenant.konf.run', expect: null, legacy: '.konf.run' },
+  { host: 'tenant.konf.app', expect: null, legacy: '.konf.app' },
+]
+
+/** Session-token cookie names @auth/core may use (https adds `__Secure-`). */
+const SESSION_COOKIE_NAMES = [
+  '__Secure-authjs.session-token',
+  'authjs.session-token',
 ]
 
 function log(msg) {
@@ -225,6 +268,208 @@ async function probe(surface) {
   return { failures, detail }
 }
 
+/** The cookie name of a raw `Set-Cookie` value. */
+function setCookieName(value) {
+  return value.split(';')[0].split('=')[0].trim()
+}
+
+/** The `Domain` attribute of a raw `Set-Cookie` value, or null when host-only. */
+function setCookieDomain(value) {
+  for (const attr of value.split(';').slice(1)) {
+    const eq = attr.indexOf('=')
+    if (eq === -1) continue
+    if (attr.slice(0, eq).trim().toLowerCase() === 'domain') {
+      return attr.slice(eq + 1).trim()
+    }
+  }
+  return null
+}
+
+function isSessionCookie(value) {
+  const name = setCookieName(value)
+  return SESSION_COOKIE_NAMES.some(
+    (base) => name === base || name.startsWith(`${base}.`),
+  )
+}
+
+/**
+ * Drive a real sign-OUT for `host` and return the `Domain` the running server
+ * scoped the session cookie to.
+ *
+ * Sign-out is the only route that emits a session `Set-Cookie` without a live
+ * OAuth round-trip — @auth/core clears the cookie through the SAME cookie
+ * options it sets it with, so whatever `Domain` shows up here is exactly what a
+ * successful sign-IN would have used. It needs no Sanity/provider backend.
+ *
+ * Two requests are needed: `/api/auth/csrf` for the double-submit token, then
+ * the POST. A dummy session cookie must ride along — @auth/core returns early
+ * (and emits no cookies) when the request carries no session token at all; its
+ * JWT fails to decode, which is logged and ignored, and the clear is still sent.
+ */
+async function signOutSessionCookies(host) {
+  const csrfRes = await fetch(`${BASE}/api/auth/csrf`, {
+    headers: { 'x-forwarded-host': host },
+    redirect: 'manual',
+  })
+  const csrfBody = await csrfRes.json().catch(() => ({}))
+  const csrfToken = csrfBody?.csrfToken
+  if (!csrfToken) {
+    throw new Error(`could not obtain a CSRF token (HTTP ${csrfRes.status})`)
+  }
+  const csrfCookies = csrfRes.headers
+    .getSetCookie()
+    .map((value) => value.split(';')[0])
+    .join('; ')
+
+  const res = await fetch(`${BASE}/api/auth/signout`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      'x-forwarded-host': host,
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: `${csrfCookies}; authjs.session-token=smoke-not-a-real-token`,
+    },
+    body: new URLSearchParams({
+      csrfToken,
+      callbackUrl: '/',
+      json: 'true',
+    }).toString(),
+  })
+
+  const body = await res.text().catch(() => '')
+  const sig = bodySignatureHit(body)
+  if (sig) throw new Error(`sign-out body contains error signature: "${sig}"`)
+  if (res.status >= 500) throw new Error(`sign-out returned HTTP ${res.status}`)
+
+  return res.headers.getSetCookie().filter(isSessionCookie)
+}
+
+/**
+ * Assert the session cookie `Domain` the SERVER actually emits for one host.
+ *
+ * This is the runtime half of the #682 fix: a `Domain` derived once at module
+ * load would give every host below the SAME value, which the browser rejects on
+ * all but one of them — dropping the cookie and failing sign-in silently.
+ */
+async function probeCookieDomain({ host, expect, legacy }) {
+  const failures = []
+  const cookies = await signOutSessionCookies(host)
+
+  if (cookies.length === 0) {
+    return {
+      failures: ['no session-token Set-Cookie was emitted by sign-out'],
+      detail: 'none',
+      domains: [],
+    }
+  }
+
+  const domains = cookies.map(setCookieDomain)
+  const widened = domains.filter((domain) => domain !== null)
+
+  if (expect === null) {
+    // A platform-shared parent must never be WIDENED. Sign-out may additionally
+    // clear the legacy pre-denylist scope — that is cleanup, not widening.
+    if (!domains.includes(null)) {
+      failures.push(
+        `expected a HOST-ONLY cookie on a platform-shared parent, got Domain=${widened.join(', ')}`,
+      )
+    }
+    for (const domain of widened) {
+      if (domain !== legacy) {
+        failures.push(
+          `unexpected Domain=${domain} on a platform-shared parent (only the legacy ${legacy} cleanup is allowed)`,
+        )
+      }
+    }
+  } else {
+    if (!domains.includes(expect)) {
+      failures.push(
+        `expected Domain=${expect}, got ${domains.map((d) => d ?? 'host-only').join(', ')}`,
+      )
+    }
+    for (const domain of widened) {
+      if (domain !== expect) {
+        failures.push(`unexpected extra Domain=${domain}`)
+      }
+      // A browser only stores a cookie whose Domain domain-matches the request
+      // host. Anything else is dropped — the silent failure mode of #682.
+      const bare = domain.replace(/^\./, '')
+      if (host !== bare && !host.endsWith(`.${bare}`)) {
+        failures.push(
+          `Domain=${domain} does not domain-match host ${host} — a browser would REJECT it`,
+        )
+      }
+    }
+    // Sign-out must also clear any residual HOST-ONLY cookie of the same name;
+    // a Set-Cookie carrying a Domain can never delete one.
+    if (!domains.includes(null)) {
+      failures.push(
+        'sign-out did not also clear the host-only cookie (a stale cookie would keep the user signed in)',
+      )
+    }
+  }
+
+  return {
+    failures,
+    detail: domains.map((d) => d ?? 'host-only').join(', '),
+    domains,
+  }
+}
+
+/**
+ * PART 2: per-request session-cookie `Domain`, in ONE server process (#682).
+ * Returns true on failure.
+ */
+async function runCookieDomainProbes() {
+  let failed = false
+  const observed = new Map()
+
+  for (const target of COOKIE_DOMAIN_HOSTS) {
+    try {
+      const { failures, detail } = await probeCookieDomain(target)
+      observed.set(target.host, detail)
+      if (failures.length) {
+        failed = true
+        log(`FAIL  session cookie Domain for ${target.host} — ${detail}`)
+        for (const f of failures) log(`        ✗ ${f}`)
+      } else {
+        log(`PASS  session cookie Domain for ${target.host} — ${detail}`)
+      }
+    } catch (err) {
+      failed = true
+      log(`FAIL  session cookie Domain for ${target.host} — ${err}`)
+    }
+  }
+
+  // THE core regression, on the two LIVE production domains: different
+  // registrable domains, one process, one build — they MUST NOT share a cookie
+  // Domain. A module-load constant gives them the same one.
+  const days = observed.get('2026.cloudnativedays.no')
+  const bergen = observed.get('2025.cloudnativebergen.dev')
+  if (days !== undefined && bergen !== undefined && days === bergen) {
+    failed = true
+    log(
+      `FAIL  2026.cloudnativedays.no and 2025.cloudnativebergen.dev received the SAME cookie Domain (${days}) — the Domain is not per-request`,
+    )
+  }
+
+  // …and the mirror image: two YEAR subdomains of ONE registrable domain MUST
+  // share a Domain, or a returning speaker is signed out between years (#462).
+  const bergen2024 = observed.get('2024.cloudnativebergen.dev')
+  if (
+    bergen !== undefined &&
+    bergen2024 !== undefined &&
+    bergen !== bergen2024
+  ) {
+    failed = true
+    log(
+      `FAIL  2025 (${bergen}) and 2024 (${bergen2024}) .cloudnativebergen.dev do NOT share a cookie Domain — cross-subdomain sign-in is broken`,
+    )
+  }
+
+  return failed
+}
+
 async function main() {
   startServer()
   await waitForReady()
@@ -246,12 +491,18 @@ async function main() {
     }
   }
 
+  if (await runCookieDomainProbes()) failed = true
+
   if (failed) {
-    log('SMOKE TEST FAILED — a protected route errored or returned 500.')
-    log('This is the exact failure class of the #462 incident (see #671).')
+    log('SMOKE TEST FAILED — a protected route errored, returned 500, or')
+    log('scoped the session cookie to the wrong Domain.')
+    log('This is the exact failure class of the #462 incident (see #671/#682).')
     process.exitCode = 1
   } else {
-    log('SMOKE TEST PASSED — all protected routes redirect/render, no 500s.')
+    log(
+      'SMOKE TEST PASSED — all protected routes redirect/render with no 500s, and',
+    )
+    log('every host got a session cookie Domain its browser would accept.')
   }
 }
 

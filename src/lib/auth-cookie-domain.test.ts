@@ -56,6 +56,12 @@ describe('deriveSessionCookieDomain — registrable-domain (eTLD+1) derivation',
     expect(
       deriveSessionCookieDomain('deep.sub.tenant.konf.run'),
     ).toBeUndefined()
+    // konf.app (#682): the central auth origin + platform subdomains share this
+    // parent, and a tenant on their own apex must never receive `.konf.app`.
+    expect(deriveSessionCookieDomain('konf.app')).toBeUndefined()
+    expect(deriveSessionCookieDomain('www.konf.app')).toBeUndefined()
+    expect(deriveSessionCookieDomain('auth.konf.app')).toBeUndefined()
+    expect(deriveSessionCookieDomain('a.b.tenant.konf.app')).toBeUndefined()
     // vercel.app previews: subdomains are unrelated projects.
     expect(deriveSessionCookieDomain('my-app.vercel.app')).toBeUndefined()
     expect(
@@ -70,7 +76,7 @@ describe('deriveSessionCookieDomain — registrable-domain (eTLD+1) derivation',
 
   it('exports the denylist with the expected shared parents', () => {
     // Pin the security-critical entries so an accidental removal fails a test.
-    for (const parent of ['konf.run', 'vercel.app', 'localhost']) {
+    for (const parent of ['konf.run', 'konf.app', 'vercel.app', 'localhost']) {
       expect(SHARED_PARENT_DOMAIN_DENYLIST).toContain(parent)
     }
   })

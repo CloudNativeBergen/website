@@ -342,13 +342,35 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
     ),
   )
   // NOTE: the cross-subdomain session cookie needs NO dedicated env check. Its
-  // `Domain` attribute is derived once at module load from the platform's own
-  // base URL (`NEXT_PUBLIC_BASE_URL` / `NEXT_PUBLIC_URL`, already surfaced as
-  // `build.baseUrl`) via `deriveSessionCookieDomain` in
-  // `src/lib/auth-cookie-domain.ts`, so there is no separate configuration to
-  // surface here. (Per-request/multi-tenant derivation is deferred to the
-  // central-auth-origin work; it must NOT re-introduce the lazy-config form
-  // that broke the middleware — see #671.)
+  // `Domain` attribute is derived PER RESPONSE from the request's own host by
+  // `deriveSessionCookieDomain` in `src/lib/auth-cookie-domain.ts`, so there is
+  // no configuration to surface here — every tenant domain is scoped correctly
+  // with zero setup.
+  //
+  // FIXED-ORIGIN GUARD (#682). `AUTH_URL` / `NEXTAUTH_URL` are not base-URL
+  // hints: next-auth's `reqWithEnvURL` REWRITES every request's origin onto that
+  // value, collapsing all tenant domains onto one host and breaking sign-in
+  // everywhere else at once. Neither is needed on Vercel (`VERCEL_URL` +
+  // `trustHost`); a central OAuth origin belongs in `AUTH_REDIRECT_PROXY_URL`.
+  // The value is a public origin, not a secret, so it is shown plain — seeing
+  // WHICH host every request is pinned to is the whole diagnostic.
+  const fixedOrigins = (['AUTH_URL', 'NEXTAUTH_URL'] as const)
+    .map((name) => ({ name, value: process.env[name]?.trim() }))
+    .filter((entry) => !!entry.value)
+  checks.push({
+    id: 'auth.fixedOrigin',
+    group: 'auth',
+    label: 'AUTH_URL / NEXTAUTH_URL',
+    status: fixedOrigins.length > 0 ? 'error' : 'ok',
+    value:
+      fixedOrigins.length > 0
+        ? fixedOrigins.map((entry) => `${entry.name}=${entry.value}`).join(', ')
+        : 'not set (correct)',
+    detail:
+      fixedOrigins.length > 0
+        ? 'next-auth rewrites EVERY request origin to this host — sign-in breaks on every conference domain except this one (harmless ONLY on a strictly single-domain deployment). Remove the variable(s); use AUTH_REDIRECT_PROXY_URL for a central OAuth origin, and NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL that also reads NEXTAUTH_URL.'
+        : 'Request origin comes from the actual host, so every conference domain signs in on itself',
+  })
   //
   // Centralized OAuth origin (#619). Informational: 'ok' when configured (opt-in
   // multi-domain OAuth), 'off' when absent (today's single-domain default). Not

@@ -18,22 +18,24 @@
  *   - the CLI bearer salt (`CLI_JWT_SALT`) equals the bare cookie name;
  *   - a wrong secret is rejected.
  *
- * The salts are the app's OWN exported constants (`SESSION_TOKEN_COOKIE_NAMES`,
- * `CLI_JWT_SALT`), imported from src/lib/auth.ts, and asserted against the
- * known-correct `@auth/core` default strings — so this guards the app, not a
- * copy. (`@auth/core` is only a transitive dep here, so its `defaultCookies()`
- * can't be imported to diff automatically; a rename must update auth.ts, which
- * this test then flags against the reference strings.)
+ * The salts are the app's OWN exported constants (`SESSION_TOKEN_COOKIE_NAMES`
+ * from src/lib/auth-cookie-domain.ts, `CLI_JWT_SALT` from src/lib/auth.ts), and
+ * are asserted against the known-correct `@auth/core` default strings — so this
+ * guards the app, not a copy. (`@auth/core` is only a transitive dep here, so its
+ * `defaultCookies()` can't be imported to diff automatically; a rename must
+ * update the app constants, which this test then flags against the reference
+ * strings.)
  */
 import { describe, it, expect } from 'vitest'
 import { encode, decode } from 'next-auth/jwt'
-import { SESSION_TOKEN_COOKIE_NAMES, CLI_JWT_SALT } from '@/lib/auth'
+import { CLI_JWT_SALT } from '@/lib/auth'
+import { SESSION_TOKEN_COOKIE_NAMES } from '@/lib/auth-cookie-domain'
 
 const SECRET = 'contract-test-secret-long-enough-for-a256cbc-hs512'
 const OTHER_SECRET = 'a-totally-different-secret-of-sufficient-length!!'
 
 // The REAL constants the app uses (salt === session-cookie name), imported from
-// src/lib/auth.ts so these assertions guard the app — not a copy.
+// the app's own modules so these assertions guard the app — not a copy.
 const [PROD_COOKIE, DEV_COOKIE] = SESSION_TOKEN_COOKIE_NAMES
 const CLI_SALT = CLI_JWT_SALT
 

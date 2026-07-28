@@ -15,6 +15,12 @@ const workOSMiddleware = authkitMiddleware({
   debug: process.env.NODE_ENV === 'development',
 })
 
+// The session cookie's `Domain` is rewritten PER REQUEST for every response
+// this produces: `auth` itself applies it to its handler-wrapper form (see
+// `perRequestAuth` in `@/lib/auth`), so the middleware's rolling session
+// refresh is scoped to the ACTUAL request host, not a module-load constant
+// (#682). Wrapping inside `auth` rather than around it also leaves the
+// `auth((req) => …)` call shape — the one the #671 outage broke — untouched.
 const nextAuthMiddleware = auth((req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'

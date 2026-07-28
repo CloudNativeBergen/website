@@ -14,9 +14,30 @@ export class AuthError extends Error {
   }
 }
 
+/**
+ * Stand-in for @auth/core's `/api/auth/*` responses.
+ *
+ * The real handlers emit `Set-Cookie` headers we cannot produce here without a
+ * live OAuth round-trip, so the mock ECHOES them instead: a request carrying an
+ * `x-mock-set-cookie` header (a JSON array of raw `Set-Cookie` values) gets each
+ * entry back on the response. That lets a test drive the app's REAL exported
+ * `handlers` — including the per-request session-cookie `Domain` rewrite wrapped
+ * around them in `src/lib/auth.ts` — with a deterministic cookie payload.
+ */
+function mockAuthRouteResponse(req?: { headers?: Headers }): Response {
+  const res = new Response(null, { status: 200 })
+  const raw = req?.headers?.get?.('x-mock-set-cookie')
+  if (raw) {
+    for (const value of JSON.parse(raw) as string[]) {
+      res.headers.append('set-cookie', value)
+    }
+  }
+  return res
+}
+
 const NextAuth = () => ({
   auth: vi.fn((handler: (req: NextAuthRequest, ctx: any) => any) => {
-    return (req: NextAuthRequest, ctx: any) => {
+    return async (req: NextAuthRequest, ctx: any) => {
       if (!req) req = {} as NextAuthRequest
 
       let user: Speaker | undefined
@@ -50,14 +71,29 @@ const NextAuth = () => ({
         }
       }
 
-      return handler(req, ctx)
+      // `handleAuth` AWAITS the wrapped handler before merging cookies — real
+      // routes are `auth(async (req) => …)`, so the mock must await too.
+      const res = await handler(req, ctx)
+
+      // Mirror next-auth's `handleAuth`, which APPENDS the Set-Cookie headers of
+      // its internal `session` action (the JWT strategy re-issues the session
+      // cookie on every call to slide its expiry) onto the handler's response.
+      // Driven by the same `x-mock-set-cookie` request header as the route
+      // handlers above, so a test can exercise the middleware's own cookie path.
+      const raw = req?.headers?.get?.('x-mock-set-cookie')
+      if (raw && res && typeof res === 'object' && 'headers' in res) {
+        for (const value of JSON.parse(raw) as string[]) {
+          ;(res as Response).headers.append('set-cookie', value)
+        }
+      }
+      return res
     }
   }),
   signIn: vi.fn(),
   signOut: vi.fn(),
   handlers: {
-    GET: vi.fn(),
-    POST: vi.fn(),
+    GET: vi.fn(mockAuthRouteResponse),
+    POST: vi.fn(mockAuthRouteResponse),
   },
   AuthError: AuthError,
 })

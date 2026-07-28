@@ -5,7 +5,11 @@ import type { Account, NextAuthConfig, Profile, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
-import { deriveSessionCookieDomain } from '@/lib/auth-cookie-domain'
+import {
+  applySessionCookieDomain,
+  sessionCookieRequestHost,
+  SESSION_TOKEN_COOKIE_NAMES,
+} from '@/lib/auth-cookie-domain'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
 import type { Speaker } from '@/lib/speaker/types'
@@ -51,21 +55,6 @@ function applySpeakerToToken(
     flags: speaker.flags,
   }
 }
-
-/**
- * `@auth/core`'s default session-token cookie names, most-specific first. Prod
- * uses the `__Secure-` prefix (https); dev uses the bare name. Salt === cookie
- * name, so these double as the decode salts. Exported so the contract test
- * (`__tests__/lib/auth/authjs-jwt-contract.test.ts`) can pin them against a real
- * encode/decode round-trip and against the known reference strings. (It can't
- * diff `@auth/core`'s own `defaultCookies()` automatically — that's a transitive
- * dep — so an upstream rename is caught only once these constants are updated to
- * match; the round-trip still guards the salt→key derivation independently.)
- */
-export const SESSION_TOKEN_COOKIE_NAMES = [
-  '__Secure-authjs.session-token',
-  'authjs.session-token',
-] as const
 
 /**
  * Decode the browser's PRE-EXISTING NextAuth session token from the request
@@ -131,17 +120,16 @@ export async function signOutHandler(): Promise<void> {
     const jar = await cookies()
     jar.delete(LINK_INTENT_COOKIE)
 
-    // RESIDUAL HOST-ONLY COOKIE CLEANUP: @auth/core clears the session cookie
-    // using the CURRENT cookie options — with the static `Domain` widening (see
-    // `staticSessionCookieDomain`), that clear targets the Domain-scoped cookie.
-    // A browser can additionally hold a HOST-ONLY cookie of the same name (set
-    // before the widening shipped, or across a config/denylist change); a
-    // Set-Cookie with a Domain attribute can never remove it, so it would
-    // SURVIVE sign-out and keep the user signed in on that host. Delete every
-    // session-token cookie (including chunked `<name>.0`, `.1`, … parts)
-    // host-only as well — the two deletes target different cookies, so both are
-    // needed. This is independent of how the Domain is derived (it just walks
-    // the request's own cookie jar), so it is correct under the static config.
+    // RESIDUAL HOST-ONLY COOKIE CLEANUP (belt and braces alongside the per-response
+    // rewriter): @auth/core clears the session cookie with the CURRENT cookie
+    // options, and `rewriteSessionCookieDomains` duplicates that clear into BOTH
+    // scopes (host-only + `Domain`-scoped) so neither can survive. This loop is
+    // the independent second mechanism: it walks the request's OWN cookie jar
+    // and deletes every session-token cookie it actually finds there, including
+    // chunked `<name>.0`, `.1`, … parts whose exact names the rewriter only sees
+    // if @auth/core emits a clear for them. Cookie-jar deletes are applied by
+    // Next AFTER the handler returns, so they are always host-only — which is
+    // exactly the scope this is here to catch.
     for (const { name } of jar.getAll()) {
       if (
         SESSION_TOKEN_COOKIE_NAMES.some(
@@ -455,94 +443,45 @@ export function redirectProxyConfig(
 }
 
 /**
- * STATIC session-cookie `Domain` for the platform's primary domain, derived
- * ONCE at module load from the configured platform base URL (the same env the
- * rest of the app treats as canonical — `NEXT_PUBLIC_BASE_URL`, then the legacy
- * alias `NEXT_PUBLIC_URL`; see `platformBaseUrl` in `@/lib/branding/platform`).
+ * FIXED-ORIGIN ENV GUARD (multi-tenant).
  *
- * The host's registrable domain (eTLD+1, via `deriveSessionCookieDomain`) is
- * used with a leading dot — host `admin.cloudnativedays.no` →
- * `Domain=.cloudnativedays.no` — so a signed-in user stays signed in across
- * apex + www + per-year subdomains of the primary domain instead of being
- * dropped by the default host-only cookie (the #462 bug this re-fixes).
+ * `AUTH_URL` / `NEXTAUTH_URL` are NOT harmless base-URL hints: next-auth's
+ * `reqWithEnvURL` (`next-auth/lib/env.js`) REWRITES every incoming request's URL
+ * onto that origin before Auth.js sees it. On a multi-tenant deployment that
+ * pins all tenants to ONE host at once — OAuth callbacks, `redirect` callback
+ * origins and cookie hosts all collapse to the configured value, so every tenant
+ * domain but that one breaks. Neither is needed on Vercel (`VERCEL_URL` +
+ * `trustHost` cover it) and the OAuth-origin need is served by
+ * `AUTH_REDIRECT_PROXY_URL` instead.
  *
- * WHY STATIC (not the reverted per-request/lazy form): feeding `NextAuth` a
- * CONFIG FUNCTION changes the shape of the returned `auth` in next-auth v5, so
- * the middleware wrapper `auth((req) => …)` in `src/proxy.ts` becomes a
- * NON-function and every authenticated route 500s (`nextAuthMiddleware is not a
- * function`) — the production incident (#671). A single primary domain today
- * needs no per-request derivation, so we compute the Domain once from config
- * and keep `NextAuth(config)` (a plain object), which leaves the middleware
- * wrapper intact. Per-request / multi-tenant derivation is DELIBERATELY
- * DEFERRED to when auth goes multi-tenant (central-auth-origin work, #619),
- * where it must be re-introduced WITHOUT the lazy-config form.
+ * Named `warn…`, not `assert…`, precisely because it does NOT throw — every
+ * `assert*` helper in this codebase does.
  *
- * PRODUCTION-ONLY: the derived `Domain` is baked into the static config and
- * therefore applies to EVERY request host. On a single-domain deployment that
- * is exactly right, but a request for a DIFFERENT registrable domain (a Vercel
- * preview, or a future tenant on another apex — deferred to #619) would receive
- * a `Set-Cookie` whose `Domain` the browser rejects, silently dropping auth.
- * We therefore only emit the override in a real PRODUCTION deployment, where
- * `NEXT_PUBLIC_URL` is production-scoped and matches the sole production host.
- * Note Vercel sets `NODE_ENV=production` for BOTH production AND preview builds,
- * so `NODE_ENV` alone cannot tell them apart — `VERCEL_ENV` does. We treat it as
- * production when `VERCEL_ENV === 'production'`, or — OFF Vercel (self-hosted /
- * CI, where `VERCEL_ENV` is unset) — when `NODE_ENV === 'production'`. A Vercel
- * PREVIEW (`VERCEL_ENV='preview'`, `NODE_ENV='production'`) is thus NOT treated
- * as production and stays host-only, which is what protects preview/other-host
- * auth from a mismatched `Domain` even if `NEXT_PUBLIC_URL` is ever set more
- * broadly than the production scope. True multi-tenant per-request derivation
- * is DELIBERATELY DEFERRED to #619.
- *
- * FAIL-SAFE: `deriveSessionCookieDomain` returns `undefined` for localhost, IP
- * literals, previews on `vercel.app`, platform-shared parents (`konf.run`),
- * public suffixes, unset/blank env, and anything unparseable — in which case NO
- * `cookies` key is emitted and today's host-only cookie is kept. It never
- * throws (so it cannot break module load / `next build`, unlike calling
- * `platformBaseUrl` which throws when unconfigured in production).
- *
- * Env-parameterised + exported so the derivation is unit-testable under both
- * outcomes. Referenced in-file by `config`, so not an unused export.
+ * Deliberately a LOUD LOG, not a throw: throwing at module load would take the
+ * whole deployment down (and the same module is imported by the middleware), and
+ * CI + `scripts/smoke-protected-routes.mjs` legitimately set these to point a
+ * `next start` at its own loopback port. The gate is `VERCEL_ENV === 'production'`
+ * — never set in CI, local dev or the smoke script — so those stay silent. The
+ * always-on, environment-independent surface is the `auth.fixedOrigin` check on
+ * /admin/settings (`src/lib/system-status/checks.ts`).
  */
-export function staticSessionCookieDomain(
-  env: NodeJS.ProcessEnv = process.env,
-): string | undefined {
-  // Production-only gate (see doc comment): apply the cross-subdomain Domain
-  // ONLY in a genuine production deployment. `VERCEL_ENV` is authoritative on
-  // Vercel (preview also has `NODE_ENV=production`); off Vercel we fall back to
-  // `NODE_ENV`. Any non-production env stays host-only.
-  const isProduction =
-    env.VERCEL_ENV === 'production' ||
-    (!env.VERCEL_ENV && env.NODE_ENV === 'production')
-  if (!isProduction) return undefined
-
-  const configured =
-    env.NEXT_PUBLIC_BASE_URL?.trim() || env.NEXT_PUBLIC_URL?.trim() || ''
-  if (!configured) return undefined
-
-  // The env may be a full URL (`https://host[:port]/path`) or a bare host.
-  // Extract just the host before deriving; `deriveSessionCookieDomain` itself
-  // strips any port. On a parse failure fall through with the raw value — the
-  // derivation is fail-safe and will decline anything it cannot parse.
-  let host = configured
-  try {
-    const withScheme = /^https?:\/\//i.test(configured)
-      ? configured
-      : `https://${configured}`
-    host = new URL(withScheme).host
-  } catch {
-    // keep `host = configured`; derivation will fail-safe to undefined.
-  }
-
-  return deriveSessionCookieDomain(host)
+function warnOnFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.VERCEL_ENV !== 'production') return
+  const offenders = (['AUTH_URL', 'NEXTAUTH_URL'] as const).filter((name) =>
+    env[name]?.trim(),
+  )
+  if (offenders.length === 0) return
+  console.error(
+    `[auth] Fixed auth origin configured in production: ${offenders.join(', ')}. ` +
+      'next-auth rewrites EVERY request origin to that host, which breaks ' +
+      'sign-in on every conference domain except that one. Remove the ' +
+      'variable(s); use AUTH_REDIRECT_PROXY_URL for a central OAuth origin, and ' +
+      'NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL that ' +
+      'also reads NEXTAUTH_URL.',
+  )
 }
 
-/**
- * The primary domain's session-cookie `Domain`, resolved once at module load.
- * `undefined` (localhost / preview / unset env / unparseable) → no `cookies`
- * override → default host-only cookie.
- */
-const sessionCookieDomain = staticSessionCookieDomain()
+warnOnFixedAuthOrigin()
 
 const config = {
   providers: [
@@ -583,22 +522,15 @@ const config = {
     },
   },
 
-  // STATIC cross-subdomain session-cookie Domain for the primary domain (see
-  // `staticSessionCookieDomain`). Spread CONDITIONALLY: when derivation declines
-  // (localhost / preview / unset env) no `cookies` key is contributed and the
-  // default HOST-ONLY cookie is kept — byte-for-byte today's behavior. Only the
-  // `domain` option is set; @auth/core DEEP-MERGES it onto the cookie defaults,
-  // so the `__Secure-` name prefix + httpOnly / secure / sameSite=lax / path are
-  // all preserved (that prefix permits a Domain attribute, unlike `__Host-`).
-  ...(sessionCookieDomain
-    ? {
-        cookies: {
-          sessionToken: {
-            options: { domain: sessionCookieDomain },
-          },
-        },
-      }
-    : {}),
+  // NOTE: NO `cookies.sessionToken.options.domain` here, deliberately. A value
+  // in this static config would apply to EVERY request host — the multi-tenant
+  // defect this replaced. The cross-subdomain `Domain` is applied PER RESPONSE
+  // from the actual request host by `applySessionCookieDomain` (wrapped around
+  // `handlers` below and around the middleware in `src/proxy.ts`), so @auth/core
+  // emits a host-only cookie here and the rewriter widens it correctly. Keeping
+  // the config free of a Domain also makes the failure mode SAFE: any emission
+  // path the rewriter misses degrades to a host-only cookie (no cross-subdomain
+  // sharing) instead of a Domain the browser rejects (silent sign-in failure).
 
   // Opt-in centralized OAuth origin (#619). Spread LAST so an absent env
   // contributes no keys and the built config is byte-for-byte today's.
@@ -622,9 +554,68 @@ export const providerMap = config.providers.map((provider: Provider) => {
   }
 })
 
-export const { handlers, auth: _auth, signIn } = NextAuth(config)
+const { handlers: rawHandlers, auth: _auth, signIn } = NextAuth(config)
 
-export const auth = _auth as typeof _auth &
+export { signIn }
+
+/**
+ * The `/api/auth/*` route handlers, with the session cookie's `Domain` rewritten
+ * PER RESPONSE from the request's own host (see `applySessionCookieDomain`).
+ *
+ * This is the primary seam: the OAuth callback (sets the session cookie) and
+ * sign-out (clears it) both land here, so this is where the tenant's real host
+ * must decide the cookie scope. `NextAuth(config)` still receives a plain STATIC
+ * object — wrapping the returned handlers leaves the shape of `auth` untouched,
+ * so the middleware wrapper `auth((req) => …)` in `src/proxy.ts` keeps working
+ * (the lazy-config form is what broke it in #671).
+ */
+export const handlers = {
+  GET: wrapAuthHandler(rawHandlers.GET),
+  POST: wrapAuthHandler(rawHandlers.POST),
+}
+
+function wrapAuthHandler(
+  handler: (req: NextRequest) => Promise<Response> | Response,
+): (req: NextRequest) => Promise<Response> {
+  return async (req: NextRequest) => {
+    const res = await handler(req)
+    // `applySessionCookieDomain` is a no-op for anything that is not a real
+    // Response with Set-Cookie headers, so no null-guard is needed here.
+    return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
+  }
+}
+
+/**
+ * `auth`, with the session cookie's `Domain` rewritten PER REQUEST on every
+ * response it produces in its HANDLER-WRAPPER form — `auth((req) => …)`.
+ *
+ * That form is used by the middleware (`src/proxy.ts`) AND by standalone API
+ * routes (`export const POST = auth(async (req) => …)`). next-auth's `handleAuth`
+ * appends the Set-Cookie headers of its internal `session` action to whatever
+ * the wrapped handler returns, and the JWT strategy re-issues the session cookie
+ * on every one of those calls to slide its expiry — so ALL of these responses
+ * emit the cookie and all of them need the right scope. Wrapping here, rather
+ * than at each call site, means a new `auth(...)` route cannot silently opt out
+ * and start issuing a competing host-only cookie.
+ *
+ * The other call forms (`auth()` in RSC, `auth(req, ev)` inline, `auth(req, res)`
+ * in API routes) return a PROMISE, not a function, and are passed through
+ * untouched — as is the wrapper form's shape: `auth(handler)` still returns a
+ * FUNCTION, which is the exact contract the #671 outage broke.
+ */
+const perRequestAuth = ((...args: unknown[]) => {
+  const result = (_auth as (...callArgs: unknown[]) => unknown)(...args)
+  if (typeof result !== 'function') return result
+
+  const handler = result as (req: NextRequest, ctx: unknown) => unknown
+  return async (req: NextRequest, ctx: unknown) => {
+    const res = await handler(req, ctx)
+    if (!(res instanceof Response)) return res
+    return applySessionCookieDomain(res, sessionCookieRequestHost(req.headers))
+  }
+}) as typeof _auth
+
+export const auth = perRequestAuth as typeof _auth &
   (<HandlerResponse extends Response | Promise<Response>>(
     ...args: [
       (
