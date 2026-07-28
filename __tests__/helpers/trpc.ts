@@ -1,7 +1,12 @@
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import { appRouter } from '@/server/_app'
-import speakers from '../testdata/speakers'
+import allSpeakers, { TEST_ORG_ID } from '../testdata/speakers'
+
+/** Re-exported as an OWN binding: a bare `export { … }` of a default import
+ * resolves to `undefined` in test files that mock a module with
+ * `importOriginal`, which re-enters this graph. */
+export const speakers = allSpeakers
 
 const t = initTRPC.context<Context>().create()
 const createCaller = t.createCallerFactory(appRouter)
@@ -47,6 +52,21 @@ export function createWorkshopCaller(
   })
 }
 
+/**
+ * The session-speaker claims the org-scoped authz waist reads. `organizerOrgIds`
+ * is what actually decides access — it must be carried, and the test file must
+ * make the request's org resolve to {@link TEST_ORG_ID} by mocking
+ * `getConferenceForCurrentDomain`. `isOrganizer` is the deprecated global flag,
+ * kept only because non-authz code still reads it.
+ */
+function sessionSpeakerFor(speaker: (typeof speakers)[number]) {
+  return {
+    _id: speaker._id!,
+    isOrganizer: speaker.isOrganizer === true,
+    organizerOrgIds: speaker.organizerOrgIds ?? [],
+  }
+}
+
 export function createAuthenticatedCaller(speakerId?: string) {
   const speaker = speakers.find((s) => s._id === speakerId) ?? speakers[0]
   return createCaller({
@@ -58,15 +78,9 @@ export function createAuthenticatedCaller(speakerId?: string) {
         name: speaker.name!,
         picture: 'https://example.com/avatar.jpg',
       },
-      speaker: {
-        _id: speaker._id!,
-        isOrganizer: speaker.isOrganizer === true,
-      },
+      speaker: sessionSpeakerFor(speaker),
     },
-    speaker: {
-      _id: speaker._id!,
-      isOrganizer: speaker.isOrganizer === true,
-    },
+    speaker: sessionSpeakerFor(speaker),
     user: {
       email: speaker.email!,
       name: speaker.name!,
@@ -82,4 +96,4 @@ export function createAdminCaller() {
   return createAuthenticatedCaller(admin._id)
 }
 
-export { speakers }
+export { TEST_ORG_ID }

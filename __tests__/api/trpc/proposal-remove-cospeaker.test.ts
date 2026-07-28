@@ -42,8 +42,13 @@ vi.mock('@/lib/conference/sanity', () => ({
       title: 'Test Conf',
       organizer: 'Test Org',
       cfpEmail: 'cfp@test.com',
+      // The organizer branch is org-scoped: the REQUEST's org comes from this
+      // conference and only a caller whose `organizerOrgIds` contains it counts
+      // as an organizer, so it must be the fixture organizer's org (TEST_ORG_ID).
+      organization: { _type: 'reference', _ref: 'org-test' },
     },
     domain: 'test.com',
+    error: null,
   }),
 }))
 

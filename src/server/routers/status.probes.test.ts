@@ -31,12 +31,22 @@ vi.mock('@/lib/email/config', () => ({
 
 import { statusRouter } from './status'
 
+/** The org the domain-resolved conference belongs to. */
+const ORG_ID = 'org-test'
+
+/**
+ * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
+ * bridge is gone), so an "organizer" caller must carry the SAME org the
+ * request's domain conference resolves to — hence `ORG_ID` on both sides.
+ */
 function makeCaller(opts: { isOrganizer?: boolean; speakerId?: string } = {}) {
+  const isOrganizer = opts.isOrganizer ?? true
   const speaker = {
     _id: opts.speakerId ?? 'admin-1',
     name: 'Admin',
     email: 'admin@example.com',
-    isOrganizer: opts.isOrganizer ?? true,
+    isOrganizer,
+    organizerOrgIds: isOrganizer ? [ORG_ID] : [],
   }
   const ctx = {
     session: { speaker, user: { name: 'Admin' } },
@@ -47,6 +57,9 @@ function makeCaller(opts: { isOrganizer?: boolean; speakerId?: string } = {}) {
 
 const CONFERENCE = {
   _id: 'conf-1',
+  // The org the authz waist resolves off the domain conference; must match the
+  // caller's `organizerOrgIds` for `adminProcedure` to admit the request.
+  organization: { _type: 'reference', _ref: ORG_ID },
   organizer: 'Test Org',
   cfpEmail: 'cfp@example.com',
   salesNotificationChannel: '#updates',

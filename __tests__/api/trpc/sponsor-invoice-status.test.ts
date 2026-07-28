@@ -18,11 +18,15 @@ vi.mock('@/lib/sanity/client', () => ({
   clientRead: { fetch: vi.fn() },
 }))
 
+// Org-scoped organizer: `organizerOrgIds` must contain the org the request
+// resolves to (the domain conference's organization), since that membership is
+// the whole authz decision.
 const mockOrganizer = {
   _id: 'org-1',
   name: 'Org',
   email: 'org@test.com',
   isOrganizer: true,
+  organizerOrgIds: ['org-test'],
 }
 
 function makeSfc(
@@ -53,7 +57,10 @@ describe('updateInvoiceStatus mutation', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
-      conference: { _id: 'conf-1' } as any,
+      conference: {
+        _id: 'conf-1',
+        organization: { _type: 'reference', _ref: 'org-test' },
+      } as any,
       domain: 'test.com',
       error: null,
     })

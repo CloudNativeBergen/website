@@ -5,6 +5,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const getAuthSession = vi.fn()
 vi.mock('@/lib/auth', () => ({ getAuthSession: () => getAuthSession() }))
 
+// `requireOrganizer` is ORG-SCOPED: it derives the REQUEST's org from the domain
+// conference and requires the viewer's `organizerOrgIds` to contain it.
+vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getOrganizationRefForCurrentConference: async () => 'org-test',
+}))
+
 const getConferenceTeams = vi.fn()
 vi.mock('@/lib/teams', () => ({
   getConferenceTeams: (id: string) => getConferenceTeams(id),
@@ -39,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   resolveConferenceId.mockResolvedValue('conf-1')
   getAuthSession.mockResolvedValue({
-    speaker: { _id: 'org-1', isOrganizer: true },
+    speaker: { _id: 'org-1', isOrganizer: true, organizerOrgIds: ['org-test'] },
   })
   getConversationViewCounts.mockResolvedValue({
     active: 0,

@@ -259,9 +259,15 @@ describe('READ FLIP (G2a): resolveParticipantIds / resolveRecipients / canAccess
             canAccessConversation(shape.legacy, speaker),
           )
         }
-        // An organizer always has access (short-circuits before party membership).
+        // An organizer OF THE THREAD'S OWN ORG always has access (short-circuits
+        // before party membership). Organizer access is ORG-SCOPED (#642): it
+        // keys on the conversation's `conferenceOrgId` against the caller's
+        // `organizerOrgIds`, so both sides need the owning org.
         expect(
-          canAccessConversation(dualWritten, { _id: 'o-x', isOrganizer: true }),
+          canAccessConversation(
+            { ...dualWritten, conferenceOrgId: 'org-test' },
+            { _id: 'o-x', organizerOrgIds: ['org-test'] },
+          ),
         ).toBe(true)
       })
     })

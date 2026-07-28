@@ -92,9 +92,13 @@ describe('authorizeTravelSupportOperation — approve (B3)', () => {
     expect(r.authorized).toBe(false)
   })
 
-  it('legacy-token bridge: an org-less global-flag organizer still authorizes (parity, sunset)', async () => {
+  it('DENIES a legacy token (global isOrganizer, no organizerOrgIds)', async () => {
+    // The legacy-token bridge is gone (#642). The global `isOrganizer` flag is
+    // not org-scoped — it is true for an organizer of ANY org — so bridging it
+    // granted organizer rights on every tenant. Such a token is now an ordinary
+    // non-organizer until the holder signs in again and re-mints org claims.
     const legacy = { _id: 'legacy', name: 'Legacy', isOrganizer: true }
     const r = await authorizeTravelSupportOperation('ts-A', legacy, 'approve')
-    expect(r.authorized).toBe(true)
+    expect(r.authorized).toBe(false)
   })
 })

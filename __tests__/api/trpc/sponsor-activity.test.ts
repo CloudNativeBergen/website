@@ -20,11 +20,15 @@ vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(),
 }))
 
+// Org-scoped organizer: `organizerOrgIds` must contain the org the request
+// resolves to (mockConference.organization), since that membership is the whole
+// authz decision — the non-organizer below organizes no org at all.
 const mockOrganizer = {
   _id: 'org-1',
   name: 'Test Organizer',
   email: 'org@test.com',
   isOrganizer: true,
+  organizerOrgIds: ['org-test'],
 }
 
 const mockNonOrganizer = {
@@ -32,11 +36,13 @@ const mockNonOrganizer = {
   name: 'Test Speaker',
   email: 'speaker@test.com',
   isOrganizer: false,
+  organizerOrgIds: [],
 }
 
 const mockConference = {
   _id: 'conf-1',
   title: 'Test Conference',
+  organization: { _type: 'reference', _ref: 'org-test' },
 }
 
 describe('Sponsor CRM Activities & Assignments', () => {

@@ -79,10 +79,22 @@ import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 const revalidateTagMock = revalidateTag as unknown as ReturnType<typeof vi.fn>
 
 const CONFERENCE_ID = 'conf-1'
+/** The org the domain-resolved conference belongs to; see `ORG_ID` use below. */
+const ORG_ID = 'org-test'
 
+/**
+ * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
+ * bridge is gone), so an "organizer" caller must carry the SAME org the
+ * request's domain conference resolves to — hence `ORG_ID` on both sides.
+ */
 function makeCaller(opts: { isOrganizer?: boolean } | null) {
   const speaker = opts
-    ? { _id: 'sp-1', name: 'Org', isOrganizer: opts.isOrganizer ?? false }
+    ? {
+        _id: 'sp-1',
+        name: 'Org',
+        isOrganizer: opts.isOrganizer ?? false,
+        organizerOrgIds: opts.isOrganizer ? [ORG_ID] : [],
+      }
     : undefined
   const ctx = {
     session: speaker ? { speaker, user: { name: 'Org' } } : null,
@@ -117,8 +129,14 @@ beforeEach(() => {
       return ['sp-1', 'sp-2']
     },
   )
+  // The domain conference carries the org the authz waist gates on, so
+  // `resolveOrganizationId()` yields ORG_ID for every request in this file.
   getConferenceMock.mockResolvedValue({
-    conference: { _id: CONFERENCE_ID },
+    conference: {
+      _id: CONFERENCE_ID,
+      organization: { _type: 'reference', _ref: ORG_ID },
+    },
+    domain: 'cloudnativebergen.no',
     error: null,
   })
 })

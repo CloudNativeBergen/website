@@ -138,8 +138,9 @@ export function validateConversationParticipant(
 /** A speaker as needed for authorization decisions (server-derived). */
 export interface AccessSpeaker {
   _id: string
-  /** DEPRECATED GLOBAL flag — retained only for the legacy-token bridge inside
-   * {@link isOrganizerForOrg}; do NOT branch access on it directly (B2, #642). */
+  /** @deprecated GLOBAL flag — ACCEPTED BUT IGNORED by the access checks, which
+   * key on {@link organizerOrgIds} alone. Declared only so a legacy-shaped
+   * session still type-checks. NEVER branch access on it (B2, #642). */
   isOrganizer?: boolean
   /** ORG-SCOPED organizer capability: the org ids this speaker organizes. The
    * conversation-access check keys on this against the thread's own org. */

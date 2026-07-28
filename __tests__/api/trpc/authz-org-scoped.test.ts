@@ -4,10 +4,19 @@
  * The org-scoped authorization WAIST (CaaS T1-2, #614). Exercises the real
  * `adminProcedure` middleware (`requireAdmin` in src/server/trpc.ts) end to end:
  * the request org comes from the domain conference, and access requires the
- * caller's `organizerOrgIds` to include it. Proves the cross-org 403, the fail-
- * closed (resolvable org, non-member) path, and that an UNRESOLVABLE org now FAILS
- * CLOSED (bridge (1) removed post-044-backfill — deny, with a warn on a would-be
- * organizer's denial).
+ * caller's `organizerOrgIds` to include it — `organizerOrgIds` and NOTHING else.
+ * BOTH migration bridges to the deprecated GLOBAL `isOrganizer` flag are gone, so
+ * this pins the whole contract:
+ *
+ *   - an organizer of the request org is ALLOWED; an organizer of another org is
+ *     DENIED (the cross-org 403), as is a member of no org at all;
+ *   - an UNRESOLVABLE org FAILS CLOSED (deny, with a warn when the denied caller
+ *     organizes at least one org, so the failure mode stays observable);
+ *   - a LEGACY TOKEN minted before #635 — the global flag set but NO
+ *     `organizerOrgIds` — is DENIED ON EVERY HOST. Bridging it granted organizer
+ *     rights on ANY host, because the global flag is true for an organizer of ANY
+ *     org: a cross-tenant grant. Such a holder is an ordinary non-organizer until
+ *     they sign in again.
  *
  * `getConferenceForCurrentDomain` is mocked to control the request's org; callers
  * are built with explicit session shapes so `organizerOrgIds` can be varied.
@@ -115,18 +124,30 @@ describe('adminProcedure waist — org-scoped organizer authorization', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
-  describe('org unresolvable — bridge (1) removed, FAILS CLOSED', () => {
-    it('DENIES a would-be organizer (global flag set) and warns on the denial', async () => {
+  it('DENIES a LEGACY token (global flag, no organizerOrgIds) on a resolvable org', async () => {
+    resolveOrg('org-A')
+    // Pre-#635 token: `organizerOrgIds` absent ENTIRELY. The bridge that let the
+    // global flag stand in is gone — it granted on ANY host, so it was a
+    // cross-tenant grant.
+    await expect(
+      callerFor({ _id: 'sp-legacy', isOrganizer: true }).speaker.admin.list(),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
+  describe('org unresolvable — FAILS CLOSED', () => {
+    it('DENIES a would-be organizer (organizes some org) and warns on the denial', async () => {
       resolveOrg(null) // conference has no organization (unknown domain)
+      // The warn fires only for a caller who organizes AT LEAST ONE org, so the
+      // denial stays observable without spamming on ordinary traffic.
       await expect(
         callerFor({
           _id: 'sp-4',
           isOrganizer: true,
-          organizerOrgIds: [],
+          organizerOrgIds: ['org-A'],
         }).speaker.admin.list(),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
       expect(console.warn).toHaveBeenCalledWith(
-        expect.stringContaining('[authz-bridge]'),
+        expect.stringContaining('[authz-deny]'),
       )
     })
 

@@ -23,9 +23,9 @@ import { UpdateEntitlementsSchema } from '../schemas/platform'
  * env contract unset the whole router fails closed.
  */
 const platformProcedure = adminProcedure.use(async ({ ctx, next }) => {
-  // `ctx.orgId` can still be null for a legacy-token bridge admin (see the
-  // waist's bridge (2)); a null org is never the platform org, so the
-  // isPlatformOrganization guard fails closed for those too.
+  // The waist already denies a null `ctx.orgId`, so this can only run with a
+  // resolved org — but a null is never the platform org anyway, so this guard
+  // fails closed independently.
   if (!(await isPlatformOrganization(ctx.orgId))) {
     throw new TRPCError({
       code: 'FORBIDDEN',

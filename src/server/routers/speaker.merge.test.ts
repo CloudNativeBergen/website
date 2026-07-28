@@ -15,8 +15,25 @@ vi.mock('@/lib/speaker/merge', async () => {
   }
 })
 
+// The org-scoped admin waist derives the REQUEST's org from the domain
+// conference, then requires the caller's `organizerOrgIds` to contain it — so the
+// resolved conference must carry the org `makeCaller` grants below.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
+
 import { speakerRouter } from './speaker'
 import { MergeValidationError } from '@/lib/speaker/merge'
+
+const ORG_ID = 'org-test'
 
 const PREVIEW = {
   survivorId: 'survivor',
@@ -33,16 +50,17 @@ const PREVIEW = {
 }
 
 function makeCaller(opts: { isOrganizer: boolean }) {
+  // `organizerOrgIds` is what the waist reads; the deprecated global flag is kept
+  // only because non-authz code still looks at it.
+  const speaker = {
+    _id: 'admin-1',
+    name: 'Admin',
+    isOrganizer: opts.isOrganizer,
+    organizerOrgIds: opts.isOrganizer ? [ORG_ID] : [],
+  }
   const ctx = {
-    session: {
-      speaker: {
-        _id: 'admin-1',
-        name: 'Admin',
-        isOrganizer: opts.isOrganizer,
-      },
-      user: { name: 'Admin' },
-    },
-    speaker: { _id: 'admin-1', name: 'Admin', isOrganizer: opts.isOrganizer },
+    session: { speaker, user: { name: 'Admin' } },
+    speaker,
   } as unknown as Context
   return speakerRouter.createCaller(ctx)
 }

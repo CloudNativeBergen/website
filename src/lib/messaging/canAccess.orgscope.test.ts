@@ -4,7 +4,10 @@
  * B2 (#642) — canAccessConversation's ORGANIZER branch must be ORG-SCOPED. Before
  * the fix it short-circuited on the DEPRECATED GLOBAL `speaker.isOrganizer`, so an
  * organizer of ANY org could read/write another tenant's thread by id. It now
- * keys on the conversation's OWN org (`conferenceOrgId`) via `isOrganizerForOrg`.
+ * keys on the conversation's OWN org (`conferenceOrgId`) via `isOrganizerForOrg`,
+ * and on `organizerOrgIds` ALONE — the legacy-token bridge to the global flag is
+ * gone, so a pre-#635 token without `organizerOrgIds` is denied on every thread,
+ * and a thread whose org is unresolvable fails closed.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { canAccessConversation } from './sanity'
@@ -61,15 +64,17 @@ describe('canAccessConversation — org-scoped organizer (B2)', () => {
     ).toBe(false)
   })
 
-  it('legacy-token bridge: an org-less global-flag organizer still passes (parity, sunset)', () => {
-    // No organizerOrgIds field → pre-#635 token → isOrganizerForOrg bridges via
-    // the global flag regardless of the thread org (matches #639 semantics).
+  it('DENIES a legacy token (no organizerOrgIds) even with the global flag set', () => {
+    // No organizerOrgIds field → pre-#635 token. The bridge that used to let the
+    // global flag stand in is GONE: it granted on ANY thread's org, because the
+    // flag is true for an organizer of ANY org. Such a holder is an ordinary
+    // non-organizer until they sign in again.
     expect(
       canAccessConversation(orgAThread(), {
         _id: 'legacy-admin',
         isOrganizer: true,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('a null thread org denies an org organizer (fail closed)', () => {
