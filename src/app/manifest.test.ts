@@ -81,7 +81,7 @@ describe('manifest — per-host PWA identity', () => {
     const result = await manifest()
 
     expect(result.name).toBe('Konf')
-    expect(result.short_name).toBe('CND')
+    expect(result.short_name).toBe('Konf')
     expect(result.description).toContain('Community-driven')
   })
 
@@ -92,7 +92,7 @@ describe('manifest — per-host PWA identity', () => {
     const result = await manifest()
 
     expect(result.name).toBe('Konf')
-    expect(result.short_name).toBe('CND')
+    expect(result.short_name).toBe('Konf')
   })
 
   it('keeps id/scope/start_url host-invariant', async () => {

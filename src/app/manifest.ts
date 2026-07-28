@@ -30,7 +30,10 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
  * conference's own `logomarkBright`, with a static fallback).
  */
 
-const PLATFORM_SHORT_NAME = 'CND'
+// Platform-default launcher label. Must stay consistent with PLATFORM_NAME:
+// a platform install showing name 'Konf' but short_name 'CND' is mixed
+// branding. Short enough already that no truncation helper is needed.
+const PLATFORM_SHORT_NAME = 'Konf'
 const PLATFORM_DESCRIPTION =
   'Community-driven Kubernetes and Cloud Native conferences in the Nordics.'
 
