@@ -65,7 +65,7 @@ import {
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
-import { normalizeEmail } from '@/lib/speaker/email'
+import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
@@ -1798,8 +1798,23 @@ export const proposalRouter = router({
           // Normalized on both sides (#684) so the invitee is not locked out of
           // their own invitation by provider casing; an empty address on either
           // side fails CLOSED rather than matching another empty one.
-          const invitationEmail = normalizeEmail(invitation.invitedEmail)
-          const responderEmail = normalizeEmail(ctx.speaker.email)
+          //
+          // Deliberately `canonicalEmail` (trim + lowercase), NOT the
+          // NFKC-folding `normalizeEmail` used by the creation guards above.
+          // The direction of failure differs:
+          //   - the guards above REJECT (self-invite, duplicate, already a
+          //     speaker), so a WIDER key rejects more and fails CLOSED;
+          //   - this check GRANTS, so a wider key would accept more and fail
+          //     OPEN.
+          // NFKC rewrites the local part (`oﬀice@ex.com` -> `office@ex.com`),
+          // and nothing guarantees the folded address reaches the same mailbox
+          // (see `canonicalEmail`'s own docs). The token was delivered to the
+          // literal `invitedEmail`, which is STORED canonically — so folding
+          // here would let a holder whose address merely folds to the same
+          // value claim an invitation that was never delivered to them. Keep
+          // the claim set no wider than the delivery set.
+          const invitationEmail = canonicalEmail(invitation.invitedEmail)
+          const responderEmail = canonicalEmail(ctx.speaker.email)
           if (
             !invitationEmail ||
             !responderEmail ||

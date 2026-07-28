@@ -535,6 +535,34 @@ describe('proposal.invitation router', () => {
       expect(result.success).toBe(true)
     })
 
+    // #684 follow-up — the ownership check GRANTS, so its key must be no wider
+    // than the set of mailboxes the token was actually delivered to. NFKC
+    // compatibility folding rewrites the local part (`oﬀice@` -> `office@`)
+    // and is NOT delivery-safe, so it must not be used here even though the
+    // creation guards (which REJECT, and therefore fail closed when wider) do
+    // use it.
+    it('rejects a responder whose address only NFKC-folds to the invited one', async () => {
+      vi.mocked(getInvitationByToken).mockResolvedValue({
+        ...mockInvitation,
+        // U+FB00 LATIN SMALL LIGATURE FF — folds to "office@test.com"
+        invitedEmail: 'oﬀice@test.com',
+      } as any)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+
+      const folded = { _id: 'speaker-9', email: 'office@test.com' }
+      const caller = createCaller(folded)
+
+      await expect(
+        caller.proposal.invitation.respond({
+          token: 'valid-token',
+          accept: true,
+        }),
+      ).rejects.toThrow(/sent to a different email address/)
+    })
+
     it('fails CLOSED when either side has an empty email', async () => {
       vi.mocked(getInvitationByToken).mockResolvedValue({
         ...mockInvitation,
