@@ -12,7 +12,7 @@ import { isLocalhostDomain } from '@/lib/environment/localhost'
  * Kept as ONE source of truth so the manifest, root metadata, per-page
  * metadata and OpenGraph alt text all agree on the platform label.
  */
-export const PLATFORM_NAME = 'Cloud Native Days'
+export const PLATFORM_NAME = 'Konf'
 
 /**
  * The PLATFORM-level base URL (origin, no trailing slash) for genuinely

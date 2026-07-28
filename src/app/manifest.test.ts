@@ -80,7 +80,7 @@ describe('manifest — per-host PWA identity', () => {
 
     const result = await manifest()
 
-    expect(result.name).toBe('Cloud Native Days')
+    expect(result.name).toBe('Konf')
     expect(result.short_name).toBe('CND')
     expect(result.description).toContain('Community-driven')
   })
@@ -91,7 +91,7 @@ describe('manifest — per-host PWA identity', () => {
 
     const result = await manifest()
 
-    expect(result.name).toBe('Cloud Native Days')
+    expect(result.name).toBe('Konf')
     expect(result.short_name).toBe('CND')
   })
 
