@@ -15,8 +15,14 @@ export default async function WorkshopPage() {
   const { conference, error } = await getConferenceForCurrentDomain()
 
   // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
-  // but the check lands here first so a disabled tenant never starts a WorkOS
-  // session round-trip it cannot complete. Fail-closed on an unresolvable org.
+  // but ordering it first means a disabled tenant never reads a WorkOS session
+  // at all (`withAuth` also throws when the AuthKit middleware did not run,
+  // which is exactly the foreign-host case `isWorkOSAuthHost` short-circuits in
+  // `src/proxy.ts`). NOTE the middleware still runs FIRST on the accepted
+  // WorkOS host, so a signed-out visitor there is bounced to AuthKit before any
+  // of this executes and only sees the 404 on return — an ordering this gate
+  // cannot change, because the feature decision needs a Sanity read that edge
+  // middleware cannot do. Fail-closed on an unresolvable org.
   if (!(await isWorkshopsEnabledForConference(conference))) {
     notFound()
   }
