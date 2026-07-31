@@ -376,7 +376,7 @@ export function DraggableProposal({
         style={{
           ...transformStyle,
           ...topicStyling.styles,
-          height: `${durationMinutes * PIXELS_PER_MINUTE}px`,
+          height: sourceTrackIndex !== undefined ? '100%' : `${durationMinutes * PIXELS_PER_MINUTE}px`,
         }}
         title={tooltipContent}
       >

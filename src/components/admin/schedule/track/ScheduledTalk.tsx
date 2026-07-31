@@ -69,19 +69,20 @@ export const ScheduledTalk = ({
   return (
     <div
       key={`${talk.talk._id}-${talk.startTime}`}
-      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${
+      className={`group absolute right-2 left-2 z-10 ${
         isSwapTarget ? 'animate-pulse' : ''
       }`}
       style={{
         top: `${position.top}px`,
         height: `${position.height}px`,
+        transition: 'transform 200ms, box-shadow 200ms',
       }}
     >
       <div
-        className={`relative h-full transition-all duration-200 ${
+        className={`relative h-full ${
           isSwapTarget
-            ? 'scale-105 transform shadow-lg ring-2 ring-amber-400/75'
-            : ''
+            ? 'scale-105 transform shadow-lg ring-2 ring-amber-400/75 transition-all duration-200'
+            : 'transition-all duration-200'
         }`}
       >
         <DraggableProposal
