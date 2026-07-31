@@ -65,9 +65,19 @@ const LAYOUT_CLASSES = {
     'border-b border-red-200 bg-red-50 px-4 py-2 shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
-const ErrorBanner = React.memo(({ error }: { error: string }) => (
+const ErrorBanner = React.memo(({ error, onRefresh }: { error: string; onRefresh?: () => void }) => (
   <div className={LAYOUT_CLASSES.errorBanner}>
-    <p className="text-red-800 dark:text-red-300">{error}</p>
+    <div className="flex items-center justify-between">
+      <p className="text-red-800 dark:text-red-300">{error}</p>
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          className="ml-4 shrink-0 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:ring-offset-red-50 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/80 dark:focus:ring-offset-red-900"
+        >
+          Refresh Data
+        </button>
+      )}
+    </div>
   </div>
 ))
 ErrorBanner.displayName = 'ErrorBanner'
@@ -179,6 +189,8 @@ export function ScheduleEditor({
       return draftDay
     })
   }, [isDraftMode, draftSchedules, officialSchedules])
+
+
 
   // Desktop is the SSR default (`true`), so wide screens never flash the mobile
   // layout and there is no hydration mismatch; phones flip to the tap-driven
@@ -306,6 +318,18 @@ export function ScheduleEditor({
       dispatch({ type: 'saveError', message })
     }
   }, [state.dirty, state.schedules, currentDayIndex, saveMutation])
+
+  // Auto-save: if there are unsaved changes and we are in draft mode, save 
+  // automatically after 3 seconds of inactivity.
+  useEffect(() => {
+    if (!hasUnsavedChanges || isSaving || !isDraftMode) return
+
+    const timer = setTimeout(() => {
+      handleSave()
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [hasUnsavedChanges, isSaving, isDraftMode, handleSave])
 
   const handlePromote = useCallback(async () => {
     if (!currentSchedule?._id) return
@@ -556,7 +580,16 @@ export function ScheduleEditor({
               onPromote={handlePromote}
             />
 
-            {error && <ErrorBanner error={error} />}
+            {error && (
+              <ErrorBanner
+                error={error}
+                onRefresh={
+                  error.includes('reload')
+                    ? () => window.location.reload()
+                    : undefined
+                }
+              />
+            )}
 
             <div className={LAYOUT_CLASSES.content}>
               {hasTracks ? (
