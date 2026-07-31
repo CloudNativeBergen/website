@@ -149,6 +149,20 @@ export const scheduleRouter = router({
         return doc
       }),
 
+    pollVersions: adminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+      return await clientWrite.fetch<{ _id: string; _rev: string; version: number }[]>(
+        `*[_type == "schedule" && conference._ref == $conferenceId]{ _id, _rev, version }`,
+        { conferenceId: conference._id }
+      )
+    }),
+
     delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input, ctx }) => {

@@ -44,6 +44,7 @@ import { ScheduleProvider } from './ScheduleContext'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { api } from '@/lib/trpc/client'
 import { PlusIcon } from '@heroicons/react/24/outline'
+import { useRouter } from 'next/navigation'
 
 interface ScheduleEditorProps {
   officialSchedules: EditorSchedule[]
@@ -197,9 +198,17 @@ export function ScheduleEditor({
   // view after mount. The two layouts are mutually exclusive so the drag board's
   // DndContext (and its touch sensors) is never mounted on a phone.
   const isDesktop = useMediaQuery('(min-width: 768px)', true)
+  const router = useRouter()
 
   const saveMutation = api.schedule.save.useMutation()
   const actionMutation = api.schedule.action.useMutation()
+
+  // Polling for external changes
+  const { data: latestVersions } = api.schedule.admin.pollVersions.useQuery(undefined, {
+    refetchInterval: 10000,
+  })
+
+  const [externalChangeError, setExternalChangeError] = useState<string | null>(null)
 
   // Single reducer over ALL days. The active day is `state.currentDayIndex`
   // (identity), never an `_id` — see reducer.ts for why that fixes the
@@ -222,7 +231,7 @@ export function ScheduleEditor({
   const currentDayIndex = state.currentDayIndex
   const currentSchedule = state.schedules[currentDayIndex] ?? null
   const isSaving = state.ui.isSaving
-  const error = state.ui.error
+  const error = externalChangeError || state.ui.error
 
   // ANY dirty day means unsaved work — surfaced on both headers' Save button
   // and guarding navigation below.
@@ -240,6 +249,34 @@ export function ScheduleEditor({
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
+
+  // Detect external changes by comparing _rev
+  useEffect(() => {
+    if (!latestVersions) return
+
+    let changed = false
+    for (const loaded of mergedSchedules) {
+      if (!loaded._id) continue // New local day, no server counterpart yet
+      const server = latestVersions.find((s) => s._id === loaded._id)
+      if (server && loaded._rev && server._rev !== loaded._rev) {
+        changed = true
+        break
+      }
+    }
+
+    if (changed) {
+      if (hasUnsavedChanges) {
+        setExternalChangeError(
+          'There are new external changes to this schedule. Please reload to sync (your local changes will be lost).',
+        )
+      } else {
+        // Auto-refresh seamlessly if the user has no unsaved changes
+        router.refresh()
+      }
+    } else {
+      setExternalChangeError(null)
+    }
+  }, [latestVersions, mergedSchedules, hasUnsavedChanges, router])
 
   // The saved-flash timeout is stored so a new save (or unmount) cancels the
   // previous one instead of leaking it / clearing the wrong flash.
