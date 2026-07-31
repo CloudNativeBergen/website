@@ -60,11 +60,11 @@ function performSwap(
 
   const draggedEndTime = calculateEndTime(
     timeSlot,
-    getProposalDurationMinutes(proposal),
+    dragItem.durationMinutes,
   )
   const targetEndTime = calculateEndTime(
     sourceTimeSlot,
-    getProposalDurationMinutes(targetTalk.talk),
+    durationBetween(targetTalk.startTime, targetTalk.endTime),
   )
 
   const newTracks = [...schedule.tracks]
@@ -175,7 +175,10 @@ export function classifyProposalDrop(
   }
 
   const targetTrack = tracks[trackIndex]
-  const durationMinutes = getProposalDurationMinutes(proposal)
+  const durationMinutes =
+    dragItem.type === 'scheduled-talk'
+      ? dragItem.durationMinutes
+      : getProposalDurationMinutes(proposal)
   // Root end-of-day gate: `endsWithinScheduleDay` sums start + duration in raw
   // minutes, so a long talk (e.g. workshop_240 at 20:00) can't wrap past
   // midnight and read as ending before 21:00 the way
@@ -217,7 +220,7 @@ export function classifyProposalDrop(
     const bothDirectionsFit =
       canSwapTalks(
         targetTrack,
-        proposal,
+        durationMinutes,
         occupiedTalk,
         timeSlot,
         draggedExclude,
@@ -241,7 +244,7 @@ export function classifyProposalDrop(
       const draggedEnd = calculateEndTime(timeSlot, durationMinutes)
       const displacedEnd = calculateEndTime(
         dragItem.sourceTimeSlot,
-        getProposalDurationMinutes(occupiedTalk.talk),
+        durationBetween(occupiedTalk.startTime, occupiedTalk.endTime),
       )
       if (
         timesOverlap(
@@ -267,7 +270,7 @@ export function classifyProposalDrop(
 
   const availableTime = findAvailableTimeSlot(
     targetTrack,
-    proposal,
+    durationMinutes,
     timeSlot,
     excludeTalk,
   )
@@ -382,7 +385,9 @@ export function moveProposal(
   // kind === 'move': drop into the (now-known-free) slot, clearing the source.
   const endTime = calculateEndTime(
     timeSlot,
-    getProposalDurationMinutes(proposal),
+    dragItem.type === 'scheduled-talk'
+      ? dragItem.durationMinutes
+      : getProposalDurationMinutes(proposal),
   )
   const newTracks = [...schedule.tracks]
 
@@ -600,7 +605,7 @@ export function addService(
 }
 
 /** Resize the service session at `talkIndex` to a new duration (in minutes). */
-export function resizeService(
+export function resizeScheduleItem(
   schedule: EditorSchedule,
   trackIndex: number,
   talkIndex: number,
@@ -611,7 +616,7 @@ export function resizeService(
   }
   const track = schedule.tracks[trackIndex]
   const talk = track.talks[talkIndex]
-  if (!talk || !talk.placeholder) return { schedule, ok: false }
+  if (!talk) return { schedule, ok: false }
 
   // Root end-of-day gate (see classifyProposalDrop) — no wrap possible.
   if (!endsWithinScheduleDay(talk.startTime, duration)) {
@@ -620,14 +625,10 @@ export function resizeService(
   const newEnd = calculateEndTime(talk.startTime, duration)
   // Reject a resize that would grow the session over a following talk/session
   // (exclude the session being resized from the check).
-  if (
-    !isTrackIntervalFree(
-      track,
-      talk.startTime,
-      newEnd,
-      matchService(talk.placeholder, talk.startTime),
-    )
-  ) {
+      const exclude = talk.talk
+        ? matchTalk(talk.talk._id, talk.startTime)
+        : matchService(talk.placeholder ?? '', talk.startTime)
+      if (!isTrackIntervalFree(track, talk.startTime, newEnd, exclude)) {
     return { schedule, ok: false }
   }
 

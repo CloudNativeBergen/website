@@ -130,13 +130,11 @@ function DroppableTrack({
     setSelectedTimeSlot('')
   }, [])
 
-  const handleUpdateServiceSession = useCallback(
+  const handleUpdateItemDuration = useCallback(
     (index: number, newDuration: number) => {
-      if (track.talks[index]?.placeholder) {
-        onResizeServiceSession?.(index, newDuration)
-      }
+      onResizeServiceSession?.(index, newDuration)
     },
-    [track.talks, onResizeServiceSession],
+    [onResizeServiceSession],
   )
 
   const handleRenameServiceSession = useCallback(
@@ -216,7 +214,7 @@ function DroppableTrack({
                 trackIndex={trackIndex}
                 track={track}
                 onRemoveTalk={onRemoveTalk}
-                onUpdateSession={handleUpdateServiceSession}
+                onUpdateSession={handleUpdateItemDuration}
                 onRenameSession={handleRenameServiceSession}
                 onDuplicate={handleDuplicateServiceSession}
               />
@@ -229,6 +227,8 @@ function DroppableTrack({
                 talkIndex={talkIndex}
                 trackIndex={trackIndex}
                 hoveredSwapTimeSlot={hoveredSwapTimeSlot}
+                track={track}
+                onUpdateDuration={handleUpdateItemDuration}
               />
             )
           }

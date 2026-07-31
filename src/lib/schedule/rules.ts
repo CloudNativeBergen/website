@@ -2,6 +2,7 @@ import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import {
   calculateEndTime,
+  durationBetween,
   endsWithinScheduleDay,
   getProposalDurationMinutes,
   timesOverlap,
@@ -80,7 +81,7 @@ export function fitsInTrack(
  */
 export function findAvailableTimeSlot(
   track: ScheduleTrack,
-  proposal: ProposalExisting,
+  durationMinutes: number,
   preferredStartTime?: string,
   excludeTalk?: { talkId: string; startTime: string },
 ): string | null {
@@ -91,7 +92,7 @@ export function findAvailableTimeSlot(
   return fitsInTrack(
     track,
     startTime,
-    getProposalDurationMinutes(proposal),
+    durationMinutes,
     exclude,
   )
     ? startTime
@@ -113,7 +114,7 @@ export function findAvailableTimeSlot(
  */
 export function canSwapTalks(
   track: ScheduleTrack,
-  draggedProposal: ProposalExisting,
+  draggedDurationMinutes: number,
   targetTalk: TrackTalk,
   targetStartTime: string,
   draggedExclude?: SlotMatcher,
@@ -122,7 +123,7 @@ export function canSwapTalks(
   return fitsInTrack(
     track,
     targetStartTime,
-    getProposalDurationMinutes(draggedProposal),
+    draggedDurationMinutes,
     anyMatch(
       matchTalk(targetTalk.talk._id, targetTalk.startTime),
       draggedExclude,
@@ -135,11 +136,10 @@ export function canSwapTalks(
  * source track at `sourceStartTime`, once the dragged talk (which is leaving
  * that track) is excluded?
  *
- * The displaced talk's landing duration is its FORMAT duration
- * ({@link getProposalDurationMinutes}) — the value `performSwap` actually writes
- * — NOT the stored slot span. Validating with the stored span while the write
- * uses the format duration let a swap pass here then overlap a neighbour after
- * the write (when stored < format). Check-what-you-write.
+ * The displaced talk's landing duration is its CURRENT scheduled duration
+ * ({@link durationBetween}) — the value `performSwap` actually writes.
+ * Validating with the format duration while the write uses the stored span
+ * could let a swap pass here then overlap a neighbour after the write.
  *
  * Two guards beyond interval-freedom:
  *  - end-of-day: the displaced talk must not run past {@link SCHEDULE_END} at
@@ -157,7 +157,10 @@ export function canPlaceDisplacedBack(
   draggedExclude: SlotMatcher,
 ): boolean {
   if (!targetTalk.talk) return false
-  const displacedDuration = getProposalDurationMinutes(targetTalk.talk)
+  const displacedDuration = durationBetween(
+    targetTalk.startTime,
+    targetTalk.endTime,
+  )
   if (!endsWithinScheduleDay(sourceStartTime, displacedDuration)) return false
   return fitsInTrack(
     sourceTrack,

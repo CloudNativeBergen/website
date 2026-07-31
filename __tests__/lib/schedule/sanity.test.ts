@@ -37,6 +37,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { saveScheduleToSanity, getValidTalkIds } from '@/lib/schedule/sanity'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'
+import { ScheduleStatus } from '@/lib/schedule/types'
 
 const conference = { _id: 'conf-1', title: 'CND 2026' } as unknown as Conference
 
@@ -291,7 +292,7 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined, status: 'official' })
+    const newDay = updateDay({ _id: '', _rev: undefined, status: ScheduleStatus.Official })
     const result = await saveScheduleToSanity(newDay, conference)
 
     // Exactly one transaction, committed once. No standalone patch() write.
@@ -337,7 +338,7 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined, status: 'draft' })
+    const newDay = updateDay({ _id: '', _rev: undefined, status: ScheduleStatus.Draft })
     await saveScheduleToSanity(newDay, conference)
 
     expect(clientWrite.transaction).toHaveBeenCalledTimes(1)

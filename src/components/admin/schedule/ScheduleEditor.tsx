@@ -422,7 +422,12 @@ export function ScheduleEditor({
 
   const handleResizeServiceSession = useCallback(
     (trackIndex: number, talkIndex: number, duration: number) => {
-      dispatch({ type: 'resizeService', trackIndex, talkIndex, duration })
+      dispatch({
+        type: 'resizeItem',
+        trackIndex,
+        talkIndex,
+        duration,
+      })
     },
     [],
   )

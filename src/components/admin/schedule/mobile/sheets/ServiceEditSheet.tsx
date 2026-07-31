@@ -98,7 +98,7 @@ export function ServiceEditSheet({
       return
     }
     dispatch({
-      type: 'resizeService',
+      type: 'resizeItem',
       trackIndex,
       talkIndex,
       duration: dur,

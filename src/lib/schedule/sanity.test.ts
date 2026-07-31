@@ -74,7 +74,7 @@ function makeSchedule(): ConferenceSchedule {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  fetchMock.mockImplementation((query: string) => {
+  fetchMock.mockImplementation((query: string): any => {
     if (query.includes('conferenceRef')) {
       return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
     }
@@ -97,7 +97,7 @@ describe('saveScheduleToSanity — schedule-change alert gating (N6)', () => {
   it('skips the alert pass and logs when the prior-placements read fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    fetchMock.mockImplementation((query: string) => {
+    fetchMock.mockImplementation((query: string): any => {
       if (query.includes('conferenceRef')) {
         return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
       }

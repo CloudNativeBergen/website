@@ -32,6 +32,7 @@ vi.mock('@/lib/schedule/validation', () => ({
 
 import { revalidateTag } from 'next/cache'
 import { scheduleRouter } from './schedule'
+import { ScheduleStatus } from '@/lib/schedule/types'
 
 const revalidateTagMock = revalidateTag as unknown as Mock
 
@@ -68,7 +69,7 @@ beforeEach(() => {
   })
   getValidTalkIdsMock.mockResolvedValue(new Set<string>())
   getTalkStatusesMock.mockResolvedValue({})
-  getScheduleStatusByIdMock.mockResolvedValue('draft')
+  getScheduleStatusByIdMock.mockResolvedValue(ScheduleStatus.Draft)
   validateMock.mockReturnValue(null)
   saveScheduleMock.mockResolvedValue({
     schedule: { _id: 'sched-1' },
@@ -125,13 +126,13 @@ describe('schedule router — tenant-scoped cache invalidation (#618)', () => {
 
 describe('schedule router — draft and publish guards', () => {
   it('auto-forks a draft if the existing schedule is official', async () => {
-    getScheduleStatusByIdMock.mockResolvedValueOnce('official')
+    getScheduleStatusByIdMock.mockResolvedValueOnce(ScheduleStatus.Official)
 
     await makeCaller().save({
       ...validPayload,
       _id: 'existing-id',
       _rev: 'rev-1',
-      status: 'draft',
+      status: ScheduleStatus.Draft,
     })
 
     // The payload passed to saveScheduleToSanity should have _id stripped
@@ -147,7 +148,7 @@ describe('schedule router — draft and publish guards', () => {
 
     const payload = {
       ...validPayload,
-      status: 'official',
+      status: ScheduleStatus.Official,
       tracks: [
         {
           trackTitle: 'T1',

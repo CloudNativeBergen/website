@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { scheduledProposalIdsExcludingDay } from '@/lib/schedule/operations'
+import { durationBetween } from '@/lib/schedule/time'
 import {
   PlusIcon,
   BookmarkIcon,
@@ -244,6 +245,7 @@ export function MobileScheduleView({
               proposal: active.talk.talk,
               sourceTrackIndex: active.trackIndex,
               sourceTimeSlot: active.talk.startTime,
+              durationMinutes: durationBetween(active.talk.startTime, active.talk.endTime),
             },
             dropPosition: {
               trackIndex: panelTrackIndex,
@@ -282,6 +284,7 @@ export function MobileScheduleView({
             proposal: active.talk.talk,
             sourceTrackIndex: active.trackIndex,
             sourceTimeSlot: active.talk.startTime,
+            durationMinutes: durationBetween(active.talk.startTime, active.talk.endTime),
           },
           dropPosition: {
             trackIndex: panelTrackIndex,

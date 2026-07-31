@@ -1,28 +1,48 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { TrackTalk } from '@/lib/conference/types'
+import { TrackTalk, ScheduleTrack } from '@/lib/conference/types'
 import { ArrowsRightLeftIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { calculateTalkPosition } from '@/lib/schedule/geometry'
+import { durationBetween } from '@/lib/schedule/time'
 import { DraggableProposal } from '../DraggableProposal'
 import { useScheduleContext } from '../ScheduleContext'
+import { useScheduleItemResize } from './useScheduleItemResize'
 
 export const ScheduledTalk = ({
   talk,
   talkIndex,
   trackIndex,
   hoveredSwapTimeSlot,
+  track,
+  onUpdateDuration,
 }: {
   talk: TrackTalk
   talkIndex: number
   trackIndex: number
   hoveredSwapTimeSlot?: string | null
+  track: ScheduleTrack
+  onUpdateDuration: (index: number, newDuration: number) => void
 }) => {
   // `activeDragItem` (swap highlight) and `dispatch` (remove) come from context
   // instead of being prop-drilled through TracksGrid → DroppableTrack.
   const { activeDragItem, dispatch } = useScheduleContext()
 
   const position = useMemo(() => calculateTalkPosition(talk), [talk])
+
+  const {
+    isResizing,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handlePointerCancel,
+  } = useScheduleItemResize({
+    talk,
+    talkIndex,
+    track,
+    height: position.height,
+    onUpdateDuration,
+  })
 
   const handleRemove = useCallback(() => {
     dispatch({ type: 'removeTalk', trackIndex, talkIndex })
@@ -68,6 +88,7 @@ export const ScheduledTalk = ({
           proposal={talk.talk}
           sourceTrackIndex={trackIndex}
           sourceTimeSlot={talk.startTime}
+          durationMinutes={durationBetween(talk.startTime, talk.endTime)}
           isDragging={isSwapTarget}
         />
         {isSwapTarget && (
@@ -83,6 +104,26 @@ export const ScheduledTalk = ({
         >
           <TrashIcon className="h-3 w-3" />
         </button>
+        <div
+          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
+            isResizing
+              ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
+              : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
+          }`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          title="Drag to resize"
+        >
+          <div
+            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
+              isResizing
+                ? 'bg-blue-500 dark:bg-blue-400'
+                : 'bg-gray-400 dark:bg-gray-300'
+            }`}
+          ></div>
+        </div>
       </div>
     </div>
   )

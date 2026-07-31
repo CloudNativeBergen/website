@@ -9,7 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { calculateTalkPosition } from '@/lib/schedule/geometry'
 import { DraggableServiceSession } from '../DraggableServiceSession'
-import { useServiceSessionResize } from './useServiceSessionResize'
+import { useScheduleItemResize } from './useScheduleItemResize'
 
 export const ServiceSession = ({
   talk,
@@ -41,12 +41,12 @@ export const ServiceSession = ({
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
-  } = useServiceSessionResize({
+  } = useScheduleItemResize({
     talk,
     talkIndex,
     track,
     height: position.height,
-    onUpdateSession,
+    onUpdateDuration: onUpdateSession,
   })
 
   const handleRemove = useCallback(() => {

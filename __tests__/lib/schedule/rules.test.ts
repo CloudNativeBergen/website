@@ -72,7 +72,7 @@ describe('isTrackIntervalFree', () => {
 describe('findAvailableTimeSlot', () => {
   it('returns the slot when the whole footprint is free', () => {
     expect(
-      findAvailableTimeSlot(track(), proposal('p', 'talk_25'), '10:00'),
+      findAvailableTimeSlot(track(), 25, '10:00'),
     ).toBe('10:00')
   })
   it('returns null when the talk would straddle a service session', () => {
@@ -80,7 +80,7 @@ describe('findAvailableTimeSlot', () => {
     expect(
       findAvailableTimeSlot(
         track(service('Lunch', '11:30', '12:30')),
-        proposal('p', 'talk_25'),
+        25,
         '12:00',
       ),
     ).toBeNull()
@@ -89,7 +89,7 @@ describe('findAvailableTimeSlot', () => {
     expect(
       findAvailableTimeSlot(
         track(talk('a', '10:10', '10:40')),
-        proposal('p', 'talk_25'),
+        25,
         '10:00',
       ),
     ).toBeNull()
@@ -116,7 +116,7 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
     const target = track(targetTalk)
     const source = track(talk('a', '10:00', '10:20'))
     const dragged = proposal('a', 'talk_20')
-    expect(canSwapTalks(target, dragged, targetTalk, '10:00')).toBe(true)
+    expect(canSwapTalks(target, 20, targetTalk, '10:00')).toBe(true)
     // b (60min) placed back at 10:00 in the source (only 'a' there, which is leaving) fits.
     expect(
       canPlaceDisplacedBack(
@@ -144,7 +144,7 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
     const target = track(targetTalk)
     const dragged = proposal('a', 'talk_20')
     // Forward fits (a into target excluding b)...
-    expect(canSwapTalks(target, dragged, targetTalk, '10:00')).toBe(true)
+    expect(canSwapTalks(target, 20, targetTalk, '10:00')).toBe(true)
     // ...but b(45m) back at 10:00→10:45 overlaps c@10:25 in the source. REJECT.
     expect(
       canPlaceDisplacedBack(

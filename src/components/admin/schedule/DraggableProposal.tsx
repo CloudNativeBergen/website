@@ -27,6 +27,7 @@ interface DraggableProposalProps {
   proposal: ProposalExisting
   sourceTrackIndex?: number
   sourceTimeSlot?: string
+  durationMinutes?: number
   isDragging?: boolean
 }
 
@@ -54,13 +55,17 @@ export function DraggableProposal({
   proposal,
   sourceTrackIndex,
   sourceTimeSlot,
+  durationMinutes: providedDurationMinutes,
   isDragging = false,
 }: DraggableProposalProps) {
   const levelConfig = getLevelConfig(proposal.level)
 
-  const { dragItem, durationMinutes, talkSize, dragId, speakerInfo } =
+  const { dragItem, durationMinutes, talkSize, dragId, speakerInfo, isOverridden } =
     useMemo(() => {
-      const duration = getProposalDurationMinutes(proposal)
+      const defaultDuration = getProposalDurationMinutes(proposal)
+      const duration = providedDurationMinutes ?? defaultDuration
+      const isOverridden = providedDurationMinutes !== undefined && providedDurationMinutes !== defaultDuration
+
       // A scheduled talk is dragged FROM a slot (both source fields are always
       // passed together by ScheduledTalk); an unassigned proposal carries none.
       const item: DragItem =
@@ -70,6 +75,7 @@ export function DraggableProposal({
               proposal,
               sourceTrackIndex,
               sourceTimeSlot,
+              durationMinutes: duration,
             }
           : { type: 'proposal', proposal }
       const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
@@ -83,11 +89,12 @@ export function DraggableProposal({
       return {
         dragItem: item,
         durationMinutes: duration,
+        isOverridden,
         talkSize: size,
         dragId: id,
         speakerInfo: populatedSpeakerNames(proposal),
       }
-    }, [proposal, sourceTrackIndex, sourceTimeSlot])
+    }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
   const topicStyling = useMemo(() => {
     const topics = proposal.topics as Topic[]
@@ -413,6 +420,12 @@ export function DraggableProposal({
               }
             />
             <span className="tabular-nums">{durationMinutes}m</span>
+            {isOverridden && (
+              <ExclamationTriangleIcon
+                className="h-3 w-3 text-amber-500"
+                title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+              />
+            )}
           </div>
         </div>
 

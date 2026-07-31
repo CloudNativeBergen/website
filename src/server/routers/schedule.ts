@@ -54,7 +54,7 @@ export const scheduleRouter = router({
         for (const track of payload.tracks || []) {
           for (const talk of track.talks || []) {
             if (talk.placeholder) continue
-            const ref = talk.talk?._id || talk.talk?._ref
+            const ref = talk.talk?._id || (talk.talk as any)?._ref
             if (ref) {
               const status = statuses[ref]
               if (
@@ -203,7 +203,7 @@ export const scheduleRouter = router({
         for (const track of targetSchedule.tracks || []) {
           for (const talk of track.talks || []) {
             if (talk.placeholder) continue
-            const ref = talk.talk?._id || talk.talk?._ref
+            const ref = talk.talk?._id || (talk.talk as any)?._ref
             if (ref) {
               const status = statuses[ref]
               if (

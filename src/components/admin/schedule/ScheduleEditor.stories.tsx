@@ -318,7 +318,8 @@ export const SingleDayWithTracks: Story = {
 
 export const MultiDay: Story = {
   args: {
-    initialSchedules: multiDaySchedules.map(toEditorSchedule),
+    officialSchedules: multiDaySchedules.map(toEditorSchedule),
+    draftSchedules: multiDaySchedules.map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },

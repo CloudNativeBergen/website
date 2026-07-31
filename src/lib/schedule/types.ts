@@ -145,6 +145,7 @@ export type DragItem =
       serviceSession?: undefined
       sourceTrackIndex: number
       sourceTimeSlot: string
+      durationMinutes: number
     }
   | {
       type: 'service-session'

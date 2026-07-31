@@ -46,7 +46,7 @@ export type ScheduleAction =
       duration: number
     }
   | {
-      type: 'resizeService'
+      type: 'resizeItem'
       trackIndex: number
       talkIndex: number
       duration: number
@@ -179,11 +179,11 @@ export function scheduleReducer(
       )
     }
 
-    case 'resizeService': {
+    case 'resizeItem': {
       if (!current) return state
       return withDayResult(
         state,
-        ops.resizeService(
+        ops.resizeScheduleItem(
           current,
           action.trackIndex,
           action.talkIndex,

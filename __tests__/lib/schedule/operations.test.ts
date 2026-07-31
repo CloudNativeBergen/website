@@ -28,7 +28,7 @@ import {
   updateTrack,
   removeTalk,
   addService,
-  resizeService,
+  resizeScheduleItem,
   renameService,
   duplicateService,
   computeUnassigned,
@@ -130,6 +130,7 @@ describe('moveProposal — moving an already-scheduled talk', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '11:00'))
     expect(res.ok).toBe(true)
@@ -149,6 +150,7 @@ describe('moveProposal — moving an already-scheduled talk', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(0, '10:00'))
     expect(res.ok).toBe(false)
@@ -167,6 +169,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_20'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
     expect(res.ok).toBe(true)
@@ -200,6 +203,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_20'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
     expect(res.ok).toBe(false)
@@ -229,6 +233,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '11:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '10:00'))).toBe(
       'invalid',
@@ -257,6 +262,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
       'swap',
@@ -287,6 +293,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
       'invalid',
@@ -312,6 +319,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '10:30'))).toBe(
       'invalid',
@@ -331,6 +339,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
       'swap',
@@ -444,13 +453,13 @@ describe('service add/resize/rename', () => {
     ).toBe(false)
   })
 
-  it('resizeService updates the endTime from the duration', () => {
+  it('resizeScheduleItem updates the endTime from the duration', () => {
     const s = schedule(track('A', service('Break', '10:00', '10:15')))
-    const res = resizeService(s, 0, 0, 30)
+    const res = resizeScheduleItem(s, 0, 0, 30)
     expect(res.schedule.tracks[0].talks[0].endTime).toBe('10:30')
   })
 
-  it('resizeService rejects a resize that overlaps the following item', () => {
+  it('resizeScheduleItem rejects a resize that overlaps the following item', () => {
     const s = schedule(
       track(
         'A',
@@ -459,12 +468,12 @@ describe('service add/resize/rename', () => {
       ),
     )
     // Growing the break to 30 min (→10:30) would overlap the 10:20 talk.
-    expect(resizeService(s, 0, 0, 30).ok).toBe(false)
+    expect(resizeScheduleItem(s, 0, 0, 30).ok).toBe(false)
   })
 
-  it('resizeService ignores a real talk (not a service session)', () => {
+  it('resizeScheduleItem ignores a real talk (not a service session)', () => {
     const s = schedule(track('A', talk('a', '10:00', '10:25')))
-    expect(resizeService(s, 0, 0, 60).ok).toBe(false)
+    expect(resizeScheduleItem(s, 0, 0, 60).ok).toBe(false)
   })
 
   it('renameService updates the placeholder', () => {
@@ -561,10 +570,10 @@ describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
     expect(res.schedule.tracks[0].talks[0].endTime).toBe('21:00')
   })
 
-  it('resizeService rejects a resize whose end exceeds 21:00', () => {
+  it('resizeScheduleItem rejects a resize whose end exceeds 21:00', () => {
     const s = schedule(track('A', service('Break', '20:30', '20:45')))
     // Growing to 60 min → 21:30, past 21:00.
-    expect(resizeService(s, 0, 0, 60).ok).toBe(false)
+    expect(resizeScheduleItem(s, 0, 0, 60).ok).toBe(false)
   })
 
   it('rejects a fresh drop whose 24h-WRAPPED end reads as within the day (F1)', () => {
@@ -599,6 +608,7 @@ describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
       proposal: proposal('w', 'workshop_240'),
       sourceTrackIndex: 1,
       sourceTimeSlot: '08:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '20:00'))).toBe(
       'invalid',
@@ -615,10 +625,10 @@ describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
     ).toBe(false)
   })
 
-  it('resizeService rejects a huge duration that would wrap past midnight (F1)', () => {
+  it('resizeScheduleItem rejects a huge duration that would wrap past midnight (F1)', () => {
     const s = schedule(track('A', service('Break', '20:00', '20:15')))
     // 20:00 + 300 → 01:00 wrapped; must be rejected, not accepted.
-    expect(resizeService(s, 0, 0, 300).ok).toBe(false)
+    expect(resizeScheduleItem(s, 0, 0, 300).ok).toBe(false)
   })
 
   it('moveServiceSession rejects a service whose wrapped end reads as within the day (F1)', () => {
@@ -647,6 +657,7 @@ describe('F4 — stale / out-of-range drag source', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 9, // out of range
       sourceTimeSlot: '10:00',
+          durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
       'invalid',
@@ -665,7 +676,8 @@ describe('F4 — stale / out-of-range drag source', () => {
       type: 'scheduled-talk',
       proposal: proposal('a'),
       sourceTrackIndex: 0,
-      sourceTimeSlot: '09:00', // stale
+      sourceTimeSlot: '09:00',
+          durationMinutes: 25, // stale
     }
     const res = moveProposal(s, dragItem, drop(1, '11:00'))
     expect(res.ok).toBe(false)
@@ -891,6 +903,7 @@ describe('classifier ⇔ reducer equivalence', () => {
           proposal: proposal('a'),
           sourceTrackIndex: 0,
           sourceTimeSlot: '10:00',
+          durationMinutes: 25,
         },
         p: drop(1, '11:00'),
         expectSwap: true,
@@ -905,6 +918,7 @@ describe('classifier ⇔ reducer equivalence', () => {
           proposal: proposal('a'),
           sourceTrackIndex: 0,
           sourceTimeSlot: '10:00',
+          durationMinutes: 25,
         },
         p: drop(0, '10:00'),
       }),
@@ -936,6 +950,7 @@ describe('classifier ⇔ reducer equivalence', () => {
           proposal: proposal('a', 'talk_25'),
           sourceTrackIndex: 0,
           sourceTimeSlot: '20:35',
+          durationMinutes: 25,
         },
         p: drop(1, '10:00'),
       }),
@@ -946,9 +961,10 @@ describe('classifier ⇔ reducer equivalence', () => {
         s: schedule(track('A', talk('a', '10:00', '10:25')), track('B')),
         d: {
           type: 'scheduled-talk',
-          proposal: proposal('a'),
+          proposal: proposal('a', 'talk_25'),
           sourceTrackIndex: 9,
           sourceTimeSlot: '10:00',
+          durationMinutes: 25,
         },
         p: drop(1, '11:00'),
       }),
@@ -959,9 +975,10 @@ describe('classifier ⇔ reducer equivalence', () => {
         s: schedule(track('A', talk('a', '10:00', '10:25')), track('B')),
         d: {
           type: 'scheduled-talk',
-          proposal: proposal('a'),
+          proposal: proposal('a', 'talk_25'),
           sourceTrackIndex: 0,
           sourceTimeSlot: '09:00',
+          durationMinutes: 25,
         },
         p: drop(1, '11:00'),
       }),
