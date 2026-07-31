@@ -182,7 +182,7 @@ export function DraggableProposal({
       proposal.status === Status.submitted
 
     const baseClasses = isNotReady
-      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-red-900'
+      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-gray-800'
       : isAcceptedButNotConfirmed
         ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-amber-400 dark:bg-stone-800'
         : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-700 dark:bg-gray-800'
