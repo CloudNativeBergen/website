@@ -118,11 +118,12 @@ export function DraggableProposal({
   const backgroundStyle = useMemo(() => {
     const topics = proposal.topics as Topic[]
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
-    const isWithdrawnOrRejected =
+    const isNotReady =
       proposal.status === Status.withdrawn ||
-      proposal.status === Status.rejected
+      proposal.status === Status.rejected ||
+      proposal.status === Status.submitted
 
-    if (isWithdrawnOrRejected) {
+    if (isNotReady) {
       return {}
     }
 
@@ -175,11 +176,12 @@ export function DraggableProposal({
 
   const containerClasses = useMemo(() => {
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
-    const isWithdrawnOrRejected =
+    const isNotReady =
       proposal.status === Status.withdrawn ||
-      proposal.status === Status.rejected
+      proposal.status === Status.rejected ||
+      proposal.status === Status.submitted
 
-    const baseClasses = isWithdrawnOrRejected
+    const baseClasses = isNotReady
       ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-red-900'
       : isAcceptedButNotConfirmed
         ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-amber-400 dark:bg-stone-800'
