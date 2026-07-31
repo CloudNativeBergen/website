@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -94,6 +94,7 @@ export function HomepageSectionsEditor({
   const router = useRouter()
   const utils = api.useUtils()
   const { showNotification } = useNotification()
+  const dndId = useId()
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
   // Rows are materialized ONCE: `toEditorRows` generates keys for keyless
@@ -349,6 +350,7 @@ export function HomepageSectionsEditor({
                 </div>
               ) : (
                 <DndContext
+                  id={dndId}
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragStart={handleDragStart}

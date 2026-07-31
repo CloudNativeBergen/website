@@ -159,6 +159,7 @@ export function ScheduleEditor({
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const dndId = React.useId()
 
   const [isDraftMode, setIsDraftMode] = useState(true)
 
@@ -525,6 +526,7 @@ export function ScheduleEditor({
     <div className={LAYOUT_CLASSES.container}>
       <ScheduleProvider value={scheduleContextValue}>
         <DndContext
+          id={dndId}
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
