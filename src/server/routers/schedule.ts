@@ -34,6 +34,18 @@ export const scheduleRouter = router({
 
       const payload = input as ConferenceSchedule
 
+      // DATE GUARD: reject any schedule whose date falls outside the conference
+      // window. Prevents accidental creation of rogue days (e.g. wrong date in a
+      // CLI script or a stale client payload with a garbage date).
+      if (conference.startDate && conference.endDate && payload.date) {
+        if (payload.date < conference.startDate || payload.date > conference.endDate) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Schedule date ${payload.date} is outside the conference dates (${conference.startDate} – ${conference.endDate}).`,
+          })
+        }
+      }
+
       // AUTO-FORK GUARD:
       // If we are saving a 'draft', but the existing document is 'official', we MUST fork it.
       if (payload._id && payload.status === ScheduleStatus.Draft) {

@@ -250,9 +250,21 @@ export function ScheduleEditor({
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
 
+  // Guard: after calling router.refresh(), the new SSR props will have updated
+  // _rev values while react-query's latestVersions cache still holds stale data
+  // from the previous poll. Without a cooldown, the effect immediately sees a
+  // mismatch (new prop _rev ≠ stale cached _rev) and fires ANOTHER refresh —
+  // creating an infinite loop. After a refresh we skip comparisons until the
+  // next poll cycle has a chance to fetch fresh versions that match the new props.
+  const lastRefreshRef = useRef(0)
+
   // Detect external changes by comparing _rev
   useEffect(() => {
     if (!latestVersions) return
+
+    // Skip comparison during cooldown after a router.refresh()
+    const elapsed = Date.now() - lastRefreshRef.current
+    if (elapsed < 15000) return
 
     let changed = false
     for (const loaded of mergedSchedules) {
@@ -271,6 +283,7 @@ export function ScheduleEditor({
         )
       } else {
         // Auto-refresh seamlessly if the user has no unsaved changes
+        lastRefreshRef.current = Date.now()
         router.refresh()
       }
     } else {

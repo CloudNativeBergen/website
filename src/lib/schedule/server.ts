@@ -103,7 +103,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
       list: ConferenceSchedule[],
       defaultStatus: ScheduleStatus,
     ): EditorSchedule[] {
-      const copy = [...list]
+      const conferenceDatesSet = new Set(conferenceDates)
+      const copy = list.filter((s) => conferenceDatesSet.has(s.date))
       const existingDates = new Set(copy.map((s) => s.date))
       for (const date of conferenceDates) {
         if (!existingDates.has(date)) {
