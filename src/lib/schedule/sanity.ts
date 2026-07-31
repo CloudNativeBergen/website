@@ -38,6 +38,31 @@ export async function getValidTalkIds(
   return new Set(ids || [])
 }
 
+/** Fetch all talk statuses for the Strict Block guard. */
+export async function getTalkStatuses(
+  conferenceId: string,
+): Promise<Record<string, string>> {
+  const talks = await scopedFetch<{ _id: string; status?: string }[]>(
+    clientWrite,
+    { conferenceId },
+    `*[_type == "talk"]{ _id, status }`,
+  )
+  return Object.fromEntries(
+    (talks || []).map((t) => [t._id, t.status || 'new']),
+  )
+}
+
+/** Fetch the current status of a schedule document. */
+export async function getScheduleStatusById(
+  scheduleId: string,
+): Promise<string | null> {
+  const doc = await clientWrite.fetch<{ status?: string } | null>(
+    `*[_id == $id][0]{ status }`,
+    { id: scheduleId },
+  )
+  return doc?.status || null
+}
+
 /**
  * The referenced talk id on a slot, resolved from either the projected `_id` or
  * a raw Sanity `_ref`. Returns '' when the slot carries no resolvable talk (no
@@ -263,6 +288,8 @@ export async function saveScheduleToSanity(
         .set({
           date: schedule.date,
           tracks: sanitizedTracks,
+          status: schedule.status,
+          version: (schedule.version || 0) + 1,
         })
         .commit()
 
@@ -297,11 +324,13 @@ export async function saveScheduleToSanity(
       // forked edits. Check for an existing schedule for this (conference, date)
       // first; if one exists, surface the same conflict UX as a revision mismatch
       // so the client tells the organizer to reload rather than fork the day.
+      // Check for an existing schedule for this (conference, date, status)
+      // so we don't block drafting if an official day exists.
       const existingId = await scopedFetch<string | null>(
         clientWrite,
         { conferenceId: conference._id },
-        `*[_type == "schedule" && date == $date][0]._id`,
-        { date: schedule.date },
+        `*[_type == "schedule" && date == $date && status == $status][0]._id`,
+        { date: schedule.date, status: schedule.status || 'draft' },
       )
       if (existingId) {
         return {
@@ -323,18 +352,25 @@ export async function saveScheduleToSanity(
         date: schedule.date,
         tracks: sanitizedTracks,
         conference: createReference(conference._id),
+        status: schedule.status || 'draft',
+        version: schedule.version || 1,
+        ...(options?.actorId
+          ? { owner: createReference(options.actorId) }
+          : {}),
       }
 
-      await clientWrite
-        .transaction()
-        .create(newScheduleDoc)
-        .patch(conference._id, (patch) =>
+      const tx = clientWrite.transaction().create(newScheduleDoc)
+
+      // CRITICAL DECOUPLING: Only append Official schedules to the reference array.
+      if (schedule.status === 'official') {
+        tx.patch(conference._id, (patch) =>
           patch
             .setIfMissing({ schedules: [] })
-            // Array items need a stable _key, matching other reference arrays.
             .append('schedules', [createReferenceWithKey(newId, 'schedule')]),
         )
-        .commit()
+      }
+
+      await tx.commit()
 
       // Read back the created document's `_rev` so a follow-up save in the same
       // session carries a revision and participates in optimistic concurrency

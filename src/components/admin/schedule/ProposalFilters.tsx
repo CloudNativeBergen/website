@@ -3,66 +3,72 @@
 import {
   FunnelIcon,
   XMarkIcon,
-  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline'
 import { SearchInput } from '@/components/SearchInput'
-import { FilterSelect } from '@/components/FilterSelect'
 import type { ProposalFilterState } from './useProposalFilters'
 
 const SEARCH_INPUT_CLASSES =
-  'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600'
+  'w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-8 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600'
 
-const FormatFilter = ({
-  selectedFormat,
-  availableFormats,
-  onFormatChange,
-}: {
-  selectedFormat: string
-  availableFormats: string[]
-  onFormatChange: (value: string) => void
-}) => (
-  <FilterSelect
-    icon={FunnelIcon}
-    value={selectedFormat}
-    onChange={onFormatChange}
-    ariaLabel="Filter by format"
-    options={
-      new Map(
-        availableFormats.map((format) => [
-          format,
-          format.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        ]),
-      )
-    }
-    allLabel="All formats"
-  />
-)
+import { ChevronDownIcon } from '@heroicons/react/16/solid'
 
-const LevelFilter = ({
-  selectedLevel,
-  availableLevels,
-  onLevelChange,
-}: {
-  selectedLevel: string
-  availableLevels: string[]
-  onLevelChange: (value: string) => void
-}) => (
-  <FilterSelect
-    icon={AdjustmentsHorizontalIcon}
-    value={selectedLevel}
-    onChange={onLevelChange}
-    ariaLabel="Filter by level"
-    options={
-      new Map(
-        availableLevels.map((level) => [
-          level,
-          level.charAt(0).toUpperCase() + level.slice(1),
-        ]),
-      )
+const UnifiedFilter = ({ filters }: { filters: ProposalFilterState }) => {
+  const unifiedValue = filters.selectedFormat
+    ? `format:${filters.selectedFormat}`
+    : filters.selectedLevel
+      ? `level:${filters.selectedLevel}`
+      : ''
+
+  const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value
+    if (val.startsWith('format:')) {
+      filters.setSelectedFormat(val.replace('format:', ''))
+      filters.setSelectedLevel('')
+    } else if (val.startsWith('level:')) {
+      filters.setSelectedLevel(val.replace('level:', ''))
+      filters.setSelectedFormat('')
+    } else {
+      filters.setSelectedFormat('')
+      filters.setSelectedLevel('')
     }
-    allLabel="All levels"
-  />
-)
+  }
+
+  return (
+    <div className="relative h-full">
+      <FunnelIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
+      <select
+        value={unifiedValue}
+        onChange={onChange}
+        aria-label="Filter talks"
+        className="h-full w-full cursor-pointer appearance-none rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-7 text-sm text-gray-900 transition-all focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:bg-gray-600"
+      >
+        <option value="">Filter...</option>
+        {filters.availableFormats.length > 0 && (
+          <optgroup label="Format">
+            {filters.availableFormats.map((f) => (
+              <option key={`format:${f}`} value={`format:${f}`}>
+                {f.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {filters.availableLevels.length > 0 && (
+          <optgroup label="Level">
+            {filters.availableLevels.map((l) => (
+              <option key={`level:${l}`} value={`level:${l}`}>
+                {l.charAt(0).toUpperCase() + l.slice(1)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      <ChevronDownIcon
+        aria-hidden="true"
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 sm:h-4 sm:w-4 dark:text-gray-400"
+      />
+    </div>
+  )
+}
 
 /**
  * Search + format + level filter controls, driven by {@link ProposalFilterState}
@@ -71,46 +77,34 @@ const LevelFilter = ({
  */
 export function ProposalFilters({
   filters,
-  clearButtonClassName,
 }: {
   filters: ProposalFilterState
-  clearButtonClassName?: string
 }) {
   return (
     <div className="space-y-3">
-      {filters.hasActiveFilters && (
-        <button
-          onClick={filters.clearFilters}
-          className={
-            clearButtonClassName ??
-            'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white/90 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm transition-all hover:bg-white hover:text-gray-800 focus:ring-2 focus:ring-gray-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100'
-          }
-          type="button"
-          title="Clear all filters"
-        >
-          <XMarkIcon className="h-3 w-3" />
-          Clear
-        </button>
-      )}
-
-      <SearchInput
-        value={filters.searchQuery}
-        onChange={filters.setSearchQuery}
-        placeholder="Search talks or speakers..."
-        inputClassName={SEARCH_INPUT_CLASSES}
-      />
-
-      <FormatFilter
-        selectedFormat={filters.selectedFormat}
-        availableFormats={filters.availableFormats}
-        onFormatChange={filters.setSelectedFormat}
-      />
-
-      <LevelFilter
-        selectedLevel={filters.selectedLevel}
-        availableLevels={filters.availableLevels}
-        onLevelChange={filters.setSelectedLevel}
-      />
+      <div className="flex gap-2">
+        <div className="relative flex-[3]">
+          <SearchInput
+            value={filters.searchQuery}
+            onChange={filters.setSearchQuery}
+            placeholder="Search talks..."
+            inputClassName={SEARCH_INPUT_CLASSES}
+          />
+          {filters.hasActiveFilters && (
+            <button
+              onClick={filters.clearFilters}
+              type="button"
+              title="Clear all filters"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:text-gray-800 dark:text-gray-500 dark:hover:text-gray-200"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex-[2]">
+          <UnifiedFilter filters={filters} />
+        </div>
+      </div>
     </div>
   )
 }

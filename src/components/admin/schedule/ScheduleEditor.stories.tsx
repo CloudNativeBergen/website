@@ -284,7 +284,8 @@ type Story = StoryObj<typeof ScheduleEditor>
 
 export const EmptySchedule: Story = {
   args: {
-    initialSchedules: [emptySchedule].map(toEditorSchedule),
+    officialSchedules: [emptySchedule].map(toEditorSchedule),
+    draftSchedules: [emptySchedule].map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },
@@ -300,7 +301,8 @@ export const EmptySchedule: Story = {
 
 export const SingleDayWithTracks: Story = {
   args: {
-    initialSchedules: [singleDaySchedule].map(toEditorSchedule),
+    officialSchedules: [singleDaySchedule].map(toEditorSchedule),
+    draftSchedules: [singleDaySchedule].map(toEditorSchedule),
     conference: mockConference,
     initialProposals: allProposals,
   },

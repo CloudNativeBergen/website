@@ -46,7 +46,8 @@ import { api } from '@/lib/trpc/client'
 import { PlusIcon } from '@heroicons/react/24/outline'
 
 interface ScheduleEditorProps {
-  initialSchedules: EditorSchedule[]
+  officialSchedules: EditorSchedule[]
+  draftSchedules: EditorSchedule[]
   conference: Conference
   initialProposals: ProposalExisting[]
 }
@@ -151,12 +152,32 @@ const MemoizedTracksGrid = React.memo(TracksGrid)
 MemoizedTracksGrid.displayName = 'MemoizedTracksGrid'
 
 export function ScheduleEditor({
-  initialSchedules,
+  officialSchedules,
+  draftSchedules,
   initialProposals,
 }: ScheduleEditorProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const [isDraftMode, setIsDraftMode] = useState(true)
+
+  const mergedSchedules = useMemo(() => {
+    if (!isDraftMode) return officialSchedules
+
+    return draftSchedules.map((draftDay, i) => {
+      const officialDay = officialSchedules[i]
+      if (!draftDay._id && officialDay && officialDay._id) {
+        return {
+          ...officialDay,
+          status: 'draft',
+          _id: '',
+          _rev: undefined,
+        } as EditorSchedule
+      }
+      return draftDay
+    })
+  }, [isDraftMode, draftSchedules, officialSchedules])
 
   // Desktop is the SSR default (`true`), so wide screens never flash the mobile
   // layout and there is no hydration mismatch; phones flip to the tap-driven
@@ -165,15 +186,25 @@ export function ScheduleEditor({
   const isDesktop = useMediaQuery('(min-width: 768px)', true)
 
   const saveMutation = api.schedule.save.useMutation()
+  const actionMutation = api.schedule.action.useMutation()
 
   // Single reducer over ALL days. The active day is `state.currentDayIndex`
   // (identity), never an `_id` — see reducer.ts for why that fixes the
   // day-collision bug. There is no second store to hand-sync.
   const [state, dispatch] = useReducer(
     scheduleReducer,
-    { schedules: initialSchedules, proposals: initialProposals },
+    { schedules: mergedSchedules, proposals: initialProposals },
     initScheduleEditorState,
   )
+
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    dispatch({ type: 'resetSchedules', schedules: mergedSchedules })
+  }, [mergedSchedules])
 
   const currentDayIndex = state.currentDayIndex
   const currentSchedule = state.schedules[currentDayIndex] ?? null
@@ -274,6 +305,25 @@ export function ScheduleEditor({
       dispatch({ type: 'saveError', message })
     }
   }, [state.dirty, state.schedules, currentDayIndex, saveMutation])
+
+  const handlePromote = useCallback(async () => {
+    if (!currentSchedule?._id) return
+    if (!confirm('Are you sure you want to publish this day?')) return
+
+    try {
+      await actionMutation.mutateAsync({
+        id: currentSchedule._id,
+        action: 'promote',
+      })
+      alert('Day published successfully!')
+      // Optionally reload the page to get the freshest data, or just let the cache revalidate.
+      window.location.reload()
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to publish schedule'
+      alert(`Error publishing: ${message}`)
+    }
+  }, [currentSchedule, actionMutation])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event
@@ -494,6 +544,9 @@ export function ScheduleEditor({
               isSaving={isSaving}
               saveSuccess={saveSuccess}
               hasUnsavedChanges={hasUnsavedChanges}
+              isDraftMode={isDraftMode}
+              onToggleDraftMode={setIsDraftMode}
+              onPromote={handlePromote}
             />
 
             {error && <ErrorBanner error={error} />}

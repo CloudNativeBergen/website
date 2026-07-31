@@ -63,6 +63,7 @@ export type ScheduleAction =
       sourceTrackIndex: number
     }
   | { type: 'changeDay'; dayIndex: number }
+  | { type: 'resetSchedules'; schedules: EditorSchedule[] }
   | { type: 'saveStart' }
   | {
       type: 'saveDaySucceeded'
@@ -223,6 +224,15 @@ export function scheduleReducer(
       return {
         ...state,
         currentDayIndex: action.dayIndex,
+        ui: { ...state.ui, error: null },
+      }
+    }
+
+    case 'resetSchedules': {
+      return {
+        ...state,
+        schedules: action.schedules,
+        dirty: action.schedules.map(() => false),
         ui: { ...state.ui, error: null },
       }
     }

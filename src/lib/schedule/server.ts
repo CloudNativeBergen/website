@@ -1,12 +1,14 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
-import { Status, ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'
-import { EditorSchedule, toEditorSchedule } from './types'
+import { EditorSchedule, toEditorSchedule, ScheduleStatus } from './types'
+import { clientReadUncached } from '@/lib/sanity/client'
 
 export interface ScheduleData {
-  schedules: EditorSchedule[]
+  officialSchedules: EditorSchedule[]
+  draftSchedules: EditorSchedule[]
   conference: Conference
   proposals: ProposalExisting[]
   error?: string
@@ -36,81 +38,121 @@ export async function getScheduleData(): Promise<ScheduleData> {
 
     if (conferenceError || !conference) {
       return {
-        schedules: [],
+        officialSchedules: [],
+        draftSchedules: [],
         conference: {} as Conference,
         proposals: [],
         error: 'Failed to fetch conference data',
       }
     }
 
-    // Operate on a COPY: fabricating empty days and sorting must never mutate
-    // the cached `conference.schedules` array in place (that leaks synthetic
-    // days and a reordering back into the shared, cached conference object).
-    const schedules: ConferenceSchedule[] = [...(conference.schedules ?? [])]
+    // explicitly query Sanity for all schedules (both drafts and official)
+    const rawSchedules = await clientReadUncached.fetch<ConferenceSchedule[]>(
+      `*[_type == "schedule" && conference._ref == $conferenceId]{
+        _id, _rev, date, status, version, owner,
+        tracks[]{
+          trackTitle,
+          trackDescription,
+          talks[]{
+            startTime,
+            endTime,
+            placeholder,
+            "hasTalkRef": defined(talk),
+            talk->{
+              _id,
+              title,
+              description,
+              format,
+              level,
+              status,
+              audiences,
+              topics[]-> {
+                _id,
+                title,
+                color,
+                slug,
+                description
+              },
+              speakers[]->{
+                _id,
+                name,
+                "slug": slug.current,
+                title,
+                "image": coalesce(image.asset->url, imageURL)
+              }
+            }
+          }
+        }
+      }`,
+      { conferenceId: conference._id },
+    )
+
+    const officialRaw = rawSchedules.filter(
+      (s) => s.status === ScheduleStatus.Official || !s.status,
+    ) // Fallback for legacy
+    const draftRaw = rawSchedules.filter(
+      (s) => s.status === ScheduleStatus.Draft,
+    )
 
     const conferenceDates = generateConferenceDates(
       conference.startDate,
       conference.endDate,
     )
 
-    const existingDates = new Set(schedules.map((s) => s.date))
-
-    for (const date of conferenceDates) {
-      if (!existingDates.has(date)) {
-        schedules.push({
-          _id: '',
-          date: date,
-          tracks: [],
-        })
-        // Keep the set in step with what we've fabricated so a duplicate date in
-        // `conferenceDates` can't fabricate the same day twice.
-        existingDates.add(date)
+    function fillAndSort(
+      list: ConferenceSchedule[],
+      defaultStatus: ScheduleStatus,
+    ): EditorSchedule[] {
+      const copy = [...list]
+      const existingDates = new Set(copy.map((s) => s.date))
+      for (const date of conferenceDates) {
+        if (!existingDates.has(date)) {
+          copy.push({
+            _id: '',
+            date: date,
+            tracks: [],
+            status: defaultStatus,
+          })
+          existingDates.add(date)
+        }
       }
+      copy.sort((a, b) => a.date.localeCompare(b.date))
+      return copy.map(toEditorSchedule)
     }
 
-    schedules.sort((a, b) => a.date.localeCompare(b.date))
-
-    // Resolve every persisted day into an EditorSchedule at the load boundary.
-    // `toEditorSchedule` tags each slot (talk vs service) AND drops "ghost" slots
-    // — entries whose talk reference no longer resolves (the proposal was deleted
-    // after being scheduled) and which aren't service placeholders. The
-    // projection keeps them as `{ talk: null }` with no placeholder; in the
-    // editor they render invisibly and can't be removed, and on save the payload
-    // validator rejects the whole day ("neither a talk nor a placeholder"),
-    // permanently bricking that day. This is the SINGLE editor-side ghost-strip;
-    // fabricated empty days convert trivially.
-    const editorSchedules: EditorSchedule[] = schedules.map(toEditorSchedule)
+    const officialSchedules = fillAndSort(officialRaw, ScheduleStatus.Official)
+    const draftSchedules = fillAndSort(draftRaw, ScheduleStatus.Draft)
 
     const { proposals, proposalsError } = await getProposals({
       conferenceId: conference._id,
       returnAll: true,
       includePreviousAcceptedTalks: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      statuses: ['submitted', 'accepted', 'confirmed'] as any,
     })
 
     if (proposalsError) {
       return {
-        schedules: editorSchedules,
+        officialSchedules,
+        draftSchedules,
         conference,
         proposals: [],
         error: 'Failed to fetch proposals',
       }
     }
 
-    const schedulableProposals = proposals.filter(
-      (proposal: ProposalExisting) =>
-        proposal.status === Status.accepted ||
-        proposal.status === Status.confirmed,
-    )
-
+    // Return ALL proposals so organizers can draft with unaccepted talks
     return {
-      schedules: editorSchedules,
+      officialSchedules,
+      draftSchedules,
       conference,
-      proposals: schedulableProposals,
+      proposals: proposals || [],
     }
   } catch (error) {
     console.error('Error fetching schedule data:', error)
     return {
-      schedules: [],
+      officialSchedules: [],
+      draftSchedules: [],
       conference: {} as Conference,
       proposals: [],
       error: 'Internal server error',

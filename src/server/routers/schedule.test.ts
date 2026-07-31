@@ -15,9 +15,14 @@ vi.mock('@/lib/conference/sanity', () => ({
 // --- Schedule persistence layer (stubbed — we assert the router, not Sanity) -
 const saveScheduleMock = vi.fn()
 const getValidTalkIdsMock = vi.fn()
+const getTalkStatusesMock = vi.fn()
+const getScheduleStatusByIdMock = vi.fn()
 vi.mock('@/lib/schedule/sanity', () => ({
   saveScheduleToSanity: (...args: unknown[]) => saveScheduleMock(...args),
   getValidTalkIds: (...args: unknown[]) => getValidTalkIdsMock(...args),
+  getTalkStatuses: (...args: unknown[]) => getTalkStatusesMock(...args),
+  getScheduleStatusById: (...args: unknown[]) =>
+    getScheduleStatusByIdMock(...args),
 }))
 
 const validateMock = vi.fn()
@@ -62,6 +67,8 @@ beforeEach(() => {
     error: null,
   })
   getValidTalkIdsMock.mockResolvedValue(new Set<string>())
+  getTalkStatusesMock.mockResolvedValue({})
+  getScheduleStatusByIdMock.mockResolvedValue('draft')
   validateMock.mockReturnValue(null)
   saveScheduleMock.mockResolvedValue({
     schedule: { _id: 'sched-1' },
@@ -113,5 +120,47 @@ describe('schedule router — tenant-scoped cache invalidation (#618)', () => {
     })
     await expect(makeCaller().save(validPayload)).rejects.toBeTruthy()
     expect(revalidateTagMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('schedule router — draft and publish guards', () => {
+  it('auto-forks a draft if the existing schedule is official', async () => {
+    getScheduleStatusByIdMock.mockResolvedValueOnce('official')
+
+    await makeCaller().save({
+      ...validPayload,
+      _id: 'existing-id',
+      _rev: 'rev-1',
+      status: 'draft',
+    })
+
+    // The payload passed to saveScheduleToSanity should have _id stripped
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: '' }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('enforces the Strict Block when publishing an official schedule', async () => {
+    getTalkStatusesMock.mockResolvedValueOnce({ 'talk-1': 'submitted' })
+
+    const payload = {
+      ...validPayload,
+      status: 'official',
+      tracks: [
+        {
+          trackTitle: 'T1',
+          talks: [
+            { startTime: '10:00', endTime: '10:30', talk: { _ref: 'talk-1' } },
+          ],
+        },
+      ],
+    }
+
+    await expect(makeCaller().save(payload)).rejects.toThrowError(
+      /Strict Block: Cannot publish schedule/,
+    )
+    expect(saveScheduleMock).not.toHaveBeenCalled()
   })
 })

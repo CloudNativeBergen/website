@@ -26,9 +26,7 @@ vi.mock('@/lib/sanity/helpers', () => ({
   }),
 }))
 
-// The prior-placements read is the one whose behaviour each test controls.
-let priorFetchImpl: () => Promise<unknown> = () =>
-  Promise.resolve({ date: '2026-09-10', tracks: [] })
+
 
 const commitMock = vi.fn().mockResolvedValue({ _rev: 'r2' })
 const setMock = vi.fn(() => ({ commit: commitMock }))
@@ -38,14 +36,13 @@ const patchMock = vi.fn((id?: unknown) => {
   return { ifRevisionId: ifRevisionIdMock }
 })
 
+// Default fetchMock implementation
 const fetchMock = vi.fn((query: string) => {
-  // Target-existence / scope check.
   if (query.includes('conferenceRef')) {
     return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
   }
-  // Prior-placements projection (the one N6 cares about).
   if (query.includes('trackTitle')) {
-    return priorFetchImpl()
+    return Promise.resolve({ date: '2026-09-10', tracks: [] })
   }
   return Promise.resolve(null)
 })
@@ -77,23 +74,38 @@ function makeSchedule(): ConferenceSchedule {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  priorFetchImpl = () =>
-    Promise.resolve({
-      date: '2026-09-10',
-      tracks: [
-        {
-          trackTitle: 'Track A',
-          talks: [{ startTime: '09:00', talkId: 't1' }],
-        },
-      ],
-    })
+  fetchMock.mockImplementation((query: string) => {
+    if (query.includes('conferenceRef')) {
+      return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
+    }
+    if (query.includes('trackTitle')) {
+      return Promise.resolve({
+        date: '2026-09-10',
+        tracks: [
+          {
+            trackTitle: 'Track A',
+            talks: [{ startTime: '09:00', talkId: 't1' }],
+          },
+        ],
+      })
+    }
+    return Promise.resolve(null)
+  })
 })
 
 describe('saveScheduleToSanity — schedule-change alert gating (N6)', () => {
   it('skips the alert pass and logs when the prior-placements read fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    priorFetchImpl = () => Promise.reject(new Error('read fail'))
+    fetchMock.mockImplementation((query: string) => {
+      if (query.includes('conferenceRef')) {
+        return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
+      }
+      if (query.includes('trackTitle')) {
+        return Promise.reject(new Error('read fail'))
+      }
+      return Promise.resolve(null)
+    })
 
     const result = await saveScheduleToSanity(makeSchedule(), CONF)
 

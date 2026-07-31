@@ -160,3 +160,9 @@ export type DragItem =
       sourceTrackIndex: number
       sourceTimeSlot: string
     }
+
+export enum ScheduleStatus {
+  Draft = 'draft',
+  Official = 'official',
+  Archived = 'archived',
+}

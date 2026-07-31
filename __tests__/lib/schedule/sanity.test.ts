@@ -291,7 +291,7 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined })
+    const newDay = updateDay({ _id: '', _rev: undefined, status: 'official' })
     const result = await saveScheduleToSanity(newDay, conference)
 
     // Exactly one transaction, committed once. No standalone patch() write.
@@ -331,6 +331,21 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     expect(result.schedule?._rev).toBe('created-rev')
   })
 
+  it('runs one atomic transaction for drafts but DOES NOT append them to the conference array', async () => {
+    const { tx } = installTransaction()
+    mockClient.fetch
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _rev: 'created-rev' })
+
+    const newDay = updateDay({ _id: '', _rev: undefined, status: 'draft' })
+    await saveScheduleToSanity(newDay, conference)
+
+    expect(clientWrite.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    // The patch for the conference array MUST NOT be called!
+    expect(tx.patch).not.toHaveBeenCalled()
+  })
+
   it('returns a conflict (no create) when a schedule for this (conference, date) already exists (F2)', async () => {
     // The duplicate-day existence check finds a doc for this date.
     mockClient.fetch.mockResolvedValueOnce('existing-sched-id')
@@ -353,7 +368,12 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     expect(query).toContain('_type == "schedule"')
     expect(query).toContain('conference._ref == $conferenceId')
     expect(query).toContain('date == $date')
-    expect(params).toEqual({ conferenceId: 'conf-1', date: '2026-06-15' })
+    expect(query).toContain('status == $status')
+    expect(params).toEqual({
+      conferenceId: 'conf-1',
+      date: '2026-06-15',
+      status: 'draft',
+    })
   })
 })
 

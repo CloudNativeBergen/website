@@ -10,7 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const HEADER_CLASS =
-  'border-b border-gray-200 bg-white px-4 py-2 shrink-0 dark:border-gray-700 dark:bg-gray-900'
+  'border-b border-gray-200 bg-white px-4 shrink-0 dark:border-gray-700 dark:bg-gray-900 min-h-[64px] flex items-center'
 
 const PRIMARY_BUTTON =
   'inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600'
@@ -28,6 +28,9 @@ const HeaderSectionComponent = ({
   isSaving,
   saveSuccess,
   hasUnsavedChanges,
+  isDraftMode,
+  onToggleDraftMode,
+  onPromote,
 }: {
   schedule: ConferenceSchedule | null
   schedules: ConferenceSchedule[]
@@ -38,16 +41,11 @@ const HeaderSectionComponent = ({
   isSaving: boolean
   saveSuccess: boolean
   hasUnsavedChanges: boolean
+  isDraftMode: boolean
+  onToggleDraftMode: (enabled: boolean) => void
+  onPromote: () => void
 }) => {
-  const trackCount = useMemo(
-    () => schedule?.tracks?.length || 0,
-    [schedule?.tracks?.length],
-  )
 
-  const headerInfo = useMemo(() => {
-    if (!schedule) return null
-    return `${schedule.date} • ${trackCount} tracks`
-  }, [schedule, trackCount])
 
   const dayNavigation = useMemo(() => {
     if (!schedules || schedules.length <= 1) return null
@@ -91,29 +89,71 @@ const HeaderSectionComponent = ({
 
   return (
     <div className={HEADER_CLASS}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Schedule Editor
-            </h1>
-            {headerInfo && (
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {headerInfo}
-              </p>
-            )}
-          </div>
+      <div className="flex w-full flex-wrap items-center justify-between gap-4 py-2">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           {dayNavigation}
+          {schedule && (
+            <span
+              title={`This day's schedule is currently ${schedule.status === 'official' ? 'live and visible to the public' : 'a private draft'}.`}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                schedule.status === 'official'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+              }`}
+            >
+              {schedule.status === 'official' ? 'Official' : 'Draft'}
+            </span>
+          )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 border-r border-gray-300 pr-3 dark:border-gray-700">
+            <span
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+              title="When ON, you can edit the schedule. When OFF, you preview exactly what attendees see."
+            >
+              Edit Mode
+            </span>
+            <button
+              title="Toggle Draft Mode: When ON, you can edit the schedule. When OFF, you preview exactly what attendees see."
+              onClick={() => onToggleDraftMode(!isDraftMode)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none ${
+                isDraftMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+              role="switch"
+              aria-checked={isDraftMode}
+            >
+              <span className="sr-only">Toggle Draft Mode</span>
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  isDraftMode ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           <button
             onClick={onAddTrack}
             className={SECONDARY_BUTTON}
             type="button"
+            disabled={!isDraftMode}
           >
             <PlusIcon className="h-4 w-4" />
             Track
           </button>
+
+          {isDraftMode && (
+            <button
+              title="Publish: Make this day's schedule official and visible to the public."
+              onClick={onPromote}
+              disabled={isSaving || !schedule?._id}
+              className={SECONDARY_BUTTON}
+              type="button"
+            >
+              <CheckCircleIcon className="h-4 w-4 text-green-600" />
+              Publish
+            </button>
+          )}
           <button
             onClick={onSave}
             disabled={isSaving}
@@ -126,7 +166,7 @@ const HeaderSectionComponent = ({
               saveSuccess
                 ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
                 : ''
-            }`}
+            } ${!isDraftMode ? 'hidden cursor-not-allowed opacity-50' : ''}`}
             type="button"
           >
             {saveSuccess ? (

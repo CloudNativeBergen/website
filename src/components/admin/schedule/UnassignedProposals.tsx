@@ -12,54 +12,81 @@ interface UnassignedProposalsProps {
   proposals: ProposalExisting[]
 }
 
+import { getProposalDurationMinutes } from '@/lib/schedule/types'
+import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
+
 const VIRTUAL_SCROLL_THRESHOLD = 50
-const PROPOSAL_HEIGHT = 120
 
 const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
   <div className="flex h-full items-center justify-center p-8 text-center">
-    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-      {hasProposals ? 'No matches found' : 'No talks available'}
-    </h3>
-    <p className="text-sm text-gray-500 dark:text-gray-400">
-      {hasProposals
-        ? 'Try adjusting your search or filter criteria'
-        : 'No confirmed proposals are available for scheduling'}
+    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+      {hasProposals ? 'No matches found' : 'No talks to schedule'}
     </p>
   </div>
 )
 
 export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
   const filters = useProposalFilters(proposals)
-  const { filteredProposals, statsText } = filters
+  const { filteredProposals } = filters
 
   const useVirtualScrolling =
     filteredProposals.length > VIRTUAL_SCROLL_THRESHOLD
   const [scrollTop, setScrollTop] = useState(0)
   const [containerHeight, setContainerHeight] = useState(600)
 
-  const virtualizedItems = useMemo(() => {
-    if (!useVirtualScrolling)
-      return filteredProposals.map((proposal, index) => ({
-        proposal,
-        index,
-        offsetTop: 0,
-      }))
+  const { virtualizedItems, totalHeight } = useMemo(() => {
+    if (!useVirtualScrolling) {
+      return {
+        virtualizedItems: filteredProposals.map((proposal, index) => ({
+          proposal,
+          index,
+          offsetTop: 0,
+          height: getProposalDurationMinutes(proposal) * PIXELS_PER_MINUTE + 8, // 8px for gap/padding
+        })),
+        totalHeight: 0,
+      }
+    }
 
-    const startIndex = Math.floor(scrollTop / PROPOSAL_HEIGHT)
-    const endIndex = Math.min(
-      startIndex + Math.ceil(containerHeight / PROPOSAL_HEIGHT) + 2,
-      filteredProposals.length,
-    )
+    const itemsWithLayout = []
+    let currentOffset = 0
+    for (let i = 0; i < filteredProposals.length; i++) {
+      const h = getProposalDurationMinutes(filteredProposals[i]) * PIXELS_PER_MINUTE + 8 // 8px gap
+      itemsWithLayout.push({
+        proposal: filteredProposals[i],
+        index: i,
+        offsetTop: currentOffset,
+        height: h,
+      })
+      currentOffset += h
+    }
 
-    return filteredProposals.slice(startIndex, endIndex).map((proposal, i) => ({
-      proposal,
-      index: startIndex + i,
-      offsetTop: (startIndex + i) * PROPOSAL_HEIGHT,
-    }))
+    const totalHeight = currentOffset
+
+    // Find visible range
+    let startIndex = 0
+    while (
+      startIndex < itemsWithLayout.length &&
+      itemsWithLayout[startIndex].offsetTop + itemsWithLayout[startIndex].height < scrollTop
+    ) {
+      startIndex++
+    }
+
+    let endIndex = startIndex
+    while (
+      endIndex < itemsWithLayout.length &&
+      itemsWithLayout[endIndex].offsetTop < scrollTop + containerHeight + 200 // buffer
+    ) {
+      endIndex++
+    }
+
+    return {
+      virtualizedItems: itemsWithLayout.slice(startIndex, endIndex + 1),
+      totalHeight,
+    }
   }, [filteredProposals, scrollTop, containerHeight, useVirtualScrolling])
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop)
+  const handleScroll = useCallback((_e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(_e.currentTarget.scrollTop)
   }, [])
 
   return (
@@ -67,17 +94,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       className="sticky flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
       style={{ top: '80px' }}
     >
-      <div className="relative border-b border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Unassigned Talks
-          </h2>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {statsText}
-          </p>
+      <div className="relative flex min-h-[64px] w-full items-center border-b border-gray-200 bg-gray-50/50 px-4 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+        <div className="w-full">
+          <ProposalFilters filters={filters} />
         </div>
-
-        <ProposalFilters filters={filters} />
       </div>
 
       <div
@@ -91,17 +111,17 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       >
         {filteredProposals.length > 0 ? (
           useVirtualScrolling ? (
-            <div
+              <div
               className="relative"
-              style={{ height: filteredProposals.length * PROPOSAL_HEIGHT }}
+              style={{ height: totalHeight }}
             >
-              {virtualizedItems.map(({ proposal, offsetTop }) => (
+              {virtualizedItems.map(({ proposal, offsetTop, height }) => (
                 <div
                   key={proposal._id}
                   className="absolute right-0 left-0 px-4 py-1"
                   style={{
                     top: offsetTop,
-                    height: PROPOSAL_HEIGHT,
+                    height: height,
                   }}
                 >
                   <div className="overflow-hidden">
@@ -124,55 +144,44 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         )}
       </div>
 
-      <div className="border-t border-gray-200 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
-        <h3 className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-          Legend
-        </h3>
-        <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
-          <div className="flex items-center gap-2">
+      <div className="border-t border-gray-200 bg-gray-50/50 p-2 dark:border-gray-700 dark:bg-gray-800/50">
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-700 dark:text-gray-300">
               Status:
             </span>
-            <div className="h-3 w-3 rounded border-2 border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/50"></div>
+            <div className="h-2.5 w-2.5 rounded border-2 border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/50"></div>
             <span>Accepted</span>
-            <div className="h-3 w-3 rounded border border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"></div>
+            <div className="h-2.5 w-2.5 rounded border border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"></div>
             <span>Confirmed</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-700 dark:text-gray-300">
               Level:
             </span>
             <LevelIndicator level={Level.beginner} size="xs" />
-            <span>Beginner</span>
+            <span>Beg</span>
             <LevelIndicator level={Level.intermediate} size="xs" />
-            <span>Intermediate</span>
+            <span>Int</span>
             <LevelIndicator level={Level.advanced} size="xs" />
-            <span>Advanced</span>
+            <span>Adv</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-700 dark:text-gray-300">
-              Topics:
+              Topic:
             </span>
-            <div className="h-3 w-3 rounded-sm bg-blue-500"></div>
-            <span>Square indicators</span>
+            <div className="h-2.5 w-2.5 rounded-sm bg-blue-500"></div>
+            <span>Single</span>
+            <div className="h-2.5 w-3 border-l-[3px] border-orange-500"></div>
+            <span>Multi</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700 dark:text-gray-300">
-              Border:
-            </span>
-            <div className="h-3 w-4 border-l-4 border-blue-500"></div>
-            <span>Single topic</span>
-            <div className="h-3 w-4 border-l-4 border-orange-500"></div>
-            <span>Multiple topics</span>
-          </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="font-medium text-gray-700 dark:text-gray-300">
               Audience:
             </span>
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700 dark:text-gray-300">
+            <span className="rounded bg-gray-100 px-1 py-0.5 text-[10px] dark:bg-gray-700 dark:text-gray-300">
               DEV +1
             </span>
-            <span>Primary + count</span>
           </div>
         </div>
       </div>

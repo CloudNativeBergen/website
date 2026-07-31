@@ -2,6 +2,7 @@ import { TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
 import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
+import { ScheduleStatus } from '@/lib/schedule/types'
 import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
@@ -48,6 +49,9 @@ export interface ConferenceSchedule {
   date: string
   tracks: Array<ScheduleTrack>
   conference?: { _id: string }
+  status?: ScheduleStatus
+  version?: number
+  owner?: { _ref: string; _type: 'reference' }
 }
 
 export interface ConferenceVanityMetric {
