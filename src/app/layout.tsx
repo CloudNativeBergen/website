@@ -188,7 +188,23 @@ export default function RootLayout({
                   <SessionProviderWrapper>{children}</SessionProviderWrapper>
                 </Suspense>
                 <InstallPrompt />
-                <ServiceWorkerRegistrar />
+                <Script
+                  id="sw-unregister"
+                  strategy="beforeInteractive"
+                  dangerouslySetInnerHTML={{
+                    __html: `
+                      if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                          for(let registration of registrations) {
+                            registration.unregister();
+                            console.log('Unregistered stale service worker.');
+                          }
+                        });
+                      }
+                    `,
+                  }}
+                />
+                {/* <ServiceWorkerRegistrar /> */}
               </div>
             </PwaInstallProvider>
           </TRPCProvider>

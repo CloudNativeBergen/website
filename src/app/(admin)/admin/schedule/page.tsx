@@ -2,8 +2,11 @@ import { CalendarIcon } from '@heroicons/react/24/outline'
 import { ScheduleEditor } from '@/components/admin/schedule/ScheduleEditor'
 import { getScheduleData } from '@/lib/schedule/server'
 import { unstable_noStore as noStore } from 'next/cache'
+import { ReloadDebugger } from '@/components/admin/schedule/ReloadDebugger'
 
-export default async function AdminSchedule() {
+import { Suspense } from 'react'
+
+async function ScheduleContent() {
   noStore()
   const { officialSchedules, draftSchedules, conference, proposals, error } =
     await getScheduleData()
@@ -11,6 +14,7 @@ export default async function AdminSchedule() {
   if (error) {
     return (
       <div className="mx-auto h-full max-w-7xl">
+        <ReloadDebugger />
         <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <CalendarIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
@@ -36,6 +40,7 @@ export default async function AdminSchedule() {
 
   return (
     <div className="-mx-2 -my-8 sm:-mx-4 lg:-mx-8">
+      <ReloadDebugger />
       <ScheduleEditor
         officialSchedules={officialSchedules}
         draftSchedules={draftSchedules}
@@ -43,5 +48,13 @@ export default async function AdminSchedule() {
         initialProposals={proposals}
       />
     </div>
+  )
+}
+
+export default function AdminSchedule() {
+  return (
+    <Suspense fallback={<div>Loading schedule...</div>}>
+      <ScheduleContent />
+    </Suspense>
   )
 }
