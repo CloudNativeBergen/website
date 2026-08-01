@@ -301,7 +301,7 @@ export function ScheduleEditor({
     if (elapsed < 15000) return
 
     let changed = false
-    for (const loaded of mergedSchedules) {
+    for (const loaded of state.schedules) {
       if (!loaded._id) continue // New local day, no server counterpart yet
       const server = latestVersions.find((s) => s._id === loaded._id)
       if (server && loaded._rev && server._rev !== loaded._rev) {
@@ -317,7 +317,7 @@ export function ScheduleEditor({
     } else {
       setExternalChangeError(null)
     }
-  }, [latestVersions, mergedSchedules, hasUnsavedChanges])
+  }, [latestVersions, state.schedules, hasUnsavedChanges])
 
   // The saved-flash timeout is stored so a new save (or unmount) cancels the
   // previous one instead of leaking it / clearing the wrong flash.

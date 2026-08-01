@@ -61,7 +61,7 @@ export function UnassignedDrawer({
   const source = useMemo(() => {
     if (!context || !track) return proposals
     return proposals.filter((p) => {
-      const dur = getProposalDurationMinutes(p)
+      const dur = (p as any).remainingMinutes ?? getProposalDurationMinutes(p)
       if (dur > context.maxDurationMin) return false
       if (!withinScheduleEnd(calculateEndTime(context.startTime, dur)))
         return false
@@ -257,9 +257,6 @@ export function UnassignedDrawer({
       <div className="relative mb-4">
         <ProposalFilters filters={filters} />
       </div>
-      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-        {filters.statsText}
-      </p>
       {filters.filteredProposals.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
           {source.length === 0
@@ -293,7 +290,7 @@ export function UnassignedDrawer({
                     <StatusBadge status={proposal.status} variant="compact" />
                     <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                       <ClockIcon className="h-3.5 w-3.5" />
-                      {`${getProposalDurationMinutes(proposal)}m`}
+                      {`${(proposal as any).remainingMinutes ?? getProposalDurationMinutes(proposal)}m`}
                     </span>
                     {speakers && (
                       <span className="inline-flex items-center gap-1 truncate text-xs text-gray-600 dark:text-gray-400">

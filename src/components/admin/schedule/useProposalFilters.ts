@@ -10,45 +10,61 @@ import { ProposalExisting } from '@/lib/proposal/types'
  */
 export interface ProposalFilterState {
   searchQuery: string
-  selectedFormat: string
-  selectedLevel: string
+  selectedFormats: string[]
+  selectedLevels: string[]
+  selectedTopics: string[]
+  showPartiallyScheduled: boolean
   availableFormats: string[]
   availableLevels: string[]
-  filteredProposals: ProposalExisting[]
+  availableTopics: string[]
+  filteredProposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[]
+  totalCount: number
   hasActiveFilters: boolean
   statsText: string
   setSearchQuery: (value: string) => void
-  setSelectedFormat: (value: string) => void
-  setSelectedLevel: (value: string) => void
+  setSelectedFormats: (value: string[]) => void
+  setSelectedLevels: (value: string[]) => void
+  setSelectedTopics: (value: string[]) => void
+  setShowPartiallyScheduled: (value: boolean) => void
   clearFilters: () => void
 }
 
 export function useProposalFilters(
-  proposals: ProposalExisting[],
+  proposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[],
 ): ProposalFilterState {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedFormat, setSelectedFormat] = useState('')
-  const [selectedLevel, setSelectedLevel] = useState('')
+  const [selectedFormats, setSelectedFormats] = useState<string[]>([])
+  const [selectedLevels, setSelectedLevels] = useState<string[]>([])
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
+  const [showPartiallyScheduled, setShowPartiallyScheduled] = useState(false)
 
-  const { availableFormats, availableLevels } = useMemo(() => {
+  const { availableFormats, availableLevels, availableTopics } = useMemo(() => {
     const formats = new Set(proposals.map((p) => p.format).filter(Boolean))
     const levels = new Set(proposals.map((p) => p.level).filter(Boolean))
+    const topics = new Set<string>()
+    proposals.forEach((p) => {
+      if (Array.isArray(p.topics)) {
+        p.topics.forEach((t: any) => {
+          if (t.title) topics.add(t.title)
+          else if (typeof t === 'string') topics.add(t)
+        })
+      }
+    })
     return {
       availableFormats: Array.from(formats).sort(),
       availableLevels: Array.from(levels).sort(),
+      availableTopics: Array.from(topics).sort(),
     }
   }, [proposals])
 
   const filteredProposals = useMemo(() => {
-    if (!searchQuery && !selectedFormat && !selectedLevel) {
-      return proposals
-    }
-
     return proposals.filter((proposal) => {
+      if (!showPartiallyScheduled && proposal.isPartiallyScheduled) {
+        return false
+      }
+
       if (searchQuery) {
         const query = searchQuery.toLowerCase().trim()
-        // Null-guard every field: a proposal with a missing title/format or a
-        // speaker with no name must not throw and blank the whole list.
         const titleMatch = proposal.title?.toLowerCase().includes(query)
 
         const speakerMatch =
@@ -68,26 +84,37 @@ export function useProposalFilters(
         }
       }
 
-      if (selectedFormat && proposal.format !== selectedFormat) {
+      if (selectedFormats.length > 0 && (!proposal.format || !selectedFormats.includes(proposal.format))) {
         return false
       }
 
-      if (selectedLevel && proposal.level !== selectedLevel) {
+      if (selectedLevels.length > 0 && (!proposal.level || !selectedLevels.includes(proposal.level))) {
         return false
+      }
+
+      if (selectedTopics.length > 0) {
+        const pTopics = Array.isArray(proposal.topics)
+          ? proposal.topics.map((t: any) => t.title || (typeof t === 'string' ? t : ''))
+          : []
+        if (!pTopics.some((t) => selectedTopics.includes(t))) {
+          return false
+        }
       }
 
       return true
     })
-  }, [proposals, searchQuery, selectedFormat, selectedLevel])
+  }, [proposals, searchQuery, selectedFormats, selectedLevels, selectedTopics, showPartiallyScheduled])
 
   const clearFilters = useCallback(() => {
     setSearchQuery('')
-    setSelectedFormat('')
-    setSelectedLevel('')
+    setSelectedFormats([])
+    setSelectedLevels([])
+    setSelectedTopics([])
+    setShowPartiallyScheduled(false)
   }, [])
 
   const hasActiveFilters = Boolean(
-    searchQuery || selectedFormat || selectedLevel,
+    searchQuery || selectedFormats.length > 0 || selectedLevels.length > 0 || selectedTopics.length > 0 || showPartiallyScheduled,
   )
 
   const statsText =
@@ -97,16 +124,22 @@ export function useProposalFilters(
 
   return {
     searchQuery,
-    selectedFormat,
-    selectedLevel,
+    selectedFormats,
+    selectedLevels,
+    selectedTopics,
+    showPartiallyScheduled,
     availableFormats,
     availableLevels,
+    availableTopics,
     filteredProposals,
+    totalCount: proposals.length,
     hasActiveFilters,
     statsText,
     setSearchQuery,
-    setSelectedFormat,
-    setSelectedLevel,
+    setSelectedFormats,
+    setSelectedLevels,
+    setSelectedTopics,
+    setShowPartiallyScheduled,
     clearFilters,
   }
 }

@@ -9,7 +9,7 @@ import { useProposalFilters } from './useProposalFilters'
 import { ProposalFilters } from './ProposalFilters'
 
 interface UnassignedProposalsProps {
-  proposals: ProposalExisting[]
+  proposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[]
 }
 
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
@@ -37,12 +37,15 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
   const { virtualizedItems, totalHeight } = useMemo(() => {
     if (!useVirtualScrolling) {
       return {
-        virtualizedItems: filteredProposals.map((proposal, index) => ({
-          proposal,
-          index,
-          offsetTop: 0,
-          height: getProposalDurationMinutes(proposal) * PIXELS_PER_MINUTE + 8, // 8px for gap/padding
-        })),
+        virtualizedItems: filteredProposals.map((proposal, index) => {
+          const duration = proposal.remainingMinutes ?? getProposalDurationMinutes(proposal)
+          return {
+            proposal,
+            index,
+            offsetTop: 0,
+            height: duration * PIXELS_PER_MINUTE + 8, // 8px for gap/padding
+          }
+        }),
         totalHeight: 0,
       }
     }
@@ -50,9 +53,11 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     const itemsWithLayout = []
     let currentOffset = 0
     for (let i = 0; i < filteredProposals.length; i++) {
-      const h = getProposalDurationMinutes(filteredProposals[i]) * PIXELS_PER_MINUTE + 8 // 8px gap
+      const p = filteredProposals[i]
+      const duration = p.remainingMinutes ?? getProposalDurationMinutes(p)
+      const h = duration * PIXELS_PER_MINUTE + 8 // 8px gap
       itemsWithLayout.push({
-        proposal: filteredProposals[i],
+        proposal: p,
         index: i,
         offsetTop: currentOffset,
         height: h,
@@ -91,7 +96,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
 
   return (
     <div
-      className="sticky flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
+      className="sticky z-20 flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
       style={{ top: '80px' }}
     >
       <div className="relative flex min-h-[64px] w-full items-center border-b border-gray-200 bg-gray-50/50 px-4 py-2 dark:border-gray-700 dark:bg-gray-800/50">
@@ -125,7 +130,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
                   }}
                 >
                   <div className="overflow-hidden">
-                    <DraggableProposal proposal={proposal} />
+                    <DraggableProposal proposal={proposal} durationMinutes={(proposal as any).remainingMinutes} />
                   </div>
                 </div>
               ))}
@@ -134,7 +139,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             <div className="space-y-2 p-4">
               {virtualizedItems.map(({ proposal }) => (
                 <div key={proposal._id} className="overflow-hidden">
-                  <DraggableProposal proposal={proposal} />
+                  <DraggableProposal proposal={proposal} durationMinutes={(proposal as any).remainingMinutes} />
                 </div>
               ))}
             </div>

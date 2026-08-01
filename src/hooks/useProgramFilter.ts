@@ -119,7 +119,35 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       })
     })
 
-    return talks
+    // Group talks by ID to find multi-part sessions and append suffixes
+    const counts = new Map<string, number>()
+    const sorted = [...talks].sort((a, b) => {
+      if (a.scheduleDate !== b.scheduleDate) return a.scheduleDate.localeCompare(b.scheduleDate)
+      return a.startTime.localeCompare(b.startTime)
+    })
+
+    for (const t of sorted) {
+      if (t.talk?._id) {
+        counts.set(t.talk._id, (counts.get(t.talk._id) || 0) + 1)
+      }
+    }
+
+    const currentPart = new Map<string, number>()
+    for (const t of sorted) {
+      if (t.talk?._id) {
+        const total = counts.get(t.talk._id) || 0
+        if (total > 1) {
+          const part = (currentPart.get(t.talk._id) || 0) + 1
+          currentPart.set(t.talk._id, part)
+          t.talk = {
+            ...t.talk,
+            title: `${t.talk.title} (Part ${part})`,
+          }
+        }
+      }
+    }
+
+    return sorted
   }, [schedules])
 
   const filteredData = useMemo<FilteredProgramData>(() => {
