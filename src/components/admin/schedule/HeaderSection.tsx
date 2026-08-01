@@ -109,24 +109,24 @@ const HeaderSectionComponent = ({
           <div className="flex items-center gap-2 border-r border-gray-300 pr-3 dark:border-gray-700">
             <span
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
-              title="When ON, you can edit the schedule. When OFF, you preview exactly what attendees see."
+              title="When viewing Draft, you can make changes safely. When viewing Live, you see exactly what attendees see."
             >
-              Edit Mode
+              Viewing: <strong className={isDraftMode ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}>{isDraftMode ? 'Draft (Editable)' : 'Live (Read-only)'}</strong>
             </span>
             <button
-              title="Toggle Draft Mode: When ON, you can edit the schedule. When OFF, you preview exactly what attendees see."
+              title="Toggle View: Switch between your private Draft and the Live public schedule."
               onClick={() => onToggleDraftMode(!isDraftMode)}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none ${
-                isDraftMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                isDraftMode ? 'bg-amber-500' : 'bg-green-500'
               }`}
               role="switch"
               aria-checked={isDraftMode}
             >
-              <span className="sr-only">Toggle Draft Mode</span>
+              <span className="sr-only">Toggle View Mode</span>
               <span
                 aria-hidden="true"
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  isDraftMode ? 'translate-x-5' : 'translate-x-0'
+                  isDraftMode ? 'translate-x-0' : 'translate-x-5'
                 }`}
               />
             </button>
@@ -144,13 +144,13 @@ const HeaderSectionComponent = ({
 
           {isDraftMode && (
             <button
-              title="Publish: Make this day's schedule official and visible to the public."
+              title={hasUnsavedChanges ? "Save your changes first before publishing." : "Publish: Make this day's schedule official and visible to the public."}
               onClick={onPromote}
-              disabled={isSaving || !schedule?._id}
-              className={SECONDARY_BUTTON}
+              disabled={isSaving || !schedule?._id || hasUnsavedChanges}
+              className={`${SECONDARY_BUTTON} ${hasUnsavedChanges ? 'opacity-50 cursor-not-allowed' : ''}`}
               type="button"
             >
-              <CheckCircleIcon className="h-4 w-4 text-green-600" />
+              <CheckCircleIcon className={`h-4 w-4 ${hasUnsavedChanges ? 'text-gray-400' : 'text-green-600'}`} />
               Publish
             </button>
           )}

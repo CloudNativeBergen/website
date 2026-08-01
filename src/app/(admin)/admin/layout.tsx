@@ -9,9 +9,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-import { Suspense } from 'react'
-
-async function AdminContent({ children }: { children: React.ReactNode }) {
+export default async function AdminRootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const session = await getAuthSession()
   // ORG-SCOPED admin gate (CaaS T1-2, #614): organizer of the CURRENT domain's
   // org (legacy-bridged to the deprecated global flag when the org is unresolvable).
@@ -40,17 +42,5 @@ async function AdminContent({ children }: { children: React.ReactNode }) {
     >
       {children}
     </AdminLayout>
-  )
-}
-
-export default function AdminRootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-gray-500">Loading admin...</div>}>
-      <AdminContent>{children}</AdminContent>
-    </Suspense>
   )
 }

@@ -4,9 +4,7 @@ import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
 import { getAuthSession } from '@/lib/auth'
 
-import { Suspense } from 'react'
-
-async function ProposalsContent() {
+export default async function AdminProposals() {
   const session = await getAuthSession()
 
   const { conference, error: conferenceError } =
@@ -43,13 +41,5 @@ async function ProposalsContent() {
       currentUserId={session?.speaker?._id}
       conference={conference}
     />
-  )
-}
-
-export default function AdminProposals() {
-  return (
-    <Suspense fallback={<div>Loading proposals...</div>}>
-      <ProposalsContent />
-    </Suspense>
   )
 }

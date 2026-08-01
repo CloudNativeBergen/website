@@ -152,10 +152,17 @@ export const scheduleRouter = router({
 
     getById: adminProcedure
       .input(z.object({ id: z.string() }))
-      .query(async ({ input, ctx }) => {
+      .query(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
         const doc = await clientWrite.fetch(
           `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
-          { id: input.id, conferenceId: ctx.orgId },
+          { id: input.id, conferenceId: conference._id },
         )
         if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
         return doc
@@ -177,10 +184,17 @@ export const scheduleRouter = router({
 
     delete: adminProcedure
       .input(z.object({ id: z.string() }))
-      .mutation(async ({ input, ctx }) => {
+      .mutation(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
         const doc = await clientWrite.fetch(
           `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
-          { id: input.id, conferenceId: ctx.orgId },
+          { id: input.id, conferenceId: conference._id },
         )
         if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
         if (doc.status === ScheduleStatus.Official) {

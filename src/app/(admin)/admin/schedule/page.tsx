@@ -4,9 +4,7 @@ import { getScheduleData } from '@/lib/schedule/server'
 import { unstable_noStore as noStore } from 'next/cache'
 import { ReloadDebugger } from '@/components/admin/schedule/ReloadDebugger'
 
-import { Suspense } from 'react'
-
-async function ScheduleContent() {
+export default async function AdminSchedule() {
   noStore()
   const { officialSchedules, draftSchedules, conference, proposals, error } =
     await getScheduleData()
@@ -48,13 +46,5 @@ async function ScheduleContent() {
         initialProposals={proposals}
       />
     </div>
-  )
-}
-
-export default function AdminSchedule() {
-  return (
-    <Suspense fallback={<div>Loading schedule...</div>}>
-      <ScheduleContent />
-    </Suspense>
   )
 }

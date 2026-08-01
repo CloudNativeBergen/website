@@ -20,6 +20,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useTransition,
 } from 'react'
 import React from 'react'
 import { ScheduleTrack, TrackTalk, Conference } from '@/lib/conference/types'
@@ -66,16 +67,39 @@ const LAYOUT_CLASSES = {
     'border-b border-red-200 bg-red-50 px-4 py-2 shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
-const ErrorBanner = React.memo(({ error, onRefresh }: { error: string; onRefresh?: () => void }) => (
+const ErrorBanner = React.memo(({ error, onRefresh, isRefreshing }: { error: string; onRefresh?: () => void; isRefreshing?: boolean }) => (
   <div className={LAYOUT_CLASSES.errorBanner}>
     <div className="flex items-center justify-between">
       <p className="text-red-800 dark:text-red-300">{error}</p>
       {onRefresh && (
         <button
           onClick={onRefresh}
-          className="ml-4 shrink-0 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:ring-offset-red-50 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/80 dark:focus:ring-offset-red-900"
+          disabled={isRefreshing}
+          className="ml-4 inline-flex items-center gap-2 shrink-0 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:ring-offset-red-50 disabled:opacity-50 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/80 dark:focus:ring-offset-red-900"
         >
-          Refresh Data
+          {isRefreshing && (
+            <svg
+              className="h-4 w-4 animate-spin text-red-800 dark:text-red-200"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          )}
+          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
         </button>
       )}
     </div>
@@ -199,7 +223,7 @@ export function ScheduleEditor({
   // DndContext (and its touch sensors) is never mounted on a phone.
   const isDesktop = useMediaQuery('(min-width: 768px)', true)
   const router = useRouter()
-
+  const utils = api.useUtils()
   const saveMutation = api.schedule.save.useMutation()
   const actionMutation = api.schedule.action.useMutation()
 
@@ -257,6 +281,16 @@ export function ScheduleEditor({
   // creating an infinite loop. After a refresh we skip comparisons until the
   // next poll cycle has a chance to fetch fresh versions that match the new props.
   const lastRefreshRef = useRef(0)
+  const [isRefreshing, startTransition] = useTransition()
+
+  const handleRefreshData = useCallback(() => {
+    setExternalChangeError(null)
+    lastRefreshRef.current = Date.now()
+    startTransition(() => {
+      router.refresh()
+    })
+    utils.schedule.admin.pollVersions.invalidate()
+  }, [router, utils])
 
   // Detect external changes by comparing _rev
   useEffect(() => {
@@ -277,19 +311,13 @@ export function ScheduleEditor({
     }
 
     if (changed) {
-      if (hasUnsavedChanges) {
-        setExternalChangeError(
-          'There are new external changes to this schedule. Please reload to sync (your local changes will be lost).',
-        )
-      } else {
-        // Auto-refresh seamlessly if the user has no unsaved changes
-        lastRefreshRef.current = Date.now()
-        router.refresh()
-      }
+      setExternalChangeError(
+        'There are new external changes to this schedule. Please reload to sync (your local changes will be lost).',
+      )
     } else {
       setExternalChangeError(null)
     }
-  }, [latestVersions, mergedSchedules, hasUnsavedChanges, router])
+  }, [latestVersions, mergedSchedules, hasUnsavedChanges])
 
   // The saved-flash timeout is stored so a new save (or unmount) cancels the
   // previous one instead of leaking it / clearing the wrong flash.
@@ -633,9 +661,10 @@ export function ScheduleEditor({
             {error && (
               <ErrorBanner
                 error={error}
+                isRefreshing={isRefreshing}
                 onRefresh={
                   error.includes('reload')
-                    ? () => window.location.reload()
+                    ? handleRefreshData
                     : undefined
                 }
               />

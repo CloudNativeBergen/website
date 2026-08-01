@@ -74,7 +74,7 @@ async function SessionLoader({ children }: { children: React.ReactNode }) {
       */}
       <AppBadgeSync />
       <NotificationClickSync />
-      {/* <StandaloneLaunchRedirect /> */}
+      <StandaloneLaunchRedirect />
       {children}
     </SessionProvider>
   )
