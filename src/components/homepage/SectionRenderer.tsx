@@ -390,7 +390,9 @@ function renderSection(
         <Sponsors
           sponsors={conference.sponsors || []}
           conference={conference}
-          showCTA={section.showCta !== false && lifecycle.stage !== 'post-event'}
+          showCTA={
+            section.showCta !== false && lifecycle.stage !== 'post-event'
+          }
           heading={section.heading?.trim() || undefined}
           description={section.description?.trim() || undefined}
           ctaHeading={section.ctaHeading?.trim() || undefined}

@@ -1,6 +1,9 @@
 import type { Conference, ConferenceSchedule } from '@/lib/conference/types'
 import { isRegistrationAvailable } from '@/lib/conference/state'
-import type { LowestTicketPrice } from '@/lib/tickets/public'
+import type {
+  LowestTicketPrice,
+  TicketAvailability,
+} from '@/lib/tickets/public'
 import { Status } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 
@@ -25,6 +28,13 @@ export interface BuildEventJsonLdOptions {
    */
   lowestTicketPrice?: LowestTicketPrice | null
   /**
+   * Live availability from the ticketing provider. Drives `offers.availability`
+   * so the structured data cannot advertise `InStock` for an event whose own
+   * page says sold out. Absent leaves the offer as `InStock`, matching the
+   * lifecycle model's refusal to invent a sold-out claim from a missing signal.
+   */
+  ticketAvailability?: TicketAvailability | null
+  /**
    * Confirmed speakers to expose as `performer`. Supplied only on the program
    * page; the home page keeps the block simple and omits performers.
    */
@@ -46,6 +56,7 @@ export function buildEventJsonLd({
   conference,
   domain,
   lowestTicketPrice,
+  ticketAvailability,
   performers,
 }: BuildEventJsonLdOptions): Record<string, unknown> {
   const protocol = domain.includes('localhost') ? 'http' : 'https'
@@ -67,7 +78,13 @@ export function buildEventJsonLd({
     startDate: conference.startDate,
     endDate: conference.endDate,
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-    eventStatus: 'https://schema.org/EventScheduled',
+    // Mirrors the homepage lifecycle override: a cancelled edition renders a
+    // notice instead of a page, and its structured data has to say the same
+    // thing or search results keep advertising an event that is not happening.
+    eventStatus:
+      conference.lifecycleStatus === 'cancelled'
+        ? 'https://schema.org/EventCancelled'
+        : 'https://schema.org/EventScheduled',
     url: siteUrl,
     image: [`${siteUrl}/opengraph-image`],
     organizer,
@@ -101,11 +118,26 @@ export function buildEventJsonLd({
   // Offers only while registration is genuinely available (registrationEnabled
   // + link + conference not over) — structured data must never claim tickets
   // are purchasable while the site itself hides every ticket CTA.
-  if (isRegistrationAvailable(conference) && conference.registrationLink) {
+  // A cancelled or archived event emits NO offer at all: its homepage has no
+  // ticket CTA, and an Offer on a cancelled event is a straightforwardly false
+  // claim regardless of what the registration toggle still says.
+  const lifecycleBlocksOffers =
+    conference.lifecycleStatus === 'cancelled' ||
+    conference.lifecycleStatus === 'archived'
+  if (
+    !lifecycleBlocksOffers &&
+    isRegistrationAvailable(conference) &&
+    conference.registrationLink
+  ) {
     const offers: Record<string, unknown> = {
       '@type': 'Offer',
       url: conference.registrationLink,
-      availability: 'https://schema.org/InStock',
+      availability:
+        ticketAvailability === 'sold-out'
+          ? 'https://schema.org/SoldOut'
+          : ticketAvailability === 'upcoming'
+            ? 'https://schema.org/PreOrder'
+            : 'https://schema.org/InStock',
     }
     if (lowestTicketPrice) {
       // Google's Event spec wants the lowest price including all mandatory

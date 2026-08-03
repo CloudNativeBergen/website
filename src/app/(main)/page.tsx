@@ -133,6 +133,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
         conference={conference}
         domain={domain}
         lowestTicketPrice={lowestTicketPrice}
+        ticketAvailability={ticketAvailability}
       />
       <HomepageSectionRenderer
         sections={sections}
