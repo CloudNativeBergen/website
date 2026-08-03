@@ -386,8 +386,20 @@ export const midCycleConference = {
   ],
 } as unknown as Conference
 
-/** Mid-cycle, but the vendor reports every active ticket type at zero. */
-export const soldOutConference = midCycleConference
+/**
+ * Mid-cycle, but the vendor reports every active ticket type at zero.
+ *
+ * The conference document is deliberately identical to {@link midCycleConference} —
+ * being sold out is something the TICKET VENDOR reports, never a field an
+ * organizer sets — so the difference lives in the mocked ticket data, not here.
+ * It still gets its own `_id`: a bare alias made the two fixtures the same
+ * object, which knip flags as a duplicate export and which makes any test that
+ * keys on `_id` unable to tell the two stories apart.
+ */
+export const soldOutConference = {
+  ...midCycleConference,
+  _id: 'conf-sold-out',
+} as unknown as Conference
 
 /** After the event, with photos and recordings to lead with. */
 export const postEventConference = {
