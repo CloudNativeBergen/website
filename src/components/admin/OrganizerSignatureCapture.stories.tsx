@@ -3,7 +3,7 @@ import { fn } from 'storybook/test'
 import { OrganizerSignatureCapture } from './OrganizerSignatureCapture'
 
 const meta = {
-  title: 'Systems/Sponsors/Contract/OrganizerSignatureCapture',
+  title: 'Components/Admin/OrganizerSignatureCapture',
   component: OrganizerSignatureCapture,
   parameters: {
     layout: 'padded',

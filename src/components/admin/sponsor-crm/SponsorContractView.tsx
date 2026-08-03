@@ -7,7 +7,7 @@ import { api } from '@/lib/trpc/client'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { ContractFlowStep } from './ContractFlowStep'
 import { SponsorPortalSection } from './SponsorPortalSection'
-import { OrganizerSignatureCapture } from './OrganizerSignatureCapture'
+import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { formatNumber } from '@/lib/format'
 import {

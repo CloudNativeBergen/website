@@ -30,7 +30,7 @@ vi.mock('@heroicons/react/24/outline', () => ({
 }))
 
 // vi.mock calls are hoisted automatically by Vitest
-import { OrganizerSignatureCapture } from '@/components/admin/sponsor-crm/OrganizerSignatureCapture'
+import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 
 const STORAGE_KEY = 'organizer-signature-org-1'
 const FAKE_SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='

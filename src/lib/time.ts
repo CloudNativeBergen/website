@@ -158,6 +158,41 @@ export function formatDatesSafe(
   return `${p1.day}.–${p2.day}. ${month1} ${p1.year}`
 }
 
+/**
+ * Formats a date range in the given BCP-47 locale, letting `Intl` collapse the
+ * shared parts the way that locale does (e.g. `en-GB` → "5–6 November 2026").
+ *
+ * Separate from {@link formatDatesSafe}, which hard-codes the Norwegian
+ * "5.–6. november 2026" shape. Use this for documents that must read in their
+ * own language — an English letter carrying a Norwegian date range is the kind
+ * of detail a consulate notices.
+ */
+export function formatDateRangeLocalized(
+  startDate: string,
+  endDate: string,
+  locale: string = HOUSE_LOCALE,
+): string {
+  if (!startDate || !endDate) return 'TBD'
+
+  const start = toOsloAnchoredDate(startDate)
+  const end = toOsloAnchoredDate(endDate)
+  if (isNaN(start.getTime()) || isNaN(end.getTime()))
+    return 'Invalid Date Range'
+
+  // A reversed range does not throw — `formatRange` happily renders
+  // "6 – 5 November 2026", which is nonsense on a printed document. Order the
+  // ends so the output always reads forward; dates stored the wrong way round
+  // are a data problem to fix at the source, not to print.
+  const [from, to] = start <= end ? [start, end] : [end, start]
+
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: OSLO_TZ,
+  }).formatRange(from, to)
+}
+
 /** Formats a timestamp with time, house locale (e.g. "27. oktober 2025, 14:30"). */
 export function formatDateTimeSafe(dateString: string): string {
   if (!dateString) return 'TBD'
