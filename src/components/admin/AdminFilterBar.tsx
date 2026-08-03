@@ -232,7 +232,7 @@ export function AdminFilterBar({
                 value={search.value}
                 onChange={(event) => search.onChange(event.target.value)}
                 placeholder={search.placeholder ?? 'Search...'}
-                className="block h-9 w-full rounded-md border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+                className="block h-9 w-full rounded-md border border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
               />
               {search.value && (
                 <button
