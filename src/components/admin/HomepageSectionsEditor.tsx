@@ -857,14 +857,16 @@ function SectionConfig({
           rows={2}
           value={row.description ?? ''}
           onChange={(e) => onChange({ description: e.target.value })}
-          placeholder="Description (optional — defaults to the dates and city)"
+          placeholder="Description (optional — extra copy, no default)"
           aria-label="Save the date description"
           className={inputClass}
         />
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           Shows the dates, venue, a countdown, and what happens next (call for
           speakers, programme, tickets) from the dates already configured. Steps
-          with no date are left out rather than shown as unknown.
+          with no date are left out rather than shown as unknown. The
+          description is an extra line on top of that — leave it empty and the
+          card simply shows no extra line.
         </p>
       </div>
     )

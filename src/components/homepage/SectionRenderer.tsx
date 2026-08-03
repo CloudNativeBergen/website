@@ -80,14 +80,16 @@ function PhaseCtaRow({
           cfp: PIRSCH_EVENTS.cfpFeaturedSpeakers,
           tickets: PIRSCH_EVENTS.ticketsFeaturedSpeakers,
           info: PIRSCH_EVENTS.infoFeaturedSpeakers,
+          programme: PIRSCH_EVENTS.programFeaturedSpeakers,
         }
       : {
           cfp: PIRSCH_EVENTS.cfpFeaturedOrganizers,
           tickets: PIRSCH_EVENTS.ticketsFeaturedOrganizers,
           info: PIRSCH_EVENTS.infoFeaturedOrganizers,
+          programme: PIRSCH_EVENTS.programFeaturedOrganizers,
         }
 
-  const { primaryCta, cfp, tickets, content } = lifecycle
+  const { primaryCta, cfp, tickets, content, stage } = lifecycle
   const ticketsOnSale = tickets === 'on-sale'
   const buttonClassName =
     'inline-flex items-center space-x-2 px-8 py-4 font-semibold'
@@ -97,14 +99,21 @@ function PhaseCtaRow({
     : 'Get tickets'
   const showsPrice = Boolean(ticketsFromPrice) && ticketsOnSale
 
+  // "Watch the talks" is a POST-EVENT promise. `hasRecordings` alone is not
+  // enough: a recording can be attached to a confirmed talk before the event
+  // (a re-run, a teaser), and the pre-event `programme` stage also renders this
+  // button — which would advertise talks nobody has given yet. The stage is the
+  // half of the condition that says the event has actually happened.
+  const showsRecordings = stage === 'post-event' && content.hasRecordings
+
   const programmeButton = (
     <Button
       href="/program"
       variant="primary"
       className={buttonClassName}
-      data-pirsch-event={events.info}
+      data-pirsch-event={events.programme}
     >
-      {content.hasRecordings ? (
+      {showsRecordings ? (
         <>
           <PlayCircleIcon className="h-5 w-5" aria-hidden="true" />
           <span>Watch the talks</span>

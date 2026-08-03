@@ -29,9 +29,13 @@
  * - `cta-cfp-featured-speakers`       Featured Speakers section "Submit a talk"
  * - `cta-tickets-featured-speakers`   Featured Speakers section tickets button
  * - `cta-info-featured-speakers`      Featured Speakers section info button
+ * - `cta-program-featured-speakers`   Featured Speakers section programme button
+ *                                     ("See the programme" / "Watch the talks")
  * - `cta-cfp-featured-organizers`     Organizers section "Submit a talk"
  * - `cta-tickets-featured-organizers` Organizers section tickets button
  * - `cta-info-featured-organizers`    Organizers section info button
+ * - `cta-program-featured-organizers` Organizers section programme button
+ *                                     ("See the programme" / "Watch the talks")
  * - `outbound-checkin-tickets-page`   /tickets external registration button
  *                                     (outbound to checkin.no)
  */
@@ -51,8 +55,10 @@ export const PIRSCH_EVENTS = {
   cfpFeaturedSpeakers: 'cta-cfp-featured-speakers',
   ticketsFeaturedSpeakers: 'cta-tickets-featured-speakers',
   infoFeaturedSpeakers: 'cta-info-featured-speakers',
+  programFeaturedSpeakers: 'cta-program-featured-speakers',
   cfpFeaturedOrganizers: 'cta-cfp-featured-organizers',
   ticketsFeaturedOrganizers: 'cta-tickets-featured-organizers',
   infoFeaturedOrganizers: 'cta-info-featured-organizers',
+  programFeaturedOrganizers: 'cta-program-featured-organizers',
   outboundCheckinTicketsPage: 'outbound-checkin-tickets-page',
 } as const

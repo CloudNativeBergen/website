@@ -1,6 +1,6 @@
 import type { TypedObject } from 'sanity'
 import type { Conference } from '@/lib/conference/types'
-import { resolveHomepageLifecycle } from './lifecycle'
+import { resolveHomepageLifecycle, type HomepageStage } from './lifecycle'
 
 /**
  * Front-page builder (F1 + F2): the CLOSED, typed section registry.
@@ -295,6 +295,25 @@ export type HomepageSection =
   | VenueSection
 
 /**
+ * Stages in which the event is still AHEAD, so a save-the-date band is honest.
+ *
+ * `programme` belongs here: it means "programme published, event still ahead"
+ * ({@link HomepageStage}), and it is reached the moment `programDate` rolls past
+ * — whether or not anything was actually published. The stages left out are the
+ * ones where a countdown to the event would be a lie: `post-event`, plus the
+ * `cancelled` / `archived` overrides (which the renderer replaces the page for
+ * anyway, but which must never grow a countdown if called directly).
+ */
+function isPreEventStage(stage: HomepageStage): boolean {
+  return (
+    stage === 'announced' ||
+    stage === 'cfp-open' ||
+    stage === 'curating' ||
+    stage === 'programme'
+  )
+}
+
+/**
  * The default homepage, as an ordered section list. This is what renders when
  * `homepageSections` is ABSENT (every legacy conference):
  *
@@ -320,6 +339,15 @@ export type HomepageSection =
  *     speakers, before the event. That is the day-one page, and without the band
  *     it is a hero sitting directly on top of a sponsorship pitch.
  *
+ *     "Before the event" is the whole pre-event span ({@link isPreEventStage}),
+ *     NOT just the stages up to `curating`. The `programme` stage is entered by
+ *     `programDate` rolling past, which says nothing about whether a programme
+ *     exists: an organizer who set a programme date and has not published yet
+ *     loses the band AND fails the `hasProgramme` middle-slot test on the same
+ *     day, leaving a hero over a sponsorship pitch purely because a date passed.
+ *     The two conditions are therefore driven by the SAME fact — the band shows
+ *     exactly while there is no programme and no speakers to lead with.
+ *
  * A conference that already has a programme or featured speakers is untouched.
  */
 export function getDefaultSections(conference: Conference): HomepageSection[] {
@@ -329,9 +357,11 @@ export function getDefaultSections(conference: Conference): HomepageSection[] {
     { _key: 'default-hero', _type: 'homepageHero' },
   ]
 
-  const isPreEvent =
-    stage === 'announced' || stage === 'cfp-open' || stage === 'curating'
-  if (isPreEvent && !content.hasProgramme && !content.hasFeaturedSpeakers) {
+  if (
+    isPreEventStage(stage) &&
+    !content.hasProgramme &&
+    !content.hasFeaturedSpeakers
+  ) {
     sections.push({
       _key: 'default-save-the-date',
       _type: 'homepageSaveTheDate',

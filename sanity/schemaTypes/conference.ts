@@ -1357,7 +1357,7 @@ export default defineType({
             type: 'text',
             rows: 2,
             description:
-              'Optional copy under the heading. Defaults to the dates and city.',
+              'Optional extra copy. There is no default: the card already shows the dates, the venue and city, a countdown and the milestone list, so leaving this empty simply adds no extra line.',
           }),
         ]),
         defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers', [

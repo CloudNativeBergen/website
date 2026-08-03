@@ -4,11 +4,28 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 
-// Stub every leaf component the renderer maps to, so the test verifies the
+// Stub the leaf components the renderer maps to, so the test verifies the
 // mapping/order/skip logic — not the (separately tested) leaf components.
+// `SaveTheDate` and `LifecycleNotice` are deliberately NOT stubbed: this file is
+// the only test that covers them, so a stand-in would assert nothing.
+//
+// next/link → a plain anchor so `Button href=…` renders in jsdom. `...rest` is
+// forwarded because the analytics contract lives in `data-pirsch-event`
+// attributes on those anchors.
 vi.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string
+    children: React.ReactNode
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }))
 vi.mock('@/components/Hero', () => ({
   Hero: () => <div data-testid="hero" />,
@@ -67,21 +84,20 @@ vi.mock('@/components/homepage/MetricsBlock', () => ({
 vi.mock('@/components/homepage/FaqBlock', () => ({
   FaqBlock: () => <div data-testid="faq" />,
 }))
+// The clock-driven halves of the countdown are stubbed (they tick on a timer);
+// `CountdownStrip` is what the REAL SaveTheDate embeds, so the stub keeps that
+// band renderable. Neither stub carries a `data-testid`-free marker by accident:
+// `countdown` is asserted on directly, the strip deliberately is not.
 vi.mock('@/components/homepage/Countdown', () => ({
   Countdown: ({ targetMs }: { targetMs: number }) => (
     <div data-testid="countdown" data-target={targetMs} />
   ),
+  CountdownStrip: ({ targetMs }: { targetMs: number }) => (
+    <div data-countdown-strip={targetMs} />
+  ),
 }))
 vi.mock('@/components/homepage/VenueBlock', () => ({
   VenueBlock: () => <div data-testid="venue" />,
-}))
-vi.mock('@/components/homepage/SaveTheDate', () => ({
-  SaveTheDate: () => <div data-testid="save-the-date" />,
-}))
-vi.mock('@/components/homepage/LifecycleNotice', () => ({
-  LifecycleNotice: ({ status }: { status: string }) => (
-    <div data-testid="lifecycle-notice" data-status={status} />
-  ),
 }))
 
 import { HomepageSectionRenderer } from './SectionRenderer'
@@ -129,6 +145,20 @@ function testIdsInOrder(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('[data-testid]')).map((el) =>
     el.getAttribute('data-testid')!,
   )
+}
+
+/**
+ * Section markers in document order. Stubbed leaves expose a `data-testid`; the
+ * REAL save-the-date band is identified by the heading id its own component
+ * owns, so it joins the ordering assertions without the production component
+ * having to carry a test-only attribute.
+ */
+function sectionsInOrder(container: HTMLElement): string[] {
+  return Array.from(
+    container.querySelectorAll(
+      '[data-testid], [aria-labelledby="save-the-date-title"]',
+    ),
+  ).map((el) => el.getAttribute('data-testid') ?? 'save-the-date')
 }
 
 describe('HomepageSectionRenderer — default composition', () => {
@@ -342,10 +372,13 @@ describe('HomepageSectionRenderer — F4 blocks', () => {
 describe('HomepageSectionRenderer — lifecycle states', () => {
   it('inserts the save-the-date band on a day-one conference', () => {
     const conference = makeConference({
+      startDate: '2999-01-01',
       programDate: '2999-01-01',
       schedules: [],
       featuredSpeakers: [],
       featuredGalleryImages: [],
+      venueName: 'Grieghallen',
+      city: 'Bergen',
     })
     const { container } = render(
       <HomepageSectionRenderer
@@ -353,9 +386,13 @@ describe('HomepageSectionRenderer — lifecycle states', () => {
         conference={conference}
       />,
     )
-    const ids = testIdsInOrder(container)
+    const ids = sectionsInOrder(container)
     expect(ids[0]).toBe('hero')
     expect(ids[1]).toBe('save-the-date')
+    // The REAL band, not a stand-in: its house heading plus the dates and place
+    // it derives from the conference document.
+    expect(container.textContent).toContain('Save the date')
+    expect(container.textContent).toContain('Grieghallen, Bergen')
   })
 
   for (const status of ['cancelled', 'archived'] as const) {
@@ -367,12 +404,14 @@ describe('HomepageSectionRenderer — lifecycle states', () => {
           conference={conference}
         />,
       )
-      expect(testIdsInOrder(container)).toEqual(['lifecycle-notice'])
-      expect(
-        container
-          .querySelector('[data-testid="lifecycle-notice"]')
-          ?.getAttribute('data-status'),
-      ).toBe(status)
+      // NOTHING from the section list survives — that is the whole point of the
+      // short-circuit; the notice below is all there is.
+      expect(sectionsInOrder(container)).toEqual([])
+      expect(container.textContent).toContain(
+        status === 'cancelled'
+          ? 'Test Conf has been cancelled'
+          : 'Test Conf has ended',
+      )
     })
 
     it(`ignores a STORED composition for a ${status} conference`, () => {
@@ -384,7 +423,8 @@ describe('HomepageSectionRenderer — lifecycle states', () => {
       const { container } = render(
         <HomepageSectionRenderer sections={sections} conference={conference} />,
       )
-      expect(testIdsInOrder(container)).toEqual(['lifecycle-notice'])
+      expect(sectionsInOrder(container)).toEqual([])
+      expect(container.textContent).toContain('Test Conf has')
     })
   }
 
@@ -399,5 +439,130 @@ describe('HomepageSectionRenderer — lifecycle states', () => {
       <HomepageSectionRenderer sections={sections} conference={conference} />,
     )
     expect(container.querySelector('[data-testid="program"]')).toBeNull()
+  })
+})
+
+describe('HomepageSectionRenderer — phase CTA row', () => {
+  /** A published schedule whose one confirmed talk carries a recording URL. */
+  function schedulesWithRecording() {
+    return [
+      {
+        _id: 's1',
+        date: '2000-01-01',
+        tracks: [
+          {
+            trackTitle: 'Track 1',
+            trackDescription: '',
+            talks: [
+              {
+                startTime: '09:00',
+                endTime: '09:45',
+                talk: {
+                  _id: 't1',
+                  status: 'confirmed',
+                  attachments: [
+                    {
+                      _key: 'a1',
+                      _type: 'urlAttachment',
+                      attachmentType: 'recording',
+                      url: 'https://example.com/watch',
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ] as never
+  }
+
+  const featuredSpeakersOnly = [
+    { _key: 'f', _type: 'homepageFeaturedSpeakers' },
+  ] as unknown as HomepageSection[]
+  const organizersOnly = [
+    { _key: 'o', _type: 'homepageOrganizers' },
+  ] as unknown as HomepageSection[]
+
+  function programmeLink(container: HTMLElement) {
+    return container.querySelector('a[href="/program"]')
+  }
+
+  it('tracks the programme CTA as its OWN event, not as the info CTA', () => {
+    const conference = makeConference({
+      startDate: '2000-01-01',
+      endDate: '2000-01-02',
+      schedules: schedulesWithRecording(),
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={featuredSpeakersOnly}
+        conference={conference}
+      />,
+    )
+    const link = programmeLink(container)
+    expect(link?.getAttribute('data-pirsch-event')).toBe(
+      'cta-program-featured-speakers',
+    )
+    // …and it is NOT conflated with the /info CTA, which is the bug.
+    expect(link?.getAttribute('data-pirsch-event')).not.toBe(
+      'cta-info-featured-speakers',
+    )
+  })
+
+  it('uses the organizers-scoped programme event in the organizers band', () => {
+    const conference = makeConference({
+      startDate: '2000-01-01',
+      endDate: '2000-01-02',
+      schedules: schedulesWithRecording(),
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={organizersOnly}
+        conference={conference}
+      />,
+    )
+    expect(programmeLink(container)?.getAttribute('data-pirsch-event')).toBe(
+      'cta-program-featured-organizers',
+    )
+  })
+
+  it('offers "Watch the talks" only AFTER the event', () => {
+    const conference = makeConference({
+      startDate: '2000-01-01',
+      endDate: '2000-01-02',
+      schedules: schedulesWithRecording(),
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={featuredSpeakersOnly}
+        conference={conference}
+      />,
+    )
+    expect(programmeLink(container)?.textContent).toContain('Watch the talks')
+  })
+
+  it('never advertises recordings on a PRE-EVENT page', () => {
+    // Programme published, event still ahead, and a talk already carries a
+    // recording link (a re-run, a teaser). The label must stay forward-looking.
+    const conference = makeConference({
+      startDate: '2999-01-01',
+      endDate: '2999-01-02',
+      programDate: '2000-01-01',
+      schedules: schedulesWithRecording(),
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={featuredSpeakersOnly}
+        conference={conference}
+      />,
+    )
+    const link = programmeLink(container)
+    expect(link?.textContent).toContain('See the programme')
+    expect(container.textContent).not.toContain('Watch the talks')
+    // The event name does not depend on the label.
+    expect(link?.getAttribute('data-pirsch-event')).toBe(
+      'cta-program-featured-speakers',
+    )
   })
 })

@@ -168,6 +168,47 @@ describe('getDefaultSections — lifecycle behaviour', () => {
     expect(types[1]).toBe('homepageSaveTheDate')
   })
 
+  it('does NOT add the save-the-date band once a real programme is published', () => {
+    // Programme stage WITH content: the page leads with the programme, so the
+    // band would be redundant.
+    const conference = makeConference({
+      programDate: PAST,
+      schedules: LIVE_SCHEDULE,
+    })
+    const types = getDefaultSections(conference).map((s) => s._type)
+    expect(types).not.toContain('homepageSaveTheDate')
+    expect(types).toContain('homepageProgramHighlights')
+  })
+
+  it('keeps the save-the-date band when the programme date passed with an EMPTY schedule', () => {
+    // The date-rollover hole: `programDate` in the past puts the conference in
+    // the `programme` stage, but an empty schedule means `hasProgramme` is
+    // false, so the programme slot is empty too. Without the band this page is
+    // a hero above a sponsorship pitch, triggered purely by a date passing.
+    const conference = makeConference({
+      programDate: PAST,
+      schedules: [{ _id: 's1', date: '2999-01-01', tracks: [] }] as never,
+    })
+    expect(getDefaultSections(conference).map((s) => s._type)).toEqual([
+      'homepageHero',
+      'homepageSaveTheDate',
+      'homepageGallery',
+      'homepageSponsors',
+    ])
+  })
+
+  it('drops the save-the-date band when an empty programme falls through to speakers', () => {
+    // Same stage, but there IS something to lead with — the band is not needed.
+    const conference = makeConference({
+      programDate: PAST,
+      schedules: [{ _id: 's1', date: '2999-01-01', tracks: [] }] as never,
+      featuredSpeakers: [{ _id: 'sp1' }] as never,
+    })
+    expect(getDefaultSections(conference).map((s) => s._type)).not.toContain(
+      'homepageSaveTheDate',
+    )
+  })
+
   it('does not add the save-the-date band after the event', () => {
     const conference = makeConference({
       startDate: PAST,

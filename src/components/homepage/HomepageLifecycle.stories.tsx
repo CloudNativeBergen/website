@@ -58,6 +58,11 @@ const meta = {
   // Pinning the clock is load-bearing here, not cosmetic: every stage in the
   // model is derived from `Date.now()` against the conference dates, so an
   // unpinned clock would eventually flip a story into a different state.
+  //
+  // `pinClock()` RETURNS the restore function and this arrow returns it, which
+  // is how Storybook `beforeEach` teardown works (house pattern — see
+  // `mockDateBeforeEach`). Do not swallow the return value: the pinned `Date`
+  // would then leak into every story rendered afterwards in the same session.
   beforeEach: () => pinClock(),
   title: 'Systems/Homepage/Public/Matrix/HomepageLifecycle',
   tags: ['matrix'],
