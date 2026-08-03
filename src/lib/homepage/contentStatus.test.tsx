@@ -35,6 +35,8 @@ import {
 } from './contentStatus'
 import {
   HOMEPAGE_SECTION_TYPES,
+  SECTION_LABELS,
+  isHomepageSectionType,
   type HomepageSection,
   type HomepageSectionType,
 } from './sections'
@@ -244,6 +246,22 @@ const CASES: Record<HomepageSectionType, Case[]> = {
           {
             sponsor: { _id: 'x', name: 'Acme', website: 'https://acme.test' },
             tier: { title: 'Gold', tagline: '', tierType: 'standard' },
+          },
+        ] as never,
+      }),
+      willHide: false,
+    },
+    {
+      // No logo reaches the page — `groupSponsorsByTier` drops an untiered
+      // sponsor — but `Sponsors.tsx` keys its heading off the RAW array, so the
+      // band is not empty either. Both halves are asserted by the render below.
+      name: 'sponsors that are all untiered, with the pitch off — heading only',
+      section: { _key: 'sp', _type: 'homepageSponsors', showCta: false },
+      conference: bareConference({
+        sponsors: [
+          {
+            sponsor: { _id: 'x', name: 'Acme', website: 'https://acme.test' },
+            tier: null,
           },
         ] as never,
       }),
@@ -606,6 +624,87 @@ describe('counts and summaries', () => {
     )
     expect(status.kind).toBe('degraded')
     expect(status.summary).toBe('1 sponsor, none in a tier')
+    // Stored: one. Rendered: none. `count` is the second number.
+    expect(status.count).toBe(0)
+  })
+
+  /**
+   * THE regression this file exists to prevent on the sponsors band: a count
+   * read off `conference.sponsors.length` promises logos that
+   * `groupSponsorsByTier` never draws. Both numbers in the summary are checked
+   * against the REAL band — logo links and tier headings counted out of the
+   * rendered DOM — so a summary can only be right by being right about what
+   * renders, not by agreeing with a rule restated in the test.
+   */
+  it('counts only the sponsors the band actually draws', () => {
+    const section: HomepageSection = {
+      _key: 's',
+      _type: 'homepageSponsors',
+      // The pitch card off, so every remaining <h3> is a tier heading.
+      showCta: false,
+    }
+    const conference = bareConference({
+      sponsors: [
+        {
+          sponsor: { _id: '1', name: 'A', website: 'https://a.test' },
+          tier: { title: 'Gold', tagline: '', tierType: 'standard' },
+        },
+        {
+          sponsor: { _id: '2', name: 'B', website: 'https://b.test' },
+          tier: { title: 'Gold', tagline: '', tierType: 'standard' },
+        },
+        {
+          sponsor: { _id: '3', name: 'C', website: 'https://c.test' },
+          tier: { title: 'Silver', tagline: '', tierType: 'standard' },
+        },
+        // The two the band silently drops.
+        {
+          sponsor: { _id: '4', name: 'D', website: 'https://d.test' },
+          tier: null,
+        },
+        {
+          sponsor: { _id: '5', name: 'E', website: 'https://e.test' },
+          tier: undefined,
+        },
+      ] as never,
+    })
+
+    const status = sectionContentStatus(section, conference)
+    const { container } = render(
+      <HomepageSectionRenderer sections={[section]} conference={conference} />,
+    )
+    const logoLinks = container.querySelectorAll('a[aria-label^="Visit "]')
+    const tierHeadings = container.querySelectorAll('h3')
+
+    // Sanity on the fixture: the real component really does drop the two.
+    expect(logoLinks.length).toBe(3)
+    expect(tierHeadings.length).toBe(2)
+
+    expect(status.count).toBe(logoLinks.length)
+    expect(status.summary).toBe(
+      `${logoLinks.length} sponsors in ${tierHeadings.length} tiers`,
+    )
+    // Fewer logos than sponsors on file is exactly "renders, but thinner than
+    // intended" — and the reason must name how many are missing.
+    expect(status.kind).toBe('degraded')
+    expect(status.reason).toContain('2 sponsors in no tier')
+  })
+
+  it('is ready — not degraded — when every sponsor has a tier', () => {
+    const status = sectionContentStatus(
+      { _key: 's', _type: 'homepageSponsors' },
+      bareConference({
+        sponsors: [
+          {
+            sponsor: { _id: '1', name: 'A', website: 'https://a.test' },
+            tier: { title: 'Gold', tagline: '', tierType: 'standard' },
+          },
+        ] as never,
+      }),
+    )
+    expect(status.kind).toBe('ready')
+    expect(status.count).toBe(1)
+    expect(status.summary).toBe('1 sponsor in 1 tier')
   })
 
   it('says what an empty sponsors band actually looks like in each case', () => {
@@ -628,6 +727,75 @@ describe('counts and summaries', () => {
       bareConference({ startDate: PAST, endDate: PAST }),
     )
     expect(postEvent.reason).toContain('empty band')
+  })
+})
+
+/**
+ * The forward-compat path, held to the SAME parity bar as the registered types:
+ * the renderer skips an unknown `_type` with a warn, so the status must report
+ * it as hiding — and must not claim it is a section type this deploy knows.
+ */
+describe('a section type from the future', () => {
+  it('reports as hiding, exactly as the renderer skips it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const section = {
+        _key: 'z',
+        _type: 'homepageSomethingNewer',
+      } as unknown as HomepageSection
+      const conference = bareConference()
+
+      const status = sectionContentStatus(section, conference)
+      expect(status.willHide).toBe(true)
+      expect(status.kind).toBe('empty-hides')
+
+      const { container } = render(
+        <HomepageSectionRenderer
+          sections={[section]}
+          conference={conference}
+        />,
+      )
+      expect(container.innerHTML === '').toBe(status.willHide)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  /**
+   * `type` carries the stored string verbatim, and `known: false` says so. The
+   * narrowing is the point: the label lookup below is a
+   * `Record<HomepageSectionType, …>`, and without the discriminant this status
+   * would key it with a string that is not in it — an `undefined` label in the
+   * composer rail, from a value the old signature swore was a section type.
+   */
+  it('does not pass itself off as a registered section type', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const status = sectionContentStatus(
+        {
+          _key: 'z',
+          _type: 'homepageSomethingNewer',
+        } as unknown as HomepageSection,
+        bareConference(),
+      )
+      expect(status.known).toBe(false)
+      expect(status.type).toBe('homepageSomethingNewer')
+      expect(isHomepageSectionType(status.type)).toBe(false)
+
+      const label = status.known ? SECTION_LABELS[status.type] : status.summary
+      expect(label).toBe('Unknown section type')
+
+      const known = sectionContentStatus(
+        { _key: 'h', _type: 'homepageHero' },
+        bareConference(),
+      )
+      expect(known.known).toBe(true)
+      expect(known.known && SECTION_LABELS[known.type]).toBe(
+        SECTION_LABELS.homepageHero,
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

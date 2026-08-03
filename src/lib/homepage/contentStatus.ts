@@ -19,8 +19,10 @@ import type {
  * with a count ("6 sponsors in 2 tiers"), a reason, and a link to the surface
  * where that content is actually edited.
  *
- * THE CORRECTNESS BAR: {@link SectionContentStatus.willHide} must be TRUE
- * exactly when the real renderer produces nothing for that section. A preview
+ * THE CORRECTNESS BAR: the `willHide` flag of {@link SectionContentStatus} must
+ * be TRUE exactly when the real renderer produces nothing for that section — and
+ * its `count` must be what the renderer will actually DRAW, not what the
+ * collection behind it happens to hold. A preview
  * that shows a band the live page drops is worse than no preview, because the
  * organizer ships believing the page is full. The predicates below are
  * therefore transcriptions of the renderer's own guards, each annotated with
@@ -172,13 +174,14 @@ export const CONTENT_SOURCES: Record<SectionContentSourceId, ContentSource> = {
  *
  *  - `ready` — real content behind it; it renders in full.
  *  - `degraded` — it renders, but thinner than intended (the sponsors band with
- *    no sponsors is the canonical case: the "Become a Sponsor" pitch alone).
+ *    no sponsors is the canonical case: the "Become a Sponsor" pitch alone; the
+ *    band holding untiered sponsors is the same fact one step in — those logos
+ *    are stored, and the page will not draw them).
  *  - `empty-hides` — the live site renders NOTHING for it.
  */
 export type SectionContentKind = 'ready' | 'degraded' | 'empty-hides'
 
-export interface SectionContentStatus {
-  type: HomepageSectionType
+interface SectionContentStatusFacts {
   kind: SectionContentKind
   /**
    * TRUE iff the renderer emits nothing for this section — the property the
@@ -187,8 +190,14 @@ export interface SectionContentStatus {
    */
   willHide: boolean
   /**
-   * How many items back the band, or `null` when the section is not backed by
-   * a countable collection (hero, save-the-date, CTA banner, countdown, venue).
+   * How many items the band will ACTUALLY RENDER, or `null` when the section is
+   * not backed by a countable collection (hero, save-the-date, CTA banner,
+   * countdown, venue).
+   *
+   * "Will render", not "is stored": the sponsors band drops every sponsor with
+   * no tier, so a conference holding ten sponsors of which three are untiered
+   * counts SEVEN here. A count the organizer cannot find on the page is the
+   * same lie as a band the page does not draw.
    */
   count: number | null
   /** Plural noun for {@link count}: "speakers", "sponsors", "photos". */
@@ -202,6 +211,40 @@ export interface SectionContentStatus {
   /** Ready-to-render deep link, or `null` for composer-local content. */
   manage: { label: string; href: string } | null
 }
+
+/** A section this deploy's registry knows — the overwhelmingly common case. */
+export interface KnownSectionContentStatus extends SectionContentStatusFacts {
+  /** Narrowing discriminant: `type` is a registered section type. */
+  known: true
+  type: HomepageSectionType
+}
+
+/**
+ * A stored section whose `_type` this deploy has never heard of — data written
+ * by a newer schema during deploy skew.
+ *
+ * A SEPARATE shape rather than a widened `type`, because `type` is what callers
+ * key label maps, icon maps and variant pickers by, and every one of those is a
+ * `Record<HomepageSectionType, …>` that this value would miss. The union makes
+ * the miss a compile error at the point of use instead of an `undefined` label
+ * in the composer rail, and `known` is the one check needed to clear it.
+ *
+ * The BEHAVIOUR mirrors the renderer's unknown-`_type` skip
+ * (`SectionRenderer.tsx`): the section contributes nothing to the page, so this
+ * reports as hiding. No warning is logged here — the renderer already warns
+ * once per process for exactly this `_type`, and the composer surfaces the same
+ * fact where it matters more, as a row that says so in words.
+ */
+export interface UnknownSectionContentStatus extends SectionContentStatusFacts {
+  known: false
+  /** The stored `_type`, verbatim. NOT a registered section type. */
+  type: string
+  kind: 'empty-hides'
+  willHide: true
+}
+
+export type SectionContentStatus =
+  KnownSectionContentStatus | UnknownSectionContentStatus
 
 export interface SectionContentStatusOptions {
   /**
@@ -302,19 +345,40 @@ function hasSaveTheDateDates(conference: Conference): boolean {
   return Boolean(conference.startDate && conference.endDate)
 }
 
+/** What the sponsors band will actually draw, counted the way it groups. */
+interface SponsorTally {
+  /** Sponsors that reach a logo grid — i.e. the ones with a tier. */
+  shown: number
+  /** Sponsors dropped for having no tier. Stored, but never on the page. */
+  untiered: number
+  /** Tier HEADINGS, after `special` collapses. */
+  tiers: number
+}
+
 /**
  * `groupSponsorsByTier` (`@/lib/sponsor/utils`): an untiered sponsor is skipped
  * — it never reaches a logo grid — and every `special` tier collapses into one
- * `SPECIAL` heading. Counting tiers the same way keeps "6 sponsors in 2 tiers"
- * honest about what the band will actually show.
+ * `SPECIAL` heading. BOTH numbers in "6 sponsors in 2 tiers" come from this
+ * walk, so neither can over-report what the band will show.
  */
-function sponsorTierCount(conference: Conference): number {
+function tallySponsors(conference: Conference): SponsorTally {
   const tiers = new Set<string>()
+  let shown = 0
+  let untiered = 0
   for (const entry of conference.sponsors ?? []) {
-    if (!entry.tier) continue
-    tiers.add(entry.tier.tierType === 'special' ? 'SPECIAL' : entry.tier.title)
+    if (!entry?.tier) {
+      untiered++
+      continue
+    }
+    shown++
+    // `String(...)` because upstream uses the title as an OBJECT KEY, and an
+    // object key coerces. A tier whose title is missing in stored data groups
+    // under `'undefined'` there, so it must group under `'undefined'` here too.
+    tiers.add(
+      entry.tier.tierType === 'special' ? 'SPECIAL' : String(entry.tier.title),
+    )
   }
-  return tiers.size
+  return { shown, untiered, tiers: tiers.size }
 }
 
 /**
@@ -379,8 +443,9 @@ function status(
     summary: string
     reason?: string
   },
-): SectionContentStatus {
+): KnownSectionContentStatus {
   return {
+    known: true,
     type,
     kind,
     willHide: kind === 'empty-hides',
@@ -404,7 +469,7 @@ function collectionStatus(
   count: number,
   noun: string,
   reason: string,
-): SectionContentStatus {
+): KnownSectionContentStatus {
   if (count === 0) {
     return status(type, 'empty-hides', src, {
       count: 0,
@@ -524,10 +589,9 @@ export function sectionContentStatus(
     // section: vertical whitespace and nothing else. That is not a hide, so
     // `willHide` stays false; it is called out as a degraded state instead.
     case 'homepageSponsors': {
-      const count = conference.sponsors?.length ?? 0
-      const tiers = sponsorTierCount(conference)
+      const { shown, untiered, tiers } = tallySponsors(conference)
       const src = source('sponsors')
-      if (count === 0) {
+      if (shown === 0 && untiered === 0) {
         const cta = sponsorsShowCta(section, conference, now)
         return status('homepageSponsors', 'degraded', src, {
           count: 0,
@@ -538,19 +602,33 @@ export function sectionContentStatus(
             : 'Renders as an empty band — there are no sponsors and the sponsor call-to-action is switched off.',
         })
       }
-      if (tiers === 0) {
+      // Stored sponsors, none of them tiered: `Sponsors.tsx` keys its heading
+      // off the RAW array, so the band still draws its title and blurb — above
+      // an empty space where every logo was dropped.
+      if (shown === 0) {
         return status('homepageSponsors', 'degraded', src, {
-          count,
+          count: 0,
           countLabel: 'sponsors',
-          summary: `${pluralize(count, 'sponsors')}, none in a tier`,
+          summary: `${pluralize(untiered, 'sponsors')}, none in a tier`,
           reason:
             'No logos render — a sponsor is only shown once it is assigned to a tier.',
         })
       }
+      const summary = `${pluralize(shown, 'sponsors')} in ${pluralize(tiers, 'tiers')}`
+      // Some render, some do not. Thinner than the organizer thinks it is,
+      // which is the whole reason this module exists — say the number.
+      if (untiered > 0) {
+        return status('homepageSponsors', 'degraded', src, {
+          count: shown,
+          countLabel: 'sponsors',
+          summary,
+          reason: `${pluralize(untiered, 'sponsors')} in no tier ${untiered === 1 ? 'is' : 'are'} left out — a sponsor is only shown once it is assigned to a tier.`,
+        })
+      }
       return status('homepageSponsors', 'ready', src, {
-        count,
+        count: shown,
         countLabel: 'sponsors',
-        summary: `${pluralize(count, 'sponsors')} in ${pluralize(tiers, 'tiers')}`,
+        summary,
       })
     }
 
@@ -689,18 +767,26 @@ export function sectionContentStatus(
       // composer. The `never` binding is the compile-time half — adding a
       // fourteenth section type to the registry fails to build here until it
       // gets a real case above.
+      //
+      // The returned `type` is the raw stored string, and it is typed as such:
+      // see {@link UnknownSectionContentStatus} for why this is a shape of its
+      // own rather than a `HomepageSectionType` it demonstrably is not.
       const exhaustive: never = section
       const unknown = exhaustive as { _type?: string }
-      return status(
-        String(unknown?._type) as HomepageSectionType,
-        'empty-hides',
-        source('section-config'),
-        {
-          summary: 'Unknown section type',
-          reason:
-            'Hidden on the live site — this section type is not in the registry this deploy knows.',
-        },
-      )
+      const src = source('section-config')
+      return {
+        known: false,
+        type: String(unknown?._type),
+        kind: 'empty-hides',
+        willHide: true,
+        count: null,
+        countLabel: null,
+        summary: 'Unknown section type',
+        reason:
+          'Hidden on the live site — this section type is not in the registry this deploy knows.',
+        source: src,
+        manage: manageOf(src),
+      }
     }
   }
 }
