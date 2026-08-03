@@ -9,6 +9,7 @@ import {
   createReferenceWithKey,
 } from '@/lib/sanity/helpers'
 import { notifyScheduleChanges, type SlotPlacement } from '@/lib/reminders'
+import { ScheduleStatus } from './types'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
@@ -38,6 +39,37 @@ export async function getValidTalkIds(
   return new Set(ids || [])
 }
 
+/** Fetch all talk statuses for the Strict Block guard. */
+export async function getTalkStatuses(
+  conferenceId: string,
+): Promise<Record<string, string>> {
+  const talks = await scopedFetch<{ _id: string; status?: string }[]>(
+    clientWrite,
+    { conferenceId },
+    `*[_type == "talk"]{ _id, status }`,
+  )
+  return Object.fromEntries(
+    (talks || []).map((t) => [t._id, t.status || 'new']),
+  )
+}
+
+/** Fetch the current status of a schedule document. */
+export async function getScheduleStatusById(
+  scheduleId: string,
+  conferenceId: string,
+): Promise<string | null> {
+  // Scoped to the tenant AND the type: this read decides whether a save forks,
+  // and an unscoped `*[_id == $id]` answers questions about documents in other
+  // conferences. A foreign or unknown id now returns null, which the caller
+  // treats as official and therefore forks — the safe direction, and it reveals
+  // nothing about whether that id exists elsewhere.
+  const doc = await clientWrite.fetch<{ status?: string } | null>(
+    `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]{ status }`,
+    { id: scheduleId, conferenceId },
+  )
+  return doc?.status || null
+}
+
 /**
  * The referenced talk id on a slot, resolved from either the projected `_id` or
  * a raw Sanity `_ref`. Returns '' when the slot carries no resolvable talk (no
@@ -53,10 +85,12 @@ function resolveTalkId(talk: {
 
 /**
  * Flatten a schedule day's real (non-placeholder, resolvable) talk slots to the
- * placement tuples the schedule-change diff compares. Placeholders and ghost
+ * placement tuples the schedule-change diff compares. Exported because promote
+ * — now the only write that changes the PUBLIC program — has to diff the
+ * outgoing official day against the incoming one to alert speakers. Placeholders and ghost
  * slots (no resolvable talk) are skipped — they have no speakers to alert.
  */
-function collectPlacements(
+export function collectPlacements(
   date: string,
   tracks: ConferenceSchedule['tracks'] | undefined,
 ): SlotPlacement[] {
@@ -231,9 +265,13 @@ export async function saveScheduleToSanity(
       const target = await clientWrite.fetch<{
         _type: string
         conferenceRef: string | null
-      } | null>(`*[_id == $id][0]{ _type, "conferenceRef": conference._ref }`, {
-        id: schedule._id,
-      })
+        status: string | null
+      } | null>(
+        `*[_id == $id][0]{ _type, "conferenceRef": conference._ref, status }`,
+        {
+          id: schedule._id,
+        },
+      )
 
       // One generic message for missing, wrong-type, and wrong-conference so a
       // caller can't probe whether an arbitrary document id exists.
@@ -245,10 +283,31 @@ export async function saveScheduleToSanity(
         return { error: 'Schedule not found or not accessible' }
       }
 
+      // ALERT GATE: only the OFFICIAL day is public, so only it may notify
+      // speakers. The editor autosaves a draft every few seconds, so alerting on
+      // a draft would spam every speaker a "your talk moved to …" message for
+      // each drag of a day nobody can see yet; an ARCHIVED day is a superseded
+      // snapshot and equally must stay silent.
+      //
+      // The gate reads the PERSISTED status of the document being written, never
+      // `schedule.status` from the payload: that field is client-supplied, so a
+      // crafted (or merely stale) payload could otherwise force alerts from a
+      // private draft — or silence them on the real program.
+      //
+      // Legacy schedules written before drafts existed carry NO `status`; treat a
+      // missing one as official (same fallback as `getScheduleData`), otherwise
+      // every pre-existing conference would go silent.
+      const notifiesSpeakers =
+        !target.status || target.status === ScheduleStatus.Official
+
       // Capture the CURRENT placements before the overwrite so we can alert
       // speakers whose talk genuinely moved (see `notifyScheduleChanges` after
-      // the commit). Best-effort — never blocks or fails the save.
-      const priorPlacements = await fetchPriorPlacements(schedule._id)
+      // the commit). Best-effort — never blocks or fails the save. Skipped
+      // entirely for a non-official day: nothing will be sent, so nothing needs
+      // to be read.
+      const priorPlacements = notifiesSpeakers
+        ? await fetchPriorPlacements(schedule._id)
+        : null
 
       // Optimistic concurrency: `_rev` is guaranteed present (rejected above),
       // so ALWAYS patch with `ifRevisionId` — a save is rejected if the day
@@ -263,6 +322,13 @@ export async function saveScheduleToSanity(
         .set({
           date: schedule.date,
           tracks: sanitizedTracks,
+          // `status` is deliberately NOT written here. Promotion is the only
+          // legitimate status transition, and it owns the archive + reference
+          // swap that has to happen with it. Honouring a client-supplied status
+          // on save let a crafted payload flip a draft to official without
+          // archiving the day's existing official (two official days), or
+          // archive the live day while it stayed referenced by the conference.
+          version: (schedule.version || 0) + 1,
         })
         .commit()
 
@@ -271,17 +337,19 @@ export async function saveScheduleToSanity(
       // SCHEDULE-CHANGE ALERTS: diff prior vs saved placements and notify the
       // speakers of any talk whose slot actually moved. Never-throw (a failure
       // here must not fail the already-committed save); a run where nothing
-      // moved emits nothing.
+      // moved emits nothing. A draft/archived day never reaches this pass at all
+      // (see the alert gate above).
       //
-      // A `null` prior means the pre-save read FAILED (distinct from an empty
-      // day): diffing against an empty baseline would treat every talk as newly
-      // placed and announce nothing, silently swallowing any real move. Skip the
-      // pass entirely and log so the miss is observable, rather than misfire.
-      if (priorPlacements === null) {
+      // A `null` prior on an official day means the pre-save read FAILED
+      // (distinct from an empty day): diffing against an empty baseline would
+      // treat every talk as newly placed and announce nothing, silently
+      // swallowing any real move. Skip the pass entirely and log so the miss is
+      // observable, rather than misfire.
+      if (notifiesSpeakers && priorPlacements === null) {
         console.warn(
           `Skipping schedule-change alerts for ${schedule._id}: prior placements unavailable (read failed)`,
         )
-      } else {
+      } else if (notifiesSpeakers && priorPlacements) {
         await notifyScheduleChanges({
           prior: priorPlacements,
           next: collectPlacements(schedule.date, schedule.tracks),
@@ -297,11 +365,13 @@ export async function saveScheduleToSanity(
       // forked edits. Check for an existing schedule for this (conference, date)
       // first; if one exists, surface the same conflict UX as a revision mismatch
       // so the client tells the organizer to reload rather than fork the day.
+      // Check for an existing schedule for this (conference, date, status)
+      // so we don't block drafting if an official day exists.
       const existingId = await scopedFetch<string | null>(
         clientWrite,
         { conferenceId: conference._id },
-        `*[_type == "schedule" && date == $date][0]._id`,
-        { date: schedule.date },
+        `*[_type == "schedule" && date == $date && status == $status][0]._id`,
+        { date: schedule.date, status: schedule.status || 'draft' },
       )
       if (existingId) {
         return {
@@ -323,18 +393,25 @@ export async function saveScheduleToSanity(
         date: schedule.date,
         tracks: sanitizedTracks,
         conference: createReference(conference._id),
+        status: schedule.status || 'draft',
+        version: schedule.version || 1,
+        ...(options?.actorId
+          ? { owner: createReference(options.actorId) }
+          : {}),
       }
 
-      await clientWrite
-        .transaction()
-        .create(newScheduleDoc)
-        .patch(conference._id, (patch) =>
+      const tx = clientWrite.transaction().create(newScheduleDoc)
+
+      // CRITICAL DECOUPLING: Only append Official schedules to the reference array.
+      if (schedule.status === 'official') {
+        tx.patch(conference._id, (patch) =>
           patch
             .setIfMissing({ schedules: [] })
-            // Array items need a stable _key, matching other reference arrays.
             .append('schedules', [createReferenceWithKey(newId, 'schedule')]),
         )
-        .commit()
+      }
+
+      await tx.commit()
 
       // Read back the created document's `_rev` so a follow-up save in the same
       // session carries a revision and participates in optimistic concurrency

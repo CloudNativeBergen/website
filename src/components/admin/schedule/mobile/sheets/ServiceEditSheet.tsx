@@ -8,7 +8,11 @@ import {
   durationBetween,
   withinScheduleEnd,
 } from '@/lib/schedule/time'
-import { isTrackIntervalFree, matchService } from '@/lib/schedule/rules'
+import {
+  isTrackIntervalFree,
+  matchService,
+  matchTalk,
+} from '@/lib/schedule/rules'
 import { SERVICE_DURATION_OPTIONS } from '@/lib/schedule/constants'
 import { Dropdown } from '@/components/Form'
 
@@ -67,7 +71,9 @@ export function ServiceEditSheet({
         track,
         talk.startTime,
         end,
-        matchService(talk.placeholder ?? '', talk.startTime),
+        talk.talk
+          ? matchTalk(talk.talk._id, talk.startTime)
+          : matchService(talk.placeholder ?? '', talk.startTime),
       )
     },
     [track, talk.startTime, talk.placeholder],
@@ -98,7 +104,7 @@ export function ServiceEditSheet({
       return
     }
     dispatch({
-      type: 'resizeService',
+      type: 'resizeItem',
       trackIndex,
       talkIndex,
       duration: dur,

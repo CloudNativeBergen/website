@@ -159,7 +159,7 @@ export function AdminFilterBar({
   const filterControls = (
     <>
       {/* Desktop: inline dropdown row */}
-      <div className="hidden items-center gap-1.5 lg:flex">
+      <div className="hidden flex-wrap items-center gap-1.5 lg:flex">
         {filters.map((group) => (
           <DesktopFilterDropdown key={group.key} group={group} />
         ))}
@@ -217,10 +217,10 @@ export function AdminFilterBar({
         className,
       )}
     >
-      <div className="flex flex-row items-center gap-2 lg:justify-between lg:gap-3">
+      <div className="flex flex-row flex-wrap items-center gap-2 lg:justify-between lg:gap-3">
         <div
           className={clsx(
-            'flex items-center gap-2 lg:flex-none',
+            'flex w-full items-center gap-2 lg:w-auto lg:flex-none',
             search && 'flex-1',
           )}
         >

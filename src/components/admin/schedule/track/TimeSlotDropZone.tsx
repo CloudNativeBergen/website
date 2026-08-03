@@ -36,7 +36,7 @@ export const TimeSlotDropZone = ({
   // `activeDragItem` and the whole-day `schedule` come from context instead of
   // being prop-drilled through TracksGrid → DroppableTrack. The schedule lets
   // `canDrop` validate the REVERSE half of a swap (see below).
-  const { activeDragItem, schedule, otherScheduledProposalIds } =
+  const { activeDragItem, schedule, otherScheduledProposalIds, isReadOnly } =
     useScheduleContext()
 
   const { setNodeRef, isOver } = useDroppable({
@@ -46,6 +46,8 @@ export const TimeSlotDropZone = ({
       trackIndex,
       timeSlot: timeSlot.time,
     },
+    // Live (official) view is a read-only preview — nothing may be dropped.
+    disabled: isReadOnly,
   })
 
   useEffect(() => {
@@ -168,7 +170,7 @@ export const TimeSlotDropZone = ({
           </div>
         )}
 
-      {!isOccupied && !activeDragItem && (
+      {!isOccupied && !activeDragItem && !isReadOnly && (
         <button
           onClick={handleAddServiceSession}
           className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100 hover:z-20"

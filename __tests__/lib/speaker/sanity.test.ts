@@ -1,19 +1,38 @@
-const { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate } =
-  vi.hoisted(() => {
-    const mockCommit = vi.fn().mockResolvedValue({})
-    const mockUnset = vi.fn()
-    const mockSet = vi.fn()
-    mockSet.mockReturnValue({ commit: mockCommit, unset: mockUnset })
-    mockUnset.mockReturnValue({ commit: mockCommit })
-    const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
-    const mockFetch = vi.fn()
-    const mockCreate = vi.fn()
-    return { mockCommit, mockSet, mockUnset, mockPatch, mockFetch, mockCreate }
-  })
+const {
+  mockCommit,
+  mockSet,
+  mockUnset,
+  mockPatch,
+  mockFetch,
+  mockCachedFetch,
+  mockCreate,
+} = vi.hoisted(() => {
+  const mockCommit = vi.fn().mockResolvedValue({})
+  const mockUnset = vi.fn()
+  const mockSet = vi.fn()
+  mockSet.mockReturnValue({ commit: mockCommit, unset: mockUnset })
+  mockUnset.mockReturnValue({ commit: mockCommit })
+  const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
+  const mockFetch = vi.fn()
+  const mockCachedFetch = vi.fn()
+  const mockCreate = vi.fn()
+  return {
+    mockCommit,
+    mockSet,
+    mockUnset,
+    mockPatch,
+    mockFetch,
+    mockCachedFetch,
+    mockCreate,
+  }
+})
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: mockFetch,
+  },
+  clientReadCached: {
+    fetch: mockCachedFetch,
   },
   clientWrite: {
     patch: mockPatch,
@@ -29,6 +48,7 @@ import {
   updateSpeaker,
   getOrCreateSpeaker,
   getSpeaker,
+  getPublicSpeaker,
 } from '@/lib/speaker/sanity'
 import { SpeakerInputSchema } from '@/server/schemas/speaker'
 import type { Speaker } from '@/lib/speaker/types'
@@ -378,5 +398,37 @@ describe('isOrganizer computed from conference.organizers', () => {
     const query = mockFetch.mock.calls[0][0] as string
     expect(query).toContain('isOrganizer')
     expect(query).toContain('conference')
+  })
+})
+
+describe('getPublicSpeaker — schedule lookup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCachedFetch.mockResolvedValue({ name: 'Test Speaker', talks: [] })
+  })
+
+  /**
+   * A conference keeps one `schedule` document per day PER STATUS — private
+   * `draft`s organizers are still moving talks around in, plus an `archived`
+   * snapshot of every superseded published version. The public speaker page
+   * resolves a talk's slot by reverse lookup, so without a status constraint it
+   * would advertise whichever document the store returned first: after a single
+   * promote cycle an archived doc always exists.
+   */
+  it('resolves the slot from the OFFICIAL schedule only', async () => {
+    await getPublicSpeaker('conf-1', 'test-speaker')
+
+    const query = mockCachedFetch.mock.calls[0][0] as string
+    const lookup = query
+      .split('\n')
+      .find((line) => line.includes('"schedule": *['))
+    expect(lookup).toBeDefined()
+    expect(lookup).toContain('status == "official"')
+    // Legacy days written before drafts existed carry NO status field; they must
+    // still resolve, or every existing conference's speaker pages lose their
+    // times.
+    expect(lookup).toContain('!defined(status)')
+    // Deterministic pick when a talk somehow appears on two official days.
+    expect(lookup).toContain('order(date asc)')
   })
 })

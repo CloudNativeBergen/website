@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
 import { AdminPageHeader } from '@/components/admin'
@@ -61,6 +61,7 @@ export function SponsorEmailTemplatesPageClient({
   conference,
 }: SponsorEmailTemplatesPageClientProps) {
   const { showNotification } = useNotification()
+  const dndId = useId()
   const [deleteTarget, setDeleteTarget] = useState<SponsorEmailTemplate | null>(
     null,
   )
@@ -220,6 +221,7 @@ export function SponsorEmailTemplatesPageClient({
 
       {!isLoading && displayTemplates.length > 0 && (
         <DndContext
+          id={dndId}
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}

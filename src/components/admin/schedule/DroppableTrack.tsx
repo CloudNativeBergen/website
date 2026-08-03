@@ -11,6 +11,7 @@ import { TimeSlotDropZone } from './track/TimeSlotDropZone'
 import { ServiceSession } from './track/ServiceSession'
 import { ScheduledTalk } from './track/ScheduledTalk'
 import { ServiceSessionModal } from './track/ServiceSessionModal'
+import { useScheduleContext } from './ScheduleContext'
 
 interface DroppableTrackProps {
   track: ScheduleTrack
@@ -57,6 +58,9 @@ function DroppableTrack({
   const [hoveredSwapTimeSlot, setHoveredSwapTimeSlot] = useState<string | null>(
     null,
   )
+  // Live (official) view: renaming/removing the track are edits with no save
+  // path (see ScheduleContext).
+  const { isReadOnly } = useScheduleContext()
 
   const timeSlots = useMemo(
     () => generateTimeSlots(SCHEDULE_START, SCHEDULE_END, SLOT_INTERVAL),
@@ -74,6 +78,7 @@ function DroppableTrack({
       type: 'track',
       trackIndex,
     },
+    disabled: isReadOnly,
   })
 
   const handleSaveEdit = useCallback(() => {
@@ -130,13 +135,11 @@ function DroppableTrack({
     setSelectedTimeSlot('')
   }, [])
 
-  const handleUpdateServiceSession = useCallback(
+  const handleUpdateItemDuration = useCallback(
     (index: number, newDuration: number) => {
-      if (track.talks[index]?.placeholder) {
-        onResizeServiceSession?.(index, newDuration)
-      }
+      onResizeServiceSession?.(index, newDuration)
     },
-    [track.talks, onResizeServiceSession],
+    [onResizeServiceSession],
   )
 
   const handleRenameServiceSession = useCallback(
@@ -176,7 +179,8 @@ function DroppableTrack({
     >
       <TrackHeader
         track={track}
-        isEditing={isEditing}
+        isReadOnly={isReadOnly}
+        isEditing={isEditing && !isReadOnly}
         editTitle={editTitle}
         editDescription={editDescription}
         onEditTitle={handleEditTitle}
@@ -216,7 +220,7 @@ function DroppableTrack({
                 trackIndex={trackIndex}
                 track={track}
                 onRemoveTalk={onRemoveTalk}
-                onUpdateSession={handleUpdateServiceSession}
+                onUpdateSession={handleUpdateItemDuration}
                 onRenameSession={handleRenameServiceSession}
                 onDuplicate={handleDuplicateServiceSession}
               />
@@ -229,6 +233,8 @@ function DroppableTrack({
                 talkIndex={talkIndex}
                 trackIndex={trackIndex}
                 hoveredSwapTimeSlot={hoveredSwapTimeSlot}
+                track={track}
+                onUpdateDuration={handleUpdateItemDuration}
               />
             )
           }

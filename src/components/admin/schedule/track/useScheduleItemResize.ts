@@ -7,12 +7,43 @@ import {
   SCHEDULE_END,
   calculateEndTime,
   durationBetween,
+  getProposalDurationMinutes,
   toMinutes,
 } from '@/lib/schedule/time'
-import { isTrackIntervalFree, matchService } from '@/lib/schedule/rules'
+import {
+  isTrackIntervalFree,
+  matchService,
+  matchTalk,
+} from '@/lib/schedule/rules'
 
 const MIN_DURATION = 5
-const MAX_DURATION = 180
+/**
+ * Fallback ceiling for items with no intrinsic length (service sessions). It is
+ * a FLOOR for the real cap, never a cap in itself — see {@link maxDurationFor}.
+ */
+const DEFAULT_MAX_DURATION = 180
+
+/**
+ * Largest duration this particular item may be dragged to.
+ *
+ * The old flat `MAX_DURATION = 180` was written when this hook only ran on
+ * service sessions. It now mounts on every `ScheduledTalk` too, so merely
+ * GRABBING the handle of a 240-minute workshop clamped it to 180 and releasing
+ * kept the truncation. The cap therefore has to derive from the item:
+ *
+ * - a talk can always be dragged back out to its full FORMAT duration (a split
+ *   remainder must be re-joinable), and
+ * - nothing may be capped below the length it already has, so an existing long
+ *   item is never silently shortened just by touching its handle.
+ *
+ * The real limits (no overlap with the next item, end-of-day) still come from
+ * `clampDuration` below.
+ */
+function maxDurationFor(talk: TrackTalk): number {
+  const current = durationBetween(talk.startTime, talk.endTime)
+  const declared = talk.talk ? getProposalDurationMinutes(talk.talk) : 0
+  return Math.max(DEFAULT_MAX_DURATION, declared, current)
+}
 
 /**
  * Resize interaction for a service session's bottom handle.
@@ -30,18 +61,18 @@ const MAX_DURATION = 180
  * but clamping here gives the drag live feedback at the boundary instead of a
  * silently-rejected no-op.
  */
-export function useServiceSessionResize({
+export function useScheduleItemResize({
   talk,
   talkIndex,
   track,
   height,
-  onUpdateSession,
+  onUpdateDuration,
 }: {
   talk: TrackTalk
   talkIndex: number
   track: ScheduleTrack
   height: number
-  onUpdateSession: (index: number, newDuration: number) => void
+  onUpdateDuration: (index: number, newDuration: number) => void
 }) {
   const [isResizing, setIsResizing] = useState(false)
   const startYRef = useRef(0)
@@ -66,13 +97,19 @@ export function useServiceSessionResize({
     capturePointerIdRef.current = null
   }, [])
 
-  // Largest duration (quantized to the slot interval, within [MIN, MAX]) whose
-  // end stays free and inside the schedule — i.e. clamp `requested` down until
-  // both scheduling rules hold. Reuses the tested rule, no new overlap math.
+  // Largest duration (quantized to the slot interval, within
+  // [MIN_DURATION, maxDurationFor(talk)]) whose end stays free and inside the
+  // schedule — i.e. clamp `requested` down until both scheduling rules hold.
+  // Reuses the tested rule, no new overlap math.
   const clampDuration = useCallback(
     (requested: number): number => {
-      let duration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, requested))
-      const exclude = matchService(talk.placeholder ?? '', talk.startTime)
+      let duration = Math.min(
+        maxDurationFor(talk),
+        Math.max(MIN_DURATION, requested),
+      )
+      const exclude = talk.talk
+        ? matchTalk(talk.talk._id, talk.startTime)
+        : matchService(talk.placeholder ?? '', talk.startTime)
       while (duration > MIN_DURATION) {
         const end = calculateEndTime(talk.startTime, duration)
         const withinDay = toMinutes(end) <= toMinutes(SCHEDULE_END)
@@ -86,7 +123,7 @@ export function useServiceSessionResize({
       }
       return duration
     },
-    [track, talk.placeholder, talk.startTime],
+    [track, talk],
   )
 
   const handlePointerDown = useCallback(
@@ -125,10 +162,10 @@ export function useServiceSessionResize({
       // identical resizeService actions.
       if (duration >= MIN_DURATION && duration !== lastDispatchedRef.current) {
         lastDispatchedRef.current = duration
-        onUpdateSession(talkIndex, duration)
+        onUpdateDuration(talkIndex, duration)
       }
     },
-    [isResizing, clampDuration, talkIndex, onUpdateSession],
+    [isResizing, clampDuration, talkIndex, onUpdateDuration],
   )
 
   const endResize = useCallback((e: React.PointerEvent) => {
@@ -150,7 +187,7 @@ export function useServiceSessionResize({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (lastDispatchedRef.current !== originalDurationRef.current) {
-        onUpdateSession(talkIndex, originalDurationRef.current)
+        onUpdateDuration(talkIndex, originalDurationRef.current)
       }
       lastDispatchedRef.current = null
       releaseCapture()
@@ -158,7 +195,7 @@ export function useServiceSessionResize({
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isResizing, talkIndex, onUpdateSession, releaseCapture])
+  }, [isResizing, talkIndex, onUpdateDuration, releaseCapture])
 
   // If the handle unmounts mid-resize, don't leave the pointer captured.
   useEffect(() => releaseCapture, [releaseCapture])

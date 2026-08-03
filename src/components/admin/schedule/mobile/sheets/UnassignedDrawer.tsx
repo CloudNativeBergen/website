@@ -3,6 +3,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
+import type { SchedulableProposal } from '@/lib/schedule/types'
 import { ScheduleAction } from '@/lib/schedule/reducer'
 import {
   SCHEDULE_END,
@@ -50,18 +51,25 @@ export function UnassignedDrawer({
   dispatch,
   onPick,
   onClose,
+  isReadOnly = false,
 }: {
-  proposals: ProposalExisting[]
+  proposals: SchedulableProposal[]
   context: SlotContext | null
   track: ScheduleTrack | null
   dispatch: React.Dispatch<ScheduleAction>
   onPick: (proposal: ProposalExisting) => void
   onClose: () => void
+  /**
+   * Live (official) view: the list stays browsable (it answers "what is still
+   * unscheduled?") but nothing can be picked up or created — there is no save
+   * path for the official schedule.
+   */
+  isReadOnly?: boolean
 }) {
   const source = useMemo(() => {
     if (!context || !track) return proposals
     return proposals.filter((p) => {
-      const dur = getProposalDurationMinutes(p)
+      const dur = p.remainingMinutes ?? getProposalDurationMinutes(p)
       if (dur > context.maxDurationMin) return false
       if (!withinScheduleEnd(calculateEndTime(context.startTime, dur)))
         return false
@@ -232,7 +240,7 @@ export function UnassignedDrawer({
 
   return (
     <BottomSheet title={title} onClose={onClose}>
-      {context && (
+      {context && !isReadOnly && (
         <>
           <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
             Free until{' '}
@@ -257,9 +265,6 @@ export function UnassignedDrawer({
       <div className="relative mb-4">
         <ProposalFilters filters={filters} />
       </div>
-      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-        {filters.statsText}
-      </p>
       {filters.filteredProposals.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
           {source.length === 0
@@ -277,7 +282,10 @@ export function UnassignedDrawer({
                 <button
                   type="button"
                   onClick={() => handlePick(proposal)}
-                  className={`flex w-full ${TAP_TARGET} flex-col gap-1 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700`}
+                  disabled={isReadOnly}
+                  className={`flex w-full ${TAP_TARGET} flex-col gap-1 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-default dark:border-gray-700 dark:bg-gray-800 ${
+                    isReadOnly ? '' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -293,7 +301,7 @@ export function UnassignedDrawer({
                     <StatusBadge status={proposal.status} variant="compact" />
                     <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                       <ClockIcon className="h-3.5 w-3.5" />
-                      {`${getProposalDurationMinutes(proposal)}m`}
+                      {`${proposal.remainingMinutes ?? getProposalDurationMinutes(proposal)}m`}
                     </span>
                     {speakers && (
                       <span className="inline-flex items-center gap-1 truncate text-xs text-gray-600 dark:text-gray-400">

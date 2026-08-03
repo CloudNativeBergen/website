@@ -74,6 +74,8 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import {
   deleteProposal,
+  getProposals,
+  getWorkshops,
   ProposalDeletionBlockedError,
   recordSpeakerTicketEmailed,
   updateProposalStatus,
@@ -424,5 +426,102 @@ describe('recordSpeakerTicketEmailed', () => {
         expect.any(String),
     })
     expect(mockPatchCommit).toHaveBeenCalled()
+  })
+})
+
+/**
+ * SCHEDULE RESOLUTION: a conference keeps one `schedule` document per day PER
+ * STATUS — private `draft`s plus an `archived` snapshot of every superseded
+ * published version. Any reverse lookup that matches "a schedule containing this
+ * talk" therefore has several candidates and must take the OFFICIAL one, with a
+ * missing `status` (legacy days) counting as official.
+ */
+describe('schedule resolution — official documents only', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('constrains the getProposals scheduleInfo lookup to the official schedule', async () => {
+    mockFetch.mockResolvedValue([])
+
+    await getProposals({ conferenceId: 'conf-1', includeSchedule: true })
+
+    const [query] = mockFetch.mock.calls[0]
+    const lookup = query
+      .split('\n')
+      .find((line: string) => line.includes('"schedule": *['))
+    expect(lookup).toBeDefined()
+    // Drafts and archived snapshots are excluded...
+    expect(lookup).toContain('status == "official"')
+    // ...but legacy days (written before drafts existed) carry no status field
+    // at all and must still resolve, or every existing program goes blank.
+    expect(lookup).toContain('!defined(status)')
+  })
+
+  it('resolves a workshop slot from the official day, not an archived snapshot', async () => {
+    // The store is faked to apply the query's OWN status predicate, so a query
+    // that fails to constrain status sees the archived doc too — which, being
+    // first, is what the loop would pick.
+    const scheduleDocs = [
+      {
+        status: 'archived',
+        date: '2026-09-10',
+        tracks: [
+          {
+            trackTitle: 'Old Room',
+            talks: [
+              { startTime: '09:00', endTime: '11:00', talkRef: 'workshop-1' },
+            ],
+          },
+        ],
+      },
+      {
+        status: 'official',
+        date: '2026-09-10',
+        tracks: [
+          {
+            trackTitle: 'New Room',
+            talks: [
+              { startTime: '13:00', endTime: '15:00', talkRef: 'workshop-1' },
+            ],
+          },
+        ],
+      },
+    ]
+
+    mockFetch.mockImplementation((query: string) => {
+      if (query.includes('_type == "schedule"')) {
+        const officialOnly = query.includes('status == "official"')
+        return Promise.resolve(
+          officialOnly
+            ? scheduleDocs.filter(
+                (doc) => !doc.status || doc.status === 'official',
+              )
+            : scheduleDocs,
+        )
+      }
+      return Promise.resolve([
+        { _id: 'workshop-1', title: 'A Workshop', format: 'workshop_120' },
+      ])
+    })
+
+    const { workshops } = await getWorkshops({
+      conferenceId: 'conf-1',
+      includeScheduleInfo: true,
+    })
+
+    const workshop = workshops[0] as unknown as {
+      room?: string
+      startTime?: string
+      scheduleInfo?: { room?: string; timeSlot?: { startTime?: string } }
+    }
+    expect(workshop.room).toBe('New Room')
+    expect(workshop.startTime).toBe('13:00')
+    expect(workshop.scheduleInfo?.timeSlot?.startTime).toBe('13:00')
   })
 })

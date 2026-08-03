@@ -261,13 +261,22 @@ interface AgendaScheduleRow {
  * Build one agenda entry per (speaker) presenting today, keeping each speaker's
  * EARLIEST slot (so a speaker with two talks today gets one notification about
  * the first). Fetches only schedule docs whose `date` is today.
+ *
+ * OFFICIAL ONLY: a conference keeps several `schedule` documents per day — the
+ * private `draft`s organizers are still editing plus an `archived` snapshot of
+ * every previously-published version. Reading them all would mail a speaker the
+ * time from an unpublished or superseded day; worse, keeping the EARLIEST slot
+ * across documents means one stale draft wins over the real program. Legacy days
+ * carry no `status` at all, so a missing one counts as official (the same
+ * fallback `getScheduleData` applies in `src/lib/schedule/server.ts`) —
+ * otherwise every pre-existing conference would stop sending day-of mail.
  */
 export async function fetchTodaysAgenda(
   conferenceId: string,
   today: string,
 ): Promise<AgendaEntry[]> {
   const rows = await clientReadUncached.fetch<AgendaScheduleRow[]>(
-    `*[_type == "schedule" && conference._ref == $conferenceId && date == $today]{
+    `*[_type == "schedule" && conference._ref == $conferenceId && date == $today && (status == "official" || !defined(status))]{
       tracks[]{
         trackTitle,
         "talks": talks[defined(talk)]{

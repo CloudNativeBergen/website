@@ -7,6 +7,7 @@ import type { DragItem } from '@/lib/schedule/types'
 import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { durationBetween } from '@/lib/schedule/time'
 import { ClockIcon, Bars3Icon } from '@heroicons/react/24/outline'
+import { useScheduleContext } from './ScheduleContext'
 
 interface DraggableServiceSessionProps {
   serviceSession: TrackTalk
@@ -27,6 +28,9 @@ export function DraggableServiceSession({
   sourceTimeSlot,
   isDragging = false,
 }: DraggableServiceSessionProps) {
+  // Live (official) view: read-only preview, so no drag (see ScheduleContext).
+  const { isReadOnly } = useScheduleContext()
+
   const { dragItem, durationMinutes, sessionSize, dragId } = useMemo(() => {
     const duration = durationBetween(
       serviceSession.startTime,
@@ -77,6 +81,7 @@ export function DraggableServiceSession({
     // registration can't clobber the source card's in dnd-kit's registry.
     id: isDragging ? `${dragId}-overlay` : dragId,
     data: dragItem,
+    disabled: isReadOnly,
   })
 
   const transformStyle = useMemo(() => {
@@ -136,15 +141,17 @@ export function DraggableServiceSession({
             Enter/Space actually starts the drag. (Keyboard drops remain a
             known gap: `pointerWithin` collision detection has no pointer
             during a keyboard drag.) */}
-        <button
-          type="button"
-          aria-label={`Drag ${serviceSession.placeholder || 'Service Session'}`}
-          className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
-          {...attributes}
-          {...listeners}
-        >
-          <Bars3Icon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
-        </button>
+        {!isReadOnly && (
+          <button
+            type="button"
+            aria-label={`Drag ${serviceSession.placeholder || 'Service Session'}`}
+            className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
+            {...attributes}
+            {...listeners}
+          >
+            <Bars3Icon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+          </button>
+        )}
 
         <div className="min-w-0 flex-1">{TitleComponent}</div>
 

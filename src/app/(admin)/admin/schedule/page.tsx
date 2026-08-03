@@ -5,7 +5,8 @@ import { unstable_noStore as noStore } from 'next/cache'
 
 export default async function AdminSchedule() {
   noStore()
-  const { schedules, conference, proposals, error } = await getScheduleData()
+  const { officialSchedules, draftSchedules, conference, proposals, error } =
+    await getScheduleData()
 
   if (error) {
     return (
@@ -36,7 +37,8 @@ export default async function AdminSchedule() {
   return (
     <div className="-mx-2 -my-8 sm:-mx-4 lg:-mx-8">
       <ScheduleEditor
-        initialSchedules={schedules}
+        officialSchedules={officialSchedules}
+        draftSchedules={draftSchedules}
         conference={conference}
         initialProposals={proposals}
       />

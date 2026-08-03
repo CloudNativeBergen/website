@@ -17,6 +17,7 @@ export const TrackHeader = ({
   onCancel,
   onStartEdit,
   onRemoveTrack,
+  isReadOnly = false,
 }: {
   track: ScheduleTrack
   isEditing: boolean
@@ -28,6 +29,8 @@ export const TrackHeader = ({
   onCancel: () => void
   onStartEdit: () => void
   onRemoveTrack: () => void
+  /** Live (official) view — hide the edit/remove affordances (no save path). */
+  isReadOnly?: boolean
 }) => {
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
@@ -104,24 +107,26 @@ export const TrackHeader = ({
               )}
             </div>
           </div>
-          <div className="ml-3 flex shrink-0 gap-1">
-            <button
-              onClick={onStartEdit}
-              className="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300"
-              title="Edit track"
-              type="button"
-            >
-              <PencilIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setConfirmingRemove(true)}
-              className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
-              title="Remove track"
-              type="button"
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
-          </div>
+          {!isReadOnly && (
+            <div className="ml-3 flex shrink-0 gap-1">
+              <button
+                onClick={onStartEdit}
+                className="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300"
+                title="Edit track"
+                type="button"
+              >
+                <PencilIcon className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setConfirmingRemove(true)}
+                className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
+                title="Remove track"
+                type="button"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
