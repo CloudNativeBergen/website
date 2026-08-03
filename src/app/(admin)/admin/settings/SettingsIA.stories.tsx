@@ -16,7 +16,6 @@ import {
   SwatchIcon,
   EyeIcon,
   PencilSquareIcon,
-  ChartPieIcon,
 } from '@heroicons/react/24/outline'
 import {
   InfoCard,
@@ -27,6 +26,7 @@ import {
   SettingsGroupSection,
 } from './settingsLayout'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
+import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { StatusBadge } from '@/components/StatusBadge'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
@@ -101,16 +101,26 @@ function SettingsIADemo() {
               <FieldRow label="Tagline" value="Cloud on your terms" />
             </InfoCard>
 
+            {/* Summary + way in to the Appearance section; the editors live
+                there, not here. */}
             <InfoCard
-              title="Branding"
+              title="Appearance"
               icon={SwatchIcon}
-              editUrl={EDIT_URL}
-              action={<EditPencil />}
+              manageLink={{
+                href: '/admin/settings/appearance',
+                label: 'Open Appearance',
+              }}
             >
-              <FieldRow
-                label="Background Pattern"
-                value="Cloud Native (animated CNCF logos)"
-              />
+              <div>
+                <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Brand Colors
+                </p>
+                <ThemeSwatchRow
+                  theme={{ primaryColor: '#1D4ED8', accentColor: '#7C3AED' }}
+                />
+              </div>
+              <FieldRow label="Logos &amp; marks" value="2 of 4 set" />
+              <FieldRow label="Homepage" value="Default (automatic)" />
             </InfoCard>
 
             <InfoCard title="Visibility" icon={EyeIcon} action={<EditPencil />}>
@@ -250,22 +260,6 @@ function SettingsIADemo() {
               <FieldRow label="Checkin Customer ID" value={12345} />
               <FieldRow label="Checkin Event ID" value={67890} />
             </InfoCard>
-
-            <CollapsibleSection
-              title="Homepage Stats"
-              icon={<ChartPieIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={EDIT_URL} />
-                  <EditPencil />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                <FieldRow label="Attendees" value="500+" />
-                <FieldRow label="Speakers" value="60" />
-              </div>
-            </CollapsibleSection>
           </SettingsGroupSection>
 
           <SettingsGroupSection
@@ -340,21 +334,6 @@ function SettingsIADemo() {
                 value={['Kubernetes', 'Observability', 'Security']}
                 type="array"
               />
-            </InfoCard>
-
-            <InfoCard
-              title="Homepage Composition"
-              icon={DocumentTextIcon}
-              action={<EditPencil />}
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
-                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Layout
-                </dt>
-                <dd className="min-w-0 text-right text-sm">
-                  <StatusBadge label="Default (automatic)" color="gray" />
-                </dd>
-              </div>
             </InfoCard>
           </SettingsGroupSection>
         </div>
