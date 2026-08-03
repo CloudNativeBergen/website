@@ -70,6 +70,7 @@ function renderSection(
         // Blank/absent copy falls through to the component's house defaults.
         <ImageGallery
           featuredImages={conference.featuredGalleryImages}
+          variant={section.variant}
           heading={section.heading?.trim() || undefined}
           description={section.description?.trim() || undefined}
         />
@@ -116,6 +117,7 @@ function renderSection(
         <Sponsors
           sponsors={conference.sponsors || []}
           conference={conference}
+          variant={section.variant}
           showCTA={
             section.showCta !== false && lifecycle.stage !== 'post-event'
           }
