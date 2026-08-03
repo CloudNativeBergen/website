@@ -169,6 +169,26 @@ Stories serve as visual regression test cases. When using tools like Chromatic o
 
 **Best Practice:** Keep individual stories for states that need precise visual testing (status changes, error states, etc.)
 
+### Local visual diff (`pnpm visual-diff`)
+
+`scripts/visual-diff/` is a local, offline visual-regression harness built on the same Playwright + Storybook mechanics as `scripts/shoot-story.mjs`. It captures every selected story in **light and dark**, at two git refs, and reports which stories moved and by how much — the tool to reach for when a change is too large to review by reading (a codemod, a palette/token migration, an edit to a shared primitive).
+
+```bash
+pnpm visual-diff baseline main   # capture the "before" ref
+pnpm visual-diff candidate       # capture the working tree, uncommitted changes and all
+pnpm visual-diff report          # ranked summary + side-by-side diff images
+pnpm visual-diff help            # full option list
+```
+
+- **Story selection is automatic** — the run enumerates Storybook's `/index.json`, so a new story is covered the day it lands. Narrow with repeatable `--include` / `--exclude` regexes (matched against story id, sidebar title and import path); admin surfaces are excluded unless you pass `--all`. A story can opt out permanently with the `visual-diff:skip` tag.
+- **Named refs are checked out into a throwaway git worktree**, so your working tree is never touched and `candidate` can be your dirty tree.
+- **Output** goes to gitignored `.visual-diff/`; open `report/index.html` for the baseline | candidate | diff strips, or read `report/report.json`.
+- **Own port.** It serves Storybook on `:6207` (not `shoot`'s `:6006`) and refuses to attach to a server it did not start, because a Storybook left running by another checkout serves that checkout's stories.
+
+**Determinism is the story author's job too.** Captures run with a fixed browser clock, UTC/en-US, reduced motion, animations and transitions disabled, and **all non-local network requests refused** — a story embedding live third-party content (a YouTube iframe, a remote avatar) otherwise renders whatever that third party served at that moment, and the two runs disagree for reasons unrelated to your change. Pass `--allow-external` to lift that. Each story is then shot twice; if the two shots differ it is reported as **UNSTABLE** and kept out of the change list, because its diffs cannot be trusted. Fix such a story by pinning `globalThis.Date` in `beforeEach` (see "Deterministic Dates") rather than by tolerating the noise.
+
+**What it cannot see:** hover, focus and other interaction states; animation mid-flight; viewports other than the one captured (`--width`/`--height` shoot a single size per run); anything below the `--max-height` clip on very tall stories; and per-render randomness (`Math.random()` in a component looks like a change, and the twice-in-one-page probe cannot detect it because it never re-renders).
+
 ## Common Patterns
 
 ### Interactive Components (State Management)

@@ -36,7 +36,8 @@
     "audit-sponsor-health": "tsx scripts/audit-sponsor-health.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "shoot": "node scripts/shoot-story.mjs"
+    "shoot": "node scripts/shoot-story.mjs",
+    "visual-diff": "node scripts/visual-diff/cli.mjs"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

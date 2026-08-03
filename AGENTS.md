@@ -54,6 +54,16 @@ Project uses [mise](https://mise.jdx.sh/). Key commands:
   - Screenshot it with **`rtk pnpm shoot <story-id> [width] [height]`** (`scripts/shoot-story.mjs`) — defaults to iPhone-portrait (393×852, DPR 3), auto-starts Storybook, flattens decorator insets so the capture maps 1:1 to the app, and prints a hard per-card viewport-overflow check. Then actually view the PNG.
   - For full-screen/mobile views set `parameters.layout: 'fullscreen'` on the story so captures aren't inset.
   - Prefer isolated Storybook capture over trusting a deployed URL — a stale **PWA service worker** can serve an old bundle (see `public/sw.js` / `scripts/stamp-sw.mjs`); a Safari **Private tab** bypasses the SW when checking production.
+- **Sweeping UI changes → run the local visual diff.** For a change too large to review by reading (codemods, a palette/token migration, a shared-primitive edit), use `pnpm visual-diff` (`scripts/visual-diff/`). It screenshots every selected story in **light and dark** at two git refs and reports which stories moved and by how much — a Chromatic stand-in that runs offline.
+
+  ```bash
+  pnpm visual-diff baseline main   # capture the "before" ref
+  pnpm visual-diff candidate       # capture the working tree (uncommitted changes included)
+  pnpm visual-diff report          # ranked summary + side-by-side diff images
+  ```
+
+  Named refs are checked out into a throwaway git worktree, so your working tree is never touched. Output lands in gitignored `.visual-diff/` (open `report/index.html`). Narrow the run with `--include`/`--exclude` regexes; admin surfaces are excluded unless you pass `--all`. Full usage lives in the header of `scripts/visual-diff/cli.mjs` (`pnpm visual-diff help`). It serves Storybook on **:6207**, not `shoot`'s :6006, and refuses to attach to a server it did not start — a Storybook left running by another checkout would silently make the whole run describe the wrong branch. Stories that re-render differently shot-to-shot are reported as **UNSTABLE** and kept out of the change list; fix them by pinning `globalThis.Date` (above) rather than by ignoring the diff.
+
 - **Testing (Vitest):** Test behavior over implementation. Prefer integration tests. Mock at boundaries.
 - **Storybook Interaction:** Use `play` functions for interactive tests (`storybook/test`).
 

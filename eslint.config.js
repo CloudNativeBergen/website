@@ -37,6 +37,10 @@ const eslintConfig = [
       '__tests__/**/testdata/**',
       '__tests__/**/mocks/**',
       'storybook-static/**', // Built Storybook output
+      // Local visual-diff harness output (scripts/visual-diff): screenshots and
+      // a temporary git worktree checkout of the ref being compared. Linting it
+      // would lint a second copy of the entire repo.
+      '.visual-diff/**',
       'cli/**',
     ],
   },

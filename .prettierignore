@@ -8,5 +8,9 @@ coverage
 node_modules
 .vercel
 cli
+# Local visual-diff harness output: screenshots plus a full temporary git
+# worktree checkout of the compared ref. Formatting it would be meaningless
+# and would double-scan the whole repo.
+.visual-diff
 .env*
 .env*

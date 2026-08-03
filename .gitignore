@@ -50,6 +50,10 @@ public/mockServiceWorker.js
 .storybook/.env
 
 certificates
+# local visual-regression harness (scripts/visual-diff) — screenshots, diff
+# images, temporary git worktrees. Never commit these.
+/.visual-diff/
+
 # Playwright e2e
 /test-results/
 /playwright-report/
