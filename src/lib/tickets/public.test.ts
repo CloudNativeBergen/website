@@ -14,7 +14,8 @@ vi.mock('./provider', () => ({
     resolveTicketingProviderMock(...a),
 }))
 
-import { getPublicTicketTypes } from './public'
+import { getPublicTicketTypes, getTicketAvailability } from './public'
+import type { PublicTicketType } from './provider/types'
 
 const CONF = {
   checkinCustomerId: 42,
@@ -80,5 +81,70 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       eventRef: { customerId: 42, eventId: 7 },
     })
     expect(await getPublicTicketTypes(CONF)).toBeNull()
+  })
+})
+
+describe('getTicketAvailability', () => {
+  const FUTURE = '2999-01-01T00:00:00Z'
+  const PAST = '2000-01-01T00:00:00Z'
+
+  function t(over: Record<string, unknown>): PublicTicketType {
+    return pubTicket({
+      available: null,
+      visibleStartsAt: null,
+      visibleEndsAt: null,
+      type: 'standard',
+      ...over,
+    }) as unknown as PublicTicketType
+  }
+
+  it('is unknown with no tickets at all', () => {
+    expect(getTicketAvailability([])).toBe('unknown')
+  })
+
+  it('is unknown when every ticket has expired', () => {
+    expect(getTicketAvailability([t({ visibleEndsAt: PAST })])).toBe('unknown')
+  })
+
+  it('is upcoming when nothing is on sale yet', () => {
+    expect(getTicketAvailability([t({ visibleStartsAt: FUTURE })])).toBe(
+      'upcoming',
+    )
+  })
+
+  it('is on-sale when a ticket is inside its window', () => {
+    expect(getTicketAvailability([t({})])).toBe('on-sale')
+  })
+
+  it('is sold-out only when every active ticket positively reports zero', () => {
+    expect(
+      getTicketAvailability([t({ available: 0 }), t({ available: 0 })]),
+    ).toBe('sold-out')
+  })
+
+  it('degrades to on-sale when any active ticket reports an unknown count', () => {
+    expect(
+      getTicketAvailability([t({ available: 0 }), t({ available: null })]),
+    ).toBe('on-sale')
+  })
+
+  it('is on-sale when some tickets remain', () => {
+    expect(
+      getTicketAvailability([t({ available: 0 }), t({ available: 5 })]),
+    ).toBe('on-sale')
+  })
+
+  it('ignores invitation-only types entirely', () => {
+    // An invite-only type with stock left must not mask a public sell-out...
+    expect(
+      getTicketAvailability([
+        t({ available: 0 }),
+        t({ available: 10, requiresInvitation: true }),
+      ]),
+    ).toBe('sold-out')
+    // ...and an invite-only type alone is not a public sale.
+    expect(
+      getTicketAvailability([t({ available: 0, requiresInvitation: true })]),
+    ).toBe('unknown')
   })
 })

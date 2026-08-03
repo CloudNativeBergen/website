@@ -61,6 +61,7 @@ import { useNotification } from './NotificationProvider'
 export type ConferenceFieldsetKey =
   | 'basicInfo'
   | 'visibility'
+  | 'lifecycle'
   | 'venue'
   | 'branding'
   | 'dates'
@@ -174,6 +175,63 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         ],
         description:
           'Unlisted conferences still render for direct visitors so you can preview and share them, but they are excluded from sitemaps, robots and search indexing.',
+      },
+    ],
+  },
+  // The two homepage states no date can imply. Everything else — save-the-date,
+  // CFP open, programme published, post-event — is derived, so this card is
+  // deliberately the ONLY lifecycle switch an organizer ever sees.
+  lifecycle: {
+    title: 'Event Status',
+    subtitle: 'Call off this edition, or retire the event',
+    fields: [
+      {
+        name: 'lifecycleStatus',
+        label: 'Status',
+        type: 'select',
+        nullableWhenEmpty: true,
+        options: [
+          {
+            value: 'cancelled',
+            title: 'Cancelled — this edition is not happening',
+          },
+          {
+            value: 'archived',
+            title: 'Archived — the event has ended for good',
+          },
+        ],
+        description:
+          'Leave as None for a normal event. Either value REPLACES the homepage with a notice — the programme, speakers and every ticket link stop being shown.',
+      },
+      {
+        name: 'lifecycleHeadline',
+        label: 'Headline',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description:
+          'Optional. Blank falls back to a headline built from the conference title.',
+      },
+      {
+        name: 'lifecycleMessage',
+        label: 'Message',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'What happened and what a visitor should do next (refunds, the next edition, where to ask). Blank falls back to house copy.',
+      },
+      {
+        name: 'lifecycleLinkLabel',
+        label: 'Link label',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description: 'e.g. "Read the full statement" or "Browse the archive".',
+      },
+      {
+        name: 'lifecycleLinkHref',
+        label: 'Link URL',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description: 'A site path (e.g. /info) or a full http(s) URL.',
       },
     ],
   },
@@ -587,6 +645,7 @@ const MUTATION_BY_FIELDSET: Record<
 > = {
   basicInfo: 'updateBasicInfo',
   visibility: 'updateVisibility',
+  lifecycle: 'updateLifecycleStatus',
   venue: 'updateVenue',
   branding: 'updateBranding',
   dates: 'updateDates',

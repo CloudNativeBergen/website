@@ -1,7 +1,9 @@
-// Server-safe barrel: ONLY the registry/model module. The editor logic
-// (./editor) deliberately stays a deep import — it pulls in @dnd-kit, a
-// client-only dependency, and this barrel is imported by server components
-// (page.tsx), so re-exporting it here would drag-and-drop code into the
-// RSC module graph and break the build.
+// The registry/model module — the homepage vocabulary every layer shares.
+//
+// The editor logic (./editor) stays a deep import to keep this surface small,
+// NOT because it is unsafe to reach from a server component: it no longer has
+// any runtime dependency (see the inlined `arrayMove` there), so importing a
+// label map or a type guard from it does not drag client-only code into the
+// RSC graph. That property is load-bearing — keep ./editor dependency-free.
 export * from './sections'
 export * from './richText'

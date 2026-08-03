@@ -319,6 +319,33 @@ describe('UpdateHomepageSectionsSchema', () => {
     })
     expect(parsed.homepageSections[0]).toMatchObject({ _type: 'homepageVenue' })
   })
+
+  it('round-trips a save-the-date block with optional copy', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageSaveTheDate',
+          _key: 'std',
+          heading: 'Mark your calendar',
+          description: 'Two days of cloud native in Bergen.',
+        },
+      ],
+    })
+    expect(parsed.homepageSections[0]).toMatchObject({
+      _type: 'homepageSaveTheDate',
+      heading: 'Mark your calendar',
+    })
+  })
+
+  it('accepts a bare save-the-date block (all copy derived)', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [{ _type: 'homepageSaveTheDate', _key: 'std' }],
+    })
+    expect(parsed.homepageSections[0]).toEqual({
+      _type: 'homepageSaveTheDate',
+      _key: 'std',
+    })
+  })
 })
 
 /**

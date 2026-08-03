@@ -269,3 +269,57 @@ describe('serializeJsonLd', () => {
     )
   })
 })
+
+describe('buildEventJsonLd — lifecycle overrides', () => {
+  it('marks a cancelled edition as EventCancelled and emits no offer', () => {
+    const json = buildEventJsonLd({
+      conference: makeConference({
+        lifecycleStatus: 'cancelled',
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      }),
+      domain: 'example.com',
+    })
+    expect(json.eventStatus).toBe('https://schema.org/EventCancelled')
+    expect(json.offers).toBeUndefined()
+  })
+
+  it('emits no offer for an archived event', () => {
+    const json = buildEventJsonLd({
+      conference: makeConference({
+        lifecycleStatus: 'archived',
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      }),
+      domain: 'example.com',
+    })
+    expect(json.offers).toBeUndefined()
+  })
+
+  it('reports SoldOut availability rather than InStock', () => {
+    const json = buildEventJsonLd({
+      conference: makeConference({
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      }),
+      domain: 'example.com',
+      ticketAvailability: 'sold-out',
+    })
+    expect(json.offers).toMatchObject({
+      availability: 'https://schema.org/SoldOut',
+    })
+  })
+
+  it('never invents SoldOut from a missing availability signal', () => {
+    const json = buildEventJsonLd({
+      conference: makeConference({
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      }),
+      domain: 'example.com',
+    })
+    expect(json.offers).toMatchObject({
+      availability: 'https://schema.org/InStock',
+    })
+  })
+})

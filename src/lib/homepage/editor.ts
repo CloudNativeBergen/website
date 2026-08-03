@@ -1,6 +1,29 @@
-import { arrayMove } from '@dnd-kit/sortable'
+/**
+ * Local copy of `@dnd-kit/sortable`'s `arrayMove`, semantics preserved
+ * (including the negative-index handling this module never relies on).
+ *
+ * Inlined DELIBERATELY. `arrayMove` is a pure four-line array helper, but
+ * importing it from `@dnd-kit/sortable` pulls that package's React context into
+ * whatever module graph reaches this file. The package is client-only, so any
+ * server component importing anything from here — a label map, a type guard —
+ * died at build time with `createContext is not a function` while collecting
+ * page data. Four lines of duplication buys this module ZERO runtime
+ * dependencies, which is what a pure model/logic module should have.
+ */
+function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
+  const next = array.slice()
+  next.splice(to < 0 ? next.length + to : to, 0, next.splice(from, 1)[0])
+  return next
+}
 import { sanitizeRichTextContent, type RichTextContentBlock } from './richText'
-import { type HomepageSection, type HomepageSectionType } from './sections'
+import {
+  SECTION_LABELS,
+  type HomepageSection,
+  type HomepageSectionType,
+} from './sections'
+
+// Re-exported for the editor surface, which historically imported it from here.
+export { SECTION_LABELS }
 
 /**
  * Front-page builder (F3): the PURE editor logic behind the drag-and-drop
@@ -8,22 +31,6 @@ import { type HomepageSection, type HomepageSectionType } from './sections'
  * payload mapping, dirty check and structural-preview mapping are unit-testable
  * in isolation from the modal surface that drives them.
  */
-
-/** Human labels for each block type — shared by the list rows and the preview. */
-export const SECTION_LABELS: Record<HomepageSectionType, string> = {
-  homepageHero: 'Hero',
-  homepageFeaturedSpeakers: 'Featured Speakers',
-  homepageProgramHighlights: 'Program Highlights',
-  homepageOrganizers: 'Organizers',
-  homepageSponsors: 'Sponsors',
-  homepageGallery: 'Photo Gallery',
-  homepageMetrics: 'Vanity Metrics',
-  homepageCtaBanner: 'Call-to-action Banner',
-  homepageRichText: 'Rich Text',
-  homepageFaq: 'FAQ',
-  homepageCountdown: 'Countdown',
-  homepageVenue: 'Venue',
-}
 
 /**
  * The block types that carry per-section config worth an inline accordion.
@@ -34,6 +41,7 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
  */
 const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageHero',
+  'homepageSaveTheDate',
   'homepageCtaBanner',
   'homepageRichText',
   'homepageMetrics',
@@ -61,6 +69,9 @@ const PHASE_SLOT_DEFAULT_KEYS: ReadonlySet<string> = new Set([
   'default-program',
   'default-featured-speakers',
   'default-organizers',
+  // The save-the-date band is itself lifecycle-conditional: it appears only
+  // while the event has no programme and no featured speakers to show.
+  'default-save-the-date',
 ])
 
 /** Working row shape — a superset of every block's fields, keyed for the list. */
@@ -139,8 +150,12 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
       // Normalise on LOAD as well as on save: the row the editor mutates is
       // always the allowlisted shape, whatever the dataset happens to hold.
       row.content = sanitizeRichTextContent(s.content)
-    } else if (s._type === 'homepageMetrics') {
+    } else if (
+      s._type === 'homepageMetrics' ||
+      s._type === 'homepageSaveTheDate'
+    ) {
       row.heading = s.heading
+      if (s._type === 'homepageSaveTheDate') row.description = s.description
     } else if (s._type === 'homepageFaq') {
       row.heading = s.heading
       row.source = s.source ?? 'own'
@@ -213,6 +228,10 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
         break
       case 'homepageMetrics':
         if (row.heading?.trim()) out.heading = row.heading.trim()
+        break
+      case 'homepageSaveTheDate':
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        if (row.description?.trim()) out.description = row.description.trim()
         break
       case 'homepageFaq': {
         if (row.heading?.trim()) out.heading = row.heading.trim()
