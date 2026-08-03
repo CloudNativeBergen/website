@@ -47,9 +47,25 @@ const srgbToLinear = (c: number): number =>
 const linearToSrgb = (c: number): number =>
   c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055
 
-/** Parse `#rrggbb` into 0..1 sRGB components. Assumes a validated hex string. */
+const HEX_COLOR = /^#([0-9a-f]{6})$/i
+
+/**
+ * Parse `#rrggbb` into 0..1 sRGB components.
+ *
+ * Validates rather than assuming. The production path already gates on the same
+ * shape before it gets here, so this never fires in the app — but sliced
+ * unchecked, `'#12345'` parsed as `#3b5733` and `''` as `#NaNNaNNaN`: a wrong
+ * brand colour served silently, which is a far worse failure than a stack
+ * trace. Throwing keeps a malformed value from ever reaching a stylesheet.
+ */
 function parseHex(hex: string): readonly [number, number, number] {
-  const h = hex.trim().slice(1)
+  const match = HEX_COLOR.exec(hex.trim())
+  if (!match) {
+    throw new TypeError(
+      `Expected a #rrggbb colour, received ${JSON.stringify(hex)}`,
+    )
+  }
+  const h = match[1]
   return [
     parseInt(h.slice(0, 2), 16) / 255,
     parseInt(h.slice(2, 4), 16) / 255,

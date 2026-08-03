@@ -239,3 +239,32 @@ describe('contrast guarantees for any tenant primary', () => {
     }
   })
 })
+
+/**
+ * Raised by adversarial review. The production caller gates on the same shape,
+ * so none of these is reachable today — but slicing an unvalidated string
+ * produced a *silently wrong colour* rather than an error, and a brand colour
+ * that is quietly wrong is the one failure nobody notices.
+ */
+describe('shiftToLightness — malformed input', () => {
+  const target = DARK_TINT_LIGHTNESS.surface
+
+  it.each([
+    ['empty', ''],
+    ['no hash', '1d4ed8'],
+    ['three-digit shorthand', '#fff'],
+    ['five digits', '#12345'],
+    ['seven digits', '#1d4ed80'],
+    ['non-hex characters', '#gggggg'],
+    ['a CSS colour name', 'rebeccapurple'],
+    ['an injection attempt', '#000;} body{display:none'],
+  ])('rejects %s rather than inventing a colour', (_label, value) => {
+    expect(() => shiftToLightness(value, target)).toThrow(TypeError)
+  })
+
+  it('still accepts uppercase and surrounding whitespace', () => {
+    expect(shiftToLightness('  #1D4ED8  ', target)).toBe(
+      shiftToLightness('#1d4ed8', target),
+    )
+  })
+})
