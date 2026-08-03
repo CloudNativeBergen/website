@@ -39,8 +39,37 @@ export const HOMEPAGE_SECTION_TYPES = [
   'homepageVenue',
 ] as const
 
-/** Default heading for the FAQ block when none is configured. */
+/**
+ * DEFAULT SECTION COPY — the house wording each block falls back to when a
+ * tenant has configured nothing. These constants ARE the pre-config strings,
+ * moved out of the components verbatim, so an unconfigured section renders
+ * exactly what it rendered before the copy became configurable (the
+ * zero-migration guarantee above, extended to copy).
+ */
 export const DEFAULT_FAQ_HEADING = 'Frequently asked questions'
+export const DEFAULT_GALLERY_HEADING = 'Conference Moments'
+export const DEFAULT_GALLERY_DESCRIPTION =
+  'Relive the energy and excitement from our past events. Browse through captured moments featuring speakers, attendees, and the vibrant community atmosphere.'
+export const DEFAULT_FEATURED_SPEAKERS_HEADING = 'Featured Speakers'
+export const DEFAULT_ORGANIZERS_HEADING = 'Meet Our Organizers'
+export const DEFAULT_SPONSORS_HEADING = 'Our sponsors'
+export const DEFAULT_SPONSORS_DESCRIPTION =
+  'Meet our sponsors who are fueling the cluster and keeping the pods running!'
+export const DEFAULT_SPONSORS_CTA_HEADING = 'Become a Sponsor'
+export const DEFAULT_SPONSORS_CTA_DESCRIPTION =
+  "Level up your brand's visibility among Kubernetes enthusiasts, container wranglers, and cloud architects. We have sponsorship tiers for every cluster size."
+
+/** Default sub-heading under the featured-speakers heading. */
+export function defaultFeaturedSpeakersDescription(
+  conferenceTitle: string,
+): string {
+  return `Meet the speakers at ${conferenceTitle}`
+}
+
+/** Default sub-heading under the organizers heading. */
+export function defaultOrganizersDescription(conferenceTitle: string): string {
+  return `The passionate team driving ${conferenceTitle}`
+}
 
 export type HomepageSectionType = (typeof HOMEPAGE_SECTION_TYPES)[number]
 
@@ -80,24 +109,58 @@ export interface HeroSection extends BaseSection {
   ctaOverrides?: HeroCtaOverride[]
 }
 
+/**
+ * Featured-speakers band. Content is `conference.featuredSpeakers`; the block
+ * carries only the band's copy. Blank/absent renders the house default —
+ * {@link DEFAULT_FEATURED_SPEAKERS_HEADING} and
+ * {@link defaultFeaturedSpeakersDescription}.
+ */
 export interface FeaturedSpeakersSection extends BaseSection {
   _type: 'homepageFeaturedSpeakers'
+  heading?: string
+  description?: string
 }
 
 export interface ProgramHighlightsSection extends BaseSection {
   _type: 'homepageProgramHighlights'
 }
 
+/**
+ * Organizers band. Content is `conference.organizers`; blank/absent copy
+ * renders {@link DEFAULT_ORGANIZERS_HEADING} /
+ * {@link defaultOrganizersDescription}.
+ */
 export interface OrganizersSection extends BaseSection {
   _type: 'homepageOrganizers'
+  heading?: string
+  description?: string
 }
 
+/**
+ * Sponsors band. Logos come from `conference.sponsors`; the block carries the
+ * band copy plus the prospective-sponsor call-to-action card. `showCta` is
+ * tri-state by absence: undefined/true shows the card (today's behaviour),
+ * false hides it.
+ */
 export interface SponsorsSection extends BaseSection {
   _type: 'homepageSponsors'
+  heading?: string
+  description?: string
+  /** Absent = shown. Set false to drop the "Become a Sponsor" card. */
+  showCta?: boolean
+  ctaHeading?: string
+  ctaDescription?: string
 }
 
+/**
+ * Photo-gallery band. Images come from `conference.featuredGalleryImages`;
+ * blank/absent copy renders {@link DEFAULT_GALLERY_HEADING} /
+ * {@link DEFAULT_GALLERY_DESCRIPTION}.
+ */
 export interface GallerySection extends BaseSection {
   _type: 'homepageGallery'
+  heading?: string
+  description?: string
 }
 
 /** Standalone vanity-metrics band (content from `conference.vanityMetrics`). */

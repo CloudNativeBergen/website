@@ -1335,14 +1335,101 @@ export default defineType({
             ],
           }),
         ]),
-        defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers'),
+        defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description:
+              'Optional heading. Defaults to "Featured Speakers". The speakers themselves come from the conference configuration.',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Defaults to "Meet the speakers at <conference title>".',
+          }),
+        ]),
         defineHomepageSection(
           'homepageProgramHighlights',
           'Program Highlights',
         ),
-        defineHomepageSection('homepageOrganizers', 'Organizers'),
-        defineHomepageSection('homepageSponsors', 'Sponsors'),
-        defineHomepageSection('homepageGallery', 'Photo Gallery'),
+        defineHomepageSection('homepageOrganizers', 'Organizers', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Meet Our Organizers".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Defaults to "The passionate team driving <conference title>".',
+          }),
+        ]),
+        defineHomepageSection('homepageSponsors', 'Sponsors', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Our sponsors".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Leave blank for the house default.',
+          }),
+          defineField({
+            name: 'showCta',
+            title: 'Show the “Become a Sponsor” card',
+            type: 'boolean',
+            initialValue: true,
+            description:
+              'Turn off to drop the prospective-sponsor call-to-action below the logos.',
+          }),
+          defineField({
+            name: 'ctaHeading',
+            title: 'Call-to-action Heading',
+            type: 'string',
+            hidden: ({ parent }) =>
+              (parent as { showCta?: boolean })?.showCta === false,
+            description: 'Optional. Defaults to "Become a Sponsor".',
+          }),
+          defineField({
+            name: 'ctaDescription',
+            title: 'Call-to-action Body',
+            type: 'text',
+            rows: 3,
+            hidden: ({ parent }) =>
+              (parent as { showCta?: boolean })?.showCta === false,
+            description:
+              'Optional pitch to prospective sponsors. Leave blank for the house default.',
+          }),
+        ]),
+        defineHomepageSection('homepageGallery', 'Photo Gallery', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Conference Moments".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 3,
+            description:
+              'Optional copy under the heading. Leave blank for the house default.',
+          }),
+        ]),
         defineHomepageSection('homepageMetrics', 'Vanity Metrics', [
           defineField({
             name: 'heading',

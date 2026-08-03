@@ -5,17 +5,27 @@ import { ImageCarousel } from '@/components/ImageCarousel'
 import { GalleryModal } from '@/components/GalleryModal'
 import { Container } from '@/components/Container'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import {
+  DEFAULT_GALLERY_DESCRIPTION,
+  DEFAULT_GALLERY_HEADING,
+} from '@/lib/homepage/sections'
 import { cn } from '@/lib/utils'
 
 interface ImageGalleryProps {
   featuredImages?: GalleryImageWithSpeakers[]
   allImages?: GalleryImageWithSpeakers[]
+  /** Band heading. Defaults to the house copy (`homepageGallery` config). */
+  heading?: string
+  /** Band sub-heading. Defaults to the house copy. */
+  description?: string
   className?: string
 }
 
 export function ImageGallery({
   featuredImages = [],
   allImages = [],
+  heading = DEFAULT_GALLERY_HEADING,
+  description = DEFAULT_GALLERY_DESCRIPTION,
   className,
 }: ImageGalleryProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -65,12 +75,10 @@ export function ImageGallery({
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-space-grotesk text-3xl font-bold tracking-tight text-brand-slate-gray sm:text-4xl dark:text-white">
-            Conference Moments
+            {heading}
           </h2>
           <p className="mt-4 text-lg text-brand-slate-gray/80 dark:text-gray-300">
-            Relive the energy and excitement from our past events. Browse
-            through captured moments featuring speakers, attendees, and the
-            vibrant community atmosphere.
+            {description}
           </p>
         </div>
 

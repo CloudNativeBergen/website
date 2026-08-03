@@ -11,15 +11,33 @@ import {
 } from '@/lib/sponsor/utils'
 import Link from 'next/link'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
+import {
+  DEFAULT_SPONSORS_CTA_DESCRIPTION,
+  DEFAULT_SPONSORS_CTA_HEADING,
+  DEFAULT_SPONSORS_DESCRIPTION,
+  DEFAULT_SPONSORS_HEADING,
+} from '@/lib/homepage/sections'
 
 export function Sponsors({
   sponsors,
   conference,
   showCTA = true,
+  heading = DEFAULT_SPONSORS_HEADING,
+  description = DEFAULT_SPONSORS_DESCRIPTION,
+  ctaHeading = DEFAULT_SPONSORS_CTA_HEADING,
+  ctaDescription = DEFAULT_SPONSORS_CTA_DESCRIPTION,
 }: {
   sponsors: ConferenceSponsor[]
   conference: Conference
   showCTA?: boolean
+  /** Band heading. Defaults to the house copy (`homepageSponsors` config). */
+  heading?: string
+  /** Band sub-heading. Defaults to the house copy. */
+  description?: string
+  /** "Become a Sponsor" card heading. Defaults to the house copy. */
+  ctaHeading?: string
+  /** "Become a Sponsor" card body. Defaults to the house copy. */
+  ctaDescription?: string
 }) {
   const hasSponsors = sponsors && sponsors.length > 0
 
@@ -47,11 +65,10 @@ export function Sponsors({
           <div className="mb-20">
             <div className="mx-auto max-w-2xl lg:mx-0">
               <h2 className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl">
-                Our sponsors
+                {heading}
               </h2>
               <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-                Meet our sponsors who are fueling the cluster and keeping the
-                pods running!
+                {description}
               </p>
             </div>
           </div>
@@ -118,12 +135,10 @@ export function Sponsors({
                 </div>
                 <div className="flex-1">
                   <h3 className="font-space-grotesk mb-4 text-2xl font-bold tracking-tight text-brand-slate-gray md:text-3xl">
-                    Become a Sponsor
+                    {ctaHeading}
                   </h3>
                   <p className="font-inter mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0">
-                    Level up your brand&apos;s visibility among Kubernetes
-                    enthusiasts, container wranglers, and cloud architects. We
-                    have sponsorship tiers for every cluster size.
+                    {ctaDescription}
                   </p>
                   {conference.sponsorTiers &&
                   conference.sponsorTiers.length > 0 ? (

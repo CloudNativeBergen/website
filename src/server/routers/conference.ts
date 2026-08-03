@@ -533,6 +533,27 @@ export const conferenceRouter = router({
               if (section.heading) base.heading = section.heading
               break
             }
+            case 'homepageFeaturedSpeakers':
+            case 'homepageOrganizers':
+            case 'homepageGallery': {
+              // Copy-only overrides: content still comes from the conference.
+              // An omitted field is what makes the band fall back to the house
+              // default copy, so blanks are never stored.
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              break
+            }
+            case 'homepageSponsors': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              // Only the NON-default (hidden) state is persisted, mirroring
+              // `hidden` — absent means the CTA card shows, as it always has.
+              if (section.showCta === false) base.showCta = false
+              if (section.ctaHeading) base.ctaHeading = section.ctaHeading
+              if (section.ctaDescription)
+                base.ctaDescription = section.ctaDescription
+              break
+            }
             case 'homepageCtaBanner': {
               base.heading = section.heading
               if (section.body) base.body = section.body
@@ -582,8 +603,8 @@ export const conferenceRouter = router({
               break
             }
             default:
-              // The content-free blocks (featured speakers, program, organizers,
-              // sponsors, gallery) carry only `_type`/`_key`/`hidden`.
+              // Program highlights carries no config of its own — only
+              // `_type`/`_key`/`hidden`.
               break
           }
           return base

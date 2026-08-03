@@ -20,6 +20,10 @@ const meta: Meta<typeof Sponsors> = {
       control: 'boolean',
       description: 'Show call-to-action for prospective sponsors',
     },
+    heading: { control: 'text', description: 'Band heading override' },
+    description: { control: 'text', description: 'Band sub-heading override' },
+    ctaHeading: { control: 'text', description: 'CTA card heading override' },
+    ctaDescription: { control: 'text', description: 'CTA card body override' },
   },
 }
 
@@ -162,5 +166,23 @@ export const SingleTier: Story = {
     sponsors: mockSponsors.slice(0, 2) as ConferenceSponsor[],
     conference: mockConference as Conference,
     showCTA: true,
+  },
+}
+
+/**
+ * A tenant overriding the house copy from its `homepageSponsors` section
+ * config. Omitting any of these props restores the defaults shown in
+ * `WithSponsors` — the copy is configuration, not a fork.
+ */
+export const CustomCopy: Story = {
+  args: {
+    sponsors: mockSponsors as ConferenceSponsor[],
+    conference: mockConference as Conference,
+    showCTA: true,
+    heading: 'Our partners',
+    description: 'The organisations that make this conference possible.',
+    ctaHeading: 'Partner with us',
+    ctaDescription:
+      'Put your brand in front of the practitioners who build and run the systems your product serves.',
   },
 }
