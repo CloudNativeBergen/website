@@ -88,8 +88,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className={labelClass}>{label}</label>
-      {children}
+      {/* The control is nested inside the label, which associates the two
+          without threading an id through every field. */}
+      <label className="block">
+        <span className={labelClass}>{label}</span>
+        {children}
+      </label>
       {hint && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
       )}
@@ -412,7 +416,7 @@ export function InvitationLetterForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:bg-gray-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:dark:bg-gray-600"
+          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 disabled:bg-gray-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:dark:bg-gray-600"
         >
           {values.delivery === 'download' ? (
             <DocumentArrowDownIcon className="h-4 w-4" />

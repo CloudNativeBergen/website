@@ -80,6 +80,11 @@ function joinList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
 }
 
+/** English article for a role label — "an attendee", "an organizer", "a speaker". */
+function indefiniteArticle(word: string): string {
+  return /^[aeiou]/i.test(word) ? 'an' : 'a'
+}
+
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
@@ -173,9 +178,9 @@ export function buildInvitationLetterContent({
   paragraphs.push(
     details.role === 'speaker'
       ? `${details.fullName} is participating as a confirmed speaker and will present as part of the conference programme.`
-      : `${details.fullName} is participating as ${
-          roleLabel === 'attendee' ? 'an' : 'a'
-        } ${roleLabel} at the conference.`,
+      : `${details.fullName} is participating as ${indefiniteArticle(
+          roleLabel,
+        )} ${roleLabel} at the conference.`,
   )
 
   const arrival = formatDate(details.arrivalDate)

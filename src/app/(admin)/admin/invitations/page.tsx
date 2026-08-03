@@ -1,5 +1,5 @@
 import { ErrorDisplay } from '@/components/admin'
-import { InvitationLettersPageClient } from '@/components/admin/invitation/InvitationLettersPageClient'
+import { InvitationLettersPageClient } from '@/components/admin/invitation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export default async function AdminInvitationLetters() {

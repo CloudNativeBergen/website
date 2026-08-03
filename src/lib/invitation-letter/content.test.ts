@@ -202,6 +202,16 @@ describe('buildInvitationLetterContent', () => {
     expect(build().paragraphs[1]).toContain('as an attendee')
   })
 
+  it('gets the article right for every role', () => {
+    expect(build({ role: 'organizer' }).paragraphs[1]).toContain(
+      'as an organizer',
+    )
+    expect(build({ role: 'sponsor' }).paragraphs[1]).toContain(
+      'as a sponsor representative',
+    )
+    expect(build().paragraphs[1]).toContain('as an attendee')
+  })
+
   it('states the intended stay when both dates are given', () => {
     const content = build({
       arrivalDate: '2026-11-03',

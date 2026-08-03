@@ -307,6 +307,12 @@ describe('formatDateRangeLocalized', () => {
     )
   })
 
+  it('reads forward even when the ends are stored the wrong way round', () => {
+    expect(
+      formatDateRangeLocalized('2026-11-06', '2026-11-05', 'en-GB'),
+    ).toMatch(/5\s*[–-]\s*6 November 2026/)
+  })
+
   it('handles missing and invalid input', () => {
     expect(formatDateRangeLocalized('', '2026-11-06')).toBe('TBD')
     expect(formatDateRangeLocalized('nonsense', 'also-nonsense')).toBe(

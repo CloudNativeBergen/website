@@ -151,7 +151,9 @@ describe('invitationLetter.issue — delivery', () => {
     const result = await createCaller().invitationLetter.issue(validInput)
 
     expect(result.reference).toMatch(/^INV-\d{4}-[A-Z2-9]{6}$/)
-    expect(Buffer.from(result.pdfBase64, 'base64').toString()).toContain('%PDF')
+    expect(Buffer.from(result.pdfBase64!, 'base64').toString()).toContain(
+      '%PDF',
+    )
     expect(result.filename).toContain('amina-yusuf')
     expect(result.filename.endsWith('.pdf')).toBe(true)
   })
@@ -161,6 +163,16 @@ describe('invitationLetter.issue — delivery', () => {
 
     expect(sendInvitationLetterEmail).not.toHaveBeenCalled()
     expect(recordMock.mock.calls[0][0].emailedTo).toBeUndefined()
+  })
+
+  it('withholds the PDF when the email actually went out', async () => {
+    const result = await createCaller().invitationLetter.issue({
+      ...validInput,
+      delivery: 'email',
+    })
+
+    expect(result.emailedTo).toBe('amina@example.com')
+    expect(result.pdfBase64).toBeUndefined()
   })
 
   it('emails the applicant and records it when asked to', async () => {
@@ -186,6 +198,7 @@ describe('invitationLetter.issue — delivery', () => {
       delivery: 'email',
     })
 
+    // Nothing is stored, so a failed send must still hand back the letter.
     expect(result.pdfBase64).toBeTruthy()
     expect(result.emailError).toBe('mailbox full')
     expect(result.emailedTo).toBeUndefined()

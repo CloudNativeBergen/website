@@ -62,7 +62,11 @@ export function InvitationLettersPageClient({
 
   const issueMutation = api.invitationLetter.issue.useMutation({
     onSuccess: (result) => {
-      if (values.delivery !== 'email') {
+      // Driven by what the server returned, not by `values` — the form is
+      // cleared below and could otherwise drift while the request is in
+      // flight. The server withholds the PDF only when the email actually
+      // went out, so its presence IS the instruction to download.
+      if (result.pdfBase64) {
         downloadPdf(result.pdfBase64, result.filename)
       }
       setLastReference(result.reference)
@@ -75,7 +79,7 @@ export function InvitationLettersPageClient({
         showNotification({
           type: 'warning',
           title: 'Letter issued, email failed',
-          message: `${result.reference} was generated but could not be emailed (${result.emailError}). The PDF was downloaded so you can forward it.`,
+          message: `${result.reference} was generated but could not be emailed (${result.emailError}). The PDF has been downloaded so you can forward it — nothing is stored, so keep it.`,
         })
         return
       }

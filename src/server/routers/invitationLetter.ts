@@ -141,10 +141,17 @@ export const invitationLetterRouter = router({
         })
       }
 
+      // Withhold the PDF only when the email actually went out: it carries the
+      // same passport data the rest of this feature refuses to keep, so it
+      // should not travel further than it must. But a failed send MUST return
+      // it — nothing is stored, so losing it here would cost the applicant a
+      // full re-entry of their passport details.
+      const needsPdf = input.delivery !== 'email' || !emailedTo
+
       return {
         reference,
         filename,
-        pdfBase64: pdf.toString('base64'),
+        pdfBase64: needsPdf ? pdf.toString('base64') : undefined,
         emailedTo,
         emailError,
         auditRecorded: !auditError,

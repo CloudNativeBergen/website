@@ -179,12 +179,18 @@ export function formatDateRangeLocalized(
   if (isNaN(start.getTime()) || isNaN(end.getTime()))
     return 'Invalid Date Range'
 
+  // A reversed range does not throw — `formatRange` happily renders
+  // "6 – 5 November 2026", which is nonsense on a printed document. Order the
+  // ends so the output always reads forward; dates stored the wrong way round
+  // are a data problem to fix at the source, not to print.
+  const [from, to] = start <= end ? [start, end] : [end, start]
+
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
     timeZone: OSLO_TZ,
-  }).formatRange(start, end)
+  }).formatRange(from, to)
 }
 
 /** Formats a timestamp with time, house locale (e.g. "27. oktober 2025, 14:30"). */

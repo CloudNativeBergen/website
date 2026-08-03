@@ -248,7 +248,9 @@ export async function generateInvitationLetterPdf(
 ): Promise<Buffer> {
   // Never fail letter generation on a logo problem — the helper logs and
   // returns undefined, and the document falls back to a text letterhead.
-  const logoDataUrl = rasterizeLogoToPngDataUrl(conferenceLogo)
+  const logoDataUrl = rasterizeLogoToPngDataUrl(conferenceLogo, {
+    logTag: 'invitation-letter',
+  })
   const buffer = await renderToBuffer(
     <InvitationLetterDocument content={content} logoDataUrl={logoDataUrl} />,
   )
