@@ -1,4 +1,20 @@
-import { arrayMove } from '@dnd-kit/sortable'
+/**
+ * Local copy of `@dnd-kit/sortable`'s `arrayMove`, semantics preserved
+ * (including the negative-index handling this module never relies on).
+ *
+ * Inlined DELIBERATELY. `arrayMove` is a pure four-line array helper, but
+ * importing it from `@dnd-kit/sortable` pulls that package's React context into
+ * whatever module graph reaches this file. The package is client-only, so any
+ * server component importing anything from here — a label map, a type guard —
+ * died at build time with `createContext is not a function` while collecting
+ * page data. Four lines of duplication buys this module ZERO runtime
+ * dependencies, which is what a pure model/logic module should have.
+ */
+function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
+  const next = array.slice()
+  next.splice(to < 0 ? next.length + to : to, 0, next.splice(from, 1)[0])
+  return next
+}
 import type { PortableTextBlock } from '@portabletext/editor'
 import { type HomepageSection, type HomepageSectionType } from './sections'
 
