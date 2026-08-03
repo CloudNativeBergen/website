@@ -330,6 +330,68 @@ describe('marking — how a consumer tells sample from real', () => {
     }
   })
 
+  /**
+   * The schedule's WRAPPERS are the ones that got missed once: a track and a
+   * slot have no `_id`, but a schedule UI renders them as objects in their own
+   * right, and the consuming UI decides what to badge "Sample content" from the
+   * mark alone. Same for the sponsor record nested inside a `ConferenceSponsor`
+   * — the wall renders that, not the wrapper.
+   */
+  it('marks the structural wrappers too, not only the id-bearing entities', () => {
+    const day = conference.schedules![0]
+    expect(isPlaceholder(day)).toBe(true)
+    for (const track of day.tracks) {
+      expect(isPlaceholder(track)).toBe(true)
+      for (const slot of track.talks) {
+        expect(isPlaceholder(slot)).toBe(true)
+        expect(isPlaceholder(slot.talk)).toBe(true)
+      }
+    }
+    for (const entry of conference.sponsors!) {
+      expect(isPlaceholder(entry.sponsor)).toBe(true)
+      expect(isPlaceholder(entry.tier)).toBe(true)
+    }
+  })
+
+  /**
+   * The contract in the module header says EVERY generated object is marked,
+   * with one carve-out for plain field values. Spot-checks let a new collection
+   * slip through unmarked, so this walks the whole filled conference: every
+   * object in it came from the module, because `blankConference()` contributes
+   * only strings and empty arrays.
+   */
+  it('leaves no generated object unmarked, anywhere in the tree', () => {
+    // Portable text, references and the image field are FIELD VALUES: nothing
+    // badges them, and marking them would be noise inside a Sanity shape.
+    const FIELD_VALUE_TYPES = new Set(['block', 'span', 'reference', 'image'])
+    const unmarked: string[] = []
+
+    const walk = (value: unknown, path: string) => {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => walk(item, `${path}[${index}]`))
+        return
+      }
+      if (typeof value !== 'object' || value === null) return
+      const record = value as Record<string, unknown>
+      if (
+        typeof record._type === 'string' &&
+        FIELD_VALUE_TYPES.has(record._type)
+      ) {
+        return
+      }
+      if (!isPlaceholder(record)) unmarked.push(path)
+      for (const [key, child] of Object.entries(record)) {
+        walk(child, `${path}.${key}`)
+      }
+    }
+
+    // The conference itself is the tenant's own object, not a generated one.
+    for (const [key, value] of Object.entries(conference)) {
+      walk(value, key)
+    }
+    expect(unmarked).toEqual([])
+  })
+
   it('does not claim real content is a placeholder', () => {
     expect(isPlaceholder({ name: 'Real' })).toBe(false)
     expect(isPlaceholder(null)).toBe(false)
@@ -456,7 +518,9 @@ describe('generated art honours the tenant theme', () => {
   })
 })
 
-describe('gallery placeholders do not blow up the image pipeline', () => {
+describe('the gallery contract', () => {
+  const images = fill(blankConference()).conference.featuredGalleryImages!
+
   /**
    * `@sanity/image-url` THROWS on a malformed asset `_ref`, and `ImageCarousel`
    * calls it unconditionally — a lazy `_ref: 'placeholder'` would take the whole
@@ -464,9 +528,36 @@ describe('gallery placeholders do not blow up the image pipeline', () => {
    * exactly this reason.
    */
   it('produces an asset ref the Sanity image builder accepts', () => {
-    const { conference } = fill(blankConference())
-    for (const image of conference.featuredGalleryImages!) {
+    for (const image of images) {
       expect(() => sanityImage(image.image).width(400).url()).not.toThrow()
+    }
+  })
+
+  /**
+   * `imageUrl` is the half of the contract a consumer renders: self-contained
+   * artwork, no fetch. If this ever became a URL, the whole zero-network promise
+   * would go with it.
+   */
+  it('carries its artwork inline in imageUrl, so rendering costs no request', () => {
+    for (const image of images) {
+      expect(image.imageUrl).toMatch(/^data:image\/svg\+xml/)
+      expect(image.imageUrl).not.toMatch(/https?:\/\//)
+      expect(decodeURIComponent(image.imageUrl!)).toContain('SAMPLE PHOTO')
+    }
+  })
+
+  /**
+   * The other half, pinned so the constraint stays visible: the decoy ref
+   * resolves to a `cdn.sanity.io` URL that 404s, NOT to the artwork. There is no
+   * source shape that makes the builder hand back a caller-supplied `data:` URI,
+   * which is why a consumer has to prefer `imageUrl` itself — see the note on
+   * `sampleGalleryImages`. `ImageCarousel` does not do that yet.
+   */
+  it('cannot serve the artwork through the CDN builder — the consumer must prefer imageUrl', () => {
+    for (const image of images) {
+      const built = sanityImage(image.image).width(2400).url()
+      expect(built).toContain('cdn.sanity.io')
+      expect(built).not.toBe(image.imageUrl)
     }
   })
 })
@@ -569,8 +660,10 @@ async function reachableFrom(
   const queue: Array<{ file: string; trail: string[] }> = entries.map(
     (file) => ({ file, trail: [file] }),
   )
-  while (queue.length > 0) {
-    const { file, trail } = queue.shift()!
+  // A read cursor rather than `queue.shift()`: shifting re-indexes the whole
+  // array on every dequeue, and this walk drains 300+ modules.
+  for (let head = 0; head < queue.length; head++) {
+    const { file, trail } = queue[head]
     if (seen.has(file)) continue
     seen.set(file, trail)
     const source = await readFile(file, 'utf8')

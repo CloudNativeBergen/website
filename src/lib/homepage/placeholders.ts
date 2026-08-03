@@ -20,11 +20,18 @@
  *     plausible names, and emphatically no stock faces. Sponsors are generated
  *     wordmarks that read "SAMPLE A", not real brands. A placeholder that could
  *     pass for a booked speaker or a signed sponsor is a lie in both directions.
- *  3. **The consumer can always tell.** Every generated entity carries the
+ *  3. **The consumer can always tell.** Every generated OBJECT carries the
  *     {@link PLACEHOLDER_MARK} property (`isPlaceholder(entity)` — no string
- *     matching), every synthetic id starts with {@link PLACEHOLDER_ID_PREFIX},
- *     and {@link withPlaceholders} returns the set of section types it backed so
- *     the preview can pin a "Sample content" chip on exactly those bands.
+ *     matching): not just the entities, but the structural wrappers a UI can
+ *     hold on its own — a schedule day, its tracks, its slots, the sponsor
+ *     record inside a `ConferenceSponsor`. The only unmarked objects are plain
+ *     FIELD VALUES, which no consumer badges: portable-text blocks and spans,
+ *     `_type: 'reference'` pointers, and the `_type: 'image'` field (see
+ *     `sampleGalleryImages`). Every synthetic id starts with
+ *     {@link PLACEHOLDER_ID_PREFIX}, and {@link withPlaceholders} returns the set
+ *     of section types it backed so the preview can pin a "Sample content" chip
+ *     on exactly those bands. `placeholders.test.ts` deep-walks a fully filled
+ *     conference and asserts this rule holds for every object in it.
  *
  * PURITY. Type-only imports, no package at runtime, no `Date.now()`, no
  * network, nothing persisted. The reference time is a REQUIRED argument
@@ -353,7 +360,9 @@ function sampleSponsorTiers(): PlaceholderOf<SponsorTier>[] {
       tierType: 'standard',
       // Prices exist ONLY so `sortTierNamesByValue` orders Gold above
       // Community in the preview; no price is ever displayed on the homepage.
-      price: [{ _key: `${id}-price`, amount: tier.amount, currency: 'NOK' }],
+      price: [
+        mark({ _key: `${id}-price`, amount: tier.amount, currency: 'NOK' }),
+      ],
       soldOut: false,
       mostPopular: false,
     })
@@ -364,8 +373,11 @@ function sampleSponsors(): PlaceholderOf<ConferenceSponsor>[] {
   return SAMPLE_TIERS.flatMap((tier) =>
     tier.letters.map((letter) => {
       const name = `Sample Sponsor ${letter}`
+      // The wrapper AND the two records inside it are marked: a sponsor wall
+      // renders `entry.sponsor`, not the wrapper, so that is the object a
+      // "Sample content" badge has in hand.
       return mark<ConferenceSponsor>({
-        sponsor: {
+        sponsor: mark({
           _id: placeholderId(`sponsor-${letter.toLowerCase()}`),
           name,
           // Dead on purpose — the preview neutralizes anchors, and a placeholder
@@ -375,15 +387,17 @@ function sampleSponsors(): PlaceholderOf<ConferenceSponsor>[] {
           logoBright: placeholderWordmarkSvg(`Sample ${letter}`, {
             dark: true,
           }),
-        },
-        tier: {
+        }),
+        tier: mark({
           _id: placeholderId(
             `tier-${tier.title.toLowerCase().replace(/\s+/g, '-')}`,
           ),
           title: tier.title,
           tagline: 'Placeholder sponsor tier',
-          tierType: 'standard',
-        },
+          // `as const`: wrapping the literal in `mark()` costs it the contextual
+          // type that kept `tierType` narrow.
+          tierType: 'standard' as const,
+        }),
       })
     }),
   )
@@ -392,13 +406,32 @@ function sampleSponsors(): PlaceholderOf<ConferenceSponsor>[] {
 /**
  * Gallery stand-ins.
  *
- * `image.asset._ref` is a WELL-FORMED but nonexistent Sanity asset id. That
- * shape is load-bearing: `@sanity/image-url` THROWS on a malformed ref
- * ("Malformed asset _ref"), which would take the whole gallery band down inside
- * the preview. With a well-formed ref the builder produces a CDN URL that 404s
- * and the carousel falls back to its own error state, so the gradient tile in
- * `imageUrl` is what a consumer should render — it is the honest, zero-fetch
- * artwork this module promises.
+ * THE GALLERY CONTRACT, which a consumer MUST honour to render these:
+ *
+ *  - **`imageUrl` is the artwork.** A `data:` URI carrying the gradient tile,
+ *    ready for an `<img src>` with no fetch. This is the field to render. It
+ *    mirrors the real GROQ projection (`"imageUrl": image.asset->url`), so a
+ *    consumer that reads it is reading a field that exists on real images too.
+ *  - **`image` is a decoy that must not throw.** Its `asset._ref` is
+ *    SYNTACTICALLY valid but points at nothing. That shape is load-bearing:
+ *    `@sanity/image-url` THROWS on a malformed ref ("Malformed asset _ref") and
+ *    the carousel calls it unconditionally, so a lazy `_ref: 'placeholder'`
+ *    would take the whole band down inside the preview. Fed to the CDN builder
+ *    the ref yields a URL that 404s — a network round-trip that renders nothing.
+ *
+ * So: **prefer `imageUrl` when it is a `data:` URI, fall back to the CDN builder
+ * otherwise.** That is exactly the rule `speakerImageUrl` already applies to
+ * non-Sanity speaker images, and it is why the sample avatars render while these
+ * tiles do not.
+ *
+ * KNOWN GAP, not fixable from here: `ImageCarousel` — and with it `GalleryModal`
+ * and `SimpleImageCarousel` — builds its `src` from `image` unconditionally and
+ * never looks at `imageUrl`, so today a placeholder tile renders the carousel's
+ * "Failed to load image" state instead of the gradient. There is no source shape
+ * that makes `@sanity/image-url` return a caller-supplied `data:` URI (it always
+ * composes a `cdn.sanity.io` URL from projectId/dataset/assetId), so the
+ * fallback has to live in the component. Until it does, the sample tiles are
+ * correct data that the homepage band does not yet read.
  */
 function sampleGalleryImages(
   brand: PlaceholderBrand,
@@ -523,22 +556,32 @@ function sampleTalks(
   })
 }
 
-/** One day, one track, four talks — enough for the stats tiles and talk cards. */
+/**
+ * One day, one track, four talks — enough for the stats tiles and talk cards.
+ *
+ * The wrappers are marked as well as the talks. A track and a slot have no id of
+ * their own, but a schedule UI renders them as objects in their own right — a
+ * track header, a time slot — and an unmarked one is a placeholder an organizer
+ * could take for real. Part 3 of the honesty contract covers every generated
+ * object, not only the ones with an `_id`.
+ */
 function sampleSchedule(
   date: string,
   talks: PlaceholderOf<ProposalExisting>[],
 ): PlaceholderOf<ConferenceSchedule>[] {
-  const slots: TrackTalk[] = SAMPLE_TALKS.map((talk, index) => ({
-    talk: talks[index],
-    startTime: talk.start,
-    endTime: talk.end,
-    hasTalkRef: true,
-  }))
-  const track: ScheduleTrack = {
+  const slots: PlaceholderOf<TrackTalk>[] = SAMPLE_TALKS.map((talk, index) =>
+    mark<TrackTalk>({
+      talk: talks[index],
+      startTime: talk.start,
+      endTime: talk.end,
+      hasTalkRef: true,
+    }),
+  )
+  const track = mark<ScheduleTrack>({
     trackTitle: 'Sample Track',
     trackDescription: 'Placeholder track — your real programme replaces this.',
     talks: slots,
-  }
+  })
   return [
     mark<ConferenceSchedule>({
       _id: placeholderId('schedule-day-1'),
@@ -658,10 +701,14 @@ export function withPlaceholders(
     types.add('homepageCountdown')
   }
 
-  const speakers = sampleSpeakers(brand)
+  // Built ON DEMAND and memoised: two branches below want the same speaker set
+  // (the shelf, and the talks that need someone to present them), and the
+  // common case — a conference with nothing empty — must build none of it.
+  let builtSpeakers: PlaceholderOf<SpeakerWithTalks>[] | undefined
+  const speakers = () => (builtSpeakers ??= sampleSpeakers(brand))
 
   if (isEmpty(conference.featuredSpeakers)) {
-    patch.featuredSpeakers = speakers
+    patch.featuredSpeakers = speakers()
     types.add('homepageFeaturedSpeakers')
   }
 
@@ -687,7 +734,7 @@ export function withPlaceholders(
   }
 
   if (isEmpty(conference.schedules)) {
-    const talks = sampleTalks(conference._id, speakers)
+    const talks = sampleTalks(conference._id, speakers())
     patch.schedules = sampleSchedule(startDate, talks)
     // The band ALSO gates on `isProgramPublished` — a `programDate` in the
     // past — so a schedule fixture alone still renders nothing. Filled only
