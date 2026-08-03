@@ -1,4 +1,4 @@
-import type { SponsorStatus } from './types'
+import type { SponsorStatus, InvoiceStatus } from './types'
 
 /**
  * Canonical short labels for the pipeline stages, matching the sponsor board's
@@ -16,3 +16,12 @@ export const SPONSOR_STATUS_LABELS: Record<SponsorStatus, string> = {
 
 /** The stage a sponsor reaches once the deal is accepted. */
 export const ACCEPTED_SPONSOR_STATUS: SponsorStatus = 'closed-won'
+
+/** Canonical labels for the invoice axis, shared by the board and the export. */
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  'not-sent': 'Not Sent',
+  sent: 'Sent',
+  paid: 'Paid',
+  overdue: 'Overdue',
+  cancelled: 'Cancelled',
+}

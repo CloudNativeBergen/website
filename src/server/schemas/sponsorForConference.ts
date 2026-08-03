@@ -254,4 +254,10 @@ export const SponsorCRMFilterSchema = z.object({
    * because the rules span the sponsor document (org. number for EHF).
    */
   billingComplete: z.boolean().optional(),
+  /**
+   * Filter on whether an invoice can be raised as recorded — see
+   * `evaluateInvoiceReadiness`. Stricter than `billingComplete`: it also
+   * requires an amount and a signed contract.
+   */
+  invoiceReady: z.boolean().optional(),
 })

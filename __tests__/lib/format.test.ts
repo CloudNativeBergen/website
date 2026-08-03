@@ -1,4 +1,4 @@
-import { formatOrgNumber } from '@/lib/format'
+import { formatOrgNumber, mailtoHref } from '@/lib/format'
 
 const nbsp = '\u00A0'
 
@@ -56,5 +56,31 @@ describe('formatOrgNumber', () => {
 
   it('should trim surrounding whitespace', () => {
     expect(formatOrgNumber(' 933338622 ')).toBe(`933${nbsp}338${nbsp}622`)
+  })
+})
+
+describe('mailtoHref', () => {
+  it('links a plain address', () => {
+    expect(mailtoHref('billing@example.com')).toBe('mailto:billing@example.com')
+    expect(mailtoHref('  billing@example.com  ')).toBe(
+      'mailto:billing@example.com',
+    )
+  })
+
+  it('refuses values that would inject mailto parameters', () => {
+    expect(mailtoHref('a@b.com?bcc=attacker@evil.com')).toBeNull()
+    expect(mailtoHref('a@b.com&subject=Paid')).toBeNull()
+    expect(mailtoHref('a@b.com#fragment')).toBeNull()
+  })
+
+  it('refuses lists, display names and junk', () => {
+    expect(mailtoHref('a@b.com, c@d.com')).toBeNull()
+    expect(mailtoHref('Finance <a@b.com>')).toBeNull()
+    expect(mailtoHref('not an email')).toBeNull()
+  })
+
+  it('returns null for an absent address', () => {
+    expect(mailtoHref(undefined)).toBeNull()
+    expect(mailtoHref('   ')).toBeNull()
   })
 })
