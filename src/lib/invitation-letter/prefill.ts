@@ -33,7 +33,12 @@ export interface InvitationPrefill {
 /** Whatever `searchParams` hands us — a value, a repeated value, or nothing. */
 type RawParam = string | string[] | undefined
 
-/** Matches the `.max()` caps in `IssueInvitationLetterSchema`. */
+/**
+ * Conservative caps for URL-seeded values. NOT a mirror of
+ * `IssueInvitationLetterSchema` — `fullName` and `email` carry no `.max()`
+ * there. These exist so a hand-edited link cannot stuff the form with a
+ * megabyte of text; the schema still has the final say on what is accepted.
+ */
 const LIMITS = {
   name: 200,
   email: 254,

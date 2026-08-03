@@ -24,7 +24,16 @@ export default async function AdminInvitationLetters({
 
   const prefill = parseInvitationPrefill(await searchParams)
 
+  // Keyed on the seed: navigating from one order's "issue letter" link to
+  // another keeps this route mounted, and the client seeds its form state in a
+  // `useState` initializer — so without a remount the SECOND organizer would
+  // see the FIRST applicant's details still in the fields. On a form that
+  // produces an identity document, that is the one mistake worth a remount.
   return (
-    <InvitationLettersPageClient conference={conference} prefill={prefill} />
+    <InvitationLettersPageClient
+      key={JSON.stringify(prefill)}
+      conference={conference}
+      prefill={prefill}
+    />
   )
 }

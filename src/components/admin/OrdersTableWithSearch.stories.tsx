@@ -84,7 +84,35 @@ const orders: GroupedOrder[] = [
   },
 ]
 
+const FIXED_NOW = new Date('2026-03-01T12:00:00Z').getTime()
+
 const meta = {
+  beforeEach: () => {
+    // Pin the clock (house pattern — see Countdown.stories): the table derives
+    // payment status from `new Date()`, so an unpinned clock makes an overdue
+    // row flip to on-time as the fixture ages and drifts Chromatic snapshots.
+    const OriginalDate = globalThis.Date
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(FIXED_NOW)
+      return new (
+        Function.prototype.bind.apply(OriginalDate, [
+          null,
+          ...args,
+        ]) as typeof OriginalDate
+      )()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => FIXED_NOW
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
+
   title: 'Systems/Participants/Admin/OrdersTable',
   component: OrdersTableWithSearch,
   parameters: { layout: 'fullscreen', options: { showPanel: false } },

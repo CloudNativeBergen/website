@@ -454,6 +454,7 @@ export function OrdersTableWithSearch({
                             )}
                             className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
                             title="Issue invitation letter"
+                            aria-label="Issue invitation letter"
                           >
                             <EnvelopeOpenIcon className="h-4 w-4" />
                           </Link>
@@ -506,6 +507,7 @@ export function OrdersTableWithSearch({
                                       )}
                                       className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
                                       title="Issue invitation letter"
+                                      aria-label="Issue invitation letter"
                                     >
                                       <EnvelopeOpenIcon className="h-4 w-4" />
                                     </Link>
@@ -584,6 +586,7 @@ export function OrdersTableWithSearch({
                     href={issueLetterHref(primaryTicket, order.order_id)}
                     className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
                     title="Issue invitation letter"
+                    aria-label="Issue invitation letter"
                   >
                     <EnvelopeOpenIcon className="h-4 w-4" />
                   </Link>
@@ -666,6 +669,7 @@ export function OrdersTableWithSearch({
                             href={issueLetterHref(ticket, order.order_id)}
                             className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
                             title="Issue invitation letter"
+                            aria-label="Issue invitation letter"
                           >
                             <EnvelopeOpenIcon className="h-4 w-4" />
                           </Link>
