@@ -268,3 +268,25 @@ describe('shiftToLightness — malformed input', () => {
     )
   })
 })
+
+/**
+ * Raised in review alongside the malformed-hex guard, and for the same reason:
+ * an out-of-range target does not blow up, it produces a colour that looks
+ * plausible. formatHex clamps, so the caller gets a wrong tint with no signal.
+ */
+describe('shiftToLightness — malformed target lightness', () => {
+  it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
+    ['below range', -0.1],
+    ['above range', 1.1],
+  ])('rejects %s rather than clamping to a plausible colour', (_l, value) => {
+    expect(() => shiftToLightness('#1d4ed8', value)).toThrow(RangeError)
+  })
+
+  it('accepts the exact boundaries', () => {
+    expect(shiftToLightness('#1d4ed8', 0)).toMatch(/^#[0-9a-f]{6}$/)
+    expect(shiftToLightness('#1d4ed8', 1)).toMatch(/^#[0-9a-f]{6}$/)
+  })
+})

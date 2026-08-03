@@ -130,6 +130,17 @@ function isDisplayable(rgb: readonly [number, number, number]): boolean {
  * Returns lowercase `#rrggbb`.
  */
 export function shiftToLightness(hex: string, targetL: number): string {
+  // Same argument as parseHex: NaN or an out-of-range target propagates through
+  // the mix and formatHex clamps it into a plausible-looking colour, so a wrong
+  // brand tint ships silently. Every caller passes a DARK_TINT_LIGHTNESS
+  // constant, so this cannot fire in the app — it exists so the next caller
+  // gets an error instead of a colour nobody can explain.
+  if (!Number.isFinite(targetL) || targetL < 0 || targetL > 1) {
+    throw new RangeError(
+      `Expected an OKLab lightness in 0..1, received ${targetL}`,
+    )
+  }
+
   const [L, a, b] = srgbToOklab(parseHex(hex))
 
   // Mixing black into a colour at lightness L by fraction p yields (p·L, p·a,
