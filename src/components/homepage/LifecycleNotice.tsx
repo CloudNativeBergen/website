@@ -81,7 +81,13 @@ export function LifecycleNotice({
                 {headline}
               </h1>
 
-              {dates !== 'TBD' ? (
+              {/*
+                Dates only for a CANCELLED edition, where "this was going to
+                happen on these dates" is the whole point. An archived event is
+                not about one edition, so printing the last one's dates under a
+                tombstone reads like it is still being scheduled.
+              */}
+              {cancelled && dates !== 'TBD' ? (
                 <p className="font-jetbrains mb-6 text-sm tracking-wide text-brand-cloud-blue uppercase dark:text-blue-400">
                   <time dateTime={conference.startDate}>{dates}</time>
                   {conference.city ? ` · ${conference.city}` : ''}

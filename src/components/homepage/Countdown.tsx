@@ -41,16 +41,39 @@ export function countdownBreakdown(remainingMs: number): Breakdown {
 const headingClass =
   'font-space-grotesk mb-10 text-center text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400'
 
-function Unit({ value, label }: { value: string; label: string }) {
+function Unit({
+  value,
+  label,
+  compact = false,
+}: {
+  value: string
+  label: string
+  /**
+   * Embedded inside another card rather than owning a full-width section. The
+   * standalone size overflows its column on a 393px viewport once the day count
+   * reaches three digits — which is the NORMAL case for a save-the-date band.
+   */
+  compact?: boolean
+}) {
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex min-w-0 flex-col items-center">
       <span
-        className="font-space-grotesk text-4xl font-bold text-brand-slate-gray tabular-nums sm:text-6xl dark:text-gray-100"
+        className={
+          compact
+            ? 'font-space-grotesk text-2xl font-bold text-brand-slate-gray tabular-nums sm:text-4xl dark:text-gray-100'
+            : 'font-space-grotesk text-4xl font-bold text-brand-slate-gray tabular-nums sm:text-6xl dark:text-gray-100'
+        }
         aria-hidden={value === '--'}
       >
         {value}
       </span>
-      <span className="font-inter mt-1 text-xs font-medium tracking-wide text-brand-slate-gray/60 uppercase sm:text-sm dark:text-gray-400">
+      <span
+        className={
+          compact
+            ? 'font-inter mt-1 text-[10px] font-medium tracking-wide text-brand-slate-gray/60 uppercase sm:text-xs dark:text-gray-400'
+            : 'font-inter mt-1 text-xs font-medium tracking-wide text-brand-slate-gray/60 uppercase sm:text-sm dark:text-gray-400'
+        }
+      >
         {label}
       </span>
     </div>
@@ -84,9 +107,11 @@ function useCountdownRemaining(targetMs: number): number | null {
 /** The bare d/h/m/s grid, with no section chrome. */
 function CountdownUnits({
   remaining,
+  compact = false,
   className = 'mx-auto grid max-w-2xl grid-cols-4 gap-4 sm:gap-8',
 }: {
   remaining: number | null
+  compact?: boolean
   className?: string
 }) {
   const parts = remaining === null ? null : countdownBreakdown(remaining)
@@ -111,7 +136,7 @@ function CountdownUnits({
   return (
     <div className={className} role="timer" aria-live="off">
       {units.map((u) => (
-        <Unit key={u.label} value={u.value} label={u.label} />
+        <Unit key={u.label} value={u.value} label={u.label} compact={compact} />
       ))}
     </div>
   )
@@ -129,7 +154,8 @@ export function CountdownStrip({ targetMs }: { targetMs: number }) {
   return (
     <CountdownUnits
       remaining={remaining}
-      className="mx-auto grid max-w-lg grid-cols-4 gap-3 sm:gap-6"
+      compact
+      className="mx-auto grid max-w-md grid-cols-4 gap-2 sm:gap-5"
     />
   )
 }

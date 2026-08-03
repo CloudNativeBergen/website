@@ -131,56 +131,63 @@ export function SaveTheDate({
   )
 }
 
-/** One roadmap row. `open` steps are linkable; the rest are plain statements. */
+/**
+ * One roadmap row: the milestone and where it stands on the left, and — only
+ * when the step is actionable today — a button on the right. The status line is
+ * never the button label, so the button says what a visitor gets to DO.
+ */
 function RoadmapRow({ step }: { step: RoadmapStep }) {
   const done = step.status === 'done'
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-      <span className="flex items-center gap-x-2">
+    <li className="flex flex-col gap-y-2 sm:flex-row sm:items-center sm:justify-between sm:gap-x-4">
+      <span className="flex items-start gap-x-2">
         {done ? (
           <CheckCircleIcon
-            className="h-5 w-5 shrink-0 text-brand-slate-gray/40 dark:text-gray-500"
+            className="mt-0.5 h-4 w-4 shrink-0 text-brand-slate-gray/40 dark:text-gray-500"
             aria-hidden="true"
           />
         ) : (
           <span
             className={
               step.status === 'open'
-                ? 'h-2.5 w-2.5 shrink-0 rounded-full bg-brand-fresh-green'
-                : 'h-2.5 w-2.5 shrink-0 rounded-full bg-brand-cloud-blue/30 dark:bg-blue-400/40'
+                ? 'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-fresh-green'
+                : 'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-cloud-blue/30 dark:bg-blue-400/40'
             }
             aria-hidden="true"
           />
         )}
-        <span
-          className={
-            done
-              ? 'font-inter text-brand-slate-gray/60 dark:text-gray-400'
-              : 'font-inter font-medium text-brand-slate-gray dark:text-gray-200'
-          }
-        >
-          {step.label}
+        <span className="flex flex-col">
+          <span
+            className={
+              done
+                ? 'font-inter text-brand-slate-gray/60 dark:text-gray-400'
+                : 'font-inter font-medium text-brand-slate-gray dark:text-gray-200'
+            }
+          >
+            {step.label}
+          </span>
+          <span
+            className={
+              done
+                ? 'font-jetbrains text-xs text-brand-slate-gray/50 dark:text-gray-500'
+                : 'font-jetbrains text-xs text-brand-slate-gray/70 dark:text-gray-400'
+            }
+          >
+            {step.detail}
+          </span>
         </span>
       </span>
-      {step.href ? (
-        <Button
-          href={step.href}
-          variant="primary"
-          className="px-4 py-1.5 text-sm font-semibold"
-        >
-          {step.detail}
-        </Button>
-      ) : (
-        <span
-          className={
-            done
-              ? 'font-jetbrains text-sm text-brand-slate-gray/50 dark:text-gray-500'
-              : 'font-jetbrains text-sm text-brand-slate-gray/80 dark:text-gray-300'
-          }
-        >
-          {step.detail}
+      {step.href && step.actionLabel ? (
+        <span className="pl-6 sm:shrink-0 sm:pl-0">
+          <Button
+            href={step.href}
+            variant="primary"
+            className="px-4 py-1.5 text-sm font-semibold"
+          >
+            {step.actionLabel}
+          </Button>
         </span>
-      )}
+      ) : null}
     </li>
   )
 }

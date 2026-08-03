@@ -177,6 +177,23 @@ function ActionButtons({
     displayButtons = reversedButtons.slice(0, 3)
   }
 
+  // On a page with no CFP, no programme and no tickets — day one — the reversal
+  // above leaves "Become a Sponsor" as the first and loudest thing a visitor
+  // sees. Asking for money is the wrong opening move for an event nobody has
+  // heard of yet, so the visitor-facing link leads and the sponsor pitch is
+  // demoted to an outline button beside it.
+  const hasVisitorCta = displayButtons.some(
+    (b) => b.href !== '/sponsor' && b.href !== '/info',
+  )
+  if (!hasVisitorCta && displayButtons.some((b) => b.href === '/sponsor')) {
+    displayButtons = [
+      ...displayButtons.filter((b) => b.href === '/info'),
+      ...displayButtons
+        .filter((b) => b.href === '/sponsor')
+        .map((b) => ({ ...b, variant: 'outline' as const })),
+    ]
+  }
+
   const showsPrice =
     ticketsFromPrice && displayButtons.some((b) => b.href === '/tickets')
 

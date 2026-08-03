@@ -133,9 +133,12 @@ export interface RoadmapStep {
   label: string
   /** `done` renders muted; `open` renders as the live, linkable step. */
   status: 'upcoming' | 'open' | 'done'
+  /** The status line — a date or a state, never an action. */
   detail: string
   /** Present only when the step is something a visitor can act on today. */
   href?: string
+  /** Button copy for an actionable step. Always paired with `href`. */
+  actionLabel?: string
 }
 
 /**
@@ -170,6 +173,7 @@ export function resolveRoadmapSteps(
         status: 'open',
         detail: `Open until ${formatDate(conference.cfpEndDate)}`,
         href: '/cfp',
+        actionLabel: 'Submit a talk',
       })
     } else {
       steps.push({
@@ -189,6 +193,7 @@ export function resolveRoadmapSteps(
         status: 'open',
         detail: 'Published',
         href: '/program',
+        actionLabel: 'See the programme',
       })
     } else {
       // The programme date may already have passed with nothing published yet.
@@ -212,6 +217,7 @@ export function resolveRoadmapSteps(
       status: 'open',
       detail: 'On sale now',
       href: '/tickets',
+      actionLabel: 'Get tickets',
     })
   } else if (lifecycle.tickets === 'not-yet-on-sale') {
     steps.push({
