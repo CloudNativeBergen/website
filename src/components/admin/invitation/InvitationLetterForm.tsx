@@ -73,8 +73,26 @@ const ROLES: Array<{ value: ParticipantRole; label: string }> = [
   { value: 'organizer', label: 'Organizer' },
 ]
 
+/**
+ * The shared control style.
+ *
+ * Every part of this is load-bearing, because nothing styles form controls for
+ * us: Tailwind v4's preflight resets *every* element to `border: 0 solid`, and
+ * `@tailwindcss/forms` is not actually in the build (it is listed in
+ * `tailwind.config.ts`, but the CSS-first config in `src/styles/tailwind.css`
+ * never pulls that file in with `@config`, and v4 does not auto-load it). So a
+ * control given only a border COLOUR renders with no border, and one given no
+ * padding renders one line tall with its text flush against the edge. Border
+ * width, padding and the focus ring width are all spelled out here, matching
+ * the pattern used by the other admin forms.
+ */
 const inputClass =
-  'mt-1 block w-full rounded-md border-gray-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white'
+  'mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500'
+/** Date fields also need the native picker to follow the theme. */
+const dateInputClass = `${inputClass} dark:scheme-dark`
+/** Native checkbox/radio: `scheme-dark` is what makes them legible on dark. */
+const checkableClass =
+  'h-4 w-4 shrink-0 cursor-pointer border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:scheme-dark'
 const labelClass =
   'block text-xs font-medium text-gray-600 uppercase dark:text-gray-400'
 
@@ -121,7 +139,18 @@ export function InvitationLetterForm({
   organizer,
   onSignatureChange,
 }: InvitationLetterFormProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  // Open when there is already something behind the toggle — otherwise values
+  // seeded from an order (employer, job title) would be submitted unseen.
+  const [showAdvanced, setShowAdvanced] = useState(
+    () =>
+      !!(
+        values.addressedTo ||
+        values.organization ||
+        values.jobTitle ||
+        values.signatoryTitle ||
+        values.additionalNotes
+      ),
+  )
   const set = <K extends keyof InvitationLetterFormValues>(
     key: K,
     value: InvitationLetterFormValues[K],
@@ -177,7 +206,7 @@ export function InvitationLetterForm({
               required
               value={values.dateOfBirth}
               onChange={(e) => set('dateOfBirth', e.target.value)}
-              className={inputClass}
+              className={dateInputClass}
             />
           </Field>
           <Field label="Passport number">
@@ -195,7 +224,7 @@ export function InvitationLetterForm({
               type="date"
               value={values.passportExpiry}
               onChange={(e) => set('passportExpiry', e.target.value)}
-              className={inputClass}
+              className={dateInputClass}
             />
           </Field>
           <Field label="Email" hint="Required to send the letter by email">
@@ -277,7 +306,7 @@ export function InvitationLetterForm({
               type="date"
               value={values.arrivalDate}
               onChange={(e) => set('arrivalDate', e.target.value)}
-              className={inputClass}
+              className={dateInputClass}
             />
           </Field>
           <Field label="Departure">
@@ -285,7 +314,7 @@ export function InvitationLetterForm({
               type="date"
               value={values.departureDate}
               onChange={(e) => set('departureDate', e.target.value)}
-              className={inputClass}
+              className={dateInputClass}
             />
           </Field>
         </div>
@@ -321,7 +350,7 @@ export function InvitationLetterForm({
                     [key]: e.target.checked,
                   })
                 }
-                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600"
+                className={`${checkableClass} rounded`}
               />
               {label}
             </label>
@@ -425,7 +454,7 @@ export function InvitationLetterForm({
                 value={value}
                 checked={values.delivery === value}
                 onChange={() => set('delivery', value)}
-                className="h-4 w-4 cursor-pointer border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600"
+                className={checkableClass}
               />
               {label}
             </label>
