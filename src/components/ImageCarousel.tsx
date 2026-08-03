@@ -11,7 +11,7 @@ import { useImageCarousel } from '@/hooks/useImageCarousel'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/Button'
-import { sanityImage } from '@/lib/sanity/client'
+import { galleryImageSrc, isDataUri, sanityImage } from '@/lib/sanity/client'
 
 interface ImageCarouselProps {
   images: GalleryImageWithSpeakers[]
@@ -122,12 +122,16 @@ export function ImageCarousel({
           {currentImage?.image && !hasCurrentImageError && (
             <img
               ref={(el) => setImageRef(el, currentImage._id)}
-              src={sanityImage(currentImage.image)
-                .width(2400)
-                .quality(85)
-                .fit('max')
-                .url()}
-              srcSet={`${sanityImage(currentImage.image).width(1200).quality(85).fit('max').url()} 1x, ${sanityImage(currentImage.image).width(2400).quality(85).fit('max').url()} 2x`}
+              src={galleryImageSrc(currentImage, {
+                width: 2400,
+                quality: 85,
+                fit: 'max',
+              })}
+              srcSet={
+                isDataUri(currentImage.imageUrl)
+                  ? undefined
+                  : `${sanityImage(currentImage.image).width(1200).quality(85).fit('max').url()} 1x, ${sanityImage(currentImage.image).width(2400).quality(85).fit('max').url()} 2x`
+              }
               alt={
                 currentImage.imageAlt ??
                 (currentImage.photographer

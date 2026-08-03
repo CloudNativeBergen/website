@@ -63,3 +63,50 @@ export function speakerImageUrl(
   }
   return image
 }
+
+const DATA_URI_PREFIX = 'data:'
+
+/**
+ * True when a resolved image URL carries its bytes inline rather than pointing
+ * at a host. Such images have no CDN asset behind them and no responsive
+ * variants, so callers must neither transform them nor build a `srcSet`.
+ */
+export function isDataUri(url: string | null | undefined): url is string {
+  return typeof url === 'string' && url.startsWith(DATA_URI_PREFIX)
+}
+
+/**
+ * Resolves a gallery image URL for display. Gallery images are normally Sanity
+ * assets rendered through the image builder, but `imageUrl` can hold a `data:`
+ * URI (generated artwork with no uploaded asset behind it). The builder has no
+ * pass-through source shape — it always composes a CDN URL from the asset ref,
+ * which 404s for such images — so those are returned verbatim. Everything else
+ * keeps the existing builder transform, unchanged.
+ */
+export function galleryImageSrc(
+  source: { image?: SanityImageSource; imageUrl?: string },
+  opts: {
+    width: number
+    height?: number
+    quality?: number
+    fit?: 'crop' | 'max'
+  },
+): string {
+  if (isDataUri(source.imageUrl)) {
+    return source.imageUrl
+  }
+  if (!source.image) {
+    return source.imageUrl ?? ''
+  }
+  let builder = sanityImage(source.image).width(opts.width)
+  if (opts.height !== undefined) {
+    builder = builder.height(opts.height)
+  }
+  if (opts.quality !== undefined) {
+    builder = builder.quality(opts.quality)
+  }
+  if (opts.fit !== undefined) {
+    builder = builder.fit(opts.fit)
+  }
+  return builder.url()
+}

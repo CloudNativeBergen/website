@@ -5,7 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useImageCarousel } from '@/hooks/useImageCarousel'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
-import { sanityImage } from '@/lib/sanity/client'
+import { galleryImageSrc } from '@/lib/sanity/client'
 
 interface SimpleImageCarouselProps {
   images: GalleryImageWithSpeakers[]
@@ -81,11 +81,11 @@ export function SimpleImageCarousel({
             >
               <img
                 ref={handleImageRef}
-                src={sanityImage(currentImage.image)
-                  .width(1200)
-                  .quality(85)
-                  .fit('max')
-                  .url()}
+                src={galleryImageSrc(currentImage, {
+                  width: 1200,
+                  quality: 85,
+                  fit: 'max',
+                })}
                 alt={
                   currentImage.imageAlt ??
                   (currentImage.photographer
