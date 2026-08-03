@@ -91,3 +91,62 @@ describe('Hero — F1 override precedence', () => {
     expect(screen.queryByText(/Practical Info/i)).toBeNull()
   })
 })
+
+/**
+ * BACK-COMPAT TRIPWIRE for the hero variant work.
+ *
+ * These snapshots were generated from the PRE-VARIANT `Hero` — before the
+ * `variant` prop existed at all. They are the proof that adding variants left
+ * the default rendering byte-identical, which three live conference sites
+ * depend on (they store no `variant`, so they resolve to `classic`).
+ *
+ * A failure here for the DEFAULT hero is a back-compat break: fix the code,
+ * never `vitest -u`. New snapshots for `minimal`/`emblem` are expected.
+ */
+describe('Hero — default (classic) DOM equality', () => {
+  const fullConference = makeConference({
+    tagline: 'Where cloud native meets the fjords',
+    description: 'A day of deep technical talks.\nOne track, no fluff.',
+    venueName: 'Grieghallen',
+    venueAddress: 'Edvard Griegs plass 1, Bergen',
+    vanityMetrics: [
+      { label: 'Attendees', value: '450+' },
+      { label: 'Speakers', value: '40' },
+    ],
+    socialLinks: ['https://bsky.app/profile/example', 'https://example.com'],
+  } as unknown as Partial<Conference>)
+
+  it('renders the fully-populated hero identically', () => {
+    const { container } = render(<Hero conference={fullConference} />)
+    expect(container.innerHTML).toMatchSnapshot()
+  })
+
+  it('renders the override path identically', () => {
+    const { container } = render(
+      <Hero
+        conference={fullConference}
+        headlineOverride="Tickets are live"
+        subheadlineOverride="Early-bird pricing until 1 June."
+        ctaOverrides={[
+          { _key: 'a', label: 'Get your ticket', href: '/tickets' },
+          { _key: 'b', label: 'Read the programme', href: '/program' },
+        ]}
+      />,
+    )
+    expect(container.innerHTML).toMatchSnapshot()
+  })
+
+  it('renders the sparse hero identically', () => {
+    const { container } = render(
+      <Hero
+        conference={makeConference({
+          venueName: undefined,
+          vanityMetrics: undefined,
+          socialLinks: undefined,
+          registrationEnabled: false,
+        } as unknown as Partial<Conference>)}
+      />,
+    )
+    expect(container.innerHTML).toMatchSnapshot()
+  })
+})
