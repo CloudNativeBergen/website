@@ -23,6 +23,7 @@ const handlers = [
   http.post('/api/trpc/conference.updateSponsorshipCustomization', ok),
   http.post('/api/trpc/conference.updateDomains', ok),
   http.post('/api/trpc/conference.updateAnnouncement', ok),
+  http.post('/api/trpc/conference.updateLifecycleStatus', ok),
 ]
 
 /**
@@ -389,4 +390,35 @@ export const DomainsConfirmGating: Story = {
     await userEvent.type(confirm, 'cloudnativebergen.no')
     expect(save).toBeEnabled()
   },
+}
+
+const lifecycleInitial = {
+  lifecycleStatus: 'cancelled',
+  lifecycleHeadline: '',
+  lifecycleMessage:
+    'After a great deal of deliberation we have decided not to run the 2026 edition. Everyone who bought a ticket has been refunded in full.',
+  lifecycleLinkLabel: 'Read the full statement',
+  lifecycleLinkHref: '/info',
+}
+
+/**
+ * The Event Status fieldset — the ONLY lifecycle switch in the product. A select
+ * with a "— None —" option (the normal state) plus the notice copy, so an
+ * organizer can call an edition off without opening Sanity Studio.
+ */
+export const LifecycleStatusFieldset: Story = {
+  args: {
+    fieldset: 'lifecycle',
+    initialValues: lifecycleInitial,
+    defaultOpen: true,
+  },
+}
+
+export const LifecycleStatusFieldsetDark: Story = {
+  args: {
+    fieldset: 'lifecycle',
+    initialValues: lifecycleInitial,
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }

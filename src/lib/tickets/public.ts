@@ -91,6 +91,52 @@ export function getTicketSaleStatus(
 }
 
 /**
+ * What the PUBLIC can be told about ticket availability, derived from the
+ * vendor's ticket list.
+ *
+ * `unknown` is a first-class outcome, not a failure to handle: the ticket list
+ * may be empty, every type may be invitation-only, or the vendor may not report
+ * remaining counts at all (Checkin passes `available` through raw and it is
+ * frequently `null`). Callers must render `unknown` as "no availability claim",
+ * never as sold out — a wrong "Sold out" costs an organizer real ticket sales.
+ */
+export type TicketAvailability = 'upcoming' | 'on-sale' | 'sold-out' | 'unknown'
+
+/**
+ * Derive public ticket availability from the vendor ticket list.
+ *
+ *  - `sold-out` — tickets ARE in their sale window, every one of them reports a
+ *    remaining count, and every count is zero. Requires positive evidence from
+ *    the vendor: if even one active type reports `available: null` (unknown) the
+ *    answer degrades to `on-sale`.
+ *  - `on-sale` — at least one type is inside its sale window.
+ *  - `upcoming` — nothing is on sale yet but at least one type has a sale window
+ *    that has not opened. This is the "tickets not yet on sale" state.
+ *  - `unknown` — no types at all, or every type has expired.
+ */
+export function getTicketAvailability(
+  tickets: PublicTicketType[],
+): TicketAvailability {
+  const active: PublicTicketType[] = []
+  let hasUpcoming = false
+
+  for (const ticket of tickets) {
+    // Invitation-only types are not part of the public availability picture:
+    // they are neither buyable by a visitor nor evidence of a sell-out.
+    if (ticket.requiresInvitation) continue
+    const status = getTicketSaleStatus(ticket)
+    if (status === 'active') active.push(ticket)
+    else if (status === 'upcoming') hasUpcoming = true
+  }
+
+  if (active.length > 0) {
+    const allReportZero = active.every((t) => t.available === 0)
+    return allReportZero ? 'sold-out' : 'on-sale'
+  }
+  return hasUpcoming ? 'upcoming' : 'unknown'
+}
+
+/**
  * Format price in NOK with proper formatting.
  * Prices from Checkin.no are excl. VAT.
  */

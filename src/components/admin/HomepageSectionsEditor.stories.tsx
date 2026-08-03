@@ -96,6 +96,15 @@ const copySections: HomepageSection[] = [
   },
 ]
 
+// The Save-the-date band, whose config is heading + an OPTIONAL extra line.
+// Both fields are blank here so the placeholders — which must describe what the
+// band actually renders, not a default it never derives — are visible.
+const saveTheDateSections: HomepageSection[] = [
+  { _key: 'hero', _type: 'homepageHero' },
+  { _key: 'std', _type: 'homepageSaveTheDate' },
+  { _key: 'sponsors', _type: 'homepageSponsors' },
+]
+
 const meta = {
   title: 'Systems/Settings/Admin/HomepageSectionsEditor',
   component: HomepageSectionsEditor,
@@ -240,4 +249,25 @@ export const ContentBandCopyConfigDark: Story = {
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   play: ContentBandCopyConfig.play,
+}
+
+/**
+ * The Save-the-date config, accordion expanded. Both fields are blank, so this
+ * is the view an organizer meets first — and the placeholders have to be true:
+ * the heading has a house default, the description does NOT. The dates, venue
+ * and city are already the band's headline and place line, so an empty
+ * description adds no line rather than repeating them.
+ */
+export const SaveTheDateConfig: Story = {
+  args: {
+    initialSections: saveTheDateSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    const configure = await screen.findByRole('button', {
+      name: 'Configure Save the Date',
+    })
+    await userEvent.click(configure)
+  },
 }

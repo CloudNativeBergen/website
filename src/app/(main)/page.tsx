@@ -4,7 +4,9 @@ import { isUnknownHost } from '@/lib/conference/guard'
 import {
   getPublicTicketTypes,
   getLowestTicketPrice,
+  getTicketAvailability,
   type LowestTicketPrice,
+  type TicketAvailability,
 } from '@/lib/tickets/public'
 import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import { formatDatesSafe } from '@/lib/time'
@@ -98,6 +100,11 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   // back silently to plain labels — the homepage must never fail because
   // checkin.no is unavailable.
   let lowestTicketPrice: LowestTicketPrice | null = null
+  // Live availability, so the page can tell "not yet on sale" from "on sale"
+  // from "sold out" instead of guessing from the registration toggle. Left null
+  // on any failure — the lifecycle model degrades that to "on sale" and never
+  // to a sold-out claim.
+  let ticketAvailability: TicketAvailability | null = null
   // Gate on the FULL binding (customer + event id — what the resolver
   // requires) and pass only the minimal binding so the 'use cache' key stays
   // stable across unrelated conference-field changes.
@@ -108,6 +115,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
       )
       if (ticketData) {
         lowestTicketPrice = getLowestTicketPrice(ticketData.tickets)
+        ticketAvailability = getTicketAvailability(ticketData.tickets)
       }
     } catch (ticketError) {
       console.error('Failed to fetch ticket prices for homepage:', ticketError)
@@ -125,11 +133,13 @@ async function CachedHomeContent({ domain }: { domain: string }) {
         conference={conference}
         domain={domain}
         lowestTicketPrice={lowestTicketPrice}
+        ticketAvailability={ticketAvailability}
       />
       <HomepageSectionRenderer
         sections={sections}
         conference={conference}
         ticketsFromPrice={lowestTicketPrice?.formatted}
+        ticketAvailability={ticketAvailability}
       />
     </>
   )

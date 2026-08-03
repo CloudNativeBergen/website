@@ -27,6 +27,7 @@ import {
 import {
   UpdateBasicInfoSchema,
   UpdateVisibilitySchema,
+  UpdateLifecycleStatusSchema,
   UpdateVenueSchema,
   UpdateBrandingSchema,
   UpdateDatesSchema,
@@ -213,6 +214,22 @@ export const conferenceRouter = router({
    */
   updateVisibility: adminProcedure
     .input(UpdateVisibilitySchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Set or clear the homepage lifecycle OVERRIDE (cancelled / archived).
+   *
+   * Deliberately its own mutation rather than a field on `updateBasicInfo`:
+   * cancelling an event REPLACES the public homepage, so it must be an explicit,
+   * auditable action and not a side effect of editing the tagline. Passing
+   * `lifecycleStatus: null` clears the override and hands the page back to
+   * date-derived behaviour.
+   */
+  updateLifecycleStatus: adminProcedure
+    .input(UpdateLifecycleStatusSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)
@@ -527,6 +544,11 @@ export const conferenceRouter = router({
                   'cta',
                 )
               }
+              break
+            }
+            case 'homepageSaveTheDate': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
               break
             }
             case 'homepageMetrics': {

@@ -13,25 +13,32 @@ import { MetricsBlock } from '@/components/homepage/MetricsBlock'
 import { FaqBlock } from '@/components/homepage/FaqBlock'
 import { Countdown } from '@/components/homepage/Countdown'
 import { VenueBlock } from '@/components/homepage/VenueBlock'
+import { SaveTheDate } from '@/components/homepage/SaveTheDate'
+import { LifecycleNotice } from '@/components/homepage/LifecycleNotice'
 import { resolveCountdownTarget } from '@/lib/homepage/countdown'
 import {
+  CalendarDaysIcon,
   InformationCircleIcon,
   MicrophoneIcon,
+  PlayCircleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import type { Conference } from '@/lib/conference/types'
-import { isCfpOpen, isRegistrationAvailable } from '@/lib/conference/state'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import {
   DEFAULT_FEATURED_SPEAKERS_HEADING,
   DEFAULT_ORGANIZERS_HEADING,
   defaultFeaturedSpeakersDescription,
   defaultOrganizersDescription,
-  hasPublishedSchedule,
   type FeaturedSpeakersSection,
   type HomepageSection,
   type OrganizersSection,
 } from '@/lib/homepage'
+import {
+  resolveHomepageLifecycle,
+  type HomepageLifecycle,
+} from '@/lib/homepage/lifecycle'
+import type { TicketAvailability } from '@/lib/tickets/public'
 
 /** Unknown section `_type`s already warned about (once per process). */
 const warnedUnknownSectionTypes = new Set<string>()
@@ -49,16 +56,21 @@ const warnedUnknownSectionTypes = new Set<string>()
  */
 
 /**
- * Phase-appropriate CTA row for homepage sections that otherwise end without a
- * call to action: CFP first while open, then tickets, then practical info.
- * (Moved verbatim from the legacy `page.tsx`.)
+ * Lifecycle-appropriate CTA row for homepage sections that otherwise end without
+ * a call to action.
+ *
+ * ORDER: after the event the PROGRAMME leads — a "Get tickets" button on a
+ * finished conference is the single clearest signal that a site is unmaintained,
+ * and what a post-event visitor actually wants is the talks. Before the event
+ * the CFP leads while open (speakers are the scarcer supply), then tickets, then
+ * practical info. A sold-out event never renders a ticket CTA.
  */
 function PhaseCtaRow({
-  conference,
+  lifecycle,
   section,
   ticketsFromPrice,
 }: {
-  conference: Conference
+  lifecycle: HomepageLifecycle
   section: 'featured-speakers' | 'featured-organizers'
   ticketsFromPrice?: string | null
 }) {
@@ -68,74 +80,119 @@ function PhaseCtaRow({
           cfp: PIRSCH_EVENTS.cfpFeaturedSpeakers,
           tickets: PIRSCH_EVENTS.ticketsFeaturedSpeakers,
           info: PIRSCH_EVENTS.infoFeaturedSpeakers,
+          programme: PIRSCH_EVENTS.programFeaturedSpeakers,
         }
       : {
           cfp: PIRSCH_EVENTS.cfpFeaturedOrganizers,
           tickets: PIRSCH_EVENTS.ticketsFeaturedOrganizers,
           info: PIRSCH_EVENTS.infoFeaturedOrganizers,
+          programme: PIRSCH_EVENTS.programFeaturedOrganizers,
         }
 
-  const cfpOpen = isCfpOpen(conference)
-  const registrationAvailable = isRegistrationAvailable(conference)
+  const { primaryCta, cfp, tickets, content, stage } = lifecycle
+  const ticketsOnSale = tickets === 'on-sale'
   const buttonClassName =
     'inline-flex items-center space-x-2 px-8 py-4 font-semibold'
   // Checkin.no prices are excl. VAT — disclosed in the caption below the row
   const ticketsLabel = ticketsFromPrice
     ? `Get tickets — from ${ticketsFromPrice} kr`
     : 'Get tickets'
-  const showsPrice = Boolean(ticketsFromPrice) && registrationAvailable
+  const showsPrice = Boolean(ticketsFromPrice) && ticketsOnSale
+
+  // "Watch the talks" is a POST-EVENT promise. `hasRecordings` alone is not
+  // enough: a recording can be attached to a confirmed talk before the event
+  // (a re-run, a teaser), and the pre-event `programme` stage also renders this
+  // button — which would advertise talks nobody has given yet. The stage is the
+  // half of the condition that says the event has actually happened.
+  const showsRecordings = stage === 'post-event' && content.hasRecordings
+
+  const programmeButton = (
+    <Button
+      href="/program"
+      variant="primary"
+      className={buttonClassName}
+      data-pirsch-event={events.programme}
+    >
+      {showsRecordings ? (
+        <>
+          <PlayCircleIcon className="h-5 w-5" aria-hidden="true" />
+          <span>Watch the talks</span>
+        </>
+      ) : (
+        <>
+          <CalendarDaysIcon className="h-5 w-5" aria-hidden="true" />
+          <span>See the programme</span>
+        </>
+      )}
+    </Button>
+  )
+
+  const ticketsButton = (variant: 'primary' | 'outline') => (
+    <Button
+      href="/tickets"
+      variant={variant}
+      className={buttonClassName}
+      data-pirsch-event={events.tickets}
+    >
+      <TicketIcon className="h-5 w-5" aria-hidden="true" />
+      <span>{ticketsLabel}</span>
+    </Button>
+  )
+
+  const infoButton = (
+    <Button
+      href="/info"
+      variant="primary"
+      className={buttonClassName}
+      data-pirsch-event={events.info}
+    >
+      <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
+      <span>Practical information</span>
+    </Button>
+  )
+
+  let buttons: ReactNode
+  if (primaryCta === 'programme') {
+    buttons = (
+      <>
+        {programmeButton}
+        {ticketsOnSale && ticketsButton('outline')}
+      </>
+    )
+  } else if (primaryCta === 'cfp' || cfp === 'open') {
+    buttons = (
+      <>
+        <Button
+          href="/cfp"
+          variant="primary"
+          className={buttonClassName}
+          data-pirsch-event={events.cfp}
+        >
+          <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+          <span>Submit a talk</span>
+        </Button>
+        {ticketsOnSale && ticketsButton('outline')}
+      </>
+    )
+  } else if (primaryCta === 'tickets') {
+    buttons = ticketsButton('primary')
+  } else {
+    buttons = infoButton
+  }
 
   return (
     <>
       <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
-        {cfpOpen ? (
-          <>
-            <Button
-              href="/cfp"
-              variant="primary"
-              className={buttonClassName}
-              data-pirsch-event={events.cfp}
-            >
-              <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-              <span>Submit a talk</span>
-            </Button>
-            {registrationAvailable && (
-              <Button
-                href="/tickets"
-                variant="outline"
-                className={buttonClassName}
-                data-pirsch-event={events.tickets}
-              >
-                <TicketIcon className="h-5 w-5" aria-hidden="true" />
-                <span>{ticketsLabel}</span>
-              </Button>
-            )}
-          </>
-        ) : registrationAvailable ? (
-          <Button
-            href="/tickets"
-            variant="primary"
-            className={buttonClassName}
-            data-pirsch-event={events.tickets}
-          >
-            <TicketIcon className="h-5 w-5" aria-hidden="true" />
-            <span>{ticketsLabel}</span>
-          </Button>
-        ) : (
-          <Button
-            href="/info"
-            variant="primary"
-            className={buttonClassName}
-            data-pirsch-event={events.info}
-          >
-            <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
-            <span>Practical information</span>
-          </Button>
-        )}
+        {buttons}
       </div>
       {showsPrice && (
         <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
           Ticket prices excl. VAT
+        </p>
+      )}
+      {tickets === 'sold-out' && (
+        <p className="font-jetbrains mt-4 text-center text-sm font-semibold tracking-wide text-brand-slate-gray/80 uppercase dark:text-gray-300">
+          Tickets are sold out
         </p>
       )}
     </>
@@ -146,10 +203,12 @@ function PhaseCtaRow({
 function FeaturedSpeakersSectionView({
   conference,
   section,
+  lifecycle,
   ticketsFromPrice,
 }: {
   conference: Conference
   section: FeaturedSpeakersSection
+  lifecycle: HomepageLifecycle
   ticketsFromPrice?: string | null
 }) {
   if (
@@ -177,7 +236,7 @@ function FeaturedSpeakersSectionView({
         <FeaturedSpeakersShelf speakers={conference.featuredSpeakers} />
 
         <PhaseCtaRow
-          conference={conference}
+          lifecycle={lifecycle}
           section="featured-speakers"
           ticketsFromPrice={ticketsFromPrice}
         />
@@ -190,10 +249,12 @@ function FeaturedSpeakersSectionView({
 function OrganizersSectionView({
   conference,
   section,
+  lifecycle,
   ticketsFromPrice,
 }: {
   conference: Conference
   section: OrganizersSection
+  lifecycle: HomepageLifecycle
   ticketsFromPrice?: string | null
 }) {
   const sortedOrganizers =
@@ -233,7 +294,7 @@ function OrganizersSectionView({
         </div>
 
         <PhaseCtaRow
-          conference={conference}
+          lifecycle={lifecycle}
           section="featured-organizers"
           ticketsFromPrice={ticketsFromPrice}
         />
@@ -245,10 +306,14 @@ function OrganizersSectionView({
 /** Program-highlights band (legacy middle slot). Null without a live schedule. */
 function ProgramHighlightsSectionView({
   conference,
+  lifecycle,
 }: {
   conference: Conference
+  lifecycle: HomepageLifecycle
 }) {
-  if (!hasPublishedSchedule(conference)) return null
+  // A published-but-EMPTY schedule is not a programme. Guarding on content (not
+  // just on "publish was pressed") is what stops the all-zero statistics band.
+  if (!lifecycle.content.hasProgramme) return null
   return (
     <ProgramHighlights
       schedules={conference.schedules!}
@@ -261,19 +326,21 @@ function ProgramHighlightsSectionView({
 
 interface RenderContext {
   conference: Conference
+  lifecycle: HomepageLifecycle
   ticketsFromPrice?: string | null
 }
 
 /** Map ONE section config to its rendered node (or null). */
 function renderSection(
   section: HomepageSection,
-  { conference, ticketsFromPrice }: RenderContext,
+  { conference, lifecycle, ticketsFromPrice }: RenderContext,
 ): ReactNode {
   switch (section._type) {
     case 'homepageHero':
       return (
         <Hero
           conference={conference}
+          lifecycle={lifecycle}
           ticketsFromPrice={ticketsFromPrice}
           headlineOverride={section.heroHeadline}
           subheadlineOverride={section.heroSubheadline}
@@ -290,13 +357,27 @@ function renderSection(
           description={section.description?.trim() || undefined}
         />
       ) : null
+    case 'homepageSaveTheDate':
+      return (
+        <SaveTheDate
+          section={section}
+          conference={conference}
+          lifecycle={lifecycle}
+        />
+      )
     case 'homepageProgramHighlights':
-      return <ProgramHighlightsSectionView conference={conference} />
+      return (
+        <ProgramHighlightsSectionView
+          conference={conference}
+          lifecycle={lifecycle}
+        />
+      )
     case 'homepageFeaturedSpeakers':
       return (
         <FeaturedSpeakersSectionView
           conference={conference}
           section={section}
+          lifecycle={lifecycle}
           ticketsFromPrice={ticketsFromPrice}
         />
       )
@@ -305,15 +386,22 @@ function renderSection(
         <OrganizersSectionView
           conference={conference}
           section={section}
+          lifecycle={lifecycle}
           ticketsFromPrice={ticketsFromPrice}
         />
       )
     case 'homepageSponsors':
+      // The "Become a Sponsor" pitch is suppressed once the event is over: it is
+      // the loudest thing on an empty homepage and, after the fact, it asks for
+      // money for something that has already happened. Sponsors that DO exist
+      // still render — a thank-you wall is exactly what a post-event page wants.
       return (
         <Sponsors
           sponsors={conference.sponsors || []}
           conference={conference}
-          showCTA={section.showCta !== false}
+          showCTA={
+            section.showCta !== false && lifecycle.stage !== 'post-event'
+          }
           heading={section.heading?.trim() || undefined}
           description={section.description?.trim() || undefined}
           ctaHeading={section.ctaHeading?.trim() || undefined}
@@ -367,18 +455,43 @@ export function HomepageSectionRenderer({
   sections,
   conference,
   ticketsFromPrice,
+  ticketAvailability,
 }: {
   sections: HomepageSection[]
   conference: Conference
   ticketsFromPrice?: string | null
+  /**
+   * Live availability from the ticketing provider (see `getTicketAvailability`).
+   * Absent degrades to "on sale" — never to a sold-out claim.
+   */
+  ticketAvailability?: TicketAvailability | null
 }) {
+  const lifecycle = resolveHomepageLifecycle(conference, { ticketAvailability })
+
+  // `cancelled` / `archived` REPLACE the page. Short-circuiting above the
+  // section list is deliberate: rendering the notice as one more section would
+  // leave the hero's ticket CTA, the countdown and the speaker shelf underneath
+  // it, and visitors act on buttons rather than on paragraphs.
+  if (lifecycle.isOverridden) {
+    return (
+      <LifecycleNotice
+        conference={conference}
+        status={lifecycle.stage as 'cancelled' | 'archived'}
+      />
+    )
+  }
+
   return (
     <>
       {sections
         .filter((section) => !section.hidden)
         .map((section) => (
           <Fragment key={section._key}>
-            {renderSection(section, { conference, ticketsFromPrice })}
+            {renderSection(section, {
+              conference,
+              lifecycle,
+              ticketsFromPrice,
+            })}
           </Fragment>
         ))}
     </>

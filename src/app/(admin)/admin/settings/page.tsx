@@ -27,6 +27,10 @@ import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEdito
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { ActivationChecklist } from '@/components/admin/ActivationChecklist'
 import { resolveHomepageSections } from '@/lib/homepage'
+// Shared label map — the settings page previously carried its own copy, which
+// silently went stale (it was missing FAQ, Countdown and Venue) and rendered raw
+// `_type` strings for them.
+import { SECTION_LABELS } from '@/lib/homepage/editor'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
 import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
@@ -65,6 +69,9 @@ import {
   SparklesIcon,
   EyeIcon,
   EyeSlashIcon,
+  ArchiveBoxIcon,
+  ExclamationTriangleIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline'
 
 /** Group id → group metadata, so tier-1 subsections stay single-sourced. */
@@ -159,17 +166,6 @@ export default async function AdminSettings() {
   const usingDefaultHomepage =
     !conference.homepageSections || conference.homepageSections.length === 0
   const homepageSectionsForEditor = resolveHomepageSections(conference)
-  const HOMEPAGE_SECTION_LABELS: Record<string, string> = {
-    homepageHero: 'Hero',
-    homepageFeaturedSpeakers: 'Featured Speakers',
-    homepageProgramHighlights: 'Program Highlights',
-    homepageOrganizers: 'Organizers',
-    homepageSponsors: 'Sponsors',
-    homepageGallery: 'Photo Gallery',
-    homepageMetrics: 'Vanity Metrics',
-    homepageCtaBanner: 'Call-to-action Banner',
-    homepageRichText: 'Rich Text',
-  }
 
   return (
     <div className="space-y-6">
@@ -320,6 +316,52 @@ export default async function AdminSettings() {
                 {visibility === 'unlisted'
                   ? 'Reachable by direct link but excluded from sitemaps, robots and search indexing.'
                   : 'Publicly listed and indexed by search engines.'}
+              </p>
+            </InfoCard>
+
+            <InfoCard
+              title="Event Status"
+              icon={
+                conference.lifecycleStatus === 'cancelled'
+                  ? ExclamationTriangleIcon
+                  : conference.lifecycleStatus === 'archived'
+                    ? ArchiveBoxIcon
+                    : CalendarDaysIcon
+              }
+              action={
+                <EditConferenceCard
+                  fieldset="lifecycle"
+                  initialValues={{
+                    lifecycleStatus: conference.lifecycleStatus ?? '',
+                    lifecycleHeadline: conference.lifecycleHeadline ?? '',
+                    lifecycleMessage: conference.lifecycleMessage ?? '',
+                    lifecycleLinkLabel: conference.lifecycleLinkLabel ?? '',
+                    lifecycleLinkHref: conference.lifecycleLinkHref ?? '',
+                  }}
+                />
+              }
+            >
+              <div
+                id="lifecycle"
+                className="flex scroll-mt-24 items-center justify-between gap-3 border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700"
+              >
+                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
+                  Status
+                </dt>
+                <dd className="min-w-0 text-right text-sm">
+                  {conference.lifecycleStatus === 'cancelled' ? (
+                    <StatusBadge label="Cancelled" color="red" />
+                  ) : conference.lifecycleStatus === 'archived' ? (
+                    <StatusBadge label="Archived" color="gray" />
+                  ) : (
+                    <StatusBadge label="Running" color="green" />
+                  )}
+                </dd>
+              </div>
+              <p className="pt-1 text-sm text-gray-500 dark:text-gray-400">
+                {conference.lifecycleStatus
+                  ? 'The homepage is REPLACED by a notice. The programme, speakers and every ticket link are hidden.'
+                  : 'The homepage follows the dates above on its own — save-the-date, call for speakers, programme, then post-event. Only cancelling or retiring the event needs a switch.'}
               </p>
             </InfoCard>
 
@@ -797,7 +839,7 @@ export default async function AdminSettings() {
                   >
                     <span>
                       {idx + 1}.{' '}
-                      {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
+                      {SECTION_LABELS[section._type] ?? section._type}
                     </span>
                     {section.hidden ? (
                       <StatusBadge label="Hidden" color="yellow" />

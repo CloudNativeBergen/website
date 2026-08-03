@@ -144,6 +144,15 @@ export default defineType({
         'Ordered list of homepage sections. Leave empty to render the default phase-aware layout (hero, gallery, featured speakers / program, sponsors).',
       options: { collapsible: true, collapsed: true },
     },
+    // Homepage lifecycle OVERRIDE (F5). Its own fieldset, appended last, for the
+    // same merge-conflict reason as `homepage` above.
+    {
+      name: 'lifecycle',
+      title: 'Event Status',
+      description:
+        'Only for calling an edition off or retiring it for good. Every other state (save-the-date, CFP open, programme published, post-event) is derived from the dates above and needs no switch here.',
+      options: { collapsible: true, collapsed: true },
+    },
   ],
   fields: [
     // === Basic Information ===
@@ -1335,6 +1344,22 @@ export default defineType({
             ],
           }),
         ]),
+        defineHomepageSection('homepageSaveTheDate', 'Save the Date', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Save the date".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Description',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional extra copy. There is no default: the card already shows the dates, the venue and city, a countdown and the milestone list, so leaving this empty simply adds no extra line.',
+          }),
+        ]),
         defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers', [
           defineField({
             name: 'heading',
@@ -1570,6 +1595,67 @@ export default defineType({
           }),
         ]),
       ],
+    }),
+
+    // === Event Status (homepage lifecycle override) ===
+    // ABSENT is the norm: the homepage derives its stage from the CFP,
+    // programme and event dates. These fields exist ONLY for the two states no
+    // date can imply. Setting one REPLACES the homepage with a notice — it is
+    // not a banner above the usual page — so a cancelled event can never show a
+    // ticket CTA.
+    defineField({
+      name: 'lifecycleStatus',
+      title: 'Event Status',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Leave unset for a normal event. Cancelled and Archived each REPLACE the homepage with a notice.',
+      options: {
+        list: [
+          {
+            title: 'Cancelled — this edition is not happening',
+            value: 'cancelled',
+          },
+          {
+            title: 'Archived — the event has ended for good',
+            value: 'archived',
+          },
+        ],
+        layout: 'radio',
+      },
+    }),
+    defineField({
+      name: 'lifecycleHeadline',
+      title: 'Status Headline',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Optional. Leave blank for a sensible default built from the conference title.',
+    }),
+    defineField({
+      name: 'lifecycleMessage',
+      title: 'Status Message',
+      type: 'text',
+      rows: 4,
+      fieldset: 'lifecycle',
+      description:
+        'What happened, and what a visitor should do next (refunds, the next edition, where to ask). Blank falls back to house copy.',
+    }),
+    defineField({
+      name: 'lifecycleLinkLabel',
+      title: 'Status Link Label',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Optional single link on the notice, e.g. "Read the full statement" or "Browse the archive".',
+    }),
+    defineField({
+      name: 'lifecycleLinkHref',
+      title: 'Status Link URL',
+      type: 'string',
+      fieldset: 'lifecycle',
+      validation: (Rule) => Rule.custom(safeLinkRule),
+      description: 'A site path (e.g. /info) or a full http(s) URL.',
     }),
   ],
 
