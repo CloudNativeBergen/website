@@ -161,10 +161,17 @@ least one org), and a **legacy token** with no `organizerOrgIds` claim denies to
 — bridging that granted organizer on **any host**, because the global flag is
 true for an organizer of any org. Holders of a pre-#635 token re-login once.
 
+The recipient-selection helper in `src/lib/notification/sanity.ts` has no
+org-unresolvable fallback either: `getOrganizerSpeakerIds()` (current request's
+org) and `getOrganizerSpeakerIdsForOrg(orgId)` both return `[]` when the org
+cannot be resolved. The cross-org set has exactly one entry point,
+`getAllOrganizerSpeakerIdsAcrossOrgs()`, which a caller must name — it exists for
+the stale-nudge cron's candidacy filter and is never a recipient list. No
+authorization path may call any of them; access is `isOrganizerForCurrentOrg`.
+
 **Remaining cleanup**: drop the deprecated `isOrganizer` field and its remaining
-UI / recipient-selection reads (see `src/lib/messaging/standing.ts` and
-`src/lib/notification/sanity.ts`, which still hold their own org-unresolvable
-fallbacks for recipient selection — not access).
+UI reads, and the org-unresolvable fallback still held by
+`src/lib/messaging/standing.ts` (standing selection — not access).
 
 Key modules: `src/lib/authz/organizer.ts` (the shared `isOrganizerForOrg` /
 `isOrganizerForCurrentOrg` helpers), `src/server/trpc.ts`

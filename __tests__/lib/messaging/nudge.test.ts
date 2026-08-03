@@ -12,7 +12,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/notification/sanity', () => ({
-  getOrganizerSpeakerIds: vi.fn(async () => ['org-1', 'org-2']),
+  getOrganizerSpeakerIdsForOrg: vi.fn(async () => ['org-1', 'org-2']),
+  // The candidacy superset is now an explicitly named cross-org read (#723).
+  getAllOrganizerSpeakerIdsAcrossOrgs: vi.fn(async () => ['org-1', 'org-2']),
   createNotifications: vi.fn(async () => {}),
 }))
 
@@ -23,7 +25,7 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
   createNotifications,
 } from '@/lib/notification/sanity'
 import {
@@ -82,7 +84,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
-  vi.mocked(getOrganizerSpeakerIds).mockResolvedValue(['org-1', 'org-2'])
+  vi.mocked(getOrganizerSpeakerIdsForOrg).mockResolvedValue(['org-1', 'org-2'])
   // B4: the loop now batch-resolves each conversation's conference → owning org
   // before scoping recipients. That extra read is the ONLY fetch carrying
   // `organization._ref`; route it to a stable mapping so conf-1 owns org-1 (the
@@ -187,7 +189,7 @@ describe('routing + stamping', () => {
   })
 
   it('skips (does not stamp) an unassigned thread when there are no organizers', async () => {
-    vi.mocked(getOrganizerSpeakerIds).mockResolvedValue([])
+    vi.mocked(getOrganizerSpeakerIdsForOrg).mockResolvedValue([])
     installPatch()
     readMock.fetch.mockResolvedValueOnce([{ ...unassignedProposalConv }])
 

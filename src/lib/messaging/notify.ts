@@ -1,7 +1,7 @@
 import 'server-only'
 import {
   upsertMessageNotifications,
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
 } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import { clientReadUncached } from '@/lib/sanity/client'
@@ -111,9 +111,9 @@ export async function notifyNewMessage({
     // (audience-dependent email default + link variant), whether any recipient is
     // a speaker. That is an access/participant question. ORG-SCOPED (CaaS T1-2,
     // #614): pass the conference's own org so a background send does not depend on
-    // request domain; a pre-backfill conference (no org) falls back to the global
-    // set via the recipient-selection legacy bridge.
-    const organizerIds = await getOrganizerSpeakerIds(
+    // request domain; a conference with no resolvable org FAILS CLOSED to an empty
+    // set (it no longer widens to every tenant's organizers).
+    const organizerIds = await getOrganizerSpeakerIdsForOrg(
       conference.organization?._ref ?? null,
     )
     const organizerSet = new Set(organizerIds)

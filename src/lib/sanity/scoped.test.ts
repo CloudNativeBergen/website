@@ -133,9 +133,24 @@ describe('scopedFetch', () => {
     )
   })
 
-  it('runs the raw body unchanged when the scope is empty', async () => {
+  // FAIL CLOSED (#616): an unresolvable tenant must never become a global read.
+  it('THROWS instead of running the body unscoped when the scope is empty', async () => {
     const fetch = vi.fn().mockResolvedValue([])
-    await scopedFetch({ fetch }, {}, `*[_type == "x"]`, { a: 1 })
-    expect(fetch).toHaveBeenCalledWith(`*[_type == "x"]`, { a: 1 }, undefined)
+    await expect(
+      scopedFetch({ fetch }, {}, `*[_type == "x"]`, { a: 1 }),
+    ).rejects.toThrow(/empty tenant scope/)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('THROWS on a scope whose dimensions are explicitly null', async () => {
+    const fetch = vi.fn().mockResolvedValue([])
+    await expect(
+      scopedFetch(
+        { fetch },
+        { orgId: null, conferenceId: null },
+        `*[_type == "x"]`,
+      ),
+    ).rejects.toThrow(/empty tenant scope/)
+    expect(fetch).not.toHaveBeenCalled()
   })
 })
