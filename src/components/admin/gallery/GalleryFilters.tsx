@@ -231,7 +231,7 @@ export function GalleryFilters({
             }
             onChange={(e) => handleFeaturedChange(e.target.value)}
             className={clsx(
-              'h-11 appearance-none rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white',
+              'h-11 appearance-none rounded-md border border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white',
               fieldWidth('w-32'),
             )}
             aria-label="Featured filter"
@@ -268,7 +268,7 @@ export function GalleryFilters({
               <Combobox.Input
                 id={`${idPrefix}-speaker`}
                 className={clsx(
-                  'h-11 rounded-md border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+                  'h-11 rounded-md border border-gray-300 py-1.5 pr-8 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
                   fieldWidth('w-40'),
                 )}
                 displayValue={(speaker: { _id: string; name: string } | null) =>
@@ -314,7 +314,7 @@ export function GalleryFilters({
             onChange={(e) => setLocalPhotographer(e.target.value)}
             placeholder="Photographer"
             className={clsx(
-              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+              'h-11 rounded-md border border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
               fieldWidth('w-36'),
             )}
             aria-label="Filter by photographer"
@@ -331,7 +331,7 @@ export function GalleryFilters({
             onChange={(e) => setLocalLocation(e.target.value)}
             placeholder="Location"
             className={clsx(
-              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
+              'h-11 rounded-md border border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500',
               fieldWidth('w-32'),
             )}
             aria-label="Filter by location"
@@ -355,7 +355,7 @@ export function GalleryFilters({
               updateURL(newFilters)
             }}
             className={clsx(
-              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
+              'h-11 rounded-md border border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
               fieldWidth('w-36'),
             )}
             aria-label="Filter from date"
@@ -379,7 +379,7 @@ export function GalleryFilters({
               updateURL(newFilters)
             }}
             className={clsx(
-              'h-11 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
+              'h-11 rounded-md border border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none lg:h-9 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark',
               fieldWidth('w-36'),
             )}
             aria-label="Filter to date"
