@@ -225,6 +225,40 @@ describe('invitationLetter.issue — validation', () => {
     ).rejects.toThrow(/email address is required/)
   })
 
+  it('rejects a date that does not exist on the calendar', async () => {
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        dateOfBirth: '2026-02-30',
+      }),
+    ).rejects.toThrow(/does not exist/)
+  })
+
+  it('accepts a real leap day', async () => {
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        dateOfBirth: '2024-02-29',
+      }),
+    ).resolves.toBeTruthy()
+  })
+
+  it('rejects half a period of stay rather than silently dropping it', async () => {
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        arrivalDate: '2026-11-03',
+      }),
+    ).rejects.toThrow(/both arrival and departure/)
+
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        departureDate: '2026-11-08',
+      }),
+    ).rejects.toThrow(/both arrival and departure/)
+  })
+
   it('refuses to issue when the conference names no legal entity', async () => {
     vi.mocked(getConferenceForCurrentDomain).mockResolvedValue({
       conference: { ...conference, organizer: '  ' } as never,
