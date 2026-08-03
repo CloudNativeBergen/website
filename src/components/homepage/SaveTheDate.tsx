@@ -109,7 +109,9 @@ export function SaveTheDate({
               ) : null}
             </div>
             {countdownTarget !== null ? (
-              <div className="sm:w-64 sm:shrink-0">
+              /* Wide enough that a THREE-digit day count still clears the hours
+                 column — the normal case for a save-the-date. */
+              <div className="sm:w-80 sm:shrink-0">
                 <CountdownStrip targetMs={countdownTarget} />
               </div>
             ) : null}

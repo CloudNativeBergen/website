@@ -1,5 +1,4 @@
 import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
-import { http, HttpResponse } from 'msw'
 import { ProgramHighlights } from './ProgramHighlights'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import {
@@ -26,56 +25,32 @@ import type { Conference, ConferenceSchedule } from '@/lib/conference/types'
 
 /* ----------------------------- speaker portraits ------------------------ */
 
-const PORTRAITS: Record<string, [string, string]> = {
-  'sp-ada': ['#1d4ed8', 'AL'],
-  'sp-bjorn': ['#0f766e', 'BO'],
-  'sp-marte': ['#6d28d9', 'MV'],
-  'sp-erik': ['#b45309', 'ES'],
-  'sp-priya': ['#be123c', 'PR'],
-}
-
-/** A flat portrait plate, at the 4:5 crop the cards use. */
-function portraitSvg(bg: string, initials: string): string {
-  return (
+/**
+ * Portraits are INLINE data URIs rather than fetched images. `speakerImageUrl`
+ * passes any non-Sanity-CDN string through untouched, so this needs no request
+ * mocking at all — and the capture is offline-safe and deterministic, where a
+ * portrait that silently fell back to the missing-avatar plate would hide the
+ * card layout these stories exist to inspect.
+ */
+function portrait(bg: string, initials: string): string {
+  const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="800" viewBox="0 0 640 800">` +
     `<rect width="640" height="800" fill="${bg}"/>` +
-    `<circle cx="320" cy="300" r="130" fill="#ffffff" opacity="0.22"/>` +
-    `<ellipse cx="320" cy="640" rx="215" ry="185" fill="#ffffff" opacity="0.22"/>` +
-    `<text x="320" y="330" font-family="sans-serif" font-size="120" font-weight="700" fill="#ffffff" text-anchor="middle">${initials}</text>` +
+    `<circle cx="320" cy="300" r="130" fill="#ffffff" opacity="0.25"/>` +
+    `<ellipse cx="320" cy="660" rx="215" ry="190" fill="#ffffff" opacity="0.25"/>` +
+    `<text x="320" y="345" font-family="sans-serif" font-size="130" font-weight="700" fill="#ffffff" text-anchor="middle">${initials}</text>` +
     `</svg>`
-  )
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
-
-/**
- * Portraits are served locally rather than fetched: the shoot has to be
- * deterministic and offline-safe, and a broken portrait would hide exactly the
- * layout problems these captures exist to find.
- */
-const handlers = [
-  http.get('https://cdn.sanity.io/images/*', ({ request }) => {
-    const path = new URL(request.url).pathname
-    const id = Object.keys(PORTRAITS).find((key) =>
-      path.includes(key.replace('sp-', '')),
-    )
-    const [bg, initials] = PORTRAITS[id ?? 'sp-ada']
-    return new HttpResponse(portraitSvg(bg, initials), {
-      headers: { 'Content-Type': 'image/svg+xml' },
-    })
-  }),
-]
 
 /* --------------------------------- people ------------------------------- */
-
-function assetRef(id: string): string {
-  const stem = id.replace('sp-', '')
-  return `image-${stem.repeat(40).slice(0, 40)}-640x800-jpg`
-}
 
 function speaker(
   id: string,
   name: string,
   title: string,
   bio: string,
+  image: string,
   flags: Flags[] = [],
 ): SpeakerWithTalks {
   return {
@@ -88,10 +63,7 @@ function speaker(
     slug: name.toLowerCase().replace(/[^a-z]+/g, '-'),
     title,
     bio: convertStringToPortableTextBlocks(bio),
-    image: {
-      _type: 'image',
-      asset: { _ref: assetRef(id), _type: 'reference' },
-    },
+    image,
     flags,
   } as unknown as SpeakerWithTalks
 }
@@ -101,6 +73,7 @@ const ada = speaker(
   'Ada Lindqvist',
   'Principal Platform Engineer at Vipps',
   'Ada has spent six years turning a 200-service Kubernetes estate into something an on-call engineer can sleep through.',
+  portrait('#1d4ed8', 'AL'),
   [Flags.localSpeaker],
 )
 const bjorn = speaker(
@@ -108,6 +81,7 @@ const bjorn = speaker(
   'Bjørn-Kristian Aleksandersen',
   'Senior Site Reliability Engineer at Telenor',
   'Bjørn keeps Norway’s largest mobile network observable, and has opinions about cardinality.',
+  portrait('#0f766e', 'BA'),
   [Flags.firstTimeSpeaker],
 )
 const marte = speaker(
@@ -115,6 +89,7 @@ const marte = speaker(
   'Marte Vik',
   'Staff Engineer at NAV',
   'Marte builds the internal developer platform used by 1 200 engineers in Norwegian public services.',
+  portrait('#6d28d9', 'MV'),
   [Flags.localSpeaker],
 )
 const erik = speaker(
@@ -122,12 +97,14 @@ const erik = speaker(
   'Erik Sørensen',
   'CTO at Nordcloud',
   'Erik has migrated more datacentres than he cares to count, and would like to talk about the ones that failed.',
+  portrait('#b45309', 'ES'),
 )
 const priya = speaker(
   'sp-priya',
   'Priya Raman',
   'Cloud Native Advocate at Fastly',
   'Priya works on edge compute, and on convincing people that the edge is not magic.',
+  portrait('#be123c', 'PR'),
   [Flags.firstTimeSpeaker],
 )
 
@@ -307,7 +284,6 @@ const meta = {
   component: ProgramHighlights,
   parameters: {
     layout: 'fullscreen',
-    msw: { handlers },
     docs: {
       description: {
         component:
