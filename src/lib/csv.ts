@@ -8,8 +8,10 @@ const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r']
 
 /** Quotes, escapes and de-weaponises a single cell. */
 export function csvCell(value: string | number | undefined | null): string {
+  // Strip every CR/LF variant, not just CRLF/LF: a bare \r is a record
+  // separator to some CSV consumers and would split the row in two.
   const raw = String(value ?? '')
-    .replace(/\r?\n/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
     .trim()
   const safe = FORMULA_PREFIXES.some((prefix) => raw.startsWith(prefix))
     ? `'${raw}`

@@ -62,3 +62,10 @@ describe('csvFilename', () => {
     expect(csvFilename('sponsor-invoices', '—')).toBe('sponsor-invoices.csv')
   })
 })
+
+describe('csvCell control characters', () => {
+  it('strips a bare carriage return, not just CRLF', () => {
+    expect(csvCell('line one\rline two')).toBe('line one line two')
+    expect(csvCell('a\r\nb\nc\rd')).toBe('a b c d')
+  })
+})

@@ -60,3 +60,23 @@ export function formatCurrency(
 
   return `${formatNumber(amount)} ${currency}`
 }
+
+/**
+ * A `mailto:` href for an address, or `null` when the value is not a single
+ * plain address.
+ *
+ * Stored addresses are typed by humans and are not URL-safe: a value
+ * containing `?` or `&` would otherwise become mailto parameters (`?bcc=…`)
+ * and silently change what the mail client composes. Anything that is not one
+ * unambiguous address is rendered as text instead of a link, which also makes
+ * junk data visible rather than clickable.
+ */
+export function mailtoHref(email: string | undefined | null): string | null {
+  const trimmed = email?.trim()
+  if (!trimmed) return null
+  return /^[^\s@,;:?#&<>"']+@[^\s@,;:?#&<>"']+\.[^\s@,;:?#&<>"']+$/.test(
+    trimmed,
+  )
+    ? `mailto:${trimmed}`
+    : null
+}

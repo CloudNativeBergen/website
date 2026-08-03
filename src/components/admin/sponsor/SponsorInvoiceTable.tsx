@@ -24,7 +24,7 @@ import type { InvoiceRow } from '@/lib/sponsor-crm/invoice'
 import { INVOICE_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 import type { BadgeColor } from '@/components/StatusBadge'
 import type { InvoiceStatus } from '@/lib/sponsor-crm/types'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, mailtoHref } from '@/lib/format'
 import { formatDateSafe } from '@/lib/time'
 
 interface SponsorInvoiceTableProps {
@@ -131,13 +131,19 @@ const DeliveryDetails = ({ row }: { row: InvoiceRow }) => (
     </div>
     {row.billingEmail ? (
       <div className="flex min-w-0 items-center text-xs text-gray-500 dark:text-gray-400">
-        <a
-          href={`mailto:${row.billingEmail}`}
-          className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-          title={row.billingEmail}
-        >
-          {row.billingEmail}
-        </a>
+        {mailtoHref(row.billingEmail) ? (
+          <a
+            href={mailtoHref(row.billingEmail)!}
+            className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+            title={row.billingEmail}
+          >
+            {row.billingEmail}
+          </a>
+        ) : (
+          <span className="truncate" title={row.billingEmail}>
+            {row.billingEmail}
+          </span>
+        )}
         <CopyValueButton value={row.billingEmail} what="Billing email" />
       </div>
     ) : (
