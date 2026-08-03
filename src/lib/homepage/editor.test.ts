@@ -441,3 +441,28 @@ describe('toPayload — trimming, omission and item filtering', () => {
     })
   })
 })
+
+/**
+ * This module is reachable from SERVER components (`page.tsx` imports its label
+ * maps). A single value import from a client-only package — even for a pure
+ * helper — puts that package's React context in the RSC module graph, and the
+ * production build dies collecting page data with `createContext is not a
+ * function`. That is invisible to typecheck and to every unit test, so it is
+ * asserted on the source text instead. `import type` is fine: it is erased.
+ */
+describe('server safety', () => {
+  it('has no runtime dependency on any package', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const source = await readFile(
+      new URL('./editor.ts', import.meta.url),
+      'utf8',
+    )
+
+    const runtimeImports = Array.from(
+      source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
+      (match) => match[1],
+    ).filter((specifier) => !specifier.startsWith('.'))
+
+    expect(runtimeImports).toEqual([])
+  })
+})
