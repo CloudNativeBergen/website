@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 
 function createChainableBuilder() {
   const builder: Record<string, any> = {}
-  const chainMethods = ['image', 'width', 'height', 'fit', 'quality']
+  const chainMethods = ['image', 'width', 'height', 'fit', 'quality', 'auto']
   for (const method of chainMethods) {
     builder[method] = vi.fn(() => builder)
   }

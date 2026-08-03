@@ -1,17 +1,26 @@
-import { PortableText } from '@portabletext/react'
 import { Container } from '@/components/Container'
-import { portableTextComponents } from '@/lib/portabletext/components'
+import { RichTextContent } from './RichTextContent'
+import {
+  isRichTextContentEmpty,
+  sanitizeRichTextContent,
+} from '@/lib/homepage/richText'
 import type { RichTextSection } from '@/lib/homepage'
 
 /**
- * Generic portable-text block (front-page builder F2), rendered with the shared
- * {@link portableTextComponents} used elsewhere on the site. The registry is
- * closed to portable text only — no raw HTML/embeds — so brand styling and
- * safety stay under our control. Renders nothing when the content is empty.
+ * The homepage's constrained escape hatch (front-page builder F2).
+ *
+ * The section registry stays CLOSED — there is still no raw-HTML or embed block
+ * — but this one block carries an allowlisted rich-content vocabulary (prose,
+ * lists, safe links, code/preformatted, images from our own asset pipeline,
+ * small tables, callouts) so a conference can express its one distinctive thing
+ * without the platform growing a `dangerouslySetInnerHTML`. The vocabulary and
+ * the reasoning live in `@/lib/homepage/richText`; {@link RichTextContent}
+ * sanitizes before rendering. Renders nothing when the content is empty.
  */
 export function RichTextBlock({ section }: { section: RichTextSection }) {
   const { heading, content } = section
-  if (!Array.isArray(content) || content.length === 0) return null
+  const blocks = sanitizeRichTextContent(content)
+  if (blocks.length === 0 || isRichTextContentEmpty(blocks)) return null
   return (
     <section className="py-20 sm:py-32">
       <Container>
@@ -22,7 +31,7 @@ export function RichTextBlock({ section }: { section: RichTextSection }) {
             </h2>
           ) : null}
           <div className="font-inter text-lg text-brand-slate-gray dark:text-gray-300">
-            <PortableText value={content} components={portableTextComponents} />
+            <RichTextContent content={blocks} />
           </div>
         </div>
       </Container>

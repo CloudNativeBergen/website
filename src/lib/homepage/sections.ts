@@ -1,6 +1,7 @@
 import type { TypedObject } from 'sanity'
 import type { Conference } from '@/lib/conference/types'
 import { resolveHomepageLifecycle, type HomepageStage } from './lifecycle'
+import type { RichTextContentBlock } from './richText'
 
 /**
  * Front-page builder (F1 + F2): the CLOSED, typed section registry.
@@ -11,6 +12,12 @@ import { resolveHomepageLifecycle, type HomepageStage } from './lifecycle'
  * maps to a vetted house component. There is intentionally no raw-HTML / embed
  * block: an open block would be a brand-consistency and XSS hazard on a
  * multi-tenant deployment.
+ *
+ * The one pressure-release valve is {@link RichTextSection}, whose content is an
+ * ALLOWLISTED portable-text vocabulary (see `./richText`) — a constrained escape
+ * hatch for the one distinctive thing a conference needs, not an open one. It
+ * extends this decision rather than overturning it: still no HTML string, still
+ * no embed, still every value rendered through a vetted house component.
  *
  * ZERO-MIGRATION GUARANTEE: when `homepageSections` is ABSENT (every legacy
  * conference), the page renders {@link getDefaultSections} — a lifecycle-aware
@@ -221,11 +228,18 @@ export interface CtaBannerSection extends BaseSection {
   buttonHref: string
 }
 
-/** Generic portable-text block, rendered with the shared portable-text renderer. */
+/**
+ * The registry's one CONSTRAINED escape hatch: organizer-authored rich content,
+ * stored as portable text over a strict allowlist (prose, headings, lists, safe
+ * links, code/preformatted, images from our own asset pipeline, small tables,
+ * callouts). See `./richText` for the vocabulary, the two-sided enforcement and
+ * why this is not a raw-HTML block. `content` is typed loosely on purpose —
+ * what is READ from the dataset is untrusted until sanitized at render.
+ */
 export interface RichTextSection extends BaseSection {
   _type: 'homepageRichText'
   heading?: string
-  content: TypedObject[]
+  content: TypedObject[] | RichTextContentBlock[]
 }
 
 /**

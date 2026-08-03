@@ -13,12 +13,22 @@
  * with the house hex as the FALLBACK). With no theme the site renders
  * pixel-identical; with one, a single `:root` block re-skins light AND dark.
  *
- * L1 constraint: colours are used VERBATIM. No contrast auto-derivation and no
- * clamping — a light primary on a white surface is the admin's call (the
- * settings preview surfaces the result before they save). The one derived value
- * is the hover shade, computed in pure CSS via `color-mix` (a darker primary),
- * which only ever appears in the injected override, never in the default path.
+ * DARK MODE gets its OWN variables (`--brand-primary-dark*`, `--brand-accent-dark`)
+ * rather than reusing the light ones. The house palette does not paint dark
+ * surfaces in the light primary — it uses hand-tuned darker/lighter shades — so
+ * feeding the raw primary to the `.dark` rules made storing a theme a visible
+ * change in dark mode. Those shades are derived per-tenant in
+ * `./color`, which explains the transform.
+ *
+ * L1 constraint on the LIGHT palette is unchanged: colours are used VERBATIM,
+ * with no contrast auto-derivation and no clamping — a light primary on a white
+ * surface is the admin's call (the settings preview surfaces the result before
+ * they save). The light hover shade is still derived in pure CSS via
+ * `color-mix`, and appears only in the injected override, never in the default
+ * path.
  */
+
+import { DARK_TINT_LIGHTNESS, shiftToLightness } from './color'
 
 /** A 6-digit hex colour, e.g. `#1D4ED8`. Case-insensitive; `#` required. */
 export const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/
@@ -72,8 +82,10 @@ export function resolveBrandPair(
  * default output byte-identical.
  *
  * Only well-formed hex values are emitted; a malformed stored value is ignored
- * (defence in depth — the schema already rejects them on write). The hover
- * shade is derived from the primary purely in CSS so no colour maths lives here.
+ * (defence in depth — the schema already rejects them on write). The light
+ * hover shade is derived from the primary purely in CSS; the dark tints are
+ * derived as plain hex by `./color` (see there for the transform and why it
+ * cannot be a `color-mix`).
  */
 export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
   // ALL-OR-NOTHING, matching the write-path contract (Zod + Studio both
@@ -83,7 +95,7 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
   if (!pair) return ''
   const { primary, accent } = pair
 
-  const decls = [
+  const decls: string[] = [
     `--brand-primary:${primary}`,
     // Hover fallback for engines without color-mix(): the primary itself. An
     // unsupported function in a custom property is only detected at var()
@@ -92,13 +104,26 @@ export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
     // color-mix upgrade behind @supports.
     `--brand-primary-hover:${primary}`,
     `--brand-accent:${accent}`,
+    // Dark-mode tints. Each `.dark` brand rule in tailwind.css reads one of
+    // these with its house shade as the fallback, so an unthemed site is
+    // untouched while a themed one gets a properly darkened/lightened tint
+    // instead of the raw light-mode colour.
+    `--brand-primary-dark:${shiftToLightness(primary, DARK_TINT_LIGHTNESS.surface)}`,
+    `--brand-primary-dark-deep:${shiftToLightness(primary, DARK_TINT_LIGHTNESS.deep)}`,
+    `--brand-primary-dark-edge:${shiftToLightness(primary, DARK_TINT_LIGHTNESS.edge)}`,
+    `--brand-primary-dark-text:${shiftToLightness(primary, DARK_TINT_LIGHTNESS.text)}`,
+    `--brand-accent-dark:${shiftToLightness(accent, DARK_TINT_LIGHTNESS.accent)}`,
   ]
-  // L1 hover = a slightly darker primary, derived in pure CSS (no derivation
-  // logic in TS). color-mix is only ever emitted here, never on the default
-  // path, so it can't affect the no-override pixel-identity guarantee.
+
+  // L1 light hover = a slightly darker primary, derived in pure CSS. color-mix
+  // is only ever emitted here, never on the default path, so it can't affect
+  // the no-override pixel-identity guarantee.
   const hoverMix = `--brand-primary-hover:color-mix(in srgb, ${primary} 85%, #000)`
 
-  return `:root{${decls.join(';')}}@supports (color: color-mix(in srgb, red 50%, blue)){:root{${hoverMix}}}`
+  return (
+    `:root{${decls.join(';')}}` +
+    `@supports (color: color-mix(in srgb, red 50%, blue)){:root{${hoverMix}}}`
+  )
 }
 
 /**

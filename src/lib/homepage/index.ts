@@ -6,3 +6,4 @@
 // label map or a type guard from it does not drag client-only code into the
 // RSC graph. That property is load-bearing — keep ./editor dependency-free.
 export * from './sections'
+export * from './richText'

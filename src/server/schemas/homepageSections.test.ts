@@ -22,7 +22,13 @@ describe('UpdateHomepageSectionsSchema', () => {
         {
           _type: 'homepageRichText',
           _key: 'r',
-          content: [{ _type: 'block', _key: 'b1', children: [] }],
+          content: [
+            {
+              _type: 'block',
+              _key: 'b1',
+              children: [{ _type: 'span', _key: 's1', text: 'Hi', marks: [] }],
+            },
+          ],
         },
       ],
     }
@@ -101,6 +107,22 @@ describe('UpdateHomepageSectionsSchema', () => {
       UpdateHomepageSectionsSchema.parse({
         homepageSections: [
           { _type: 'homepageCtaBanner', _key: 'c', heading: 'Only heading' },
+        ],
+      }),
+    ).toThrow()
+  })
+
+  it('keeps mailto: OUT of button links (only rich-text prose may use it)', () => {
+    expect(() =>
+      UpdateHomepageSectionsSchema.parse({
+        homepageSections: [
+          {
+            _type: 'homepageCtaBanner',
+            _key: 'c',
+            heading: 'Ask us',
+            buttonLabel: 'Email',
+            buttonHref: 'mailto:hi@example.com',
+          },
         ],
       }),
     ).toThrow()
@@ -323,5 +345,186 @@ describe('UpdateHomepageSectionsSchema', () => {
       _type: 'homepageSaveTheDate',
       _key: 'std',
     })
+  })
+})
+
+/**
+ * The WRITE half of the rich-text contract. The render-side sanitizer has its
+ * own adversarial suite (`src/lib/homepage/richText.test.ts`); these assert the
+ * other half — that a hostile payload is REFUSED at the boundary rather than
+ * quietly cleaned, so an organizer sees an error instead of vanished content,
+ * and so nothing unmodelled is ever written to a shared-dataset document.
+ */
+describe('UpdateHomepageSectionsSchema — rich text content', () => {
+  const REAL_REF = `image-${'a'.repeat(40)}-1600x900-jpg`
+
+  const withContent = (content: unknown) => ({
+    homepageSections: [{ _type: 'homepageRichText', _key: 'r', content }],
+  })
+
+  const parseContent = (content: unknown) => {
+    const parsed = UpdateHomepageSectionsSchema.parse(withContent(content))
+    const section = parsed.homepageSections[0]
+    if (section._type !== 'homepageRichText') throw new Error('wrong type')
+    return section.content
+  }
+
+  const linked = (href: string) => [
+    {
+      _type: 'block',
+      _key: 'b1',
+      markDefs: [{ _type: 'link', _key: 'l1', href }],
+      children: [{ _type: 'span', _key: 's1', text: 'x', marks: ['l1'] }],
+    },
+  ]
+
+  it.each([
+    'javascript:alert(1)',
+    'JaVaScRiPt:alert(1)',
+    'java\tscript:alert(1)',
+    'data:text/html;base64,PHN2Zz48L3N2Zz4=',
+    'vbscript:msgbox(1)',
+    '//evil.example',
+    'https:evil.example',
+    'file:///etc/passwd',
+  ])('rejects the link scheme %j at the boundary', (href) => {
+    expect(() => parseContent(linked(href))).toThrow()
+  })
+
+  it.each(['/tickets', 'https://example.com/x', 'mailto:hi@example.com'])(
+    'accepts the link %j',
+    (href) => {
+      expect(() => parseContent(linked(href))).not.toThrow()
+    },
+  )
+
+  it.each(['html', 'rawHtml', 'script', 'iframe', 'embed', 'homepageHero'])(
+    'rejects the unmodelled content type %j (the vocabulary is closed)',
+    (type) => {
+      expect(() =>
+        parseContent([{ _type: type, _key: 'x', html: '<script></script>' }]),
+      ).toThrow()
+    },
+  )
+
+  it.each([
+    ['a remote URL', 'https://evil.example/pixel.gif'],
+    ['a data URL', 'data:image/svg+xml,<svg onload=alert(1)>'],
+    ['an SVG asset', `image-${'a'.repeat(40)}-10x10-svg`],
+    ['a file asset', `file-${'a'.repeat(40)}-pdf`],
+    ['a traversal suffix', `image-${'a'.repeat(40)}-10x10-png/../x`],
+  ])('rejects an image asset that is %s', (_label, ref) => {
+    expect(() =>
+      parseContent([
+        { _type: 'richTextImage', _key: 'i', asset: { _ref: ref }, alt: '' },
+      ]),
+    ).toThrow()
+  })
+
+  it('accepts an image from our own asset pipeline', () => {
+    const content = parseContent([
+      {
+        _type: 'richTextImage',
+        _key: 'i',
+        asset: { _type: 'reference', _ref: REAL_REF },
+        alt: 'Venue',
+        caption: 'Grieghallen',
+      },
+    ])
+    expect(content[0]).toEqual({
+      _type: 'richTextImage',
+      _key: 'i',
+      asset: { _type: 'reference', _ref: REAL_REF },
+      alt: 'Venue',
+      caption: 'Grieghallen',
+    })
+  })
+
+  it('stores only modelled keys — smuggled fields never reach the document', () => {
+    const content = parseContent([
+      {
+        _type: 'richTextCode',
+        _key: 'c',
+        language: 'yaml',
+        code: 'kind: Venue',
+        onload: 'alert(1)',
+        html: '<script>alert(1)</script>',
+        className: 'fixed inset-0',
+      },
+    ])
+    expect(Object.keys(content[0]).sort()).toEqual([
+      '_key',
+      '_type',
+      'code',
+      'language',
+    ])
+  })
+
+  it('accepts the full vocabulary in one block', () => {
+    const content = parseContent([
+      {
+        _type: 'block',
+        _key: 'b',
+        style: 'h2',
+        markDefs: [],
+        children: [{ _type: 'span', _key: 's', text: 'Venue', marks: [] }],
+      },
+      {
+        _type: 'richTextCode',
+        _key: 'c',
+        language: 'yaml',
+        code: 'kind: Venue',
+      },
+      {
+        _type: 'richTextImage',
+        _key: 'i',
+        asset: { _type: 'reference', _ref: REAL_REF },
+      },
+      {
+        _type: 'richTextTable',
+        _key: 't',
+        headerRow: true,
+        rows: [
+          { _key: 'r1', cells: ['Room', 'Track'] },
+          { _key: 'r2', cells: ['A', 'Platform'] },
+        ],
+      },
+      {
+        _type: 'richTextCallout',
+        _key: 'k',
+        tone: 'warning',
+        body: 'Sold out',
+      },
+    ])
+    expect(content.map((b) => b._type)).toEqual([
+      'block',
+      'richTextCode',
+      'richTextImage',
+      'richTextTable',
+      'richTextCallout',
+    ])
+  })
+
+  it('rejects content that would render nothing at all', () => {
+    expect(() =>
+      parseContent([{ _type: 'block', _key: 'b', children: [] }]),
+    ).toThrow()
+  })
+
+  it('rejects a payload past the size ceilings', () => {
+    expect(() =>
+      parseContent([
+        { _type: 'richTextCode', _key: 'c', code: 'a'.repeat(20_001) },
+      ]),
+    ).toThrow()
+    expect(() =>
+      parseContent(
+        Array.from({ length: 201 }, (_, i) => ({
+          _type: 'block',
+          _key: `b${i}`,
+          children: [{ _type: 'span', _key: 's', text: 'x', marks: [] }],
+        })),
+      ),
+    ).toThrow()
   })
 })

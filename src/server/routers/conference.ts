@@ -585,7 +585,11 @@ export const conferenceRouter = router({
             }
             case 'homepageRichText': {
               if (section.heading) base.heading = section.heading
-              base.content = ensureUniqueArrayKeys(section.content, 'block')
+              // Already sanitised AND fully keyed (blocks, spans, markDefs,
+              // table rows) by `HomepageRichTextContentSchema`'s terminal
+              // transform — re-keying here would only risk re-pointing a span's
+              // mark at the wrong link annotation.
+              base.content = section.content
               break
             }
             case 'homepageFaq': {

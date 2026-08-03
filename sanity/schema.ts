@@ -2,6 +2,12 @@ import { type SchemaTypeDefinition } from 'sanity'
 
 import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
+import {
+  richTextCallout,
+  richTextCode,
+  richTextImage,
+  richTextTable,
+} from './schemaTypes/richTextContent'
 import conference from './schemaTypes/conference'
 import conferenceBudget from './schemaTypes/conferenceBudget'
 import contractTemplate from './schemaTypes/contractTemplate'
@@ -42,6 +48,11 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Core content
     blockContent,
+    // Homepage Rich Text vocabulary (the allowlisted escape hatch)
+    richTextCode,
+    richTextImage,
+    richTextTable,
+    richTextCallout,
     dataProcessingConsent,
     fileAttachment,
     urlAttachment,

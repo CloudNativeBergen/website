@@ -17,6 +17,17 @@ import {
   BACKGROUND_PATTERN_VALUES,
   type BackgroundPattern,
 } from '@/lib/conference/backgroundPattern'
+import {
+  isSafeLinkHref,
+  isSafeRichTextHref,
+  UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
+} from '@/lib/portabletext/safeHref'
+import {
+  RICH_TEXT_LIMITS,
+  SANITY_IMAGE_REF_PATTERN,
+  sanitizeRichTextContent,
+} from '@/lib/homepage/richText'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -630,29 +641,15 @@ const sectionCopy = z.string().trim().min(1).optional()
  * `data:`, scheme-relative `//host` — is rejected: these are tenant-entered
  * values rendered into every visitor's page, so the scheme surface must be
  * closed at the write path (same standard as the legal-page authority URL).
+ *
+ * The predicate itself lives in `@/lib/portabletext/safeHref` so the write path,
+ * the render path and the Studio rule cannot drift apart.
  */
 const safeLinkHref = z
   .string()
   .trim()
   .min(1, 'Link is required')
-  .refine(
-    (value) => {
-      if (value.startsWith('/') && !value.startsWith('//')) return true
-      // Require the EXPLICIT scheme prefix: `new URL` also parses degenerate
-      // forms like `https:example.com` (no authority), which are not the
-      // "full http(s) URL" the message promises.
-      if (!/^https?:\/\//i.test(value)) return false
-      try {
-        const parsed = new URL(value)
-        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      } catch {
-        return false
-      }
-    },
-    {
-      message: 'Enter a site path (e.g. /tickets) or a full http(s) URL',
-    },
-  )
+  .refine(isSafeLinkHref, { message: UNSAFE_LINK_MESSAGE })
 
 const HeroCtaOverrideSchema = z.object({
   _key: sectionKey,
@@ -681,6 +678,138 @@ const HomepageFaqItemSchema = z.object({
   question: z.string().trim().min(1, 'Question is required'),
   answer: z.string().trim().min(1, 'Answer is required'),
 })
+
+// === homepage Rich Text: the sanitised escape hatch ======================
+//
+// The WRITE half of the two-sided contract documented in
+// `src/lib/homepage/richText.ts`. It rejects loudly on anything an organizer
+// could reasonably be told about — an unsafe link scheme, an image that is not
+// one of our own assets, an unknown block type, an oversized blob — so a bad
+// paste surfaces as an error rather than as content that silently vanishes.
+// Editorial noise (an unrecognised style, a stray mark, a missing `_key`) is
+// NOT worth an error, so the terminal `.transform` hands the parsed value to
+// the same sanitizer the renderer uses and stores only its normalised output.
+// Every `z.object` below strips unknown keys, so nothing unmodelled is stored.
+
+const richTextSpanSchema = z.object({
+  _type: z.literal('span'),
+  _key: z.string().optional(),
+  text: z
+    .string()
+    .max(RICH_TEXT_LIMITS.spanText, 'A single run of text is too long'),
+  marks: z.array(z.string()).max(RICH_TEXT_LIMITS.markDefsPerBlock).optional(),
+})
+
+/**
+ * The ONLY annotation. `href` is gated by the shared safe-scheme predicate —
+ * the rich-text one, which also admits `mailto:`, so the message must be the
+ * rich-text message and not the stricter CTA wording.
+ */
+const richTextMarkDefSchema = z.object({
+  _type: z.literal('link'),
+  _key: z.string().min(1, 'Link annotations need a key'),
+  href: z
+    .string()
+    .trim()
+    .min(1, 'Link is required')
+    .refine(isSafeRichTextHref, { message: UNSAFE_RICH_TEXT_LINK_MESSAGE }),
+})
+
+const richTextProseBlockSchema = z.object({
+  _type: z.literal('block'),
+  _key: z.string().optional(),
+  // Presentation enums are NORMALISED by the sanitizer rather than rejected —
+  // an unexpected style renders as a paragraph, which is not a security event.
+  style: z.string().optional(),
+  listItem: z.string().optional(),
+  level: z.number().optional(),
+  children: z.array(richTextSpanSchema).max(RICH_TEXT_LIMITS.spansPerBlock),
+  markDefs: z
+    .array(richTextMarkDefSchema)
+    .max(RICH_TEXT_LIMITS.markDefsPerBlock)
+    .optional(),
+})
+
+const richTextCodeBlockSchema = z.object({
+  _type: z.literal('richTextCode'),
+  _key: z.string().optional(),
+  language: z.string().optional(),
+  filename: z.string().max(RICH_TEXT_LIMITS.filename).nullable().optional(),
+  code: z
+    .string()
+    .min(1, 'Code blocks need content')
+    .max(RICH_TEXT_LIMITS.code, 'Code block is too long'),
+})
+
+const richTextImageBlockSchema = z.object({
+  _type: z.literal('richTextImage'),
+  _key: z.string().optional(),
+  asset: z.object({
+    _type: z.literal('reference').optional(),
+    // The gate that keeps an arbitrary remote `<img src>` — a tracking and
+    // exfiltration beacon pointed at every reader — out of the page.
+    _ref: z
+      .string()
+      .regex(
+        SANITY_IMAGE_REF_PATTERN,
+        'Images must be uploaded here (SVG and external image URLs are not allowed)',
+      ),
+  }),
+  alt: z.string().max(RICH_TEXT_LIMITS.alt).nullable().optional(),
+  caption: z.string().max(RICH_TEXT_LIMITS.caption).nullable().optional(),
+})
+
+const richTextTableBlockSchema = z.object({
+  _type: z.literal('richTextTable'),
+  _key: z.string().optional(),
+  caption: z.string().max(RICH_TEXT_LIMITS.caption).nullable().optional(),
+  headerRow: z.boolean().optional(),
+  rows: z
+    .array(
+      z.object({
+        _key: z.string().optional(),
+        cells: z
+          .array(z.string().max(RICH_TEXT_LIMITS.tableCell))
+          .max(RICH_TEXT_LIMITS.tableColumns, 'Too many columns'),
+      }),
+    )
+    .min(1, 'Tables need at least one row')
+    .max(RICH_TEXT_LIMITS.tableRows, 'Too many rows'),
+})
+
+const richTextCalloutBlockSchema = z.object({
+  _type: z.literal('richTextCallout'),
+  _key: z.string().optional(),
+  tone: z.string().optional(),
+  title: z.string().max(RICH_TEXT_LIMITS.calloutTitle).nullable().optional(),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Callouts need body text')
+    .max(RICH_TEXT_LIMITS.calloutBody),
+})
+
+/**
+ * The closed content vocabulary. `discriminatedUnion` means an unmodelled
+ * `_type` — `html`, `embed`, `script`, anything — fails at the boundary instead
+ * of being carried through to the document.
+ */
+export const HomepageRichTextContentSchema = z
+  .array(
+    z.discriminatedUnion('_type', [
+      richTextProseBlockSchema,
+      richTextCodeBlockSchema,
+      richTextImageBlockSchema,
+      richTextTableBlockSchema,
+      richTextCalloutBlockSchema,
+    ]),
+  )
+  .min(1, 'Rich text needs at least one block')
+  .max(RICH_TEXT_LIMITS.blocks, 'Rich text block has too many items')
+  .transform(sanitizeRichTextContent)
+  .refine((blocks) => blocks.length > 0, {
+    message: 'Rich text needs at least one block with content',
+  })
 
 const HomepageSectionSchema = z.discriminatedUnion('_type', [
   z.object({
@@ -755,9 +884,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _key: sectionKey,
     hidden: sectionHidden,
     heading: z.string().trim().min(1).nullable().optional(),
-    content: z
-      .array(PortableTextBlockSchema)
-      .min(1, 'Rich text needs at least one block'),
+    content: HomepageRichTextContentSchema,
   }),
   z.object({
     _type: z.literal('homepageFaq'),
