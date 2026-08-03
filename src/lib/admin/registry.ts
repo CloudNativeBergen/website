@@ -271,6 +271,14 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: UsersIcon,
   },
   {
+    id: 'sponsors-invoices',
+    title: 'Sponsor Invoicing',
+    href: '/admin/sponsors/invoices',
+    group: 'Events & Content',
+    keywords: ['invoice', 'invoicing', 'billing', 'faktura', 'finance', 'ehf'],
+    icon: BanknotesIcon,
+  },
+  {
     id: 'sponsors-contracts',
     title: 'Sponsor Contracts',
     href: '/admin/sponsors/contracts',

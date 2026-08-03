@@ -128,6 +128,7 @@ import {
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
 import { isBillingComplete } from '@/lib/sponsor-crm/billing'
+import { evaluateInvoiceReadiness } from '@/lib/sponsor-crm/invoice'
 import {
   canTransition,
   checkPipelineState,
@@ -765,6 +766,13 @@ export const sponsorRouter = router({
         if (input?.billingComplete !== undefined) {
           filtered = filtered.filter(
             (s) => isBillingComplete(s) === input.billingComplete,
+          )
+        }
+
+        // Filter: ready to invoice as recorded (billing + amount + signature)
+        if (input?.invoiceReady !== undefined) {
+          filtered = filtered.filter(
+            (s) => evaluateInvoiceReadiness(s).ready === input.invoiceReady,
           )
         }
 
