@@ -205,7 +205,9 @@ self.addEventListener('fetch', (event) => {
 // `src/lib/push/messages.ts` and parsed here — this parsing MIRRORS the pure
 // helper in `src/lib/pwa/push-payload.ts` (kept in sync by the sw-source test).
 
-const NOTIFICATION_DEFAULT_TITLE = 'Cloud Native Days'
+// Must stay in sync with PLATFORM_NAME (src/lib/branding/platform.ts), which
+// this plain-JS service worker cannot import. Asserted by the sw-source test.
+const NOTIFICATION_DEFAULT_TITLE = 'Konf'
 // A push with no (or an unparseable/off-origin) url opens the standalone
 // notifications page — somewhere the notification is readable — not the bare
 // app root. Mirrors DEFAULT_URL in src/lib/pwa/push-payload.ts.

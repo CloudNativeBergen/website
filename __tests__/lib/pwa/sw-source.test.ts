@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { NEVER_CACHE_PREFIXES } from '@/lib/pwa/request-classification'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 /**
  * `public/sw.js` is hand-written plain JS and cannot import the TypeScript
@@ -15,6 +16,15 @@ describe('public/sw.js source invariants', () => {
     resolve(__dirname, '../../../public/sw.js'),
     'utf8',
   )
+
+  // The worker's untitled-push fallback is the ONE brand string baked into the
+  // service worker. It cannot import PLATFORM_NAME, so pin it here: a push with
+  // no title must never render some other conference's brand on a device.
+  it('falls back to the platform name for an untitled push', () => {
+    expect(source).toContain(
+      `const NOTIFICATION_DEFAULT_TITLE = '${PLATFORM_NAME}'`,
+    )
+  })
 
   it('references every auth prefix that must never be cached', () => {
     for (const prefix of NEVER_CACHE_PREFIXES) {

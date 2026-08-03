@@ -53,6 +53,12 @@ export interface ConferenceLogos {
   logoDark?: string
   logomarkBright?: string
   logomarkDark?: string
+  /**
+   * The conference title. Not a logo, but it is what `ConferenceLogo` builds
+   * its generated fallback mark from when no logo has been uploaded — without
+   * it an unbranded tenant falls all the way back to the platform mark.
+   */
+  title?: string
 }
 
 interface DashboardLayoutProps {

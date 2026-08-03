@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'Cloud Native Days Norway Website/1.0',
+        'User-Agent': `${PLATFORM_NAME} Website/1.0`,
         Accept: 'image/*',
       },
       signal: controller.signal,

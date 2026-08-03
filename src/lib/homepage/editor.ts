@@ -1,4 +1,20 @@
-import { arrayMove } from '@dnd-kit/sortable'
+/**
+ * Local copy of `@dnd-kit/sortable`'s `arrayMove`, semantics preserved
+ * (including the negative-index handling this module never relies on).
+ *
+ * Inlined DELIBERATELY. `arrayMove` is a pure four-line array helper, but
+ * importing it from `@dnd-kit/sortable` pulls that package's React context into
+ * whatever module graph reaches this file. The package is client-only, so any
+ * server component importing anything from here — a label map, a type guard —
+ * died at build time with `createContext is not a function` while collecting
+ * page data. Four lines of duplication buys this module ZERO runtime
+ * dependencies, which is what a pure model/logic module should have.
+ */
+function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
+  const next = array.slice()
+  next.splice(to < 0 ? next.length + to : to, 0, next.splice(from, 1)[0])
+  return next
+}
 import type { PortableTextBlock } from '@portabletext/editor'
 import { type HomepageSection, type HomepageSectionType } from './sections'
 
@@ -26,10 +42,11 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
 }
 
 /**
- * The block types that carry per-section config worth an inline accordion. The
- * content-free blocks (featured speakers, program, organizers, sponsors,
- * gallery) only source their content from the conference, so they need no form
- * — their cards render without an expandable config panel.
+ * The block types that carry per-section config worth an inline accordion.
+ * The content-sourced bands (featured speakers, organizers, sponsors, gallery)
+ * still pull their CONTENT from the conference, but their headings and body
+ * copy are per-section config, so they get a form too. Program highlights is
+ * the only block with nothing to configure.
  */
 const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageHero',
@@ -39,6 +56,10 @@ const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageFaq',
   'homepageCountdown',
   'homepageVenue',
+  'homepageFeaturedSpeakers',
+  'homepageOrganizers',
+  'homepageSponsors',
+  'homepageGallery',
 ])
 
 export function isConfigurable(type: HomepageSectionType): boolean {
@@ -77,8 +98,13 @@ export interface EditorRow {
   // Countdown block
   targetOverride?: string
   liveMessage?: string
-  // Venue block
+  // Venue block + the copy-configurable content bands (featured speakers,
+  // organizers, sponsors, gallery) share `heading`/`description`.
   description?: string
+  // Sponsors block
+  showCta?: boolean
+  ctaHeading?: string
+  ctaDescription?: string
 }
 
 let keyCounter = 0
@@ -144,6 +170,21 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
     } else if (s._type === 'homepageVenue') {
       row.heading = s.heading
       row.description = s.description
+    } else if (
+      s._type === 'homepageFeaturedSpeakers' ||
+      s._type === 'homepageOrganizers' ||
+      s._type === 'homepageGallery'
+    ) {
+      row.heading = s.heading
+      row.description = s.description
+    } else if (s._type === 'homepageSponsors') {
+      row.heading = s.heading
+      row.description = s.description
+      // Absent means "shown" — surface it as the checked state so the form
+      // round-trips an unconfigured block to an identical payload.
+      row.showCta = s.showCta !== false
+      row.ctaHeading = s.ctaHeading
+      row.ctaDescription = s.ctaDescription
     }
     return row
   })
@@ -217,8 +258,21 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
         if (row.liveMessage?.trim()) out.liveMessage = row.liveMessage.trim()
         break
       case 'homepageVenue':
+      case 'homepageFeaturedSpeakers':
+      case 'homepageOrganizers':
+      case 'homepageGallery':
         if (row.heading?.trim()) out.heading = row.heading.trim()
         if (row.description?.trim()) out.description = row.description.trim()
+        break
+      case 'homepageSponsors':
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        if (row.description?.trim()) out.description = row.description.trim()
+        // Only the non-default state is stored, so an untouched sponsors block
+        // serializes to exactly `{_type, _key}` as it did before.
+        if (row.showCta === false) out.showCta = false
+        if (row.ctaHeading?.trim()) out.ctaHeading = row.ctaHeading.trim()
+        if (row.ctaDescription?.trim())
+          out.ctaDescription = row.ctaDescription.trim()
         break
       default:
         break

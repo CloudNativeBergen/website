@@ -74,12 +74,15 @@ describe('isConfigurable', () => {
     expect(isConfigurable('homepageMetrics')).toBe(true)
   })
 
-  it('is false for content-free blocks', () => {
-    expect(isConfigurable('homepageGallery')).toBe(false)
-    expect(isConfigurable('homepageSponsors')).toBe(false)
-    expect(isConfigurable('homepageFeaturedSpeakers')).toBe(false)
+  it('is true for the content bands that carry only copy config', () => {
+    expect(isConfigurable('homepageGallery')).toBe(true)
+    expect(isConfigurable('homepageSponsors')).toBe(true)
+    expect(isConfigurable('homepageFeaturedSpeakers')).toBe(true)
+    expect(isConfigurable('homepageOrganizers')).toBe(true)
+  })
+
+  it('is false for the block with nothing to configure', () => {
     expect(isConfigurable('homepageProgramHighlights')).toBe(false)
-    expect(isConfigurable('homepageOrganizers')).toBe(false)
   })
 })
 
@@ -340,6 +343,93 @@ describe('toPayload — trimming, omission and item filtering', () => {
     expect(venue.description).toBe('Grieghallen')
   })
 
+  it('maps the content bands’ copy overrides in both directions', () => {
+    const stored: HomepageSection[] = [
+      {
+        _key: 'g',
+        _type: 'homepageGallery',
+        heading: 'Photos',
+        description: 'From last year',
+      },
+      {
+        _key: 'f',
+        _type: 'homepageFeaturedSpeakers',
+        heading: 'Our speakers',
+      },
+      {
+        _key: 'o',
+        _type: 'homepageOrganizers',
+        description: 'The crew',
+      },
+    ]
+    const editorRows = toEditorRows(stored)
+    expect(editorRows[0]).toMatchObject({
+      heading: 'Photos',
+      description: 'From last year',
+    })
+    const [gallery, featured, organizers] = toPayload(editorRows)
+    expect(gallery).toEqual({
+      _key: 'g',
+      _type: 'homepageGallery',
+      heading: 'Photos',
+      description: 'From last year',
+    })
+    expect(featured).toEqual({
+      _key: 'f',
+      _type: 'homepageFeaturedSpeakers',
+      heading: 'Our speakers',
+    })
+    expect(organizers).toEqual({
+      _key: 'o',
+      _type: 'homepageOrganizers',
+      description: 'The crew',
+    })
+  })
+
+  it('serializes an unconfigured sponsors block to bare _type/_key (zero migration)', () => {
+    const [out] = toPayload(
+      toEditorRows([{ _key: 's', _type: 'homepageSponsors' }]),
+    )
+    expect(out).toEqual({ _key: 's', _type: 'homepageSponsors' })
+  })
+
+  it('stores sponsors CTA copy and only the non-default hidden-CTA state', () => {
+    const [shown, hiddenCta] = toPayload([
+      {
+        _key: 's1',
+        _type: 'homepageSponsors',
+        showCta: true,
+        ctaHeading: '  Sponsor us  ',
+        ctaDescription: '  Reach our audience.  ',
+      },
+      {
+        _key: 's2',
+        _type: 'homepageSponsors',
+        showCta: false,
+        ctaHeading: 'ignored but kept as a draft in the form',
+      },
+    ])
+    expect(shown).toEqual({
+      _key: 's1',
+      _type: 'homepageSponsors',
+      ctaHeading: 'Sponsor us',
+      ctaDescription: 'Reach our audience.',
+    })
+    expect(hiddenCta).toMatchObject({ showCta: false })
+  })
+
+  it('round-trips a hidden sponsors CTA through the editor rows', () => {
+    const [row] = toEditorRows([
+      { _key: 's', _type: 'homepageSponsors', showCta: false },
+    ])
+    expect(row.showCta).toBe(false)
+    expect(toPayload([row])[0]).toEqual({
+      _key: 's',
+      _type: 'homepageSponsors',
+      showCta: false,
+    })
+  })
+
   it('always carries _type and _key, plus hidden when set', () => {
     const [out] = toPayload([
       { _key: 'v', _type: 'homepageVenue', hidden: true },
@@ -349,5 +439,30 @@ describe('toPayload — trimming, omission and item filtering', () => {
       _key: 'v',
       hidden: true,
     })
+  })
+})
+
+/**
+ * This module is reachable from SERVER components (`page.tsx` imports its label
+ * maps). A single value import from a client-only package — even for a pure
+ * helper — puts that package's React context in the RSC module graph, and the
+ * production build dies collecting page data with `createContext is not a
+ * function`. That is invisible to typecheck and to every unit test, so it is
+ * asserted on the source text instead. `import type` is fine: it is erased.
+ */
+describe('server safety', () => {
+  it('has no runtime dependency on any package', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const source = await readFile(
+      new URL('./editor.ts', import.meta.url),
+      'utf8',
+    )
+
+    const runtimeImports = Array.from(
+      source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
+      (match) => match[1],
+    ).filter((specifier) => !specifier.startsWith('.'))
+
+    expect(runtimeImports).toEqual([])
   })
 })

@@ -1,3 +1,5 @@
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+
 /**
  * Escape the three characters Slack treats as control characters inside a
  * `mrkdwn` text field — `&`, `<`, `>` — per Slack's formatting guidance
@@ -90,7 +92,7 @@ export async function postSlackMessage(
     body: JSON.stringify({
       channel,
       blocks: message.blocks,
-      text: message.text || 'Notification from Cloud Native Days',
+      text: message.text || `Notification from ${PLATFORM_NAME}`,
     }),
   })
 

@@ -34,8 +34,10 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
 // a platform install showing name 'Konf' but short_name 'CND' is mixed
 // branding. Short enough already that no truncation helper is needed.
 const PLATFORM_SHORT_NAME = 'Konf'
-const PLATFORM_DESCRIPTION =
-  'Community-driven Kubernetes and Cloud Native conferences in the Nordics.'
+// Platform-default description, shown only when no conference resolves for the
+// host. Must describe the PLATFORM, not any one conference's subject matter —
+// it used to describe Nordic Kubernetes events specifically.
+const PLATFORM_DESCRIPTION = `${PLATFORM_NAME} — run your conference: call for papers, program, speakers and tickets.`
 
 /** Max length for a PWA `short_name` (kept tight so launchers never truncate). */
 const SHORT_NAME_MAX = 12

@@ -18,6 +18,7 @@ import { ProposalConfirmationHandler } from '@/components/cfp/ProposalConfirmati
 import { NotSeeingTalksPrompt } from '@/components/cfp/NotSeeingTalksPrompt'
 import { MessagesIntroCard } from '@/components/cfp/MessagesIntroCard'
 import { startProviderLink } from '@/app/(cfp)/cfp/profile/link-actions'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
@@ -247,26 +248,22 @@ export default async function SpeakerDashboard() {
 
   // Prepare data for speaker share wrapper
   const primaryTalk = confirmedTalks[0]
-  const talkTitle = primaryTalk?.title || 'Cloud Native Days Norway'
+  // A talk title must never fall back to a brand name — the share card is only
+  // rendered when a confirmed talk exists, so this is a defensive placeholder.
+  const talkTitle = primaryTalk?.title || 'Untitled Talk'
   const eventName = primaryTalk
     ? activeConferences.find((c) =>
         c.proposals.some((p) => p._id === primaryTalk._id),
-      )?.conference.title || 'Cloud Native Days Norway'
-    : 'Cloud Native Days Norway'
+      )?.conference.title || PLATFORM_NAME
+    : PLATFORM_NAME
 
-  // Determine what to show in sidebar: latest badge takes priority over confirmed talk
-  const showBadgeInSidebar = latestBadge
-
-  let badgeEventName: string | undefined
-
-  if (showBadgeInSidebar && latestBadge) {
-    // Get the conference name for the badge
-    const badgeConference = activeConferences.find((c) =>
-      c.badges.some((b) => b._id === latestBadge._id),
-    )
-    badgeEventName =
-      badgeConference?.conference.title || 'Cloud Native Days Norway'
-  }
+  // Conference name for the latest badge's sidebar card, degrading to the
+  // platform label when the badge's conference can't be resolved.
+  const badgeEventName = latestBadge
+    ? activeConferences.find((c) =>
+        c.badges.some((b) => b._id === latestBadge._id),
+      )?.conference.title || PLATFORM_NAME
+    : PLATFORM_NAME
 
   if (activeConferences.length === 0) {
     return (
@@ -350,7 +347,7 @@ export default async function SpeakerDashboard() {
             {latestBadge && (
               <BadgeShare
                 badge={latestBadge}
-                eventName={badgeEventName || 'Cloud Native Days Norway'}
+                eventName={badgeEventName}
                 domain={domain}
                 className="w-full"
               />

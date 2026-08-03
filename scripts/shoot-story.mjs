@@ -23,7 +23,11 @@ const [
 ] = process.argv.slice(2)
 const width = Number(wArg) || 393 // iPhone 15/16 Pro portrait (CSS px)
 const height = Number(hArg) || 852
-const PORT = 6006
+// Port is overridable via SHOOT_PORT so a checkout that is NOT the one serving
+// :6006 (a git worktree, a second branch) can shoot its own stories instead of
+// silently screenshotting another checkout's Storybook — which reports the
+// story as missing, or worse, renders a stale version of it.
+const PORT = Number(process.env.SHOOT_PORT) || 6006
 const BASE = `http://localhost:${PORT}`
 
 async function storybookUp() {
@@ -47,13 +51,13 @@ const pmBin = process.platform === 'win32' ? `${pm}.cmd` : pm
 
 let started
 if (!(await storybookUp())) {
-  console.log(`[shoot] starting Storybook on :6006 (via ${pm}) …`)
+  console.log(`[shoot] starting Storybook on :${PORT} (via ${pm}) …`)
   // npm needs `--` to forward flags to the script; pnpm/yarn forward them as-is
   // and pass a literal `--` through to the storybook CLI, which Storybook 10
   // rejects ("too many arguments for 'dev'"). Only insert it for npm.
   const runArgs = ['run', 'storybook']
   if (pm === 'npm') runArgs.push('--')
-  runArgs.push('--ci', '--quiet')
+  runArgs.push('--ci', '--quiet', '-p', String(PORT))
   started = spawn(pmBin, runArgs, {
     stdio: 'ignore',
     detached: true,
@@ -63,7 +67,7 @@ if (!(await storybookUp())) {
     await sleep(2000)
   }
   if (!(await storybookUp())) {
-    console.error('[shoot] Storybook did not come up on :6006')
+    console.error(`[shoot] Storybook did not come up on :${PORT}`)
     process.exit(1)
   }
 }

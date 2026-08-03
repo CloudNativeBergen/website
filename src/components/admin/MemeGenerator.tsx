@@ -12,7 +12,6 @@ import {
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '../ConferenceLogo'
-import { Logo } from '../Logo'
 import type { ConferenceLogos } from '../common/DashboardLayout'
 import QRCodeStyling from 'qr-code-styling'
 import {
@@ -466,9 +465,6 @@ export function MemeGenerator({
   const logoAspectRatio = 970 / 234
   const logoHeight = (size: number) => size / logoAspectRatio
 
-  // Check if conference has custom logos
-  const hasCustomLogo = Boolean(conferenceLogos?.logoBright)
-
   const renderLogo = (scale: number = 1) => (
     <div
       className="pointer-events-none absolute"
@@ -481,20 +477,17 @@ export function MemeGenerator({
         padding: 0,
       }}
     >
-      {hasCustomLogo ? (
-        <ConferenceLogo
-          conference={conferenceLogos}
-          variant="horizontal"
-          className="h-full w-full"
-          style={logoStyle}
-        />
-      ) : (
-        <Logo
-          variant={logoVariant}
-          className="h-full w-full"
-          style={logoStyle}
-        />
-      )}
+      {/* ConferenceLogo already picks the uploaded logo when there is one and
+          generates a mark from the conference name when there is not, so the
+          old hasCustomLogo branch (which fell back to a hardcoded wordmark)
+          is gone. `fallbackVariant` still drives the gradient/mono control. */}
+      <ConferenceLogo
+        conference={conferenceLogos}
+        variant="horizontal"
+        fallbackVariant={logoVariant}
+        className="size-full"
+        style={logoStyle}
+      />
     </div>
   )
 
@@ -507,7 +500,7 @@ export function MemeGenerator({
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="block h-full w-full"
+        className="block size-full"
         style={{ margin: 0, padding: 0, display: 'block' }}
       />
       {renderLogo(0.5)}
@@ -525,7 +518,7 @@ export function MemeGenerator({
             ref={exportCanvasRef}
             width={CANVAS_SIZE}
             height={CANVAS_SIZE}
-            className="h-full w-full"
+            className="size-full"
             style={{ margin: 0, padding: 0, display: 'block' }}
           />
           {renderLogo(1)}

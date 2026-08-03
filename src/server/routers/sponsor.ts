@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   SponsorInputSchema,
@@ -2400,7 +2401,7 @@ export const sponsorRouter = router({
 
         const result = await retryWithBackoff(async () => {
           return await resend.emails.send({
-            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,
             react: emailTemplate,
@@ -2553,7 +2554,7 @@ export const sponsorRouter = router({
 
         const result = await retryWithBackoff(async () => {
           return await resend.emails.send({
-            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,
             react: emailTemplate,
@@ -2789,7 +2790,7 @@ export const sponsorRouter = router({
           ccRecipients: ccEmails.slice(1),
           additionalContent: discountInfo,
           fromEmail: conference.sponsorEmail
-            ? `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`
+            ? `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`
             : undefined,
         })
 
