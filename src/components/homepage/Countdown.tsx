@@ -197,14 +197,14 @@ function CountdownInline({ remaining }: { remaining: number | null }) {
        * variant. A larger phone size wrapped "seconds" onto a second row, which
        * is the units grid again, only ragged.
        */
-      className="font-space-grotesk flex flex-wrap items-baseline justify-center gap-x-2.5 text-lg font-bold text-brand-slate-gray tabular-nums sm:gap-x-3 sm:text-3xl dark:text-gray-100"
+      className="font-space-grotesk flex flex-wrap items-baseline justify-center gap-x-2 text-base font-bold text-brand-slate-gray tabular-nums sm:gap-x-3 sm:text-3xl dark:text-gray-100"
       role="timer"
       aria-live="off"
     >
       {units.map((u) => (
         <span key={u.label} className="whitespace-nowrap">
           {u.value}
-          <span className="font-inter ml-1 text-xs font-medium text-brand-slate-gray/60 sm:text-sm dark:text-gray-400">
+          <span className="font-inter ml-1 text-[11px] font-medium text-brand-slate-gray/60 sm:text-sm dark:text-gray-400">
             {u.label}
           </span>
         </span>

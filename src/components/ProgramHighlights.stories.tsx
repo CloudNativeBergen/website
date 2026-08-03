@@ -207,6 +207,12 @@ function slot(startTime: string, endTime: string, proposal: ProposalExisting) {
   return { startTime, endTime, talk: proposal, hasTalkRef: true }
 }
 
+/**
+ * Each talk appears in exactly ONE slot. The band deduplicates against the
+ * featured picks, not across the schedule, so a talk booked twice renders as
+ * two identical cards — realistic-looking fixture data that would quietly
+ * misrepresent the layout.
+ */
 const schedules = [
   {
     _id: 'sched-day-1',
@@ -218,7 +224,6 @@ const schedules = [
         talks: [
           slot('09:15', '10:00', talks[0]),
           slot('10:15', '11:00', talks[2]),
-          slot('13:00', '15:00', talks[3]),
         ],
       },
       {
@@ -227,7 +232,6 @@ const schedules = [
         talks: [
           slot('09:15', '09:40', talks[1]),
           slot('10:15', '10:40', talks[4]),
-          slot('11:00', '11:20', talks[5]),
         ],
       },
     ],
@@ -239,7 +243,12 @@ const schedules = [
       {
         trackTitle: 'Platform Engineering',
         trackDescription: 'Grieghallen, Peer Gynt',
-        talks: [slot('09:15', '10:00', talks[2])],
+        talks: [slot('10:00', '12:00', talks[3])],
+      },
+      {
+        trackTitle: 'Observability',
+        trackDescription: 'Grieghallen, Klokkeklang',
+        talks: [slot('10:00', '10:20', talks[5])],
       },
     ],
   },
