@@ -485,7 +485,7 @@ export function MemeGenerator({
         conference={conferenceLogos}
         variant="horizontal"
         fallbackVariant={logoVariant}
-        className="h-full w-full"
+        className="size-full"
         style={logoStyle}
       />
     </div>
@@ -500,7 +500,7 @@ export function MemeGenerator({
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="block h-full w-full"
+        className="block size-full"
         style={{ margin: 0, padding: 0, display: 'block' }}
       />
       {renderLogo(0.5)}
@@ -518,7 +518,7 @@ export function MemeGenerator({
             ref={exportCanvasRef}
             width={CANVAS_SIZE}
             height={CANVAS_SIZE}
-            className="h-full w-full"
+            className="size-full"
             style={{ margin: 0, padding: 0, display: 'block' }}
           />
           {renderLogo(1)}
