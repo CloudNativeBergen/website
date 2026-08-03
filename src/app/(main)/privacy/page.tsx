@@ -536,6 +536,52 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                     </div>
 
+                    {/* Visa Invitation Letters */}
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-amber-800 dark:text-amber-200">
+                        <DocumentTextIcon className="mr-3 h-5 w-5" />
+                        Visa Invitation Letters
+                      </h3>
+                      <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+                        If you ask us for a letter of invitation to support a
+                        visa application, you send us your passport details and
+                        an organizer enters them to produce the letter.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            Used to write the letter, then discarded
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>• Passport number and validity date</li>
+                            <li>• Date of birth and nationality</li>
+                            <li>• Employer, travel dates, addressee</li>
+                          </ul>
+                          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                            These are never stored in our systems and never
+                            written to our logs. They exist only for as long as
+                            it takes to render your letter, and the letter
+                            itself is not stored either.
+                          </p>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            Kept as a record that we issued a letter
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>• Your name and email address</li>
+                            <li>• The letter reference and issue date</li>
+                            <li>• Which organizer issued it</li>
+                          </ul>
+                          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                            We keep this so we can confirm to you — or to a
+                            consulate that contacts us — that a specific letter
+                            is genuine.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-teal-800 dark:text-teal-200">

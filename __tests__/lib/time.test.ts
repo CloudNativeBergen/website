@@ -6,6 +6,7 @@ import {
   formatDateLocalized,
   formatDateSafe,
   formatDatesSafe,
+  formatDateRangeLocalized,
   formatDateTimeSafe,
   formatConferenceDate,
   formatConferenceDateShort,
@@ -275,5 +276,41 @@ describe('instantToOsloLocalInput / osloLocalInputToIso', () => {
     expect(instantToOsloLocalInput(undefined)).toBe('')
     expect(osloLocalInputToIso('not-a-date')).toBeNull()
     expect(osloLocalInputToIso('')).toBeNull()
+  })
+})
+
+describe('formatDateRangeLocalized', () => {
+  it('collapses the range the way the locale does', () => {
+    expect(
+      formatDateRangeLocalized('2026-11-05', '2026-11-06', 'en-GB'),
+    ).toMatch(/5\s*[–-]\s*6 November 2026/)
+  })
+
+  it('spans months and years without losing either end', () => {
+    expect(
+      formatDateRangeLocalized('2026-10-30', '2026-11-02', 'en-GB'),
+    ).toContain('October')
+    expect(
+      formatDateRangeLocalized('2026-12-30', '2027-01-02', 'en-GB'),
+    ).toContain('2027')
+  })
+
+  it('renders a single day when both ends match', () => {
+    expect(formatDateRangeLocalized('2026-11-05', '2026-11-05', 'en-GB')).toBe(
+      '5 November 2026',
+    )
+  })
+
+  it('defaults to the house locale', () => {
+    expect(formatDateRangeLocalized('2026-11-05', '2026-11-06')).toContain(
+      'november',
+    )
+  })
+
+  it('handles missing and invalid input', () => {
+    expect(formatDateRangeLocalized('', '2026-11-06')).toBe('TBD')
+    expect(formatDateRangeLocalized('nonsense', 'also-nonsense')).toBe(
+      'Invalid Date Range',
+    )
   })
 })

@@ -255,6 +255,21 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: DocumentTextIcon,
   },
   {
+    id: 'invitation-letters',
+    title: 'Invitation Letters',
+    href: '/admin/invitations',
+    group: 'Events & Content',
+    keywords: [
+      'visa',
+      'invitation',
+      'letter',
+      'embassy',
+      'consulate',
+      'travel',
+    ],
+    icon: DocumentTextIcon,
+  },
+  {
     id: 'sponsors-crm',
     title: 'Sponsor CRM',
     href: '/admin/sponsors/crm',

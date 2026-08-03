@@ -22,10 +22,10 @@ const styles = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
     fontSize: 10,
-    lineHeight: 1.5,
+    lineHeight: 1.4,
     color: TEXT_PRIMARY,
-    paddingTop: 50,
-    paddingBottom: 60,
+    paddingTop: 42,
+    paddingBottom: 52,
     paddingHorizontal: 55,
   },
   header: {
@@ -34,10 +34,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     borderBottomWidth: 1,
     borderBottomColor: BORDER_COLOR,
-    paddingBottom: 14,
-    marginBottom: 22,
+    paddingBottom: 12,
+    marginBottom: 16,
   },
-  logo: { width: 120, maxHeight: 42, objectFit: 'contain' },
+  logo: { width: 110, maxHeight: 38, objectFit: 'contain' },
   organizerLine: { fontSize: 9, color: TEXT_SECONDARY, textAlign: 'right' },
   organizerName: {
     fontSize: 11,
@@ -51,27 +51,27 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   meta: { fontSize: 9, color: TEXT_SECONDARY },
-  addressee: { marginBottom: 18, fontSize: 10 },
+  addressee: { marginBottom: 14, fontSize: 10 },
   subject: {
     fontSize: 12,
     fontFamily: 'Helvetica-Bold',
     color: BRAND_BLUE,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  paragraph: { marginBottom: 10, textAlign: 'justify' },
+  paragraph: { marginBottom: 8, textAlign: 'justify' },
   tableHeading: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: 'Helvetica-Bold',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     color: TEXT_MUTED,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   table: {
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     borderRadius: 3,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   tableRow: {
     flexDirection: 'row',
@@ -81,17 +81,17 @@ const styles = StyleSheet.create({
   tableRowLast: { flexDirection: 'row' },
   tableLabel: {
     width: '38%',
-    padding: 6,
+    padding: 5,
     fontSize: 9,
     color: TEXT_SECONDARY,
   },
   tableValue: {
     width: '62%',
-    padding: 6,
+    padding: 5,
     fontSize: 10,
     fontFamily: 'Helvetica-Bold',
   },
-  signatureBlock: { marginTop: 26 },
+  signatureBlock: { marginTop: 14 },
   signatureImage: { width: 130, maxHeight: 46, objectFit: 'contain' },
   signatureRule: {
     borderTopWidth: 1,
@@ -161,7 +161,6 @@ export function InvitationLetterDocument({
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           {logoDataUrl ? (
-            // eslint-disable-next-line jsx-a11y/alt-text
             <Image src={logoDataUrl} style={styles.logo} />
           ) : (
             <Text style={styles.organizerName}>{organizerName}</Text>
@@ -195,34 +194,41 @@ export function InvitationLetterDocument({
         <DetailTable heading="Applicant" rows={content.applicantRows} />
         <DetailTable heading="Event" rows={content.eventRows} />
 
-        {content.paragraphs.slice(1).map((paragraph, index) => (
+        {content.paragraphs.slice(1, -1).map((paragraph, index) => (
           <Text key={index} style={styles.paragraph}>
             {paragraph}
           </Text>
         ))}
 
-        <View style={styles.signatureBlock} wrap={false}>
-          <Text style={styles.paragraph}>Yours sincerely,</Text>
-          {content.signatory.signatureDataUrl && (
-            // eslint-disable-next-line jsx-a11y/alt-text
-            <Image
-              src={content.signatory.signatureDataUrl}
-              style={styles.signatureImage}
-            />
-          )}
-          <View style={styles.signatureRule}>
-            <Text style={styles.signatoryName}>{content.signatory.name}</Text>
-            {content.signatory.title && (
-              <Text style={styles.signatoryDetail}>
-                {content.signatory.title}
-              </Text>
+        {/* The closing and the signature travel together: a signature stranded
+            alone on a second page reads as an afterthought on a document whose
+            whole purpose is to look official. */}
+        <View wrap={false}>
+          <Text style={styles.paragraph}>
+            {content.paragraphs[content.paragraphs.length - 1]}
+          </Text>
+          <View style={styles.signatureBlock}>
+            <Text style={styles.paragraph}>Yours sincerely,</Text>
+            {content.signatory.signatureDataUrl && (
+              <Image
+                src={content.signatory.signatureDataUrl}
+                style={styles.signatureImage}
+              />
             )}
-            <Text style={styles.signatoryDetail}>{organizerName}</Text>
-            {content.signatory.email && (
-              <Text style={styles.signatoryDetail}>
-                {content.signatory.email}
-              </Text>
-            )}
+            <View style={styles.signatureRule}>
+              <Text style={styles.signatoryName}>{content.signatory.name}</Text>
+              {content.signatory.title && (
+                <Text style={styles.signatoryDetail}>
+                  {content.signatory.title}
+                </Text>
+              )}
+              <Text style={styles.signatoryDetail}>{organizerName}</Text>
+              {content.signatory.email && (
+                <Text style={styles.signatoryDetail}>
+                  {content.signatory.email}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
 

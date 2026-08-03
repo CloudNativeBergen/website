@@ -1,4 +1,4 @@
-import { formatDateLocalized, formatDatesSafe } from '@/lib/time'
+import { formatDateLocalized, formatDateRangeLocalized } from '@/lib/time'
 import { formatOrgNumber } from '@/lib/format'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -104,7 +104,11 @@ export function buildInvitationLetterContent({
   issuedAt: string
 }): InvitationLetterContent {
   const roleLabel = PARTICIPANT_ROLE_LABELS[details.role]
-  const eventDates = formatDatesSafe(conference.startDate, conference.endDate)
+  const eventDates = formatDateRangeLocalized(
+    conference.startDate,
+    conference.endDate,
+    LETTER_LOCALE,
+  )
   const venue = [conference.venueName, conference.venueAddress]
     .filter(Boolean)
     .join(', ')
