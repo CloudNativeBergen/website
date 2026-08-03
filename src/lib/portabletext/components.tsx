@@ -1,36 +1,17 @@
 import { PortableTextComponents } from '@portabletext/react'
-
-/**
- * Restrict a stored rich-text link to schemes that are safe to render into a
- * public page: site-internal paths, http(s), and mailto. Portable-text content
- * is tenant-authored (speaker bios, homepage rich-text blocks, …), so a stored
- * `javascript:`/`data:` href must degrade to an inert anchor, not execute.
- */
-function safePortableTextHref(href: string | undefined): string {
-  const value = href?.trim()
-  if (!value) return '#'
-  if (value.startsWith('/') && !value.startsWith('//')) return value
-  // http(s) requires the explicit scheme prefix — `new URL` also parses
-  // degenerate no-authority forms like `https:example.com`. mailto: has no
-  // authority by design, so the protocol check suffices there.
-  const hasHttpPrefix = /^https?:\/\//i.test(value)
-  try {
-    const parsed = new URL(value)
-    if (
-      ((parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
-        hasHttpPrefix) ||
-      parsed.protocol === 'mailto:'
-    ) {
-      return value
-    }
-  } catch {}
-  return '#'
-}
+import { toSafeRichTextHref } from './safeHref'
 
 /**
  * Custom PortableText components for rendering rich text content.
  * Provides consistent styling for headings, paragraphs, lists, and inline formatting
  * that matches the editor experience.
+ *
+ * Portable-text content is tenant-authored (speaker bios, homepage rich-text
+ * blocks, …), so the `link` mark runs every stored href through
+ * {@link toSafeRichTextHref}: a `javascript:`/`data:` href degrades to an inert
+ * anchor instead of executing. Everything else here renders its children as
+ * React text, which React escapes — no map entry uses
+ * `dangerouslySetInnerHTML`, and none must ever start.
  */
 export const portableTextComponents: PortableTextComponents = {
   block: {
@@ -42,6 +23,14 @@ export const portableTextComponents: PortableTextComponents = {
     ),
     h3: ({ children }) => (
       <h3 className="mb-4 text-xl leading-normal font-semibold">{children}</h3>
+    ),
+    h4: ({ children }) => (
+      <h4 className="mb-3 text-lg leading-normal font-semibold">{children}</h4>
+    ),
+    blockquote: ({ children }) => (
+      <blockquote className="mb-4 border-l-4 border-gray-300 pl-4 leading-relaxed italic dark:border-gray-600">
+        {children}
+      </blockquote>
     ),
     normal: ({ children }) => (
       <p className="mb-4 leading-relaxed">{children}</p>
@@ -65,8 +54,16 @@ export const portableTextComponents: PortableTextComponents = {
     ),
     em: ({ children }) => <em className="italic">{children}</em>,
     underline: ({ children }) => <u className="underline">{children}</u>,
+    'strike-through': ({ children }) => (
+      <s className="line-through">{children}</s>
+    ),
+    code: ({ children }) => (
+      <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[0.9em] break-words text-gray-800 dark:bg-white/10 dark:text-gray-100">
+        {children}
+      </code>
+    ),
     link: ({ value, children }) => {
-      const href = safePortableTextHref((value as { href?: string })?.href)
+      const href = toSafeRichTextHref((value as { href?: string })?.href)
       return (
         <a
           href={href}
