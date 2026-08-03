@@ -33,10 +33,21 @@ export interface InvitationLetterDetails {
   passportNumber: string
   /** Optional but frequently requested by consulates. */
   passportExpiry?: string
+  /**
+   * As written in the passport. Free text rather than an enum: passports carry
+   * M/F/X and spelled-out forms depending on the issuing country, and a letter
+   * that contradicts the data page is worse than one that omits the field.
+   */
+  gender?: string
+  /** Home address, which the visa application also states. */
+  residentialAddress?: string
+  phone?: string
   /** Where the letter is sent; also the email delivery address. */
   email?: string
   /** Employer or affiliation, printed when present. */
   organization?: string
+  /** Position held, which speaks to the purpose of the visit. */
+  jobTitle?: string
   role: ParticipantRole
   /** Ticket or registration reference, so the claim is checkable. */
   registrationReference?: string

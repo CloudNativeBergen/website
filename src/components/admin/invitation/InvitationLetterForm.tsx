@@ -17,8 +17,12 @@ export interface InvitationLetterFormValues {
   nationality: string
   passportNumber: string
   passportExpiry: string
+  gender: string
+  residentialAddress: string
+  phone: string
   email: string
   organization: string
+  jobTitle: string
   role: ParticipantRole
   registrationReference: string
   arrivalDate: string
@@ -40,8 +44,12 @@ export const EMPTY_INVITATION_FORM: InvitationLetterFormValues = {
   nationality: '',
   passportNumber: '',
   passportExpiry: '',
+  gender: '',
+  residentialAddress: '',
+  phone: '',
   email: '',
   organization: '',
+  jobTitle: '',
   role: 'attendee',
   registrationReference: '',
   arrivalDate: '',
@@ -188,6 +196,38 @@ export function InvitationLetterForm({
               placeholder="e.g. amina@example.com"
             />
           </Field>
+          <Field label="Gender" hint="As written in the passport">
+            <input
+              type="text"
+              value={values.gender}
+              onChange={(e) => set('gender', e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Female"
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              type="tel"
+              value={values.phone}
+              onChange={(e) => set('phone', e.target.value)}
+              className={inputClass}
+              placeholder="e.g. +254 700 000 000"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field
+              label="Residential address"
+              hint="The home address stated on the visa application"
+            >
+              <input
+                type="text"
+                value={values.residentialAddress}
+                onChange={(e) => set('residentialAddress', e.target.value)}
+                className={inputClass}
+                placeholder="Street, city, postal code, country"
+              />
+            </Field>
+          </div>
         </div>
       </fieldset>
 
@@ -308,6 +348,15 @@ export function InvitationLetterForm({
                 onChange={(e) => set('organization', e.target.value)}
                 className={inputClass}
                 placeholder="e.g. Example Bank Ltd"
+              />
+            </Field>
+            <Field label="Job title">
+              <input
+                type="text"
+                value={values.jobTitle}
+                onChange={(e) => set('jobTitle', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Software Engineer"
               />
             </Field>
             <Field label="Your title" hint="Printed under your signature">

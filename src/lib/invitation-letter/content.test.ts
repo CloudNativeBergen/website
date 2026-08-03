@@ -134,11 +134,65 @@ describe('buildInvitationLetterContent', () => {
     ])
   })
 
+  it('carries the fields a consulate cross-checks against the application', () => {
+    const rows = Object.fromEntries(
+      build({
+        gender: 'Female',
+        residentialAddress: 'Riverside Drive 4, Nairobi, Kenya',
+        phone: '+254 700 000 000',
+        jobTitle: 'Software Engineer',
+        organization: 'Example Bank Ltd',
+      }).applicantRows.map((row) => [row.label, row.value]),
+    )
+
+    expect(rows['Gender']).toBe('Female')
+    expect(rows['Residential address']).toBe(
+      'Riverside Drive 4, Nairobi, Kenya',
+    )
+    expect(rows['Phone']).toBe('+254 700 000 000')
+    expect(rows['Employment']).toBe('Software Engineer, Example Bank Ltd')
+  })
+
+  it('reads the applicant table in passport-data-page order', () => {
+    const labels = build({
+      gender: 'Male',
+      passportExpiry: '2035-02-18',
+      residentialAddress: 'Somewhere',
+      phone: '+47 900 00 000',
+      organization: 'Example Ltd',
+    }).applicantRows.map((row) => row.label)
+
+    expect(labels).toEqual([
+      'Full name',
+      'Date of birth',
+      'Gender',
+      'Nationality',
+      'Passport number',
+      'Passport valid until',
+      'Residential address',
+      'Phone',
+      'Employment',
+    ])
+  })
+
+  it('falls back to whichever half of the employment line exists', () => {
+    const only = (overrides: Parameters<typeof build>[0]) =>
+      build(overrides).applicantRows.find((row) => row.label === 'Employment')
+        ?.value
+
+    expect(only({ organization: 'Example Ltd' })).toBe('Example Ltd')
+    expect(only({ jobTitle: 'Software Engineer' })).toBe('Software Engineer')
+    expect(only({})).toBeUndefined()
+  })
+
   it('omits optional rows that were not filled in', () => {
     const labels = build().applicantRows.map((row) => row.label)
 
     expect(labels).not.toContain('Passport valid until')
-    expect(labels).not.toContain('Organization')
+    expect(labels).not.toContain('Gender')
+    expect(labels).not.toContain('Residential address')
+    expect(labels).not.toContain('Phone')
+    expect(labels).not.toContain('Employment')
   })
 
   it('describes a speaker differently from an attendee', () => {

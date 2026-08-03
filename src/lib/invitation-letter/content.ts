@@ -124,9 +124,17 @@ export function buildInvitationLetterContent({
     conference.organizerAddress,
   ].filter((line): line is string => !!line?.trim())
 
+  // Ordered like a passport data page, then contact, then employment — the
+  // sequence a consular officer reads when checking the letter against the
+  // application.
+  const employment = [details.jobTitle, details.organization]
+    .filter((part) => !!part?.trim())
+    .join(', ')
+
   const applicantRows = [
     { label: 'Full name', value: details.fullName },
     { label: 'Date of birth', value: formatDate(details.dateOfBirth) ?? '' },
+    details.gender ? { label: 'Gender', value: details.gender } : undefined,
     { label: 'Nationality', value: details.nationality },
     { label: 'Passport number', value: details.passportNumber },
     details.passportExpiry
@@ -135,9 +143,11 @@ export function buildInvitationLetterContent({
           value: formatDate(details.passportExpiry) ?? '',
         }
       : undefined,
-    details.organization
-      ? { label: 'Organization', value: details.organization }
+    details.residentialAddress
+      ? { label: 'Residential address', value: details.residentialAddress }
       : undefined,
+    details.phone ? { label: 'Phone', value: details.phone } : undefined,
+    employment ? { label: 'Employment', value: employment } : undefined,
   ].filter((row): row is { label: string; value: string } => !!row)
 
   const eventRows = [
