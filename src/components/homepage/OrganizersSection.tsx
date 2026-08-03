@@ -1,5 +1,6 @@
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { OrganizersCompact } from '@/components/homepage/OrganizersCompact'
 import { PhaseCtaRow } from '@/components/homepage/PhaseCtaRow'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -8,8 +9,15 @@ import {
   type OrganizersSection,
 } from '@/lib/homepage'
 import type { HomepageLifecycle } from '@/lib/homepage/lifecycle'
+import { resolveVariant } from '@/lib/homepage/variants'
 
-/** Organizers band (legacy fallback slot). Null when there are none. */
+/**
+ * Organizers band (legacy fallback slot). Null when there are none.
+ *
+ * VARIANTS: `cards` (default) gives every organizer a full promotion card;
+ * `compact` collapses the team into a dense avatar-and-name roster. The sort,
+ * the copy fallbacks and the phase CTA row are shared by both.
+ */
 export function OrganizersSectionView({
   conference,
   section,
@@ -28,6 +36,7 @@ export function OrganizersSectionView({
         a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
       ) || []
   if (sortedOrganizers.length === 0) return null
+  const variant = resolveVariant('homepageOrganizers', section.variant)
   const heading = section.heading?.trim() || DEFAULT_ORGANIZERS_HEADING
   const description =
     section.description?.trim() ||
@@ -44,18 +53,22 @@ export function OrganizersSectionView({
           </p>
         </div>
 
-        <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
-          {sortedOrganizers.map((organizer) => (
-            <SpeakerPromotionCard
-              key={organizer._id}
-              speaker={{
-                ...organizer,
-                talks: [],
-              }}
-              variant="organizer"
-            />
-          ))}
-        </div>
+        {variant === 'compact' ? (
+          <OrganizersCompact organizers={sortedOrganizers} />
+        ) : (
+          <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
+            {sortedOrganizers.map((organizer) => (
+              <SpeakerPromotionCard
+                key={organizer._id}
+                speaker={{
+                  ...organizer,
+                  talks: [],
+                }}
+                variant="organizer"
+              />
+            ))}
+          </div>
+        )}
 
         <PhaseCtaRow
           lifecycle={lifecycle}
