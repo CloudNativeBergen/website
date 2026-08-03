@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 
 import { SaveTheDate } from './SaveTheDate'
@@ -196,5 +196,140 @@ describe('SaveTheDate — missing conference data', () => {
     )
 
     expect(container.innerHTML).toBe('')
+  })
+})
+
+/**
+ * The clock has to be pinned for anything that renders the countdown: the
+ * embedded strip reads `Date.now()` on every tick, so an unpinned run would
+ * write a different snapshot every second.
+ */
+const FIXED_NOW = new Date('2026-03-01T12:00:00Z').getTime()
+
+describe('SaveTheDate — variants', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(FIXED_NOW)
+  })
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
+
+  const roadmapLifecycle = makeLifecycle({ cfp: 'open' })
+
+  function renderVariant(
+    sectionOverrides: Partial<SaveTheDateSection> = {},
+    conferenceOverrides: Partial<Conference> = {},
+  ) {
+    return render(
+      <SaveTheDate
+        section={section(sectionOverrides)}
+        conference={makeConference({
+          cfpStartDate: '2026-02-01',
+          cfpEndDate: '2026-06-15',
+          programDate: '2026-08-15',
+          ...conferenceOverrides,
+        })}
+        lifecycle={roadmapLifecycle}
+      />,
+    )
+  }
+
+  /**
+   * BACK-COMPAT TRIPWIRE. Captured from the PRE-VARIANT component: the DEFAULT
+   * (`card`) rendering is what the live conference sites get. A diff here means
+   * the default path regressed — fix the code, never `vitest -u`.
+   */
+  describe('default (card) markup is frozen', () => {
+    it('renders the boxed card with countdown and roadmap', () => {
+      const { container } = renderVariant({
+        description:
+          'Two days of talks, workshops and hallway track on the western fjords.',
+      })
+      expect(container.innerHTML).toMatchSnapshot()
+    })
+
+    it('renders the card without a description', () => {
+      const { container } = renderVariant()
+      expect(container.innerHTML).toMatchSnapshot()
+    })
+  })
+
+  describe('variant resolution', () => {
+    it('renders an explicit `card` identically to no variant at all', () => {
+      const { container: implicit } = renderVariant()
+      const withoutVariant = implicit.innerHTML
+      cleanup()
+      const { container: explicit } = renderVariant({ variant: 'card' })
+      expect(explicit.innerHTML).toBe(withoutVariant)
+    })
+
+    it('falls back to the card for a variant from the future', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { container: implicit } = renderVariant()
+      const withoutVariant = implicit.innerHTML
+      cleanup()
+      const { container: unknown } = renderVariant({
+        variant: 'poster' as 'card',
+      })
+      expect(unknown.innerHTML).toBe(withoutVariant)
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    })
+  })
+
+  describe('strip variant', () => {
+    it('keeps the dates, the place and the countdown', () => {
+      const { container } = renderVariant({ variant: 'strip' })
+      const text = container.textContent ?? ''
+      expect(text).toContain('27.–28. oktober 2026')
+      expect(text).toContain('Grieghallen, Bergen')
+      expect(container.querySelector('[role="timer"]')).toBeTruthy()
+      expectNoBrokenFragments(container)
+    })
+
+    it('drops the roadmap — that is the whole point of the strip', () => {
+      const { container: card } = renderVariant()
+      expect(card.textContent).toContain('What happens next')
+      cleanup()
+      const { container: strip } = renderVariant({ variant: 'strip' })
+      expect(strip.textContent).not.toContain('What happens next')
+    })
+
+    it('keeps the labelled-region contract of the card', () => {
+      const { container } = renderVariant({ variant: 'strip' })
+      const band = container.querySelector('section')!
+      expect(band.getAttribute('aria-labelledby')).toBe('save-the-date-title')
+      expect(container.querySelector('#save-the-date-title')).toBeTruthy()
+    })
+
+    it('still renders an organizer description', () => {
+      const { container } = renderVariant({
+        variant: 'strip',
+        description: 'Bring a laptop — the workshops are hands-on.',
+      })
+      expect(container.textContent).toContain(
+        'Bring a laptop — the workshops are hands-on.',
+      )
+      expectNoBrokenFragments(container)
+    })
+
+    it('falls back to the title when the dates are not fixed', () => {
+      const { container } = renderVariant(
+        { variant: 'strip' },
+        { startDate: '', endDate: '' },
+      )
+      expect(container.textContent).toContain('Cloud Native Days Bergen')
+      expectNoBrokenFragments(container)
+    })
+
+    it('removes itself when there is neither a date nor a place', () => {
+      const { container } = renderVariant(
+        { variant: 'strip' },
+        { startDate: '', endDate: '', city: '', venueName: undefined },
+      )
+      expect(container.innerHTML).toBe('')
+    })
   })
 })
