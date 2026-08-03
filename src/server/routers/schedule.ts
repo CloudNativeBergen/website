@@ -69,7 +69,10 @@ export const scheduleRouter = router({
       // can reach a legacy day would patch the live program to `draft` in place
       // and blank it from the public site.
       if (payload._id && payload.status === ScheduleStatus.Draft) {
-        const existingStatus = await getScheduleStatusById(payload._id)
+        const existingStatus = await getScheduleStatusById(
+          payload._id,
+          conference._id,
+        )
         if (
           existingStatus === ScheduleStatus.Official ||
           existingStatus === null

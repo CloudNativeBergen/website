@@ -56,10 +56,16 @@ export async function getTalkStatuses(
 /** Fetch the current status of a schedule document. */
 export async function getScheduleStatusById(
   scheduleId: string,
+  conferenceId: string,
 ): Promise<string | null> {
+  // Scoped to the tenant AND the type: this read decides whether a save forks,
+  // and an unscoped `*[_id == $id]` answers questions about documents in other
+  // conferences. A foreign or unknown id now returns null, which the caller
+  // treats as official and therefore forks — the safe direction, and it reveals
+  // nothing about whether that id exists elsewhere.
   const doc = await clientWrite.fetch<{ status?: string } | null>(
-    `*[_id == $id][0]{ status }`,
-    { id: scheduleId },
+    `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]{ status }`,
+    { id: scheduleId, conferenceId },
   )
   return doc?.status || null
 }

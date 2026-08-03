@@ -133,22 +133,24 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       }
     }
 
+    // Return NEW slot objects rather than mutating. `[...talks]` copies the
+    // array but not its elements, so assigning `t.talk` here rewrote the slot
+    // objects that `schedules` itself owns: any other consumer saw the suffixed
+    // title, and because this memo keys on `schedules`, a re-run appended it a
+    // second time — "Talk (Part 1) (Part 1)".
     const currentPart = new Map<string, number>()
-    for (const t of sorted) {
-      if (t.talk?._id) {
-        const total = counts.get(t.talk._id) || 0
-        if (total > 1) {
-          const part = (currentPart.get(t.talk._id) || 0) + 1
-          currentPart.set(t.talk._id, part)
-          t.talk = {
-            ...t.talk,
-            title: `${t.talk.title} (Part ${part})`,
-          }
-        }
-      }
-    }
+    return sorted.map((t) => {
+      if (!t.talk?._id) return t
+      const total = counts.get(t.talk._id) || 0
+      if (total <= 1) return t
 
-    return sorted
+      const part = (currentPart.get(t.talk._id) || 0) + 1
+      currentPart.set(t.talk._id, part)
+      return {
+        ...t,
+        talk: { ...t.talk, title: `${t.talk.title} (Part ${part})` },
+      }
+    })
   }, [schedules])
 
   const filteredData = useMemo<FilteredProgramData>(() => {
