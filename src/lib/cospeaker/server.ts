@@ -13,6 +13,7 @@ import { getProposalAbstract } from './sanity'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { canonicalEmail } from '@/lib/speaker/email'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -116,7 +117,7 @@ function buildEmailEventContext(
 } {
   return {
     protocol: domain.includes('localhost') ? 'http://' : 'https://',
-    eventName: conference.title || 'Cloud Native Days',
+    eventName: conference.title || PLATFORM_NAME,
     eventLocation: conference.city
       ? `${conference.city}, ${conference.country || 'Norway'}`
       : 'Location TBA',

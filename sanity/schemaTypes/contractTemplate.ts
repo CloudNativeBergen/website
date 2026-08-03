@@ -103,7 +103,10 @@ export default defineType({
       title: 'Header Text',
       type: 'string',
       description: 'Text shown in the PDF header (e.g. organization name)',
-      initialValue: 'Cloud Native Days Norway',
+      // No initialValue: this is one tenant's document and the header must be
+      // THEIR organization name. Seeding it with a specific conference's name
+      // put that brand on every other organizer's contracts. The admin editor
+      // seeds it from the resolved conference instead.
     }),
     defineField({
       name: 'footerText',

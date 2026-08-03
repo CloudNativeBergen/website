@@ -3,6 +3,7 @@ import { resend, retryWithBackoff, isTransientError } from '@/lib/email/config'
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
 import { emailBrandColor } from '@/lib/branding/theme'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface SendSpeakerTicketEmailParams {
   speaker: { name: string; email: string }
@@ -41,7 +42,7 @@ export async function sendSpeakerTicketEmail({
     )
   }
 
-  const from = `${conference.organizer || 'Cloud Native Days'} <${fromAddress}>`
+  const from = `${conference.organizer || PLATFORM_NAME} <${fromAddress}>`
   const subject = `🎟️ Your speaker ticket for ${conference.title}`
 
   const template = SpeakerTicketEmailTemplate({

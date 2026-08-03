@@ -46,7 +46,12 @@ export function ContractTemplateEditorPage({
   const [language, setLanguage] = useState<'nb' | 'en'>('nb')
   const [currency, setCurrency] = useState('NOK')
   const [tier, setTier] = useState('')
-  const [headerText, setHeaderText] = useState('Cloud Native Days Norway')
+  // Seed a NEW template's contract header from the tenant's own identity. It
+  // used to be hardcoded to one conference's name, so every other organizer's
+  // first contract shipped with someone else's branding on it.
+  const [headerText, setHeaderText] = useState(
+    conference.organizer || conference.title || '',
+  )
   const [footerText, setFooterText] = useState('')
   const [isDefault, setIsDefault] = useState(false)
   const [isActive, setIsActive] = useState(true)
