@@ -70,7 +70,8 @@ export function evaluateBilling(
         {
           field: 'billing',
           label: 'Billing details',
-          message: 'No billing details recorded — this sponsor cannot be invoiced.',
+          message:
+            'No billing details recorded — this sponsor cannot be invoiced.',
         },
       ],
     }

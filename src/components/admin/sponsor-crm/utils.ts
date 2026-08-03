@@ -2,8 +2,10 @@ import type {
   InvoiceStatus,
   SignatureStatus,
   SponsorForConferenceExpanded,
+  SponsorStatus,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
+import { SPONSOR_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { getCurrentDateTime } from '@/lib/time'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
@@ -230,6 +232,26 @@ export function getSignatureStatusBadgeProps(status: SignatureStatus): {
       return { label: 'Rejected', color: 'red' }
     case 'expired':
       return { label: 'Expired', color: 'orange' }
+  }
+}
+
+/** Badge presentation for a pipeline stage, using the canonical stage labels. */
+export function getSponsorStatusBadgeProps(status: SponsorStatus): {
+  label: string
+  color: BadgeColor
+} {
+  const label = SPONSOR_STATUS_LABELS[status] ?? formatStatusName(status)
+  switch (status) {
+    case 'prospect':
+      return { label, color: 'gray' }
+    case 'contacted':
+      return { label, color: 'blue' }
+    case 'negotiating':
+      return { label, color: 'yellow' }
+    case 'closed-won':
+      return { label, color: 'green' }
+    case 'closed-lost':
+      return { label, color: 'red' }
   }
 }
 
