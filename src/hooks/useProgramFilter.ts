@@ -122,7 +122,8 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     // Group talks by ID to find multi-part sessions and append suffixes
     const counts = new Map<string, number>()
     const sorted = [...talks].sort((a, b) => {
-      if (a.scheduleDate !== b.scheduleDate) return a.scheduleDate.localeCompare(b.scheduleDate)
+      if (a.scheduleDate !== b.scheduleDate)
+        return a.scheduleDate.localeCompare(b.scheduleDate)
       return a.startTime.localeCompare(b.startTime)
     })
 

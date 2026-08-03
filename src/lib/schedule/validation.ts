@@ -103,7 +103,9 @@ export function validateSchedulePayload(
         if (!talkSlots.has(refId)) {
           talkSlots.set(refId, [])
         }
-        talkSlots.get(refId)!.push({ startTime: slot.startTime, endTime: slot.endTime })
+        talkSlots
+          .get(refId)!
+          .push({ startTime: slot.startTime, endTime: slot.endTime })
       }
     }
   }

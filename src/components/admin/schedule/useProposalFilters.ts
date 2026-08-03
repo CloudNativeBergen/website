@@ -3,6 +3,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ProposalExisting } from '@/lib/proposal/types'
 
+/** A topic is either a dereferenced document with a title, or a bare string. */
+type TopicLike = string | { title?: string }
+
 /**
  * Search + format + level filtering for a list of proposals. Extracted from
  * `UnassignedProposals` so the desktop sidebar and the mobile assign sheet share
@@ -17,7 +20,10 @@ export interface ProposalFilterState {
   availableFormats: string[]
   availableLevels: string[]
   availableTopics: string[]
-  filteredProposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[]
+  filteredProposals: (ProposalExisting & {
+    remainingMinutes?: number
+    isPartiallyScheduled?: boolean
+  })[]
   totalCount: number
   hasActiveFilters: boolean
   statsText: string
@@ -30,13 +36,20 @@ export interface ProposalFilterState {
 }
 
 export function useProposalFilters(
-  proposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[],
+  proposals: (ProposalExisting & {
+    remainingMinutes?: number
+    isPartiallyScheduled?: boolean
+  })[],
 ): ProposalFilterState {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFormats, setSelectedFormats] = useState<string[]>([])
   const [selectedLevels, setSelectedLevels] = useState<string[]>([])
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
-  const [showPartiallyScheduled, setShowPartiallyScheduled] = useState(false)
+  // Defaults ON. Splitting a talk (resizing it down) leaves a REMAINDER in the
+  // unassigned list; with this off the remainder vanished the instant it was
+  // created and the only clue was a checkbox buried in the filter bar. Hiding
+  // partials is now the deliberate act, so it counts as an active filter below.
+  const [showPartiallyScheduled, setShowPartiallyScheduled] = useState(true)
 
   const { availableFormats, availableLevels, availableTopics } = useMemo(() => {
     const formats = new Set(proposals.map((p) => p.format).filter(Boolean))
@@ -44,9 +57,9 @@ export function useProposalFilters(
     const topics = new Set<string>()
     proposals.forEach((p) => {
       if (Array.isArray(p.topics)) {
-        p.topics.forEach((t: any) => {
-          if (t.title) topics.add(t.title)
-          else if (typeof t === 'string') topics.add(t)
+        p.topics.forEach((t: TopicLike) => {
+          const title = typeof t === 'string' ? t : t.title
+          if (title) topics.add(title)
         })
       }
     })
@@ -84,17 +97,25 @@ export function useProposalFilters(
         }
       }
 
-      if (selectedFormats.length > 0 && (!proposal.format || !selectedFormats.includes(proposal.format))) {
+      if (
+        selectedFormats.length > 0 &&
+        (!proposal.format || !selectedFormats.includes(proposal.format))
+      ) {
         return false
       }
 
-      if (selectedLevels.length > 0 && (!proposal.level || !selectedLevels.includes(proposal.level))) {
+      if (
+        selectedLevels.length > 0 &&
+        (!proposal.level || !selectedLevels.includes(proposal.level))
+      ) {
         return false
       }
 
       if (selectedTopics.length > 0) {
         const pTopics = Array.isArray(proposal.topics)
-          ? proposal.topics.map((t: any) => t.title || (typeof t === 'string' ? t : ''))
+          ? proposal.topics.map(
+              (t: TopicLike) => (typeof t === 'string' ? t : t.title) ?? '',
+            )
           : []
         if (!pTopics.some((t) => selectedTopics.includes(t))) {
           return false
@@ -103,18 +124,30 @@ export function useProposalFilters(
 
       return true
     })
-  }, [proposals, searchQuery, selectedFormats, selectedLevels, selectedTopics, showPartiallyScheduled])
+  }, [
+    proposals,
+    searchQuery,
+    selectedFormats,
+    selectedLevels,
+    selectedTopics,
+    showPartiallyScheduled,
+  ])
 
   const clearFilters = useCallback(() => {
     setSearchQuery('')
     setSelectedFormats([])
     setSelectedLevels([])
     setSelectedTopics([])
-    setShowPartiallyScheduled(false)
+    // Back to the default (shown), not to hidden.
+    setShowPartiallyScheduled(true)
   }, [])
 
   const hasActiveFilters = Boolean(
-    searchQuery || selectedFormats.length > 0 || selectedLevels.length > 0 || selectedTopics.length > 0 || showPartiallyScheduled,
+    searchQuery ||
+    selectedFormats.length > 0 ||
+    selectedLevels.length > 0 ||
+    selectedTopics.length > 0 ||
+    !showPartiallyScheduled,
   )
 
   const statsText =

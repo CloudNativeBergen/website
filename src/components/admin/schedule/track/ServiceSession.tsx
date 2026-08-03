@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { calculateTalkPosition } from '@/lib/schedule/geometry'
 import { DraggableServiceSession } from '../DraggableServiceSession'
+import { useScheduleContext } from '../ScheduleContext'
 import { useScheduleItemResize } from './useScheduleItemResize'
 
 export const ServiceSession = ({
@@ -32,6 +33,9 @@ export const ServiceSession = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(talk.placeholder || '')
+  // Live (official) view: rename/duplicate/remove/resize are edits with no save
+  // path, so hide them entirely rather than letting them dirty the editor.
+  const { isReadOnly } = useScheduleContext()
 
   const position = useMemo(() => calculateTalkPosition(talk), [talk])
 
@@ -104,7 +108,7 @@ export const ServiceSession = ({
           sourceTimeSlot={talk.startTime}
         />
 
-        {isEditing && (
+        {isEditing && !isReadOnly && (
           <div className="absolute inset-0 z-30 rounded-md border-2 border-blue-400 bg-blue-50 p-2 dark:border-blue-500 dark:bg-blue-900/20">
             <div className="space-y-1">
               <input
@@ -136,53 +140,57 @@ export const ServiceSession = ({
           </div>
         )}
 
-        <div
-          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
-            isResizing
-              ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
-              : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
-          }`}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          title="Drag to resize"
-        >
-          <div
-            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
-              isResizing
-                ? 'bg-blue-500 dark:bg-blue-400'
-                : 'bg-gray-400 dark:bg-gray-300'
-            }`}
-          ></div>
-        </div>
+        {!isReadOnly && (
+          <>
+            <div
+              className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
+                isResizing
+                  ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
+                  : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
+              }`}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              title="Drag to resize"
+            >
+              <div
+                className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
+                  isResizing
+                    ? 'bg-blue-500 dark:bg-blue-400'
+                    : 'bg-gray-400 dark:bg-gray-300'
+                }`}
+              ></div>
+            </div>
 
-        <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={handleStartEdit}
-            className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
-            title="Rename session"
-            type="button"
-          >
-            <PencilIcon className="h-3 w-3" />
-          </button>
-          <button
-            onClick={handleDuplicate}
-            className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
-            title="Duplicate to all tracks"
-            type="button"
-          >
-            <DocumentDuplicateIcon className="h-3 w-3" />
-          </button>
-          <button
-            onClick={handleRemove}
-            className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
-            title="Remove session"
-            type="button"
-          >
-            <TrashIcon className="h-3 w-3" />
-          </button>
-        </div>
+            <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                onClick={handleStartEdit}
+                className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+                title="Rename session"
+                type="button"
+              >
+                <PencilIcon className="h-3 w-3" />
+              </button>
+              <button
+                onClick={handleDuplicate}
+                className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
+                title="Duplicate to all tracks"
+                type="button"
+              >
+                <DocumentDuplicateIcon className="h-3 w-3" />
+              </button>
+              <button
+                onClick={handleRemove}
+                className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
+                title="Remove session"
+                type="button"
+              >
+                <TrashIcon className="h-3 w-3" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
+import { useScheduleContext } from './ScheduleContext'
 import {
   ClockIcon,
   UserIcon,
@@ -59,42 +60,53 @@ export function DraggableProposal({
   isDragging = false,
 }: DraggableProposalProps) {
   const levelConfig = getLevelConfig(proposal.level)
+  // Live (official) view: the board is a read-only preview, so the card must not
+  // be draggable at all — a drop there would mutate state with no save path.
+  const { isReadOnly } = useScheduleContext()
 
-  const { dragItem, durationMinutes, talkSize, dragId, speakerInfo, isOverridden } =
-    useMemo(() => {
-      const defaultDuration = getProposalDurationMinutes(proposal)
-      const duration = providedDurationMinutes ?? defaultDuration
-      const isOverridden = providedDurationMinutes !== undefined && providedDurationMinutes !== defaultDuration
+  const {
+    dragItem,
+    durationMinutes,
+    talkSize,
+    dragId,
+    speakerInfo,
+    isOverridden,
+  } = useMemo(() => {
+    const defaultDuration = getProposalDurationMinutes(proposal)
+    const duration = providedDurationMinutes ?? defaultDuration
+    const isOverridden =
+      providedDurationMinutes !== undefined &&
+      providedDurationMinutes !== defaultDuration
 
-      // A scheduled talk is dragged FROM a slot (both source fields are always
-      // passed together by ScheduledTalk); an unassigned proposal carries none.
-      const item: DragItem =
-        sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
-          ? {
-              type: 'scheduled-talk',
-              proposal,
-              sourceTrackIndex,
-              sourceTimeSlot,
-              durationMinutes: duration,
-            }
-          : { type: 'proposal', proposal }
-      const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
+    // A scheduled talk is dragged FROM a slot (both source fields are always
+    // passed together by ScheduledTalk); an unassigned proposal carries none.
+    const item: DragItem =
+      sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
+        ? {
+            type: 'scheduled-talk',
+            proposal,
+            sourceTrackIndex,
+            sourceTimeSlot,
+            durationMinutes: duration,
+          }
+        : { type: 'proposal', proposal }
+    const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
 
-      let size: 'very-short' | 'short' | 'medium' | 'long'
-      if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
-      else if (duration <= TALK_THRESHOLDS.SHORT) size = 'short'
-      else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
-      else size = 'long'
+    let size: 'very-short' | 'short' | 'medium' | 'long'
+    if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
+    else if (duration <= TALK_THRESHOLDS.SHORT) size = 'short'
+    else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
+    else size = 'long'
 
-      return {
-        dragItem: item,
-        durationMinutes: duration,
-        isOverridden,
-        talkSize: size,
-        dragId: id,
-        speakerInfo: populatedSpeakerNames(proposal),
-      }
-    }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
+    return {
+      dragItem: item,
+      durationMinutes: duration,
+      isOverridden,
+      talkSize: size,
+      dragId: id,
+      speakerInfo: populatedSpeakerNames(proposal),
+    }
+  }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
   const topicStyling = useMemo(() => {
     const topics = proposal.topics as Topic[]
@@ -165,6 +177,7 @@ export function DraggableProposal({
     // registration can't clobber the source card's in dnd-kit's registry.
     id: isDragging ? `${dragId}-overlay` : dragId,
     data: dragItem,
+    disabled: isReadOnly,
   })
 
   const transformStyle = useMemo(() => {
@@ -378,7 +391,10 @@ export function DraggableProposal({
         style={{
           ...transformStyle,
           ...topicStyling.styles,
-          height: sourceTrackIndex !== undefined ? '100%' : `${durationMinutes * PIXELS_PER_MINUTE}px`,
+          height:
+            sourceTrackIndex !== undefined
+              ? '100%'
+              : `${durationMinutes * PIXELS_PER_MINUTE}px`,
         }}
         title={tooltipContent}
       >
@@ -392,15 +408,17 @@ export function DraggableProposal({
               whose Enter/Space actually starts the drag. (Keyboard drops
               remain a known gap: `pointerWithin` collision detection has no
               pointer during a keyboard drag.) */}
-          <button
-            type="button"
-            aria-label={`Drag ${proposal.title}`}
-            className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
-            {...attributes}
-            {...listeners}
-          >
-            <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              aria-label={`Drag ${proposal.title}`}
+              className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
+              {...attributes}
+              {...listeners}
+            >
+              <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+            </button>
+          )}
 
           <div className="flex min-w-0 flex-1 items-center gap-1">
             <div className="min-w-0 flex-1">{TitleComponent}</div>

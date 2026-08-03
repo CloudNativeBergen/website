@@ -48,15 +48,20 @@ const patchMock = vi.fn((id?: unknown) => {
 })
 
 // Default fetchMock implementation
-const fetchMock = vi.fn((query: string) => {
-  if (query.includes('conferenceRef')) {
-    return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
-  }
-  if (query.includes('trackTitle')) {
-    return Promise.resolve({ date: '2026-09-10', tracks: [] })
-  }
-  return Promise.resolve(null)
-})
+// Typed as returning `Promise<unknown>` so per-test implementations can return
+// whichever document shape that query needs. Inferring from the default
+// implementation pins the union to just those shapes and rejects the rest.
+const fetchMock = vi.fn<(query: string) => Promise<unknown>>(
+  (query: string) => {
+    if (query.includes('conferenceRef')) {
+      return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
+    }
+    if (query.includes('trackTitle')) {
+      return Promise.resolve({ date: '2026-09-10', tracks: [] })
+    }
+    return Promise.resolve(null)
+  },
+)
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
@@ -95,7 +100,7 @@ const priorReadIssued = () =>
 beforeEach(() => {
   vi.clearAllMocks()
   persistedStatus = undefined
-  fetchMock.mockImplementation((query: string): unknown => {
+  fetchMock.mockImplementation((query: string) => {
     if (query.includes('conferenceRef')) {
       return Promise.resolve({
         _type: 'schedule',
@@ -122,7 +127,7 @@ describe('saveScheduleToSanity — schedule-change alert gating (N6)', () => {
   it('skips the alert pass and logs when the prior-placements read fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    fetchMock.mockImplementation((query: string): unknown => {
+    fetchMock.mockImplementation((query: string) => {
       if (query.includes('conferenceRef')) {
         return Promise.resolve({ _type: 'schedule', conferenceRef: 'conf-1' })
       }

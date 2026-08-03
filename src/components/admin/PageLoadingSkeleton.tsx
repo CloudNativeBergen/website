@@ -177,12 +177,15 @@ export function AdminScheduleLoading() {
         {/* Sidebar skeleton */}
         <div className="flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900">
           <div className="relative flex min-h-[64px] w-full items-center border-b border-gray-200 bg-gray-50/50 px-4 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-            <div className="h-9 w-full rounded-md bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            <div className="h-9 w-full animate-pulse rounded-md bg-gray-200 dark:bg-gray-700" />
           </div>
           <div className="flex-1 overflow-hidden">
             <div className="animate-pulse space-y-2 p-4">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+                <div
+                  key={i}
+                  className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+                >
                   <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
                   <div className="mt-2 h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
                 </div>

@@ -292,7 +292,11 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined, status: ScheduleStatus.Official })
+    const newDay = updateDay({
+      _id: '',
+      _rev: undefined,
+      status: ScheduleStatus.Official,
+    })
     const result = await saveScheduleToSanity(newDay, conference)
 
     // Exactly one transaction, committed once. No standalone patch() write.
@@ -338,7 +342,11 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined, status: ScheduleStatus.Draft })
+    const newDay = updateDay({
+      _id: '',
+      _rev: undefined,
+      status: ScheduleStatus.Draft,
+    })
     await saveScheduleToSanity(newDay, conference)
 
     expect(clientWrite.transaction).toHaveBeenCalledTimes(1)

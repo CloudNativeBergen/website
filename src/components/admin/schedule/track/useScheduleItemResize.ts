@@ -7,12 +7,43 @@ import {
   SCHEDULE_END,
   calculateEndTime,
   durationBetween,
+  getProposalDurationMinutes,
   toMinutes,
 } from '@/lib/schedule/time'
-import { isTrackIntervalFree, matchService, matchTalk } from '@/lib/schedule/rules'
+import {
+  isTrackIntervalFree,
+  matchService,
+  matchTalk,
+} from '@/lib/schedule/rules'
 
 const MIN_DURATION = 5
-const MAX_DURATION = 180
+/**
+ * Fallback ceiling for items with no intrinsic length (service sessions). It is
+ * a FLOOR for the real cap, never a cap in itself — see {@link maxDurationFor}.
+ */
+const DEFAULT_MAX_DURATION = 180
+
+/**
+ * Largest duration this particular item may be dragged to.
+ *
+ * The old flat `MAX_DURATION = 180` was written when this hook only ran on
+ * service sessions. It now mounts on every `ScheduledTalk` too, so merely
+ * GRABBING the handle of a 240-minute workshop clamped it to 180 and releasing
+ * kept the truncation. The cap therefore has to derive from the item:
+ *
+ * - a talk can always be dragged back out to its full FORMAT duration (a split
+ *   remainder must be re-joinable), and
+ * - nothing may be capped below the length it already has, so an existing long
+ *   item is never silently shortened just by touching its handle.
+ *
+ * The real limits (no overlap with the next item, end-of-day) still come from
+ * `clampDuration` below.
+ */
+function maxDurationFor(talk: TrackTalk): number {
+  const current = durationBetween(talk.startTime, talk.endTime)
+  const declared = talk.talk ? getProposalDurationMinutes(talk.talk) : 0
+  return Math.max(DEFAULT_MAX_DURATION, declared, current)
+}
 
 /**
  * Resize interaction for a service session's bottom handle.
@@ -66,12 +97,16 @@ export function useScheduleItemResize({
     capturePointerIdRef.current = null
   }, [])
 
-  // Largest duration (quantized to the slot interval, within [MIN, MAX]) whose
-  // end stays free and inside the schedule — i.e. clamp `requested` down until
-  // both scheduling rules hold. Reuses the tested rule, no new overlap math.
+  // Largest duration (quantized to the slot interval, within
+  // [MIN_DURATION, maxDurationFor(talk)]) whose end stays free and inside the
+  // schedule — i.e. clamp `requested` down until both scheduling rules hold.
+  // Reuses the tested rule, no new overlap math.
   const clampDuration = useCallback(
     (requested: number): number => {
-      let duration = Math.min(MAX_DURATION, Math.max(MIN_DURATION, requested))
+      let duration = Math.min(
+        maxDurationFor(talk),
+        Math.max(MIN_DURATION, requested),
+      )
       const exclude = talk.talk
         ? matchTalk(talk.talk._id, talk.startTime)
         : matchService(talk.placeholder ?? '', talk.startTime)
@@ -88,7 +123,7 @@ export function useScheduleItemResize({
       }
       return duration
     },
-    [track, talk.placeholder, talk.startTime],
+    [track, talk],
   )
 
   const handlePointerDown = useCallback(

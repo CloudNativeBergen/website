@@ -21,6 +21,7 @@ import {
   useEffect,
   useRef,
   useTransition,
+  type Dispatch,
 } from 'react'
 import React from 'react'
 import { ScheduleTrack, TrackTalk, Conference } from '@/lib/conference/types'
@@ -28,6 +29,7 @@ import { DragItem, type EditorSchedule } from '@/lib/schedule/types'
 import {
   scheduleReducer,
   initScheduleEditorState,
+  type ScheduleAction,
 } from '@/lib/schedule/reducer'
 import {
   computeUnassigned,
@@ -67,59 +69,83 @@ const LAYOUT_CLASSES = {
     'border-b border-red-200 bg-red-50 px-4 py-2 shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
-const ErrorBanner = React.memo(({ error, onRefresh, isRefreshing }: { error: string; onRefresh?: () => void; isRefreshing?: boolean }) => (
-  <div className={LAYOUT_CLASSES.errorBanner}>
-    <div className="flex items-center justify-between">
-      <p className="text-red-800 dark:text-red-300">{error}</p>
-      {onRefresh && (
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="ml-4 inline-flex items-center gap-2 shrink-0 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:ring-offset-red-50 disabled:opacity-50 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/80 dark:focus:ring-offset-red-900"
-        >
-          {isRefreshing && (
-            <svg
-              className="h-4 w-4 animate-spin text-red-800 dark:text-red-200"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              ></circle>
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-          )}
-          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-        </button>
-      )}
+const ErrorBanner = React.memo(
+  ({
+    error,
+    onRefresh,
+    isRefreshing,
+  }: {
+    error: string
+    onRefresh?: () => void
+    isRefreshing?: boolean
+  }) => (
+    <div className={LAYOUT_CLASSES.errorBanner}>
+      <div className="flex items-center justify-between">
+        <p className="text-red-800 dark:text-red-300">{error}</p>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="ml-4 inline-flex shrink-0 items-center gap-2 rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:ring-offset-red-50 focus:outline-none disabled:opacity-50 dark:bg-red-900/50 dark:text-red-200 dark:hover:bg-red-900/80 dark:focus:ring-offset-red-900"
+          >
+            {isRefreshing && (
+              <svg
+                className="h-4 w-4 animate-spin text-red-800 dark:text-red-200"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+            )}
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+          </button>
+        )}
+      </div>
     </div>
-  </div>
-))
+  ),
+)
 ErrorBanner.displayName = 'ErrorBanner'
 
-const EmptyState = React.memo(({ onAddTrack }: { onAddTrack: () => void }) => (
-  <div className={LAYOUT_CLASSES.emptyState}>
-    <div className="text-center">
-      <p className="mb-4 text-gray-500 dark:text-gray-400">
-        No tracks created yet
-      </p>
-      <button onClick={onAddTrack} className={PRIMARY_BUTTON} type="button">
-        <PlusIcon className="h-4 w-4" />
-        Create First Track
-      </button>
+const EmptyState = React.memo(
+  ({
+    onAddTrack,
+    isReadOnly = false,
+  }: {
+    onAddTrack: () => void
+    isReadOnly?: boolean
+  }) => (
+    <div className={LAYOUT_CLASSES.emptyState}>
+      <div className="text-center">
+        <p className="mb-4 text-gray-500 dark:text-gray-400">
+          {isReadOnly
+            ? 'This day has no published tracks'
+            : 'No tracks created yet'}
+        </p>
+        {/* In the live (read-only) view there is no save path, so don't offer
+            an edit that could never be persisted. */}
+        {!isReadOnly && (
+          <button onClick={onAddTrack} className={PRIMARY_BUTTON} type="button">
+            <PlusIcon className="h-4 w-4" />
+            Create First Track
+          </button>
+        )}
+      </div>
     </div>
-  </div>
-))
+  ),
+)
 EmptyState.displayName = 'EmptyState'
 
 const TracksGrid = ({
@@ -198,6 +224,12 @@ export function ScheduleEditor({
 
   const [isDraftMode, setIsDraftMode] = useState(true)
 
+  // Live mode shows the OFFICIAL schedule, which has no save path at all
+  // (autosave and the Save button are draft-only). Editing it therefore has to
+  // be impossible, not merely unsaveable — see `editDispatch` and the
+  // `isReadOnly` context flag that hides every affordance.
+  const isReadOnly = !isDraftMode
+
   const mergedSchedules = useMemo(() => {
     if (!isDraftMode) return officialSchedules
 
@@ -215,8 +247,6 @@ export function ScheduleEditor({
     })
   }, [isDraftMode, draftSchedules, officialSchedules])
 
-
-
   // Desktop is the SSR default (`true`), so wide screens never flash the mobile
   // layout and there is no hydration mismatch; phones flip to the tap-driven
   // view after mount. The two layouts are mutually exclusive so the drag board's
@@ -228,11 +258,16 @@ export function ScheduleEditor({
   const actionMutation = api.schedule.action.useMutation()
 
   // Polling for external changes
-  const { data: latestVersions } = api.schedule.admin.pollVersions.useQuery(undefined, {
-    refetchInterval: 10000,
-  })
+  const { data: latestVersions } = api.schedule.admin.pollVersions.useQuery(
+    undefined,
+    {
+      refetchInterval: 10000,
+    },
+  )
 
-  const [externalChangeError, setExternalChangeError] = useState<string | null>(null)
+  const [externalChangeError, setExternalChangeError] = useState<string | null>(
+    null,
+  )
 
   // Single reducer over ALL days. The active day is `state.currentDayIndex`
   // (identity), never an `_id` — see reducer.ts for why that fixes the
@@ -251,6 +286,19 @@ export function ScheduleEditor({
     }
     dispatch({ type: 'resetSchedules', schedules: mergedSchedules })
   }, [mergedSchedules])
+
+  // Every MUTATING dispatch goes through here. In live mode it is a no-op, so
+  // even a path that forgets to hide its affordance (or a stale keyboard
+  // shortcut) cannot push the editor into a dirty state that has no save path
+  // and would be silently wiped by the next `resetSchedules`. Save/lifecycle
+  // actions (`saveStart`, `changeDay`, …) keep using the raw `dispatch`.
+  const editDispatch = useCallback<Dispatch<ScheduleAction>>(
+    (action) => {
+      if (isReadOnly) return
+      dispatch(action)
+    },
+    [isReadOnly],
+  )
 
   const currentDayIndex = state.currentDayIndex
   const currentSchedule = state.schedules[currentDayIndex] ?? null
@@ -292,9 +340,43 @@ export function ScheduleEditor({
     utils.schedule.admin.pollVersions.invalidate()
   }, [router, utils])
 
-  // Detect external changes by comparing _rev
+  // Every revision this client has ever HELD for a day: the ones loaded from the
+  // server props plus the ones our own saves produced.
+  //
+  // Why a set and not a `serverRev !== localRev` compare: `pollVersions` only
+  // refetches every 10s and nothing invalidated it on save, so for most of the
+  // window after an autosave (which fires every ~3s) the polled `_rev` is simply
+  // the revision WE just replaced. Comparing it against the fresh local `_rev`
+  // flagged the user's own save as an "external change", so the banner — and its
+  // Refresh Data button, which discards un-autosaved work — was up almost
+  // permanently and a REAL conflict was indistinguishable from the noise.
+  // Matching against known revisions instead means only a revision this client
+  // has never seen (i.e. written by somebody else) raises the banner.
+  const knownRevsRef = useRef<Map<string, Set<string>>>(new Map())
+  const rememberRev = useCallback((id?: string, rev?: string) => {
+    if (!id || !rev) return
+    const known = knownRevsRef.current
+    let revs = known.get(id)
+    if (!revs) {
+      revs = new Set()
+      known.set(id, revs)
+    }
+    revs.add(rev)
+  }, [])
+
+  // Detect external changes: a polled revision we have never held ourselves.
   useEffect(() => {
+    // Record first, compare second — the revisions we currently hold are by
+    // definition not foreign.
+    for (const loaded of state.schedules) {
+      rememberRev(loaded._id, loaded._rev)
+    }
+
     if (!latestVersions) return
+    // A poll that lands between the server committing our save and the mutation
+    // resolving would carry a revision we haven't recorded yet. Skip while a
+    // save is in flight; the effect re-runs when `state.schedules` updates.
+    if (isSaving) return
 
     // Skip comparison during cooldown after a router.refresh()
     const elapsed = Date.now() - lastRefreshRef.current
@@ -303,8 +385,12 @@ export function ScheduleEditor({
     let changed = false
     for (const loaded of state.schedules) {
       if (!loaded._id) continue // New local day, no server counterpart yet
+      const known = knownRevsRef.current.get(loaded._id)
+      // No baseline for this day (it never carried a `_rev`) — there is nothing
+      // to compare against, so don't cry conflict.
+      if (!known || known.size === 0) continue
       const server = latestVersions.find((s) => s._id === loaded._id)
-      if (server && loaded._rev && server._rev !== loaded._rev) {
+      if (server?._rev && !known.has(server._rev)) {
         changed = true
         break
       }
@@ -317,7 +403,7 @@ export function ScheduleEditor({
     } else {
       setExternalChangeError(null)
     }
-  }, [latestVersions, state.schedules, hasUnsavedChanges])
+  }, [latestVersions, state.schedules, isSaving, rememberRev])
 
   // The saved-flash timeout is stored so a new save (or unmount) cancels the
   // previous one instead of leaking it / clearing the wrong flash.
@@ -339,7 +425,19 @@ export function ScheduleEditor({
     [state.proposals, state.schedules],
   )
 
+  // The exact `state.schedules` identity a save FAILED on. Autosave stays parked
+  // while it still matches the live one; any edit (every reducer edit replaces
+  // the array) or an explicit Save clears it. See the autosave effect.
+  const [failedSaveSnapshot, setFailedSaveSnapshot] = useState<
+    EditorSchedule[] | null
+  >(null)
+  const autoSaveSuspended =
+    failedSaveSnapshot !== null && failedSaveSnapshot === state.schedules
+
   const handleSave = useCallback(async () => {
+    // An explicit Save is the user's "retry" — always re-arm autosave.
+    const attemptedSnapshot = state.schedules
+    setFailedSaveSnapshot(null)
     dispatch({ type: 'saveStart' })
     setSaveSuccess(false)
     if (saveSuccessTimeoutRef.current !== null) {
@@ -373,6 +471,22 @@ export function ScheduleEditor({
             // must stay dirty rather than be marked clean and lost).
             saved: daySchedule,
           })
+          // Advance the polled baseline with the revision WE just wrote, both in
+          // the known-revision set (so the conflict check can't mistake our own
+          // save for a foreign one) and in the react-query cache, which is only
+          // refetched every 10s and would otherwise keep serving the revision we
+          // just replaced.
+          rememberRev(schedule._id, schedule._rev)
+          const savedId = schedule._id
+          const savedRev = schedule._rev
+          utils.schedule.admin.pollVersions.setData(undefined, (prev) => {
+            if (!prev || !savedRev) return prev
+            return prev.some((v) => v._id === savedId)
+              ? prev.map((v) =>
+                  v._id === savedId ? { ...v, _rev: savedRev } : v,
+                )
+              : [...prev, { _id: savedId, _rev: savedRev, version: 0 }]
+          })
         }
       }
 
@@ -389,25 +503,61 @@ export function ScheduleEditor({
       const code = (err as { data?: { code?: string } })?.data?.code
       const message =
         code === 'CONFLICT'
-          ? 'This day was changed elsewhere — reload to get the latest before saving.'
-          : err instanceof Error
-            ? err.message
-            : 'Failed to save schedule'
+          ? 'This day was changed elsewhere — reload to get the latest before saving. Autosave is paused.'
+          : `${
+              err instanceof Error ? err.message : 'Failed to save schedule'
+            } — autosave is paused, your changes are kept locally. Press Save to retry.`
+      // Park autosave on THIS exact payload. The failure modes here are
+      // persistent (a server-side double-booking the client check missed, a
+      // revision conflict), so re-arming every 3s just replayed the same
+      // rejected save forever. The edits stay in state and stay dirty.
+      setFailedSaveSnapshot(attemptedSnapshot)
       dispatch({ type: 'saveError', message })
     }
-  }, [state.dirty, state.schedules, currentDayIndex, saveMutation])
+  }, [
+    state.dirty,
+    state.schedules,
+    currentDayIndex,
+    saveMutation,
+    utils,
+    rememberRev,
+  ])
 
-  // Auto-save: if there are unsaved changes and we are in draft mode, save 
-  // automatically after 3 seconds of inactivity.
+  // Auto-save: if there are unsaved changes and we are in draft mode, save
+  // automatically after 3 seconds of inactivity. Parked after a failed save
+  // until the user edits again (a new `state.schedules` identity clears
+  // `autoSaveSuspended`) or presses Save.
   useEffect(() => {
     if (!hasUnsavedChanges || isSaving || !isDraftMode) return
+    if (autoSaveSuspended) return
 
     const timer = setTimeout(() => {
       handleSave()
     }, 3000)
 
     return () => clearTimeout(timer)
-  }, [hasUnsavedChanges, isSaving, isDraftMode, handleSave])
+  }, [hasUnsavedChanges, isSaving, isDraftMode, autoSaveSuspended, handleSave])
+
+  // Switching view mode recomputes `mergedSchedules`, which makes the effect
+  // above dispatch `resetSchedules` — that DISCARDS every dirty day. It used to
+  // happen silently on a single toggle click, so ask first. (Autosave normally
+  // keeps `hasUnsavedChanges` false; it is true exactly when a save failed or is
+  // still pending — i.e. precisely the work that would be lost.)
+  const handleToggleDraftMode = useCallback(
+    (next: boolean) => {
+      if (next === isDraftMode) return
+      if (
+        hasUnsavedChanges &&
+        !window.confirm(
+          'You have unsaved changes. Switching view reloads the schedule from the server and discards them. Switch anyway?',
+        )
+      ) {
+        return
+      }
+      setIsDraftMode(next)
+    },
+    [isDraftMode, hasUnsavedChanges],
+  )
 
   const handlePromote = useCallback(async () => {
     if (!currentSchedule?._id) return
@@ -440,31 +590,34 @@ export function ScheduleEditor({
     setActiveItem(null)
   }, [])
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
 
-    if (!over || !active.data.current) {
+      if (!over || !active.data.current) {
+        setActiveItem(null)
+        return
+      }
+
+      const dragItem = active.data.current as DragItem
+      const dropData = over.data.current
+
+      if (dropData?.type === 'time-slot') {
+        const dropPosition = {
+          trackIndex: dropData.trackIndex,
+          timeSlot: dropData.timeSlot,
+        }
+        if (dragItem.proposal) {
+          editDispatch({ type: 'moveProposal', dragItem, dropPosition })
+        } else if (dragItem.serviceSession) {
+          editDispatch({ type: 'moveService', dragItem, dropPosition })
+        }
+      }
+
       setActiveItem(null)
-      return
-    }
-
-    const dragItem = active.data.current as DragItem
-    const dropData = over.data.current
-
-    if (dropData?.type === 'time-slot') {
-      const dropPosition = {
-        trackIndex: dropData.trackIndex,
-        timeSlot: dropData.timeSlot,
-      }
-      if (dragItem.proposal) {
-        dispatch({ type: 'moveProposal', dragItem, dropPosition })
-      } else if (dragItem.serviceSession) {
-        dispatch({ type: 'moveService', dragItem, dropPosition })
-      }
-    }
-
-    setActiveItem(null)
-  }, [])
+    },
+    [editDispatch],
+  )
 
   const handleAddTrack = useCallback(
     (trackData: { title: string; description: string }) => {
@@ -473,15 +626,16 @@ export function ScheduleEditor({
         trackDescription: trackData.description,
         talks: [],
       }
-      dispatch({ type: 'addTrack', track: newTrack })
+      editDispatch({ type: 'addTrack', track: newTrack })
       setShowAddTrackModal(false)
     },
-    [],
+    [editDispatch],
   )
 
   const handleShowAddTrackModal = useCallback(() => {
+    if (isReadOnly) return
     setShowAddTrackModal(true)
-  }, [])
+  }, [isReadOnly])
 
   const handleHideAddTrackModal = useCallback(() => {
     setShowAddTrackModal(false)
@@ -494,20 +648,23 @@ export function ScheduleEditor({
 
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {
-      dispatch({ type: 'updateTrack', trackIndex: index, track })
+      editDispatch({ type: 'updateTrack', trackIndex: index, track })
     },
-    [],
+    [editDispatch],
   )
 
-  const handleRemoveTrack = useCallback((index: number) => {
-    dispatch({ type: 'removeTrack', trackIndex: index })
-  }, [])
+  const handleRemoveTrack = useCallback(
+    (index: number) => {
+      editDispatch({ type: 'removeTrack', trackIndex: index })
+    },
+    [editDispatch],
+  )
 
   const handleRemoveTalk = useCallback(
     (trackIndex: number, talkIndex: number) => {
-      dispatch({ type: 'removeTalk', trackIndex, talkIndex })
+      editDispatch({ type: 'removeTalk', trackIndex, talkIndex })
     },
-    [],
+    [editDispatch],
   )
 
   const handleAddServiceSession = useCallback(
@@ -517,37 +674,47 @@ export function ScheduleEditor({
       title: string,
       duration: number,
     ) => {
-      dispatch({ type: 'addService', trackIndex, startTime, title, duration })
+      editDispatch({
+        type: 'addService',
+        trackIndex,
+        startTime,
+        title,
+        duration,
+      })
     },
-    [],
+    [editDispatch],
   )
 
   const handleResizeServiceSession = useCallback(
     (trackIndex: number, talkIndex: number, duration: number) => {
-      dispatch({
+      editDispatch({
         type: 'resizeItem',
         trackIndex,
         talkIndex,
         duration,
       })
     },
-    [],
+    [editDispatch],
   )
 
   const handleRenameServiceSession = useCallback(
     (trackIndex: number, talkIndex: number, title: string) => {
-      dispatch({ type: 'renameService', trackIndex, talkIndex, title })
+      editDispatch({ type: 'renameService', trackIndex, talkIndex, title })
     },
-    [],
+    [editDispatch],
   )
 
   const schedule = currentSchedule
 
   const handleDuplicateServiceSession = useCallback(
     (serviceSession: TrackTalk, sourceTrackIndex: number) => {
-      dispatch({ type: 'duplicateService', serviceSession, sourceTrackIndex })
+      editDispatch({
+        type: 'duplicateService',
+        serviceSession,
+        sourceTrackIndex,
+      })
     },
-    [],
+    [editDispatch],
   )
 
   const hasTracks = Boolean(schedule?.tracks && schedule.tracks.length > 0)
@@ -562,15 +729,22 @@ export function ScheduleEditor({
 
   // Ambient board state for the leaf drop targets (see ScheduleContext): the
   // active drag, the whole current day (for the swap reverse-check), the
-  // cross-day duplicate set, and dispatch.
+  // cross-day duplicate set, the read-only flag, and the gated dispatch.
   const scheduleContextValue = useMemo(
     () => ({
       activeDragItem: activeItem,
       schedule: currentSchedule,
       otherScheduledProposalIds,
-      dispatch,
+      isReadOnly,
+      dispatch: editDispatch,
     }),
-    [activeItem, currentSchedule, otherScheduledProposalIds],
+    [
+      activeItem,
+      currentSchedule,
+      otherScheduledProposalIds,
+      isReadOnly,
+      editDispatch,
+    ],
   )
 
   const dragOverlay = useMemo(() => {
@@ -610,7 +784,8 @@ export function ScheduleEditor({
           schedules={state.schedules}
           currentDayIndex={currentDayIndex}
           unassignedProposals={unassignedProposals}
-          dispatch={dispatch}
+          // The gated dispatch, so live mode is inert on mobile too.
+          dispatch={editDispatch}
           onDayChange={handleDayChange}
           onSave={handleSave}
           onAddTrack={handleShowAddTrackModal}
@@ -618,6 +793,12 @@ export function ScheduleEditor({
           saveSuccess={saveSuccess}
           hasUnsavedChanges={hasUnsavedChanges}
           error={error}
+          // Draft/live is not a desktop-only concept: without these a mobile
+          // organizer edited (and saved) a DRAFT with nothing on screen saying
+          // so, and no way to publish it.
+          isDraftMode={isDraftMode}
+          onToggleDraftMode={handleToggleDraftMode}
+          onPromote={handlePromote}
         />
         {showAddTrackModal && (
           <AddTrackModal
@@ -654,7 +835,7 @@ export function ScheduleEditor({
               saveSuccess={saveSuccess}
               hasUnsavedChanges={hasUnsavedChanges}
               isDraftMode={isDraftMode}
-              onToggleDraftMode={setIsDraftMode}
+              onToggleDraftMode={handleToggleDraftMode}
               onPromote={handlePromote}
             />
 
@@ -663,9 +844,7 @@ export function ScheduleEditor({
                 error={error}
                 isRefreshing={isRefreshing}
                 onRefresh={
-                  error.includes('reload')
-                    ? handleRefreshData
-                    : undefined
+                  error.includes('reload') ? handleRefreshData : undefined
                 }
               />
             )}
@@ -683,7 +862,10 @@ export function ScheduleEditor({
                   onRenameServiceSession={handleRenameServiceSession}
                 />
               ) : (
-                <EmptyState onAddTrack={handleShowAddTrackModal} />
+                <EmptyState
+                  onAddTrack={handleShowAddTrackModal}
+                  isReadOnly={isReadOnly}
+                />
               )}
             </div>
           </div>

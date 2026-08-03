@@ -35,6 +35,7 @@ export function TrackRail({
   tracks,
   placing,
   otherScheduledProposalIds,
+  isReadOnly = false,
   onSegmentTap,
   onTrackOptions,
 }: {
@@ -43,17 +44,25 @@ export function TrackRail({
   tracks: ScheduleTrack[]
   placing: Placing | null
   otherScheduledProposalIds: ReadonlySet<string>
+  /** Live (official) view: the rail is a preview — no track options, no taps. */
+  isReadOnly?: boolean
   onSegmentTap: (trackIndex: number, seg: RailSegment) => void
   onTrackOptions: (trackIndex: number) => void
 }) {
-  const segments = useMemo(() => buildTrackRail(track), [track])
+  const segments = useMemo(() => {
+    const rail = buildTrackRail(track)
+    // The live view is the published agenda: an "Assign · 10:00–10:45" row would
+    // both promise an edit that can't happen and show gaps the public never
+    // sees, so keep only the scheduled items.
+    return isReadOnly ? rail.filter((seg) => seg.kind !== 'open') : rail
+  }, [track, isReadOnly])
 
   return (
     <div className="pb-8">
       {/* Hidden while placing: the rail is a target picker, so the per-track
           controls would only get in the way. Adding a service now lives in the
           slot-tap sheet (tap an open slot → "Create service session here"). */}
-      {!placing && (
+      {!placing && !isReadOnly && (
         <div className="mb-1 flex items-center">
           <button
             type="button"
@@ -112,8 +121,9 @@ export function TrackRail({
             }
 
             // When not placing, every talk/break/open (>=10) is tappable. When
-            // placing, only valid targets and the source stay interactive.
-            const disabled = state === 'invalid'
+            // placing, only valid targets and the source stay interactive. In
+            // the live view nothing is: it is a read-only preview.
+            const disabled = state === 'invalid' || isReadOnly
 
             return (
               <li key={i} className="relative flex">

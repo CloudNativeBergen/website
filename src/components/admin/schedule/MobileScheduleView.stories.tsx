@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { useReducer } from 'react'
+import { useReducer, useState } from 'react'
 import { MobileScheduleView } from './mobile'
 import {
   scheduleReducer,
@@ -110,10 +110,14 @@ const schedules: ConferenceSchedule[] = [
 function MobileScheduleHarness({
   initialSchedules,
   proposals,
+  draftMode = true,
 }: {
   initialSchedules: ConferenceSchedule[]
   proposals: ProposalExisting[]
+  /** Start in the editable draft view (default) or the live read-only one. */
+  draftMode?: boolean
 }) {
+  const [isDraftMode, setIsDraftMode] = useState(draftMode)
   const [state, dispatch] = useReducer(
     scheduleReducer,
     // Fixtures are persisted-shaped; resolve them to EditorSchedules at the
@@ -139,6 +143,9 @@ function MobileScheduleHarness({
       saveSuccess={false}
       hasUnsavedChanges={false}
       error={state.ui.error}
+      isDraftMode={isDraftMode}
+      onToggleDraftMode={setIsDraftMode}
+      onPromote={() => {}}
     />
   )
 }
@@ -184,5 +191,18 @@ export const NoTracks: Story = {
   args: {
     initialSchedules: [{ _id: 'day-1', date: '2026-09-01', tracks: [] }],
     proposals: unassigned,
+  },
+}
+
+/**
+ * The live (official) schedule: a read-only preview. The mode badge says so,
+ * Save/Publish/Add-track are gone, the rail drops its "Assign" gaps and no card
+ * is tappable — mobile has no save path for the official document.
+ */
+export const LiveReadOnly: Story = {
+  args: {
+    initialSchedules: schedules,
+    proposals: unassigned,
+    draftMode: false,
   },
 }

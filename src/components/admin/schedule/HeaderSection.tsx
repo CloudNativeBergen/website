@@ -45,8 +45,6 @@ const HeaderSectionComponent = ({
   onToggleDraftMode: (enabled: boolean) => void
   onPromote: () => void
 }) => {
-
-
   const dayNavigation = useMemo(() => {
     if (!schedules || schedules.length <= 1) return null
 
@@ -111,7 +109,16 @@ const HeaderSectionComponent = ({
               className="text-sm font-medium text-gray-700 dark:text-gray-300"
               title="When viewing Draft, you can make changes safely. When viewing Live, you see exactly what attendees see."
             >
-              Viewing: <strong className={isDraftMode ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}>{isDraftMode ? 'Draft (Editable)' : 'Live (Read-only)'}</strong>
+              Viewing:{' '}
+              <strong
+                className={
+                  isDraftMode
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-green-600 dark:text-green-400'
+                }
+              >
+                {isDraftMode ? 'Draft (Editable)' : 'Live (Read-only)'}
+              </strong>
             </span>
             <button
               title="Toggle View: Switch between your private Draft and the Live public schedule."
@@ -144,50 +151,61 @@ const HeaderSectionComponent = ({
 
           {isDraftMode && (
             <button
-              title={hasUnsavedChanges ? "Save your changes first before publishing." : "Publish: Make this day's schedule official and visible to the public."}
+              title={
+                hasUnsavedChanges
+                  ? 'Save your changes first before publishing.'
+                  : "Publish: Make this day's schedule official and visible to the public."
+              }
               onClick={onPromote}
               disabled={isSaving || !schedule?._id || hasUnsavedChanges}
-              className={`${SECONDARY_BUTTON} ${hasUnsavedChanges ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`${SECONDARY_BUTTON} ${hasUnsavedChanges ? 'cursor-not-allowed opacity-50' : ''}`}
               type="button"
             >
-              <CheckCircleIcon className={`h-4 w-4 ${hasUnsavedChanges ? 'text-gray-400' : 'text-green-600'}`} />
+              <CheckCircleIcon
+                className={`h-4 w-4 ${hasUnsavedChanges ? 'text-gray-400' : 'text-green-600'}`}
+              />
               Publish
             </button>
           )}
-          <button
-            onClick={onSave}
-            disabled={isSaving}
-            aria-label={
-              !saveSuccess && !isSaving && hasUnsavedChanges
-                ? 'Save — you have unsaved changes'
-                : undefined
-            }
-            className={`${PRIMARY_BUTTON} transition-all duration-300 ${
-              saveSuccess
-                ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                : ''
-            } ${!isDraftMode ? 'hidden cursor-not-allowed opacity-50' : ''}`}
-            type="button"
-          >
-            {saveSuccess ? (
-              <>
-                <CheckCircleIcon className="h-4 w-4 animate-pulse" />
-                Saved!
-              </>
-            ) : (
-              <>
-                <BookmarkIcon className="h-4 w-4" />
-                {isSaving ? 'Saving...' : 'Save'}
-                {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
-                {hasUnsavedChanges && !isSaving && (
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 rounded-full bg-amber-300"
-                  />
-                )}
-              </>
-            )}
-          </button>
+          {/* Live view: not merely a `hidden` utility class (which a competing
+              display utility can win against) — the Save button does not exist
+              there, because the official schedule has no save path. */}
+          {isDraftMode && (
+            <button
+              onClick={onSave}
+              disabled={isSaving}
+              aria-label={
+                !saveSuccess && !isSaving && hasUnsavedChanges
+                  ? 'Save — you have unsaved changes'
+                  : undefined
+              }
+              className={`${PRIMARY_BUTTON} transition-all duration-300 ${
+                saveSuccess
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                  : ''
+              }`}
+              type="button"
+            >
+              {saveSuccess ? (
+                <>
+                  <CheckCircleIcon className="h-4 w-4 animate-pulse" />
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <BookmarkIcon className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save'}
+                  {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
+                  {hasUnsavedChanges && !isSaving && (
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 rounded-full bg-amber-300"
+                    />
+                  )}
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

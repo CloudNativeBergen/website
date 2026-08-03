@@ -1,6 +1,6 @@
 'use client'
 
-import { ProposalExisting } from '@/lib/proposal/types'
+import type { SchedulableProposal } from '@/lib/schedule/types'
 import { LevelIndicator } from '@/lib/proposal'
 import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
@@ -9,7 +9,7 @@ import { useProposalFilters } from './useProposalFilters'
 import { ProposalFilters } from './ProposalFilters'
 
 interface UnassignedProposalsProps {
-  proposals: (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[]
+  proposals: SchedulableProposal[]
 }
 
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
@@ -38,7 +38,8 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     if (!useVirtualScrolling) {
       return {
         virtualizedItems: filteredProposals.map((proposal, index) => {
-          const duration = proposal.remainingMinutes ?? getProposalDurationMinutes(proposal)
+          const duration =
+            proposal.remainingMinutes ?? getProposalDurationMinutes(proposal)
           return {
             proposal,
             index,
@@ -71,7 +72,9 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     let startIndex = 0
     while (
       startIndex < itemsWithLayout.length &&
-      itemsWithLayout[startIndex].offsetTop + itemsWithLayout[startIndex].height < scrollTop
+      itemsWithLayout[startIndex].offsetTop +
+        itemsWithLayout[startIndex].height <
+        scrollTop
     ) {
       startIndex++
     }
@@ -116,10 +119,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       >
         {filteredProposals.length > 0 ? (
           useVirtualScrolling ? (
-              <div
-              className="relative"
-              style={{ height: totalHeight }}
-            >
+            <div className="relative" style={{ height: totalHeight }}>
               {virtualizedItems.map(({ proposal, offsetTop, height }) => (
                 <div
                   key={proposal._id}
@@ -130,7 +130,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
                   }}
                 >
                   <div className="overflow-hidden">
-                    <DraggableProposal proposal={proposal} durationMinutes={(proposal as any).remainingMinutes} />
+                    <DraggableProposal
+                      proposal={proposal}
+                      durationMinutes={proposal.remainingMinutes}
+                    />
                   </div>
                 </div>
               ))}
@@ -139,7 +142,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             <div className="space-y-2 p-4">
               {virtualizedItems.map(({ proposal }) => (
                 <div key={proposal._id} className="overflow-hidden">
-                  <DraggableProposal proposal={proposal} durationMinutes={(proposal as any).remainingMinutes} />
+                  <DraggableProposal
+                    proposal={proposal}
+                    durationMinutes={proposal.remainingMinutes}
+                  />
                 </div>
               ))}
             </div>

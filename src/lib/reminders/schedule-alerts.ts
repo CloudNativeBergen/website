@@ -57,7 +57,7 @@ export function diffScheduleSlots(
   for (const [talkId, toSlots] of nextById) {
     const fromSlots = priorById.get(talkId)
     if (!fromSlots) continue // newly placed — not a move
-    
+
     // Sort chronologically
     toSlots.sort((a, b) => a.startTime.localeCompare(b.startTime))
     fromSlots.sort((a, b) => a.startTime.localeCompare(b.startTime))

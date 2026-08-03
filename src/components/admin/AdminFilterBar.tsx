@@ -220,7 +220,7 @@ export function AdminFilterBar({
       <div className="flex flex-row flex-wrap items-center gap-2 lg:justify-between lg:gap-3">
         <div
           className={clsx(
-            'flex items-center gap-2 w-full lg:w-auto lg:flex-none',
+            'flex w-full items-center gap-2 lg:w-auto lg:flex-none',
             search && 'flex-1',
           )}
         >
