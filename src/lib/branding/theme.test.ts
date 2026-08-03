@@ -7,6 +7,11 @@ import {
   DEFAULT_PRIMARY_COLOR,
   DEFAULT_ACCENT_COLOR,
 } from './theme'
+import { DARK_TINT_LIGHTNESS, shiftToLightness } from './color'
+
+/** Shorthand for the dark tint a given colour resolves to. */
+const d = (hex: string, tint: keyof typeof DARK_TINT_LIGHTNESS) =>
+  shiftToLightness(hex, DARK_TINT_LIGHTNESS[tint])
 
 describe('isHexColor', () => {
   it('accepts 6-digit hex, any case', () => {
@@ -57,6 +62,57 @@ describe('conferenceThemeCss — token resolution', () => {
     // A single :root block drives both light and dark.
     expect(css.startsWith(':root{')).toBe(true)
     expect(css.endsWith('}')).toBe(true)
+  })
+
+  it('emits derived DARK tints alongside the light ones', () => {
+    const css = conferenceThemeCss({
+      primaryColor: '#7C3AED',
+      accentColor: '#22D3EE',
+    })
+    // The `.dark` brand rules read these, NOT the light `--brand-primary`, so
+    // that a dark surface is a properly darkened tint rather than the raw
+    // light-mode colour. Values come from `shiftToLightness` (see color.ts).
+    expect(css).toContain(`--brand-primary-dark:${d('#7C3AED', 'surface')}`)
+    expect(css).toContain(`--brand-primary-dark-deep:${d('#7C3AED', 'deep')}`)
+    expect(css).toContain(`--brand-primary-dark-edge:${d('#7C3AED', 'edge')}`)
+    expect(css).toContain(`--brand-primary-dark-text:${d('#7C3AED', 'text')}`)
+    expect(css).toContain(`--brand-accent-dark:${d('#22D3EE', 'accent')}`)
+  })
+
+  it('darkens dark surfaces and lightens dark text, whichever way the primary starts', () => {
+    // A near-black primary must be LIGHTENED for a dark surface (it would
+    // otherwise vanish into the page); a bright one must be darkened. Both end
+    // on the same band, which is the whole point of the transform.
+    for (const primary of ['#0A1F44', '#FACC15']) {
+      const css = conferenceThemeCss({
+        primaryColor: primary,
+        accentColor: primary,
+      })
+      expect(css).toContain(`--brand-primary-dark:${d(primary, 'surface')}`)
+      expect(css).toContain(`--brand-primary-dark-text:${d(primary, 'text')}`)
+    }
+    // Bright yellow darkens to a deep olive; navy lightens to a mid slate-blue.
+    expect(d('#FACC15', 'surface')).toBe('#5f4c03')
+    expect(d('#0A1F44', 'surface')).toBe('#3c4e6e')
+  })
+
+  it('emits every dark tint as a plain hex — never a color-mix()', () => {
+    // A `color-mix()` inside a custom property is only validated at var()
+    // substitution time; if the engine lacks it the whole declaration is
+    // dropped and the `.dark` rule loses its fallback too. Plain hex has no
+    // such failure mode, and CSS could not compute these anyway (the mix
+    // percentage depends on the tenant colour's own lightness).
+    const css = conferenceThemeCss({
+      primaryColor: '#7C3AED',
+      accentColor: '#22D3EE',
+    })
+    const darkDecls = css
+      .slice(0, css.indexOf('@supports'))
+      .match(/--brand-(?:primary|accent)-dark[a-z-]*:[^;}]+/g)
+    expect(darkDecls).toHaveLength(5)
+    for (const decl of darkDecls ?? []) {
+      expect(decl.split(':')[1]).toMatch(/^#[0-9a-f]{6}$/)
+    }
   })
 
   it('emits nothing for a half-theme (all-or-nothing, matching the write-path pair contract)', () => {

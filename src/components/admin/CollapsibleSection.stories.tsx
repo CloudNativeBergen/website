@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, within } from 'storybook/test'
+import { PencilSquareIcon } from '@heroicons/react/24/outline'
 import { CollapsibleSection } from './CollapsibleSection'
 
 const meta = {
@@ -145,5 +146,56 @@ export const TogglesOpenAndClosed: Story = {
     await userEvent.click(toggle)
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await expect(canvas.getByText('Collapsible body.')).toBeVisible()
+  },
+}
+
+/**
+ * The header `action` slot — a status badge and an edit affordance — which has
+ * to live OUTSIDE the toggle button to stay valid HTML and independently
+ * clickable. No story covered this before, which is how the hover seam below
+ * went unnoticed.
+ */
+const headerAction = (
+  <>
+    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+      Ready
+    </span>
+    <button
+      type="button"
+      aria-label="Edit section"
+      className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+    >
+      <PencilSquareIcon className="h-5 w-5" />
+    </button>
+  </>
+)
+
+export const WithHeaderAction: Story = {
+  args: {
+    title: 'Get started',
+    action: headerAction,
+    children: <div className="p-6 text-gray-900 dark:text-white">Content.</div>,
+  },
+}
+
+/**
+ * Hovering the toggle must tint the WHOLE header row, including the area behind
+ * the action. Previously the tint sat on the button, so it stopped at the
+ * button's edge and left a visible vertical seam before the status badge.
+ */
+export const HeaderActionHovered: Story = {
+  args: WithHeaderAction.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.hover(canvas.getByRole('button', { name: /get started/i }))
+  },
+}
+
+/** Hovering the ACTION must NOT tint the row — it is a separate affordance. */
+export const HeaderActionSelfHovered: Story = {
+  args: WithHeaderAction.args,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.hover(canvas.getByRole('button', { name: 'Edit section' }))
   },
 }
