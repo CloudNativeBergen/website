@@ -20,6 +20,7 @@ import {
   HomeIcon,
   CreditCardIcon,
   DocumentTextIcon,
+  EnvelopeOpenIcon,
   QueueListIcon,
 } from '@heroicons/react/24/outline'
 
@@ -214,6 +215,11 @@ export default async function AdminTickets() {
             href: '/admin/tickets/discount',
             icon: <CreditCardIcon className="h-4 w-4" />,
           },
+          {
+            label: 'Invitation Letters',
+            href: '/admin/invitations',
+            icon: <EnvelopeOpenIcon className="h-4 w-4" />,
+          },
         ]}
       />
 
@@ -372,6 +378,25 @@ export default async function AdminTickets() {
                 </p>
                 <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   Manage sponsor discount codes
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/invitations"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="shrink-0">
+                <EnvelopeOpenIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Invitation Letters
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Issue visa letters for attendees
                 </p>
               </div>
             </div>

@@ -92,3 +92,20 @@ export const Default: Story = {}
 export const NoLettersYet: Story = {
   parameters: { msw: { handlers: [listHandler([])] } },
 }
+
+/**
+ * Arrived from an order on the tickets side. What the ticket knows is filled
+ * in; everything a consulate checks against the passport is still blank, and
+ * the banner says the seeded values are unverified.
+ */
+export const PrefilledFromOrder: Story = {
+  args: {
+    prefill: {
+      fullName: 'Amina Yusuf',
+      email: 'amina@example.com',
+      registrationReference: '88912',
+      organization: 'Example Bank Ltd',
+      jobTitle: 'Software Engineer',
+    },
+  },
+}

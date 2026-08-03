@@ -139,7 +139,18 @@ export function InvitationLetterForm({
   organizer,
   onSignatureChange,
 }: InvitationLetterFormProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  // Open when there is already something behind the toggle — otherwise values
+  // seeded from an order (employer, job title) would be submitted unseen.
+  const [showAdvanced, setShowAdvanced] = useState(
+    () =>
+      !!(
+        values.addressedTo ||
+        values.organization ||
+        values.jobTitle ||
+        values.signatoryTitle ||
+        values.additionalNotes
+      ),
+  )
   const set = <K extends keyof InvitationLetterFormValues>(
     key: K,
     value: InvitationLetterFormValues[K],
