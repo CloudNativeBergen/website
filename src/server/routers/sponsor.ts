@@ -61,6 +61,7 @@ import {
   deleteSponsorForConference,
   getSponsorForConference,
   listSponsorsForConference,
+  countSponsorsForConference,
   copySponsorsFromPreviousYear,
   importAllHistoricSponsors,
   tierExists,
@@ -692,6 +693,31 @@ export const sponsorRouter = router({
         })) || []
       )
     }),
+
+    /**
+     * Bare count for a set of pipeline stages — used for "showing X of Y"
+     * result lines so a page does not refetch the full expanded list just to
+     * size the total. Status only; see `countSponsorsForConference`.
+     */
+    count: adminProcedure
+      .input(z.object({ status: z.array(z.string()).optional() }).optional())
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { count, error } = await countSponsorsForConference(
+          conferenceId,
+          input?.status,
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to count sponsors for conference',
+            cause: error,
+          })
+        }
+
+        return count ?? 0
+      }),
 
     list: adminProcedure
       .input(SponsorCRMFilterSchema.optional())

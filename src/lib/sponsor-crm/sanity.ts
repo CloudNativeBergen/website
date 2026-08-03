@@ -470,6 +470,41 @@ export async function listSponsorsForConference(
   }
 }
 
+/**
+ * Counts sponsors in the given pipeline stages, without projecting the
+ * expanded document.
+ *
+ * Exists so a page that needs only "how many are there in total" (an
+ * `X of Y` result line) does not have to fetch the whole expanded list a
+ * second time — that projection pulls tier prices, add-ons, contacts and
+ * activity stats, which is a lot of payload to turn into one number.
+ *
+ * Deliberately supports ONLY the GROQ-side status filter: the readiness and
+ * billing filters are evaluated in the resolver over full documents, so a
+ * count that pretended to honour them would silently return a number for a
+ * different set than the caller asked for.
+ */
+export async function countSponsorsForConference(
+  conferenceId: string,
+  statuses?: string[],
+): Promise<{ count?: number; error?: Error }> {
+  try {
+    let filterQuery = `_type == "sponsorForConference" && conference._ref == $conferenceId`
+    if (statuses && statuses.length > 0) {
+      filterQuery += ` && status in $statuses`
+    }
+
+    const count = await clientRead.fetch<number>(`count(*[${filterQuery}])`, {
+      conferenceId,
+      statuses,
+    })
+
+    return { count }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
 export async function copySponsorsFromPreviousYear(
   params: CopySponsorsParams,
 ): Promise<{

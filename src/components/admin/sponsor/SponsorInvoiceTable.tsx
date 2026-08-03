@@ -65,6 +65,7 @@ const CopyValueButton = ({ value, what }: { value: string; what: string }) => {
 
   return (
     <button
+      type="button"
       onClick={() => copyToClipboard(value)}
       className="ml-1.5 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : `Copy ${what.toLowerCase()}`}

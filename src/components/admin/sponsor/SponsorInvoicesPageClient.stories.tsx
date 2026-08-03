@@ -160,6 +160,11 @@ const listHandler = http.get('/api/trpc/sponsor.crm.list', ({ request }) => {
   return HttpResponse.json({ result: { data: applyFilters(input) } })
 })
 
+/** Backs the "of Y" result line, which reads a bare count rather than a list. */
+const countHandler = http.get('/api/trpc/sponsor.crm.count', () =>
+  HttpResponse.json({ result: { data: roster.length } }),
+)
+
 const meta = {
   title: 'Systems/Sponsors/Admin/Invoicing/SponsorInvoicesPage',
   component: SponsorInvoicesPageClient,
@@ -173,7 +178,7 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
-    msw: { handlers: [listHandler] },
+    msw: { handlers: [listHandler, countHandler] },
     docs: {
       description: {
         component:
@@ -196,6 +201,9 @@ export const Empty: Story = {
       handlers: [
         http.get('/api/trpc/sponsor.crm.list', () =>
           HttpResponse.json({ result: { data: [] } }),
+        ),
+        http.get('/api/trpc/sponsor.crm.count', () =>
+          HttpResponse.json({ result: { data: 0 } }),
         ),
       ],
     },

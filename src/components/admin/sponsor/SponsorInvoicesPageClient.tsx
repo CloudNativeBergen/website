@@ -85,7 +85,11 @@ export function SponsorInvoicesPageClient({
         : undefined,
   })
 
-  const { data: allWonSponsors = [] } = api.sponsor.crm.list.useQuery({
+  // A bare count, not a second full list: `sponsor.crm.list` projects the whole
+  // expanded document (tier prices, add-ons, contacts, activity stats), which is
+  // far too much payload to fetch twice just to size the "of Y" in the result
+  // line.
+  const { data: wonSponsorCount = 0 } = api.sponsor.crm.count.useQuery({
     status: [ACCEPTED_SPONSOR_STATUS],
   })
 
@@ -114,7 +118,9 @@ export function SponsorInvoicesPageClient({
       document.body.appendChild(link)
       link.click()
       link.remove()
-      URL.revokeObjectURL(url)
+      // Delayed revoke, as `downloadSvg` does: revoking synchronously can race
+      // the browser's download start and truncate the file.
+      setTimeout(() => URL.revokeObjectURL(url), 100)
 
       showNotification({
         type: 'success',
@@ -133,11 +139,15 @@ export function SponsorInvoicesPageClient({
 
   const toggleStatus = (value: string) => {
     const status = value as InvoiceStatus
-    setStatuses((current) =>
-      current.includes(status)
+    setStatuses((current) => {
+      const next = current.includes(status)
         ? current.filter((entry) => entry !== status)
-        : [...current, status],
-    )
+        : [...current, status]
+      // Canonical order, not click order: the array is part of the tRPC query
+      // key, so {'sent','not-sent'} and {'not-sent','sent'} would otherwise be
+      // two cache entries for one logical filter.
+      return STATUS_OPTIONS.filter((option) => next.includes(option))
+    })
   }
 
   const filterGroups: FilterGroup[] = [
@@ -230,7 +240,7 @@ export function SponsorInvoicesPageClient({
           placeholder: 'Search sponsor or contact...',
         }}
         resultCount={rows.length}
-        totalCount={allWonSponsors.length}
+        totalCount={wonSponsorCount}
         resultLabel="invoices"
         onClearAll={() => {
           setStatuses([])

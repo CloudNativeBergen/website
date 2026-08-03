@@ -32,7 +32,7 @@ export function csvDocument(
   headers: readonly string[],
   rows: Array<Array<string | number | undefined | null>>,
 ): string {
-  return `﻿${[headers.join(','), ...rows.map(csvRow)].join('\n')}\n`
+  return `﻿${[csvRow([...headers]), ...rows.map(csvRow)].join('\n')}\n`
 }
 
 /** Slugified filename stem, e.g. `sponsor-contacts-cloud-native-days-2026.csv`. */

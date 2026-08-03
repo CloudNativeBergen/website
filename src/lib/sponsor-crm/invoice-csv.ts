@@ -1,6 +1,7 @@
 import type { InvoiceRow } from './invoice'
 import { csvDocument, csvFilename } from '@/lib/csv'
 import { INVOICE_STATUS_LABELS } from './labels'
+import { extractDateFromISO } from '@/lib/time'
 
 /**
  * Column order follows how an invoice is actually keyed in: who to bill, what
@@ -26,9 +27,13 @@ const COLUMNS = [
   'Blockers',
 ] as const
 
-/** ISO timestamp → `YYYY-MM-DD`, the form a spreadsheet parses as a date. */
+/**
+ * ISO timestamp → `YYYY-MM-DD`, the form a spreadsheet parses as a date.
+ * Deliberately NOT a localised format: this column is read by an accounting
+ * system, and "14. mars 2026" is not a date to anything but a human.
+ */
 function isoDate(value: string | undefined): string {
-  return value ? value.slice(0, 10) : ''
+  return value ? extractDateFromISO(value) : ''
 }
 
 /**
