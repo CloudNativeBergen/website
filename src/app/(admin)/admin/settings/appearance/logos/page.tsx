@@ -24,15 +24,6 @@ export default async function AppearanceLogosPage() {
       <ErrorDisplay title="Error Loading Conference" message={error.message} />
     )
   }
-  if (!conference) {
-    return (
-      <ErrorDisplay
-        title="No Conference Found"
-        message="No conference configuration found for the current domain."
-      />
-    )
-  }
-
   const section = APPEARANCE_SECTION.logos
   const values = {
     logoBright: conference.logoBright,

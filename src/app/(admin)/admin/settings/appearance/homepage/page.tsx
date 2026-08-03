@@ -36,15 +36,6 @@ export default async function AppearanceHomepagePage() {
       <ErrorDisplay title="Error Loading Conference" message={error.message} />
     )
   }
-  if (!conference) {
-    return (
-      <ErrorDisplay
-        title="No Conference Found"
-        message="No conference configuration found for the current domain."
-      />
-    )
-  }
-
   const section = APPEARANCE_SECTION.homepage
   // When nothing is stored the page renders the phase-aware default; seed the
   // editor with that same default so organizers start from what is actually on

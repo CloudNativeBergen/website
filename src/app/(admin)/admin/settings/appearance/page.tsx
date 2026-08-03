@@ -38,15 +38,6 @@ export default async function AppearanceOverviewPage() {
       <ErrorDisplay title="Error Loading Conference" message={error.message} />
     )
   }
-  if (!conference) {
-    return (
-      <ErrorDisplay
-        title="No Conference Found"
-        message="No conference configuration found for the current domain."
-      />
-    )
-  }
-
   const section = APPEARANCE_SECTION.overview
   const usingDefaultHomepage =
     !conference.homepageSections || conference.homepageSections.length === 0
