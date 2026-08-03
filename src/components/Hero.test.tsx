@@ -149,4 +149,139 @@ describe('Hero — default (classic) DOM equality', () => {
     )
     expect(container.innerHTML).toMatchSnapshot()
   })
+
+  it('renders an ABSENT variant and an explicit "classic" identically', () => {
+    const { container: absent } = render(<Hero conference={fullConference} />)
+    const withoutVariant = absent.innerHTML
+    cleanup()
+    const { container: explicit } = render(
+      <Hero conference={fullConference} variant="classic" />,
+    )
+    expect(explicit.innerHTML).toBe(withoutVariant)
+  })
+
+  it('falls back to classic for a variant from the future', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container: classic } = render(<Hero conference={fullConference} />)
+    const expected = classic.innerHTML
+    cleanup()
+    const { container: future } = render(
+      <Hero
+        conference={fullConference}
+        variant={'billboard' as unknown as 'classic'}
+      />,
+    )
+    expect(future.innerHTML).toBe(expected)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+describe('Hero — minimal variant', () => {
+  const conference = makeConference({
+    tagline: 'Where cloud native meets the fjords',
+    city: 'Bergen',
+    venueName: 'Grieghallen',
+    venueAddress: 'Edvard Griegs plass 1, Bergen',
+    startDate: '2999-10-27',
+    endDate: '2999-10-28',
+    vanityMetrics: [{ label: 'Attendees', value: '450+' }],
+    socialLinks: ['https://example.com'],
+  } as unknown as Partial<Conference>)
+
+  it('drops the background wash, venue line, metrics and social row', () => {
+    const { container } = render(
+      <Hero conference={conference} variant="minimal" />,
+    )
+    expect(container.querySelector('[data-testid="bg"]')).toBeNull()
+    expect(container.querySelector('dl')).toBeNull()
+    expect(container.textContent).not.toContain('Edvard Griegs plass')
+    expect(
+      container.querySelectorAll('a[rel="noopener noreferrer"]'),
+    ).toHaveLength(0)
+  })
+
+  it('sets the when/where as a typographic eyebrow instead', () => {
+    const { container } = render(
+      <Hero conference={conference} variant="minimal" />,
+    )
+    // Dates come from the house formatter; the city stands in for the venue.
+    expect(container.textContent).toContain('oktober')
+    expect(container.textContent).toContain('Bergen')
+  })
+
+  it('keeps the headline, description and the phase CTA row', () => {
+    render(<Hero conference={conference} variant="minimal" />)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(
+      'Where cloud native meets the fjords',
+    )
+    expect(screen.getByTestId('description')).toBeTruthy()
+    expect(screen.getByText(/Tickets/i)).toBeTruthy()
+  })
+
+  it('still surfaces the organizer announcement', () => {
+    render(
+      <Hero
+        conference={makeConference({
+          announcement: [
+            {
+              _type: 'block',
+              _key: 'a',
+              children: [{ _type: 'span', text: 'The venue has moved.' }],
+            },
+          ],
+        } as unknown as Partial<Conference>)}
+        variant="minimal"
+      />,
+    )
+    expect(screen.getByText('The venue has moved.')).toBeTruthy()
+  })
+})
+
+describe('Hero — emblem variant', () => {
+  const conference = makeConference({
+    title: 'Cloud Native Days Bergen',
+    tagline: 'Where cloud native meets the fjords',
+    city: 'Bergen',
+    startDate: '2999-10-27',
+    endDate: '2999-10-28',
+    vanityMetrics: [
+      { label: 'Attendees', value: '450+' },
+      { label: 'Speakers', value: '40' },
+    ],
+  } as unknown as Partial<Conference>)
+
+  it('leads with the conference mark', () => {
+    const { container } = render(
+      <Hero conference={conference} variant="emblem" />,
+    )
+    // No logomark uploaded → the generated initials monogram, painted from the
+    // tenant's own --brand-* properties.
+    const mark = container.querySelector('svg[role="img"]')
+    expect(mark).toBeTruthy()
+    expect(mark?.getAttribute('aria-label')).toBe('Cloud Native Days Bergen')
+  })
+
+  it('arranges the name and dates around the mark', () => {
+    const { container } = render(
+      <Hero conference={conference} variant="emblem" />,
+    )
+    expect(container.textContent).toContain('Cloud Native Days Bergen')
+    expect(container.textContent).toContain('Bergen')
+    expect(container.textContent).toContain('oktober')
+  })
+
+  it('keeps the metrics, as a strip below the composition', () => {
+    const { container } = render(
+      <Hero conference={conference} variant="emblem" />,
+    )
+    const metrics = container.querySelector('dl')
+    expect(metrics).toBeTruthy()
+    expect(metrics?.textContent).toContain('450+')
+  })
+
+  it('keeps the phase CTA row', () => {
+    render(<Hero conference={conference} variant="emblem" />)
+    expect(screen.getByText(/Tickets/i)).toBeTruthy()
+  })
 })
