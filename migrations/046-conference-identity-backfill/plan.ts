@@ -142,16 +142,40 @@ export interface PlannedSet {
 /** A non-fatal observation the dry run should surface to the operator. */
 export type PlanNote = string
 
+/**
+ * "This field holds nothing." ONLY null/undefined and whitespace-only strings
+ * qualify.
+ *
+ * A non-string value is emphatically NOT blank. Reading it as blank would have
+ * broken the migration's central promise — a `theme.primaryColor` stored as a
+ * number, or a `logoBright` stored as an image reference by some future schema
+ * revision, is a value a human put there, and this migration would have
+ * silently overwritten it with the Cloud Native default. Wrong-typed data is a
+ * job for schema validation, not for a backfill to paper over.
+ */
 const isBlank = (value: unknown): boolean =>
-  typeof value !== 'string' || value.trim() === ''
+  value === null ||
+  value === undefined ||
+  (typeof value === 'string' && value.trim() === '')
 
 // ---------------------------------------------------------------------------
 // Targeting
 // ---------------------------------------------------------------------------
 
+/**
+ * The only fields TARGETING reads. Kept separate from
+ * {@link ConferenceIdentityDoc} so the pre-pass query can project just these —
+ * the identity fields include two ~19KB inline SVGs, and fetching those for
+ * every conference in the dataset only to compare `domains[]` is pure waste.
+ */
+export type ConferenceTargetDoc = Pick<
+  ConferenceIdentityDoc,
+  '_id' | 'title' | 'domains'
+>
+
 export interface ResolvedTarget {
   spec: TargetSpec
-  doc: ConferenceIdentityDoc
+  doc: ConferenceTargetDoc
 }
 
 export interface Resolution {
@@ -169,7 +193,7 @@ export interface Resolution {
  * patched the wrong tenant.
  */
 export function resolveTargets(
-  docs: readonly ConferenceIdentityDoc[],
+  docs: readonly ConferenceTargetDoc[],
   targets: readonly TargetSpec[] = TARGETS,
 ): Resolution {
   const resolved: ResolvedTarget[] = []

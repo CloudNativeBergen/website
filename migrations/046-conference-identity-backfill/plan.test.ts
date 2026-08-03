@@ -223,6 +223,23 @@ describe('planSets — what gets written', () => {
     const sets = planSets(doc({ backgroundPattern: '   ' }), bergen)
     expect(sets.map((s) => s.path)).toContain('backgroundPattern')
   })
+
+  // Raised in review: "absent" was implemented as "not a non-empty string",
+  // which classified every non-string value as absent. A field holding the
+  // wrong TYPE still holds something a human put there, and overwriting it
+  // would break the never-overwrite promise on exactly the documents where a
+  // silent change is hardest to notice.
+  it('leaves a wrong-typed stored value alone instead of overwriting it', () => {
+    const sets = planSets(
+      doc({
+        backgroundPattern: 42 as unknown as string,
+        logoBright: { _type: 'image' } as unknown as string,
+      }),
+      bergen,
+    )
+    expect(sets.map((s) => s.path)).not.toContain('backgroundPattern')
+    expect(sets.map((s) => s.path)).not.toContain('logoBright')
+  })
 })
 
 describe('mergeSponsorshipCopy', () => {

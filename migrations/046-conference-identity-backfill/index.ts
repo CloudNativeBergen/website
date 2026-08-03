@@ -6,6 +6,7 @@ import {
   planSets,
   resolveTargets,
   type ConferenceIdentityDoc,
+  type ConferenceTargetDoc,
 } from './plan'
 
 /**
@@ -59,18 +60,14 @@ import {
 
 const isDraft = (id: string): boolean => id.startsWith('drafts.')
 
-/** The fields the plan reads. Projected explicitly — logos are large. */
-const CONFERENCE_PROJECTION = `{
-  _id,
-  title,
-  domains,
-  theme,
-  backgroundPattern,
-  logoBright,
-  logomarkBright,
-  sponsorshipCustomization,
-  "homepageSections": homepageSections[]{_key, _type}
-}`
+/**
+ * The pre-pass only needs to answer "which conference serves this host?", and
+ * the FIELD checks all run against the streamed document below, not against
+ * this row. So project the three routing fields and nothing else: the identity
+ * fields this migration writes include two ~19KB inline SVGs, and pulling those
+ * for every conference in the dataset just to compare `domains[]` is waste.
+ */
+const TARGETING_PROJECTION = `{ _id, title, domains }`
 
 export default defineMigration({
   title: 'Backfill the three existing editions’ visual identity as stored data',
@@ -89,8 +86,8 @@ export default defineMigration({
     // --- Pre-pass: resolve every target BEFORE yielding any patch ------------
     // Doing this up front means an unresolvable target aborts the run with an
     // empty changeset instead of half-applying.
-    const rows = await context.client.fetch<ConferenceIdentityDoc[]>(
-      `*[_type == "conference" && !(_id in path("drafts.**"))]${CONFERENCE_PROJECTION}`,
+    const rows = await context.client.fetch<ConferenceTargetDoc[]>(
+      `*[_type == "conference" && !(_id in path("drafts.**"))]${TARGETING_PROJECTION}`,
     )
 
     const { resolved, errors } = resolveTargets(rows ?? [])
