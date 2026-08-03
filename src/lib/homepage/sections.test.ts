@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   getDefaultSections,
   resolveHomepageSections,
-  hasPublishedSchedule,
   isHomepageSectionType,
   HOMEPAGE_SECTION_TYPES,
   type HomepageSection,
@@ -178,36 +177,6 @@ describe('getDefaultSections — lifecycle behaviour', () => {
     expect(getDefaultSections(conference).map((s) => s._type)).not.toContain(
       'homepageSaveTheDate',
     )
-  })
-})
-
-describe('hasPublishedSchedule', () => {
-  it('is false without schedules even after the program date', () => {
-    expect(
-      hasPublishedSchedule(
-        makeConference({ programDate: PAST, schedules: [] }),
-      ),
-    ).toBe(false)
-  })
-  it('is false before the program date even with schedules', () => {
-    expect(
-      hasPublishedSchedule(
-        makeConference({
-          programDate: '2999-01-01',
-          schedules: [{ _id: 's' }] as never,
-        }),
-      ),
-    ).toBe(false)
-  })
-  it('is true after the program date with at least one schedule', () => {
-    expect(
-      hasPublishedSchedule(
-        makeConference({
-          programDate: PAST,
-          schedules: [{ _id: 's' }] as never,
-        }),
-      ),
-    ).toBe(true)
   })
 })
 

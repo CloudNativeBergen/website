@@ -1,6 +1,5 @@
 import type { TypedObject } from 'sanity'
 import type { Conference } from '@/lib/conference/types'
-import { isProgramPublished } from '@/lib/conference/state'
 import { resolveHomepageLifecycle } from './lifecycle'
 
 /**
@@ -296,20 +295,6 @@ export type HomepageSection =
   | VenueSection
 
 /**
- * True when the program is published AND at least one schedule day exists.
- *
- * DELIBERATELY WEAK — it does not look inside the schedule. Prefer
- * {@link hasProgrammeContent}, which additionally requires a confirmed talk;
- * this predicate is retained because a published-but-empty schedule still means
- * "the organizer has pressed publish", which some callers care about.
- */
-export function hasPublishedSchedule(conference: Conference): boolean {
-  return (
-    isProgramPublished(conference) && (conference.schedules?.length ?? 0) > 0
-  )
-}
-
-/**
  * The default homepage, as an ordered section list. This is what renders when
  * `homepageSections` is ABSENT (every legacy conference):
  *
@@ -325,7 +310,8 @@ export function hasPublishedSchedule(conference: Conference): boolean {
  * only fire in states that previously rendered a hole:
  *
  *  1. The middle slot now tests {@link hasProgrammeContent}, not
- *     `hasPublishedSchedule`. A published-but-EMPTY schedule used to win the
+ *     the old "a schedule document exists" test. A published-but-EMPTY
+ *     schedule used to win the
  *     slot and then render an all-zero statistics band (live in production);
  *     it now falls through to featured speakers or organizers, which have
  *     something to show.

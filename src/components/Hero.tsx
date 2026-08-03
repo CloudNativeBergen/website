@@ -187,7 +187,10 @@ function ActionButtons({
   )
   if (!hasVisitorCta && displayButtons.some((b) => b.href === '/sponsor')) {
     displayButtons = [
-      ...displayButtons.filter((b) => b.href === '/info'),
+      ...displayButtons
+        .filter((b) => b.href === '/info')
+        // Promoted, or the row would be two outline buttons with no lead.
+        .map((b) => ({ ...b, variant: 'primary' as const })),
       ...displayButtons
         .filter((b) => b.href === '/sponsor')
         .map((b) => ({ ...b, variant: 'outline' as const })),
