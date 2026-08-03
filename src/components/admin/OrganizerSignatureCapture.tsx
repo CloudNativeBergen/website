@@ -73,12 +73,20 @@ export function OrganizerSignatureCapture({
     onSignatureReady(savedSignature)
   }, [savedSignature]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * What is on the pad is what gets signed.
+   *
+   * This used to hold the drawing back until "Done" was pressed, forwarding
+   * only the cleared state. That silently dropped the signature of anyone who
+   * drew it and went straight on to submit — the ink stayed on the pad, so the
+   * document looked signed right up until the unsigned PDF came back. Publish
+   * every stroke instead; "Done" is now only about remembering it for next
+   * time.
+   */
   const handleSignatureChange = useCallback(
     (dataUrl: string | null) => {
       pendingSignatureRef.current = dataUrl
-      if (!dataUrl) {
-        onSignatureReady(null)
-      }
+      onSignatureReady(dataUrl)
     },
     [onSignatureReady],
   )
@@ -95,6 +103,13 @@ export function OrganizerSignatureCapture({
       onSignatureReady(dataUrl)
     }
   }, [storageKey, onSignatureReady])
+
+  /** Abandoning a redraw must put the previously saved signature back. */
+  const handleCancelRedraw = useCallback(() => {
+    pendingSignatureRef.current = savedSignature
+    setIsDrawing(false)
+    onSignatureReady(savedSignature)
+  }, [savedSignature, onSignatureReady])
 
   const handleClear = useCallback(() => {
     try {
@@ -168,18 +183,22 @@ export function OrganizerSignatureCapture({
           className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
         >
           <CheckIcon className="h-3.5 w-3.5" />
-          Done
+          Save for next time
         </button>
         {savedSignature && (
           <button
             type="button"
-            onClick={() => setIsDrawing(false)}
+            onClick={handleCancelRedraw}
             className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
           >
             Cancel
           </button>
         )}
       </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        What you draw is used as soon as it is on the pad — saving only keeps it
+        in this browser so you do not have to draw it again.
+      </p>
     </div>
   )
 }

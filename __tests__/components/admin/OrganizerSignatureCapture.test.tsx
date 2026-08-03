@@ -78,14 +78,29 @@ describe('OrganizerSignatureCapture', () => {
   })
 
   describe('drawing a signature', () => {
-    it('does not save until Done is clicked', () => {
+    /**
+     * Regression: the drawn signature used to be held back until "Done" was
+     * pressed, so anyone who drew and went straight on to submit sent an
+     * unsigned document while the ink was still visible on the pad.
+     */
+    it('hands the drawn signature to the parent before anything is saved', () => {
       renderCapture()
 
       act(() => {
         capturedOnSignatureChange?.(FAKE_SIGNATURE)
       })
 
-      // Not saved yet — still drawing
+      expect(onSignatureReady).toHaveBeenLastCalledWith(FAKE_SIGNATURE)
+    })
+
+    it('does not persist until the signature is explicitly saved', () => {
+      renderCapture()
+
+      act(() => {
+        capturedOnSignatureChange?.(FAKE_SIGNATURE)
+      })
+
+      // Usable, but not remembered for the next letter
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
     })
 
@@ -96,7 +111,7 @@ describe('OrganizerSignatureCapture', () => {
         capturedOnSignatureChange?.(FAKE_SIGNATURE)
       })
 
-      fireEvent.click(screen.getByText('Done'))
+      fireEvent.click(screen.getByText('Save for next time'))
 
       expect(localStorage.getItem(STORAGE_KEY)).toBe(FAKE_SIGNATURE)
       expect(onSignatureReady).toHaveBeenCalledWith(FAKE_SIGNATURE)
@@ -122,7 +137,7 @@ describe('OrganizerSignatureCapture', () => {
       expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
       // Only saves when Done is clicked, with the latest data
-      fireEvent.click(screen.getByText('Done'))
+      fireEvent.click(screen.getByText('Save for next time'))
       expect(localStorage.getItem(STORAGE_KEY)).toBe(FAKE_SIGNATURE)
     })
 
@@ -161,6 +176,21 @@ describe('OrganizerSignatureCapture', () => {
       renderCapture()
       fireEvent.click(screen.getByText('Redraw'))
       expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
+    })
+
+    it('puts the saved signature back when a redraw is cancelled', () => {
+      renderCapture()
+      fireEvent.click(screen.getByText('Redraw'))
+
+      act(() => {
+        capturedOnSignatureChange?.('data:image/png;base64,scribble')
+      })
+      expect(onSignatureReady).toHaveBeenLastCalledWith(
+        'data:image/png;base64,scribble',
+      )
+
+      fireEvent.click(screen.getByText('Cancel'))
+      expect(onSignatureReady).toHaveBeenLastCalledWith(FAKE_SIGNATURE)
     })
 
     it('clears signature from localStorage when Remove is clicked', () => {

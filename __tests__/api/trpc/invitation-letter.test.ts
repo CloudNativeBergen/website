@@ -217,6 +217,51 @@ describe('invitationLetter.issue — delivery', () => {
   })
 })
 
+describe('invitationLetter.issue — what reaches the document', () => {
+  const renderedContent = () =>
+    vi.mocked(generateInvitationLetterPdf).mock.calls[0][0]
+
+  it('signs the letter with the signature the organizer drew', async () => {
+    const signatureDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+    await createCaller().invitationLetter.issue({
+      ...validInput,
+      signatureDataUrl,
+    })
+
+    expect(renderedContent().signatory.signatureDataUrl).toBe(signatureDataUrl)
+  })
+
+  /**
+   * These four were accepted by the schema, typed on the letter details, and
+   * rendered by the content builder — but the resolver never copied them
+   * across, so an organizer who filled them in got a letter that silently
+   * omitted them.
+   */
+  it('carries every applicant field the organizer typed', async () => {
+    await createCaller().invitationLetter.issue({
+      ...validInput,
+      gender: 'Female',
+      residentialAddress: '12 Kenyatta Avenue, Nairobi',
+      phone: '+254 700 000 000',
+      jobTitle: 'Software Engineer',
+      organization: 'Example Bank Ltd',
+    })
+
+    const labels = renderedContent().applicantRows.map((row) => row.label)
+    expect(labels).toContain('Gender')
+    expect(labels).toContain('Residential address')
+    expect(labels).toContain('Phone')
+    expect(labels).toContain('Employment')
+
+    const employment = renderedContent().applicantRows.find(
+      (row) => row.label === 'Employment',
+    )
+    expect(employment?.value).toBe('Software Engineer, Example Bank Ltd')
+  })
+})
+
 describe('invitationLetter.issue — validation', () => {
   it('rejects a departure before arrival', async () => {
     await expect(
@@ -270,6 +315,33 @@ describe('invitationLetter.issue — validation', () => {
         departureDate: '2026-11-08',
       }),
     ).rejects.toThrow(/both arrival and departure/)
+  })
+
+  /**
+   * A canvas signature is a full-width PNG at the device pixel ratio, so it is
+   * routinely well over 100 kB of base64. Measured on the real pad: ~78 k
+   * characters at DPR 2 and ~133 k at DPR 3. The cap has to clear that, and it
+   * has to reject rather than quietly drop anything past it — an optional field
+   * that vanishes silently is how an unsigned letter goes out unnoticed.
+   */
+  it('accepts a signature the size a real canvas produces', async () => {
+    const canvasSized = `data:image/png;base64,${'A'.repeat(200_000)}`
+
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        signatureDataUrl: canvasSized,
+      }),
+    ).resolves.toBeTruthy()
+  })
+
+  it('rejects an oversized signature loudly instead of dropping it', async () => {
+    await expect(
+      createCaller().invitationLetter.issue({
+        ...validInput,
+        signatureDataUrl: `data:image/png;base64,${'A'.repeat(500_001)}`,
+      }),
+    ).rejects.toThrow()
   })
 
   it('refuses to issue when the conference names no legal entity', async () => {
