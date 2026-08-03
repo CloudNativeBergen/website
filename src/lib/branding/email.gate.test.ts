@@ -15,20 +15,45 @@
  * waitlist orange and success green are supposed to be literals.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_PRIMARY_COLOR } from './theme'
 
-/** The house brand blues (and the off-palette purple) that must not be pinned. */
-const HOUSE_BRAND_HEXES = [
-  '#1d4ed8',
-  '#1e40af',
-  '#2563eb',
-  '#0284c7',
-  '#7c3aed',
+/**
+ * The house brand blues (and the off-palette purple) that must not be pinned.
+ *
+ * The current house blue comes from the SOURCE OF TRUTH rather than a copy, so
+ * changing `DEFAULT_PRIMARY_COLOR` cannot quietly retire the gate's main rule.
+ * The rest are the drift literals the templates accumulated (`#1E40AF`,
+ * `#2563EB`, `#0284C7`) plus the emphasis purple; they have no constant to
+ * point at because nothing should reintroduce them.
+ */
+const HOUSE_BRAND_COLORS = [
+  ...new Set(
+    [DEFAULT_PRIMARY_COLOR, '#1e40af', '#2563eb', '#0284c7', '#7c3aed'].map(
+      (hex) => hex.toLowerCase(),
+    ),
+  ),
 ]
 
-/** Email-rendering surfaces. Everything here ships bytes to a recipient. */
-const SCANNED_DIRS = ['src/components/email', 'src/lib/email']
+/**
+ * `#rrggbb` -> a pattern matching any `rgb()`/`rgba()` spelling of it.
+ *
+ * Hex is not the only way to pin a house colour: the button shadow shipped as
+ * `rgba(29, 78, 216, 0.25)` for years, and a hex-only scan is blind to exactly
+ * the literal this gate exists to catch.
+ */
+function rgbSpelling(hex: string): RegExp {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  return new RegExp(`rgba?\\(\\s*${r}\\s*,\\s*${g}\\s*,\\s*${b}\\s*[,)]`)
+}
+
+/** Email surfaces. Everything here ships bytes to a recipient. */
+const SCANNED_DIRS = [
+  'src/components/email',
+  'src/lib/email',
+  'src/lib/proposal/email',
+]
 
 /**
  * Files exempt from the gate, each with its reason. Keep this list SHORT — a
@@ -40,6 +65,15 @@ const EXEMPT = new Set([
   'src/components/email/email-branding.themed.test.tsx',
 ])
 
+/**
+ * Forward slashes whatever `join` produced. `EXEMPT` is written in POSIX form,
+ * and on Windows `join` yields backslashes — without this the exemptions never
+ * match and the gate fails on its own fixtures.
+ */
+function toPosix(filePath: string): string {
+  return filePath.split(sep).join('/')
+}
+
 function walk(dir: string): string[] {
   const out: string[] = []
   for (const entry of readdirSync(dir)) {
@@ -48,7 +82,7 @@ function walk(dir: string): string[] {
       if (entry === '__snapshots__') continue
       out.push(...walk(full))
     } else if (/\.tsx?$/.test(entry)) {
-      out.push(full)
+      out.push(toPosix(full))
     }
   }
   return out
@@ -63,7 +97,8 @@ function strippedSource(source: string): string {
 }
 
 describe('no email surface pins a house brand colour', () => {
-  const files = SCANNED_DIRS.flatMap(walk).filter((f) => !EXEMPT.has(f))
+  const scanned = SCANNED_DIRS.flatMap(walk)
+  const files = scanned.filter((f) => !EXEMPT.has(f))
 
   it('scans a non-trivial number of files', () => {
     // Guards against the walk silently matching nothing and the gate passing
@@ -71,13 +106,23 @@ describe('no email surface pins a house brand colour', () => {
     expect(files.length).toBeGreaterThan(15)
   })
 
+  it('every exemption still names a file the walk found', () => {
+    // A renamed or deleted exempt file would otherwise leave a dead entry
+    // behind, and the next file to take that path inherits the exemption for
+    // free. Exemptions have to be earned, not inherited.
+    expect([...EXEMPT].filter((e) => !scanned.includes(e))).toEqual([])
+  })
+
   it.each(files)('%s', (file) => {
     const source = strippedSource(readFileSync(file, 'utf8')).toLowerCase()
-    const found = HOUSE_BRAND_HEXES.filter((hex) => source.includes(hex))
+    const found = HOUSE_BRAND_COLORS.filter(
+      (hex) => source.includes(hex) || rgbSpelling(hex).test(source),
+    )
     expect(
       found,
-      `${file} hard-codes ${found.join(', ')}. Use the inherited brand palette ` +
-        `(useEmailBrand / resolveEmailBrandPalette) or brandedOr(palette, '<house hex>').`,
+      `${file} hard-codes ${found.join(', ')} (as hex or rgb()). Use the ` +
+        `inherited brand palette (useEmailBrand / resolveEmailBrandPalette) ` +
+        `or brandedOr(palette, '<house hex>').`,
     ).toEqual([])
   })
 })

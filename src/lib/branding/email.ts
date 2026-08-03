@@ -23,37 +23,43 @@
 import { ensureContrastWithWhite, lightnessOf, shiftToLightness } from './color'
 import { DEFAULT_PRIMARY_COLOR, isHexColor } from './theme'
 
+/**
+ * Every field is `readonly` and every instance is frozen. A palette is SHARED —
+ * the default one is a module singleton and derived ones are cached per hex, so
+ * a single mutation would silently re-brand every subsequent email in the
+ * process. `readonly` catches that at compile time, `Object.freeze` at runtime.
+ */
 export interface EmailBrandPalette {
   /**
    * The tenant's primary, VERBATIM. Only for places where the colour is not
    * text and not a text background (currently none) — prefer `accent`.
    */
-  primary: string
+  readonly primary: string
   /**
    * The brand colour made readable against white: titles, links, section
    * headers, footer emphasis and the button fill all sit against (or carry)
    * white, so all of them use this one value. House: `#1D4ED8` unchanged.
    */
-  accent: string
+  readonly accent: string
   /** `box-shadow` colour under the primary button. House: `rgba(29, 78, 216, 0.25)`. */
-  buttonShadow: string
+  readonly buttonShadow: string
   /** Callout / event-details card fill. House: `#E0F2FE` (sky-100). */
-  cardBackground: string
+  readonly cardBackground: string
   /**
    * Callout card border. Slate — NOT brand. It is a neutral hairline that reads
    * against every hue, and tinting it per tenant buys nothing but a second
    * colour to get wrong.
    */
-  cardBorder: string
+  readonly cardBorder: string
   /**
    * Emphasis (`<em>`) in rich-text bodies. The house value is an off-palette
    * purple `#7C3AED` that predates theming; a themed tenant gets its own accent
    * instead of a third party's purple. Preserved verbatim when unthemed because
    * changing it would change unthemed bytes.
    */
-  emphasis: string
+  readonly emphasis: string
   /** True when this palette is the house default (nothing tenant-specific). */
-  isDefault: boolean
+  readonly isDefault: boolean
 }
 
 const HOUSE_CARD_BACKGROUND = '#E0F2FE'
@@ -122,7 +128,12 @@ export function emailButtonShadow(hex: string): string {
     : DEFAULT_EMAIL_BRAND_PALETTE.buttonShadow
 }
 
-export const DEFAULT_EMAIL_BRAND_PALETTE: EmailBrandPalette = {
+/**
+ * Frozen for the same reason the derived palettes are: this one object is
+ * handed to every unthemed send in the process, so a mutation here would not
+ * re-brand one email, it would re-brand all of them.
+ */
+export const DEFAULT_EMAIL_BRAND_PALETTE: EmailBrandPalette = Object.freeze({
   primary: DEFAULT_PRIMARY_COLOR,
   accent: DEFAULT_PRIMARY_COLOR,
   buttonShadow: rgba(DEFAULT_PRIMARY_COLOR, 0.25),
@@ -130,7 +141,7 @@ export const DEFAULT_EMAIL_BRAND_PALETTE: EmailBrandPalette = {
   cardBorder: HOUSE_CARD_BORDER,
   emphasis: HOUSE_EMPHASIS,
   isDefault: true,
-}
+})
 
 // Templates render the same handful of colours dozens of times per send and the
 // derivations bisect; one small cache keeps a broadcast from redoing the work

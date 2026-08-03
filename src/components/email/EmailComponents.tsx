@@ -104,6 +104,15 @@ export function EmailButton({
   // `resolveEmailBrandPalette`); an explicit `color` is taken at face value —
   // that override is the caller asserting it knows better.
   const fill = color ?? brand.accent
+  // KNOWN RESIDUAL, deliberately unfixed: `secondary` keeps a fixed indigo fill
+  // (one call site, `GallerySpeakerTaggedTemplate`) while the shadow below
+  // follows the brand, so a themed secondary button is indigo under a tenant
+  // shadow. The mismatch is INHERITED, not introduced — before theming the
+  // shadow was the house blue under BOTH variants, so an unthemed secondary has
+  // always been indigo-over-blue. Both obvious repairs (derive the shadow from
+  // the actual fill; pin a matching indigo shadow) change unthemed bytes and
+  // fail the byte-identity snapshots. Whether `secondary` is brand or neutral
+  // chrome is a product decision; until it is taken, neither is a safe edit.
   const buttonStyle: React.CSSProperties = {
     backgroundColor: variant === 'primary' ? fill : '#6366F1',
     color: 'white',
