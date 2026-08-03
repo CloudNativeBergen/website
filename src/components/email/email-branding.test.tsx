@@ -84,7 +84,9 @@ describe('unthemed email output is byte-identical', () => {
   })
 
   it('EmailSectionHeader', () => {
-    expect(render(<EmailSectionHeader>Header</EmailSectionHeader>)).toMatchSnapshot()
+    expect(
+      render(<EmailSectionHeader>Header</EmailSectionHeader>),
+    ).toMatchSnapshot()
   })
 
   it('ProposalAcceptTemplate', () => {
@@ -99,11 +101,15 @@ describe('unthemed email output is byte-identical', () => {
   })
 
   it('ProposalRejectTemplate', () => {
-    expect(render(<ProposalRejectTemplate {...proposalProps} />)).toMatchSnapshot()
+    expect(
+      render(<ProposalRejectTemplate {...proposalProps} />),
+    ).toMatchSnapshot()
   })
 
   it('ProposalWaitlistTemplate', () => {
-    expect(render(<ProposalWaitlistTemplate {...proposalProps} />)).toMatchSnapshot()
+    expect(
+      render(<ProposalWaitlistTemplate {...proposalProps} />),
+    ).toMatchSnapshot()
   })
 
   it('BroadcastTemplate', () => {
@@ -111,7 +117,9 @@ describe('unthemed email output is byte-identical', () => {
   })
 
   it('SpeakerEmailTemplate', () => {
-    expect(render(<SpeakerEmailTemplate {...speakerEmailProps} />)).toMatchSnapshot()
+    expect(
+      render(<SpeakerEmailTemplate {...speakerEmailProps} />),
+    ).toMatchSnapshot()
   })
 
   it('SpeakerTicketEmailTemplate', () => {
@@ -175,7 +183,9 @@ describe('unthemed email output is byte-identical', () => {
   })
 
   it('VolunteerApprovalTemplate', () => {
-    expect(render(<VolunteerApprovalTemplate {...volunteerProps} />)).toMatchSnapshot()
+    expect(
+      render(<VolunteerApprovalTemplate {...volunteerProps} />),
+    ).toMatchSnapshot()
   })
 
   it('BadgeEmailTemplate (raw HTML)', () => {

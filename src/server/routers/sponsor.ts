@@ -2377,7 +2377,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2530,7 +2530,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

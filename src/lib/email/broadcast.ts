@@ -51,7 +51,7 @@ export async function sendBroadcastEmail({
     }
 
     const { htmlContent, error: htmlError } =
-      await convertPortableTextToHTML(messagePortableText)
+      await convertPortableTextToHTML(messagePortableText, conference)
     if (htmlError) {
       return htmlError
     }
@@ -173,7 +173,7 @@ export async function sendIndividualEmail({
 }: IndividualEmailRequest): Promise<Response> {
   try {
     const { htmlContent, error: htmlError } =
-      await convertPortableTextToHTML(messagePortableText)
+      await convertPortableTextToHTML(messagePortableText, conference)
     if (htmlError) {
       return htmlError
     }

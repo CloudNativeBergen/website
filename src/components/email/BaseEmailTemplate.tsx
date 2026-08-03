@@ -2,20 +2,40 @@ import * as React from 'react'
 import { iconForLink, titleForLink } from '../SocialIcons'
 
 import { DEFAULT_PRIMARY_COLOR } from '@/lib/branding/theme'
+import { resolveEmailBrandPalette } from '@/lib/branding/email'
+import { EmailBrandProvider } from './EmailBrandContext'
 
 /**
  * The default brand PRIMARY (Cloud Native Days blue) — re-exported from the
  * theming core so the email default can never drift from the house palette.
  * Overridable per-send via `brandColor` so a tenant's mail can carry its own
- * primary; full design-token theming lands later — this is the
- * neutral-correctness seam (go-live gate G2, E8). The base template's footer
- * already names the sender via `eventName`, so no hardcoded brand name remains.
+ * primary. The base template's footer already names the sender via `eventName`,
+ * so no hardcoded brand name remains.
  */
 export const DEFAULT_EMAIL_BRAND_COLOR = DEFAULT_PRIMARY_COLOR
 
+/** The neutral slate an email H1 uses when it is not a brand-toned heading. */
+const NEUTRAL_TITLE_COLOR = '#334155'
+
 interface BaseEmailTemplateProps {
   title?: string
+  /**
+   * Explicit H1 colour. Prefer `titleTone` — a literal here cannot follow the
+   * tenant, which is exactly how every template ended up hard-coding the house
+   * blue.
+   */
   titleColor?: string
+  /**
+   * Whether this email's H1 is a brand-toned heading (`brand`) or neutral body
+   * slate (`neutral`, the default).
+   *
+   * This is a two-value enum rather than "default the title to the brand
+   * colour" on purpose: the templates genuinely disagree — roughly half opened
+   * with a coloured heading and half with slate — and collapsing them would
+   * have changed what unthemed tenants receive. `brand` reproduces the old
+   * `#1D4ED8` literal exactly when there is no theme.
+   */
+  titleTone?: 'neutral' | 'brand'
   /** Accent colour for links, the event-details header and footer emphasis. */
   brandColor?: string
   speakerName?: string
@@ -63,7 +83,8 @@ function messagesUrlFromEventUrl(eventUrl: string): string {
 
 export function BaseEmailTemplate({
   title,
-  titleColor = '#334155',
+  titleColor,
+  titleTone = 'neutral',
   brandColor = DEFAULT_EMAIL_BRAND_COLOR,
   speakerName,
   proposalTitle,
@@ -78,7 +99,14 @@ export function BaseEmailTemplate({
   showMessagesLink,
   customContent,
 }: BaseEmailTemplateProps) {
-  const accent = brandColor
+  // Resolved ONCE here and published to every primitive below via
+  // EmailBrandProvider — email has no CSS custom properties, so this is the
+  // only mechanism by which a nested EmailButton can know the tenant's colour.
+  const brand = resolveEmailBrandPalette(brandColor)
+  const accent = brand.accent
+  const resolvedTitleColor =
+    titleColor ?? (titleTone === 'brand' ? accent : NEUTRAL_TITLE_COLOR)
+
   if (!speakerName && !customContent) {
     throw new Error(
       `BaseEmailTemplate requires either speakerName or customContent to be provided. ` +
@@ -98,7 +126,7 @@ export function BaseEmailTemplate({
   }
 
   const headerStyle: React.CSSProperties = {
-    color: titleColor,
+    color: resolvedTitleColor,
     marginBottom: '24px',
     marginTop: '0',
     fontFamily:
@@ -117,11 +145,11 @@ export function BaseEmailTemplate({
   }
 
   const eventDetailsStyle: React.CSSProperties = {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: brand.cardBackground,
     padding: '20px',
     borderRadius: '12px',
     marginBottom: '24px',
-    border: '1px solid #CBD5E1',
+    border: `1px solid ${brand.cardBorder}`,
   }
 
   const eventDetailsHeaderStyle: React.CSSProperties = {
@@ -188,160 +216,162 @@ export function BaseEmailTemplate({
   }
 
   return (
-    <div style={containerStyle}>
-      <table
-        role="presentation"
-        style={{ width: '100%', borderCollapse: 'collapse' }}
-      >
-        <tbody>
-          <tr>
-            <td>
-              <h1 style={headerStyle}>{customContent?.heading || title}</h1>
+    <EmailBrandProvider brandColor={brandColor}>
+      <div style={containerStyle}>
+        <table
+          role="presentation"
+          style={{ width: '100%', borderCollapse: 'collapse' }}
+        >
+          <tbody>
+            <tr>
+              <td>
+                <h1 style={headerStyle}>{customContent?.heading || title}</h1>
 
-              {speakerName && !customContent && (
-                <p style={paragraphStyle}>Dear {speakerName},</p>
-              )}
+                {speakerName && !customContent && (
+                  <p style={paragraphStyle}>Dear {speakerName},</p>
+                )}
 
-              {customContent?.body ? (
-                customContent.body
-              ) : (
-                <>
-                  {proposalTitle && (
-                    <p style={paragraphStyle}>
-                      Thank you for submitting your proposal{' '}
-                      <strong style={{ color: accent }}>
-                        &quot;{proposalTitle}&quot;
-                      </strong>{' '}
-                      for {eventName}.
-                    </p>
-                  )}
-
-                  {children}
-                </>
-              )}
-
-              {!customContent && eventName && (
-                <div style={eventDetailsStyle}>
-                  <h3 style={eventDetailsHeaderStyle}>Event Details:</h3>
-                  <ul style={listStyle}>
-                    <li style={listItemStyle}>
-                      <strong>Event:</strong> {eventName}
-                    </li>
-                    <li style={listItemStyle}>
-                      <strong>Location:</strong> {eventLocation}
-                    </li>
-                    <li style={listItemStyle}>
-                      <strong>Date:</strong> {eventDate}
-                    </li>
-                    <li style={{ marginBottom: '0' }}>
-                      <strong>Website:</strong>{' '}
-                      <a href={eventUrl} style={linkStyle}>
-                        {eventUrl}
-                      </a>
-                    </li>
-                  </ul>
-                </div>
-              )}
-
-              {footer}
-
-              {!footer && (
-                <>
-                  <hr style={hrStyle} />
-
-                  {socialLinks.length > 0 && (
-                    <div style={socialContainerStyle}>
-                      <p
-                        style={{
-                          fontSize: '16px',
-                          color: '#334155',
-                          marginBottom: '12px',
-                          marginTop: '0',
-                          fontWeight: '600',
-                        }}
-                      >
-                        Follow {eventName}:
+                {customContent?.body ? (
+                  customContent.body
+                ) : (
+                  <>
+                    {proposalTitle && (
+                      <p style={paragraphStyle}>
+                        Thank you for submitting your proposal{' '}
+                        <strong style={{ color: accent }}>
+                          &quot;{proposalTitle}&quot;
+                        </strong>{' '}
+                        for {eventName}.
                       </p>
-                      <div>
-                        {socialLinks.map((link, index) => {
-                          const iconElement = iconForLink(link, 'h-4 w-4')
-                          const title = titleForLink(link)
-                          return (
-                            <a
-                              key={index}
-                              href={link}
-                              style={socialLinkStyle}
-                              title={title}
-                              aria-label={title}
-                            >
-                              <span
-                                style={{
-                                  display: 'inline-block',
-                                  verticalAlign: 'middle',
-                                  width: '20px',
-                                  height: '20px',
-                                }}
-                              >
-                                {iconElement}
-                              </span>
-                            </a>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div style={footerStyle}>
-                    <p style={footerTextStyle}>
-                      This email was sent by{' '}
-                      <strong style={{ color: accent }}>{eventName}</strong>
-                      .<br />
-                      {unsubscribeUrl ? (
-                        <a
-                          href={unsubscribeUrl}
+                    {children}
+                  </>
+                )}
+
+                {!customContent && eventName && (
+                  <div style={eventDetailsStyle}>
+                    <h3 style={eventDetailsHeaderStyle}>Event Details:</h3>
+                    <ul style={listStyle}>
+                      <li style={listItemStyle}>
+                        <strong>Event:</strong> {eventName}
+                      </li>
+                      <li style={listItemStyle}>
+                        <strong>Location:</strong> {eventLocation}
+                      </li>
+                      <li style={listItemStyle}>
+                        <strong>Date:</strong> {eventDate}
+                      </li>
+                      <li style={{ marginBottom: '0' }}>
+                        <strong>Website:</strong>{' '}
+                        <a href={eventUrl} style={linkStyle}>
+                          {eventUrl}
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+
+                {footer}
+
+                {!footer && (
+                  <>
+                    <hr style={hrStyle} />
+
+                    {socialLinks.length > 0 && (
+                      <div style={socialContainerStyle}>
+                        <p
                           style={{
-                            color: accent,
-                            textDecoration: 'underline',
+                            fontSize: '16px',
+                            color: '#334155',
+                            marginBottom: '12px',
+                            marginTop: '0',
+                            fontWeight: '600',
                           }}
                         >
-                          Unsubscribe from these emails
-                        </a>
-                      ) : (
-                        'If you have any questions, please contact the organizers.'
-                      )}
-                    </p>
-                  </div>
-                </>
-              )}
+                          Follow {eventName}:
+                        </p>
+                        <div>
+                          {socialLinks.map((link, index) => {
+                            const iconElement = iconForLink(link, 'h-4 w-4')
+                            const title = titleForLink(link)
+                            return (
+                              <a
+                                key={index}
+                                href={link}
+                                style={socialLinkStyle}
+                                title={title}
+                                aria-label={title}
+                              >
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    verticalAlign: 'middle',
+                                    width: '20px',
+                                    height: '20px',
+                                  }}
+                                >
+                                  {iconElement}
+                                </span>
+                              </a>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-              {/* Adoption line (V2e): rendered regardless of a custom footer so
+                    <div style={footerStyle}>
+                      <p style={footerTextStyle}>
+                        This email was sent by{' '}
+                        <strong style={{ color: accent }}>{eventName}</strong>
+                        .<br />
+                        {unsubscribeUrl ? (
+                          <a
+                            href={unsubscribeUrl}
+                            style={{
+                              color: accent,
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            Unsubscribe from these emails
+                          </a>
+                        ) : (
+                          'If you have any questions, please contact the organizers.'
+                        )}
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Adoption line (V2e): rendered regardless of a custom footer so
                   the decision templates (which supply their own footer) get it
                   too. Speaker-facing templates opt in via `showMessagesLink`. */}
-              {showMessagesLink && (
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: '#94A3B8',
-                    textAlign: 'center' as const,
-                    marginTop: '16px',
-                    marginBottom: '0',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  You can reach the organizers anytime via{' '}
-                  <a
-                    href={messagesUrlFromEventUrl(eventUrl)}
-                    style={{ color: '#64748B', textDecoration: 'underline' }}
+                {showMessagesLink && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#94A3B8',
+                      textAlign: 'center' as const,
+                      marginTop: '16px',
+                      marginBottom: '0',
+                      lineHeight: '1.5',
+                    }}
                   >
-                    Messages
-                  </a>{' '}
-                  on the site.
-                </p>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+                    You can reach the organizers anytime via{' '}
+                    <a
+                      href={messagesUrlFromEventUrl(eventUrl)}
+                      style={{ color: '#64748B', textDecoration: 'underline' }}
+                    >
+                      Messages
+                    </a>{' '}
+                    on the site.
+                  </p>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </EmailBrandProvider>
   )
 }
