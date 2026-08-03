@@ -28,8 +28,13 @@ export function invoiceFormatLabel(
 
 /** A single missing piece of billing information. */
 export interface BillingGap {
-  /** Stable identifier, matching the underlying document path. */
-  field: 'billing' | 'billing.email' | 'billing.invoiceFormat' | 'orgNumber'
+  /**
+   * Stable identifier, matching the underlying document path — and the same
+   * paths `contract-readiness` reports (`sponsor.orgNumber`), so gaps from the
+   * two systems can be joined without a translation table.
+   */
+  field:
+    'billing' | 'billing.email' | 'billing.invoiceFormat' | 'sponsor.orgNumber'
   /** Short label for chips and lists. */
   label: string
   /** Actionable sentence explaining why it blocks invoicing. */
@@ -99,7 +104,7 @@ export function evaluateBilling(
 
   if (billing.invoiceFormat === 'ehf' && !sfc.sponsor?.orgNumber?.trim()) {
     gaps.push({
-      field: 'orgNumber',
+      field: 'sponsor.orgNumber',
       label: 'Organisation number',
       message:
         'EHF invoices are addressed by organisation number, but none is recorded for this company.',

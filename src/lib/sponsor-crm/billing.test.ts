@@ -63,6 +63,8 @@ describe('evaluateBilling', () => {
 
   it('flags a missing invoice format rather than assuming PDF', () => {
     const sfc = mockSponsor({
+      // Simulates a record written before `invoiceFormat` was required — the
+      // cast is the only way to express a state the type no longer allows.
       billing: {
         ...mockBillingInfo(),
         invoiceFormat: undefined as unknown as 'pdf',
@@ -78,7 +80,7 @@ describe('evaluateBilling', () => {
       sponsor: { ...mockSponsor().sponsor, orgNumber: undefined },
     })
 
-    expect(gapFields(sfc)).toEqual(['orgNumber'])
+    expect(gapFields(sfc)).toEqual(['sponsor.orgNumber'])
     expect(isBillingComplete(sfc)).toBe(false)
   })
 
@@ -97,6 +99,6 @@ describe('evaluateBilling', () => {
       sponsor: { ...mockSponsor().sponsor, orgNumber: '' },
     })
 
-    expect(gapFields(sfc)).toEqual(['billing.email', 'orgNumber'])
+    expect(gapFields(sfc)).toEqual(['billing.email', 'sponsor.orgNumber'])
   })
 })
