@@ -88,3 +88,65 @@ describe('program/time-utils.ts', () => {
     })
   })
 })
+
+/**
+ * Regression: a schedule date is a `YYYY-MM-DD` string, which `new Date()`
+ * parses as UTC midnight. For any viewer west of UTC that is the PREVIOUS local
+ * day, so day comparisons were off by one — a São Paulo conference's
+ * "happening now" rail never activated on the actual conference day.
+ *
+ * These pin the viewer's timezone rather than trusting the machine's.
+ */
+describe('program/time-utils.ts — viewer timezone', () => {
+  const withTimeZone = (tz: string, run: () => void) => {
+    const hadTz = 'TZ' in process.env
+    const original = process.env.TZ
+    process.env.TZ = tz
+    try {
+      run()
+    } finally {
+      // Reassigning an undefined original would set the STRING "undefined" and
+      // leak a bogus zone into every later test in this worker.
+      if (hadTz) process.env.TZ = original
+      else delete process.env.TZ
+    }
+  }
+
+  it('treats the conference day as today for a viewer west of UTC', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      // 10:00 local on the conference day itself.
+      const currentTime = new Date(2026, 10, 5, 10, 0, 0)
+      expect(isScheduleToday('2026-11-05', currentTime)).toBe(true)
+      expect(isScheduleInPast('2026-11-05', currentTime)).toBe(false)
+    })
+  })
+
+  it('still treats it as today east of UTC', () => {
+    withTimeZone('Europe/Oslo', () => {
+      const currentTime = new Date(2026, 10, 5, 10, 0, 0)
+      expect(isScheduleToday('2026-11-05', currentTime)).toBe(true)
+    })
+  })
+
+  it('does not swallow a genuinely past day west of UTC', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      const currentTime = new Date(2026, 10, 6, 10, 0, 0)
+      expect(isScheduleToday('2026-11-05', currentTime)).toBe(false)
+      expect(isScheduleInPast('2026-11-05', currentTime)).toBe(true)
+    })
+  })
+  it('falls back rather than rolling an impossible date forward', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      // 30 February would normalise to 2 March and then compare as a real day.
+      const currentTime = new Date(2026, 1, 30, 10, 0, 0)
+      expect(isScheduleToday('2026-02-30', currentTime)).toBe(false)
+    })
+  })
+
+  it('rejects a date string with trailing segments', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      const currentTime = new Date(2026, 10, 5, 10, 0, 0)
+      expect(isScheduleToday('2026-11-05-extra', currentTime)).toBe(false)
+    })
+  })
+})

@@ -78,7 +78,20 @@ export async function generateMetadata(): Promise<Metadata> {
   // request host, keeping local development correct.
   const { conference } = await getConferenceForDomain(host)
   const metadataBase = new URL(canonicalOrigin(conference, host))
-  const brand = conference?.title?.trim() || PLATFORM_NAME
+  const tenantBrand = conference?.title?.trim()
+  const brand = tenantBrand || PLATFORM_NAME
+
+  // The last-resort title/description differ by WHOSE surface this is. With a
+  // tenant resolved they must stay generic-conference copy under that tenant's
+  // name; with no tenant they describe the PLATFORM. They used to describe
+  // Nordic Kubernetes events in both cases — one conference's subject matter
+  // presented as every tenant's.
+  const fallbackTagline = tenantBrand
+    ? 'Program, speakers and tickets'
+    : 'Run your conference'
+  const fallbackDescription = tenantBrand
+    ? `Program, speakers, tickets and call for papers for ${tenantBrand}.`
+    : `${PLATFORM_NAME} gives conference organizers everything from call for papers to program, speakers and tickets.`
 
   return {
     metadataBase,
@@ -92,13 +105,9 @@ export async function generateMetadata(): Promise<Metadata> {
       : {}),
     title: {
       template: `%s - ${brand}`,
-      default: conference?.tagline
-        ? `${brand} - ${conference.tagline}`
-        : `${brand} - A community-driven Kubernetes and Cloud conference`,
+      default: `${brand} - ${conference?.tagline || fallbackTagline}`,
     },
-    description:
-      conference?.description ||
-      'We bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+    description: conference?.description || fallbackDescription,
     // PWA / installability. Next injects the manifest link automatically from
     // `app/manifest.ts`; here we add the iOS web-app meta and the icon links.
     // The apple-touch icon and favicons resolve per host via the dynamic

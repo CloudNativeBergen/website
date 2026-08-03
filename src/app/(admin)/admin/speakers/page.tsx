@@ -6,6 +6,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
 import { hasPreviousAcceptedTalks } from '@/lib/speaker/utils'
 import { unstable_noStore as noStore } from 'next/cache'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 function calculateSpeakerStats(
   speakers: (Speaker & { proposals: ProposalExisting[] })[],
@@ -98,7 +99,7 @@ export default async function AdminSpeakers() {
           ).length,
         }}
         confirmedSpeakersCount={confirmedSpeakers.length}
-        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contactEmail}>`}
+        conferenceEmail={`${conference.organizer || PLATFORM_NAME} <${conference.contactEmail}>`}
       />
     )
   } catch (error) {

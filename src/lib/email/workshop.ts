@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/email/escape'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   resend,
   retryWithBackoff,
@@ -93,12 +94,12 @@ export async function sendBasicWorkshopConfirmation({
 
                     <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
 
-                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || 'Cloud Native Days'}</strong></p>
+                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || PLATFORM_NAME}</strong></p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference?.organizer || 'Cloud Native Days'}. All rights reserved.</p>
+                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference?.organizer || PLATFORM_NAME}. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
@@ -306,12 +307,12 @@ export async function sendWorkshopAnnouncementEmail({
                     </div>
                     <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 20px; color: #64748B;">— ${escapeHtml(authorName)}</p>
                     <p style="margin: 24px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
-                    <p style="margin: 16px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${escapeHtml(conference?.organizer || 'Cloud Native Days')}</strong></p>
+                    <p style="margin: 16px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${escapeHtml(conference?.organizer || PLATFORM_NAME)}</strong></p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${escapeHtml(conference?.organizer || 'Cloud Native Days')}. You are receiving this because you are a confirmed participant of this workshop.</p>
+                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${escapeHtml(conference?.organizer || PLATFORM_NAME)}. You are receiving this because you are a confirmed participant of this workshop.</p>
                   </td>
                 </tr>
               </table>

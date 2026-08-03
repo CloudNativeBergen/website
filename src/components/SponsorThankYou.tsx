@@ -8,6 +8,7 @@ import {
   BoltIcon,
 } from '@heroicons/react/24/solid'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { InlineSvg } from './InlineSvg'
 
 interface SponsorData {
@@ -219,7 +220,7 @@ export async function SponsorThankYou({
   sponsor,
   variant = 'code-heroes',
   className = '',
-  eventName = 'Cloud Native Days',
+  eventName = PLATFORM_NAME,
   eventDate,
   showCloudNativePattern = false,
   ctaUrl,

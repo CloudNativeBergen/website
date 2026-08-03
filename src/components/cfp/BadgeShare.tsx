@@ -13,6 +13,7 @@ import {
   buildFullUrl,
   addToLinkedInProfile,
 } from '@/lib/share/social'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { BadgeRecord } from '@/lib/badge/types'
 import Link from 'next/link'
 
@@ -50,7 +51,7 @@ export function BadgeShare({
       'organizer' in badge.conference &&
       badge.conference.organizer
         ? badge.conference.organizer
-        : 'Cloud Native Days'
+        : PLATFORM_NAME
 
     addToLinkedInProfile({
       name: `${eventName} ${badgeTypeName} Badge`,

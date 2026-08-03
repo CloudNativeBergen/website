@@ -214,6 +214,98 @@ describe('UpdateHomepageSectionsSchema', () => {
     ).not.toThrow()
   })
 
+  it('round-trips per-section copy on the content bands', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageGallery',
+          _key: 'g',
+          heading: 'Photos',
+          description: 'From last year',
+        },
+        {
+          _type: 'homepageFeaturedSpeakers',
+          _key: 'f',
+          heading: 'Our speakers',
+          description: 'The line-up',
+        },
+        {
+          _type: 'homepageOrganizers',
+          _key: 'o',
+          heading: 'The team',
+          description: 'Volunteers, all of them',
+        },
+      ],
+    })
+    expect(parsed.homepageSections).toHaveLength(3)
+    expect(parsed.homepageSections[0]).toMatchObject({ heading: 'Photos' })
+  })
+
+  it('round-trips the sponsors band copy and the CTA toggle', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageSponsors',
+          _key: 's',
+          heading: 'Our partners',
+          description: 'They make it possible',
+          showCta: false,
+          ctaHeading: 'Sponsor us',
+          ctaDescription: 'Reach our audience.',
+        },
+      ],
+    })
+    expect(parsed.homepageSections[0]).toMatchObject({
+      _type: 'homepageSponsors',
+      showCta: false,
+      ctaHeading: 'Sponsor us',
+    })
+  })
+
+  it('still accepts the content bands with no copy at all (house defaults)', () => {
+    expect(() =>
+      UpdateHomepageSectionsSchema.parse({
+        homepageSections: [
+          { _type: 'homepageGallery', _key: 'g' },
+          { _type: 'homepageFeaturedSpeakers', _key: 'f' },
+          { _type: 'homepageOrganizers', _key: 'o' },
+          { _type: 'homepageSponsors', _key: 's' },
+        ],
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects blank section copy (absent is what selects the default)', () => {
+    expect(
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          { _type: 'homepageGallery', _key: 'g', heading: '' },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      UpdateHomepageSectionsSchema.safeParse({
+        homepageSections: [
+          { _type: 'homepageSponsors', _key: 's', ctaDescription: '   ' },
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('strips unknown fields off a content band (no smuggled raw HTML)', () => {
+    const parsed = UpdateHomepageSectionsSchema.parse({
+      homepageSections: [
+        {
+          _type: 'homepageGallery',
+          _key: 'g',
+          heading: 'Photos',
+          embedHtml: '<script>alert(1)</script>',
+        },
+      ],
+    })
+    expect(parsed.homepageSections[0]).not.toHaveProperty('embedHtml')
+  })
+
   it('round-trips a venue block (name/address come from the conference)', () => {
     const parsed = UpdateHomepageSectionsSchema.parse({
       homepageSections: [

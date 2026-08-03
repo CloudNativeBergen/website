@@ -17,10 +17,37 @@ vi.mock('@/components/ProgramHighlights', () => ({
   ProgramHighlights: () => <div data-testid="program" />,
 }))
 vi.mock('@/components/Sponsors', () => ({
-  Sponsors: () => <div data-testid="sponsors" />,
+  Sponsors: ({
+    showCTA,
+    heading,
+    ctaHeading,
+  }: {
+    showCTA?: boolean
+    heading?: string
+    ctaHeading?: string
+  }) => (
+    <div
+      data-testid="sponsors"
+      data-show-cta={String(showCTA)}
+      data-heading={heading ?? ''}
+      data-cta-heading={ctaHeading ?? ''}
+    />
+  ),
 }))
 vi.mock('@/components/ImageGallery', () => ({
-  ImageGallery: () => <div data-testid="gallery" />,
+  ImageGallery: ({
+    heading,
+    description,
+  }: {
+    heading?: string
+    description?: string
+  }) => (
+    <div
+      data-testid="gallery"
+      data-heading={heading ?? ''}
+      data-description={description ?? ''}
+    />
+  ),
 }))
 vi.mock('@/components/FeaturedSpeakersShelf', () => ({
   FeaturedSpeakersShelf: () => <div data-testid="featured-shelf" />,
@@ -110,6 +137,117 @@ describe('HomepageSectionRenderer — default composition', () => {
     expect(ids[0]).toBe('hero')
     expect(ids).toContain('featured-shelf')
     expect(ids).not.toContain('program')
+  })
+})
+
+describe('HomepageSectionRenderer — per-section copy', () => {
+  it('renders the house copy when a section configures none', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={[
+          { _key: 'g', _type: 'homepageGallery' },
+          { _key: 'f', _type: 'homepageFeaturedSpeakers' },
+          { _key: 's', _type: 'homepageSponsors' },
+        ]}
+        conference={conference}
+      />,
+    )
+    // The inline bands render their defaults verbatim…
+    expect(container.textContent).toContain('Featured Speakers')
+    expect(container.textContent).toContain('Meet the speakers at Test Conf')
+    // …and the leaf components are handed NOTHING, so their own prop defaults
+    // (today's copy) apply — this is the zero-migration guarantee.
+    const gallery = container.querySelector('[data-testid="gallery"]')!
+    expect(gallery.getAttribute('data-heading')).toBe('')
+    expect(gallery.getAttribute('data-description')).toBe('')
+    const sponsors = container.querySelector('[data-testid="sponsors"]')!
+    expect(sponsors.getAttribute('data-heading')).toBe('')
+    expect(sponsors.getAttribute('data-cta-heading')).toBe('')
+    expect(sponsors.getAttribute('data-show-cta')).toBe('true')
+  })
+
+  it('renders configured copy for the inline bands', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={[
+          {
+            _key: 'f',
+            _type: 'homepageFeaturedSpeakers',
+            heading: 'Who you will hear',
+            description: 'A hand-picked line-up',
+          },
+          {
+            _key: 'o',
+            _type: 'homepageOrganizers',
+            heading: 'The crew',
+            description: 'Volunteers, all of them',
+          },
+        ]}
+        conference={conference}
+      />,
+    )
+    expect(container.textContent).toContain('Who you will hear')
+    expect(container.textContent).toContain('A hand-picked line-up')
+    expect(container.textContent).not.toContain('Featured Speakers')
+    expect(container.textContent).toContain('The crew')
+    expect(container.textContent).not.toContain('Meet Our Organizers')
+  })
+
+  it('passes configured copy and the CTA toggle down to the leaf components', () => {
+    const conference = makeConference()
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={[
+          { _key: 'g', _type: 'homepageGallery', heading: 'Photos' },
+          {
+            _key: 's',
+            _type: 'homepageSponsors',
+            heading: 'Our partners',
+            showCta: false,
+            ctaHeading: 'ignored while hidden',
+          },
+        ]}
+        conference={conference}
+      />,
+    )
+    expect(
+      container
+        .querySelector('[data-testid="gallery"]')
+        ?.getAttribute('data-heading'),
+    ).toBe('Photos')
+    const sponsors = container.querySelector('[data-testid="sponsors"]')!
+    expect(sponsors.getAttribute('data-heading')).toBe('Our partners')
+    expect(sponsors.getAttribute('data-show-cta')).toBe('false')
+  })
+
+  it('treats blank stored copy as absent (falls back to the default)', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={[
+          { _key: 'g', _type: 'homepageGallery', heading: '   ' },
+          { _key: 'f', _type: 'homepageFeaturedSpeakers', heading: '  ' },
+        ]}
+        conference={conference}
+      />,
+    )
+    expect(
+      container
+        .querySelector('[data-testid="gallery"]')
+        ?.getAttribute('data-heading'),
+    ).toBe('')
+    expect(container.textContent).toContain('Featured Speakers')
   })
 })
 

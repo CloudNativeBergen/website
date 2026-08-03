@@ -1037,6 +1037,101 @@ function SectionConfig({
     )
   }
 
+  if (
+    row._type === 'homepageFeaturedSpeakers' ||
+    row._type === 'homepageOrganizers' ||
+    row._type === 'homepageGallery'
+  ) {
+    const label = SECTION_LABELS[row._type]
+    const headingPlaceholder =
+      row._type === 'homepageFeaturedSpeakers'
+        ? 'Heading (optional — default “Featured Speakers”)'
+        : row._type === 'homepageOrganizers'
+          ? 'Heading (optional — default “Meet Our Organizers”)'
+          : 'Heading (optional — default “Conference Moments”)'
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder={headingPlaceholder}
+          aria-label={`${label} heading`}
+          className={inputClass}
+        />
+        <textarea
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Sub-heading (optional — leave blank for the default)"
+          aria-label={`${label} sub-heading`}
+          rows={2}
+          className={inputClass}
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Copy only — the {label.toLowerCase()} themselves come from the
+          conference configuration.
+        </p>
+      </div>
+    )
+  }
+
+  if (row._type === 'homepageSponsors') {
+    const showCta = row.showCta !== false
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Our sponsors”)"
+          aria-label="Sponsors heading"
+          className={inputClass}
+        />
+        <textarea
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Sub-heading (optional — leave blank for the default)"
+          aria-label="Sponsors sub-heading"
+          rows={2}
+          className={inputClass}
+        />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={showCta}
+            onChange={(e) => onChange({ showCta: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600"
+          />
+          Show the “Become a Sponsor” call-to-action
+        </label>
+        {showCta ? (
+          <>
+            <input
+              type="text"
+              value={row.ctaHeading ?? ''}
+              onChange={(e) => onChange({ ctaHeading: e.target.value })}
+              placeholder="Call-to-action heading (optional — default “Become a Sponsor”)"
+              aria-label="Sponsors call-to-action heading"
+              className={inputClass}
+            />
+            <textarea
+              value={row.ctaDescription ?? ''}
+              onChange={(e) => onChange({ ctaDescription: e.target.value })}
+              placeholder="Call-to-action body (optional — leave blank for the default)"
+              aria-label="Sponsors call-to-action body"
+              rows={3}
+              className={inputClass}
+            />
+          </>
+        ) : null}
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Copy only — sponsor logos and tiers come from the conference
+          configuration.
+        </p>
+      </div>
+    )
+  }
+
   if (row._type === 'homepageVenue') {
     return (
       <div className="space-y-2">

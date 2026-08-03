@@ -102,6 +102,26 @@ const richTextSections: HomepageSection[] = [
   },
 ]
 
+// The content bands, whose config is COPY ONLY (headings/sub-headings, plus the
+// sponsors CTA card and its on/off toggle) — the content itself still comes from
+// the conference.
+const copySections: HomepageSection[] = [
+  {
+    _key: 'gallery',
+    _type: 'homepageGallery',
+    heading: 'Photos from 2025',
+    description: 'Talks, hallway track and the after-party, in pictures.',
+  },
+  { _key: 'featured', _type: 'homepageFeaturedSpeakers' },
+  {
+    _key: 'sponsors',
+    _type: 'homepageSponsors',
+    heading: 'Our partners',
+    ctaHeading: 'Partner with us',
+    ctaDescription: 'Reach the people who build and run these systems.',
+  },
+]
+
 const meta = {
   title: 'Systems/Settings/Admin/HomepageSectionsEditor',
   component: HomepageSectionsEditor,
@@ -240,4 +260,34 @@ export const F4ConfigFormsDark: Story = {
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   play: F4ConfigForms.play,
+}
+
+/**
+ * The content bands' copy config, with the Sponsors accordion expanded — band
+ * heading/sub-heading, the "Become a Sponsor" on/off toggle and its copy. Every
+ * field is optional: blank means "use the house default".
+ */
+export const ContentBandCopyConfig: Story = {
+  args: {
+    initialSections: copySections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    const configure = await screen.findByRole('button', {
+      name: 'Configure Sponsors',
+    })
+    await userEvent.click(configure)
+  },
+}
+
+/** The content bands' copy config in dark mode, Sponsors accordion expanded. */
+export const ContentBandCopyConfigDark: Story = {
+  args: {
+    initialSections: copySections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  play: ContentBandCopyConfig.play,
 }

@@ -17,6 +17,7 @@ import type { BadgeRecord } from '@/lib/badge/types'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Conference } from '@/lib/conference/types'
 import { speakerImageUrl } from '@/lib/sanity/client'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { BlueskyIcon, LinkedInIcon } from '@/components/SocialIcons'
@@ -74,7 +75,7 @@ export function BadgeDisplay({
     const issueDate = new Date(badge.issuedAt)
     addToLinkedInProfile({
       name: `${conference.title} ${badgeTypeName} Badge`,
-      organizationName: conference.organizer || 'Cloud Native Days',
+      organizationName: conference.organizer || PLATFORM_NAME,
       issueYear: issueDate.getFullYear(),
       issueMonth: issueDate.getMonth() + 1,
       certUrl: fullBadgeUrl,

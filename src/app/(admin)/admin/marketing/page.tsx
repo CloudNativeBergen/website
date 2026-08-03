@@ -18,6 +18,7 @@ import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithD
 import { PhotoGalleryWithDownload } from '@/components/admin/PhotoGalleryWithDownload'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { getSpeakerFilename } from '@/lib/speaker/utils'
+import { PLATFORM_NAME, PLATFORM_SLUG } from '@/lib/branding/platform'
 import { getFeaturedGalleryImages } from '@/lib/gallery/sanity'
 import {
   UserGroupIcon,
@@ -335,7 +336,7 @@ export default async function MarketingPage() {
         {/* Conference Promotional Tab */}
         <div>
           <DownloadableImage
-            filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || 'cloud-native-bergen'}-conference-promo`}
+            filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
           >
             <div
               className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
@@ -435,7 +436,7 @@ export default async function MarketingPage() {
             <PhotoGalleryWithDownload
               photos={featuredPhotos}
               qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
-              conferenceTitle={conference.title || 'Cloud Native Days'}
+              conferenceTitle={conference.title || PLATFORM_NAME}
               conferenceLogos={{
                 logoBright: conference.logoBright,
                 logoDark: conference.logoDark,
@@ -476,7 +477,7 @@ export default async function MarketingPage() {
                         }}
                         variant="speaker-spotlight"
                         isFeatured={true}
-                        eventName={conference.title || 'Cloud Native Days'}
+                        eventName={conference.title || PLATFORM_NAME}
                         className="h-full w-full"
                         showCloudNativePattern={true}
                       />

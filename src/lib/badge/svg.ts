@@ -1,5 +1,6 @@
 import type { BadgeType } from './types'
 import BadgeGraphics from './graphics/2025'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 const COLORS = {
   aqua: '#06B6D4',
@@ -22,7 +23,7 @@ export function generateBadgeSVG(options: BadgeSVGOptions): string {
     options
 
   const badgeTypeText = badgeType === 'speaker' ? 'SPEAKER' : 'ORGANIZER'
-  const topText = conferenceTitle?.toUpperCase() || 'CLOUD NATIVE DAYS'
+  const topText = conferenceTitle?.toUpperCase() || PLATFORM_NAME.toUpperCase()
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 920 920" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: auto;">

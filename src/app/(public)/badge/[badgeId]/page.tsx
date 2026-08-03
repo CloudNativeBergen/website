@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getBadgeById } from '@/lib/badge/sanity'
 import { BadgeDisplay } from '@/components/badge/BadgeDisplay'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Metadata } from 'next'
 import type { Speaker } from '@/lib/speaker/types'
 import type { Conference } from '@/lib/conference/types'
@@ -51,7 +52,7 @@ export async function generateMetadata({
       : null
 
   const speakerName = speaker?.name || 'Speaker'
-  const conferenceName = conference?.title || 'Cloud Native Days'
+  const conferenceName = conference?.title || PLATFORM_NAME
   const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
   const title = `${badgeTypeName} Badge - ${speakerName}`
   const description = `Verified ${badgeTypeName} Badge for ${speakerName} at ${conferenceName}. OpenBadges 3.0 compliant digital credential.`
