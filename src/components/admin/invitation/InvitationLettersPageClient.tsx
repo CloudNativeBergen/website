@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   DocumentTextIcon,
   CheckCircleIcon,
@@ -55,6 +56,10 @@ export function InvitationLettersPageClient({
     EMPTY_INVITATION_FORM,
   )
   const [lastReference, setLastReference] = useState<string | null>(null)
+  // Never put in form state: it must survive the reset that clears the
+  // applicant fields, since the same organizer signs the next letter too.
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
+  const { data: session } = useSession()
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
@@ -122,6 +127,7 @@ export function InvitationLettersPageClient({
       costCoverage: values.costCoverage,
       additionalNotes: values.additionalNotes || undefined,
       signatoryTitle: values.signatoryTitle || undefined,
+      signatureDataUrl: signatureDataUrl ?? undefined,
       delivery: values.delivery,
     })
   }
@@ -160,6 +166,12 @@ export function InvitationLettersPageClient({
           onChange={setValues}
           onSubmit={handleSubmit}
           isSubmitting={issueMutation.isPending}
+          organizer={
+            session?.speaker?._id
+              ? { id: session.speaker._id, name: session.speaker.name }
+              : undefined
+          }
+          onSignatureChange={setSignatureDataUrl}
         />
       </div>
 

@@ -46,6 +46,14 @@ interface OrganizerSignatureCaptureProps {
   organizerName: string
   onSignatureReady: (dataUrl: string | null) => void
   disabled?: boolean
+  /**
+   * What this signature is called in the surrounding flow. Defaults to the
+   * contract wording, which is where the component started; invitation letters
+   * pass their own so the copy matches the document being signed.
+   */
+  label?: string
+  /** Explains where the signature ends up. Defaults to the contract wording. */
+  description?: string
 }
 
 export function OrganizerSignatureCapture({
@@ -53,6 +61,8 @@ export function OrganizerSignatureCapture({
   organizerName,
   onSignatureReady,
   disabled = false,
+  label = 'Counter-signature',
+  description = 'Your signature will be embedded in the contract PDF before it is sent. It is saved locally and never uploaded to the server.',
 }: OrganizerSignatureCaptureProps) {
   const storageKey = `${STORAGE_KEY_PREFIX}${organizerId}`
   const savedSignature = useLocalStorageSignature(storageKey)
@@ -104,7 +114,7 @@ export function OrganizerSignatureCapture({
       />
     ) : (
       <p className="text-xs text-gray-400 italic dark:text-gray-500">
-        No counter-signature saved for {organizerName}.
+        No {label.toLowerCase()} saved for {organizerName}.
       </p>
     )
   }
@@ -113,7 +123,7 @@ export function OrganizerSignatureCapture({
     return (
       <div className="space-y-2">
         <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-          Counter-signature ({organizerName})
+          {label} ({organizerName})
         </p>
         <SavedSignaturePreview
           dataUrl={savedSignature}
@@ -144,12 +154,9 @@ export function OrganizerSignatureCapture({
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-        Counter-signature ({organizerName})
+        {label} ({organizerName})
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        Your signature will be embedded in the contract PDF before it is sent.
-        It is saved locally and never uploaded to the server.
-      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
       <SignaturePadCanvas
         onSignatureChange={handleSignatureChange}
         height={150}

@@ -6,6 +6,7 @@ import {
   LockClosedIcon,
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline'
+import { OrganizerSignatureCapture } from '@/components/admin/OrganizerSignatureCapture'
 import type {
   InvitationDelivery,
   ParticipantRole,
@@ -106,6 +107,10 @@ interface InvitationLetterFormProps {
   onChange: (values: InvitationLetterFormValues) => void
   onSubmit: () => void
   isSubmitting: boolean
+  /** Signing organizer — the letter is issued in their name. */
+  organizer?: { id: string; name: string }
+  /** Handwritten signature, read from this browser's local store. */
+  onSignatureChange: (dataUrl: string | null) => void
 }
 
 export function InvitationLetterForm({
@@ -113,6 +118,8 @@ export function InvitationLetterForm({
   onChange,
   onSubmit,
   isSubmitting,
+  organizer,
+  onSignatureChange,
 }: InvitationLetterFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const set = <K extends keyof InvitationLetterFormValues>(
@@ -386,6 +393,18 @@ export function InvitationLetterForm({
           </div>
         )}
       </div>
+
+      {organizer && (
+        <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
+          <OrganizerSignatureCapture
+            organizerId={organizer.id}
+            organizerName={organizer.name}
+            onSignatureReady={onSignatureChange}
+            label="Signature"
+            description="Drawn once and kept in this browser only — it is sent with the letter you issue, never stored on the server. Without one, the letter is signed with your name and title."
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700">
         <div className="flex flex-wrap gap-4">
