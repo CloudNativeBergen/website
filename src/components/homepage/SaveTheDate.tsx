@@ -12,6 +12,7 @@ import {
   type RoadmapStep,
 } from '@/lib/homepage/lifecycle'
 import type { Conference } from '@/lib/conference/types'
+import { resolveVariant } from '@/lib/homepage/variants'
 import { formatDatesSafe, formatDateSafe } from '@/lib/time'
 import {
   CalendarDaysIcon,
@@ -34,6 +35,13 @@ import {
  * a milestone with no date is omitted (see {@link resolveRoadmapSteps}), and
  * with no milestones at all the band is still a complete save-the-date: dates,
  * place and a live countdown.
+ *
+ * VARIANTS. `card` (the default) is the tall boxed card above, unchanged.
+ * `strip` is the same announcement as one slim band — dates, place and the
+ * compact countdown on a single row, no card and no roadmap. The card is
+ * designed as the day-one FILLER for a page with nothing else on it; once
+ * speakers, a programme and photos exist, the same information is still worth
+ * keeping, but not worth a screenful. The strip is that persistent reminder.
  */
 export function SaveTheDate({
   section,
@@ -44,6 +52,7 @@ export function SaveTheDate({
   conference: Conference
   lifecycle: HomepageLifecycle
 }) {
+  const variant = resolveVariant('homepageSaveTheDate', section.variant)
   const dates = formatDatesSafe(conference.startDate, conference.endDate)
   const place = [conference.venueName, conference.city]
     .map((part) => part?.trim())
@@ -58,6 +67,57 @@ export function SaveTheDate({
   const description = section.description?.trim()
   const steps = resolveRoadmapSteps(conference, lifecycle, formatDateSafe)
   const countdownTarget = resolveCountdownTarget(conference, {})
+
+  if (variant === 'strip') {
+    return (
+      <section className="py-8 sm:py-12" aria-labelledby="save-the-date-title">
+        <Container>
+          {/* One row on a tablet and up; stacked on a phone, where a side-by-side
+              countdown would squeeze the dates to two characters a line. */}
+          <div className="flex flex-col gap-5 rounded-xl border border-brand-cloud-blue/10 bg-brand-cloud-blue/5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-8 dark:border-blue-900/60 dark:bg-blue-950/40">
+            <div className="min-w-0">
+              <p className="font-jetbrains text-xs tracking-wide text-brand-cloud-blue uppercase dark:text-blue-400">
+                {heading}
+              </p>
+              {dates !== 'TBD' ? (
+                <h2
+                  id="save-the-date-title"
+                  className="font-space-grotesk mt-1 text-2xl font-bold tracking-tighter text-brand-slate-gray sm:text-3xl dark:text-white"
+                >
+                  <time dateTime={conference.startDate}>{dates}</time>
+                </h2>
+              ) : (
+                <h2
+                  id="save-the-date-title"
+                  className="font-space-grotesk mt-1 text-2xl font-bold tracking-tighter text-brand-slate-gray sm:text-3xl dark:text-white"
+                >
+                  {conference.title}
+                </h2>
+              )}
+              {place ? (
+                <p className="font-jetbrains mt-1 flex items-center gap-x-2 text-sm text-brand-cloud-blue dark:text-blue-400">
+                  <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{place}</span>
+                </p>
+              ) : null}
+              {/* Organizer copy is never dropped just because the band is slim —
+                  it moves to a quieter size instead of disappearing. */}
+              {description ? (
+                <p className="font-inter mt-2 text-sm text-brand-slate-gray/80 dark:text-gray-300">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            {countdownTarget !== null ? (
+              <div className="sm:w-64 sm:shrink-0">
+                <CountdownStrip targetMs={countdownTarget} />
+              </div>
+            ) : null}
+          </div>
+        </Container>
+      </section>
+    )
+  }
 
   return (
     <section className="py-16 sm:py-24" aria-labelledby="save-the-date-title">

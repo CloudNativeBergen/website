@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { SaveTheDate } from './SaveTheDate'
 import type { Conference } from '@/lib/conference/types'
 import type { HomepageLifecycle } from '@/lib/homepage/lifecycle'
@@ -71,7 +71,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The day-one band. Built entirely from what a brand-new organizer has already entered — the dates, the venue and city, a live countdown, and whichever CFP / programme / ticket milestones carry a date. The `description` is OPTIONAL EXTRA COPY with no derived default: the dates and the place are already the card’s headline and place line, so an empty description simply adds no line rather than restating them.',
+          'The day-one band. Built entirely from what a brand-new organizer has already entered — the dates, the venue and city, a live countdown, and whichever CFP / programme / ticket milestones carry a date. The `description` is OPTIONAL EXTRA COPY with no derived default: the dates and the place are already the card’s headline and place line, so an empty description simply adds no line rather than restating them. Two variants: `card` (the default — the tall boxed card with the “what happens next” roadmap) and `strip` (one slim band with the dates, the place and the compact countdown, for a page that has real content above it and only wants the reminder).',
       },
     },
   },
@@ -111,6 +111,63 @@ export const CityOnly: Story = {
 export const NoDatesYet: Story = {
   args: {
     section: { _key: 'std', _type: 'homepageSaveTheDate' },
+    conference: { ...conference, startDate: '', endDate: '' } as Conference,
+  },
+}
+
+const darkDecorator: Decorator[] = [
+  (Story) => (
+    <div className="dark bg-gray-950">
+      <Story />
+    </div>
+  ),
+]
+
+const dark = {
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  decorators: darkDecorator,
+}
+
+export const Dark: Story = {
+  args: WithDescription.args,
+  ...dark,
+}
+
+/* --------------------------------- strip -------------------------------- */
+
+/**
+ * `strip`: the same announcement, a fraction of the height. The roadmap goes —
+ * it is the part that only makes sense on a page with nothing else on it — and
+ * the countdown moves beside the dates instead of under them.
+ */
+export const Strip: Story = {
+  args: {
+    section: {
+      _key: 'std',
+      _type: 'homepageSaveTheDate',
+      variant: 'strip',
+      description:
+        'Two days of talks, workshops and hallway track on the western fjords.',
+    },
+  },
+}
+
+export const StripDark: Story = {
+  args: Strip.args,
+  ...dark,
+}
+
+/** The strip at its slimmest: dates, place and countdown, no extra copy. */
+export const StripWithoutDescription: Story = {
+  args: {
+    section: { _key: 'std', _type: 'homepageSaveTheDate', variant: 'strip' },
+  },
+}
+
+/** Edge case: dates not fixed yet — the title takes the headline slot. */
+export const StripNoDatesYet: Story = {
+  args: {
+    section: { _key: 'std', _type: 'homepageSaveTheDate', variant: 'strip' },
     conference: { ...conference, startDate: '', endDate: '' } as Conference,
   },
 }

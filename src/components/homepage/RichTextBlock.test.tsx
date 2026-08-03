@@ -103,7 +103,7 @@ describe('RichTextBlock — boxed variant', () => {
 
   it('wraps the reading column in the house card chrome', () => {
     const { container } = renderBand({ variant: 'boxed' })
-    const card = container.querySelector('section > div > div')!
+    const card = container.querySelector('section > div > div > div')!
     expect(card.className).toContain('rounded-2xl')
     expect(card.className).toContain('ring-1')
   })

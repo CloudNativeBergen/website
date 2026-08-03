@@ -32,7 +32,9 @@ vi.mock('@/components/TalkPromotionCard', () => ({
   }: {
     talk: { _id: string }
     variant?: string
-  }) => <div data-testid="talk-card" data-talk={talk._id} data-variant={variant} />,
+  }) => (
+    <div data-testid="talk-card" data-talk={talk._id} data-variant={variant} />
+  ),
 }))
 vi.mock('@/components/SpeakerPromotionCard', () => ({
   SpeakerPromotionCard: ({
@@ -265,9 +267,9 @@ describe('ProgramHighlights — talks variant', () => {
     ).length
     cleanup()
     const { container } = renderBand({ variant: 'talks' })
-    expect(container.querySelectorAll('[data-testid="talk-card"]')).toHaveLength(
-      fullTalks,
-    )
+    expect(
+      container.querySelectorAll('[data-testid="talk-card"]'),
+    ).toHaveLength(fullTalks)
     expect(
       container.querySelectorAll('[data-testid="speaker-card"]'),
     ).toHaveLength(fullSpeakers)
