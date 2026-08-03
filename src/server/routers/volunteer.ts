@@ -13,6 +13,7 @@ import {
   DeleteVolunteerSchema,
   CreateVolunteerSchema,
 } from '../schemas/volunteer'
+import { requireDocumentInCurrentConference } from '../tenancy'
 import {
   getVolunteersByConference,
   getVolunteerById,
@@ -150,6 +151,9 @@ export const volunteerRouter = router({
       .input(GetVolunteerByIdSchema)
       .query(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): a READ of the same unscoped lookup — volunteer
+          // applications carry contact details, so scope it like the mutations.
+          await requireDocumentInCurrentConference(input.id, 'volunteer')
           const { volunteer, error } = await getVolunteerById(input.id)
 
           if (error) {
@@ -182,6 +186,13 @@ export const volunteerRouter = router({
       .input(UpdateVolunteerStatusSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // OWNERSHIP (#730): `getVolunteerById` is `*[_type == "volunteer" &&
+          // _id == $id][0]` — an EXISTENCE check, not an ownership check. Any
+          // tenant's volunteer application could be approved or rejected.
+          await requireDocumentInCurrentConference(
+            input.volunteerId,
+            'volunteer',
+          )
           const { volunteer, error: fetchError } = await getVolunteerById(
             input.volunteerId,
           )
@@ -252,6 +263,8 @@ export const volunteerRouter = router({
           }
 
           const { volunteerId, ...details } = input
+          // OWNERSHIP (#730) — see `updateStatus` above.
+          await requireDocumentInCurrentConference(volunteerId, 'volunteer')
           const { success, error } = await updateVolunteerDetails(
             volunteerId,
             details,
@@ -391,6 +404,12 @@ export const volunteerRouter = router({
             })
           }
 
+          // OWNERSHIP (#730) — see `updateStatus` above. Unguarded, this
+          // deleted any tenant's volunteer application.
+          await requireDocumentInCurrentConference(
+            input.volunteerId,
+            'volunteer',
+          )
           const { success, error } = await deleteVolunteer(input.volunteerId)
 
           if (error || !success) {

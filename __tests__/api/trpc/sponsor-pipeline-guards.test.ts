@@ -20,6 +20,10 @@ vi.mock('@/lib/sponsor-crm/bulk')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
+  // OWNERSHIP PROBE (#730): the bulk/CRM mutations now prove every supplied id
+  // belongs to the request's conference before writing. `beforeEach` seeds the
+  // default "all ids are ours" answer; the cross-tenant REFUSALS live in
+  // `src/server/routers/tenancy.writes.test.ts`.
   clientReadUncached: { fetch: vi.fn() },
   clientRead: { fetch: vi.fn() },
 }))
@@ -251,8 +255,34 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
   })
 
   describe('bulkUpdate', () => {
+    /**
+     * `bulkUpdate` now issues TWO reads: the #730 ownership count (every id must
+     * belong to the request's conference) and then the tierless probe. Answer
+     * the first as "all ours" so these tests keep exercising the tier guard.
+     */
+    function seedBulkReads(tierlessIds: string[], ownedCount = 2) {
+      vi.mocked(clientReadUncached.fetch as any).mockImplementation(
+        async (query: string) =>
+          query.includes('conference._ref == $conferenceId') &&
+          query.startsWith('count(')
+            ? ownedCount
+            : tierlessIds,
+      )
+    }
+
+    it('refuses the whole batch when an id belongs to another conference', async () => {
+      seedBulkReads([], 1) // only one of the two ids is ours
+      await expect(
+        createCaller(mockOrganizer).sponsor.crm.bulkUpdate({
+          ids: ['a', 'b'],
+          status: 'closed-won',
+        } as any),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+      expect(bulkUpdateSponsors).not.toHaveBeenCalled()
+    })
+
     it('rejects bulk-marking Won when a selected sponsor has no tier', async () => {
-      vi.mocked(clientReadUncached.fetch as any).mockResolvedValue(['b']) // 'b' is tierless
+      seedBulkReads(['b']) // 'b' is tierless
       await expect(
         createCaller(mockOrganizer).sponsor.crm.bulkUpdate({
           ids: ['a', 'b'],
@@ -263,7 +293,7 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
     })
 
     it('allows bulk-marking Won when every selected sponsor has a tier', async () => {
-      vi.mocked(clientReadUncached.fetch as any).mockResolvedValue([])
+      seedBulkReads([])
       await createCaller(mockOrganizer).sponsor.crm.bulkUpdate({
         ids: ['a', 'b'],
         status: 'closed-won',

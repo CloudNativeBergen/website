@@ -8,6 +8,7 @@ import {
   adminProcedure,
   resolveConferenceId,
 } from '@/server/trpc'
+import { requireDocumentInCurrentOrg } from '@/server/tenancy'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
 import {
   ProposalInputSchema,
@@ -993,6 +994,11 @@ export const proposalRouter = router({
       .input(IdParamSchema.extend({ data: ProposalAdminUpdateSchema }))
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input and `updateProposal` is
+          // a bare patch. The speaker-facing `proposal.update` above is gated by
+          // the org-scoped `getProposal`; this admin sibling was not gated at
+          // all, so it could rewrite any document in the shared dataset.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { speakers, ...proposalData } = input.data
 
           // If speakers are being updated, convert to references
@@ -1047,6 +1053,8 @@ export const proposalRouter = router({
     // Delete proposal (admin)
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): unguarded, this deleted any proposal in the dataset.
+        await requireDocumentInCurrentOrg(input.id, 'talk')
         const { err } = await deleteProposal(input.id)
 
         if (err) {
@@ -1083,6 +1091,10 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): the `_type` check below was already here, but the
+          // TENANT was not checked — any tenant's talk could be given audience
+          // feedback.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const existing = await clientWrite.getDocument(input.id)
 
           if (!existing || existing._type !== 'talk') {
@@ -1130,6 +1142,9 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input, `updateProposal` a
+          // bare patch.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal, err } = await updateProposal(input.id, {
             attachments: input.attachments,
           })
@@ -1170,6 +1185,9 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): the helper checks `_type` but not the tenant, and
+          // it also deletes the referenced file asset.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal } = await deleteAttachmentHelper(
             input.id,
             input.attachmentKey,

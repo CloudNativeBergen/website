@@ -8,10 +8,8 @@ import {
   StaffUpdateSchema,
   StaffDeleteSchema,
 } from '../schemas/staff'
-import {
-  getOrganizationRefForCurrentConference,
-  organizationField,
-} from '@/lib/organization/sanity'
+import { organizationField } from '@/lib/organization/sanity'
+import { requireCurrentOrgId, requireDocumentInCurrentOrg } from '../tenancy'
 
 /**
  * Staff CRUD (SE-4). `staff` are flat, standalone documents listed publicly at
@@ -55,7 +53,11 @@ export const staffRouter = router({
         const image = imageField(input.image)
         // Stamp the current conference's organization (CaaS T1-1) so the staff
         // member is born tenant-owned. Best-effort: absent before 044 backfill.
-        const orgRef = await getOrganizationRefForCurrentConference()
+        // FAIL CLOSED (#730): a staff document born WITHOUT an org is owned by
+        // no tenant — invisible to `getAllStaffMembers` (already org-scoped) and
+        // refused by the ownership guard on update/delete. Better to refuse the
+        // create than to strand an unreachable document.
+        const orgRef = await requireCurrentOrgId()
         const created = await clientWrite.create({
           _type: 'staff',
           name: input.name,
@@ -69,6 +71,7 @@ export const staffRouter = router({
         revalidateTag('content:staff', 'default')
         return { _id: created._id }
       } catch (error) {
+        if (error instanceof TRPCError) throw error
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create staff member',
@@ -103,6 +106,10 @@ export const staffRouter = router({
       }
 
       try {
+        // OWNERSHIP (#730): `id` is client input. Without this the patch would
+        // set `name`/`role`/`email` on ANY document in the shared dataset —
+        // another tenant's staff, or their `conference` document.
+        await requireDocumentInCurrentOrg(id, 'staff')
         let patch = clientWrite.patch(id)
         if (Object.keys(set).length > 0) patch = patch.set(set)
         if (unset.length > 0) patch = patch.unset(unset)
@@ -110,6 +117,8 @@ export const staffRouter = router({
         revalidateTag('content:staff', 'default')
         return { success: true }
       } catch (error) {
+        // Preserve the fail-closed refusal instead of masking it as a 500.
+        if (error instanceof TRPCError) throw error
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update staff member',
@@ -122,10 +131,16 @@ export const staffRouter = router({
     .input(StaffDeleteSchema)
     .mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): `input.id` is client input, and nothing references a
+        // staff document, so an unguarded delete removed ANY unreferenced
+        // document in the shared dataset — including another tenant's.
+        await requireDocumentInCurrentOrg(input.id, 'staff')
         await clientWrite.delete(input.id)
         revalidateTag('content:staff', 'default')
         return { success: true }
       } catch (error) {
+        // Preserve the fail-closed refusal instead of masking it as a 500.
+        if (error instanceof TRPCError) throw error
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete staff member',

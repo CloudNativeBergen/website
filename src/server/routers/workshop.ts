@@ -64,6 +64,7 @@ import {
   isWorkshopFormat,
 } from '@/lib/workshop/announcements'
 import { consumeAnnouncementRateLimit } from '@/lib/workshop/announcementRateLimit'
+import { requireDocumentInCurrentConference } from '@/server/tenancy'
 
 /**
  * Return the authenticated WorkOS attendee for a self-service workshop action,
@@ -674,7 +675,11 @@ export const workshopRouter = router({
       .input(confirmWorkshopSignupSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `getAllWorkshopSignups` only constrains the
+          // conference when the filter is PASSED. Without it this confirmed any
+          // signup id in the shared dataset, including another tenant's.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: [input.signupId],
           })
 
@@ -730,6 +735,20 @@ export const workshopRouter = router({
       .input(updateWorkshopCapacitySchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): the same check the public `signup` path already
+          // does. Unguarded, `updateWorkshopCapacity` is a bare
+          // `patch(id).set({capacity})` — no tenant check and no `_type` check,
+          // so it could stamp `capacity` onto any document in the dataset.
+          const belongs = await verifyWorkshopBelongsToConference(
+            input.workshopId,
+            await resolveConferenceId(),
+          )
+          if (!belongs) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Workshop not found for this conference',
+            })
+          }
           const current = await checkWorkshopCapacity(input.workshopId)
           const signupCount = current.signups
 
@@ -818,7 +837,10 @@ export const workshopRouter = router({
       .input(batchConfirmSignupsSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): scope to the request's conference — foreign ids
+          // simply do not come back, so they cannot be confirmed.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: input.signupIds,
           })
 
@@ -864,6 +886,8 @@ export const workshopRouter = router({
             },
           }
         } catch (error) {
+          // Preserve the fail-closed refusal instead of masking it as a 500.
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to batch confirm signups',
@@ -876,8 +900,22 @@ export const workshopRouter = router({
       .input(batchCancelSignupsSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): resolve which of the supplied ids actually belong
+          // to the request's conference and refuse the WHOLE batch if any does
+          // not — a silent partial cancel would hide the attempt.
+          const owned = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
+            signupIds: input.signupIds,
+            pageSize: input.signupIds.length,
+          })
+          if (owned.length !== input.signupIds.length) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more signups do not belong to this conference',
+            })
+          }
           const results = await Promise.allSettled(
-            input.signupIds.map((id) => cancelWorkshopSignup(id)),
+            owned.map((signup) => cancelWorkshopSignup(signup._id)),
           )
 
           const succeeded = results.filter(
@@ -898,6 +936,8 @@ export const workshopRouter = router({
             },
           }
         } catch (error) {
+          // Preserve the fail-closed refusal instead of masking it as a 500.
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to batch cancel signups',
@@ -912,6 +952,12 @@ export const workshopRouter = router({
         try {
           const { deleteWorkshopSignup } = await import('@/lib/workshop/sanity')
 
+          // OWNERSHIP (#730): `input.signupId` is client input and the delete
+          // was completely unguarded — it removed any document in the dataset.
+          await requireDocumentInCurrentConference(
+            input.signupId,
+            'workshopSignup',
+          )
           await deleteWorkshopSignup(input.signupId)
 
           revalidateTag('admin:workshops', 'default')
@@ -922,6 +968,8 @@ export const workshopRouter = router({
             message: 'Signup deleted successfully',
           }
         } catch (error) {
+          // Preserve the fail-closed refusal instead of masking it as a 500.
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete signup',

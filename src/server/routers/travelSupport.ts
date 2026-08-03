@@ -767,6 +767,38 @@ export const travelSupportRouter = router({
       .input(UpdateExpenseStatusSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // OWNERSHIP (#730): every OTHER travel-support mutation routes through
+          // `verifyTravelSupportOwnership` / `authorizeTravelSupportOperation`,
+          // whose organizer grant is org-scoped against the request's own org.
+          // This one skipped it and approved/rejected any expense in the shared
+          // dataset. Resolve the expense's parent request the way
+          // `deleteExpense` does, then apply the same authorization.
+          const expenseRef = await getTravelExpenseRef(input.expenseId)
+          if (!expenseRef?.travelSupport?._ref) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Expense not found',
+            })
+          }
+          const {
+            authorized,
+            isOrganizer,
+            error: authError,
+          } = await authorizeTravelSupportOperation(
+            expenseRef.travelSupport._ref,
+            ctx.speaker,
+            'approve',
+          )
+          if (!authorized || !isOrganizer) {
+            throw (
+              authError ??
+              createAuthError(
+                'FORBIDDEN',
+                'You are not an organizer for this travel support request',
+              )
+            )
+          }
+
           auditLog(
             'Expense Status Update',
             ctx.speaker._id,
@@ -801,8 +833,9 @@ export const travelSupportRouter = router({
           try {
             const statusTitle = EXPENSE_STATUS_NOTIFY_TITLES[input.status]
             if (statusTitle) {
-              const expenseRef = await getTravelExpenseRef(input.expenseId)
-              const travelSupportId = expenseRef?.travelSupport?._ref
+              // Reuse the parent id the ownership guard above already resolved
+              // rather than re-reading it.
+              const travelSupportId = expenseRef.travelSupport._ref
               if (travelSupportId) {
                 const { travelSupport } =
                   await getTravelSupportById(travelSupportId)

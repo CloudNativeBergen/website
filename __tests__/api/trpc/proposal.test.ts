@@ -12,10 +12,27 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: vi.fn(),
     create: vi.fn(),
+    getDocument: vi.fn().mockResolvedValue({ _id: 'p1', _type: 'talk' }),
     patch: vi
       .fn()
       .mockReturnValue({ set: vi.fn().mockReturnValue({ commit: vi.fn() }) }),
     delete: vi.fn(),
+  },
+  // OWNERSHIP PROBE (#730): the admin proposal mutations now resolve the
+  // target's tenant first. Report it as a `talk` of this org; the cross-tenant
+  // REFUSALS live in `src/server/routers/tenancy.writes.test.ts`.
+  clientReadUncached: {
+    fetch: vi.fn(async (query: string) =>
+      query.includes('"memberOrgIds"')
+        ? {
+            _type: 'talk',
+            orgId: null,
+            conferenceId: 'test-conference-id',
+            conferenceOrgId: 'org-test',
+            memberOrgIds: [],
+          }
+        : null,
+    ),
   },
 }))
 

@@ -1,0 +1,319 @@
+/**
+ * @vitest-environment node
+ *
+ * The shared OWNERSHIP GUARDS (#730) that every admin mutation taking a document
+ * id from client input now calls. These are the single point where a
+ * cross-tenant write is refused, so each refusal reason is pinned here:
+ * unresolvable request tenant, missing document, wrong `_type`, unowned
+ * document, foreign owner, and a failing probe read.
+ *
+ * The router-level proof that the guards are actually WIRED IN lives in
+ * `src/server/routers/tenancy.writes.test.ts`.
+ */
+
+const h = vi.hoisted(() => ({
+  getConference: vi.fn(),
+  fetch: vi.fn(),
+}))
+
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: h.getConference,
+}))
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: { fetch: h.fetch },
+  clientReadCached: { fetch: h.fetch },
+  clientWrite: { fetch: h.fetch },
+}))
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import {
+  getDocumentTenant,
+  requireCurrentOrgId,
+  requireDocumentInCurrentConference,
+  requireDocumentInCurrentOrg,
+  requireDocumentsInCurrentConference,
+  requireSpeakerInCurrentOrg,
+} from './tenancy'
+
+const ORG_A = 'org-A'
+const ORG_B = 'org-B'
+const CONF_A = 'conf-A'
+
+/** The request host resolves to CONF_A / ORG_A, or to nothing. */
+function host(resolvable: boolean) {
+  h.getConference.mockResolvedValue({
+    conference: resolvable
+      ? { _id: CONF_A, organization: { _ref: ORG_A } }
+      : {},
+    domain: 'localhost',
+    error: resolvable ? null : new Error('Conference not found for domain'),
+  })
+}
+
+/** What the ownership probe reports for the id under test. */
+function probe(doc: Record<string, unknown> | null) {
+  h.fetch.mockImplementation(async (query: string) =>
+    query.includes('"memberOrgIds"') ? doc : 0,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  host(true)
+})
+
+describe('requireCurrentOrgId', () => {
+  it('returns the request org', async () => {
+    await expect(requireCurrentOrgId()).resolves.toBe(ORG_A)
+  })
+
+  it('refuses an unresolvable host rather than returning null', async () => {
+    host(false)
+    await expect(requireCurrentOrgId()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+})
+
+describe('getDocumentTenant', () => {
+  it('projects every tenancy dimension', async () => {
+    probe({
+      _type: 'topic',
+      orgId: ORG_A,
+      conferenceId: CONF_A,
+      conferenceOrgId: null,
+      memberOrgIds: ['x'],
+    })
+    await expect(getDocumentTenant('doc-1')).resolves.toEqual({
+      type: 'topic',
+      orgId: ORG_A,
+      conferenceId: CONF_A,
+      conferenceOrgId: null,
+      memberOrgIds: ['x'],
+    })
+  })
+
+  it('returns null for a missing document, without throwing', async () => {
+    probe(null)
+    await expect(getDocumentTenant('nope')).resolves.toBeNull()
+  })
+
+  it('returns null for an empty id, WITHOUT querying', async () => {
+    await expect(getDocumentTenant('')).resolves.toBeNull()
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('FAILS CLOSED on a read error — an unknown tenant authorizes nothing', async () => {
+    h.fetch.mockRejectedValue(new Error('sanity down'))
+    await expect(getDocumentTenant('doc-1')).resolves.toBeNull()
+  })
+
+  it('drops null/blank entries from memberOrgIds', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [null, '', ORG_A] })
+    await expect(getDocumentTenant('sp')).resolves.toMatchObject({
+      memberOrgIds: [ORG_A],
+    })
+  })
+})
+
+describe('requireDocumentInCurrentOrg', () => {
+  it('accepts a document owned directly by the request org', async () => {
+    probe({ _type: 'topic', orgId: ORG_A })
+    await expect(requireDocumentInCurrentOrg('t1', 'topic')).resolves.toBe(
+      ORG_A,
+    )
+  })
+
+  it('accepts a document owned through its CONFERENCE', async () => {
+    probe({ _type: 'talk', orgId: null, conferenceOrgId: ORG_A })
+    await expect(requireDocumentInCurrentOrg('p1', 'talk')).resolves.toBe(ORG_A)
+  })
+
+  it('refuses another org’s document', async () => {
+    probe({ _type: 'topic', orgId: ORG_B })
+    await expect(
+      requireDocumentInCurrentOrg('t1', 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses the RIGHT org but the WRONG type — a conference is not a topic', async () => {
+    probe({ _type: 'conference', orgId: ORG_A })
+    await expect(
+      requireDocumentInCurrentOrg('conf-A', 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses an unowned (tenant-key-less) document', async () => {
+    probe({ _type: 'topic', orgId: null, conferenceOrgId: null })
+    await expect(
+      requireDocumentInCurrentOrg('t1', 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses a missing document', async () => {
+    probe(null)
+    await expect(
+      requireDocumentInCurrentOrg('nope', 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses on an unresolvable host WITHOUT probing at all', async () => {
+    host(false)
+    probe({ _type: 'topic', orgId: ORG_A })
+    await expect(
+      requireDocumentInCurrentOrg('t1', 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+
+  it('never leaks whether the foreign id exists — same code and message either way', async () => {
+    probe({ _type: 'topic', orgId: ORG_B })
+    const foreign = await requireDocumentInCurrentOrg('t1', 'topic').catch(
+      (e) => e,
+    )
+    probe(null)
+    const missing = await requireDocumentInCurrentOrg('t1', 'topic').catch(
+      (e) => e,
+    )
+    expect(foreign.code).toBe(missing.code)
+    expect(foreign.message).toBe(missing.message)
+  })
+})
+
+describe('requireDocumentInCurrentConference', () => {
+  it('accepts a document in the request conference', async () => {
+    probe({ _type: 'volunteer', conferenceId: CONF_A })
+    await expect(
+      requireDocumentInCurrentConference('v1', 'volunteer'),
+    ).resolves.toBe(CONF_A)
+  })
+
+  it('refuses another EDITION’s document even inside the same org', async () => {
+    probe({
+      _type: 'volunteer',
+      conferenceId: 'conf-2025',
+      conferenceOrgId: ORG_A,
+    })
+    await expect(
+      requireDocumentInCurrentConference('v1', 'volunteer'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses a conference-less document, and the wrong type', async () => {
+    probe({ _type: 'volunteer', conferenceId: null })
+    await expect(
+      requireDocumentInCurrentConference('v1', 'volunteer'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    probe({ _type: 'talk', conferenceId: CONF_A })
+    await expect(
+      requireDocumentInCurrentConference('v1', 'volunteer'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses on an unresolvable host', async () => {
+    host(false)
+    await expect(
+      requireDocumentInCurrentConference('v1', 'volunteer'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+})
+
+describe('requireDocumentsInCurrentConference (bulk)', () => {
+  /** `count()` of the supplied ids that are ours. */
+  function ownedCount(n: number) {
+    h.fetch.mockResolvedValue(n)
+  }
+
+  it('accepts a batch that is entirely ours', async () => {
+    ownedCount(3)
+    await expect(
+      requireDocumentsInCurrentConference(
+        ['a', 'b', 'c'],
+        'sponsorForConference',
+      ),
+    ).resolves.toBe(CONF_A)
+  })
+
+  it('refuses the WHOLE batch when even one id is foreign', async () => {
+    ownedCount(2)
+    await expect(
+      requireDocumentsInCurrentConference(
+        ['a', 'b', 'c'],
+        'sponsorForConference',
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('counts DISTINCT ids, so duplicates cannot inflate the batch past the count', async () => {
+    ownedCount(1)
+    await expect(
+      requireDocumentsInCurrentConference(['a', 'a'], 'sponsorForConference'),
+    ).resolves.toBe(CONF_A)
+  })
+
+  it('FAILS CLOSED when the probe read throws', async () => {
+    h.fetch.mockRejectedValue(new Error('sanity down'))
+    await expect(
+      requireDocumentsInCurrentConference(['a'], 'sponsorForConference'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('an empty batch is a no-op, not an unscoped pass', async () => {
+    await expect(
+      requireDocumentsInCurrentConference([], 'sponsorForConference'),
+    ).resolves.toBe(CONF_A)
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('requireSpeakerInCurrentOrg', () => {
+  it('accepts an explicit member of the request org', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [ORG_A] })
+    await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
+  })
+
+  it('accepts a non-member who has a TALK at one of the org’s conferences', async () => {
+    // The pre-backfill fallback, matching SPEAKER_ORG_FILTER in the admin lists.
+    h.fetch.mockImplementation(async (query: string) =>
+      query.includes('"memberOrgIds"')
+        ? { _type: 'speaker', memberOrgIds: [] }
+        : 1,
+    )
+    await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
+  })
+
+  it('refuses a speaker with neither membership nor participation', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [ORG_B] })
+    await expect(requireSpeakerInCurrentOrg('sp')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+
+  it('refuses a non-speaker document', async () => {
+    probe({ _type: 'conference', memberOrgIds: [ORG_A] })
+    await expect(requireSpeakerInCurrentOrg('conf-A')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+
+  it('requireExclusive refuses a person who ALSO belongs to another org', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [ORG_A, ORG_B] })
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // …and permits them without the flag, since this org does have standing.
+    await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
+  })
+
+  it('FAILS CLOSED when the participation probe throws', async () => {
+    h.fetch.mockImplementation(async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return { _type: 'speaker', memberOrgIds: [] }
+      }
+      throw new Error('sanity down')
+    })
+    await expect(requireSpeakerInCurrentOrg('sp')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+})

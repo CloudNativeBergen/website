@@ -58,18 +58,19 @@ export default async function SpeakerDashboard() {
   // Fetch conferences where the speaker has activity (server-side). Scoped to
   // the CURRENT tenant's org (E4): the speaker dashboard on a tenant domain
   // lists that org's editions (cross-conference within the org is intended;
-  // cross-ORG is a leak). Org-less legacy conferences (pre-044 backfill) still
-  // appear via the coalesce fallback, and the per-conference activity filter
-  // below further narrows to editions the speaker actually took part in. When
-  // the org is unresolvable (legacy domain) the query is unscoped — the
-  // migration bridge used across the codebase.
+  // cross-ORG is a leak). The per-conference activity filter below further
+  // narrows to editions the speaker actually took part in.
+  //
+  // FAIL CLOSED (#730): the tenant predicate is now UNCONDITIONAL, and an
+  // unresolvable org yields an EMPTY list rather than an unscoped read. Both
+  // migration bridges are gone: the old query dropped the predicate entirely on
+  // an unresolvable host — listing every tenant's conference metadata
+  // (`cfpEmail`, `contactEmail`, `domains`, dates) to any signed-in speaker, and
+  // then fanning out per-conference reads across all of them — and its
+  // `!defined(organization)` arm showed org-less conferences to every tenant.
   const orgRef = currentConference?.organization?._ref ?? null
   const conferencesQuery = groq`
-    *[_type == "conference"${
-      orgRef
-        ? ' && (!defined(organization) || organization._ref == $orgId)'
-        : ''
-    }] | order(startDate desc) {
+    *[_type == "conference" && organization._ref == $orgId] | order(startDate desc) {
       _id,
       title,
       organizer,
@@ -97,11 +98,13 @@ export default async function SpeakerDashboard() {
     }
   `
 
-  const conferences = await clientReadCached.fetch<Conference[]>(
-    conferencesQuery,
-    orgRef ? { orgId: orgRef } : {},
-    { next: { revalidate: 300 } },
-  )
+  const conferences = orgRef
+    ? await clientReadCached.fetch<Conference[]>(
+        conferencesQuery,
+        { orgId: orgRef },
+        { next: { revalidate: 300 } },
+      )
+    : []
 
   // Fetch data for each conference in parallel
   const conferenceDataPromises = conferences.map(async (conference) => {

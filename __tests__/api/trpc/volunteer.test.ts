@@ -3,6 +3,27 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/lib/events/registry', () => ({}))
+// OWNERSHIP PROBE (#730): the volunteer endpoints now resolve the target's
+// conference before reading or writing it. Report it as belonging to the
+// request's conference; the cross-tenant REFUSALS live in
+// `src/server/routers/tenancy.writes.test.ts`.
+vi.mock('@/lib/sanity/client', () => ({
+  clientWrite: { fetch: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  clientRead: { fetch: vi.fn() },
+  clientReadUncached: {
+    fetch: vi.fn(async (query: string) =>
+      query.includes('"memberOrgIds"')
+        ? {
+            _type: 'volunteer',
+            orgId: null,
+            conferenceId: 'conf-1',
+            conferenceOrgId: null,
+            memberOrgIds: [],
+          }
+        : null,
+    ),
+  },
+}))
 
 vi.mock('@/lib/volunteer/sanity', () => ({
   createVolunteer: vi.fn(),

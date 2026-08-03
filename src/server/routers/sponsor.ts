@@ -5,6 +5,11 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
+  requireDocumentInCurrentConference,
+  requireDocumentInCurrentOrg,
+  requireDocumentsInCurrentConference,
+} from '../tenancy'
+import {
   SponsorInputSchema,
   SponsorUpdateSchema,
   SponsorIdSchema,
@@ -418,6 +423,9 @@ export const sponsorRouter = router({
     .mutation(async ({ input }) => {
       try {
         if (Object.keys(input.data).length > 0) {
+          // OWNERSHIP (#730): `getSponsor` checks `_type` but NOT the tenant, so
+          // the guard below was an existence check only.
+          await requireDocumentInCurrentOrg(input.id, 'sponsor')
           const { sponsor: existingSponsor } = await getSponsor(input.id)
           if (!existingSponsor) {
             throw new TRPCError({
@@ -480,6 +488,9 @@ export const sponsorRouter = router({
     }),
 
   delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
+    // OWNERSHIP (#730): unguarded, this deleted any sponsor in the dataset and
+    // cascaded into every `sponsorForConference` referencing it.
+    await requireDocumentInCurrentOrg(input.id, 'sponsor')
     const { error } = await deleteSponsor(input.id)
 
     if (error) {
@@ -590,6 +601,8 @@ export const sponsorRouter = router({
       .input(IdParamSchema.extend({ data: SponsorTierUpdateSchema }))
       .mutation(async ({ input }) => {
         if (Object.keys(input.data).length > 0) {
+          // OWNERSHIP (#730): `getSponsorTier` is unscoped.
+          await requireDocumentInCurrentConference(input.id, 'sponsorTier')
           const { sponsorTier: existingTier } = await getSponsorTier(input.id)
           if (!existingTier) {
             throw new TRPCError({
@@ -653,6 +666,9 @@ export const sponsorRouter = router({
       }),
 
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
+      // OWNERSHIP (#730): unguarded, this deleted any tier in the dataset and
+      // unset `tier` on every sponsorForConference referencing it.
+      await requireDocumentInCurrentConference(input.id, 'sponsorTier')
       const { error } = await deleteSponsorTier(input.id)
 
       if (error) {
@@ -1404,6 +1420,14 @@ export const sponsorRouter = router({
         }
 
         try {
+          // OWNERSHIP (#730): `bulkUpdateSponsors` matches on `_id in $ids` with
+          // NO conference predicate (its own comment says so), so a mass
+          // status/assignee/tag rewrite could span tenants. Refuse the whole
+          // batch unless every id is ours.
+          await requireDocumentsInCurrentConference(
+            input.ids,
+            'sponsorForConference',
+          )
           // Ensure assigned person is an organizer of this conference
           if (input.assignedTo) {
             const conferenceId = await resolveConferenceId()
@@ -1465,6 +1489,13 @@ export const sponsorRouter = router({
     bulkDelete: adminProcedure
       .input(BulkDeleteSponsorCRMSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): the conference-scoped fetch below runs only inside
+        // `if (input.cancelAgreements)` and gates nothing — `bulkDeleteSponsors`
+        // itself is unscoped. Refuse the whole batch unless every id is ours.
+        await requireDocumentsInCurrentConference(
+          input.ids,
+          'sponsorForConference',
+        )
         // Cancel signing agreements if requested
         if (input.cancelAgreements) {
           try {
@@ -1517,6 +1548,12 @@ export const sponsorRouter = router({
     delete: adminProcedure
       .input(DeleteSponsorSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): same shape as `bulkDelete` — the scoped fetch below
+        // lives inside `if (input.cancelAgreement)` and gates nothing.
+        await requireDocumentInCurrentConference(
+          input.id,
+          'sponsorForConference',
+        )
         // Cancel signing agreement if requested
         if (input.cancelAgreement) {
           try {
@@ -1650,6 +1687,12 @@ export const sponsorRouter = router({
             })
           }
 
+          // OWNERSHIP (#730): attaching an activity to another tenant's sponsor
+          // record also stamps this org's key onto it.
+          await requireDocumentInCurrentConference(
+            sponsorForConferenceId,
+            'sponsorForConference',
+          )
           const { activityId, error } = await createSponsorActivity(
             sponsorForConferenceId,
             activityType,
@@ -3166,6 +3209,15 @@ export const sponsorRouter = router({
     create: adminProcedure
       .input(ContractTemplateInputSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `data.conference` is client input — without this a
+        // tenant could PLANT a contract template inside another's conference.
+        const conferenceId = await resolveConferenceId()
+        if (input.conference !== conferenceId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot create a contract template in another conference',
+          })
+        }
         const { template, error } = await createContractTemplate(input)
         if (error) {
           throw new TRPCError({
@@ -3181,6 +3233,9 @@ export const sponsorRouter = router({
       .input(ContractTemplateUpdateSchema)
       .mutation(async ({ input }) => {
         const { id, ...data } = input
+        // OWNERSHIP (#730): `updateContractTemplate` is a bare patch. Contrast
+        // the sponsor EMAIL templates, guarded by `isTemplateInCurrentOrg`.
+        await requireDocumentInCurrentConference(id, 'contractTemplate')
         const { template, error } = await updateContractTemplate(id, {
           ...data,
           tier: data.tier === null ? undefined : data.tier,
@@ -3202,6 +3257,8 @@ export const sponsorRouter = router({
     delete: adminProcedure
       .input(ContractTemplateIdSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `deleteContractTemplate` is a bare delete.
+        await requireDocumentInCurrentConference(input.id, 'contractTemplate')
         const { error } = await deleteContractTemplate(input.id)
         if (error) {
           throw new TRPCError({

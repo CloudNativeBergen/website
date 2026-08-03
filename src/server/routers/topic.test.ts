@@ -33,9 +33,24 @@ vi.mock('@/lib/sanity/client', () => ({
     },
   },
   clientReadUncached: {
-    fetch: (query: string, params?: Record<string, unknown>) =>
-      fetchMock(query, params),
+    fetch: (query: string, params?: Record<string, unknown>) => {
+      // OWNERSHIP PROBE (#730): every id-taking mutation now resolves the
+      // target's tenant first. Answer it here so the existing behavioural tests
+      // below keep exercising what they were written for; the cross-tenant
+      // REFUSALS are covered in `tenancy.writes.test.ts`.
+      if (query.includes('"memberOrgIds"')) return ownedTopicMock()
+      return fetchMock(query, params)
+    },
   },
+}))
+
+/** The tenant the ownership probe reports for the id under test. */
+const ownedTopicMock = vi.fn(() => ({
+  _type: 'topic',
+  orgId: 'org-test',
+  conferenceId: 'conf-1',
+  conferenceOrgId: 'org-test',
+  memberOrgIds: [],
 }))
 
 // The authz waist resolves the request org off the domain conference (NOT off

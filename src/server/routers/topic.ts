@@ -13,6 +13,7 @@ import {
   getOrganizationRefForCurrentConference,
   organizationField,
 } from '@/lib/organization/sanity'
+import { requireCurrentOrgId, requireDocumentInCurrentOrg } from '../tenancy'
 
 /**
  * Topic CRUD (SE-2). Topics are standalone documents referenced by
@@ -70,9 +71,11 @@ export const topicRouter = router({
     .mutation(async ({ input }) => {
       try {
         const slug = await uniqueTopicSlug(input.title)
-        // Stamp the current conference's organization (CaaS T1-1) so the topic is
-        // born tenant-owned. Best-effort: absent before the 044 backfill.
-        const orgRef = await getOrganizationRefForCurrentConference()
+        // Stamp the current conference's organization (CaaS T1-1) so the topic
+        // is born tenant-owned. FAIL CLOSED (#730): an org-less topic is owned
+        // by no tenant and the ownership guard on update/delete would refuse it
+        // forever — refuse the create rather than strand it.
+        const orgRef = await requireCurrentOrgId()
         const created = await clientWrite.create({
           _type: 'topic',
           title: input.title,
@@ -121,6 +124,10 @@ export const topicRouter = router({
         })
       }
       try {
+        // OWNERSHIP (#730): `id` is client input. Without this the patch would
+        // rewrite ANY document in the shared dataset — another tenant's topic,
+        // or (no `_type` check either) their `conference` document.
+        await requireDocumentInCurrentOrg(id, 'topic')
         let patch = clientWrite.patch(id)
         if (Object.keys(set).length > 0) patch = patch.set(set)
         if (unset.length > 0) patch = patch.unset(unset)
@@ -140,6 +147,10 @@ export const topicRouter = router({
   delete: adminProcedure
     .input(TopicDeleteSchema)
     .mutation(async ({ input }) => {
+      // OWNERSHIP (#730) FIRST, before the reference probe: `input.id` is client
+      // input, and the reference guard alone let a caller delete any document
+      // nothing happens to reference — including another tenant's.
+      await requireDocumentInCurrentOrg(input.id, 'topic')
       const [talkCount, conferenceCount] = await Promise.all([
         clientReadUncached.fetch<number>(
           `count(*[_type == "talk" && references($id)])`,
