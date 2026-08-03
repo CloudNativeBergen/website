@@ -33,6 +33,7 @@ import volunteer from './schemaTypes/volunteer'
 import workshopSignup from './schemaTypes/workshopSignup'
 import workshopAnnouncement from './schemaTypes/workshopAnnouncement'
 import staff from './schemaTypes/staff'
+import invitationLetter from './schemaTypes/invitationLetter'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -81,5 +82,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     sponsorForConference,
     sponsorTier,
     contractTemplate,
+
+    // Participants
+    invitationLetter,
   ],
 }
