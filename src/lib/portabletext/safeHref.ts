@@ -11,8 +11,10 @@
  * This module is intentionally DEPENDENCY-FREE (no `@/` alias, no runtime
  * imports) so the Sanity Studio build, the Next server bundle and the client
  * bundle can all share it instead of each keeping its own copy of the rule.
+ * The Studio is built by Vite via `sanity deploy`, which does not resolve the
+ * `@/` alias, so it imports this file by relative path — hence the alias ban.
  *
- * Three call sites consume it, and all three must stay in agreement:
+ * Three call sites IMPORT it, so the rule cannot drift between them:
  *   - write path  — the Zod `safeLinkHref` refinement (`server/schemas/conference`)
  *   - render path — the portable-text `link` mark (`portabletext/components`)
  *   - Studio      — `safeLinkRule` (`sanity/schemaTypes/conference`)
@@ -75,6 +77,18 @@ export function toSafeRichTextHref(value: unknown): string {
   return isSafeRichTextHref(value) ? (value as string).trim() : '#'
 }
 
-/** The human-facing message every surface shows for a rejected link. */
+/**
+ * The human-facing message every surface shows for a link rejected by
+ * {@link isSafeLinkHref} — CTAs and buttons, where `mailto:` is NOT allowed.
+ */
 export const UNSAFE_LINK_MESSAGE =
   'Enter a site path (e.g. /tickets) or a full http(s) URL'
+
+/**
+ * The counterpart for a link rejected by {@link isSafeRichTextHref}. Rich text
+ * admits one more scheme than {@link UNSAFE_LINK_MESSAGE} describes, so it
+ * needs its own wording — an organizer told "site path or http(s)" after
+ * typing a valid `mailto:` would be reading a rule that was never applied.
+ */
+export const UNSAFE_RICH_TEXT_LINK_MESSAGE =
+  'Enter a site path (e.g. /tickets), a full http(s) URL, or a mailto: address'

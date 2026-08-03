@@ -15,6 +15,7 @@ import {
   nextRichTextKey,
   RICH_TEXT_CALLOUT_TONES,
   RICH_TEXT_CODE_LANGUAGES,
+  RICH_TEXT_IMAGE_MIME_TYPES,
   RICH_TEXT_LIMITS,
   RICH_TEXT_OBJECT_LABELS,
   RICH_TEXT_OBJECT_TYPES,
@@ -55,6 +56,28 @@ const iconBtnClass =
   'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800'
 const addBtnClass =
   'inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-300'
+
+/**
+ * The file picker and its help line are DERIVED from the same allowlist the
+ * upload route enforces (`RICH_TEXT_IMAGE_MIME_TYPES`) — a second, hand-written
+ * list is exactly how the picker came to omit AVIF while the API accepted it.
+ * Adding a type to the allowlist now updates both automatically.
+ */
+const IMAGE_ACCEPT = RICH_TEXT_IMAGE_MIME_TYPES.join(',')
+
+/** House casing where a type has one; anything new falls back to caps. */
+const IMAGE_FORMAT_NAMES: Record<string, string> = {
+  'image/jpeg': 'JPEG',
+  'image/webp': 'WebP',
+}
+const IMAGE_FORMATS = RICH_TEXT_IMAGE_MIME_TYPES.map(
+  (type) =>
+    IMAGE_FORMAT_NAMES[type] ?? type.replace('image/', '').toUpperCase(),
+)
+const IMAGE_FORMAT_LIST =
+  IMAGE_FORMATS.length > 1
+    ? `${IMAGE_FORMATS.slice(0, -1).join(', ')} or ${IMAGE_FORMATS[IMAGE_FORMATS.length - 1]}`
+    : IMAGE_FORMATS[0]
 
 export interface RichTextContentEditorProps {
   value: RichTextContentBlock[] | undefined
@@ -116,10 +139,11 @@ export function RichTextContentEditor({
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Text, headings, lists, links, images, code, tables and callouts. This is
         the one free-form block on the homepage &mdash; but it is{' '}
-        <strong className="font-semibold">not</strong> an HTML block: pasted
-        markup, scripts, iframes, embedded videos, third-party widgets and
-        images hosted elsewhere are all removed when you save. Upload images
-        here so they are served from our own CDN.
+        <strong className="font-semibold">not an HTML block</strong>: pasted
+        markup, scripts, iframes, embedded videos and third-party widgets are
+        stripped out as you paste them. Images must be uploaded here so they are
+        served from our own CDN &mdash; SVG files and images hosted elsewhere
+        are refused with an error.
       </p>
 
       {segments.length === 0 ? (
@@ -333,7 +357,7 @@ function ImageFields({
       ) : null}
       <input
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept={IMAGE_ACCEPT}
         disabled={uploading}
         onChange={(e) => {
           const file = e.target.files?.[0]
@@ -343,8 +367,8 @@ function ImageFields({
         className="block w-full text-xs text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium dark:text-gray-300 dark:file:bg-gray-700 dark:file:text-white"
       />
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        JPEG, PNG, WebP or GIF, up to 8&nbsp;MB. SVG and links to images on
-        other sites are not accepted.
+        {IMAGE_FORMAT_LIST}, up to 8&nbsp;MB. SVG and links to images on other
+        sites are not accepted.
       </p>
       {uploading ? (
         <p className="text-xs text-gray-500 dark:text-gray-400">Uploading…</p>

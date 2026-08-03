@@ -1,7 +1,8 @@
-import { defineType, defineField } from 'sanity'
+import { defineType, defineField, defineArrayMember } from 'sanity'
 import {
   RICH_TEXT_CALLOUT_TONES,
   RICH_TEXT_CODE_LANGUAGES,
+  RICH_TEXT_IMAGE_MIME_TYPES,
   RICH_TEXT_LIMITS,
 } from '../../src/lib/homepage/richText'
 
@@ -76,7 +77,9 @@ export const richTextImage = defineType({
   type: 'image',
   description:
     'An image uploaded here. External image URLs are not supported — a remote image would load from someone else’s server for every visitor. SVG is not accepted.',
-  options: { accept: 'image/jpeg,image/png,image/webp,image/gif' },
+  // DERIVED from the shared allowlist, never hand-listed: a divergence would
+  // either block an upload the API accepts or offer one it refuses.
+  options: { accept: RICH_TEXT_IMAGE_MIME_TYPES.join(',') },
   fields: [
     defineField({
       name: 'alt',
@@ -128,7 +131,15 @@ export const richTextTable = defineType({
               name: 'cells',
               title: 'Cells',
               type: 'array',
-              of: [{ type: 'string' }],
+              // The per-cell cap is enforced HERE as well as at render: the
+              // Studio writes straight to the dataset, so without it an
+              // oversized cell is stored and only truncated on the way out.
+              of: [
+                defineArrayMember({
+                  type: 'string',
+                  validation: (Rule) => Rule.max(RICH_TEXT_LIMITS.tableCell),
+                }),
+              ],
               validation: (Rule) =>
                 Rule.required().max(RICH_TEXT_LIMITS.tableColumns),
             }),

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { screen, userEvent } from 'storybook/test'
 import { useState } from 'react'
 import { RichTextContentEditor } from './RichTextContentEditor'
 import type { RichTextContentBlock } from '@/lib/homepage/richText'
@@ -64,7 +65,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The organizer-facing editor for the homepage Rich Text block. Contiguous prose collapses into one prose editor; each code/image/table/callout block is its own reorderable card, so content can be interleaved in any order. The help text states plainly that this is not an HTML block — pasted markup, scripts, iframes, embeds and remote images are removed on save.',
+          "The organizer-facing editor for the homepage Rich Text block. Contiguous prose collapses into one prose editor; each code/image/table/callout block is its own reorderable card, so content can be interleaved in any order. The help text states plainly that this is not an HTML block — pasted markup, scripts, iframes, embeds and third-party widgets are stripped as you paste, while SVG and images hosted elsewhere are refused with an error. The image picker's accepted types are derived from the upload allowlist (RICH_TEXT_IMAGE_MIME_TYPES), so it can never drift from what the API accepts.",
       },
     },
   },
@@ -81,6 +82,23 @@ export const Empty: Story = {
 export const WithContent: Story = {
   render: () => <Harness initial={seeded} />,
   args: { value: seeded, onChange: () => {} },
+}
+
+/**
+ * A freshly added Image card. Both the file picker's `accept` list and the
+ * format line under it are derived from `RICH_TEXT_IMAGE_MIME_TYPES`, so AVIF —
+ * which the upload API has always accepted — is offered here too. Added via the
+ * button rather than seeded, because an image card with no asset yet is exactly
+ * what the sanitizer drops on load.
+ */
+export const NewImageCard: Story = {
+  render: () => <Harness initial={[]} />,
+  args: { value: [], onChange: () => {} },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: '+ Image' }),
+    )
+  },
 }
 
 export const WithContentDark: Story = {

@@ -366,6 +366,59 @@ describe('sanitizeRichTextContent — attacks', () => {
     expect(table.rows).toHaveLength(RICH_TEXT_LIMITS.tableRows)
     expect(table.rows[0].cells).toHaveLength(RICH_TEXT_LIMITS.tableColumns)
   })
+
+  it('bounds the per-span marks scan instead of walking the whole array', () => {
+    // A hostile document can carry a million marks on one span; the scan must
+    // stop at the cap, and the surviving marks must come from the capped
+    // prefix — a real decorator parked past it is NOT rescued.
+    const [block] = sanitizeRichTextContent([
+      {
+        _type: 'block',
+        _key: 'b1',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'x',
+            marks: [
+              ...Array.from(
+                { length: RICH_TEXT_LIMITS.marksPerSpan },
+                (_, i) => `junk${i}`,
+              ),
+              'strong',
+            ],
+          },
+        ],
+      },
+    ]) as RichTextProseBlock[]
+    expect(block.children[0].marks).toEqual([])
+  })
+
+  it('keeps marks inside the cap', () => {
+    const [block] = sanitizeRichTextContent([
+      {
+        _type: 'block',
+        _key: 'b1',
+        markDefs: [],
+        children: [
+          { _type: 'span', _key: 's1', text: 'x', marks: ['strong', 'em'] },
+        ],
+      },
+    ]) as RichTextProseBlock[]
+    expect(block.children[0].marks).toEqual(['strong', 'em'])
+  })
+
+  it('caps table cell length', () => {
+    const [table] = sanitizeRichTextContent([
+      {
+        _type: 'richTextTable',
+        _key: 't1',
+        rows: [{ cells: ['x'.repeat(RICH_TEXT_LIMITS.tableCell + 100)] }],
+      },
+    ]) as RichTextTableBlock[]
+    expect(table.rows[0].cells[0]).toHaveLength(RICH_TEXT_LIMITS.tableCell)
+  })
 })
 
 describe('sanitizeRichTextContent — normalisation', () => {

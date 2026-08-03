@@ -137,6 +137,12 @@ export const RICH_TEXT_LIMITS = {
   spanText: 5_000,
   spansPerBlock: 200,
   markDefsPerBlock: 50,
+  // A span can meaningfully carry at most every decorator plus one annotation
+  // key; 50 matches the per-span cap the write-path validator already applies
+  // (`richTextSpanSchema.marks`), so the render side truncates nothing the
+  // mutation would have accepted — it only bounds the scan for stored data that
+  // never went through it.
+  marksPerSpan: 50,
   listLevel: 5,
   code: 20_000,
   filename: 120,
@@ -303,12 +309,17 @@ function sanitizeProseBlock(
     const span = asRecord(entry)
     if (!span || span._type !== 'span' || typeof span.text !== 'string')
       continue
-    const marks = (Array.isArray(span.marks) ? span.marks : []).filter(
-      (m): m is string =>
-        typeof m === 'string' &&
-        ((RICH_TEXT_DECORATORS as readonly string[]).includes(m) ||
-          linkKeys.has(m)),
-    )
+    // Slice BEFORE filtering, like the block/span/markDef loops above: a
+    // hostile document must not be able to buy unbounded per-render CPU with a
+    // million-entry `marks` array.
+    const marks = (Array.isArray(span.marks) ? span.marks : [])
+      .slice(0, RICH_TEXT_LIMITS.marksPerSpan)
+      .filter(
+        (m): m is string =>
+          typeof m === 'string' &&
+          ((RICH_TEXT_DECORATORS as readonly string[]).includes(m) ||
+            linkKeys.has(m)),
+      )
     children.push({
       _type: 'span',
       _key: spanKey(span._key, children.length),

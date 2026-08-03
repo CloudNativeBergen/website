@@ -17,6 +17,7 @@ import {
   isSafeLinkHref,
   isSafeRichTextHref,
   UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
 } from '@/lib/portabletext/safeHref'
 import {
   RICH_TEXT_LIMITS,
@@ -681,7 +682,11 @@ const richTextSpanSchema = z.object({
   marks: z.array(z.string()).max(RICH_TEXT_LIMITS.markDefsPerBlock).optional(),
 })
 
-/** The ONLY annotation. `href` is gated by the shared safe-scheme predicate. */
+/**
+ * The ONLY annotation. `href` is gated by the shared safe-scheme predicate —
+ * the rich-text one, which also admits `mailto:`, so the message must be the
+ * rich-text message and not the stricter CTA wording.
+ */
 const richTextMarkDefSchema = z.object({
   _type: z.literal('link'),
   _key: z.string().min(1, 'Link annotations need a key'),
@@ -689,7 +694,7 @@ const richTextMarkDefSchema = z.object({
     .string()
     .trim()
     .min(1, 'Link is required')
-    .refine(isSafeRichTextHref, { message: UNSAFE_LINK_MESSAGE }),
+    .refine(isSafeRichTextHref, { message: UNSAFE_RICH_TEXT_LINK_MESSAGE }),
 })
 
 const richTextProseBlockSchema = z.object({

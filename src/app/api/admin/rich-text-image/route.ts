@@ -33,7 +33,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await request.formData()
+    // The ceiling below can only be enforced on a body that survived parsing.
+    // A file over the platform's own (lower) request limit dies inside
+    // `formData()`, so without this the organizer is told the server broke —
+    // when in truth their image was simply too big, which is the one thing they
+    // can act on. Siblings (`/api/upload/speaker-image`, `/api/admin/gallery/
+    // upload`) answer 413 here too; the match is case-insensitive because the
+    // runtime spells it "Body exceeded ... limit" as often as "body". Anything
+    // else is a real failure and belongs in the outer catch, not dressed up as
+    // a size problem.
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        /body|too large|payload/i.test(error.message)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Image is too large to upload. Compress or resize it and try again — files approaching the 8 MB limit can be rejected before they reach us.',
+          },
+          { status: 413 },
+        )
+      }
+      throw error
+    }
+
     const file = formData.get('file')
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })

@@ -76,6 +76,32 @@ const f4Sections: HomepageSection[] = [
   },
 ]
 
+// A stored Rich Text block, used to exercise the save-time content check.
+const richTextSections: HomepageSection[] = [
+  { _key: 'hero', _type: 'homepageHero' },
+  {
+    _key: 'rich',
+    _type: 'homepageRichText',
+    heading: 'Getting here',
+    content: [
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'Grieghallen is a ten minute walk from Bergen station.',
+            marks: [],
+          },
+        ],
+      },
+    ],
+  },
+]
+
 const meta = {
   title: 'Systems/Settings/Admin/HomepageSectionsEditor',
   component: HomepageSectionsEditor,
@@ -178,6 +204,30 @@ export const F4ConfigForms: Story = {
       name: 'Configure FAQ',
     })
     await userEvent.click(configureFaq)
+  },
+}
+
+/**
+ * Save with a half-finished Rich Text card. The editor saves the SANITIZED
+ * content — which is what the server stores — so a card the sanitizer would drop
+ * is named and the save is blocked, rather than the card silently disappearing
+ * from a homepage the editor just reported as saved (or the mutation rejecting
+ * a payload the editor had already declared valid).
+ */
+export const UnfinishedRichTextCard: Story = {
+  args: {
+    initialSections: richTextSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Configure Rich Text' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: '+ Code / preformatted' }),
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
   },
 }
 

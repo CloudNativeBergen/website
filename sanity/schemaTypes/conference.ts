@@ -1,5 +1,14 @@
 import { formats } from '../../src/lib/proposal/types'
 import { isValidTeamKey, countTeamKey } from '../../src/lib/teams/validation'
+// Relative, not `@/`: the Studio is built by Vite via `sanity deploy`, which
+// does not resolve the Next path alias. `safeHref` is dependency-free for
+// exactly this reason.
+import {
+  isSafeLinkHref,
+  isSafeRichTextHref,
+  UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
+} from '../../src/lib/portabletext/safeHref'
 import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
@@ -42,37 +51,25 @@ function defineHomepageSection(
 }
 
 /**
- * Studio-side mirror of the server `safeLinkHref` rule (defence in depth): a
- * public-page CTA link must be a site path (`/tickets`) or an explicit
- * http(s) URL — `javascript:`, `data:` and scheme-relative `//host` rejected.
+ * Studio-side application of the SHARED `isSafeLinkHref` predicate (defence in
+ * depth alongside the server schema): a public-page CTA link must be a site
+ * path (`/tickets`) or an explicit http(s) URL — `javascript:`, `data:` and
+ * scheme-relative `//host` rejected. The predicate is imported, not restated,
+ * so the Studio cannot drift from the write and render paths.
  */
 const safeLinkRule = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
-  const v = value.trim()
-  if (v.startsWith('/') && !v.startsWith('//')) return true
-  if (/^https?:\/\//i.test(v)) {
-    // Prefix alone admits bare 'https://' — require a parseable absolute URL
-    // with a host, matching the server rule.
-    try {
-      const parsed = new URL(v)
-      if (parsed.hostname) return true
-    } catch {}
-  }
-  return 'Enter a site path (e.g. /tickets) or a full http(s) URL'
+  return isSafeLinkHref(value) ? true : UNSAFE_LINK_MESSAGE
 }
 
 /**
- * The same rule for links inside the homepage Rich Text block, plus `mailto:`
- * — the one extra scheme prose needs ("email the organizers"). Delegates to
- * {@link safeLinkRule} rather than restating it, so there is still exactly one
- * scheme decision on the Studio side.
+ * The rule for links inside the homepage Rich Text block, which admits one
+ * extra scheme prose needs — `mailto:` ("email the organizers"). Same shared
+ * module, so the message and the predicate stay in step.
  */
 const safeRichTextLinkRule = (value: unknown) => {
-  if (typeof value === 'string' && /^mailto:/i.test(value.trim())) return true
-  const result = safeLinkRule(value)
-  return result === true
-    ? true
-    : 'Enter a site path (e.g. /tickets), a full http(s) URL, or a mailto: address'
+  if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
+  return isSafeRichTextHref(value) ? true : UNSAFE_RICH_TEXT_LINK_MESSAGE
 }
 
 export default defineType({

@@ -43,8 +43,10 @@ import {
   HOMEPAGE_SECTION_TYPES,
   isRichTextContentEmpty,
   sanitizeRichTextContent,
+  RICH_TEXT_OBJECT_LABELS,
   type HomepageSection,
   type HomepageSectionType,
+  type RichTextContentBlock,
 } from '@/lib/homepage'
 import {
   SECTION_LABELS,
@@ -79,6 +81,16 @@ const inputClass =
   'block w-full min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white'
 const rowBtnClass =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800'
+
+/**
+ * The card name an organizer sees in the Rich Text editor, used to point at the
+ * one that is still unfinished. `undefined` only if a block was dropped for a
+ * reason its `_type` does not name — the generic word still reads correctly.
+ */
+function richTextCardLabel(block: RichTextContentBlock | undefined): string {
+  if (!block || block._type === 'block') return 'Text'
+  return RICH_TEXT_OBJECT_LABELS[block._type]
+}
 
 export interface HomepageSectionsEditorProps {
   /** Stored sections, or the computed default when none are stored yet. */
@@ -257,18 +269,35 @@ export function HomepageSectionsEditor({
     setOverKey(null)
   }
 
-  const validate = (): string | null => {
-    for (const r of rows) {
+  /**
+   * Validate the rows AS THEY WILL BE SENT. `resolvedRows` is exactly what
+   * `save` hands to `toPayload`; `authoredRows` is what the organizer sees. The
+   * two are compared so a card resolution dropped is reported, not vanished.
+   */
+  const validate = (
+    authoredRows: EditorRow[],
+    resolvedRows: EditorRow[],
+  ): string | null => {
+    for (const [i, r] of resolvedRows.entries()) {
       if (r._type === 'homepageCtaBanner') {
         if (!r.heading?.trim()) return 'CTA banner needs a heading.'
         if (!r.buttonLabel?.trim()) return 'CTA banner needs a button label.'
         if (!r.buttonHref?.trim()) return 'CTA banner needs a button link.'
       }
       if (r._type === 'homepageRichText') {
-        // Mirror what the SERVER will keep, not what the editor holds: an
-        // organizer who added only empty cards would otherwise get a confusing
-        // rejection from the mutation instead of a friendly message here.
-        const kept = sanitizeRichTextContent(r.content)
+        const authored = authoredRows[i].content ?? []
+        const kept = r.content ?? []
+        // A shorter resolved array means a card was half-finished — an empty
+        // code/callout card, an image card with nothing uploaded, an all-blank
+        // table. The server would REJECT those outright, and dropping them
+        // behind a "saved" toast would be its own quiet data loss, so name the
+        // card and make the organizer decide.
+        if (kept.length < authored.length) {
+          const unfinished = authored.find(
+            (block) => sanitizeRichTextContent([block]).length === 0,
+          )
+          return `Rich text block has an unfinished ${richTextCardLabel(unfinished)} card. Fill it in or remove it.`
+        }
         if (kept.length === 0 || isRichTextContentEmpty(kept))
           return 'Rich text block needs content.'
       }
@@ -278,7 +307,19 @@ export function HomepageSectionsEditor({
 
   const save = () => {
     setSubmitError(null)
-    const err = validate()
+    // Rich text is the one row whose SAVED value is not literally what the
+    // editor holds: the mutation's schema runs `sanitizeRichTextContent` as its
+    // terminal transform, so the sanitized array is what gets stored either
+    // way. Resolve it HERE, once, before validating — validating the sanitized
+    // content while sending the raw content is what let an editor-side pass
+    // turn into a server-side rejection. Sanitizer output is by construction
+    // accepted by that schema, so what passes below is what the server takes.
+    const resolved = rows.map((row) =>
+      row._type === 'homepageRichText'
+        ? { ...row, content: sanitizeRichTextContent(row.content) }
+        : row,
+    )
+    const err = validate(rows, resolved)
     if (err) {
       setSubmitError(err)
       return
@@ -290,7 +331,7 @@ export function HomepageSectionsEditor({
       setConfirmingRevert(true)
       return
     }
-    mutation.mutate({ homepageSections: toPayload(rows) as never })
+    mutation.mutate({ homepageSections: toPayload(resolved) as never })
   }
 
   const revertToDefault = () => {
