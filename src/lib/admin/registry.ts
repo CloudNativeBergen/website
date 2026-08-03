@@ -24,16 +24,23 @@ import {
   HeartIcon,
   HomeIcon,
   IdentificationIcon,
+  PaintBrushIcon,
   PhotoIcon,
   PresentationChartBarIcon,
   ShieldCheckIcon,
   SignalIcon,
+  Squares2X2Icon,
+  SwatchIcon,
   TicketIcon,
   UserGroupIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
+import {
+  APPEARANCE_SECTIONS,
+  type AppearanceSectionId,
+} from '@/lib/settings/appearance'
 
 export type AdminDestinationKind = 'page' | 'setting' | 'action'
 
@@ -344,25 +351,68 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
 ]
 
 /**
+ * Search synonyms and icons for the Appearance sub-pages. The pages themselves
+ * are derived from `APPEARANCE_SECTIONS`, so a new sub-section is registered
+ * (and ⌘K-searchable) the moment it is added to that table.
+ */
+const APPEARANCE_KEYWORDS: Record<AppearanceSectionId, string[]> = {
+  overview: [
+    'appearance',
+    'brand',
+    'branding',
+    'theme',
+    'design',
+    'look and feel',
+    'style',
+  ],
+  theme: [
+    'colors',
+    'colours',
+    'palette',
+    'primary color',
+    'accent',
+    'background pattern',
+    'font',
+    'typography',
+  ],
+  logos: ['logo', 'logos', 'logomark', 'mark', 'wordmark', 'svg', 'icon'],
+  homepage: [
+    'homepage',
+    'front page',
+    'landing page',
+    'composition',
+    'sections',
+    'hero',
+    'vanity metrics',
+    'homepage stats',
+  ],
+}
+
+const APPEARANCE_ICONS: Record<AppearanceSectionId, AdminDestinationIcon> = {
+  overview: SwatchIcon,
+  theme: PaintBrushIcon,
+  logos: PhotoIcon,
+  homepage: Squares2X2Icon,
+}
+
+/**
  * Search synonyms for the Settings sections, keyed by group id, covering the
  * cards each section contains (card membership lives in the settings page JSX).
  */
 const SETTINGS_GROUP_KEYWORDS: Record<string, string[]> = {
+  // Brand/theme synonyms deliberately live on the Appearance destinations now
+  // (APPEARANCE_KEYWORDS) so ⌘K sends "logo" or "colours" to the editor rather
+  // than to the summary card.
   'identity-brand': [
     'name',
     'tagline',
     'organizer',
-    'logo',
-    'logos',
-    'branding',
-    'colors',
-    'colours',
-    'theme',
     'city',
     'country',
     'venue',
     'visibility',
     'unlisted',
+    'appearance',
   ],
   schedule: [
     'dates',
@@ -382,7 +432,6 @@ const SETTINGS_GROUP_KEYWORDS: Record<string, string[]> = {
     'check-in',
     'capacity',
     'workshop signups',
-    'homepage stats',
   ],
   sponsors: [
     'sponsorship',
@@ -401,8 +450,6 @@ const SETTINGS_GROUP_KEYWORDS: Record<string, string[]> = {
     'social links',
     'topics',
     'formats',
-    'homepage',
-    'composition',
   ],
 }
 
@@ -459,6 +506,23 @@ export const ADMIN_DESTINATIONS: AdminDestination[] = [
   ...ADMIN_SUB_PAGES.map((page): AdminDestination => ({
     ...page,
     kind: 'page',
+  })),
+  // The Appearance section — real pages, not anchors, so each sub-section is a
+  // first-class ⌘K destination.
+  ...APPEARANCE_SECTIONS.map((section): AdminDestination => ({
+    id:
+      section.id === 'overview'
+        ? 'settings-appearance'
+        : `settings-appearance-${section.id}`,
+    title:
+      section.id === 'overview'
+        ? section.title
+        : `Appearance: ${section.title}`,
+    keywords: APPEARANCE_KEYWORDS[section.id],
+    href: section.href,
+    group: 'Settings',
+    kind: 'page',
+    icon: APPEARANCE_ICONS[section.id],
   })),
   ...SETTINGS_GROUPS.map((group): AdminDestination => ({
     id: `settings-${group.id}`,

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import { RocketLaunchIcon } from '@heroicons/react/24/outline'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
@@ -83,11 +84,16 @@ export function ActivationChecklist({
   )
 }
 
-/** One checklist row — an anchor link with a done/pending icon and a hint. */
+/**
+ * One checklist row — a link with a done/pending icon and a hint. A `#…` target
+ * is a same-page jump (a plain anchor); a `/admin/…` target is a settings
+ * sub-page and routes through `Link` so it stays a client navigation.
+ */
 function ActivationRowItem({ row }: { row: ActivationRow }) {
+  const RowLink = row.anchor.startsWith('#') ? 'a' : Link
   return (
     <li>
-      <a
+      <RowLink
         href={row.anchor}
         className="group flex items-start gap-3 rounded-md px-2 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
       >
@@ -130,7 +136,7 @@ function ActivationRowItem({ row }: { row: ActivationRow }) {
         >
           Configure &rarr;
         </span>
-      </a>
+      </RowLink>
     </li>
   )
 }
