@@ -4,6 +4,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'
 import { EditorSchedule, toEditorSchedule, ScheduleStatus } from './types'
+import { Status } from '@/lib/proposal/types'
 import { clientReadUncached } from '@/lib/sanity/client'
 
 export interface ScheduleData {
@@ -128,8 +129,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       conferenceId: conference._id,
       returnAll: true,
       includePreviousAcceptedTalks: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      statuses: ['submitted', 'accepted', 'confirmed'] as any,
+      statuses: [Status.submitted, Status.accepted, Status.confirmed],
     })
 
     if (proposalsError) {

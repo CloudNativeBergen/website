@@ -79,10 +79,12 @@ function resolveTalkId(talk: {
 
 /**
  * Flatten a schedule day's real (non-placeholder, resolvable) talk slots to the
- * placement tuples the schedule-change diff compares. Placeholders and ghost
+ * placement tuples the schedule-change diff compares. Exported because promote
+ * — now the only write that changes the PUBLIC program — has to diff the
+ * outgoing official day against the incoming one to alert speakers. Placeholders and ghost
  * slots (no resolvable talk) are skipped — they have no speakers to alert.
  */
-function collectPlacements(
+export function collectPlacements(
   date: string,
   tracks: ConferenceSchedule['tracks'] | undefined,
 ): SlotPlacement[] {
@@ -314,7 +316,12 @@ export async function saveScheduleToSanity(
         .set({
           date: schedule.date,
           tracks: sanitizedTracks,
-          status: schedule.status,
+          // `status` is deliberately NOT written here. Promotion is the only
+          // legitimate status transition, and it owns the archive + reference
+          // swap that has to happen with it. Honouring a client-supplied status
+          // on save let a crafted payload flip a draft to official without
+          // archiving the day's existing official (two official days), or
+          // archive the live day while it stayed referenced by the conference.
           version: (schedule.version || 0) + 1,
         })
         .commit()

@@ -1,7 +1,9 @@
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure } from '@/server/trpc'
 import { SaveScheduleSchema } from '@/server/schemas/schedule'
+import { notifyScheduleChanges } from '@/lib/reminders'
 import {
+  collectPlacements,
   saveScheduleToSanity,
   getValidTalkIds,
   getTalkStatuses,
@@ -61,10 +63,17 @@ export const scheduleRouter = router({
       }
 
       // AUTO-FORK GUARD:
-      // If we are saving a 'draft', but the existing document is 'official', we MUST fork it.
+      // Saving a 'draft' onto a published day must fork rather than demote it.
+      // A legacy day has NO status field, and every read path treats that as
+      // official — so `null` has to fork too, otherwise the one save path that
+      // can reach a legacy day would patch the live program to `draft` in place
+      // and blank it from the public site.
       if (payload._id && payload.status === ScheduleStatus.Draft) {
         const existingStatus = await getScheduleStatusById(payload._id)
-        if (existingStatus === ScheduleStatus.Official) {
+        if (
+          existingStatus === ScheduleStatus.Official ||
+          existingStatus === null
+        ) {
           console.log(
             `Auto-forking official schedule ${payload._id} into a new draft.`,
           )
@@ -239,7 +248,7 @@ export const scheduleRouter = router({
         action: z.enum(['promote']),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { conference, error } = await getConferenceForCurrentDomain()
       if (error || !conference) {
         throw new TRPCError({
@@ -285,8 +294,17 @@ export const scheduleRouter = router({
 
         const date = targetSchedule.date
 
-        const existingOfficial = await clientWrite.fetch(
-          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && status == 'official'][0]`,
+        // A legacy day written before this feature has NO `status` field, and
+        // every read path treats that as official. Matching only
+        // `status == 'official'` here left the legacy day in
+        // `conference.schedules` and appended a second official doc for the
+        // same date — two "official" days, which makes the speaker-facing
+        // lookups tie on `order(date asc)[0]` and go nondeterministic again.
+        const existingOfficial = await clientWrite.fetch<{
+          _id: string
+          tracks?: ConferenceSchedule['tracks']
+        } | null>(
+          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && (status == 'official' || !defined(status))][0]`,
           { conferenceId: conference._id, date },
         )
 
@@ -314,6 +332,28 @@ export const scheduleRouter = router({
 
         await tx.commit()
         revalidateTag(conferenceTag(conference._id), 'default')
+
+        // SCHEDULE-CHANGE ALERTS. Publishing is now the ONLY write that changes
+        // the public program — draft saves auto-fork and Live mode is read-only
+        // — so this is where speakers must be told their talk moved. Diffing the
+        // day we just archived against the one we just published gives exactly
+        // the moves that became public.
+        //
+        // Never-fail, like the save path: the program IS published at this
+        // point, and an alert failure must not report that as an error.
+        try {
+          await notifyScheduleChanges({
+            prior: collectPlacements(date, existingOfficial?.tracks),
+            next: collectPlacements(date, targetSchedule.tracks),
+            conferenceId: conference._id,
+            actorId: ctx.speaker?._id,
+          })
+        } catch (alertError) {
+          console.error(
+            `Schedule promoted (${targetSchedule._id}) but speaker alerts failed:`,
+            alertError,
+          )
+        }
 
         return { success: true, newStatus: ScheduleStatus.Official }
       }

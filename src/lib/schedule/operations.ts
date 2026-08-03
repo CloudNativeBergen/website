@@ -239,8 +239,8 @@ export function classifyProposalDrop(
     // (via the vacated-slot exclusions), so neither sees the two talks in their
     // FINAL positions. In a single track that lets a long displaced talk land
     // over the dragged talk's new slot and still pass both halves. Reject when
-    // the two swapped footprints (both at their FORMAT durations, what
-    // performSwap writes) overlap each other. Cross-track swaps land in separate
+    // the two swapped footprints (both at their STORED spans, which is what
+    // performSwap writes now that talks are resizable) overlap each other. Cross-track swaps land in separate
     // tracks, so there is nothing to check here.
     if (dragItem.sourceTrackIndex === trackIndex) {
       const draggedEnd = calculateEndTime(timeSlot, durationMinutes)
