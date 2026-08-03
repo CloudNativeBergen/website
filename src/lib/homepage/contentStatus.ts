@@ -347,12 +347,17 @@ function tallyProgramme(conference: Conference): ProgrammeTally {
  * `hasProgrammeContent` (`./lifecycle`): published AND holding at least one
  * confirmed talk. The second half is the guard that closed the production bug
  * where an empty published schedule rendered `0+ Sessions / 0+ Speakers`.
+ *
+ * Takes the tally rather than recomputing it: its one caller already needs the
+ * session and talk counts for the status it returns, and walking every track of
+ * every schedule a second time to answer "> 0" was pure waste.
  */
-function hasProgramme(conference: Conference, now: number): boolean {
-  return (
-    isProgramPublished(conference, now) &&
-    tallyProgramme(conference).sessions > 0
-  )
+function hasProgramme(
+  conference: Conference,
+  now: number,
+  sessions: number,
+): boolean {
+  return isProgramPublished(conference, now) && sessions > 0
 }
 
 /**
@@ -622,7 +627,7 @@ export function sectionContentStatus(
     // summary names the distinct talks behind it when the two differ.
     case 'homepageProgramHighlights': {
       const { sessions, talks } = tallyProgramme(conference)
-      if (!hasProgramme(conference, now)) {
+      if (!hasProgramme(conference, now, sessions)) {
         const published = isProgramPublished(conference, now)
         return status(
           'homepageProgramHighlights',
