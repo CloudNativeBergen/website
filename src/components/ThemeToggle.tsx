@@ -21,6 +21,12 @@ function ThemeToggle() {
   return (
     <button
       type="button"
+      // Identifies this control across a document boundary. The homepage
+      // composer preview renders the REAL Header, and this toggle writes
+      // next-themes' ORIGIN-WIDE storage key — clicking it inside the preview
+      // would re-theme the admin app around it. `PreviewChrome` matches on this
+      // attribute and reroutes the click to the preview's own theme state.
+      data-slot="theme-toggle"
       aria-label={
         mounted
           ? `Switch to ${isDark ? 'light' : 'dark'} theme`
