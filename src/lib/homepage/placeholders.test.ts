@@ -62,6 +62,40 @@ function blankConference(overrides: Partial<Conference> = {}): Conference {
 const fill = (conference: Conference) =>
   withPlaceholders(conference, { now: NOW })
 
+/**
+ * Every object reachable from `value` that is NOT marked, by path — the shared
+ * engine behind the deep-walk assertions below.
+ *
+ * Portable text, references and the image field are FIELD VALUES: nothing badges
+ * them, and marking them would be noise inside a Sanity shape.
+ */
+function unmarkedObjectPaths(value: unknown, path: string): string[] {
+  const FIELD_VALUE_TYPES = new Set(['block', 'span', 'reference', 'image'])
+  const unmarked: string[] = []
+
+  const walk = (node: unknown, at: string) => {
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${at}[${index}]`))
+      return
+    }
+    if (typeof node !== 'object' || node === null) return
+    const record = node as Record<string, unknown>
+    if (
+      typeof record._type === 'string' &&
+      FIELD_VALUE_TYPES.has(record._type)
+    ) {
+      return
+    }
+    if (!isPlaceholder(record)) unmarked.push(at)
+    for (const [key, child] of Object.entries(record)) {
+      walk(child, `${at}.${key}`)
+    }
+  }
+
+  walk(value, path)
+  return unmarked
+}
+
 /* -------------------------------------------------------------------------- */
 
 describe('withPlaceholders — never overrides real content', () => {
@@ -361,35 +395,32 @@ describe('marking — how a consumer tells sample from real', () => {
    * only strings and empty arrays.
    */
   it('leaves no generated object unmarked, anywhere in the tree', () => {
-    // Portable text, references and the image field are FIELD VALUES: nothing
-    // badges them, and marking them would be noise inside a Sanity shape.
-    const FIELD_VALUE_TYPES = new Set(['block', 'span', 'reference', 'image'])
-    const unmarked: string[] = []
-
-    const walk = (value: unknown, path: string) => {
-      if (Array.isArray(value)) {
-        value.forEach((item, index) => walk(item, `${path}[${index}]`))
-        return
-      }
-      if (typeof value !== 'object' || value === null) return
-      const record = value as Record<string, unknown>
-      if (
-        typeof record._type === 'string' &&
-        FIELD_VALUE_TYPES.has(record._type)
-      ) {
-        return
-      }
-      if (!isPlaceholder(record)) unmarked.push(path)
-      for (const [key, child] of Object.entries(record)) {
-        walk(child, `${path}.${key}`)
-      }
-    }
-
-    // The conference itself is the tenant's own object, not a generated one.
-    for (const [key, value] of Object.entries(conference)) {
-      walk(value, key)
-    }
+    // The conference itself is the tenant's own object, not a generated one, so
+    // the walk starts one level down at each of its fields.
+    const unmarked = Object.entries(conference).flatMap(([key, value]) =>
+      unmarkedObjectPaths(value, key),
+    )
     expect(unmarked).toEqual([])
+  })
+
+  /**
+   * The same rule for the sets exported DIRECTLY. `PLACEHOLDER_FAQ_ITEMS` was
+   * unmarked at the source while the copies `withPlaceholders` installed were
+   * marked, so the walk above passed while a preview rendering the export got
+   * items no badge could recognise — the contract is about the objects a UI
+   * holds, whichever door they came through.
+   */
+  it('marks the exported sample sets at the source, not only once filled in', () => {
+    expect(
+      unmarkedObjectPaths(PLACEHOLDER_FAQ_ITEMS, 'PLACEHOLDER_FAQ_ITEMS'),
+    ).toEqual([])
+    for (const item of PLACEHOLDER_FAQ_ITEMS) {
+      expect(isPlaceholder(item)).toBe(true)
+    }
+    // …and the copies that land on the conference are the same objects by value.
+    expect(fill(blankConference()).conference.ticketFaqs).toEqual([
+      ...PLACEHOLDER_FAQ_ITEMS,
+    ])
   })
 
   it('does not claim real content is a placeholder', () => {
@@ -432,6 +463,16 @@ describe('determinism', () => {
     ).toBe(NINETY_DAYS_OUT)
   })
 
+  it('accepts any Date-shaped object, not only an `instanceof Date`', () => {
+    // Preview data crosses a postMessage boundary; a Date from another realm
+    // fails `instanceof` while behaving exactly like one.
+    const crossRealm = { getTime: () => NOW } as unknown as Date
+    expect(
+      withPlaceholders(blankConference(), { now: crossRealm }).conference
+        .startDate,
+    ).toBe(NINETY_DAYS_OUT)
+  })
+
   it('never reads the clock itself', async () => {
     const source = (
       await readFile(new URL('./placeholders.ts', import.meta.url), 'utf8')
@@ -442,6 +483,99 @@ describe('determinism', () => {
     expect(source).not.toMatch(/Date\.now\s*\(/)
     // `new Date(...)` with an argument is fine; a bare `new Date()` is not.
     expect(source).not.toMatch(/new Date\s*\(\s*\)/)
+  })
+})
+
+/**
+ * A reference time that is not an instant used to throw `RangeError: Invalid
+ * time value` from inside `isoDate` — four frames down, with nothing in the
+ * message naming `now` — and would have taken the whole preview with it. The
+ * module answers it by deriving no dates at all: unlike `shiftToLightness`,
+ * which throws because its degraded output would be a wrong colour nobody can
+ * see is wrong, the degraded output here is a VISIBLY missing band, and these
+ * bytes never reach a visitor.
+ */
+describe('an unusable reference time degrades rather than throwing', () => {
+  const BAD: ReadonlyArray<readonly [string, number | Date]> = [
+    ['NaN', Number.NaN],
+    ['an Invalid Date', new Date('not a date')],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['an off-type string', '2026-01-01' as unknown as number],
+    ['null', null as unknown as number],
+  ]
+
+  it.each(BAD)(
+    'survives %s and fills everything that needs no date',
+    (_, now) => {
+      const { conference, placeholderTypes } = withPlaceholders(
+        blankConference(),
+        { now },
+      )
+      expect(conference.featuredSpeakers).toHaveLength(4)
+      expect(conference.organizers).toHaveLength(3)
+      expect(conference.sponsors).toHaveLength(6)
+      expect(conference.ticketFaqs).toHaveLength(3)
+      expect(conference.vanityMetrics).toHaveLength(3)
+      expect(conference.venueName).toBe('Sample Hall')
+
+      // Not one invented instant: no epoch fallback, no "Invalid Date" string.
+      expect(conference.startDate).toBe('')
+      expect(conference.endDate).toBe('')
+      expect(conference.programDate).toBe('')
+      const serialized = JSON.stringify(conference)
+      expect(serialized).not.toContain('1970')
+      expect(serialized).not.toContain('Invalid Date')
+      expect(serialized).not.toContain('NaN')
+
+      // The date-driven bands stay hidden AND unclaimed, exactly as they are for
+      // a conference that has not set its dates.
+      expect(placeholderTypes.has('homepageSaveTheDate')).toBe(false)
+      expect(placeholderTypes.has('homepageCountdown')).toBe(false)
+      expect(resolveCountdownTarget(conference, {})).toBeNull()
+      // The programme band is sample-backed as data, but stays unpublished: its
+      // `programDate` is the one thing that cannot be derived without a clock.
+      expect(conference.schedules).toHaveLength(1)
+      expect(hasProgrammeContent(conference)).toBe(false)
+    },
+  )
+
+  it('stamps the degraded gallery and schedule with no date, not a made-up one', () => {
+    const { conference } = withPlaceholders(blankConference(), {
+      now: Number.NaN,
+    })
+    expect(conference.featuredGalleryImages!.map((i) => i.date)).toEqual([
+      '',
+      '',
+      '',
+    ])
+    expect(conference.schedules![0].date).toBe('')
+  })
+
+  it('still dates the samples off the tenant own dates when only the clock is bad', () => {
+    const { conference } = withPlaceholders(
+      blankConference({
+        startDate: '2027-05-05',
+        endDate: '2027-05-06',
+        programDate: '2020-01-01',
+      }),
+      { now: new Date('nonsense') },
+    )
+    expect(conference.featuredGalleryImages![0].date).toBe('2027-05-05')
+    expect(conference.schedules![0].date).toBe('2027-05-05')
+    // A published programme date the tenant set is never overwritten…
+    expect(conference.programDate).toBe('2020-01-01')
+    // …so the band renders in full despite the broken clock.
+    expect(hasProgrammeContent(conference)).toBe(true)
+  })
+
+  it('treats the epoch as the legitimate instant it is', () => {
+    // The guard tests USABILITY, not truthiness: `now: 0` is a real time.
+    const { conference, placeholderTypes } = withPlaceholders(
+      blankConference(),
+      { now: 0 },
+    )
+    expect(conference.startDate).toBe('1970-04-01')
+    expect(placeholderTypes.has('homepageCountdown')).toBe(true)
   })
 })
 

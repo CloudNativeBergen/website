@@ -27,16 +27,33 @@
  *     record inside a `ConferenceSponsor`. The only unmarked objects are plain
  *     FIELD VALUES, which no consumer badges: portable-text blocks and spans,
  *     `_type: 'reference'` pointers, and the `_type: 'image'` field (see
- *     `sampleGalleryImages`). Every synthetic id starts with
- *     {@link PLACEHOLDER_ID_PREFIX}, and {@link withPlaceholders} returns the set
- *     of section types it backed so the preview can pin a "Sample content" chip
- *     on exactly those bands. `placeholders.test.ts` deep-walks a fully filled
- *     conference and asserts this rule holds for every object in it.
+ *     `sampleGalleryImages`). This holds for the sample sets EXPORTED directly as
+ *     well as for the ones {@link withPlaceholders} installs — a consumer that
+ *     renders {@link PLACEHOLDER_FAQ_ITEMS} itself gets objects it can badge.
+ *     Every synthetic id starts with {@link PLACEHOLDER_ID_PREFIX}, and
+ *     {@link withPlaceholders} returns the set of section types it backed so the
+ *     preview can pin a "Sample content" chip on exactly those bands.
+ *     `placeholders.test.ts` deep-walks a fully filled conference AND the
+ *     exported sets, and asserts this rule holds for every object in them.
  *
  * PURITY. Type-only imports, no package at runtime, no `Date.now()`, no
  * network, nothing persisted. The reference time is a REQUIRED argument
  * (`options.now`) so callers cannot accidentally make a render non-deterministic
  * and so every date below is testable. Everything visual is inline SVG.
+ *
+ * A BAD CLOCK DEGRADES, IT DOES NOT THROW. If `options.now` is not a usable
+ * instant — `NaN`, an `Invalid Date`, `Infinity`, a value that is off-type at
+ * runtime — this module derives NO synthetic dates and fills everything else as
+ * usual (see {@link referenceTimeMs}). It never substitutes a stand-in instant:
+ * a preview counting down to 1970 is the wrong answer that looks like an answer.
+ * Compare `shiftToLightness` / `parseHex` in `@/lib/branding/color`, which throw
+ * on malformed input; the difference is the blast radius. A wrong tint ships to
+ * every visitor of a live page and nobody can see it is wrong, whereas these
+ * bytes are preview-only by construction (the module-graph test below) and the
+ * degraded state is legible on screen — the date-driven bands are simply absent,
+ * and absent from `placeholderTypes`, exactly as for a conference with no dates
+ * set. Throwing would trade a couple of missing sample bands for the whole
+ * preview, on a value the tenant never supplied.
  *
  * MODULE-GRAPH RULE. Placeholder bytes must never reach the public page. This
  * module is importable ONLY from the admin preview route; it is deliberately
@@ -285,6 +302,28 @@ const MS_PER_DAY = 86_400_000
 /** `YYYY-MM-DD` in UTC — the house format for `startDate` / `endDate`. */
 function isoDate(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
+}
+
+/**
+ * The caller's reference instant as finite epoch ms, or `null` when there is no
+ * usable one.
+ *
+ * `null` is the whole reason this exists: `isoDate(NaN)` throws `RangeError:
+ * Invalid time value` from four frames deep, and the module answers a bad clock
+ * by omitting dates rather than by inventing one or by failing the render (see
+ * the header). Duck-typed rather than `instanceof Date`, because preview data
+ * crosses a `postMessage` boundary and a `Date` from another realm fails
+ * `instanceof`; the same branch catches the off-type values TypeScript cannot
+ * (a string, `null`, an object) at the one point where it is cheap to catch them.
+ */
+function referenceTimeMs(now: number | Date): number | null {
+  const ms =
+    typeof now === 'number'
+      ? now
+      : typeof (now as Date | null | undefined)?.getTime === 'function'
+        ? (now as Date).getTime()
+        : Number.NaN
+  return Number.isFinite(ms) ? ms : null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -607,27 +646,33 @@ const SAMPLE_METRICS: readonly ConferenceVanityMetric[] = [
  * conference-level source a FAQ section reads when `source: 'ticketFaqs'` — and
  * exports this list for a preview that also wants to back an `own`-source
  * section whose own items are still empty.
+ *
+ * MARKED AT THE SOURCE, not on the way into the conference: this list is a
+ * public export a consumer renders directly, and part 3 of the honesty contract
+ * is a promise about the objects a UI holds, wherever it got them. An unmarked
+ * item here would be a placeholder that no "Sample content" badge could find.
  */
-export const PLACEHOLDER_FAQ_ITEMS: readonly HomepageFaqItem[] = [
-  {
-    _key: placeholderId('faq-1'),
-    question: 'Sample question: where does the conference take place?',
-    answer:
-      'Placeholder answer. Add your own questions and answers to replace this sample.',
-  },
-  {
-    _key: placeholderId('faq-2'),
-    question: 'Sample question: are tickets refundable?',
-    answer:
-      'Placeholder answer. Add your own questions and answers to replace this sample.',
-  },
-  {
-    _key: placeholderId('faq-3'),
-    question: 'Sample question: will the talks be recorded?',
-    answer:
-      'Placeholder answer. Add your own questions and answers to replace this sample.',
-  },
-]
+export const PLACEHOLDER_FAQ_ITEMS: readonly PlaceholderOf<HomepageFaqItem>[] =
+  [
+    mark<HomepageFaqItem>({
+      _key: placeholderId('faq-1'),
+      question: 'Sample question: where does the conference take place?',
+      answer:
+        'Placeholder answer. Add your own questions and answers to replace this sample.',
+    }),
+    mark<HomepageFaqItem>({
+      _key: placeholderId('faq-2'),
+      question: 'Sample question: are tickets refundable?',
+      answer:
+        'Placeholder answer. Add your own questions and answers to replace this sample.',
+    }),
+    mark<HomepageFaqItem>({
+      _key: placeholderId('faq-3'),
+      question: 'Sample question: will the talks be recorded?',
+      answer:
+        'Placeholder answer. Add your own questions and answers to replace this sample.',
+    }),
+  ]
 
 const SAMPLE_VENUE_NAME = 'Sample Hall'
 const SAMPLE_VENUE_ADDRESS = '1 Example Street'
@@ -641,6 +686,11 @@ export interface PlaceholderOptions {
    * Reference time for the synthetic dates, as epoch ms or a `Date`. REQUIRED:
    * this module never reads the clock, so a preview render is deterministic and
    * every date below is testable.
+   *
+   * A value that is not a usable instant (`NaN`, an `Invalid Date`, `Infinity`,
+   * or something off-type at runtime) is not an error: no synthetic date is
+   * derived, the date-driven bands stay unfilled and stay out of
+   * `placeholderTypes`, and the rest fills as usual. See the header.
    */
   now: number | Date
 }
@@ -677,20 +727,18 @@ export function withPlaceholders(
   conference: Conference,
   options: PlaceholderOptions,
 ): PlaceholderResult {
-  const nowMs =
-    typeof options.now === 'number' ? options.now : options.now.getTime()
+  // `null` when the caller's clock is unusable: every date below is then simply
+  // not invented, and the rest of the fill proceeds. See the header.
+  const nowMs = referenceTimeMs(options.now)
   const brand = placeholderBrand(conference.theme)
   const types = new Set<HomepageSectionType>()
   const patch: Partial<Conference> = {}
 
   // Dates first: the schedule and gallery below date themselves off the result,
   // so a conference with no start date still previews a coherent timeline.
-  const hasStartDate = Boolean(conference.startDate?.trim())
-  const startDate = hasStartDate
-    ? conference.startDate
-    : isoDate(nowMs + PLACEHOLDER_DAYS_AHEAD * MS_PER_DAY)
-  if (!hasStartDate) {
-    patch.startDate = startDate
+  const ownStartDate = conference.startDate?.trim() ? conference.startDate : ''
+  if (!ownStartDate && nowMs !== null) {
+    patch.startDate = isoDate(nowMs + PLACEHOLDER_DAYS_AHEAD * MS_PER_DAY)
     // A one-day event: an end date is what `formatDatesSafe` needs to render a
     // range rather than "TBD".
     patch.endDate = conference.endDate?.trim()
@@ -700,6 +748,10 @@ export function withPlaceholders(
     types.add('homepageSaveTheDate')
     types.add('homepageCountdown')
   }
+  // The date the sample gallery and schedule stamp themselves with. Empty only
+  // in the degraded case above — a gallery tile and a schedule day both treat an
+  // empty date as "no date" and render nothing for it, which beats a made-up one.
+  const startDate = ownStartDate || patch.startDate || ''
 
   // Built ON DEMAND and memoised: two branches below want the same speaker set
   // (the shelf, and the talks that need someone to present them), and the
@@ -740,7 +792,7 @@ export function withPlaceholders(
     // past — so a schedule fixture alone still renders nothing. Filled only
     // when the organizer has not set one, and dated a day BEFORE the caller's
     // reference time because that predicate reads the real clock.
-    if (!conference.programDate?.trim()) {
+    if (!conference.programDate?.trim() && nowMs !== null) {
       patch.programDate = isoDate(nowMs - MS_PER_DAY)
     }
     // Two featured talks, exactly as the band's own selection expects. Only
@@ -759,9 +811,10 @@ export function withPlaceholders(
   }
 
   if (isEmpty(conference.ticketFaqs)) {
-    patch.ticketFaqs = PLACEHOLDER_FAQ_ITEMS.map((item) =>
-      mark({ ...item, _key: item._key! }),
-    )
+    // Already marked at the source, so the exported list and the filled
+    // conference hand a consumer the identical objects. Copied rather than
+    // shared so a caller that mutates its conference cannot reach the export.
+    patch.ticketFaqs = PLACEHOLDER_FAQ_ITEMS.map((item) => ({ ...item }))
     types.add('homepageFaq')
   }
 
