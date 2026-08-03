@@ -1,9 +1,6 @@
 import { NextConfig } from 'next'
 
 const config: NextConfig = {
-  experimental: {
-    useTypeScriptCli: true,
-  },
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
   cacheComponents: true,
   turbopack: {

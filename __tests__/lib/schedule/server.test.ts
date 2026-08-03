@@ -18,7 +18,13 @@ vi.mock('@/lib/conference/sanity', () => ({
 
 const mockFetch = vi.fn<AnyFn>()
 vi.mock('@/lib/sanity/client', () => ({
+  // `getScheduleData` reads through `clientReadUncached` (the editor must not
+  // be served a cached day). Both are wired to the same spy so the tests keep
+  // asserting on one call log.
   clientRead: {
+    fetch: (...args: unknown[]) => mockFetch(...args),
+  },
+  clientReadUncached: {
     fetch: (...args: unknown[]) => mockFetch(...args),
   },
 }))

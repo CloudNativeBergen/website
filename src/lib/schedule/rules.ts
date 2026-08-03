@@ -1,10 +1,8 @@
 import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
-import { ProposalExisting } from '@/lib/proposal/types'
 import {
   calculateEndTime,
   durationBetween,
   endsWithinScheduleDay,
-  getProposalDurationMinutes,
   timesOverlap,
 } from './time'
 
@@ -89,12 +87,7 @@ export function findAvailableTimeSlot(
   const exclude = excludeTalk
     ? matchTalk(excludeTalk.talkId, excludeTalk.startTime)
     : undefined
-  return fitsInTrack(
-    track,
-    startTime,
-    durationMinutes,
-    exclude,
-  )
+  return fitsInTrack(track, startTime, durationMinutes, exclude)
     ? startTime
     : null
 }

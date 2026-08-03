@@ -71,9 +71,7 @@ describe('isTrackIntervalFree', () => {
 
 describe('findAvailableTimeSlot', () => {
   it('returns the slot when the whole footprint is free', () => {
-    expect(
-      findAvailableTimeSlot(track(), 25, '10:00'),
-    ).toBe('10:00')
+    expect(findAvailableTimeSlot(track(), 25, '10:00')).toBe('10:00')
   })
   it('returns null when the talk would straddle a service session', () => {
     // 25-min talk at 12:00 (→12:25) over a 11:30–12:30 lunch.
@@ -87,11 +85,7 @@ describe('findAvailableTimeSlot', () => {
   })
   it('returns null when it overlaps another talk', () => {
     expect(
-      findAvailableTimeSlot(
-        track(talk('a', '10:10', '10:40')),
-        25,
-        '10:00',
-      ),
+      findAvailableTimeSlot(track(talk('a', '10:10', '10:40')), 25, '10:00'),
     ).toBeNull()
   })
 })
@@ -156,11 +150,12 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
     ).toBe(false)
   })
 
-  it('validates the displaced talk with its FORMAT duration, not the stored slot span', () => {
-    // Regression (F3): b is STORED as a 20-min slot (10:00–10:20) but its format
-    // is presentation_45. Validating with the stored span (20m) would pass while
-    // performSwap writes the 45m format duration, overlapping c. Must use the
-    // format duration and REJECT.
+  it('validates the displaced talk with the stored span it will be written at', () => {
+    // CONTRACT CHANGE (manual duration resizing): b is STORED as a 20-min slot
+    // (10:00–10:20) though its format is presentation_45. Validation and
+    // performSwap now BOTH use the stored span, so b returns at 10:00–10:20 and
+    // clears c at 10:30 — check-what-you-write, so this is allowed. Previously
+    // the two disagreed (validate span, write format) and it had to be rejected.
     const source = track(
       talk('a', '10:00', '10:20'),
       talk('c', '10:30', '10:55'),
@@ -178,7 +173,7 @@ describe('canSwapTalks + canPlaceDisplacedBack (bidirectional)', () => {
         '10:00',
         matchTalk('a', '10:00'),
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('rejects the swap when the displaced talk would run past the end of the day (F2)', () => {

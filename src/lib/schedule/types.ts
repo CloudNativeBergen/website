@@ -131,17 +131,29 @@ export interface DragServiceSession {
  * `sourceTimeSlot`); the fresh (`proposal` / `service-session`) variants never
  * do — which is how the `!` assertions in operations.ts are retired.
  */
+/**
+ * A proposal as the scheduler handles it. The split feature lets part of a talk
+ * be placed and the rest stay in the unassigned panel, so a proposal in flight
+ * can carry how many minutes are still unplaced. Named here rather than spelled
+ * out inline at each site — it was already duplicated in three places, and the
+ * casts that hid it were `any`.
+ */
+export type SchedulableProposal = ProposalExisting & {
+  remainingMinutes?: number
+  isPartiallyScheduled?: boolean
+}
+
 export type DragItem =
   | {
       type: 'proposal'
-      proposal: ProposalExisting
+      proposal: SchedulableProposal
       serviceSession?: undefined
       sourceTrackIndex?: undefined
       sourceTimeSlot?: undefined
     }
   | {
       type: 'scheduled-talk'
-      proposal: ProposalExisting
+      proposal: SchedulableProposal
       serviceSession?: undefined
       sourceTrackIndex: number
       sourceTimeSlot: string

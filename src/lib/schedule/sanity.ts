@@ -9,6 +9,7 @@ import {
   createReferenceWithKey,
 } from '@/lib/sanity/helpers'
 import { notifyScheduleChanges, type SlotPlacement } from '@/lib/reminders'
+import { ScheduleStatus } from './types'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
@@ -256,9 +257,13 @@ export async function saveScheduleToSanity(
       const target = await clientWrite.fetch<{
         _type: string
         conferenceRef: string | null
-      } | null>(`*[_id == $id][0]{ _type, "conferenceRef": conference._ref }`, {
-        id: schedule._id,
-      })
+        status: string | null
+      } | null>(
+        `*[_id == $id][0]{ _type, "conferenceRef": conference._ref, status }`,
+        {
+          id: schedule._id,
+        },
+      )
 
       // One generic message for missing, wrong-type, and wrong-conference so a
       // caller can't probe whether an arbitrary document id exists.
@@ -270,10 +275,31 @@ export async function saveScheduleToSanity(
         return { error: 'Schedule not found or not accessible' }
       }
 
+      // ALERT GATE: only the OFFICIAL day is public, so only it may notify
+      // speakers. The editor autosaves a draft every few seconds, so alerting on
+      // a draft would spam every speaker a "your talk moved to …" message for
+      // each drag of a day nobody can see yet; an ARCHIVED day is a superseded
+      // snapshot and equally must stay silent.
+      //
+      // The gate reads the PERSISTED status of the document being written, never
+      // `schedule.status` from the payload: that field is client-supplied, so a
+      // crafted (or merely stale) payload could otherwise force alerts from a
+      // private draft — or silence them on the real program.
+      //
+      // Legacy schedules written before drafts existed carry NO `status`; treat a
+      // missing one as official (same fallback as `getScheduleData`), otherwise
+      // every pre-existing conference would go silent.
+      const notifiesSpeakers =
+        !target.status || target.status === ScheduleStatus.Official
+
       // Capture the CURRENT placements before the overwrite so we can alert
       // speakers whose talk genuinely moved (see `notifyScheduleChanges` after
-      // the commit). Best-effort — never blocks or fails the save.
-      const priorPlacements = await fetchPriorPlacements(schedule._id)
+      // the commit). Best-effort — never blocks or fails the save. Skipped
+      // entirely for a non-official day: nothing will be sent, so nothing needs
+      // to be read.
+      const priorPlacements = notifiesSpeakers
+        ? await fetchPriorPlacements(schedule._id)
+        : null
 
       // Optimistic concurrency: `_rev` is guaranteed present (rejected above),
       // so ALWAYS patch with `ifRevisionId` — a save is rejected if the day
@@ -298,17 +324,19 @@ export async function saveScheduleToSanity(
       // SCHEDULE-CHANGE ALERTS: diff prior vs saved placements and notify the
       // speakers of any talk whose slot actually moved. Never-throw (a failure
       // here must not fail the already-committed save); a run where nothing
-      // moved emits nothing.
+      // moved emits nothing. A draft/archived day never reaches this pass at all
+      // (see the alert gate above).
       //
-      // A `null` prior means the pre-save read FAILED (distinct from an empty
-      // day): diffing against an empty baseline would treat every talk as newly
-      // placed and announce nothing, silently swallowing any real move. Skip the
-      // pass entirely and log so the miss is observable, rather than misfire.
-      if (priorPlacements === null) {
+      // A `null` prior on an official day means the pre-save read FAILED
+      // (distinct from an empty day): diffing against an empty baseline would
+      // treat every talk as newly placed and announce nothing, silently
+      // swallowing any real move. Skip the pass entirely and log so the miss is
+      // observable, rather than misfire.
+      if (notifiesSpeakers && priorPlacements === null) {
         console.warn(
           `Skipping schedule-change alerts for ${schedule._id}: prior placements unavailable (read failed)`,
         )
-      } else {
+      } else if (notifiesSpeakers && priorPlacements) {
         await notifyScheduleChanges({
           prior: priorPlacements,
           next: collectPlacements(schedule.date, schedule.tracks),

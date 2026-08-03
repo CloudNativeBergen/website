@@ -130,7 +130,7 @@ describe('moveProposal — moving an already-scheduled talk', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '11:00'))
     expect(res.ok).toBe(true)
@@ -150,7 +150,7 @@ describe('moveProposal — moving an already-scheduled talk', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(0, '10:00'))
     expect(res.ok).toBe(false)
@@ -169,17 +169,18 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_20'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
     expect(res.ok).toBe(true)
     // a lands in target at 10:00, b returns to source at 10:00
     expect(res.schedule.tracks[1].talks[0].talk?._id).toBe('a')
     expect(res.schedule.tracks[0].talks[0].talk?._id).toBe('b')
-    // endTime is recomputed from b's format duration (talk_25), not the stored
-    // endTime — matching the original performSwap behaviour.
+    // CONTRACT CHANGE (manual duration resizing): the displaced talk keeps its
+    // STORED span (10:00-10:45), it is not recomputed from the format duration.
+    // Recomputing would silently undo a deliberate resize during a swap.
     expect(res.schedule.tracks[0].talks[0].startTime).toBe('10:00')
-    expect(res.schedule.tracks[0].talks[0].endTime).toBe('10:25')
+    expect(res.schedule.tracks[0].talks[0].endTime).toBe('10:45')
   })
 
   it('REJECTS the swap when the displaced talk would overlap the source', () => {
@@ -203,24 +204,24 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_20'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
     expect(res.ok).toBe(false)
     expect(res.schedule).toBe(s)
   })
 
-  it('REJECTS a swap validated with the stored span but applied with the FORMAT duration (F3)', () => {
+  it('validates the displaced talk with the span it will actually be written at (F3)', () => {
     // Source: a(talk_25)@11:00–11:25 leaving, c@11:30–11:55 staying.
     const source = track(
       'A',
       talk('a', '11:00', '11:25'),
       talk('c', '11:30', '11:55'),
     )
-    // Target b is STORED as a 20-min slot (10:00–10:20) but its format is
-    // presentation_45. The old code validated the displaced talk with the stored
-    // span (20m → b back at 11:00–11:20, clears c) then performSwap wrote the 45m
-    // format duration (11:00–11:45, overlapping c). Check-what-you-write ⇒ REJECT.
+    // Target b is STORED as a 20-min slot (10:00–10:20) though its format is
+    // presentation_45. The mismatch this test was written for is gone: validation
+    // and performSwap now BOTH use the stored span, so b returns at 11:00–11:20
+    // and genuinely clears c at 11:30. Check-what-you-write ⇒ ACCEPT.
     const target = track('B', {
       kind: 'talk',
       talk: proposal('b', 'presentation_45'),
@@ -233,22 +234,27 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '11:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '10:00'))).toBe(
-      'invalid',
+      'swap',
     )
     const res = moveProposal(s, dragItem, drop(1, '10:00'))
-    expect(res.ok).toBe(false)
-    expect(res.schedule).toBe(s)
+    expect(res.ok).toBe(true)
+    // b written at its stored 20-min span, clear of c.
+    expect(res.schedule.tracks[0].talks[0]).toMatchObject({
+      startTime: '11:00',
+      endTime: '11:20',
+    })
   })
 
-  it('allows a legal SAME-TRACK swap and leaves non-overlapping slots (F6)', () => {
-    // One track: a(talk_25)@09:00, b STORED as a 60-min slot 09:30–10:30 but
-    // FORMAT talk_25. Pre-fix validated the displaced talk with the stored 60-min
-    // span, which self-collided with b's own vacated slot → this legal swap was
-    // wrongly rejected. With the FORMAT duration plus the vacated-slot exclusions
-    // it succeeds: b→09:00–09:25, a→09:30–09:55, non-overlapping.
+  it('REJECTS a same-track swap that would need a widened slot to be shrunk (F6)', () => {
+    // CONTRACT CHANGE (manual duration resizing): b is STORED as a 60-min slot
+    // 09:30–10:30 though its format is talk_25 — i.e. someone deliberately made
+    // it longer. Swapping it back to 09:00 needs 09:00–10:00, which collides with
+    // a landing at 09:30. The earlier contract recomputed b from its format and
+    // let this through; that silently discarded the resize, so the swap is now
+    // rejected instead. The organizer shrinks b first if they want the swap.
     const s = schedule(
       track('A', talk('a', '09:00', '09:25'), {
         kind: 'talk',
@@ -262,17 +268,14 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
-      'swap',
+      'invalid',
     )
     const res = moveProposal(s, dragItem, drop(0, '09:30'))
-    expect(res.ok).toBe(true)
-    const slots = res.schedule.tracks[0].talks
-    expect(slots.map((t) => t.talk?._id)).toEqual(['b', 'a'])
-    expect(slots[0]).toMatchObject({ startTime: '09:00', endTime: '09:25' })
-    expect(slots[1]).toMatchObject({ startTime: '09:30', endTime: '09:55' })
+    expect(res.ok).toBe(false)
+    expect(res.schedule).toBe(s)
   })
 
   it('REJECTS a same-track swap whose two talks would overlap EACH OTHER (F6 guard)', () => {
@@ -293,7 +296,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '09:30'))).toBe(
       'invalid',
@@ -319,7 +322,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '10:30'))).toBe(
       'invalid',
@@ -339,7 +342,7 @@ describe('moveProposal — swap (bidirectional validation)', () => {
       proposal: proposal('a', 'talk_25'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
       'swap',
@@ -471,9 +474,20 @@ describe('service add/resize/rename', () => {
     expect(resizeScheduleItem(s, 0, 0, 30).ok).toBe(false)
   })
 
-  it('resizeScheduleItem ignores a real talk (not a service session)', () => {
+  it('resizeScheduleItem resizes a real talk, not just a service session', () => {
+    // CONTRACT CHANGE: resizing used to be service-only. Talks are now resizable
+    // (that is the feature), so this asserts the new behaviour AND that the
+    // end-of-day and collision guards still apply to talks.
     const s = schedule(track('A', talk('a', '10:00', '10:25')))
-    expect(resizeScheduleItem(s, 0, 0, 60).ok).toBe(false)
+    const res = resizeScheduleItem(s, 0, 0, 60)
+    expect(res.ok).toBe(true)
+    expect(res.schedule.tracks[0].talks[0]).toMatchObject({
+      startTime: '10:00',
+      endTime: '11:00',
+    })
+
+    const late = schedule(track('A', talk('a', '20:00', '20:25')))
+    expect(resizeScheduleItem(late, 0, 0, 300).ok).toBe(false)
   })
 
   it('renameService updates the placeholder', () => {
@@ -608,7 +622,10 @@ describe('end-of-day clamp (nothing may end after SCHEDULE_END 21:00)', () => {
       proposal: proposal('w', 'workshop_240'),
       sourceTrackIndex: 1,
       sourceTimeSlot: '08:00',
-          durationMinutes: 25,
+      // The STORED span of the source slot (08:00-12:00), which is what the
+      // editor passes at runtime. A fixture that claims 25 here contradicts its
+      // own schedule and quietly defeats the wrap check this test exists for.
+      durationMinutes: 240,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(0, '20:00'))).toBe(
       'invalid',
@@ -657,7 +674,7 @@ describe('F4 — stale / out-of-range drag source', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 9, // out of range
       sourceTimeSlot: '10:00',
-          durationMinutes: 25,
+      durationMinutes: 25,
     }
     expect(classifyProposalDrop(s.tracks, dragItem, drop(1, '11:00'))).toBe(
       'invalid',
@@ -677,7 +694,7 @@ describe('F4 — stale / out-of-range drag source', () => {
       proposal: proposal('a'),
       sourceTrackIndex: 0,
       sourceTimeSlot: '09:00',
-          durationMinutes: 25, // stale
+      durationMinutes: 25, // stale
     }
     const res = moveProposal(s, dragItem, drop(1, '11:00'))
     expect(res.ok).toBe(false)

@@ -7,6 +7,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import {
   DragItem,
   DropPosition,
+  SchedulableProposal,
   EditorSchedule,
   Slot,
   TalkSlot,
@@ -58,10 +59,7 @@ function performSwap(
   const { proposal, sourceTrackIndex, sourceTimeSlot } = dragItem
   const { trackIndex, timeSlot } = dropPosition
 
-  const draggedEndTime = calculateEndTime(
-    timeSlot,
-    dragItem.durationMinutes,
-  )
+  const draggedEndTime = calculateEndTime(timeSlot, dragItem.durationMinutes)
   const targetEndTime = calculateEndTime(
     sourceTimeSlot,
     durationBetween(targetTalk.startTime, targetTalk.endTime),
@@ -178,7 +176,7 @@ export function classifyProposalDrop(
   const durationMinutes =
     dragItem.type === 'scheduled-talk'
       ? dragItem.durationMinutes
-      : ((proposal as any).remainingMinutes ?? getProposalDurationMinutes(proposal))
+      : (proposal.remainingMinutes ?? getProposalDurationMinutes(proposal))
   // Root end-of-day gate: `endsWithinScheduleDay` sums start + duration in raw
   // minutes, so a long talk (e.g. workshop_240 at 20:00) can't wrap past
   // midnight and read as ending before 21:00 the way
@@ -189,7 +187,10 @@ export function classifyProposalDrop(
   // the proposal is already scheduled on THIS day or — via
   // `otherScheduledProposalIds` — on ANY other day.
   // Exception: If the proposal has remainingMinutes > 0, it is a split session and CAN be placed again.
-  if (dragItem.type !== 'scheduled-talk' && !((proposal as any).remainingMinutes > 0)) {
+  if (
+    dragItem.type !== 'scheduled-talk' &&
+    !((proposal.remainingMinutes ?? 0) > 0)
+  ) {
     const scheduledHere = tracks.some((track) =>
       track.talks.some((talk) => talk.talk?._id === proposal._id),
     )
@@ -388,7 +389,7 @@ export function moveProposal(
     timeSlot,
     dragItem.type === 'scheduled-talk'
       ? dragItem.durationMinutes
-      : ((proposal as any).remainingMinutes ?? getProposalDurationMinutes(proposal)),
+      : (proposal.remainingMinutes ?? getProposalDurationMinutes(proposal)),
   )
   const newTracks = [...schedule.tracks]
 
@@ -626,10 +627,10 @@ export function resizeScheduleItem(
   const newEnd = calculateEndTime(talk.startTime, duration)
   // Reject a resize that would grow the session over a following talk/session
   // (exclude the session being resized from the check).
-      const exclude = talk.talk
-        ? matchTalk(talk.talk._id, talk.startTime)
-        : matchService(talk.placeholder ?? '', talk.startTime)
-      if (!isTrackIntervalFree(track, talk.startTime, newEnd, exclude)) {
+  const exclude = talk.talk
+    ? matchTalk(talk.talk._id, talk.startTime)
+    : matchService(talk.placeholder ?? '', talk.startTime)
+  if (!isTrackIntervalFree(track, talk.startTime, newEnd, exclude)) {
     return { schedule, ok: false }
   }
 
@@ -735,7 +736,7 @@ export function duplicateService(
 export function computeUnassigned(
   proposals: ProposalExisting[],
   schedules: ConferenceSchedule[],
-): (ProposalExisting & { remainingMinutes?: number; isPartiallyScheduled?: boolean })[] {
+): SchedulableProposal[] {
   const scheduledMinutes = new Map<string, number>()
 
   for (const schedule of schedules) {

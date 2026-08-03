@@ -18,6 +18,17 @@ import { z } from 'zod'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReferenceWithKey } from '@/lib/sanity/helpers'
 
+/**
+ * A talk reference arrives either expanded (`_id`, from a dereferencing read)
+ * or raw (`_ref`, straight off the stored document). Read whichever is present
+ * through a precise shape rather than casting the payload to `any`.
+ */
+function talkReferenceId(talk: {
+  talk?: { _id?: string; _ref?: string } | null
+}): string | undefined {
+  return talk.talk?._id ?? talk.talk?._ref
+}
+
 export const scheduleRouter = router({
   save: adminProcedure
     .input(SaveScheduleSchema)
@@ -38,7 +49,10 @@ export const scheduleRouter = router({
       // window. Prevents accidental creation of rogue days (e.g. wrong date in a
       // CLI script or a stale client payload with a garbage date).
       if (conference.startDate && conference.endDate && payload.date) {
-        if (payload.date < conference.startDate || payload.date > conference.endDate) {
+        if (
+          payload.date < conference.startDate ||
+          payload.date > conference.endDate
+        ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: `Schedule date ${payload.date} is outside the conference dates (${conference.startDate} – ${conference.endDate}).`,
@@ -66,7 +80,7 @@ export const scheduleRouter = router({
         for (const track of payload.tracks || []) {
           for (const talk of track.talks || []) {
             if (talk.placeholder) continue
-            const ref = talk.talk?._id || (talk.talk as any)?._ref
+            const ref = talkReferenceId(talk)
             if (ref) {
               const status = statuses[ref]
               if (
@@ -139,10 +153,18 @@ export const scheduleRouter = router({
           })
         }
 
-        let query = `*[_type == "schedule" && conference._ref == $conferenceId]`
+        // Build the predicate INSIDE the brackets. Appending to the finished
+        // `*[...]` put the status test outside them, which GROQ reads as an
+        // array ANDed with a comparison rather than a filter — so every
+        // `list({ status })` call returned garbage instead of a filtered set.
+        const predicates = [
+          '_type == "schedule"',
+          'conference._ref == $conferenceId',
+        ]
         if (input.status) {
-          query += ` && status == $status`
+          predicates.push('status == $status')
         }
+        const query = `*[${predicates.join(' && ')}]`
 
         return await clientWrite.fetch(query, {
           conferenceId: conference._id,
@@ -176,9 +198,11 @@ export const scheduleRouter = router({
           message: 'Failed to fetch conference',
         })
       }
-      return await clientWrite.fetch<{ _id: string; _rev: string; version: number }[]>(
+      return await clientWrite.fetch<
+        { _id: string; _rev: string; version: number }[]
+      >(
         `*[_type == "schedule" && conference._ref == $conferenceId]{ _id, _rev, version }`,
-        { conferenceId: conference._id }
+        { conferenceId: conference._id },
       )
     }),
 
@@ -243,7 +267,7 @@ export const scheduleRouter = router({
         for (const track of targetSchedule.tracks || []) {
           for (const talk of track.talks || []) {
             if (talk.placeholder) continue
-            const ref = talk.talk?._id || (talk.talk as any)?._ref
+            const ref = talkReferenceId(talk)
             if (ref) {
               const status = statuses[ref]
               if (

@@ -62,15 +62,8 @@ export async function getConferenceForCurrentDomain({
   domain: string
   error: Error | null
 }> {
-  let domain = '2026.cloudnativedays.no'
-  try {
-    const headersList = await headers()
-    const host = headersList.get('host')
-    if (host) domain = host
-  } catch {
-    // Fallback for CLI/scripts where headers() throws
-    console.warn('headers() failed, falling back to default domain')
-  }
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
   try {
     return await getConferenceForDomain(domain, {
       organizers,
