@@ -16,15 +16,13 @@ const config: StorybookConfig = {
   },
   staticDirs: ['../public'],
   viteFinal: async (config) => {
-    // CloudNativePattern imports static CNCF SVGs that Vite cannot resolve.
-    // Replace with a lightweight stub so stories using BackgroundImage can build.
     config.plugins = config.plugins || []
     // The admin dashboard widgets import their fetchers from the
     // `@/app/(admin)/admin/actions` server-action module ('use server'),
     // which cannot load in the browser bundle. Re-resolve that module id to a
-    // browser-safe mock with a per-story registry (same technique as the
-    // CloudNativePattern stub below). Stories import the registry helpers
-    // from the mock file directly — Vite resolves both to the same module.
+    // browser-safe mock with a per-story registry. Stories import the registry
+    // helpers from the mock file directly — Vite resolves both to the same
+    // module.
     config.plugins.push({
       name: 'mock-admin-actions',
       enforce: 'pre',
@@ -59,7 +57,7 @@ const config: StorybookConfig = {
     // (`@/app/(cfp)/cfp/profile/link-actions`) that pulls in `next/headers` and
     // the server-only auth stack — none of which can load in the browser
     // bundle. Stub it to a browser-safe no-op action so the profile page can be
-    // storied (same aliasing technique as the CloudNativePattern stub below).
+    // storied (the same id-aliasing technique as the mocks above).
     config.plugins.push({
       name: 'mock-cfp-link-actions',
       enforce: 'pre',
@@ -72,27 +70,11 @@ const config: StorybookConfig = {
         }
       },
     })
-    config.plugins.push({
-      name: 'mock-cloud-native-pattern',
-      enforce: 'pre',
-      resolveId(id) {
-        if (
-          id === './CloudNativePattern' ||
-          id.endsWith('/CloudNativePattern')
-        ) {
-          return '\0mock:CloudNativePattern'
-        }
-      },
-      load(id) {
-        if (id === '\0mock:CloudNativePattern') {
-          return `
-            export function CloudNativePattern({ className }) {
-              return null;
-            }
-          `
-        }
-      },
-    })
+    // NOTE: `CloudNativePattern` used to be stubbed out here ("imports static
+    // CNCF SVGs that Vite cannot resolve"). It resolves fine now, and the stub
+    // rendered `null` — so every background-pattern story silently showed an
+    // empty gradient. The Appearance page's pattern tiles ARE the setting's
+    // display, so a story that cannot render them is worse than no story.
     return config
   },
   typescript: {

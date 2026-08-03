@@ -6,6 +6,7 @@ import {
   searchDestinations,
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
+import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
 
 describe('admin destination registry', () => {
   it('has globally unique destination ids', () => {
@@ -59,8 +60,22 @@ describe('admin destination registry', () => {
   it('anchors only appear on settings hrefs', () => {
     for (const destination of ADMIN_DESTINATIONS) {
       if (destination.href.includes('#')) {
-        expect(destination.href.startsWith('/admin/settings#')).toBe(true)
+        // The settings page's own group/tier anchors, and the Appearance
+        // page's section anchors — no other admin page is anchor-addressable.
+        expect(destination.href).toMatch(
+          /^\/admin\/settings(\/appearance)?#[a-z0-9-]+$/,
+        )
       }
+    }
+  })
+
+  it('links every Appearance section to an anchor on the one page', () => {
+    for (const section of APPEARANCE_SECTIONS) {
+      const destination = ADMIN_DESTINATIONS.find(
+        (d) => d.id === `settings-appearance-${section.id}`,
+      )
+      expect(destination?.href).toBe(`/admin/settings/appearance#${section.id}`)
+      expect(destination?.kind).toBe('setting')
     }
   })
 })

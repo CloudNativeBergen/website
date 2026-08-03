@@ -71,10 +71,19 @@ function Card({ theme }: { theme?: ConferenceTheme | null }) {
   )
 }
 
-/** Card body: no override → house-palette note. */
+/**
+ * Card body: no override stored. The card still shows the real palette — the
+ * house defaults, which is exactly what visitors see — with a neutral
+ * provenance badge. It must never degrade to "using the default palette".
+ */
 export const CardDefault: Story = {
   args: {},
   render: () => <Card theme={undefined} />,
+}
+
+export const CardDefaultDark: Story = {
+  ...CardDefault,
+  parameters: { theme: 'dark' },
 }
 
 /** Card body: a themed conference shows its two swatches + hex values. */
