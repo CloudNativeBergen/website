@@ -10,6 +10,7 @@ import type { OrganizerTeam } from '@/lib/teams/types'
 import type { ConferenceVisibility } from './visibility'
 import type { BackgroundPattern } from './backgroundPattern'
 import type { HomepageSection } from '@/lib/homepage/sections'
+import type { LifecycleStatus } from '@/lib/homepage/lifecycle'
 
 export interface CrmActivityThreshold {
   _key?: string
@@ -234,4 +235,21 @@ export interface Conference {
    * `...` spread; sections carry only their own presentation config.
    */
   homepageSections?: HomepageSection[]
+  /**
+   * Homepage lifecycle OVERRIDE (F5). ABSENT (every legacy conference) means the
+   * stage is derived from the CFP / programme / event dates — see
+   * `@/lib/homepage/lifecycle`. The two values here are the only states no date
+   * can imply: an event is `cancelled` or `archived` because a human says so.
+   * Both REPLACE the homepage rather than adding a banner to it. Projected by
+   * the main conference projection's `...` spread.
+   */
+  lifecycleStatus?: LifecycleStatus
+  /** Headline for the cancelled/archived notice. Blank → a derived default. */
+  lifecycleHeadline?: string
+  /** Body copy for the cancelled/archived notice. Plain text, newline-aware. */
+  lifecycleMessage?: string
+  /** Label for the single link on the notice (e.g. "Read the full statement"). */
+  lifecycleLinkLabel?: string
+  /** Destination for the notice link. Same safe-link rules as hero CTAs. */
+  lifecycleLinkHref?: string
 }

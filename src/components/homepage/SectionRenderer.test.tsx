@@ -75,6 +75,14 @@ vi.mock('@/components/homepage/Countdown', () => ({
 vi.mock('@/components/homepage/VenueBlock', () => ({
   VenueBlock: () => <div data-testid="venue" />,
 }))
+vi.mock('@/components/homepage/SaveTheDate', () => ({
+  SaveTheDate: () => <div data-testid="save-the-date" />,
+}))
+vi.mock('@/components/homepage/LifecycleNotice', () => ({
+  LifecycleNotice: ({ status }: { status: string }) => (
+    <div data-testid="lifecycle-notice" data-status={status} />
+  ),
+}))
 
 import { HomepageSectionRenderer } from './SectionRenderer'
 import { getDefaultSections, type HomepageSection } from '@/lib/homepage'
@@ -87,7 +95,25 @@ function makeConference(overrides: Partial<Conference> = {}): Conference {
     programDate: '2000-01-01',
     endDate: '2999-01-01',
     registrationEnabled: false,
-    schedules: [{ _id: 's1' }],
+    schedules: [
+      {
+        _id: 's1',
+        date: '2999-01-01',
+        tracks: [
+          {
+            trackTitle: 'Track 1',
+            trackDescription: '',
+            talks: [
+              {
+                startTime: '09:00',
+                endTime: '09:45',
+                talk: { _id: 't1', status: 'confirmed' },
+              },
+            ],
+          },
+        ],
+      },
+    ],
     featuredSpeakers: [{ _id: 'sp1', name: 'Speaker' }],
     organizers: [{ _id: 'o1', name: 'Org' }],
     featuredGalleryImages: [{ _id: 'g1' }],
@@ -310,5 +336,68 @@ describe('HomepageSectionRenderer — F4 blocks', () => {
       <HomepageSectionRenderer sections={sections} conference={conference} />,
     )
     expect(container.querySelector('[data-testid="countdown"]')).toBeNull()
+  })
+})
+
+describe('HomepageSectionRenderer — lifecycle states', () => {
+  it('inserts the save-the-date band on a day-one conference', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+      featuredSpeakers: [],
+      featuredGalleryImages: [],
+    })
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={getDefaultSections(conference)}
+        conference={conference}
+      />,
+    )
+    const ids = testIdsInOrder(container)
+    expect(ids[0]).toBe('hero')
+    expect(ids[1]).toBe('save-the-date')
+  })
+
+  for (const status of ['cancelled', 'archived'] as const) {
+    it(`REPLACES the whole page for a ${status} conference`, () => {
+      const conference = makeConference({ lifecycleStatus: status })
+      const { container } = render(
+        <HomepageSectionRenderer
+          sections={getDefaultSections(conference)}
+          conference={conference}
+        />,
+      )
+      expect(testIdsInOrder(container)).toEqual(['lifecycle-notice'])
+      expect(
+        container
+          .querySelector('[data-testid="lifecycle-notice"]')
+          ?.getAttribute('data-status'),
+      ).toBe(status)
+    })
+
+    it(`ignores a STORED composition for a ${status} conference`, () => {
+      const conference = makeConference({ lifecycleStatus: status })
+      const sections = [
+        { _key: '1', _type: 'homepageHero' },
+        { _key: '2', _type: 'homepageSponsors' },
+      ] as unknown as HomepageSection[]
+      const { container } = render(
+        <HomepageSectionRenderer sections={sections} conference={conference} />,
+      )
+      expect(testIdsInOrder(container)).toEqual(['lifecycle-notice'])
+    })
+  }
+
+  it('drops the program band when the published schedule holds no talks', () => {
+    const conference = makeConference({
+      schedules: [{ _id: 's1', date: '2999-01-01', tracks: [] }] as never,
+    })
+    const sections = [
+      { _key: '1', _type: 'homepageProgramHighlights' },
+    ] as unknown as HomepageSection[]
+    const { container } = render(
+      <HomepageSectionRenderer sections={sections} conference={conference} />,
+    )
+    expect(container.querySelector('[data-testid="program"]')).toBeNull()
   })
 })

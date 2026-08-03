@@ -27,6 +27,10 @@ import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEdito
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { ActivationChecklist } from '@/components/admin/ActivationChecklist'
 import { resolveHomepageSections } from '@/lib/homepage'
+// Shared label map — the settings page previously carried its own copy, which
+// silently went stale (it was missing FAQ, Countdown and Venue) and rendered raw
+// `_type` strings for them.
+import { SECTION_LABELS } from '@/lib/homepage/editor'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
 import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
@@ -159,17 +163,6 @@ export default async function AdminSettings() {
   const usingDefaultHomepage =
     !conference.homepageSections || conference.homepageSections.length === 0
   const homepageSectionsForEditor = resolveHomepageSections(conference)
-  const HOMEPAGE_SECTION_LABELS: Record<string, string> = {
-    homepageHero: 'Hero',
-    homepageFeaturedSpeakers: 'Featured Speakers',
-    homepageProgramHighlights: 'Program Highlights',
-    homepageOrganizers: 'Organizers',
-    homepageSponsors: 'Sponsors',
-    homepageGallery: 'Photo Gallery',
-    homepageMetrics: 'Vanity Metrics',
-    homepageCtaBanner: 'Call-to-action Banner',
-    homepageRichText: 'Rich Text',
-  }
 
   return (
     <div className="space-y-6">
@@ -797,7 +790,7 @@ export default async function AdminSettings() {
                   >
                     <span>
                       {idx + 1}.{' '}
-                      {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
+                      {SECTION_LABELS[section._type] ?? section._type}
                     </span>
                     {section.hidden ? (
                       <StatusBadge label="Hidden" color="yellow" />

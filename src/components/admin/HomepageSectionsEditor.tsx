@@ -842,6 +842,34 @@ function SectionConfig({
     )
   }
 
+  if (row._type === 'homepageSaveTheDate') {
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Save the date”)"
+          aria-label="Save the date heading"
+          className={inputClass}
+        />
+        <textarea
+          rows={2}
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Description (optional — defaults to the dates and city)"
+          aria-label="Save the date description"
+          className={inputClass}
+        />
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Shows the dates, venue, a countdown, and what happens next (call for
+          speakers, programme, tickets) from the dates already configured. Steps
+          with no date are left out rather than shown as unknown.
+        </p>
+      </div>
+    )
+  }
+
   if (row._type === 'homepageMetrics') {
     return (
       <div>

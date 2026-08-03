@@ -57,17 +57,12 @@ function Unit({ value, label }: { value: string; label: string }) {
   )
 }
 
-export function Countdown({
-  targetMs,
-  heading,
-  liveMessage,
-}: {
-  targetMs: number
-  heading?: string
-  liveMessage?: string
-}) {
-  // `null` = not yet measured on the client. Server render and the first client
-  // render both see `null`, guaranteeing identical markup (the placeholder).
+/**
+ * Milliseconds remaining until `targetMs`, or `null` until the client has
+ * measured. Server render and first client render both see `null` — see the
+ * SSR-safety note on this module.
+ */
+function useCountdownRemaining(targetMs: number): number | null {
   const [remaining, setRemaining] = useState<number | null>(null)
 
   useEffect(() => {
@@ -83,18 +78,17 @@ export function Countdown({
     return () => clearInterval(id)
   }, [targetMs])
 
-  // Post-hydration, once the target has passed.
-  if (remaining !== null && remaining <= 0) {
-    if (!liveMessage) return null
-    return (
-      <section className="py-20 sm:py-32">
-        <Container>
-          <p className={headingClass}>{liveMessage}</p>
-        </Container>
-      </section>
-    )
-  }
+  return remaining
+}
 
+/** The bare d/h/m/s grid, with no section chrome. */
+function CountdownUnits({
+  remaining,
+  className = 'mx-auto grid max-w-2xl grid-cols-4 gap-4 sm:gap-8',
+}: {
+  remaining: number | null
+  className?: string
+}) {
   const parts = remaining === null ? null : countdownBreakdown(remaining)
   const units: { label: string; value: string }[] = [
     {
@@ -114,20 +108,60 @@ export function Countdown({
       value: parts ? String(parts.seconds).padStart(2, '0') : '--',
     },
   ]
+  return (
+    <div className={className} role="timer" aria-live="off">
+      {units.map((u) => (
+        <Unit key={u.label} value={u.value} label={u.label} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The countdown grid WITHOUT the section wrapper, for embedding inside another
+ * band (the save-the-date block). Hides itself once the target has passed —
+ * a counter reading all zeros on a finished event is exactly the kind of
+ * undefined empty state this work exists to remove.
+ */
+export function CountdownStrip({ targetMs }: { targetMs: number }) {
+  const remaining = useCountdownRemaining(targetMs)
+  if (remaining !== null && remaining <= 0) return null
+  return (
+    <CountdownUnits
+      remaining={remaining}
+      className="mx-auto grid max-w-lg grid-cols-4 gap-3 sm:gap-6"
+    />
+  )
+}
+
+export function Countdown({
+  targetMs,
+  heading,
+  liveMessage,
+}: {
+  targetMs: number
+  heading?: string
+  liveMessage?: string
+}) {
+  const remaining = useCountdownRemaining(targetMs)
+
+  // Post-hydration, once the target has passed.
+  if (remaining !== null && remaining <= 0) {
+    if (!liveMessage) return null
+    return (
+      <section className="py-20 sm:py-32">
+        <Container>
+          <p className={headingClass}>{liveMessage}</p>
+        </Container>
+      </section>
+    )
+  }
 
   return (
     <section className="py-20 sm:py-32">
       <Container>
         {heading ? <h2 className={headingClass}>{heading}</h2> : null}
-        <div
-          className="mx-auto grid max-w-2xl grid-cols-4 gap-4 sm:gap-8"
-          role="timer"
-          aria-live="off"
-        >
-          {units.map((u) => (
-            <Unit key={u.label} value={u.value} label={u.label} />
-          ))}
-        </div>
+        <CountdownUnits remaining={remaining} />
       </Container>
     </section>
   )
