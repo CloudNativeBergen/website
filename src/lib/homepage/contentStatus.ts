@@ -304,17 +304,43 @@ function isProgramPublished(conference: Conference, now: number): boolean {
   return now >= new Date(conference.programDate).getTime()
 }
 
-/** Confirmed talks in the published schedules — what the programme band counts. */
-function confirmedTalkCount(conference: Conference): number {
-  let count = 0
+/** What the programme band will actually draw, counted the way it draws it. */
+interface ProgrammeTally {
+  /**
+   * Booked slots holding a confirmed talk. This is the band's OWN headline
+   * number: `calculateProgramStats` (`ProgramHighlights.tsx`) pushes one entry
+   * per slot and prints it as "N+ Sessions".
+   */
+  sessions: number
+  /**
+   * DISTINCT confirmed talks behind those slots. Lower than `sessions` when a
+   * talk is booked more than once — a repeated workshop is two sessions and one
+   * talk, and calling it "2 confirmed talks" invents a talk the organizer does
+   * not have.
+   */
+  talks: number
+}
+
+/**
+ * `calculateProgramStats` (`ProgramHighlights.tsx:257-327`): every slot whose
+ * talk is `confirmed`, across every track of every schedule. No dedupe there —
+ * two bookings of one talk are two sessions and draw two cards — so `sessions`
+ * is transcribed the same way, and the distinct-talk number is tracked
+ * ALONGSIDE it rather than replacing it.
+ */
+function tallyProgramme(conference: Conference): ProgrammeTally {
+  const talkIds = new Set<string>()
+  let sessions = 0
   for (const schedule of conference.schedules ?? []) {
     for (const track of schedule.tracks ?? []) {
       for (const slot of track.talks ?? []) {
-        if (slot.talk?.status === 'confirmed') count++
+        if (slot.talk?.status !== 'confirmed') continue
+        sessions++
+        talkIds.add(String(slot.talk._id))
       }
     }
   }
-  return count
+  return { sessions, talks: talkIds.size }
 }
 
 /**
@@ -324,7 +350,8 @@ function confirmedTalkCount(conference: Conference): number {
  */
 function hasProgramme(conference: Conference, now: number): boolean {
   return (
-    isProgramPublished(conference, now) && confirmedTalkCount(conference) > 0
+    isProgramPublished(conference, now) &&
+    tallyProgramme(conference).sessions > 0
   )
 }
 
@@ -379,6 +406,44 @@ function tallySponsors(conference: Conference): SponsorTally {
     )
   }
   return { shown, untiered, tiers: tiers.size }
+}
+
+/** `MetricsBlock.tsx:29` — `metrics.slice(0, 6)`. Six cells, no more. */
+const METRICS_SHOWN_LIMIT = 6
+
+/** What the metrics band will actually draw, counted the way it slices. */
+interface MetricsTally {
+  /** Cells the band draws WITH something in them. */
+  shown: number
+  /** Entries on file. The band's hide guard reads this, not `shown`. */
+  stored: number
+  /** Entries past the sixth: stored, and never drawn. */
+  overflow: number
+  /** Entries inside the six with neither label nor value — an empty cell. */
+  blank: number
+}
+
+/**
+ * `MetricsBlock.tsx:18-39`: the band renders the FIRST SIX entries, one cell
+ * each, and filters nothing — so an entry with no label and no value still
+ * takes one of the six and draws a cell with nothing in it. Both facts cut the
+ * number an organizer can actually count on the page, and neither is visible in
+ * `vanityMetrics.length`.
+ */
+function tallyMetrics(conference: Conference): MetricsTally {
+  const metrics = conference.vanityMetrics ?? []
+  let shown = 0
+  let blank = 0
+  for (const metric of metrics.slice(0, METRICS_SHOWN_LIMIT)) {
+    if (metric?.label?.trim() || metric?.value?.trim()) shown++
+    else blank++
+  }
+  return {
+    shown,
+    blank,
+    stored: metrics.length,
+    overflow: Math.max(0, metrics.length - METRICS_SHOWN_LIMIT),
+  }
 }
 
 /**
@@ -460,8 +525,10 @@ function status(
 
 /**
  * A collection-backed band: renders iff the collection is non-empty. Covers
- * featured speakers, organizers, gallery, metrics and FAQ, whose guards differ
- * only in which collection they read.
+ * featured speakers, organizers, gallery and FAQ, whose guards differ
+ * only in which collection they read. (Metrics and sponsors need MORE than
+ * this — the band draws fewer than it holds — so they build their status by
+ * hand from a tally.)
  */
 function collectionStatus(
   type: HomepageSectionType,
@@ -545,8 +612,16 @@ export function sectionContentStatus(
 
     // SectionRenderer.tsx:316 — `lifecycle.content.hasProgramme`, which is
     // "published AND at least one confirmed talk", not "a schedule exists".
+    //
+    // The COUNT is sessions, not talks, because sessions is what the band
+    // draws: `ProgramHighlights.tsx` prints "N+ Sessions" from one entry per
+    // booked slot, and a talk booked twice really does get two slots, two cards
+    // and two tallies there. Counting the same slots and calling them "confirmed
+    // talks" was the lie — it reported two talks to a conference that has one.
+    // Both numbers are now carried: `count` is what the page will say, and the
+    // summary names the distinct talks behind it when the two differ.
     case 'homepageProgramHighlights': {
-      const talks = confirmedTalkCount(conference)
+      const { sessions, talks } = tallyProgramme(conference)
       if (!hasProgramme(conference, now)) {
         const published = isProgramPublished(conference, now)
         return status(
@@ -554,11 +629,16 @@ export function sectionContentStatus(
           'empty-hides',
           source('programme'),
           {
-            count: talks,
-            countLabel: 'confirmed talks',
+            // Nothing renders, so nothing is counted — the scheduled sessions
+            // of an unpublished programme belong in the summary, where they
+            // read as "waiting", not as content already on the page.
+            count: 0,
+            countLabel: 'sessions',
             summary: published
               ? 'No confirmed talks yet'
-              : 'Programme not published',
+              : sessions > 0
+                ? `${pluralize(sessions, 'sessions')} waiting to be published`
+                : 'Programme not published',
             reason: published
               ? 'Hidden on the live site — the published schedule holds no confirmed talks.'
               : 'Hidden on the live site — the programme date has not arrived, so no schedule is published yet.',
@@ -566,9 +646,12 @@ export function sectionContentStatus(
         )
       }
       return status('homepageProgramHighlights', 'ready', source('programme'), {
-        count: talks,
-        countLabel: 'confirmed talks',
-        summary: pluralize(talks, 'confirmed talks'),
+        count: sessions,
+        countLabel: 'sessions',
+        summary:
+          talks === sessions
+            ? pluralize(sessions, 'sessions')
+            : `${pluralize(talks, 'confirmed talks')} in ${pluralize(sessions, 'sessions')}`,
       })
     }
 
@@ -642,15 +725,55 @@ export function sectionContentStatus(
         'Hidden on the live site — this band renders nothing without featured gallery images.',
       )
 
-    // MetricsBlock.tsx:19 — no metrics, no band. (It shows at most six.)
-    case 'homepageMetrics':
-      return collectionStatus(
-        'homepageMetrics',
-        source('vanity-metrics'),
-        conference.vanityMetrics?.length ?? 0,
-        'metrics',
-        'Hidden on the live site — this band renders nothing until vanity metrics are added.',
-      )
+    // MetricsBlock.tsx:19 — no metrics, no band. The HIDE guard reads the raw
+    // array, but the band then draws only the first six, and draws an empty
+    // cell for an entry with no label and no value. So a band CAN render while
+    // showing fewer numbers than are stored — or none at all — which is the
+    // sponsors bug in a second place: the count is the cells with something in
+    // them, and everything the band leaves out is named in the reason.
+    case 'homepageMetrics': {
+      const { shown, stored, overflow, blank } = tallyMetrics(conference)
+      const src = source('vanity-metrics')
+      if (stored === 0) {
+        return status('homepageMetrics', 'empty-hides', src, {
+          count: 0,
+          countLabel: 'metrics',
+          summary: 'No metrics yet',
+          reason:
+            'Hidden on the live site — this band renders nothing until vanity metrics are added.',
+        })
+      }
+      if (shown === 0) {
+        return status('homepageMetrics', 'degraded', src, {
+          count: 0,
+          countLabel: 'metrics',
+          summary: `${pluralize(stored, 'metrics')}, all blank`,
+          reason:
+            'Renders as an empty band — every metric on file is missing both its label and its value.',
+        })
+      }
+      const leftOut = [
+        overflow > 0
+          ? `${pluralize(overflow, 'metrics')} past the sixth ${overflow === 1 ? 'is' : 'are'} not drawn — the band shows at most six.`
+          : null,
+        blank > 0
+          ? `${pluralize(blank, 'metrics')} with no label or value ${blank === 1 ? 'draws' : 'draw'} an empty cell.`
+          : null,
+      ].filter(Boolean)
+      if (leftOut.length > 0) {
+        return status('homepageMetrics', 'degraded', src, {
+          count: shown,
+          countLabel: 'metrics',
+          summary: pluralize(shown, 'metrics'),
+          reason: leftOut.join(' '),
+        })
+      }
+      return status('homepageMetrics', 'ready', src, {
+        count: shown,
+        countLabel: 'metrics',
+        summary: pluralize(shown, 'metrics'),
+      })
+    }
 
     // CtaBanner.tsx has no early return: the heading always renders. The button
     // needs BOTH a label and a href (`CtaBanner.tsx:24`), so half a button is a

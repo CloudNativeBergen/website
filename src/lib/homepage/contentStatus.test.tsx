@@ -94,6 +94,46 @@ function scheduleWith(status: 'confirmed' | 'submitted') {
   ] as never
 }
 
+/**
+ * ONE confirmed talk, booked into TWO slots — a repeated workshop, and the
+ * shape that makes "sessions" and "talks" different numbers.
+ */
+function doubleBookedSchedule() {
+  const talk = {
+    _id: 't1',
+    status: 'confirmed',
+    title: 'A talk',
+    format: 'presentation_25',
+    speakers: [],
+    topics: [],
+  }
+  return [
+    {
+      _id: 's1',
+      date: PAST,
+      tracks: [
+        {
+          trackTitle: 'Track 1',
+          trackDescription: '',
+          talks: [
+            { startTime: '09:00', endTime: '09:45', talk },
+            { startTime: '13:00', endTime: '13:45', talk },
+          ],
+        },
+      ],
+    },
+  ] as never
+}
+
+/** N metrics, `label`/`value` numbered; `blankAt` indices carry neither. */
+function metrics(count: number, blankAt: number[] = []) {
+  return Array.from({ length: count }, (_, i) =>
+    blankAt.includes(i)
+      ? { label: '', value: '' }
+      : { label: `Metric ${i}`, value: `${i}` },
+  ) as never
+}
+
 interface Case {
   /** Names the case in the test output. */
   name: string
@@ -204,6 +244,17 @@ const CASES: Record<HomepageSectionType, Case[]> = {
       }),
       willHide: false,
     },
+    {
+      // One talk, two bookings — the band draws it twice and counts it twice.
+      // Renders, and the count assertions below pin WHICH number it reports.
+      name: 'one talk booked in two slots',
+      section: { _key: 'p', _type: 'homepageProgramHighlights' },
+      conference: bareConference({
+        programDate: PAST,
+        schedules: doubleBookedSchedule(),
+      }),
+      willHide: false,
+    },
   ],
 
   homepageOrganizers: [
@@ -305,6 +356,15 @@ const CASES: Record<HomepageSectionType, Case[]> = {
       conference: bareConference({
         vanityMetrics: [{ label: 'Attendees', value: '500+' }] as never,
       }),
+      willHide: false,
+    },
+    {
+      // `MetricsBlock` hides on the RAW array and filters nothing after that,
+      // so a stored-but-blank metric draws an empty cell inside a band that is
+      // very much rendered. Not a hide — degraded, and the status says so.
+      name: 'a metric with no label and no value — an empty cell, not a hide',
+      section: { _key: 'm', _type: 'homepageMetrics' },
+      conference: bareConference({ vanityMetrics: metrics(1, [0]) }),
       willHide: false,
     },
   ],
@@ -727,6 +787,122 @@ describe('counts and summaries', () => {
       bareConference({ startDate: PAST, endDate: PAST }),
     )
     expect(postEvent.reason).toContain('empty band')
+  })
+
+  /**
+   * The metrics twin of the sponsors regression. `MetricsBlock` draws the FIRST
+   * SIX entries and filters nothing after that, so `vanityMetrics.length`
+   * over-promises twice over: once for everything past the sixth, and once for
+   * an entry with neither a label nor a value, which takes one of the six and
+   * draws a cell with nothing in it. The expected number is read out of the
+   * RENDERED band — cells that came out with text — so this can only pass by
+   * being right about what the band draws.
+   */
+  it('counts only the metrics the band actually draws', () => {
+    const section: HomepageSection = { _key: 'm', _type: 'homepageMetrics' }
+    // Nine on file, the fourth of them blank.
+    const conference = bareConference({ vanityMetrics: metrics(9, [3]) })
+
+    const status = sectionContentStatus(section, conference)
+    const { container } = render(
+      <HomepageSectionRenderer sections={[section]} conference={conference} />,
+    )
+    const cells = [...container.querySelectorAll('dl > div')]
+    const drawn = cells.filter((cell) => cell.textContent?.trim())
+
+    // Sanity on the fixture: the cap is real, and the blank entry spends one of
+    // the six cells on nothing.
+    expect(cells.length).toBe(6)
+    expect(drawn.length).toBe(5)
+
+    expect(status.count).toBe(drawn.length)
+    expect(status.summary).toBe(`${drawn.length} metrics`)
+    // Numbers on file that the page will not show: thinner than intended, and
+    // the reason has to name both ways it is thinner.
+    expect(status.kind).toBe('degraded')
+    expect(status.reason).toContain('3 metrics past the sixth')
+    expect(status.reason).toContain('1 metric with no label or value')
+  })
+
+  it('is ready — not degraded — when every metric draws', () => {
+    const status = sectionContentStatus(
+      { _key: 'm', _type: 'homepageMetrics' },
+      bareConference({ vanityMetrics: metrics(6) }),
+    )
+    expect(status.kind).toBe('ready')
+    expect(status.count).toBe(6)
+    expect(status.summary).toBe('6 metrics')
+    expect(status.reason).toBeUndefined()
+  })
+
+  it('says what a metrics band of blanks actually looks like', () => {
+    const status = sectionContentStatus(
+      { _key: 'm', _type: 'homepageMetrics' },
+      bareConference({ vanityMetrics: metrics(2, [0, 1]) }),
+    )
+    // The band renders — `MetricsBlock` hides on the raw array — but there is
+    // nothing in it to read.
+    expect(status.willHide).toBe(false)
+    expect(status.count).toBe(0)
+    expect(status.summary).toBe('2 metrics, all blank')
+    expect(status.reason).toContain('empty band')
+  })
+
+  /**
+   * THE programme regression: one talk booked into two slots was reported as
+   * "2 confirmed talks", inventing a talk the conference does not have.
+   * `ProgramHighlights` counts one entry per BOOKED SLOT and prints it as
+   * "N+ Sessions" — two sessions, one talk — so the number is parsed back out
+   * of the band's own Sessions tile rather than restated here.
+   */
+  it('counts programme sessions the way the band prints them', () => {
+    const section: HomepageSection = {
+      _key: 'p',
+      _type: 'homepageProgramHighlights',
+    }
+    const conference = bareConference({
+      programDate: PAST,
+      schedules: doubleBookedSchedule(),
+    })
+
+    const status = sectionContentStatus(section, conference)
+    const { container } = render(
+      <HomepageSectionRenderer sections={[section]} conference={conference} />,
+    )
+    const sessionsTile = [...container.querySelectorAll('dt')].find(
+      (node) => node.textContent === 'Sessions',
+    )
+    const printed = Number(
+      sessionsTile?.nextElementSibling?.textContent?.replace('+', ''),
+    )
+
+    // Sanity on the fixture: the real band really does draw the one talk twice.
+    expect(printed).toBe(2)
+    expect(
+      [...container.querySelectorAll('h3')].filter(
+        (node) => node.textContent === 'A talk',
+      ).length,
+    ).toBe(2)
+
+    expect(status.count).toBe(printed)
+    expect(status.countLabel).toBe('sessions')
+    // Both numbers, and neither of them a talk the organizer has not written.
+    expect(status.summary).toBe('1 confirmed talk in 2 sessions')
+    expect(status.kind).toBe('ready')
+  })
+
+  it('counts nothing for a programme the page will not draw yet', () => {
+    const status = sectionContentStatus(
+      { _key: 'p', _type: 'homepageProgramHighlights' },
+      bareConference({
+        programDate: FUTURE,
+        schedules: scheduleWith('confirmed'),
+      }),
+    )
+    expect(status.willHide).toBe(true)
+    // Scheduled, not drawn — so it is in the summary, not in the count.
+    expect(status.count).toBe(0)
+    expect(status.summary).toBe('1 session waiting to be published')
   })
 })
 
