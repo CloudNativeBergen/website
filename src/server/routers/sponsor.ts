@@ -127,6 +127,7 @@ import {
 } from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
+import { isBillingComplete } from '@/lib/sponsor-crm/billing'
 import {
   canTransition,
   checkPipelineState,
@@ -756,6 +757,14 @@ export const sponsorRouter = router({
         } else if (input?.hasContactInfo === true) {
           filtered = filtered.filter(
             (s) => s.contactPersons && s.contactPersons.length > 0,
+          )
+        }
+
+        // Filter: billing complete enough to invoice (see evaluateBilling —
+        // spans the sponsor document, so it cannot live in the GROQ filter)
+        if (input?.billingComplete !== undefined) {
+          filtered = filtered.filter(
+            (s) => isBillingComplete(s) === input.billingComplete,
           )
         }
 

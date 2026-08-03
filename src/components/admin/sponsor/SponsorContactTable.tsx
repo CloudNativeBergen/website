@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { ContactPerson } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
@@ -8,13 +8,18 @@ import {
   BuildingOffice2Icon,
   ClipboardIcon,
   PencilIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import { CheckIcon } from '@heroicons/react/24/solid'
+import { CheckIcon, StarIcon } from '@heroicons/react/24/solid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { SponsorContactEditor } from './SponsorContactEditor'
 import { ModalShell } from '@/components/ModalShell'
+import { StatusBadge } from '@/components/StatusBadge'
+import { getSponsorStatusBadgeProps } from '@/components/admin/sponsor-crm/utils'
+import { evaluateBilling, invoiceFormatLabel } from '@/lib/sponsor-crm/billing'
+import type { BillingReadiness } from '@/lib/sponsor-crm/billing'
 import {
   TableContainer,
   TableHeader,
@@ -27,6 +32,8 @@ import {
 
 interface SponsorContactTableProps {
   sponsors: SponsorForConferenceExpanded[]
+  /** Copy shown when the current filters match nothing. */
+  emptyDescription?: string
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -55,6 +62,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
       onClick={() => copyToClipboard(email)}
       className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
+      aria-label={copied ? 'Copied' : `Copy ${email}`}
     >
       {copied ? (
         <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -65,36 +73,122 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   )
 }
 
+/**
+ * Billing details as recorded — never as guessed. An absent invoice format
+ * renders as an explicit gap rather than defaulting to "PDF via email", and
+ * anything `evaluateBilling` flags (including an EHF sponsor with no
+ * organisation number) is called out inline.
+ */
+const BillingCell = ({
+  sfc,
+  billing,
+}: {
+  sfc: SponsorForConferenceExpanded
+  billing: BillingReadiness
+}) => {
+  const formatLabel = invoiceFormatLabel(sfc.billing?.invoiceFormat)
+
+  return (
+    <div className="space-y-1">
+      {sfc.billing?.email ? (
+        <div className="flex items-center text-sm text-gray-900 dark:text-white">
+          <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+          <a
+            href={`mailto:${sfc.billing.email}`}
+            className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+            title={sfc.billing.email}
+          >
+            {sfc.billing.email}
+          </a>
+          <CopyEmailButton email={sfc.billing.email} />
+        </div>
+      ) : (
+        <div className="text-sm text-gray-500 italic dark:text-gray-400">
+          {billing.hasBilling ? 'No billing email' : 'No billing information'}
+        </div>
+      )}
+
+      {/* Only rendered when a format is actually recorded — an unset format is
+          reported once, by the gap line below, instead of twice. */}
+      {formatLabel && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {formatLabel}
+        </div>
+      )}
+
+      {sfc.billing?.reference && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          Ref: {sfc.billing.reference}
+        </div>
+      )}
+
+      {sfc.billing?.comments && (
+        <div
+          className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400"
+          title={sfc.billing.comments}
+        >
+          {sfc.billing.comments}
+        </div>
+      )}
+
+      {!billing.complete && billing.hasBilling && (
+        <div
+          className="flex items-start gap-1 text-xs font-medium text-amber-700 dark:text-amber-500"
+          title={billing.gaps.map((gap) => gap.message).join('\n')}
+        >
+          <ExclamationTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Missing{' '}
+            {billing.gaps.map((gap) => gap.label.toLowerCase()).join(', ')}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface ContactRow {
   sfc: SponsorForConferenceExpanded
   contact: ContactPerson
+  billing: BillingReadiness
+  /** First row of this sponsor's group — carries the sponsor-level details. */
   isFirstContactForSponsor: boolean
 }
 
+/**
+ * Orders a sponsor's contacts so the primary one leads. `contactPersons` is a
+ * plain Sanity array whose order is incidental, so without this the row that
+ * carries the sponsor's billing details could be an assistant rather than the
+ * person the contract names.
+ */
+function sortContacts(contacts: ContactPerson[]): ContactPerson[] {
+  return [...contacts].sort(
+    (a, b) => Number(!!b.isPrimary) - Number(!!a.isPrimary),
+  )
+}
+
 export function SponsorContactTable({
-  sponsors: initialSponsors,
+  sponsors,
+  emptyDescription = 'No sponsors were found for this conference.',
 }: SponsorContactTableProps) {
-  const [sponsors, setSponsors] =
-    useState<SponsorForConferenceExpanded[]>(initialSponsors)
-  const [editingSponsor, setEditingSponsor] =
-    useState<SponsorForConferenceExpanded | null>(null)
+  const [editingSponsorId, setEditingSponsorId] = useState<string | null>(null)
   // Unsaved-changes state reported by the embedded SponsorContactEditor;
   // drives ModalShell's dirty-close guard.
   const [isEditorDirty, setIsEditorDirty] = useState(false)
   const utils = api.useUtils()
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSponsors(initialSponsors)
-  }, [initialSponsors])
+  // Resolved from the live list rather than held in state, so an edit saved in
+  // the modal is reflected immediately instead of pinning the pre-save copy.
+  const editingSponsor =
+    sponsors.find((sfc) => sfc._id === editingSponsorId) ?? null
 
   const handleStartEdit = (sfc: SponsorForConferenceExpanded) => {
     setIsEditorDirty(false)
-    setEditingSponsor(sfc)
+    setEditingSponsorId(sfc._id)
   }
 
   const handleCloseEdit = () => {
-    setEditingSponsor(null)
+    setEditingSponsorId(null)
     setIsEditorDirty(false)
   }
 
@@ -103,36 +197,42 @@ export function SponsorContactTable({
     utils.sponsor.crm.list.invalidate()
   }
 
-  const contactRows: ContactRow[] = []
+  const contactRows: ContactRow[] = useMemo(() => {
+    const rows: ContactRow[] = []
 
-  sponsors.forEach((sfc) => {
-    if (sfc.contactPersons && sfc.contactPersons.length > 0) {
-      sfc.contactPersons.forEach((contact, index) => {
-        contactRows.push({
+    sponsors.forEach((sfc) => {
+      const billing = evaluateBilling(sfc)
+      const contacts = sortContacts(sfc.contactPersons ?? [])
+
+      if (contacts.length === 0) {
+        rows.push({
+          sfc,
+          billing,
+          contact: { _key: 'no-contact', name: '', email: '' },
+          isFirstContactForSponsor: true,
+        })
+        return
+      }
+
+      contacts.forEach((contact, index) => {
+        rows.push({
           sfc,
           contact,
+          billing,
           isFirstContactForSponsor: index === 0,
         })
       })
-    } else {
-      contactRows.push({
-        sfc,
-        contact: {
-          _key: 'no-contact',
-          name: '',
-          email: '',
-        },
-        isFirstContactForSponsor: true,
-      })
-    }
-  })
+    })
+
+    return rows
+  }, [sponsors])
 
   if (contactRows.length === 0) {
     return (
       <TableEmptyState
         icon={BuildingOffice2Icon}
         title="No sponsors found"
-        description="No sponsors were found for this conference."
+        description={emptyDescription}
         className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
       />
     )
@@ -181,11 +281,22 @@ export function SponsorContactTable({
                     Org: {row.sfc.sponsor.orgNumber}
                   </div>
                 )}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <StatusBadge
+                    {...getSponsorStatusBadgeProps(row.sfc.status)}
+                  />
+                  {row.sfc.tier && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {row.sfc.tier.title}
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => handleStartEdit(row.sfc)}
                 className="inline-flex shrink-0 cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 title="Manage contacts"
+                aria-label={`Manage contacts for ${row.sfc.sponsor.name}`}
               >
                 <PencilIcon className="h-4 w-4" />
               </button>
@@ -196,8 +307,20 @@ export function SponsorContactTable({
                 <dt className="shrink-0 text-gray-500 dark:text-gray-400">
                   Contact
                 </dt>
-                <dd className="text-right text-gray-900 dark:text-gray-200">
-                  {row.contact.name || (
+                <dd className="flex min-w-0 items-center justify-end gap-1.5 text-right text-gray-900 dark:text-gray-200">
+                  {row.contact.name ? (
+                    <>
+                      <span className="truncate">{row.contact.name}</span>
+                      {row.contact.isPrimary && (
+                        <span title="Primary contact — named on the contract">
+                          <StarIcon
+                            className="h-3.5 w-3.5 shrink-0 text-yellow-500"
+                            aria-label="Primary contact"
+                          />
+                        </span>
+                      )}
+                    </>
+                  ) : (
                     <span className="text-gray-500 italic dark:text-gray-400">
                       No contact person
                     </span>
@@ -254,41 +377,14 @@ export function SponsorContactTable({
               )}
             </dl>
 
-            {row.isFirstContactForSponsor &&
-              row.sfc.billing &&
-              row.sfc.billing.email && (
-                <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
-                  <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Billing
-                  </div>
-                  <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                    <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-                    <a
-                      href={`mailto:${row.sfc.billing.email}`}
-                      className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                      title={row.sfc.billing.email}
-                    >
-                      {row.sfc.billing.email}
-                    </a>
-                    <CopyEmailButton email={row.sfc.billing.email} />
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {row.sfc.billing.invoiceFormat === 'ehf'
-                      ? 'EHF (Digital)'
-                      : 'PDF via Email'}
-                  </div>
-                  {row.sfc.billing.reference && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Ref: {row.sfc.billing.reference}
-                    </div>
-                  )}
-                  {row.sfc.billing.comments && (
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {row.sfc.billing.comments}
-                    </div>
-                  )}
+            {row.isFirstContactForSponsor && (
+              <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+                <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Billing
                 </div>
-              )}
+                <BillingCell sfc={row.sfc} billing={row.billing} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -312,20 +408,51 @@ export function SponsorContactTable({
                 <Tr key={`${row.sfc._id}-${row.contact._key}-${index}`}>
                   <Td>
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      {/* Continuation rows are muted so a sponsor's second
+                          contact does not read as a second sponsor. */}
+                      <div
+                        className={
+                          row.isFirstContactForSponsor
+                            ? 'text-sm font-medium text-gray-900 dark:text-white'
+                            : 'text-sm text-gray-500 dark:text-gray-400'
+                        }
+                      >
                         {row.sfc.sponsor.name}
                       </div>
-                      {row.sfc.sponsor.orgNumber && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          Org: {row.sfc.sponsor.orgNumber}
-                        </div>
+                      {row.isFirstContactForSponsor && (
+                        <>
+                          {row.sfc.sponsor.orgNumber && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Org: {row.sfc.sponsor.orgNumber}
+                            </div>
+                          )}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <StatusBadge
+                              {...getSponsorStatusBadgeProps(row.sfc.status)}
+                            />
+                            {row.sfc.tier && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {row.sfc.tier.title}
+                              </span>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   </Td>
                   <Td>
                     {row.contact.name ? (
-                      <div className="text-sm text-gray-900 dark:text-white">
-                        {row.contact.name}
+                      <div className="flex items-center gap-1.5 text-sm text-gray-900 dark:text-white">
+                        <span>{row.contact.name}</span>
+                        {row.contact.isPrimary && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                            title="Primary contact — named on the contract"
+                          >
+                            <StarIcon className="h-3 w-3" />
+                            Primary
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="text-sm text-gray-500 italic dark:text-gray-400">
@@ -379,42 +506,7 @@ export function SponsorContactTable({
                   </Td>
                   <Td>
                     {row.isFirstContactForSponsor && (
-                      <div className="space-y-1">
-                        {row.sfc.billing && row.sfc.billing.email ? (
-                          <>
-                            <div className="flex items-center text-sm text-gray-900 dark:text-white">
-                              <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-                              <a
-                                href={`mailto:${row.sfc.billing.email}`}
-                                className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                                title={row.sfc.billing.email}
-                              >
-                                {row.sfc.billing.email}
-                              </a>
-                              <CopyEmailButton email={row.sfc.billing.email} />
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {row.sfc.billing.invoiceFormat === 'ehf'
-                                ? 'EHF (Digital)'
-                                : 'PDF via Email'}
-                            </div>
-                            {row.sfc.billing.reference && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                Ref: {row.sfc.billing.reference}
-                              </div>
-                            )}
-                            {row.sfc.billing.comments && (
-                              <div className="max-h-8 overflow-hidden text-xs text-gray-500 dark:text-gray-400">
-                                {row.sfc.billing.comments}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="text-sm text-gray-500 italic dark:text-gray-400">
-                            No billing information
-                          </div>
-                        )}
-                      </div>
+                      <BillingCell sfc={row.sfc} billing={row.billing} />
                     )}
                   </Td>
                   <Td>
@@ -423,6 +515,7 @@ export function SponsorContactTable({
                         onClick={() => handleStartEdit(row.sfc)}
                         className="inline-flex cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                         title="Manage contacts"
+                        aria-label={`Manage contacts for ${row.sfc.sponsor.name}`}
                       >
                         <PencilIcon className="h-4 w-4" />
                       </button>
