@@ -1,6 +1,6 @@
 import type { TypedObject } from 'sanity'
 import type { Conference } from '@/lib/conference/types'
-import { isProgramPublished } from '@/lib/conference/state'
+import { resolveHomepageLifecycle, type HomepageStage } from './lifecycle'
 
 /**
  * Front-page builder (F1 + F2): the CLOSED, typed section registry.
@@ -13,10 +13,15 @@ import { isProgramPublished } from '@/lib/conference/state'
  * multi-tenant deployment.
  *
  * ZERO-MIGRATION GUARANTEE: when `homepageSections` is ABSENT (every legacy
- * conference), the page renders {@link getDefaultSections} — a phase-aware
- * reproduction of the pre-builder homepage, pixel-for-pixel. Sections carry only
- * their OWN presentation config; their content still comes from the existing
- * conference sources (featured speakers, schedules, sponsors, gallery, …).
+ * conference), the page renders {@link getDefaultSections} — a lifecycle-aware
+ * reproduction of the pre-builder homepage. Sections carry only their OWN
+ * presentation config; their content still comes from the existing conference
+ * sources (featured speakers, schedules, sponsors, gallery, …).
+ *
+ * The guarantee is precise: a conference that has ANY event content to show —
+ * a programme, or featured speakers — renders the identical section list it did
+ * before the lifecycle work. The composition only changes in states that
+ * previously rendered a hole or an all-zero band; see {@link getDefaultSections}.
  */
 
 /**
@@ -26,6 +31,7 @@ import { isProgramPublished } from '@/lib/conference/state'
  */
 export const HOMEPAGE_SECTION_TYPES = [
   'homepageHero',
+  'homepageSaveTheDate',
   'homepageFeaturedSpeakers',
   'homepageProgramHighlights',
   'homepageOrganizers',
@@ -38,6 +44,28 @@ export const HOMEPAGE_SECTION_TYPES = [
   'homepageCountdown',
   'homepageVenue',
 ] as const
+
+/**
+ * Human labels for each block type. Lives in this SERVER-SAFE module (not
+ * `./editor`, which pulls in the client-only @dnd-kit) so the admin settings
+ * page — a server component — can render section names without dragging
+ * drag-and-drop code into the RSC module graph.
+ */
+export const SECTION_LABELS: Record<HomepageSectionType, string> = {
+  homepageHero: 'Hero',
+  homepageSaveTheDate: 'Save the Date',
+  homepageFeaturedSpeakers: 'Featured Speakers',
+  homepageProgramHighlights: 'Program Highlights',
+  homepageOrganizers: 'Organizers',
+  homepageSponsors: 'Sponsors',
+  homepageGallery: 'Photo Gallery',
+  homepageMetrics: 'Vanity Metrics',
+  homepageCtaBanner: 'Call-to-action Banner',
+  homepageRichText: 'Rich Text',
+  homepageFaq: 'FAQ',
+  homepageCountdown: 'Countdown',
+  homepageVenue: 'Venue',
+}
 
 /**
  * DEFAULT SECTION COPY — the house wording each block falls back to when a
@@ -70,6 +98,9 @@ export function defaultFeaturedSpeakersDescription(
 export function defaultOrganizersDescription(conferenceTitle: string): string {
   return `The passionate team driving ${conferenceTitle}`
 }
+
+/** Default heading for the save-the-date band when none is configured. */
+export const DEFAULT_SAVE_THE_DATE_HEADING = 'Save the date'
 
 export type HomepageSectionType = (typeof HOMEPAGE_SECTION_TYPES)[number]
 
@@ -107,6 +138,18 @@ export interface HeroSection extends BaseSection {
   heroSubheadline?: string
   /** When non-empty, replaces the phase-aware CTA row with these buttons. */
   ctaOverrides?: HeroCtaOverride[]
+}
+
+/**
+ * The day-one band: dates, place, countdown and the "what happens next" roadmap
+ * (CFP → programme → tickets), built entirely from dates the organizer has
+ * already entered. It is what stands between a brand-new event and a homepage
+ * that is a hero above a "Become a Sponsor" pitch.
+ */
+export interface SaveTheDateSection extends BaseSection {
+  _type: 'homepageSaveTheDate'
+  heading?: string
+  description?: string
 }
 
 /**
@@ -238,6 +281,7 @@ export interface VenueSection extends BaseSection {
 
 export type HomepageSection =
   | HeroSection
+  | SaveTheDateSection
   | FeaturedSpeakersSection
   | ProgramHighlightsSection
   | OrganizersSection
@@ -250,45 +294,93 @@ export type HomepageSection =
   | CountdownSection
   | VenueSection
 
-/** True when the program is published AND at least one schedule day exists. */
-export function hasPublishedSchedule(conference: Conference): boolean {
+/**
+ * Stages in which the event is still AHEAD, so a save-the-date band is honest.
+ *
+ * `programme` belongs here: it means "programme published, event still ahead"
+ * ({@link HomepageStage}), and it is reached the moment `programDate` rolls past
+ * — whether or not anything was actually published. The stages left out are the
+ * ones where a countdown to the event would be a lie: `post-event`, plus the
+ * `cancelled` / `archived` overrides (which the renderer replaces the page for
+ * anyway, but which must never grow a countdown if called directly).
+ */
+function isPreEventStage(stage: HomepageStage): boolean {
   return (
-    isProgramPublished(conference) && (conference.schedules?.length ?? 0) > 0
+    stage === 'announced' ||
+    stage === 'cfp-open' ||
+    stage === 'curating' ||
+    stage === 'programme'
   )
 }
 
 /**
- * The pre-builder homepage, reproduced as an ordered section list. This is what
- * renders when `homepageSections` is ABSENT — it MUST stay pixel-identical to the
- * legacy page, including the phase-dependent MIDDLE slot:
+ * The default homepage, as an ordered section list. This is what renders when
+ * `homepageSections` is ABSENT (every legacy conference):
  *
- *   Hero → Gallery → (ProgramHighlights | FeaturedSpeakers | Organizers) → Sponsors
+ *   Hero → [SaveTheDate] → Gallery → (ProgramHighlights | FeaturedSpeakers |
+ *   Organizers) → Sponsors
  *
  * The middle slot is mutually exclusive exactly as the legacy `if/else` chain:
- * a published schedule wins over featured speakers, which win over the organizers
- * fallback. Each section's own renderer additionally data-guards (e.g. Gallery
- * renders nothing without featured images), matching the legacy conditionals.
+ * a programme with content wins over featured speakers, which win over the
+ * organizers fallback. Each section's own renderer additionally data-guards
+ * (e.g. Gallery renders nothing without featured images).
+ *
+ * TWO LIFECYCLE-DRIVEN DEPARTURES from the pre-lifecycle layout, both of which
+ * only fire in states that previously rendered a hole:
+ *
+ *  1. The middle slot now tests {@link hasProgrammeContent}, not
+ *     the old "a schedule document exists" test. A published-but-EMPTY
+ *     schedule used to win the
+ *     slot and then render an all-zero statistics band (live in production);
+ *     it now falls through to featured speakers or organizers, which have
+ *     something to show.
+ *  2. {@link SaveTheDateSection} is inserted after the Hero while the event has
+ *     nothing to say about its own content yet — no programme AND no featured
+ *     speakers, before the event. That is the day-one page, and without the band
+ *     it is a hero sitting directly on top of a sponsorship pitch.
+ *
+ *     "Before the event" is the whole pre-event span ({@link isPreEventStage}),
+ *     NOT just the stages up to `curating`. The `programme` stage is entered by
+ *     `programDate` rolling past, which says nothing about whether a programme
+ *     exists: an organizer who set a programme date and has not published yet
+ *     loses the band AND fails the `hasProgramme` middle-slot test on the same
+ *     day, leaving a hero over a sponsorship pitch purely because a date passed.
+ *     The two conditions are therefore driven by the SAME fact — the band shows
+ *     exactly while there is no programme and no speakers to lead with.
+ *
+ * A conference that already has a programme or featured speakers is untouched.
  */
 export function getDefaultSections(conference: Conference): HomepageSection[] {
+  const { stage, content } = resolveHomepageLifecycle(conference)
+
   const sections: HomepageSection[] = [
     { _key: 'default-hero', _type: 'homepageHero' },
-    { _key: 'default-gallery', _type: 'homepageGallery' },
   ]
 
-  const hasFeaturedSpeakers = (conference.featuredSpeakers?.length ?? 0) > 0
-  const hasOrganizers = (conference.organizers?.length ?? 0) > 0
+  if (
+    isPreEventStage(stage) &&
+    !content.hasProgramme &&
+    !content.hasFeaturedSpeakers
+  ) {
+    sections.push({
+      _key: 'default-save-the-date',
+      _type: 'homepageSaveTheDate',
+    })
+  }
 
-  if (hasPublishedSchedule(conference)) {
+  sections.push({ _key: 'default-gallery', _type: 'homepageGallery' })
+
+  if (content.hasProgramme) {
     sections.push({
       _key: 'default-program',
       _type: 'homepageProgramHighlights',
     })
-  } else if (hasFeaturedSpeakers) {
+  } else if (content.hasFeaturedSpeakers) {
     sections.push({
       _key: 'default-featured-speakers',
       _type: 'homepageFeaturedSpeakers',
     })
-  } else if (hasOrganizers) {
+  } else if (content.hasOrganizers) {
     sections.push({ _key: 'default-organizers', _type: 'homepageOrganizers' })
   }
 
@@ -298,9 +390,14 @@ export function getDefaultSections(conference: Conference): HomepageSection[] {
 
 /**
  * Resolve the ordered section list to render for a conference. A NON-EMPTY
- * stored `homepageSections` composition wins; otherwise the phase-aware default
- * (the legacy layout). An empty stored array falls back to the default so a
- * tenant can never accidentally blank their whole homepage.
+ * stored `homepageSections` composition wins; otherwise the lifecycle-aware
+ * default. An empty stored array falls back to the default so a tenant can never
+ * accidentally blank their whole homepage.
+ *
+ * NOTE: `cancelled` / `archived` do NOT appear here. Those states REPLACE the
+ * page rather than reorder it, so the renderer short-circuits above the section
+ * list — see `HomepageSectionRenderer`. Returning a section list for them would
+ * let a stored composition leak a ticket CTA onto a cancelled event.
  */
 export function resolveHomepageSections(
   conference: Conference,

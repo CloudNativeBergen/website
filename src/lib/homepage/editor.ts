@@ -16,7 +16,14 @@ function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
   return next
 }
 import type { PortableTextBlock } from '@portabletext/editor'
-import { type HomepageSection, type HomepageSectionType } from './sections'
+import {
+  SECTION_LABELS,
+  type HomepageSection,
+  type HomepageSectionType,
+} from './sections'
+
+// Re-exported for the editor surface, which historically imported it from here.
+export { SECTION_LABELS }
 
 /**
  * Front-page builder (F3): the PURE editor logic behind the drag-and-drop
@@ -24,22 +31,6 @@ import { type HomepageSection, type HomepageSectionType } from './sections'
  * payload mapping, dirty check and structural-preview mapping are unit-testable
  * in isolation from the modal surface that drives them.
  */
-
-/** Human labels for each block type — shared by the list rows and the preview. */
-export const SECTION_LABELS: Record<HomepageSectionType, string> = {
-  homepageHero: 'Hero',
-  homepageFeaturedSpeakers: 'Featured Speakers',
-  homepageProgramHighlights: 'Program Highlights',
-  homepageOrganizers: 'Organizers',
-  homepageSponsors: 'Sponsors',
-  homepageGallery: 'Photo Gallery',
-  homepageMetrics: 'Vanity Metrics',
-  homepageCtaBanner: 'Call-to-action Banner',
-  homepageRichText: 'Rich Text',
-  homepageFaq: 'FAQ',
-  homepageCountdown: 'Countdown',
-  homepageVenue: 'Venue',
-}
 
 /**
  * The block types that carry per-section config worth an inline accordion.
@@ -50,6 +41,7 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
  */
 const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageHero',
+  'homepageSaveTheDate',
   'homepageCtaBanner',
   'homepageRichText',
   'homepageMetrics',
@@ -77,6 +69,9 @@ const PHASE_SLOT_DEFAULT_KEYS: ReadonlySet<string> = new Set([
   'default-program',
   'default-featured-speakers',
   'default-organizers',
+  // The save-the-date band is itself lifecycle-conditional: it appears only
+  // while the event has no programme and no featured speakers to show.
+  'default-save-the-date',
 ])
 
 /** Working row shape — a superset of every block's fields, keyed for the list. */
@@ -153,8 +148,12 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
     } else if (s._type === 'homepageRichText') {
       row.heading = s.heading
       row.content = (s.content as PortableTextBlock[]) ?? []
-    } else if (s._type === 'homepageMetrics') {
+    } else if (
+      s._type === 'homepageMetrics' ||
+      s._type === 'homepageSaveTheDate'
+    ) {
       row.heading = s.heading
+      if (s._type === 'homepageSaveTheDate') row.description = s.description
     } else if (s._type === 'homepageFaq') {
       row.heading = s.heading
       row.source = s.source ?? 'own'
@@ -227,6 +226,10 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
         break
       case 'homepageMetrics':
         if (row.heading?.trim()) out.heading = row.heading.trim()
+        break
+      case 'homepageSaveTheDate':
+        if (row.heading?.trim()) out.heading = row.heading.trim()
+        if (row.description?.trim()) out.description = row.description.trim()
         break
       case 'homepageFaq': {
         if (row.heading?.trim()) out.heading = row.heading.trim()

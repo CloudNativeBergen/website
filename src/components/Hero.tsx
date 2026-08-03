@@ -11,15 +11,15 @@ import {
   MicrophoneIcon,
   CalendarDaysIcon,
   MapPinIcon,
+  PlayCircleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
+import { isSeekingSponsors } from '@/lib/conference/state'
 import {
-  isCfpOpen,
-  isProgramPublished,
-  isRegistrationAvailable,
-  isSeekingSponsors,
-} from '@/lib/conference/state'
+  resolveHomepageLifecycle,
+  type HomepageLifecycle,
+} from '@/lib/homepage/lifecycle'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { PortableText } from '@portabletext/react'
 import { TypedObject } from 'sanity'
@@ -55,10 +55,12 @@ function isPortableTextEmpty(content?: TypedObject[]): boolean {
 
 function ActionButtons({
   conference,
+  lifecycle,
   ticketsFromPrice,
   ctaOverrides,
 }: {
   conference: Conference
+  lifecycle: HomepageLifecycle
   ticketsFromPrice?: string | null
   /**
    * F1 homepage-builder override. When non-empty, these buttons REPLACE the
@@ -110,7 +112,7 @@ function ActionButtons({
     })
   }
 
-  if (isCfpOpen(conference)) {
+  if (lifecycle.cfp === 'open') {
     buttons.push({
       label: 'Submit to Speak',
       href: '/cfp',
@@ -120,17 +122,30 @@ function ActionButtons({
     })
   }
 
-  if (isProgramPublished(conference)) {
+  // Gated on programme CONTENT, not on the publish date having passed: linking
+  // "View Program" at an empty programme page is the same broken promise as the
+  // zero-statistics band. After the event the label follows what is actually
+  // there — "Watch the talks" only when a recording exists.
+  if (lifecycle.content.hasProgramme) {
     buttons.push({
-      label: 'View Program',
+      label:
+        lifecycle.stage === 'post-event' && lifecycle.content.hasRecordings
+          ? 'Watch the talks'
+          : 'View Program',
       href: '/program',
       variant: 'primary',
-      icon: CalendarDaysIcon,
+      icon:
+        lifecycle.stage === 'post-event' && lifecycle.content.hasRecordings
+          ? PlayCircleIcon
+          : CalendarDaysIcon,
       event: PIRSCH_EVENTS.programHero,
     })
   }
 
-  if (isRegistrationAvailable(conference)) {
+  // A sold-out or not-yet-opened sale renders no ticket button at all — the
+  // save-the-date roadmap and the sold-out notice carry that information
+  // instead, rather than a button that leads to a dead end.
+  if (lifecycle.tickets === 'on-sale') {
     buttons.push({
       // Checkin.no prices are excl. VAT — disclosed in the caption rendered
       // under the button row, consistent with the note on /tickets
@@ -160,6 +175,26 @@ function ActionButtons({
     ].slice(0, 3)
   } else {
     displayButtons = reversedButtons.slice(0, 3)
+  }
+
+  // On a page with no CFP, no programme and no tickets — day one — the reversal
+  // above leaves "Become a Sponsor" as the first and loudest thing a visitor
+  // sees. Asking for money is the wrong opening move for an event nobody has
+  // heard of yet, so the visitor-facing link leads and the sponsor pitch is
+  // demoted to an outline button beside it.
+  const hasVisitorCta = displayButtons.some(
+    (b) => b.href !== '/sponsor' && b.href !== '/info',
+  )
+  if (!hasVisitorCta && displayButtons.some((b) => b.href === '/sponsor')) {
+    displayButtons = [
+      ...displayButtons
+        .filter((b) => b.href === '/info')
+        // Promoted, or the row would be two outline buttons with no lead.
+        .map((b) => ({ ...b, variant: 'primary' as const })),
+      ...displayButtons
+        .filter((b) => b.href === '/sponsor')
+        .map((b) => ({ ...b, variant: 'outline' as const })),
+    ]
   }
 
   const showsPrice =
@@ -199,6 +234,7 @@ export function Hero({
   headlineOverride,
   subheadlineOverride,
   ctaOverrides,
+  lifecycle,
 }: {
   conference: Conference
   /** Lowest ticket price formatted for display (e.g. "1 234"), excl. VAT */
@@ -213,7 +249,14 @@ export function Hero({
   headlineOverride?: string
   subheadlineOverride?: string
   ctaOverrides?: HeroCtaOverride[]
+  /**
+   * Resolved lifecycle state. The renderer resolves it once for the whole page
+   * and passes it down; standalone use (stories) may omit it and the Hero
+   * derives it from the conference itself.
+   */
+  lifecycle?: HomepageLifecycle
 }) {
+  const resolved = lifecycle ?? resolveHomepageLifecycle(conference)
   return (
     <div className="relative py-10 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
@@ -307,9 +350,16 @@ export function Hero({
 
           <ActionButtons
             conference={conference}
+            lifecycle={resolved}
             ticketsFromPrice={ticketsFromPrice}
             ctaOverrides={ctaOverrides}
           />
+
+          {resolved.tickets === 'sold-out' && (
+            <p className="font-jetbrains mt-4 text-center text-sm font-semibold tracking-wide text-brand-slate-gray/80 uppercase dark:text-gray-300">
+              Tickets are sold out
+            </p>
+          )}
 
           {conference.venueName && (
             <p className="font-jetbrains mt-6 flex items-start justify-center gap-x-2 text-sm text-brand-cloud-blue sm:mt-8 dark:text-blue-400">

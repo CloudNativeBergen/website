@@ -6,6 +6,10 @@ import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
 import { CLONE_FAMILIES } from '@/lib/conference/edition'
 import {
+  LIFECYCLE_STATUS_VALUES,
+  type LifecycleStatus,
+} from '@/lib/homepage/lifecycle'
+import {
   CONFERENCE_VISIBILITY_VALUES,
   type ConferenceVisibility,
 } from '@/lib/conference/visibility'
@@ -688,6 +692,13 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     ctaOverrides: z.array(HeroCtaOverrideSchema).optional(),
   }),
   z.object({
+    _type: z.literal('homepageSaveTheDate'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    heading: z.string().trim().min(1).nullable().optional(),
+    description: z.string().trim().min(1).nullable().optional(),
+  }),
+  z.object({
     _type: z.literal('homepageFeaturedSpeakers'),
     _key: sectionKey,
     hidden: sectionHidden,
@@ -773,6 +784,26 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     description: z.string().trim().min(1).nullable().optional(),
   }),
 ])
+
+// === Event status (homepage lifecycle override) ===
+// The ONLY non-derivable homepage states. `lifecycleStatus: null` clears the
+// override and returns the page to date-derived behaviour. The copy fields are
+// nullable-when-blank so an organizer can wipe a stale statement without
+// leaving an empty string behind (see the null-means-unset rule above).
+export const UpdateLifecycleStatusSchema = z.object({
+  lifecycleStatus: z
+    .enum(
+      LIFECYCLE_STATUS_VALUES as unknown as [
+        LifecycleStatus,
+        ...LifecycleStatus[],
+      ],
+    )
+    .nullable(),
+  lifecycleHeadline: z.string().trim().nullable().optional(),
+  lifecycleMessage: z.string().trim().nullable().optional(),
+  lifecycleLinkLabel: z.string().trim().nullable().optional(),
+  lifecycleLinkHref: safeLinkHref.nullable().optional(),
+})
 
 export const UpdateHomepageSectionsSchema = z.object({
   homepageSections: z.array(HomepageSectionSchema),
