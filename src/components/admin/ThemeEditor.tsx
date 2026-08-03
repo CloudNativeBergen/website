@@ -6,6 +6,7 @@ import { SwatchIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { api } from '@/lib/trpc/client'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { useNotification } from './NotificationProvider'
 import {
   DEFAULT_ACCENT_COLOR,
@@ -352,7 +353,7 @@ export function ThemeSwatchRow({ theme }: { theme?: ConferenceTheme | null }) {
   if (!overridden) {
     return (
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Using the default Cloud Native Days palette.
+        Using the default {PLATFORM_NAME} palette.
       </p>
     )
   }

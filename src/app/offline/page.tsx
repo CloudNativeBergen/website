@@ -1,6 +1,7 @@
 'use client'
 
-import { Logo } from '@/components/Logo'
+import { BrandWordmark } from '@/components/BrandWordmark'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 /**
  * Offline fallback page.
@@ -19,7 +20,10 @@ import { Logo } from '@/components/Logo'
 export default function OfflinePage() {
   return (
     <div className="flex min-h-[70vh] w-full flex-col items-center justify-center px-6 py-20 text-center">
-      <Logo className="h-12 w-auto" aria-hidden="true" />
+      {/* This page is deliberately STATIC (no host resolution), so it cannot
+          know which tenant the visitor was on — the platform mark is the only
+          honest choice here. It used to render one conference's wordmark. */}
+      <BrandWordmark name={PLATFORM_NAME} className="h-12 w-auto" />
 
       <h1 className="font-display mt-10 text-3xl font-medium tracking-tighter text-blue-600 sm:text-4xl dark:text-blue-300">
         You&apos;re offline

@@ -1,7 +1,7 @@
 import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
 import { BackgroundPatternProvider } from '@/components/BackgroundPatternProvider'
-import { ThemeStyle } from '@/components/ThemeStyle'
+import { TenantThemeStyle } from '@/components/TenantThemeStyle'
 import { normalizeBackgroundPattern } from '@/lib/conference/backgroundPattern'
 import { Conference } from '@/lib/conference/types'
 
@@ -18,7 +18,7 @@ export async function Layout({
     <BackgroundPatternProvider
       pattern={normalizeBackgroundPattern(conference.backgroundPattern)}
     >
-      <ThemeStyle theme={conference.theme} />
+      <TenantThemeStyle conference={conference} />
       <Header c={conference} />
       <main className="flex-auto">{children}</main>
       {showFooter && <Footer c={conference} />}
