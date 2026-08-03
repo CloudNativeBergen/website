@@ -99,12 +99,16 @@ describe('program/time-utils.ts', () => {
  */
 describe('program/time-utils.ts — viewer timezone', () => {
   const withTimeZone = (tz: string, run: () => void) => {
+    const hadTz = 'TZ' in process.env
     const original = process.env.TZ
     process.env.TZ = tz
     try {
       run()
     } finally {
-      process.env.TZ = original
+      // Reassigning an undefined original would set the STRING "undefined" and
+      // leak a bogus zone into every later test in this worker.
+      if (hadTz) process.env.TZ = original
+      else delete process.env.TZ
     }
   }
 
@@ -129,6 +133,20 @@ describe('program/time-utils.ts — viewer timezone', () => {
       const currentTime = new Date(2026, 10, 6, 10, 0, 0)
       expect(isScheduleToday('2026-11-05', currentTime)).toBe(false)
       expect(isScheduleInPast('2026-11-05', currentTime)).toBe(true)
+    })
+  })
+  it('falls back rather than rolling an impossible date forward', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      // 30 February would normalise to 2 March and then compare as a real day.
+      const currentTime = new Date(2026, 1, 30, 10, 0, 0)
+      expect(isScheduleToday('2026-02-30', currentTime)).toBe(false)
+    })
+  })
+
+  it('rejects a date string with trailing segments', () => {
+    withTimeZone('America/Sao_Paulo', () => {
+      const currentTime = new Date(2026, 10, 5, 10, 0, 0)
+      expect(isScheduleToday('2026-11-05-extra', currentTime)).toBe(false)
     })
   })
 })

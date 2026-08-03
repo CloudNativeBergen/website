@@ -67,10 +67,31 @@ function stripTime(date: Date): Date {
  * 2026-11-05 reported `isScheduleToday === false`, so the "happening now" rail
  * never activated on the actual conference day for any Americas tenant.
  */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
 function startOfLocalDay(dateString: string): Date {
-  const [year, month, day] = dateString.split('-').map(Number)
-  if (!year || !month || !day) return stripTime(new Date(dateString))
-  return new Date(year, month - 1, day)
+  const match = DATE_ONLY.exec(dateString)
+  if (!match) return stripTime(new Date(dateString))
+
+  const [, y, m, d] = match
+  const year = Number(y)
+  const month = Number(m)
+  const day = Number(d)
+  const local = new Date(year, month - 1, day)
+
+  // Reject a date that does not exist. `new Date(2026, 1, 30)` silently rolls
+  // 30 February forward to 2 March, which would make the day comparisons agree
+  // on the wrong day rather than fall back. Round-tripping the components is
+  // the only way to tell a real date from a normalised one.
+  if (
+    local.getFullYear() !== year ||
+    local.getMonth() !== month - 1 ||
+    local.getDate() !== day
+  ) {
+    return stripTime(new Date(dateString))
+  }
+
+  return local
 }
 
 export function isConferenceDay(
