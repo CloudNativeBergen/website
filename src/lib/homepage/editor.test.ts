@@ -81,8 +81,8 @@ describe('isConfigurable', () => {
     expect(isConfigurable('homepageOrganizers')).toBe(true)
   })
 
-  it('is false for the block with nothing to configure', () => {
-    expect(isConfigurable('homepageProgramHighlights')).toBe(false)
+  it('is true for the block whose only config is its variant', () => {
+    expect(isConfigurable('homepageProgramHighlights')).toBe(true)
   })
 })
 
@@ -158,6 +158,22 @@ describe('toPreviewBands', () => {
       { _key: 'hp-manual-1', _type: 'homepageFeaturedSpeakers' },
     ])
     expect(toPreviewBands(manual, true)[0].isPhaseSlot).toBe(false)
+  })
+
+  it('tags only the bands switched away from their default variant', () => {
+    const bands = toPreviewBands(
+      toEditorRows([
+        { _key: 'hero', _type: 'homepageHero', variant: 'classic' },
+        { _key: 'sponsors', _type: 'homepageSponsors', variant: 'logo-wall' },
+        { _key: 'venue', _type: 'homepageVenue' },
+      ]),
+      false,
+    )
+    expect(bands.map((b) => b.variantLabel)).toEqual([
+      undefined,
+      'Logo wall',
+      undefined,
+    ])
   })
 
   it('ghosts hidden sections', () => {
@@ -428,6 +444,62 @@ describe('toPayload — trimming, omission and item filtering', () => {
       _type: 'homepageSponsors',
       showCta: false,
     })
+  })
+
+  it('stores a non-default variant and never the default one', () => {
+    expect(
+      toPayload([{ _key: 'h', _type: 'homepageHero', variant: 'emblem' }])[0],
+    ).toEqual({ _key: 'h', _type: 'homepageHero', variant: 'emblem' })
+
+    // "Chose the default" and "never touched the picker" are the same bytes —
+    // the zero-migration guarantee the router relies on.
+    expect(
+      toPayload([{ _key: 'h', _type: 'homepageHero', variant: 'classic' }])[0],
+    ).toEqual({ _key: 'h', _type: 'homepageHero' })
+    expect(
+      toPayload([{ _key: 'h', _type: 'homepageHero', variant: undefined }])[0],
+    ).toEqual({ _key: 'h', _type: 'homepageHero' })
+  })
+
+  it('carries the variant alongside a type’s own config fields', () => {
+    expect(
+      toPayload([
+        {
+          _key: 'f',
+          _type: 'homepageFaq',
+          variant: 'list',
+          heading: '  Questions  ',
+          source: 'ticketFaqs',
+        },
+      ])[0],
+    ).toEqual({
+      _key: 'f',
+      _type: 'homepageFaq',
+      variant: 'list',
+      heading: 'Questions',
+      source: 'ticketFaqs',
+    })
+  })
+
+  it('round-trips a stored variant through the editor rows', () => {
+    const stored: HomepageSection[] = [
+      { _key: 'sp', _type: 'homepageSponsors', variant: 'logo-wall' },
+    ]
+    const [row] = toEditorRows(stored)
+    expect(row.variant).toBe('logo-wall')
+    expect(toPayload([row])[0]).toEqual(stored[0])
+  })
+
+  it('leaves the dirty guard clean until a NON-default variant is picked', () => {
+    const base: EditorRow[] = [{ _key: 'h', _type: 'homepageHero' }]
+    const asDefault: EditorRow[] = [
+      { _key: 'h', _type: 'homepageHero', variant: 'classic' },
+    ]
+    const changed: EditorRow[] = [
+      { _key: 'h', _type: 'homepageHero', variant: 'minimal' },
+    ]
+    expect(serializeRows(asDefault)).toBe(serializeRows(base))
+    expect(serializeRows(changed)).not.toBe(serializeRows(base))
   })
 
   it('always carries _type and _key, plus hidden when set', () => {
