@@ -12,6 +12,8 @@ import {
 } from '@/lib/conference/baseUrl'
 import { PortableTextBlock } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
+import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 export const CONTRACT_EMAIL_SLUGS = {
   SENT: 'contract-sent',
@@ -32,6 +34,12 @@ interface ConferenceInfo {
   organizer?: string
   sponsorEmail?: string
   socialLinks?: string[]
+  /**
+   * The tenant's brand theme. This local projection type used to omit it, so
+   * contract email could not be branded even in principle. Callers that read
+   * the conference with the standard `...` GROQ spread already have it.
+   */
+  theme?: ConferenceTheme | null
 }
 
 export interface ContractEmailVariables {
@@ -48,9 +56,13 @@ interface ContractEmailResult {
   react: React.ReactElement
 }
 
-const TITLE_COLORS: Record<string, string> = {
-  [CONTRACT_EMAIL_SLUGS.SENT]: '#1D4ED8',
-  [CONTRACT_EMAIL_SLUGS.REMINDER]: '#1D4ED8',
+/**
+ * The H1 tone per contract email. `brand` follows the tenant; `#059669` is a
+ * STATUS green ("your agreement is signed") and deliberately does not.
+ */
+const TITLE_TONES: Record<string, 'brand' | string> = {
+  [CONTRACT_EMAIL_SLUGS.SENT]: 'brand',
+  [CONTRACT_EMAIL_SLUGS.REMINDER]: 'brand',
   [CONTRACT_EMAIL_SLUGS.SIGNED]: '#059669',
 }
 
@@ -85,9 +97,10 @@ function buildVariables(vars: ContractEmailVariables): Record<string, string> {
   return v
 }
 
-function renderButton(button: ContractEmailButton): string {
+function renderButton(button: ContractEmailButton, brandColor: string): string {
+  const brand = resolveEmailBrandPalette(brandColor)
   return `<div style="text-align: center; margin: 28px 0;">
-    <a href="${button.href}" style="display: inline-block; padding: 14px 32px; background-color: #1D4ED8; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${button.text}</a>
+    <a href="${button.href}" style="display: inline-block; padding: 14px 32px; background-color: ${brandedOr(brand, '#1D4ED8')}; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${button.text}</a>
   </div>`
 }
 
@@ -111,25 +124,32 @@ export async function renderContractEmail(
 
   const variables = { ...buildVariables(vars), ...options?.extraVariables }
   const subject = processTemplateVariables(template.subject, variables)
+  const brandColor = emailBrandColor(vars.conference.theme)
 
   let htmlContent = ''
   if (template.body && template.body.length > 0) {
     const processedBody = processPortableTextVariables(template.body, variables)
-    htmlContent = portableTextToHTML(processedBody as PortableTextBlock[])
+    htmlContent = portableTextToHTML(
+      processedBody as PortableTextBlock[],
+      brandColor,
+    )
   }
 
   if (options?.button) {
-    htmlContent += renderButton(options.button)
+    htmlContent += renderButton(options.button, brandColor)
   }
 
-  const titleColor = TITLE_COLORS[slug] || '#334155'
+  const titleTone = TITLE_TONES[slug]
   const eventUrl = variables.EVENT_URL || ''
   const eventDate = variables.EVENT_DATE || ''
   const eventLocation = variables.EVENT_LOCATION || 'Norway'
 
   const element = React.createElement(BaseEmailTemplate, {
     title: subject,
-    titleColor,
+    ...(titleTone === 'brand'
+      ? { titleTone: 'brand' as const }
+      : { titleColor: titleTone ?? '#334155' }),
+    brandColor,
     eventName: vars.conference.title,
     eventLocation,
     eventDate,

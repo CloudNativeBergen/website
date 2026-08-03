@@ -20,11 +20,7 @@
  * before branding existed, so the conference editions that store no theme send
  * the same bytes they always have. Every field below documents its house value.
  */
-import {
-  EMAIL_CARD_TINT_LIGHTNESS,
-  ensureContrastWithWhite,
-  shiftToLightness,
-} from './color'
+import { ensureContrastWithWhite, lightnessOf, shiftToLightness } from './color'
 import { DEFAULT_PRIMARY_COLOR, isHexColor } from './theme'
 
 export interface EmailBrandPalette {
@@ -69,6 +65,50 @@ function rgba(hex: string, alpha: number): string {
   const h = hex.trim().slice(1)
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/**
+ * Replace a hard-coded HOUSE brand literal with the tenant's accent.
+ *
+ * The templates did not agree on one house blue — `#1D4ED8` dominates but
+ * `#1E40AF`, `#2563EB` and `#0284C7` appear too, drift rather than design.
+ * There is no tenant equivalent of "the slightly different blue", so a themed
+ * tenant collapses all of them onto its own accent, while an UNTHEMED tenant
+ * keeps the exact literal it has always received. That is what makes this swap
+ * mechanical and safe: every call site is provably byte-identical when there is
+ * no theme, whatever literal it started from.
+ *
+ * Never wrap a STATUS colour in this. Reject red, waitlist orange and success
+ * green mean something; they are not brand.
+ */
+export function brandedOr(
+  palette: EmailBrandPalette,
+  houseColor: string,
+): string {
+  return palette.isDefault ? houseColor : palette.accent
+}
+
+/**
+ * Like {@link brandedOr}, but for a house TINT rather than the brand colour
+ * itself — the pale callout fills and hairline borders (`#F0F9FF`, `#BFDBFE`,
+ * `#BAE6FD`, `#E0F2FE`).
+ *
+ * Those cannot map onto the accent: a card filled with the tenant's primary is
+ * an unreadable block. What they share with the accent is HUE, so the tenant's
+ * colour is moved onto the house shade's own perceptual lightness — the same
+ * trick the dark-mode brand tints use (`DARK_TINT_LIGHTNESS`). A magenta tenant
+ * gets a pale magenta card at exactly the weight the pale blue one had, so the
+ * layout reads identically.
+ *
+ * Unthemed returns the house literal untouched.
+ */
+export function brandedTintOr(
+  palette: EmailBrandPalette,
+  houseTint: string,
+): string {
+  return palette.isDefault
+    ? houseTint
+    : shiftToLightness(palette.primary, lightnessOf(houseTint))
 }
 
 /**
@@ -132,7 +172,7 @@ export function resolveEmailBrandPalette(
     // The house card is sky-100, not a tint of blue-700, so this derivation
     // deliberately does NOT reproduce `#E0F2FE` for the house blue — the
     // short-circuit above is what guarantees that, not this line.
-    cardBackground: shiftToLightness(hex, EMAIL_CARD_TINT_LIGHTNESS),
+    cardBackground: shiftToLightness(hex, lightnessOf(HOUSE_CARD_BACKGROUND)),
     cardBorder: HOUSE_CARD_BORDER,
     emphasis: accent,
     isDefault: false,

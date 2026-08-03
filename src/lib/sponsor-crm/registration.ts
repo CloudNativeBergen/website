@@ -1,3 +1,4 @@
+import type { ConferenceTheme } from '@/lib/branding/theme'
 import { randomUUID } from 'crypto'
 import {
   clientWrite,
@@ -321,6 +322,12 @@ export interface SfcPortalInviteData {
     organizer: string | null
     sponsorEmail: string | null
     socialLinks: string[] | null
+    /**
+     * Tenant brand theme. This projection omitted it, so the portal-invite
+     * email had no way to reach the tenant's colour at all — the sender was
+     * not "defaulting", it was blind.
+     */
+    theme: ConferenceTheme | null
   } | null
 }
 
@@ -345,7 +352,8 @@ export async function getSfcForPortalInvite(
         startDate,
         organizer,
         sponsorEmail,
-        socialLinks
+        socialLinks,
+        theme
       }
     }`,
     { id: sfcId },

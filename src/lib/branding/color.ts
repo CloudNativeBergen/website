@@ -209,6 +209,15 @@ export const DARK_TINT_LIGHTNESS = {
 /* Contrast                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The OKLab lightness (0..1) of an `#rrggbb` colour — the same axis
+ * {@link shiftToLightness} targets. Exposed so a caller can say "put the
+ * tenant's hue where THIS house shade sits" without hard-coding the number.
+ */
+export function lightnessOf(hex: string): number {
+  return srgbToOklab(parseHex(hex))[0]
+}
+
 /** WCAG 2.x relative luminance of an `#rrggbb` colour. */
 export function relativeLuminance(hex: string): number {
   const [r, g, b] = parseHex(hex).map(srgbToLinear)
@@ -273,12 +282,3 @@ export function ensureContrastWithWhite(
   }
   return shiftToLightness(hex, lo)
 }
-
-/**
- * Mix `hex` toward white to the pale tint used behind email callout cards.
- *
- * The lightness target is the OKLab L of the house card background `#E0F2FE`,
- * so a tenant's card sits at the same perceptual weight as the house one
- * whatever its hue.
- */
-export const EMAIL_CARD_TINT_LIGHTNESS = 0.951

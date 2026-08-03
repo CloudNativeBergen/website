@@ -602,6 +602,7 @@ export function SponsorCRMPipeline({
             domains: conference.domains || [domain],
             socialLinks: conference.socialLinks,
             prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
+            theme: conference.theme,
           }}
         />
       )}

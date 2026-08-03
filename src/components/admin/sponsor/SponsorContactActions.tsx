@@ -1,5 +1,6 @@
 'use client'
 
+import { emailBrandColor } from '@/lib/branding/theme'
 import { useState } from 'react'
 import {
   EnvelopeIcon,
@@ -116,6 +117,7 @@ export function SponsorContactActions({
         eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
+        brandColor={emailBrandColor(conference.theme)}
       />
     </>
   )

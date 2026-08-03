@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         "conferenceStartDate": conference->startDate,
         "conferenceSponsorEmail": conference->sponsorEmail,
         "conferenceOrganizer": conference->organizer,
+        "conferenceTheme": conference->theme,
         "organizationRef": conference->organization._ref
       }`,
       { threshold: thresholdDate, maxReminders: MAX_REMINDERS },
@@ -98,6 +99,9 @@ export async function GET(request: NextRequest) {
               startDate: contract.conferenceStartDate,
               organizer: contract.conferenceOrganizer,
               sponsorEmail: contract.conferenceSponsorEmail,
+              // The projection above used to stop at `organizer`, so this cron
+              // could not brand its reminders even in principle.
+              theme: contract.conferenceTheme,
             },
           },
           {

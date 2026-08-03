@@ -22,6 +22,11 @@ export interface SpeakerEmailTemplateProps {
   message: string
   senderName: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function SpeakerEmailTemplate({
@@ -35,6 +40,7 @@ export function SpeakerEmailTemplate({
   subject,
   message,
   socialLinks = [],
+  brandColor,
 }: SpeakerEmailTemplateProps) {
   const proposalSection = (
     <EmailSection backgroundColor="#F8FAFC" borderColor="#E5E7EB">
@@ -99,6 +105,7 @@ export function SpeakerEmailTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       customContent={{
         body: (
           <>

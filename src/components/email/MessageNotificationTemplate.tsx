@@ -6,6 +6,7 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 export interface MessageNotificationTemplateProps {
   recipientName: string
@@ -33,6 +34,11 @@ export interface MessageNotificationTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 /**
@@ -53,7 +59,9 @@ export function MessageNotificationTemplate({
   eventDate,
   eventUrl,
   socialLinks = [],
+  brandColor,
 }: MessageNotificationTemplateProps) {
+  const brand = resolveEmailBrandPalette(brandColor)
   const customContent = {
     heading: firstContact
       ? `The ${eventName} organizers reached out`
@@ -110,7 +118,10 @@ export function MessageNotificationTemplate({
           {preferencesUrl && (
             <a
               href={preferencesUrl}
-              style={{ color: '#2563EB', textDecoration: 'underline' }}
+              style={{
+                color: brandedOr(brand, '#2563EB'),
+                textDecoration: 'underline',
+              }}
             >
               Manage notification preferences
             </a>
@@ -128,6 +139,7 @@ export function MessageNotificationTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       customContent={customContent}
     />
   )

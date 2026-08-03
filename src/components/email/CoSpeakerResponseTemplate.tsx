@@ -6,6 +6,11 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
+import {
+  brandedOr,
+  brandedTintOr,
+  resolveEmailBrandPalette,
+} from '@/lib/branding/email'
 
 export interface CoSpeakerResponseTemplateProps {
   inviterName: string
@@ -20,6 +25,11 @@ export interface CoSpeakerResponseTemplateProps {
   accepted: boolean
   declineReason?: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function CoSpeakerResponseTemplate({
@@ -35,7 +45,9 @@ export function CoSpeakerResponseTemplate({
   accepted,
   declineReason,
   socialLinks = [],
+  brandColor,
 }: CoSpeakerResponseTemplateProps) {
+  const brand = resolveEmailBrandPalette(brandColor)
   const responseSection = accepted ? (
     <div style={{ marginBottom: '24px' }}>
       <EmailText>
@@ -77,8 +89,13 @@ export function CoSpeakerResponseTemplate({
   )
 
   const nextStepsSection = accepted ? (
-    <EmailSection backgroundColor="#F0F9FF" borderColor="#BAE6FD">
-      <EmailSectionHeader color="#0284C7">Next Steps</EmailSectionHeader>
+    <EmailSection
+      backgroundColor={brandedTintOr(brand, '#F0F9FF')}
+      borderColor={brandedTintOr(brand, '#BAE6FD')}
+    >
+      <EmailSectionHeader color={brandedOr(brand, '#0284C7')}>
+        Next Steps
+      </EmailSectionHeader>
       <ul
         style={{
           margin: '0',
@@ -103,8 +120,13 @@ export function CoSpeakerResponseTemplate({
       </ul>
     </EmailSection>
   ) : (
-    <EmailSection backgroundColor="#F0F9FF" borderColor="#BAE6FD">
-      <EmailSectionHeader color="#0284C7">What&apos;s Next?</EmailSectionHeader>
+    <EmailSection
+      backgroundColor={brandedTintOr(brand, '#F0F9FF')}
+      borderColor={brandedTintOr(brand, '#BAE6FD')}
+    >
+      <EmailSectionHeader color={brandedOr(brand, '#0284C7')}>
+        What&apos;s Next?
+      </EmailSectionHeader>
       <EmailText size="14px">
         You can still invite other co-speakers to your proposal if needed. Visit
         your proposal page to send additional invitations.
@@ -150,6 +172,7 @@ export function CoSpeakerResponseTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       showMessagesLink
       customContent={customContent}
     />

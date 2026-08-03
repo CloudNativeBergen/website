@@ -9,6 +9,7 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 import { api } from '@/lib/trpc/client'
@@ -30,6 +31,7 @@ interface SponsorIndividualEmailModalProps {
     domains: string[]
     socialLinks?: string[]
     prospectusUrl?: string
+    theme?: ConferenceTheme | null
   }
 }
 
@@ -129,6 +131,7 @@ export function SponsorIndividualEmailModal({
         eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
+        brandColor={emailBrandColor(conference.theme)}
         content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
       />
     )
@@ -162,6 +165,7 @@ export function SponsorIndividualEmailModal({
       storageKey={`sponsor-individual-email-${sponsorForConference._id}`}
       warningContent={localhostWarning}
       previewComponent={createPreview}
+      brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
       templateSelector={({ setSubject, setMessage }) => (
         <SponsorTemplatePicker

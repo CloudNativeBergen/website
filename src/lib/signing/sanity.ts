@@ -1,3 +1,4 @@
+import type { ConferenceTheme } from '@/lib/branding/theme'
 import { clientReadUncached } from '@/lib/sanity/client'
 
 export interface SigningContractData {
@@ -31,6 +32,8 @@ export interface SigningContractData {
     domains?: string[]
     socialLinks?: string[]
     salesNotificationChannel?: string
+    /** Tenant brand theme — the contract-signed email is branded from it. */
+    theme?: ConferenceTheme | null
   }
   contactPersons?: Array<{ name?: string; email?: string; isPrimary?: boolean }>
   contractValue?: number
@@ -54,7 +57,7 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   },
   "sponsor": sponsor->{ name },
   "tier": tier->{ title },
-  "conference": conference->{ _id, title, startDate, city, organizer, sponsorEmail, domains, socialLinks, salesNotificationChannel },
+  "conference": conference->{ _id, title, startDate, city, organizer, sponsorEmail, domains, socialLinks, salesNotificationChannel, theme },
   contactPersons[]{ name, email, isPrimary },
   contractValue,
   contractCurrency

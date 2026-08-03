@@ -96,6 +96,7 @@ export default async function DiscountCodesAdminPage() {
             socialLinks: conference.socialLinks,
             contactEmail: conference.contactEmail || conference.cfpEmail,
             domain: domain,
+            theme: conference.theme,
           }}
         />
       </div>

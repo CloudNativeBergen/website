@@ -46,6 +46,12 @@ export interface EmailModalProps {
     messageHTML: string
   }) => React.ReactNode
   fromAddress: string
+  /**
+   * Tenant brand primary (THEMING L1), used to colour the PREVIEW body so it
+   * matches what is actually sent. Without it a themed conference's preview
+   * shows house-blue links and headings while the real email is branded.
+   */
+  brandColor?: string
   storageKey?: string
   additionalFields?: Record<string, string | number | boolean>
   onAdditionalFieldsChange?: (
@@ -73,6 +79,7 @@ export function EmailModal({
   initialValues = {},
   previewComponent,
   fromAddress,
+  brandColor,
   storageKey,
   additionalFields = {},
   onAdditionalFieldsChange,
@@ -195,7 +202,10 @@ export function EmailModal({
   }, [richTextValue])
 
   const getCurrentMessageHTML = (): string => {
-    return portableTextToHTML(richTextValue as PortableTextBlockForHTML[])
+    return portableTextToHTML(
+      richTextValue as PortableTextBlockForHTML[],
+      brandColor,
+    )
   }
 
   useEffect(() => {

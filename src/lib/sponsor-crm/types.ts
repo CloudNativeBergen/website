@@ -1,3 +1,4 @@
+import type { ConferenceTheme } from '@/lib/branding/theme'
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
 
 export type SponsorStatus =
@@ -121,6 +122,8 @@ export interface SponsorForConferenceExpanded {
     domains?: string[]
     socialLinks?: string[]
     logoBright?: string
+    /** Tenant brand theme — the contract emails are branded from it. */
+    theme?: ConferenceTheme | null
   }
   tier?: {
     _id: string
