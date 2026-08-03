@@ -1,6 +1,7 @@
 import type { TypedObject } from 'sanity'
 import type { Conference } from '@/lib/conference/types'
 import { resolveHomepageLifecycle, type HomepageStage } from './lifecycle'
+import type { SectionVariant } from './variants'
 import type { RichTextContentBlock } from './richText'
 
 /**
@@ -141,6 +142,8 @@ interface BaseSection {
  */
 export interface HeroSection extends BaseSection {
   _type: 'homepageHero'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageHero'>
   heroHeadline?: string
   heroSubheadline?: string
   /** When non-empty, replaces the phase-aware CTA row with these buttons. */
@@ -155,6 +158,8 @@ export interface HeroSection extends BaseSection {
  */
 export interface SaveTheDateSection extends BaseSection {
   _type: 'homepageSaveTheDate'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageSaveTheDate'>
   heading?: string
   description?: string
 }
@@ -167,12 +172,16 @@ export interface SaveTheDateSection extends BaseSection {
  */
 export interface FeaturedSpeakersSection extends BaseSection {
   _type: 'homepageFeaturedSpeakers'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageFeaturedSpeakers'>
   heading?: string
   description?: string
 }
 
 export interface ProgramHighlightsSection extends BaseSection {
   _type: 'homepageProgramHighlights'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageProgramHighlights'>
 }
 
 /**
@@ -182,6 +191,8 @@ export interface ProgramHighlightsSection extends BaseSection {
  */
 export interface OrganizersSection extends BaseSection {
   _type: 'homepageOrganizers'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageOrganizers'>
   heading?: string
   description?: string
 }
@@ -194,6 +205,8 @@ export interface OrganizersSection extends BaseSection {
  */
 export interface SponsorsSection extends BaseSection {
   _type: 'homepageSponsors'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageSponsors'>
   heading?: string
   description?: string
   /** Absent = shown. Set false to drop the "Become a Sponsor" card. */
@@ -209,6 +222,8 @@ export interface SponsorsSection extends BaseSection {
  */
 export interface GallerySection extends BaseSection {
   _type: 'homepageGallery'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageGallery'>
   heading?: string
   description?: string
 }
@@ -216,12 +231,16 @@ export interface GallerySection extends BaseSection {
 /** Standalone vanity-metrics band (content from `conference.vanityMetrics`). */
 export interface MetricsSection extends BaseSection {
   _type: 'homepageMetrics'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageMetrics'>
   heading?: string
 }
 
 /** Generic call-to-action banner (heading + body + one house Button). */
 export interface CtaBannerSection extends BaseSection {
   _type: 'homepageCtaBanner'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageCtaBanner'>
   heading: string
   body?: string
   buttonLabel: string
@@ -238,6 +257,8 @@ export interface CtaBannerSection extends BaseSection {
  */
 export interface RichTextSection extends BaseSection {
   _type: 'homepageRichText'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageRichText'>
   heading?: string
   content: TypedObject[] | RichTextContentBlock[]
 }
@@ -260,6 +281,8 @@ export interface HomepageFaqItem {
  */
 export interface FaqSection extends BaseSection {
   _type: 'homepageFaq'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageFaq'>
   heading?: string
   /** `'own'` (default) renders `items`; `'ticketFaqs'` renders the ticket FAQs. */
   source?: 'own' | 'ticketFaqs'
@@ -274,6 +297,8 @@ export interface FaqSection extends BaseSection {
  */
 export interface CountdownSection extends BaseSection {
   _type: 'homepageCountdown'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageCountdown'>
   heading?: string
   /** ISO date/timestamp that overrides `conference.startDate` as the target. */
   targetOverride?: string
@@ -289,6 +314,8 @@ export interface CountdownSection extends BaseSection {
  */
 export interface VenueSection extends BaseSection {
   _type: 'homepageVenue'
+  /** Presentation variant. Absent = the default (see SECTION_VARIANTS). */
+  variant?: SectionVariant<'homepageVenue'>
   heading?: string
   description?: string
 }

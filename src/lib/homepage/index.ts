@@ -7,3 +7,6 @@
 // RSC graph. That property is load-bearing — keep ./editor dependency-free.
 export * from './sections'
 export * from './richText'
+// The variant registry is part of the shared vocabulary (the renderer, the write
+// path and the Studio schema all read it) and is itself dependency-free.
+export * from './variants'
