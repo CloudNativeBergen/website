@@ -4,3 +4,4 @@
 // (page.tsx), so re-exporting it here would drag-and-drop code into the
 // RSC module graph and break the build.
 export * from './sections'
+export * from './richText'

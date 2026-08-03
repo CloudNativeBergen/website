@@ -36,11 +36,13 @@ import {
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
-import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { RichTextContentEditor } from './RichTextContentEditor'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import {
   HOMEPAGE_SECTION_TYPES,
+  isRichTextContentEmpty,
+  sanitizeRichTextContent,
   type HomepageSection,
   type HomepageSectionType,
 } from '@/lib/homepage'
@@ -263,7 +265,11 @@ export function HomepageSectionsEditor({
         if (!r.buttonHref?.trim()) return 'CTA banner needs a button link.'
       }
       if (r._type === 'homepageRichText') {
-        if (!r.content || r.content.length === 0)
+        // Mirror what the SERVER will keep, not what the editor holds: an
+        // organizer who added only empty cards would otherwise get a confusing
+        // rejection from the mutation instead of a friendly message here.
+        const kept = sanitizeRichTextContent(r.content)
+        if (kept.length === 0 || isRichTextContentEmpty(kept))
           return 'Rich text block needs content.'
       }
     }
@@ -832,11 +838,9 @@ function SectionConfig({
           aria-label="Rich text heading"
           className={inputClass}
         />
-        <PortableTextEditor
-          label="Content"
-          value={row.content ?? []}
-          onChange={(blocks) => onChange({ content: blocks })}
-          compact
+        <RichTextContentEditor
+          value={row.content}
+          onChange={(content) => onChange({ content })}
         />
       </div>
     )

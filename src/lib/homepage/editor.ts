@@ -1,5 +1,5 @@
 import { arrayMove } from '@dnd-kit/sortable'
-import type { PortableTextBlock } from '@portabletext/editor'
+import { sanitizeRichTextContent, type RichTextContentBlock } from './richText'
 import { type HomepageSection, type HomepageSectionType } from './sections'
 
 /**
@@ -70,7 +70,7 @@ export interface EditorRow {
   body?: string
   buttonLabel?: string
   buttonHref?: string
-  content?: PortableTextBlock[]
+  content?: RichTextContentBlock[]
   // FAQ block
   source?: 'own' | 'ticketFaqs'
   faqItems?: { _key: string; question: string; answer: string }[]
@@ -126,7 +126,9 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
       row.buttonHref = s.buttonHref
     } else if (s._type === 'homepageRichText') {
       row.heading = s.heading
-      row.content = (s.content as PortableTextBlock[]) ?? []
+      // Normalise on LOAD as well as on save: the row the editor mutates is
+      // always the allowlisted shape, whatever the dataset happens to hold.
+      row.content = sanitizeRichTextContent(s.content)
     } else if (s._type === 'homepageMetrics') {
       row.heading = s.heading
     } else if (s._type === 'homepageFaq') {

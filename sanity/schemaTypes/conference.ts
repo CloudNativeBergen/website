@@ -61,6 +61,20 @@ const safeLinkRule = (value: unknown) => {
   return 'Enter a site path (e.g. /tickets) or a full http(s) URL'
 }
 
+/**
+ * The same rule for links inside the homepage Rich Text block, plus `mailto:`
+ * — the one extra scheme prose needs ("email the organizers"). Delegates to
+ * {@link safeLinkRule} rather than restating it, so there is still exactly one
+ * scheme decision on the Studio side.
+ */
+const safeRichTextLinkRule = (value: unknown) => {
+  if (typeof value === 'string' && /^mailto:/i.test(value.trim())) return true
+  const result = safeLinkRule(value)
+  return result === true
+    ? true
+    : 'Enter a site path (e.g. /tickets), a full http(s) URL, or a mailto: address'
+}
+
 export default defineType({
   name: 'conference',
   title: 'Conference',
@@ -1388,7 +1402,58 @@ export default defineType({
             name: 'content',
             title: 'Content',
             type: 'array',
-            of: [{ type: 'block' }],
+            description:
+              'The one free-form block on the homepage. You can write prose, headings, lists and links, and add code/preformatted text, images, small tables and callouts. You cannot paste HTML, embed a script, an iframe or a third-party widget, or point an image at another site — anything of that kind is removed when the page is saved.',
+            // The vocabulary is ALLOWLISTED, mirroring
+            // `src/lib/homepage/richText.ts` (the server validator and the
+            // renderer read the same lists). `block` is spelled out rather than
+            // left at Sanity's defaults so the Studio cannot author a style,
+            // decorator or annotation the write path would refuse.
+            of: [
+              {
+                type: 'block',
+                styles: [
+                  { title: 'Normal', value: 'normal' },
+                  { title: 'H2', value: 'h2' },
+                  { title: 'H3', value: 'h3' },
+                  { title: 'H4', value: 'h4' },
+                  { title: 'Quote', value: 'blockquote' },
+                ],
+                lists: [
+                  { title: 'Bullet', value: 'bullet' },
+                  { title: 'Numbered', value: 'number' },
+                ],
+                marks: {
+                  decorators: [
+                    { title: 'Strong', value: 'strong' },
+                    { title: 'Emphasis', value: 'em' },
+                    { title: 'Underline', value: 'underline' },
+                    { title: 'Code', value: 'code' },
+                    { title: 'Strike', value: 'strike-through' },
+                  ],
+                  annotations: [
+                    {
+                      title: 'Link',
+                      name: 'link',
+                      type: 'object',
+                      fields: [
+                        {
+                          title: 'Link',
+                          name: 'href',
+                          type: 'string',
+                          validation: (Rule) =>
+                            Rule.required().custom(safeRichTextLinkRule),
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+              { type: 'richTextCode' },
+              { type: 'richTextImage' },
+              { type: 'richTextTable' },
+              { type: 'richTextCallout' },
+            ],
             validation: (Rule) => Rule.required(),
           }),
         ]),
