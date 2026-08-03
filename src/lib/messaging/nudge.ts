@@ -2,7 +2,8 @@ import 'server-only'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import {
   createNotifications,
-  getOrganizerSpeakerIds,
+  getAllOrganizerSpeakerIdsAcrossOrgs,
+  getOrganizerSpeakerIdsForOrg,
 } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
 import type { NotificationInput } from '@/lib/notification/types'
@@ -96,7 +97,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
     // recipient list. Recipients are resolved PER-ORG inside the loop (B4): the
     // prior code reused this global set as the team-else-all fallback, which
     // push-notified every tenant's organizers about one tenant's threads.
-    const selectionOrganizerIds = await getOrganizerSpeakerIds(null)
+    const selectionOrganizerIds = await getAllOrganizerSpeakerIdsAcrossOrgs()
     const cutoff = staleConversationCutoff()
 
     // Selection: open (or absent status) AND no activity since the cutoff AND
@@ -194,7 +195,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
                 conversation.conversationType === 'sponsor'
                   ? 'sponsors'
                   : 'cfp',
-              allOrganizerIds: await getOrganizerSpeakerIds(orgId),
+              allOrganizerIds: await getOrganizerSpeakerIdsForOrg(orgId),
             })
         if (recipientIds.length === 0) continue
 

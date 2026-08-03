@@ -36,7 +36,7 @@ import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanit
  */
 
 /** The minimum shape these checks read off a speaker/session token. */
-type OrganizerSpeaker = Pick<Speaker, '_id' | 'organizerOrgIds'>
+export type OrganizerSpeaker = Pick<Speaker, '_id' | 'organizerOrgIds'>
 
 /**
  * PURE, synchronous org-scoped organizer check. Given a speaker and the already-
