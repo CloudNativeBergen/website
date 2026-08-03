@@ -610,9 +610,15 @@ const sectionHidden = z.boolean().optional()
  * Optional per-section COPY (heading/sub-heading/CTA text). Blank is rejected
  * rather than stored: an absent field is what makes a section fall back to the
  * house default, so an empty string would be a third, meaningless state. The
- * editor omits blanks before it builds the payload.
+ * editor omits blanks before it builds the payload (`toPayload` only assigns a
+ * trimmed non-empty value), and the router only persists truthy values.
+ *
+ * Deliberately NOT `.nullable()`: the section types model these as
+ * `heading?: string`, so `null` would be a third state nothing downstream
+ * handles. Absent is the only way to mean "use the house default" — the same
+ * two-state shape as `sectionHidden`.
  */
-const sectionCopy = z.string().trim().min(1).nullable().optional()
+const sectionCopy = z.string().trim().min(1).optional()
 
 /**
  * A link an ORGANIZER can point a public-page button at: a site-internal path
