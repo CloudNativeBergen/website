@@ -233,6 +233,11 @@ export const galleryRouter = router({
       })
       return images
     } catch (error) {
+      // requireCurrentOrgId throws NOT_FOUND on an unresolvable host — that is
+      // the fail-closed signal this PR introduces, and wrapping it as a 500
+      // would hide a tenancy failure behind a generic server error in the
+      // client AND in monitoring. Same rethrow the admin paths already use.
+      if (error instanceof TRPCError) throw error
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch your photos',
@@ -250,6 +255,11 @@ export const galleryRouter = router({
       })
       return count
     } catch (error) {
+      // requireCurrentOrgId throws NOT_FOUND on an unresolvable host — that is
+      // the fail-closed signal this PR introduces, and wrapping it as a 500
+      // would hide a tenancy failure behind a generic server error in the
+      // client AND in monitoring. Same rethrow the admin paths already use.
+      if (error instanceof TRPCError) throw error
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to count your photos',
