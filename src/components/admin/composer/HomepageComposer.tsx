@@ -502,10 +502,26 @@ export function HomepageComposer({
   const showPreview = isWide || pane === 'preview'
 
   return (
-    <div className="space-y-4">
+    /**
+     * ONE SCROLLBAR PER PANE, NEVER ONE FOR THE PAGE.
+     *
+     * `data-shell-fit="viewport"` is the contract with `DashboardLayout` (see
+     * the `shell-fit:` variant in tailwind.css): the shell stops being a
+     * scrolling document and hands this element a box exactly as tall as what is
+     * left of the viewport. The workspace then divides that box — chrome at
+     * fixed height, panes taking the rest and scrolling inside themselves.
+     *
+     * Without it the page scrolled AND the panes scrolled: two scrollbars, and
+     * the header, the Save button and the mode toggles drifted off the top the
+     * moment an organizer reached for a card further down the rail.
+     */
+    <div
+      data-shell-fit="viewport"
+      className="flex min-h-0 flex-1 flex-col gap-4"
+    >
       {/* Two rows rather than one: at 393px a single row truncated the title to
           "Homepage comp…" and orphaned Save onto a line of its own. */}
-      <header className="space-y-3">
+      <header className="shrink-0 space-y-3">
         <div className="flex items-center gap-3">
           <Link
             href={APPEARANCE_HREF}
@@ -573,7 +589,7 @@ export function HomepageComposer({
       </header>
 
       {usingDefault ? (
-        <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+        <p className="shrink-0 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
           You are using the default layout — change anything below to make it
           your own. “Revert to default” brings back the automatic layout that
           adapts as your conference takes shape.
@@ -583,7 +599,7 @@ export function HomepageComposer({
       {submitError ? (
         <p
           role="alert"
-          className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
+          className="shrink-0 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
         >
           {submitError}
         </p>
@@ -595,24 +611,39 @@ export function HomepageComposer({
         label="Workspace pane"
         value={pane}
         onChange={setPane}
-        className="lg:hidden"
+        className="shrink-0 lg:hidden"
         options={[
           { value: 'compose', label: 'Compose' },
           { value: 'preview', label: 'Preview' },
         ]}
       />
 
-      <div className="flex flex-col gap-4 lg:h-[calc(100vh-16rem)] lg:min-h-[38rem] lg:flex-row">
+      {/* The panes take ALL the height the chrome above did not, and no more:
+          `min-h-0` is what lets a flex child be shorter than its content, which
+          is the difference between a pane that scrolls and a pane that pushes
+          the page taller. The old `lg:h-[calc(100vh-16rem)]` guessed at the
+          chrome above it — and guessed 16rem in a shell whose header, banner and
+          pane toggle vary by breakpoint and by state, which is how the page came
+          to scroll behind two panes that were already scrolling. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {showRail ? (
           <div
             ref={railRef}
             className={cn(
-              'min-w-0 lg:w-[26rem] lg:shrink-0 lg:overflow-y-auto lg:pr-1',
+              // Below `lg` this IS the workspace's only pane, so it scrolls on
+              // its own there too — a phone must not scroll the page to reach
+              // the last card while the Save button rides off the top.
+              'min-h-0 min-w-0 flex-1 overflow-y-auto',
+              'lg:w-[26rem] lg:flex-none lg:pr-1',
             )}
           >
             <ComposerRail
               rows={rows}
               expanded={expanded}
+              // The same query the status rows read: the config panels quote
+              // this tenant's tagline, description and title back as the copy
+              // their bands render when a field is left blank.
+              conference={conference}
               focusKey={focusKey}
               hoverKey={hoverKey}
               statuses={statuses}

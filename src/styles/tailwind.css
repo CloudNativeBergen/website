@@ -11,6 +11,24 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
+ * `shell-fit:` — styles that apply only when a PAGE inside this element claims
+ * the viewport.
+ *
+ * The dashboard shell (`DashboardLayout`) is a scrolling document: the sticky
+ * chrome scrolls with it and the page below is as tall as its content. That is
+ * right for every list and form in the admin, and wrong for a workspace whose
+ * two panes scroll on their own — the homepage composer — where it produces the
+ * double scrollbar the shell and the panes then fight over.
+ *
+ * Such a page marks its own root `data-shell-fit="viewport"` and the shell
+ * reacts: `:has()` lets the ancestor chrome respond to a descendant without any
+ * prop threading through a server layout, and without a JS pass that would flash
+ * the scrolling layout on first paint. The marker is a CONTRACT, not a style —
+ * see `DashboardLayout` for the three elements that answer it.
+ */
+@custom-variant shell-fit (&:has([data-shell-fit='viewport']));
+
+/*
  * Prevent iOS auto-zoom on focus for form controls.
  *
  * iOS Safari (and installed PWAs) auto-zoom the viewport when a focused

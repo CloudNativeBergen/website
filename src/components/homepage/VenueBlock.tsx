@@ -1,7 +1,10 @@
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { MapPinIcon } from '@heroicons/react/24/outline'
-import type { VenueSection } from '@/lib/homepage/sections'
+import {
+  DEFAULT_VENUE_HEADING,
+  type VenueSection,
+} from '@/lib/homepage/sections'
 import type { Conference } from '@/lib/conference/types'
 import { buildDirectionsUrl } from '@/lib/homepage/venue'
 import { resolveVariant } from '@/lib/homepage/variants'
@@ -34,7 +37,7 @@ export function VenueBlock({
   const address = conference.venueAddress?.trim()
   if (!name && !address) return null
 
-  const heading = section.heading?.trim() || 'Venue'
+  const heading = section.heading?.trim() || DEFAULT_VENUE_HEADING
   const description = section.description?.trim()
   const directionsUrl = buildDirectionsUrl(name, address)
 

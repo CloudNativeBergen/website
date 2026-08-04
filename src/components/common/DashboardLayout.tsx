@@ -199,7 +199,14 @@ export function DashboardLayout({
 
   return (
     <>
-      <div>
+      {/* VIEWPORT-CLAIMING PAGES (`shell-fit:`, see tailwind.css). By default this
+          is an ordinary scrolling document. When the page inside marks itself
+          `data-shell-fit="viewport"`, the shell becomes a fixed column exactly
+          one viewport tall: the sticky chrome can no longer scroll away, `main`
+          becomes the only flexible row, and the page owns every scrollbar
+          beneath it. `dvh` rather than `vh` so a phone's collapsing URL bar does
+          not leave the bottom of the workspace under the browser chrome. */}
+      <div className="shell-fit:flex shell-fit:h-dvh shell-fit:flex-col shell-fit:overflow-hidden">
         <Dialog
           open={sidebarOpen}
           onClose={setSidebarOpen}
@@ -485,8 +492,14 @@ export function DashboardLayout({
           </div>
         </div>
 
-        <main className="py-4 lg:py-10 lg:pl-20">
-          <div className="px-2 sm:px-4 lg:px-8">{children}</div>
+        {/* The generous `lg:py-10` is a reading rhythm for documents; a workspace
+            that must fit the viewport spends that height on content instead, so
+            `shell-fit:` trades it for a slim gutter. Horizontal padding is
+            untouched — it is alignment with the rest of the admin. */}
+        <main className="py-4 lg:py-10 lg:pl-20 shell-fit:flex shell-fit:min-h-0 shell-fit:flex-1 shell-fit:flex-col shell-fit:overflow-hidden shell-fit:py-3 lg:shell-fit:py-4">
+          <div className="px-2 sm:px-4 lg:px-8 shell-fit:flex shell-fit:min-h-0 shell-fit:flex-1 shell-fit:flex-col">
+            {children}
+          </div>
         </main>
       </div>
 

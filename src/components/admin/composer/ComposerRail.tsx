@@ -32,12 +32,18 @@ import {
 } from '@/lib/homepage'
 import type { SectionContentStatus } from '@/lib/homepage/contentStatus'
 import { SECTION_LABELS, type EditorRow } from '@/lib/homepage/editor'
+import type { PlaceholderConference } from './placeholderCopy'
 import { ComposerSectionCard } from './SectionCard'
 
 export interface ComposerRailProps {
   rows: EditorRow[]
   /** `_key`s whose config panel is open. */
   expanded: ReadonlySet<string>
+  /**
+   * The tenant's title/tagline/description — what the config panels quote as
+   * the copy each band renders when its field is left blank.
+   */
+  conference?: PlaceholderConference
   focusKey: string | null
   hoverKey: string | null
   /** `_key` → what the live site does with that section. */
@@ -77,6 +83,7 @@ export interface ComposerRailProps {
 export function ComposerRail({
   rows,
   expanded,
+  conference,
   focusKey,
   hoverKey,
   statuses,
@@ -163,6 +170,7 @@ export function ComposerRail({
                   index={index}
                   total={rows.length}
                   expanded={expanded.has(row._key)}
+                  conference={conference}
                   focused={focusKey === row._key}
                   hovered={hoverKey === row._key}
                   status={statuses.get(row._key)}
