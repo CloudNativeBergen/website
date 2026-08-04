@@ -19,10 +19,25 @@
  *                                  `name`, or its `type` when anonymous)
  *   `ticketTargets.milestones[ticketMilestone].date`
  *
- * KNOWN LIMIT: traversal follows `fields` and `of` only. Portable-text
- * internals reached through `marks.annotations` (rich-text link annotations,
- * for instance) are NOT walked — those are block-content plumbing, not fields a
- * cross-app reader projects. Everything else nests to full depth.
+ * NAMED TYPES ARE RESOLVED. A field whose `type` is a SEPARATELY REGISTERED
+ * schema type (`richTextCode`, say) carries no inline `fields`, so walking only
+ * what is written at the reference site would capture the reference and none of
+ * its internals — and deleting `richTextCode.code` would slip through the lock
+ * unnoticed. Pass the registry (see `describeSchemaShape`) and the walker looks
+ * the type up and continues underneath it.
+ *
+ * CYCLE GUARD: resolving named types can loop — `blockContent` embeds types
+ * that embed `blockContent` again, and a self-referencing type would recurse
+ * forever. The walker therefore carries the SET OF TYPE NAMES ALREADY RESOLVED
+ * ON THE CURRENT PATH and refuses to resolve one a second time. The repeat
+ * still gets its own `path -> type` entry (so removing the field is caught);
+ * only the descent stops. The guard is per-path, not global: the same named
+ * type appearing under two different fields is expanded under both.
+ *
+ * KNOWN LIMIT: traversal follows `fields` and `of`. Portable-text internals
+ * reached through `marks.annotations` (rich-text link annotations, for
+ * instance) are NOT walked — those are block-content plumbing, not fields a
+ * cross-app reader projects.
  */
 
 /** The subset of a Sanity field/member definition this walker cares about. */
@@ -36,24 +51,70 @@ interface ShapeNode {
 /** A document type flattened to `path -> type`, sorted by path. */
 export type SchemaShape = Record<string, string>
 
+/**
+ * Registered schema types by name, so a `type: 'richTextCode'` reference can be
+ * expanded into that type's own fields. Build one with
+ * {@link buildSchemaTypeRegistry}.
+ */
+export type SchemaTypeRegistry = Record<string, ShapeNode>
+
 function asNodes(value: unknown): ShapeNode[] {
   return Array.isArray(value) ? (value as ShapeNode[]) : []
 }
 
-function walk(nodes: ShapeNode[], prefix: string, out: SchemaShape): void {
+/** Index a list of registered schema type definitions by `name`. */
+export function buildSchemaTypeRegistry(types: unknown): SchemaTypeRegistry {
+  const registry: SchemaTypeRegistry = {}
+  for (const type of asNodes(types)) {
+    if (type && typeof type.name === 'string') registry[type.name] = type
+  }
+  return registry
+}
+
+interface WalkContext {
+  out: SchemaShape
+  registry: SchemaTypeRegistry
+  /** Named types already resolved on the path being walked — the cycle guard. */
+  resolving: ReadonlySet<string>
+}
+
+/**
+ * Continue the walk underneath a node, through both what is written inline at
+ * the reference site AND — when the node's `type` names a registered type that
+ * is not already being resolved on this path — that type's own definition.
+ */
+function descend(
+  node: ShapeNode,
+  type: string,
+  path: string,
+  ctx: WalkContext,
+) {
+  walk(asNodes(node.fields), path, ctx)
+  walkMembers(asNodes(node.of), path, ctx)
+
+  const named = ctx.registry[type]
+  if (!named || ctx.resolving.has(type)) return
+  const nested: WalkContext = {
+    ...ctx,
+    resolving: new Set([...ctx.resolving, type]),
+  }
+  walk(asNodes(named.fields), path, nested)
+  walkMembers(asNodes(named.of), path, nested)
+}
+
+function walk(nodes: ShapeNode[], prefix: string, ctx: WalkContext): void {
   for (const node of nodes) {
     if (!node || typeof node !== 'object') continue
     const type = typeof node.type === 'string' ? node.type : 'unknown'
     const name = typeof node.name === 'string' ? node.name : undefined
     if (!name) continue
     const path = prefix ? `${prefix}.${name}` : name
-    out[path] = type
-    walk(asNodes(node.fields), path, out)
-    walkMembers(asNodes(node.of), path, out)
+    ctx.out[path] = type
+    descend(node, type, path, ctx)
   }
 }
 
-function walkMembers(members: ShapeNode[], path: string, out: SchemaShape) {
+function walkMembers(members: ShapeNode[], path: string, ctx: WalkContext) {
   for (const member of members) {
     if (!member || typeof member !== 'object') continue
     const memberType = typeof member.type === 'string' ? member.type : 'unknown'
@@ -63,21 +124,30 @@ function walkMembers(members: ShapeNode[], path: string, out: SchemaShape) {
     // collide.
     const key = typeof member.name === 'string' ? member.name : memberType
     const memberPath = `${path}[${key}]`
-    out[memberPath] = memberType
-    walk(asNodes(member.fields), memberPath, out)
-    walkMembers(asNodes(member.of), memberPath, out)
+    ctx.out[memberPath] = memberType
+    descend(member, memberType, memberPath, ctx)
   }
 }
 
 /**
  * Flatten a Sanity document type definition to its sorted `path -> type` shape.
+ *
+ * Pass `registry` (from {@link buildSchemaTypeRegistry}) to expand references to
+ * separately registered types; without it, such a reference is captured at its
+ * own entry only and its internals are not walked.
  */
-export function describeSchemaShape(documentType: {
-  name: string
-  fields?: unknown
-}): SchemaShape {
+export function describeSchemaShape(
+  documentType: { name: string; fields?: unknown },
+  registry: SchemaTypeRegistry = {},
+): SchemaShape {
   const out: SchemaShape = {}
-  walk(asNodes(documentType.fields), '', out)
+  // The document type itself seeds the cycle guard: a type embedding itself
+  // (directly or through another type) stops at the first repeat.
+  walk(asNodes(documentType.fields), '', {
+    out,
+    registry,
+    resolving: new Set([documentType.name]),
+  })
   return Object.fromEntries(
     Object.keys(out)
       .sort()

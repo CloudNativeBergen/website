@@ -12,11 +12,16 @@
  * find yourself importing from `@/lib/...` here, the thing you are adding
  * belongs somewhere else.
  *
- * WHY IT IS NARROW: the `conference` document has ~160 fields and grows most
- * weeks. kontroll depends on TEN of them. Keeping the contract to those ten is
- * the whole point — it is the drift surface between two codebases, and a small
- * surface is a cheap one. Do NOT widen this to "the conference type"; add a
- * second, equally narrow projection if another view needs different fields.
+ * WHY IT IS NARROW: the `conference` document carries some 80 top-level fields
+ * (235 paths once nested objects, arrays and named types are counted, at the
+ * time of writing) and grows most weeks. kontroll depends on NINE of them — the
+ * nine in
+ * {@link CONFERENCE_CONTRACT_FIELDS} — plus the system field `_id`, which is
+ * not a schema field and so is not in that list. Ten projection entries, nine
+ * schema fields. Keeping the contract that small is the whole point: it is the
+ * drift surface between two codebases, and a small surface is a cheap one. Do
+ * NOT widen this to "the conference type"; add a second, equally narrow
+ * projection if another view needs different fields.
  *
  * ENFORCEMENT: `__tests__/sanity/schema-contract.test.ts` asserts that every
  * schema field named here still exists in `sanity/schemaTypes/conference.ts`,
@@ -38,7 +43,10 @@ export type ConferenceContractVisibility = 'unlisted' | 'live'
 export type ConferenceContractLifecycleStatus = 'cancelled' | 'archived'
 
 /**
- * The `conference` schema fields this contract reads.
+ * The NINE `conference` schema fields this contract reads. `_id` is deliberately
+ * absent: it is a system field on every Sanity document, not something
+ * `sanity/schemaTypes/conference.ts` declares, so asserting it against the
+ * schema would fail for the wrong reason.
  *
  * This list is asserted against the live schema — a removal or a rename here is
  * a test failure, not a runtime surprise in the other app.
@@ -59,8 +67,9 @@ export const CONFERENCE_CONTRACT_FIELDS = [
 ] as const
 
 /**
- * The GROQ projection kontroll uses to list conferences. Ten fields, no
- * references followed, no joins — a listing row and nothing more.
+ * The GROQ projection kontroll uses to list conferences: ten entries — `_id`
+ * plus the nine schema fields above — with no references followed and no joins.
+ * A listing row and nothing more.
  *
  * `organization` is projected as its raw reference id (`organizationId`)
  * because the consumer already knows which organization it asked for; it needs

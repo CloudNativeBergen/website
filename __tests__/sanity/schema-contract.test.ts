@@ -20,11 +20,13 @@
  * Escape hatch: `pnpm tsx scripts/update-schema-baseline.ts`, committed in the
  * same PR. See `formatSchemaShapeDrift` for the message a failure prints.
  *
- * Coverage note: the shape walker follows `fields` and `of` to full depth, so
- * inline objects and arrays-of-objects (including the homepage section blocks
- * and their nested arrays) ARE covered. Portable-text internals reached via
- * `marks.annotations` are NOT walked; they are block-content plumbing, not
- * fields any cross-app reader projects.
+ * Coverage note: the walker follows `fields` and `of`, and ALSO resolves a
+ * field whose `type` names a separately registered schema type (`richTextCode`
+ * and the rest of the rich-text vocabulary) by looking it up in the Studio's
+ * own type list — so `richTextCode.code` is inside the lock, not merely the
+ * reference to it. Cycles are stopped by a per-path guard on type names.
+ * Portable-text internals reached via `marks.annotations` are NOT walked; they
+ * are block-content plumbing, not fields any cross-app reader projects.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -33,15 +35,20 @@ import conference from '../../sanity/schemaTypes/conference'
 import {
   LOCKED_DOCUMENT_TYPES,
   SCHEMA_SHAPE_BASELINE_PATH,
+  SCHEMA_TYPE_REGISTRY,
 } from '../../sanity/lib/lockedSchemas'
 import {
+  buildSchemaTypeRegistry,
   describeSchemaShape,
   diffSchemaShape,
   formatSchemaShapeDrift,
   hasSchemaShapeDrift,
   type SchemaShape,
 } from '../../sanity/lib/schemaShape'
-import { CONFERENCE_CONTRACT_FIELDS } from '@/lib/conference/contract'
+import {
+  CONFERENCE_CONTRACT_FIELDS,
+  CONFERENCE_LIST_PROJECTION,
+} from '@/lib/conference/contract'
 
 const REPO_ROOT = resolve(__dirname, '../..')
 
@@ -59,7 +66,10 @@ describe('locked Sanity document types', () => {
   it.each(Object.keys(LOCKED_DOCUMENT_TYPES))(
     '"%s" is append-only: no field removed, no field retyped',
     (typeName) => {
-      const current = describeSchemaShape(LOCKED_DOCUMENT_TYPES[typeName])
+      const current = describeSchemaShape(
+        LOCKED_DOCUMENT_TYPES[typeName],
+        SCHEMA_TYPE_REGISTRY,
+      )
       const drift = diffSchemaShape(baseline[typeName], current)
       if (hasSchemaShapeDrift(drift)) {
         throw new Error(
@@ -89,10 +99,10 @@ describe('cross-app conference read contract', () => {
             'on the "conference" document type.',
             '',
             'That projection is the exact GROQ the kontroll control panel',
-            '(my.konf.app) runs to list an organization’s conferences. Ten',
-            'fields out of ~160 — this is the tightest part of the contract and',
-            'the least forgiving: the field is gone, so kontroll now reads null',
-            'for it in production.',
+            `(my.konf.app) runs to list an organization’s conferences: ${CONFERENCE_CONTRACT_FIELDS.length}`,
+            `schema fields out of ${topLevelFields.size} top-level, plus the system field _id.`,
+            'This is the tightest part of the contract and the least forgiving —',
+            'the field is gone, so kontroll now reads null for it in production.',
             '',
             'Either restore the field, or remove it from',
             'CONFERENCE_CONTRACT_FIELDS and CONFERENCE_LIST_PROJECTION in',
@@ -106,6 +116,18 @@ describe('cross-app conference read contract', () => {
       expect(topLevelFields.has(fieldName)).toBe(true)
     },
   )
+
+  // Guards the contract's own documentation against the off-by-one it already
+  // had once: ten projection ENTRIES, nine SCHEMA fields, because `_id` is a
+  // system field on every document rather than something the schema declares.
+  it('names nine schema fields; the tenth projection entry is _id', () => {
+    expect(CONFERENCE_CONTRACT_FIELDS).toHaveLength(9)
+    expect(CONFERENCE_CONTRACT_FIELDS).not.toContain('_id')
+    expect(CONFERENCE_LIST_PROJECTION).toContain('_id')
+    for (const fieldName of CONFERENCE_CONTRACT_FIELDS) {
+      expect(CONFERENCE_LIST_PROJECTION).toContain(fieldName)
+    }
+  })
 })
 
 /**
@@ -204,6 +226,90 @@ describe('schema shape extraction', () => {
     })
   })
 
+  it('resolves fields whose type is a separately registered type', () => {
+    const registry = buildSchemaTypeRegistry([
+      {
+        name: 'codeBlock',
+        type: 'object',
+        fields: [
+          { name: 'code', type: 'text' },
+          { name: 'language', type: 'string' },
+        ],
+      },
+    ])
+    const shape = describeSchemaShape(
+      {
+        name: 'sample',
+        fields: [{ name: 'body', type: 'array', of: [{ type: 'codeBlock' }] }],
+      },
+      registry,
+    )
+    expect(shape).toEqual({
+      body: 'array',
+      'body[codeBlock]': 'codeBlock',
+      'body[codeBlock].code': 'text',
+      'body[codeBlock].language': 'string',
+    })
+  })
+
+  it('captures the named type at its own entry only when no registry is given', () => {
+    const shape = describeSchemaShape({
+      name: 'sample',
+      fields: [{ name: 'body', type: 'array', of: [{ type: 'codeBlock' }] }],
+    })
+    expect(shape).toEqual({ body: 'array', 'body[codeBlock]': 'codeBlock' })
+  })
+
+  it('stops at the first repeat of a type on the path (cycle guard)', () => {
+    // `richText` embeds `callout`, and `callout` embeds `richText` again — the
+    // exact shape that would recurse forever without the guard.
+    const registry = buildSchemaTypeRegistry([
+      {
+        name: 'richText',
+        type: 'array',
+        of: [{ type: 'callout' }],
+      },
+      {
+        name: 'callout',
+        type: 'object',
+        fields: [
+          { name: 'title', type: 'string' },
+          { name: 'nested', type: 'richText' },
+        ],
+      },
+    ])
+    const shape = describeSchemaShape(
+      { name: 'sample', fields: [{ name: 'body', type: 'richText' }] },
+      registry,
+    )
+    // One full expansion, then the repeat of `richText` is recorded but not
+    // descended into — so the walk terminates instead of hanging.
+    expect(shape).toEqual({
+      body: 'richText',
+      'body[callout]': 'callout',
+      'body[callout].title': 'string',
+      'body[callout].nested': 'richText',
+    })
+  })
+
+  it('stops when a document type embeds itself', () => {
+    const registry = buildSchemaTypeRegistry([
+      {
+        name: 'node',
+        type: 'object',
+        fields: [
+          { name: 'label', type: 'string' },
+          { name: 'child', type: 'node' },
+        ],
+      },
+    ])
+    const shape = describeSchemaShape(
+      { name: 'node', fields: registry.node.fields },
+      registry,
+    )
+    expect(shape).toEqual({ label: 'string', child: 'node' })
+  })
+
   it('captures the real conference schema at depth, not just the top level', () => {
     const shape = baseline.conference
     const paths = Object.keys(shape)
@@ -211,6 +317,12 @@ describe('schema shape extraction', () => {
     // Nested proof: an array-of-objects member field, three levels down.
     expect(
       shape['homepageSections[homepageFaq].items[homepageFaqItem].answer'],
+    ).toBe('text')
+    // Named-type proof: `richTextCode` is registered separately in
+    // sanity/schema.ts and carries no inline fields at the reference site.
+    // Without registry resolution this path would not exist at all.
+    expect(
+      shape['homepageSections[homepageRichText].content[richTextCode].code'],
     ).toBe('text')
   })
 })

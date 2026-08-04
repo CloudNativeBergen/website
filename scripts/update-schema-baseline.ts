@@ -17,6 +17,7 @@ import { resolve } from 'node:path'
 import {
   LOCKED_DOCUMENT_TYPES,
   SCHEMA_SHAPE_BASELINE_PATH,
+  SCHEMA_TYPE_REGISTRY,
 } from '../sanity/lib/lockedSchemas'
 import {
   describeSchemaShape,
@@ -25,7 +26,10 @@ import {
 
 const shapes: Record<string, SchemaShape> = {}
 for (const name of Object.keys(LOCKED_DOCUMENT_TYPES).sort()) {
-  shapes[name] = describeSchemaShape(LOCKED_DOCUMENT_TYPES[name])
+  shapes[name] = describeSchemaShape(
+    LOCKED_DOCUMENT_TYPES[name],
+    SCHEMA_TYPE_REGISTRY,
+  )
 }
 
 const target = resolve(process.cwd(), SCHEMA_SHAPE_BASELINE_PATH)
