@@ -3,7 +3,11 @@
 import React from 'react'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
-import { sanityImage } from '@/lib/sanity/client'
+import {
+  galleryImageSrc,
+  isInlineImageDataUri,
+  sanityImage,
+} from '@/lib/sanity/client'
 
 /**
  * A Sanity asset id encodes its own pixel dimensions (`image-<sha1>-<w>x<h>-<ext>`),
@@ -65,12 +69,19 @@ export function ImageMosaic({
           <>
             {image.image && (
               <img
-                src={sanityImage(image.image)
-                  .width(800)
-                  .quality(85)
-                  .fit('max')
-                  .url()}
-                srcSet={`${sanityImage(image.image).width(600).quality(85).fit('max').url()} 1x, ${sanityImage(image.image).width(1200).quality(85).fit('max').url()} 2x`}
+                src={galleryImageSrc(image, {
+                  width: 800,
+                  quality: 85,
+                  fit: 'max',
+                })}
+                // Inline artwork has no responsive renditions — a srcSet could
+                // only repeat the same bytes at 1x and 2x. Same rule as
+                // ImageCarousel.
+                srcSet={
+                  isInlineImageDataUri(image.imageUrl)
+                    ? undefined
+                    : `${sanityImage(image.image).width(600).quality(85).fit('max').url()} 1x, ${sanityImage(image.image).width(1200).quality(85).fit('max').url()} 2x`
+                }
                 alt={alt}
                 style={{ aspectRatio: tileAspectRatio(image) }}
                 className="w-full object-cover"
