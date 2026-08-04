@@ -25,7 +25,12 @@ export {
   getDomainVerification,
   listDomainVerificationsForConference,
 } from './sanity'
-export { PLATFORM_DOMAIN_NOT_ALLOCATED } from './platform'
+export {
+  derivePlatformHosts,
+  PLATFORM_DOMAIN_NOT_ALLOCATED,
+  shouldTakeLatestHost,
+} from './platform'
+export type { PlatformHostRefusal, PlatformHostSet } from './platform'
 export {
   findUnallocatedPlatformDomains,
   listDomainVerificationViews,

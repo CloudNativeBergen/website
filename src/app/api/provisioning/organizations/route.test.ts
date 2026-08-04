@@ -203,19 +203,28 @@ vi.mock('@/lib/sanity/client', () => ({
 
 const syncDomainVerificationsMock = vi.fn(async () => {})
 const getDomainVerificationMock = vi.fn(async () => null)
-vi.mock('@/lib/domain-verification', () => ({
-  syncDomainVerifications: (...args: unknown[]) =>
-    syncDomainVerificationsMock(...(args as [])),
-  getDomainVerification: (...args: unknown[]) =>
-    getDomainVerificationMock(...(args as [])),
-  toDomainVerificationView: (hostname: string) => ({
-    hostname,
-    status: 'pending',
-  }),
-  findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
-  PLATFORM_DOMAIN_NOT_ALLOCATED:
-    'That hostname belongs to the platform and has not been allocated to this conference',
-}))
+// The record-writing half is faked (its own suite owns it), but the ADDRESS
+// DERIVATION is the real thing: what host this endpoint mints for a slug is a
+// property of the endpoint, and a stubbed derivation would prove nothing.
+vi.mock('@/lib/domain-verification', async () => {
+  const platform = await vi.importActual<
+    typeof import('@/lib/domain-verification/platform')
+  >('@/lib/domain-verification/platform')
+  return {
+    syncDomainVerifications: (...args: unknown[]) =>
+      syncDomainVerificationsMock(...(args as [])),
+    getDomainVerification: (...args: unknown[]) =>
+      getDomainVerificationMock(...(args as [])),
+    toDomainVerificationView: (hostname: string) => ({
+      hostname,
+      status: 'pending',
+    }),
+    findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
+    derivePlatformHosts: platform.derivePlatformHosts,
+    shouldTakeLatestHost: platform.shouldTakeLatestHost,
+    PLATFORM_DOMAIN_NOT_ALLOCATED: platform.PLATFORM_DOMAIN_NOT_ALLOCATED,
+  }
+})
 
 import { POST } from './route'
 
@@ -294,6 +303,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.PROVISIONING_API_TOKEN
+  vi.unstubAllEnvs()
   warnSpy.mockRestore()
   errorSpy.mockRestore()
 })
@@ -697,6 +707,89 @@ describe('provisioning API — malformed input is rejected before any write', ()
       request({ token: 'wrong-token-value-of-adequate-length!!', raw: '{' }),
     )
     expect(res.status).toBe(401)
+  })
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5b. THE TENANT'S ADDRESS
+//
+// This is the self-service caller: it sends no `domains`, so without a minted
+// host the tenant it creates is served by nothing and reachable by nobody.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('provisioning API — the tenant comes out reachable', () => {
+  const BARE = 'cloud-native-oslo.konf.run'
+  const DATED = 'cloud-native-oslo-2027.konf.run'
+  const MINTED = [BARE, DATED]
+
+  /** The self-service payload: no `domains` key at all. */
+  const selfService = () =>
+    body({
+      domains: [] as string[],
+    })
+
+  it('claims BOTH minted hosts for a caller that sends no domains', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    const res = await POST(request({ payload: selfService() }))
+
+    expect(res.status).toBe(201)
+    const conferences = ofType('conference')
+    expect(conferences).toHaveLength(1)
+    expect(conferences[0].domains).toEqual(MINTED)
+  })
+
+  it('hands both minted hosts to the platform ALLOCATION call for that conference', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    await POST(request({ payload: selfService() }))
+
+    const conferenceId = ofType('conference')[0]._id
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
+      conferenceId,
+      MINTED,
+      [],
+      { allocatePlatformHosts: true },
+    )
+  })
+
+  it('claims the minted hosts in ADDITION to a caller-supplied domain', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    await POST(request())
+    expect(ofType('conference')[0].domains).toEqual([
+      ...MINTED,
+      'oslo.cloudnativedays.no',
+    ])
+  })
+
+  it('refuses with a 409 when another conference already holds the minted host', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    docs.set('conference-incumbent', {
+      _id: 'conference-incumbent',
+      _type: 'conference',
+      domains: [BARE],
+    })
+    const res = await POST(request({ payload: selfService() }))
+
+    expect(ofType('organization')).toHaveLength(0)
+    expect(ofType('conference')).toHaveLength(1) // only the incumbent
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'platform_host_taken',
+      host: BARE,
+    })
+  })
+
+  it('writes NOTHING when no suffix is configured and the caller named no domain', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', '')
+    const res = await POST(request({ payload: selfService() }))
+
+    // The ghost tenant: an org + conference at no address, reported as success.
+    expect(ofType('organization')).toHaveLength(0)
+    expect(ofType('conference')).toHaveLength(0)
+    expect(ofType('speaker')).toHaveLength(0)
+    expect(res.status).toBe(500)
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'platform_domain_unconfigured',
+    })
   })
 })
 

@@ -51,7 +51,43 @@ Content-Type: application/json
 }
 ```
 
-The body is validated with `CreateOrganizationSchema` from `src/server/schemas/onboarding.ts` — **the same schema the operator wizard posts through**, not a looser copy. `billingEmail` is optional; `startDate`/`endDate` are optional but travel as a pair; `domains` may be empty (a tenant can start on no domain and attach one later).
+The body is validated with `CreateOrganizationSchema` from `src/server/schemas/onboarding.ts` — **the same schema the operator wizard posts through**, not a looser copy. `billingEmail` is optional; `startDate`/`endDate` are optional but travel as a pair; `domains` is normally **omitted** — see below.
+
+## The tenant's addresses
+
+Provisioning **mints the new edition's hostnames** and claims them in the same
+transaction. Without them a self-service tenant would exist at no address at
+all: tenant resolution is by request `Host` against `conference.domains[]`, so a
+conference that claims nothing is served by nothing and its organizer cannot
+reach `/admin`.
+
+```
+acme.konf.run         the SHORT address of the org's latest edition
+acme-2026.konf.run    this edition's PERMANENT address
+```
+
+- **Both are a single label** under `PLATFORM_DOMAIN_SUFFIX`, which is what the
+  live wildcard certificate covers — no per-tenant provider work, ever. A nested
+  form (`2026.acme.konf.run`) is deliberately not produced; it does not work
+  without a per-org wildcard and an aliased deployment.
+- **The year is the edition's `startDate`.** With no dates yet the two collapse
+  into the single bare host: a year is a factual claim about the event and the
+  address is permanent, so an unknown year is never guessed at.
+- **Reserved labels are refused** (`www`, `api`, `auth`, `admin`, …), checked on
+  the org slug.
+- **Renaming the org later does not move them.** The derivation runs once, at
+  provisioning; nothing re-derives it at read time.
+- The short address later **moves** to newer editions (see
+  `docs/DOMAIN_VERIFICATION.md`); the dated one never does, so archive links keep
+  resolving.
+- Any `domains` the caller _does_ send are claimed **in addition**, after the
+  minted hosts, and still have to prove themselves by DNS. The minted hosts route
+  immediately, so they are what the organizer signs in on while a custom domain
+  is still being verified.
+
+Both minted hosts are allocated to the new conference as
+`method: "platform-owned"` — see `docs/DOMAIN_VERIFICATION.md`. They are the
+entries in `challenges` with no TXT record to publish.
 
 ## Responses
 
@@ -61,9 +97,11 @@ The body is validated with `CreateOrganizationSchema` from `src/server/schemas/o
 | `200`  | same shape, `replayed: true`                                                                      | This key already provisioned; the **original** ids are returned and nothing was written.             |
 | `400`  | `{ error: "invalid_request", code, issues? }`                                                     | `idempotency_key_required`, `invalid_json`, or `schema_validation_failed` (with per-field `issues`). |
 | `401`  | `{ error: "unauthorized" }`                                                                       | Any authentication failure. Uniform and detail-free.                                                 |
-| `409`  | `{ error: "conflict", code, slug? \| domains? }`                                                  | `slug_taken`, `domain_claimed`, `ambiguous_organizer`.                                               |
+| `409`  | `{ error: "conflict", code, slug? \| domains? \| host? }`                                         | `slug_taken`, `domain_claimed`, `ambiguous_organizer`, `platform_host_taken`, `reserved_slug`.       |
 | `429`  | `{ error: "rate_limited" }` + `Retry-After`                                                       | Over a cap, or the limiter could not persist a hit.                                                  |
-| `500`  | `{ error: "internal_error" }`                                                                     | The transaction failed; nothing was written.                                                         |
+| `500`  | `{ error: "internal_error", code? }`                                                              | The transaction failed, or `platform_domain_unconfigured`; nothing was written.                      |
+
+`platform_host_taken` (with `host` and `slug`) means the slug is free but the address it mints is already claimed — the remedy is a different slug. `reserved_slug` means the slug would mint one of the platform's own hostnames. `platform_domain_unconfigured` is **not the caller's fault and not fixable by it**: no `PLATFORM_DOMAIN_SUFFIX` is set and no `domains` were sent, so the tenant would have no address; provisioning refuses rather than committing an unreachable one. Retrying will not help until the deployment is fixed.
 
 `challenges` is a `DomainVerificationView[]` — one per claimed domain, carrying the TXT record the caller must publish (#683). Domains are **claims, not proofs**: a new conference routes nothing until its records verify.
 

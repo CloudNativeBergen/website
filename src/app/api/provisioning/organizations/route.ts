@@ -49,8 +49,17 @@ import { CreateOrganizationSchema } from '@/server/schemas/onboarding'
  *     "organization": { "name", "slug", "contactEmail", "billingEmail"? },
  *     "conference":   { "title", "city", "country", "startDate"?, "endDate"? },
  *     "organizer":    { "name", "email" },
- *     "domains":      ["oslo.example.com"]
+ *     "domains":      ["oslo.example.com"]      (OPTIONAL, usually omitted)
  *   }
+ *
+ * ── THE TENANT'S ADDRESS ───────────────────────────────────────────────────
+ * `domains` is normally omitted by this caller: provisioning MINTS the
+ * edition's host — `<org-slug>-<year>.<PLATFORM_DOMAIN_SUFFIX>`, one label, or
+ * the bare slug when no `startDate` was given — and claims it in the
+ * transaction, so the response's first challenge is a live, `platform-owned`
+ * host the organizer can sign in on immediately. Any `domains` sent are claimed
+ * IN ADDITION and still have to prove themselves by DNS. See
+ * `@/lib/onboarding/provision`.
  *
  * ── RESPONSES ──────────────────────────────────────────────────────────────
  *   201 { organizationId, conferenceId, speakerId, speakerCreated,
@@ -59,9 +68,9 @@ import { CreateOrganizationSchema } from '@/server/schemas/onboarding'
  *       ORIGINAL ids are returned and nothing was written.
  *   400 { error: "invalid_request", code, issues? }
  *   401 { error: "unauthorized" }                       (uniform, always)
- *   409 { error: "conflict", code, slug? | domains? }
+ *   409 { error: "conflict", code, slug? | domains? | host? }
  *   429 { error: "rate_limited" }                       (+ Retry-After)
- *   500 { error: "internal_error" }
+ *   500 { error: "internal_error", code? }
  */
 
 const RETRY_AFTER_SECONDS = 60
@@ -172,6 +181,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               domains: rejection.domains,
             },
             { status: 409 },
+          )
+        case 'platform_host_taken':
+          // A CONFLICT, not a bad request: the payload is fine and the slug is
+          // free, but the address it mints is taken. The control panel's remedy
+          // is the same as for `slug_taken` — ask for a different slug — so it
+          // is reported the same way, with the offending host named.
+          return NextResponse.json(
+            {
+              error: 'conflict',
+              code: 'platform_host_taken',
+              slug: rejection.slug,
+              host: rejection.host,
+            },
+            { status: 409 },
+          )
+        case 'reserved_slug':
+          // Same shape and remedy as `slug_taken` — the slug is unusable and
+          // the control panel has to ask for another one.
+          return NextResponse.json(
+            {
+              error: 'conflict',
+              code: 'reserved_slug',
+              slug: rejection.slug,
+            },
+            { status: 409 },
+          )
+        case 'no_host_available':
+          // NOT the caller's fault and NOT fixable by it: this caller does not
+          // name domains, so the missing `PLATFORM_DOMAIN_SUFFIX` is a platform
+          // misconfiguration. A named 500 tells the operator where to look and
+          // keeps the control panel from retrying a request that cannot succeed
+          // until the deployment changes.
+          console.error(
+            '[provisioning] refused: no host could be minted for the tenant — is PLATFORM_DOMAIN_SUFFIX set?',
+          )
+          return NextResponse.json(
+            { error: 'internal_error', code: 'platform_domain_unconfigured' },
+            { status: 500 },
           )
         case 'ambiguous_organizer':
           return NextResponse.json(

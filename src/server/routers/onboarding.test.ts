@@ -83,15 +83,23 @@ vi.mock('@/lib/sanity/client', () => ({
 // Tenant creation claims domains, so it mints their ownership-verification
 // records and hands the operator the challenge to publish (#683).
 const syncDomainVerificationsMock = vi.fn(async () => {})
-vi.mock('@/lib/domain-verification', () => ({
-  syncDomainVerifications: (...args: unknown[]) =>
-    syncDomainVerificationsMock(...(args as [])),
-  getDomainVerification: async () => null,
-  toDomainVerificationView: (hostname: string) => ({ hostname }),
-  findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
-  PLATFORM_DOMAIN_NOT_ALLOCATED:
-    'That hostname belongs to the platform and has not been allocated to this conference',
-}))
+// Record writing is faked; the ADDRESS DERIVATION is real, so what host the
+// wizard mints for a slug is actually exercised rather than stubbed.
+vi.mock('@/lib/domain-verification', async () => {
+  const platform = await vi.importActual<
+    typeof import('@/lib/domain-verification/platform')
+  >('@/lib/domain-verification/platform')
+  return {
+    syncDomainVerifications: (...args: unknown[]) =>
+      syncDomainVerificationsMock(...(args as [])),
+    getDomainVerification: async () => null,
+    toDomainVerificationView: (hostname: string) => ({ hostname }),
+    findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
+    derivePlatformHosts: platform.derivePlatformHosts,
+    shouldTakeLatestHost: platform.shouldTakeLatestHost,
+    PLATFORM_DOMAIN_NOT_ALLOCATED: platform.PLATFORM_DOMAIN_NOT_ALLOCATED,
+  }
+})
 
 import {
   onboardingRouter,
@@ -151,6 +159,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.PLATFORM_ORG_SLUG
+  vi.unstubAllEnvs()
 })
 
 describe('createOrganization — authorization (platform waist)', () => {
@@ -250,13 +259,24 @@ describe('createOrganization — server-side uniqueness authority', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
-  it('skips the claimed-domains read entirely for a domainless tenant', async () => {
-    await makeCaller(operator).createOrganization(input({ domains: [] }))
-    expect(commitMock).toHaveBeenCalledTimes(1)
-    const domainQueries = fetchMock.mock.calls.filter(([q]) =>
-      (q as string).includes('.domains[]'),
-    )
-    expect(domainQueries).toEqual([])
+  it('refuses a tenant that would have NO address, before any read', async () => {
+    // No platform suffix configured and no domain typed: committing would
+    // create an organization and a conference that no host serves.
+    await expect(
+      makeCaller(operator).createOrganization(input({ domains: [] })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(createSpy).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
+    // Refused before the uniqueness reads — only the authz read happened.
+    const provisioningReads = fetchMock.mock.calls.filter(([q]) => {
+      const query = q as string
+      return (
+        query.includes('.domains[]') ||
+        query.includes('_type == "speaker"') ||
+        query.includes('count(')
+      )
+    })
+    expect(provisioningReads).toEqual([])
   })
 
   it('refuses an organizer email matching SEVERAL accounts (duplicates first)', async () => {
@@ -372,12 +392,51 @@ describe('createOrganization — atomic transaction', () => {
     expect(commitMock).toHaveBeenCalledTimes(1)
   })
 
-  it('accepts a tenant with NO domains and omits the field', async () => {
-    await makeCaller(operator).createOrganization(input({ domains: [] }))
+  it('mints both platform subdomains for a tenant the operator gave no domain', async () => {
+    // The SAME front-door contract as the machine API: an operator who types no
+    // domain still gets a reachable tenant, not a ghost one.
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    const result = await makeCaller(operator).createOrganization(
+      input({ domains: [] }),
+    )
     const conf = createSpy.mock.calls
       .map((c) => c[0])
       .find((d) => d._type === 'conference')
-    expect(conf).not.toHaveProperty('domains')
+    expect(conf.domains).toEqual([
+      'cloud-native-oslo.konf.run',
+      'cloud-native-oslo-2027.konf.run',
+    ])
+    // …and it rides the platform's allocation call, so it comes out granted.
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
+      result.conferenceId,
+      ['cloud-native-oslo.konf.run', 'cloud-native-oslo-2027.konf.run'],
+      [],
+      { allocatePlatformHosts: true },
+    )
+  })
+
+  it('claims the minted hosts ALONGSIDE the domain the operator typed, minted first', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    await makeCaller(operator).createOrganization(input())
+    const conf = createSpy.mock.calls
+      .map((c) => c[0])
+      .find((d) => d._type === 'conference')
+    // The typed domain is CLAIMED but unproven, so it may not route yet; the
+    // minted host works immediately and is therefore the primary address.
+    expect(conf.domains).toEqual([
+      'cloud-native-oslo.konf.run',
+      'cloud-native-oslo-2027.konf.run',
+      'oslo.cloudnativedays.no',
+    ])
+  })
+
+  it('refuses when another conference already holds the minted address', async () => {
+    vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    claimedDomains = ['cloud-native-oslo.konf.run']
+    await expect(
+      makeCaller(operator).createOrganization(input({ domains: [] })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
   })
 
   it('rejects a lone start date (dates travel as a pair) before any read', async () => {

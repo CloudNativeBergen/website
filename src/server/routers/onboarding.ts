@@ -24,6 +24,19 @@ export const ORG_SLUG_ALREADY_TAKEN = 'Already used by another organization'
 export const AMBIGUOUS_ORGANIZER_EMAIL =
   'That email matches multiple speaker accounts — resolve the duplicates before onboarding this organizer'
 
+/** Prefix when the address minted from the org slug is already claimed. The
+ * slug itself is free, so the wizard must point at the ADDRESS, not the slug. */
+export const PLATFORM_HOST_ALREADY_CLAIMED =
+  'Another conference already claims the address this slug would get — choose a different slug'
+
+/** Message when no address at all could be given to the new tenant. */
+export const NO_TENANT_HOST_AVAILABLE =
+  'This deployment mints no tenant subdomains (PLATFORM_DOMAIN_SUFFIX is unset), so the tenant would have no address — add a domain below'
+
+/** Prefix when the slug would mint a hostname the platform keeps for itself. */
+export const RESERVED_ORG_SLUG =
+  'That slug is reserved by the platform — choose another'
+
 /**
  * PLATFORM-OPERATOR gate (onboarding S1). Layered on `protectedProcedure`
  * (authentication) exactly like `requireAdmin` layers the tenant waist — but
@@ -61,6 +74,24 @@ function toTRPCError(rejection: ProvisionRejection): TRPCError {
       return new TRPCError({
         code: 'BAD_REQUEST',
         message: `${DOMAIN_ALREADY_CLAIMED}: ${rejection.domains.join(', ')}`,
+      })
+    case 'platform_host_taken':
+      return new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `${PLATFORM_HOST_ALREADY_CLAIMED}: ${rejection.host}`,
+      })
+    case 'reserved_slug':
+      return new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `${RESERVED_ORG_SLUG}: ${rejection.slug}`,
+      })
+    case 'no_host_available':
+      // BAD_REQUEST rather than a 500: the operator can fix it from the form
+      // they are looking at by attaching a domain, which is not true of the
+      // machine caller (see the provisioning API's mapping).
+      return new TRPCError({
+        code: 'BAD_REQUEST',
+        message: NO_TENANT_HOST_AVAILABLE,
       })
     case 'ambiguous_organizer':
       return new TRPCError({
