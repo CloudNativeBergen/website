@@ -9,10 +9,16 @@ const createNotificationsMock = vi.fn().mockResolvedValue(undefined)
 const getOrganizerSpeakerIdsMock = vi
   .fn()
   .mockResolvedValue(['org-1', 'org-2', 'org-3'])
+const getAllOrganizersMock = vi
+  .fn()
+  .mockResolvedValue(['org-1', 'org-2', 'org-3', 'org-9'])
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: (...a: unknown[]) => createNotificationsMock(...a),
-  getOrganizerSpeakerIds: (orgId?: string | null) =>
+  getOrganizerSpeakerIdsForOrg: (orgId: string | null) =>
     getOrganizerSpeakerIdsMock(orgId),
+  // The candidacy filter's cross-org superset is now an EXPLICITLY named read
+  // (#723) — it can no longer be reached by omitting an argument.
+  getAllOrganizerSpeakerIdsAcrossOrgs: () => getAllOrganizersMock(),
 }))
 
 // TEAMS-2 teams SOURCE keyed by conference id, so the REAL
@@ -177,8 +183,11 @@ describe('nudgeStaleConversations — per-org recipient isolation (B4)', () => {
     expect(recipientsFor('c-b')).not.toContain('a1')
     expect(summary.nudged).toBe(2)
     expect(summary.notifications).toBe(4)
-    // The GLOBAL organizer set is never requested for recipient resolution.
+    // The GLOBAL organizer set is never requested for recipient resolution:
+    // recipients only ever come from the per-org read, and the cross-org read is
+    // used solely for the candidacy filter (#723).
     expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalledWith(undefined)
+    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalledWith(null)
   })
 
   it('skips a conversation whose org is unresolvable — never broadcasts', async () => {

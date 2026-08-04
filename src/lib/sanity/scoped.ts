@@ -130,6 +130,12 @@ export interface ScopedFetchOptions {
  * names the tenant ONCE and cannot forget to bind a `$conferenceId`/`$orgId` it
  * referenced. Scope bindings win over caller params of the same name — the scope
  * is the invariant. `options` is forwarded verbatim (e.g. `{ cache: 'no-store' }`).
+ *
+ * FAILS CLOSED on an EMPTY scope (both dimensions absent/null): it THROWS rather
+ * than running the body unscoped. `scopedQuery` — a pure string helper — still
+ * returns the body unchanged, but the IO entry point must not turn "I could not
+ * resolve the tenant" into "read every tenant". Resolve the tenant before
+ * calling, and handle an unresolvable one explicitly (empty result or an error).
  */
 export async function scopedFetch<T>(
   client: ScopedFetchClient,
@@ -138,6 +144,11 @@ export async function scopedFetch<T>(
   params: Record<string, unknown> = {},
   options?: ScopedFetchOptions,
 ): Promise<T> {
+  if (!scopePredicate(scope)) {
+    throw new Error(
+      'scopedFetch: empty tenant scope (no conferenceId and no orgId). A read with an unresolvable tenant must fail closed — resolve the tenant, or handle the null case in the caller.',
+    )
+  }
   const query = scopedQuery(scope, groqBody)
   const mergedParams = { ...params, ...scopeParams(scope) }
   return client.fetch<T>(query, mergedParams, options)

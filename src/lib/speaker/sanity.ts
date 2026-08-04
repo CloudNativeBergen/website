@@ -830,6 +830,18 @@ export async function getSpeakers(
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 
+  // TENANT SCOPING (#616): with neither a conference nor an org there is no
+  // predicate to scope EITHER the speaker list or the nested proposals, so the
+  // query would read the whole dataset. Refuse instead of running it.
+  if (!conferenceId && !orgId) {
+    return {
+      speakers,
+      err: new Error(
+        'getSpeakers requires a conferenceId or an orgId (tenant scoping, #616)',
+      ),
+    }
+  }
+
   try {
     const conferenceFilter = conferenceId
       ? `&& conference._ref == $conferenceId`
@@ -846,10 +858,17 @@ export async function getSpeakers(
     // Crossing conferences must still stay INSIDE the org: without this, an
     // org-scoped speaker list would expose a shared speaker's proposals from
     // ANOTHER organization's conferences.
+    //
+    // FAILS CLOSED when no org resolves (#616). The fallback used to be `''` —
+    // an entirely UNSCOPED nested projection — so a caller that asked for
+    // cross-conference proposals without an org id (the admin badge page and the
+    // admin speakers page both did) rendered a shared speaker's proposals from
+    // EVERY organization. Falling back to the single-conference filter keeps the
+    // page working (it just stops crossing editions) and can never cross tenants.
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
       ? orgId
         ? '&& conference->organization._ref == $orgId'
-        : ''
+        : conferenceFilter
       : conferenceFilter
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { createGalleryImage } from '@/lib/gallery/sanity'
 import { galleryImageCreateSchema } from '@/server/schemas/gallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { getCurrentDateTime } from '@/lib/time'
@@ -37,8 +38,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // `isUnknownHost`, not `!conference`: an unknown host resolves to a TRUTHY
+    // `{} as Conference`, so the old check never fired and the upload would have
+    // been created with an undefined conference reference.
     const { conference } = await getConferenceForCurrentDomain({})
-    if (!conference) {
+    if (isUnknownHost({ conference })) {
       return NextResponse.json(
         { error: 'Conference not found for current domain' },
         { status: 404 },

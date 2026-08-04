@@ -59,9 +59,13 @@ export default async function AdminSpeakers() {
       )
     }
 
+    // The cross-edition proposals projection MUST carry the org id, or it is
+    // unscoped and lists a shared speaker's proposals from every organization
+    // (#616). Null org → this conference's proposals only (fail closed).
     const { speakers, err: speakersError } = await getSpeakersWithAcceptedTalks(
       conference._id,
       true,
+      conference.organization?._ref ?? null,
     )
 
     if (speakersError) {

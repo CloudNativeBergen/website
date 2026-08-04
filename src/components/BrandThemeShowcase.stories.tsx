@@ -49,6 +49,14 @@ function BrandSample({ theme }: { theme?: ConferenceTheme | null }) {
           Bordered callout using the brand colour.
         </p>
       </div>
+
+      <div className="flex h-16 items-center justify-center rounded-xl bg-aqua-gradient text-sm font-semibold text-white">
+        Aqua gradient (accent endpoint)
+      </div>
+
+      <div className="rounded-xl bg-brand-cloud-blue p-4 text-center text-sm font-semibold text-white">
+        Solid brand surface with white label
+      </div>
     </div>
   )
 }
@@ -62,6 +70,38 @@ const PURPLE: ConferenceTheme = {
 const TEAL: ConferenceTheme = {
   primaryColor: '#0D9488',
   accentColor: '#84CC16',
+}
+
+/**
+ * Stress palettes for the DARK tints. The dark brand rules do not use the raw
+ * primary — they derive shades at fixed perceptual lightness (see
+ * `src/lib/branding/color.ts`), and these four sit at the corners of what a
+ * tenant can pick: near-black, near-white, and two colours whose natural
+ * lightness is nowhere near the dark surface band.
+ */
+const NAVY: ConferenceTheme = {
+  primaryColor: '#0A1F44',
+  accentColor: '#334155',
+}
+const YELLOW: ConferenceTheme = {
+  primaryColor: '#FACC15',
+  accentColor: '#FB923C',
+}
+const RED: ConferenceTheme = { primaryColor: '#DC2626', accentColor: '#F97316' }
+const PASTEL: ConferenceTheme = {
+  primaryColor: '#FBCFE8',
+  accentColor: '#A5F3FC',
+}
+
+/**
+ * The house colours stored AS a theme. This must look like the unthemed
+ * Default in both schemes — storing a theme is meant to be a no-op, which is
+ * only true if the dark rules derive their tints instead of using the raw
+ * primary.
+ */
+const HOUSE: ConferenceTheme = {
+  primaryColor: '#1D4ED8',
+  accentColor: '#06B6D4',
 }
 
 const meta = {
@@ -115,5 +155,28 @@ export const ThemedPurpleDark: Story = {
 export const ThemedTeal: Story = { args: { theme: TEAL } }
 export const ThemedTealDark: Story = {
   args: { theme: TEAL },
+  parameters: { theme: 'dark' },
+}
+
+/** House colours stored as a theme — should be indistinguishable from Default. */
+export const ThemedHouseDark: Story = {
+  args: { theme: HOUSE },
+  parameters: { theme: 'dark' },
+}
+
+export const ThemedNavyDark: Story = {
+  args: { theme: NAVY },
+  parameters: { theme: 'dark' },
+}
+export const ThemedYellowDark: Story = {
+  args: { theme: YELLOW },
+  parameters: { theme: 'dark' },
+}
+export const ThemedRedDark: Story = {
+  args: { theme: RED },
+  parameters: { theme: 'dark' },
+}
+export const ThemedPastelDark: Story = {
+  args: { theme: PASTEL },
   parameters: { theme: 'dark' },
 }

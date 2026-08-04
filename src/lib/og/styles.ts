@@ -1,6 +1,12 @@
+/**
+ * Brand-NEUTRAL layout tokens for the OpenGraph cards.
+ *
+ * The card's brand COLOURS are not here: they depend on the conference's stored
+ * theme and are resolved per-request by `ogBrandColors` in `@/lib/og/brand`
+ * (which falls back to the house palette in `@/lib/branding/theme`). Only values
+ * that are the same for every tenant live in this table.
+ */
 export const STYLES = {
-  // Brand gradient: Cloud Blue (#1D4ED8) to Cyan (#06B6D4)
-  gradient: 'linear-gradient(135deg, #1D4ED8, #06B6D4)',
   // Brand typography for OG images
   fontFamily: 'Space Grotesk, system-ui, -apple-system, sans-serif',
   fontFamilyHeading: 'JetBrains Mono, Space Grotesk, monospace, sans-serif',
@@ -23,8 +29,6 @@ export const STYLES = {
     whiteLight: 'rgba(255, 255, 255, 0.2)',
     whiteVeryLight: 'rgba(255, 255, 255, 0.1)',
     blackTransparent: 'rgba(0, 0, 0, 0.3)',
-    blue: '#1D4ED8',
-    cyan: '#06B6D4',
   },
   shadow: {
     text: '0 4px 8px rgba(0, 0, 0, 0.3)',

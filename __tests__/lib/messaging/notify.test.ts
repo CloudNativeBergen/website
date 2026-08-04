@@ -18,7 +18,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/notification/sanity', () => ({
   upsertMessageNotifications: vi.fn(async () => {}),
-  getOrganizerSpeakerIds: vi.fn(async () => ['org-1']),
+  // The fan-out reads the CONFERENCE's org explicitly (#723).
+  getOrganizerSpeakerIdsForOrg: vi.fn(async () => ['org-1']),
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -44,7 +45,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
 
 import {
   upsertMessageNotifications,
-  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
 } from '@/lib/notification/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { getConversationPreferencesFor } from '@/lib/messaging/sanity'
@@ -57,7 +58,7 @@ import type { Conference } from '@/lib/conference/types'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const upsertMock = upsertMessageNotifications as unknown as LooseMock
-const organizersMock = getOrganizerSpeakerIds as unknown as LooseMock
+const organizersMock = getOrganizerSpeakerIdsForOrg as unknown as LooseMock
 const fetchMock = (clientReadUncached as unknown as { fetch: LooseMock }).fetch
 const prefsMock = getConversationPreferencesFor as unknown as LooseMock
 const emailMock = sendMessageEmails as unknown as LooseMock

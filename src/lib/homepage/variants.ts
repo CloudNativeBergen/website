@@ -28,8 +28,9 @@ import type { HomepageSectionType } from './sections'
  * client-only package would put that package's React context in the RSC module
  * graph and kill the production build with `createContext is not a function`),
  * and the Sanity Studio's Vite build imports it by relative path to drive the
- * schema's variant option lists. Asserted on the source text in
- * `variants.test.ts` — typecheck cannot see either hazard.
+ * schema's variant option lists. Asserted in `variants.test.ts` by PARSING this
+ * file and rejecting every runtime module reference — static, side-effect,
+ * re-export or dynamic — since typecheck can see neither hazard.
  */
 export const SECTION_VARIANTS = {
   homepageHero: ['classic', 'minimal', 'emblem'],
@@ -77,13 +78,73 @@ export function isSectionVariant<T extends HomepageSectionType>(
   )
 }
 
-/** Unknown `type:variant` pairs already warned about (once per process). */
+/**
+ * Bounds on the unknown-variant warning ledger, in the house style of
+ * `RICH_TEXT_LIMITS` in `./richText` — named, never magic numbers at the use
+ * site. (Named here rather than imported: this module stays import-free.)
+ *
+ * The ledger exists only to warn ONCE per bad value, but it is fed by STORED
+ * data in a long-lived server process. A corrupt or hostile dataset with many
+ * distinct junk variants would otherwise grow it without bound, and would emit
+ * one log line per distinct value forever. Both are capped: memory by
+ * {@link distinctPairs}, log volume by going quiet once that cap is reached.
+ */
+export const VARIANT_WARN_LIMITS = {
+  /**
+   * Distinct `(type, value)` pairs remembered. The whole registry is ~28
+   * variants, so a healthy process never reaches double digits here; anything
+   * near this cap is already a data problem the first warnings have reported.
+   */
+  distinctPairs: 100,
+  /**
+   * Longest stored value quoted back in a warning — and therefore the longest
+   * string a single ledger entry can hold. Two junk values sharing a prefix
+   * this long collapse to one warning, which is the right trade: the message
+   * has already identified the section type and the shape of the bad data.
+   */
+  storedValue: 80,
+} as const
+
+/** Unknown `type:value` pairs already warned about (once per process). */
 const warnedUnknownVariants = new Set<string>()
+/** Set once the ledger fills; from then on unknown variants resolve silently. */
+let unknownVariantWarningsExhausted = false
+
+/**
+ * How a rejected value is named in a warning: strings quoted and clipped,
+ * anything else reported by TYPE. A wrong-typed value is a different bug from a
+ * misspelt one and the message should not disguise it as a variant name.
+ */
+function describeStoredVariant(value: unknown): string {
+  if (value === null) return 'null'
+  if (typeof value !== 'string') return `[${typeof value}]`
+  return value.length > VARIANT_WARN_LIMITS.storedValue
+    ? `'${value.slice(0, VARIANT_WARN_LIMITS.storedValue)}…'`
+    : `'${value}'`
+}
+
+function warnUnknownVariant(type: HomepageSectionType, stored: unknown): void {
+  if (unknownVariantWarningsExhausted) return
+  const described = describeStoredVariant(stored)
+  const key = `${type}:${described}`
+  if (warnedUnknownVariants.has(key)) return
+  if (warnedUnknownVariants.size >= VARIANT_WARN_LIMITS.distinctPairs) {
+    unknownVariantWarningsExhausted = true
+    console.warn(
+      `[homepage] more than ${VARIANT_WARN_LIMITS.distinctPairs} distinct unknown variants seen — suppressing further variant warnings for this process`,
+    )
+    return
+  }
+  warnedUnknownVariants.add(key)
+  console.warn(
+    `[homepage] unknown variant ${described} for ${type} — rendering '${defaultVariant(type)}'`,
+  )
+}
 
 /**
  * Resolve the variant to render: ABSENT → the default; a registered variant →
  * itself; anything else → the default, with a `console.warn` once per distinct
- * `(type, variant)` per process (this runs on every render of the page).
+ * `(type, value)` per process (this runs on every render of the page).
  *
  * FORWARD COMPAT: the variant sibling of the renderer's unknown-`_type`
  * skip-with-warn, with one deliberate difference — an unknown VARIANT falls back
@@ -91,22 +152,27 @@ const warnedUnknownVariants = new Set<string>()
  * content is still valid; only its presentation hint comes from the future.
  * Skipping would hide real content on an older deploy during a rollout.
  *
+ * `stored` is `unknown`, not `string | undefined`. The value comes off a stored
+ * Sanity document, and the type that says otherwise is an assertion about the
+ * dataset rather than a fact about it. The behaviour for a non-string is
+ * therefore EXPLICIT rather than accidental, and it follows the precedent set by
+ * `isBlank()` in migration 046: a wrong-typed value is not quietly folded into
+ * the benign case. Only `undefined` — the shape of an absent optional field, and
+ * the only shape the write path can produce, since it omits the default rather
+ * than writing null — resolves silently. `null`, numbers and objects resolve to
+ * the same safe default but are REPORTED, because they are data bugs that
+ * nothing else in the render path will surface.
+ *
  * `type` must be a registered section type: the renderer has already skipped
  * unknown `_type`s before any variant is resolved.
  */
 export function resolveVariant<T extends HomepageSectionType>(
   type: T,
-  stored: string | undefined,
+  stored: unknown,
 ): SectionVariant<T> {
   if (stored === undefined) return defaultVariant(type)
   if (isSectionVariant(type, stored)) return stored
-  const key = `${type}:${stored}`
-  if (!warnedUnknownVariants.has(key)) {
-    warnedUnknownVariants.add(key)
-    console.warn(
-      `[homepage] unknown variant '${stored}' for ${type} — rendering '${defaultVariant(type)}'`,
-    )
-  }
+  warnUnknownVariant(type, stored)
   return defaultVariant(type)
 }
 

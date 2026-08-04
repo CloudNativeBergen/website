@@ -44,7 +44,14 @@ export function CollapsibleSection({
     <div
       className={`overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700 ${className}`}
     >
-      <div className="flex items-center">
+      {/* The hover tint belongs to the whole header ROW, not to the toggle
+          button. `action` (a status badge, an edit pencil) has to sit OUTSIDE
+          the button to stay valid HTML and independently clickable — so when
+          the tint lived on the button it stopped at the button's edge and left
+          a visible seam, with the right-hand side keeping the card background.
+          `has-*` scopes it to hovering the toggle specifically, so the row does
+          not light up merely because the pointer is over the action. */}
+      <div className="flex items-center transition-colors has-[button[aria-expanded]:hover]:bg-gray-50 dark:has-[button[aria-expanded]:hover]:bg-gray-800">
         {/* Accessible-disclosure pattern: the HEADING wraps the toggle button
             (h2 > button is valid; button/span > h2 is not — a heading is flow
             content and cannot sit inside phrasing content). */}
@@ -54,7 +61,7 @@ export function CollapsibleSection({
             onClick={() => setIsOpen(!isOpen)}
             aria-expanded={isOpen}
             aria-controls={contentId}
-            className="flex min-w-0 flex-1 items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex min-w-0 flex-1 items-center justify-between px-6 py-4 text-left"
           >
             <span className="flex min-w-0 items-center">
               {icon ? (
