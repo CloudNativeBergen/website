@@ -74,23 +74,85 @@ all.
 
 Entitlement is therefore an **allocation recorded at write time**:
 
-- The platform grants one host to one conference, and only through
-  `provisionOrganization` — the platform-operator wizard and the
-  bearer-authenticated provisioning API. That is the sole caller that passes
-  `allocatePlatformHosts`.
+- The platform grants a host to one conference, and only through a
+  SERVER-DERIVED label: `provisionOrganization` (the platform-operator wizard and
+  the bearer-authenticated provisioning API) for a tenant's first edition, and
+  `createEdition` for later ones. Those are the only callers that pass
+  `allocatePlatformHosts`, and they pass ONLY hosts derived from the tenant's own
+  globally unique org slug — never a hostname anybody typed.
 - The `domainVerification` document records the grant (`method:
 "platform-owned"`, `conference` = the grantee).
 - Every read-time decision requires **both** the recorded allocation and a live
   suffix re-check (`isPlatformAllocated`). Neither half is sufficient: a
   mis-issued record for a host outside the zone grants nothing, and a host in the
   zone with no allocation grants nothing.
-- Tenant-facing writes never allocate. `updateDomains` and `createEdition`
-  **reject** an unallocated in-zone hostname (`findUnallocatedPlatformDomains`)
-  before any write, and `ensureDomainVerification` creates no document for one,
-  so even a bypass of the mutation guard fails closed.
+- TYPED hostnames never allocate. `updateDomains` and `createEdition` **reject**
+  an unallocated in-zone hostname in their payload
+  (`findUnallocatedPlatformDomains`) before any write, and
+  `ensureDomainVerification` creates no document for one, so even a bypass of the
+  mutation guard fails closed. An organizer can therefore never express a claim
+  outside their own org's namespace — which is exactly the hijack this prevents.
 - `revoked` is refused **before** the allocation check everywhere — routing, the
   allowlist and the admin view — so releasing the claim really does undo the
   grant.
+
+### Minting: what the platform actually hands out
+
+The same suffix that decides what is _in_ the zone decides what the platform
+**mints** (`derivePlatformHosts`). A tenant gets **two** hosts, both a **single
+label** — which is the whole reason this needs no per-tenant provider work:
+
+```
+acme-2026.konf.run    PERMANENT. This edition's own address, forever.
+acme.konf.run         The SHORT address of the org's LATEST edition. It MOVES.
+```
+
+`*.konf.run` and its alias already cover both. A nested form
+(`2026.acme.konf.run`) does **not** work: it needs a per-org wildcard registered
+_and_ a deployment aliased to it, and without that last step a visitor gets the
+CDN's own "deployment not found" page instead of ours.
+
+| Rule                                          | Why                                                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exactly **one label** above the suffix        | What a wildcard certificate covers. Enforced, not assumed: the label regex admits no dots and the host is re-counted against the suffix.      |
+| The dated host names the **edition**          | Editions are already addressed per year in the wild, and a retired edition keeps its URL permanently — archive links never break.             |
+| Year comes from the edition's `startDate`     | Deterministic; it cannot collide across an org's editions, and across orgs the globally unique org slug already guarantees uniqueness.        |
+| No dates yet → the two collapse into one host | A year is a factual claim and the host is permanent. Guessing the current year would strand a December signup on last year's address forever. |
+| Reserved labels refused (on the **org slug**) | `www`, `api`, `auth`, `admin`, … The claim is global and permanent, so the platform's own hostnames must never be handed out to a tenant.     |
+| Derived **once**, never re-derived            | Renaming the organization afterwards does not move, break or re-issue an address; claims and records are keyed by the hostname itself.        |
+
+There is deliberately **no fallback label** (`-2`, a random suffix) when a minted
+host is already claimed. Provisioning refuses instead, naming the host — an
+unpredictable address would be permanent too.
+
+**Both hosts are allocated**, each with its own `platform-owned` record naming
+the conference that holds it. Being in the zone still grants nothing on its own.
+
+### The short address moves — as a transfer, never as two writes
+
+`domains[]` is a globally unique routing claim, so the short address cannot sit
+on two editions at once and must never sit on none. Creating a newer edition
+therefore **transfers** it: released from the previous holder and claimed by the
+new one **inside the same Sanity transaction**, which is all-or-nothing. Two
+separate writes would have an interleaving that leaves the address duplicated (a
+routing collision) or lost (an address that resolves nowhere).
+
+`planEditionPlatformHosts` (`src/lib/conference/platformEditionHosts.ts`) decides
+it, and `createEdition` stages both halves:
+
+- **Later start date wins** (`shouldTakeLatestHost`). Back-filling a 2024 edition
+  after 2026 exists does **not** drag the short address backwards; it gets its own
+  dated host and nothing else. Two editions in one calendar year are ordered by
+  their actual start dates; an exact tie keeps the incumbent, because a live
+  address does not churn without evidence.
+- **The dated host never moves.** Only the bare host is ever released, which is
+  what makes retiring an old edition to a static archive safe.
+- **A foreign holder is a conflict, not a transfer.** The label derives from a
+  globally unique org slug, so a holder in another organization is an anomaly and
+  the edition is refused rather than the claim stolen.
+- **Provisioning never transfers.** It creates an organization's _first_ edition
+  and nothing else (a second provisioning under the same slug is refused by
+  `isOrgSlugTaken`), so the short address is always claimed fresh there.
 
 ### The suffix is configuration
 
@@ -218,18 +280,19 @@ existing consumers, so it fails closed from day one.
 
 ## Moving parts
 
-| Path                                              | Role                                                        |
-| ------------------------------------------------- | ----------------------------------------------------------- |
-| `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                   |
-| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract + label-wise matcher  |
-| `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification |
-| `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                 |
-| `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist (#688 consumes this)    |
-| `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                 |
-| `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts               |
-| `src/app/api/cron/domain-verification/route.ts`   | daily cron (05:00 UTC)                                      |
-| `src/server/routers/domainVerification.ts`        | admin list + re-check                                       |
-| `src/components/admin/DomainVerificationCard.tsx` | `/admin/settings#domain-verification`                       |
+| Path                                              | Role                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                               |
+| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract, label-wise matcher, host minting |
+| `src/lib/onboarding/provision.ts`                 | claims + allocates the minted host in the tenant transaction            |
+| `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification             |
+| `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                             |
+| `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist (#688 consumes this)                |
+| `src/lib/domain-verification/routing.ts`          | the flag-gated routing gate                                             |
+| `src/lib/domain-verification/sweep.ts`            | continuous re-verification + organizer alerts                           |
+| `src/app/api/cron/domain-verification/route.ts`   | daily cron (05:00 UTC)                                                  |
+| `src/server/routers/domainVerification.ts`        | admin list + re-check                                                   |
+| `src/components/admin/DomainVerificationCard.tsx` | `/admin/settings#domain-verification`                                   |
 
 DNS resolution uses a dedicated `node:dns` `Resolver` with an explicit timeout
 and a fixed `tries`, plus an outer wall-clock race. Nothing about verification is

@@ -48,12 +48,48 @@ const handlers = [
           speakerId: 'speaker-xyz',
           speakerCreated: false,
           organizerMatchedName: 'Kari Nordmann',
-          // Domain ownership is CLAIMED, not proven, at hand-off (#683).
+          // Provisioning MINTS the tenant's two platform hosts (the short
+          // address first) and claims them alongside the operator's own
+          // domain. The minted pair is allocated — verified, nothing to
+          // publish — while the custom domain is claimed, not proven (#683).
           challenges: [
+            {
+              hostname: 'cloud-native-oslo.konf.run',
+              status: 'verified',
+              grandfathered: false,
+              platformOwned: true,
+              graceUntil: null,
+              recordName: null,
+              recordValue: null,
+              wildcard: false,
+              devOnly: false,
+              redirectAllowlisted: true,
+              routable: true,
+              lastCheckedAt: null,
+              lastSuccessAt: null,
+              lastError: null,
+            },
+            {
+              hostname: 'cloud-native-oslo-2027.konf.run',
+              status: 'verified',
+              grandfathered: false,
+              platformOwned: true,
+              graceUntil: null,
+              recordName: null,
+              recordValue: null,
+              wildcard: false,
+              devOnly: false,
+              redirectAllowlisted: true,
+              routable: true,
+              lastCheckedAt: null,
+              lastSuccessAt: null,
+              lastError: null,
+            },
             {
               hostname: 'oslo.cloudnativedays.no',
               status: 'pending',
               grandfathered: false,
+              platformOwned: false,
               graceUntil: null,
               recordName: '_konf-challenge.oslo.cloudnativedays.no',
               recordValue:

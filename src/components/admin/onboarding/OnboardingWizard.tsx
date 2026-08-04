@@ -667,7 +667,12 @@ function SuccessPanel({
   organizerEmail: string
   domains: string[]
 }) {
-  const firstDomain = domains[0]
+  // The hosts the SERVER actually claimed, not the ones typed into the form:
+  // provisioning mints `<org-slug>.<platform suffix>` and puts it first, so the
+  // typed list alone would announce "no domain attached yet" for a tenant that
+  // has a live address.
+  const primary = result.challenges[0] ?? null
+  const firstDomain = primary?.hostname ?? domains[0]
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-green-300 bg-green-50 p-6 dark:border-green-700/60 dark:bg-green-900/20">
@@ -764,11 +769,25 @@ function SuccessPanel({
             Next: the activation checklist
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            Once DNS and Vercel domain setup for{' '}
-            <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
-              {firstDomain}
-            </code>{' '}
-            point at this platform, the tenant&apos;s admin lives at{' '}
+            {primary?.platformOwned ? (
+              <>
+                The tenant is reachable now — we issued{' '}
+                <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
+                  {firstDomain}
+                </code>{' '}
+                and it serves this conference immediately, with no DNS to set
+                up.{' '}
+              </>
+            ) : (
+              <>
+                Point DNS and Vercel domain setup for{' '}
+                <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
+                  {firstDomain}
+                </code>{' '}
+                at this platform first.{' '}
+              </>
+            )}
+            The tenant&apos;s admin lives at{' '}
             <a
               href={`https://${firstDomain}/admin/settings`}
               className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"

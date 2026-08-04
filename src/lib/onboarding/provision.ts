@@ -8,10 +8,12 @@ import {
   domainEntriesOverlap,
 } from '@/lib/conference/domains'
 import {
+  derivePlatformHosts,
   getDomainVerification,
   syncDomainVerifications,
   toDomainVerificationView,
   type DomainVerificationView,
+  type PlatformHostRefusal,
 } from '@/lib/domain-verification'
 import {
   PROVISIONING_RECEIPT_RETENTION_DAYS,
@@ -33,6 +35,12 @@ import { buildOnboardingDocuments, type OnboardingInput } from './create'
  * That single-implementation rule is load-bearing: a second copy would fork the
  * per-field document enumeration in `buildOnboardingDocuments` (#752) and start
  * silently dropping new conference fields on whichever path was forgotten.
+ *
+ * ADDRESSING: the platform MINTS the new tenant's host — `<org-slug>.<suffix>`
+ * — and claims it in the same transaction ({@link planTenantDomains}). Without
+ * it a self-service tenant would exist at no address at all: resolution is by
+ * request `Host` against `conference.domains[]`, so a conference claiming
+ * nothing is served by nothing and its organizer cannot even reach /admin.
  *
  * SERVER-SIDE AUTHORITY (the wizard and the control panel only mirror these):
  *   - org slug must be globally unique among organizations;
@@ -106,6 +114,105 @@ export async function findConflictingDomains(
   )
 }
 
+/**
+ * The domains the new conference will actually CLAIM, and the platform hosts
+ * among them (empty, with a reason, when none could be minted).
+ *
+ * ## The derivation
+ *
+ * Both hosts from {@link derivePlatformHosts} — one rule, one implementation,
+ * shared with the matcher that decides what is inside the platform zone:
+ *
+ *   `acme.konf.run`       the SHORT address of the org's latest edition;
+ *   `acme-2026.konf.run`  this edition's permanent address.
+ *
+ * With no dates yet the two collapse into one host (that function explains why
+ * a guessed year is worse than none).
+ *
+ * ## The bare host is NOT transferred here — it cannot be
+ *
+ * The short address MOVES as newer editions appear, and a transfer has to
+ * release it from the previous holder in the same breath as claiming it. That
+ * case is unreachable on this path: provisioning creates an organization's
+ * FIRST edition and nothing else, because `isOrgSlugTaken` refuses a second
+ * provisioning under the same slug outright. So there is never an incumbent
+ * edition of this org, and the bare host is always claimed fresh. If some
+ * OTHER tenant somehow holds it, that is a collision and is refused below —
+ * never stolen. The transfer belongs to the edition-creation path;
+ * {@link shouldTakeLatestHost} is the shared rule for it.
+ *
+ * ## Coexisting with caller-supplied domains
+ *
+ * The minted hosts are PREPENDED to whatever the caller asked for rather than
+ * replacing it, and the two coexist deliberately:
+ *
+ *  - The operator wizard may pass a custom domain. That domain is CLAIMED but
+ *    unproven at creation (`pending`, no TXT published yet), so under
+ *    `DOMAIN_VERIFICATION_ENFORCE_ROUTING` it does not route and the tenant
+ *    would be unreachable for as long as DNS takes. The minted hosts work
+ *    immediately — they are inside a zone we already serve under a wildcard
+ *    certificate — so they are the addresses the organizer signs in on while
+ *    their own domain is still being proven. Nothing is dropped, and the bare
+ *    host goes FIRST so the short address is the primary one every surface
+ *    reads off `domains[0]`.
+ *  - The self-service API passes none, and gets exactly the minted pair.
+ *
+ * A caller that names a minted host explicitly is deduplicated, not
+ * double-claimed.
+ *
+ * ## Nothing derivable
+ *
+ * An empty result is the ONE state the caller must refuse: no suffix
+ * configured (or a slug DNS cannot carry) AND no caller-supplied domain means a
+ * tenant at no address whatsoever. Deployments that operate no platform zone
+ * keep working exactly as before as long as they pass a domain — the refusal is
+ * scoped to the case where there would be no host at all, not to an unset
+ * suffix per se.
+ *
+ * ## No fallback label, ever
+ *
+ * There is deliberately no `-2` suffixing when a minted host is already
+ * claimed. The claim is globally unique and PERMANENT, so an auto-suffixed
+ * address would (a) silently stop matching the slug and year every other
+ * surface derives it from, and (b) hand out an address nobody can predict. A
+ * collision is surfaced as a rejection naming the host; the remedy is a
+ * different org slug, chosen by whoever is provisioning.
+ *
+ * ## Minted once, never re-derived
+ *
+ * The org slug is editable from the control panel afterwards. That does NOT
+ * move these hosts: they are stored in `conference.domains[]` and in the
+ * `domainVerification` records, all keyed by the hostname itself, and nothing
+ * re-derives them at read time. A renamed org keeps the addresses it was issued
+ * — which is the point, since they are already in the wild.
+ */
+export function planTenantDomains(
+  orgSlug: string,
+  startDate: string | null | undefined,
+  requested: readonly string[],
+): {
+  domains: string[]
+  platformHosts: string[]
+  refusal: PlatformHostRefusal | null
+} {
+  const normalized = requested.map(normalizeDomain).filter((d) => d !== '')
+  const derived = derivePlatformHosts(orgSlug, startDate)
+  if (!derived.ok) {
+    return { domains: normalized, platformHosts: [], refusal: derived.reason }
+  }
+  // Bare first (the short, primary address), then the dated one — deduplicated,
+  // since an undated edition mints the same host twice.
+  const platformHosts = [...new Set([derived.hosts.bare, derived.hosts.dated])]
+  return {
+    domains: [
+      ...platformHosts,
+      ...normalized.filter((entry) => !platformHosts.includes(entry)),
+    ],
+    platformHosts,
+    refusal: null,
+  }
+}
+
 /** Whether an organization already claims this slug. */
 export async function isOrgSlugTaken(slug: string): Promise<boolean> {
   const count = await clientReadUncached.fetch<number>(
@@ -177,6 +284,16 @@ async function readReceipt(id: string): Promise<Receipt | null> {
 export type ProvisionRejection =
   | { code: 'slug_taken'; slug: string }
   | { code: 'domain_claimed'; domains: string[] }
+  /** The minted `<slug>-<year>.<suffix>` host is already claimed — the org slug
+   * is free but its address is not, so provisioning would strand the tenant. */
+  | { code: 'platform_host_taken'; host: string; slug: string }
+  /** The minted label is one the platform keeps for itself (`www`, `auth`, …).
+   * Refused whether or not the caller supplied other domains: the claim is
+   * permanent, so it must never be handed out by accident. */
+  | { code: 'reserved_slug'; slug: string }
+  /** No host could be minted AND the caller named none: the tenant would exist
+   * at no address. A deployment misconfiguration, refused rather than written. */
+  | { code: 'no_host_available'; slug: string }
   | { code: 'ambiguous_organizer' }
   | { code: 'commit_failed'; cause: unknown }
 
@@ -288,12 +405,39 @@ export async function provisionOrganization(
     }
   }
 
+  // The tenant's ADDRESSES, decided before anything is read or written: the
+  // minted `<slug>.<suffix>` + `<slug>-<year>.<suffix>` pair, plus whatever the
+  // caller asked for.
+  const { domains, platformHosts, refusal } = planTenantDomains(
+    input.organization.slug,
+    input.conference.startDate,
+    input.domains,
+  )
+  // A reserved label is refused even when the caller supplied its own domain:
+  // the point is not that this tenant lacks an address, it is that this slug
+  // must never be allowed to take one of the platform's own hostnames.
+  if (refusal === 'reserved') {
+    return {
+      ok: false,
+      rejection: { code: 'reserved_slug', slug: input.organization.slug },
+    }
+  }
+  if (domains.length === 0) {
+    // Refuse LOUDLY. Committing here is what produced the ghost tenants: an
+    // organization and a conference that no host serves and no organizer can
+    // reach, indistinguishable from a successful provision to the caller.
+    return {
+      ok: false,
+      rejection: { code: 'no_host_available', slug: input.organization.slug },
+    }
+  }
+
   const [slugTaken, taken, speakerMatches] = await Promise.all([
     isOrgSlugTaken(input.organization.slug),
-    // Overlap-aware (exact OR wildcard, both directions) and SKIPPED outright
-    // for a domainless tenant — that path must not depend on a global read it
-    // doesn't need.
-    findConflictingDomains(input.domains),
+    // Overlap-aware (exact OR wildcard, both directions), over the EFFECTIVE
+    // list — the minted host is a globally unique claim like any other and is
+    // checked as one.
+    findConflictingDomains(domains),
     findSpeakersByEmail(input.organizer.email),
   ])
 
@@ -301,6 +445,22 @@ export async function provisionOrganization(
     return {
       ok: false,
       rejection: { code: 'slug_taken', slug: input.organization.slug },
+    }
+  }
+  // Reported ahead of an ordinary domain conflict, and separately: the caller
+  // never asked for these hosts, so "already claimed" would be baffling. The
+  // actionable remedy is a different org slug. Note this is NOT a transfer
+  // opportunity — a claim on the org's own labels held by anyone else is a
+  // collision, and stealing it is exactly what must not happen.
+  const takenPlatformHost = platformHosts.find((host) => taken.includes(host))
+  if (takenPlatformHost !== undefined) {
+    return {
+      ok: false,
+      rejection: {
+        code: 'platform_host_taken',
+        host: takenPlatformHost,
+        slug: input.organization.slug,
+      },
     }
   }
   if (taken.length > 0) {
@@ -312,7 +472,7 @@ export async function provisionOrganization(
   const existingSpeaker = speakerMatches[0] ?? null
 
   const { organization, conference, speaker } = buildOnboardingDocuments(
-    input,
+    { ...input, domains },
     {
       organizationId: generateKey('organization'),
       conferenceId: generateKey('conference'),
@@ -351,7 +511,9 @@ export async function provisionOrganization(
         conferenceId: conference._id,
         speakerId,
         speakerCreated: speaker !== null,
-        domains: input.domains,
+        // The EFFECTIVE list, so a replay re-mints (and re-allocates) exactly
+        // the hosts this tenant was actually given.
+        domains,
         createdAt: new Date(now).toISOString(),
         expiresAt: new Date(
           now + PROVISIONING_RECEIPT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
@@ -382,7 +544,7 @@ export async function provisionOrganization(
     return { ok: false, rejection: { code: 'commit_failed', cause: error } }
   }
 
-  const challenges = await mintChallenges(conference._id, input.domains)
+  const challenges = await mintChallenges(conference._id, domains)
 
   // A new conference document exists; bust the shared conferences tag so domain
   // resolution can see it once its domain actually routes here.

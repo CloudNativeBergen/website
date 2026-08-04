@@ -35,6 +35,7 @@ import {
   PLATFORM_DOMAIN_NOT_ALLOCATED,
   syncDomainVerifications,
 } from '@/lib/domain-verification'
+import { planEditionPlatformHosts } from '@/lib/conference/platformEditionHosts'
 import {
   buildEditionDocuments,
   type SourceConference,
@@ -985,7 +986,7 @@ export const conferenceRouter = router({
     .mutation(async ({ input }) => {
       const sourceId = await resolveConferenceId()
 
-      const [source, sourceTiers, sourceTemplates, claimedDomains] =
+      const [source, sourceTiers, sourceTemplates, claimedDomains, orgSlug] =
         await Promise.all([
           clientReadUncached.fetch<SourceConference | null>(
             `*[_type == "conference" && _id == $id][0]`,
@@ -1000,6 +1001,13 @@ export const conferenceRouter = router({
             { id: sourceId },
           ),
           fetchClaimedDomains(),
+          // The org slug is what the platform hosts are minted FROM. Read from
+          // the source conference's organization ref — never from client input.
+          clientReadUncached.fetch<string | null>(
+            // groq-global-scoped: keyed by the SERVER-resolved source conference id (`resolveConferenceId`, from the request Host), exactly like the reads above it.
+            `*[_type == "conference" && _id == $id][0].organization->slug.current`,
+            { id: sourceId },
+          ),
         ])
 
       if (!source?._id) {
@@ -1038,6 +1046,23 @@ export const conferenceRouter = router({
         })
       }
 
+      // PLATFORM HOSTS FOR THE NEW EDITION: its own permanent
+      // `<org-slug>-<year>` address, plus the short `<org-slug>` address when
+      // this edition is genuinely the org's latest — which means TRANSFERRING
+      // that one off the edition currently holding it.
+      const hostPlan = await planEditionPlatformHosts({
+        orgSlug,
+        organizationId: source.organization?._ref ?? null,
+        startDate: input.startDate,
+        claimedDomains,
+      })
+      if (hostPlan.conflict !== null) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${DOMAIN_ALREADY_CLAIMED}: ${hostPlan.conflict}`,
+        })
+      }
+
       const { conference, sponsorTiers, contractTemplates, summary } =
         buildEditionDocuments(
           {
@@ -1045,7 +1070,17 @@ export const conferenceRouter = router({
             sponsorTiers: sourceTiers ?? [],
             contractTemplates: sourceTemplates ?? [],
           },
-          input,
+          // The minted hosts lead, so the short address is the edition's
+          // primary one; the organizer's own domains follow, deduplicated.
+          {
+            ...input,
+            domains: [
+              ...hostPlan.claim,
+              ...input.domains.filter(
+                (entry) => !hostPlan.claim.includes(normalizeDomain(entry)),
+              ),
+            ],
+          },
           {
             newConferenceId,
             mintId: () => generateKey('doc'),
@@ -1057,6 +1092,17 @@ export const conferenceRouter = router({
         let tx = clientWrite.transaction().create(conference)
         for (const tier of sponsorTiers) tx = tx.create(tier)
         for (const tpl of contractTemplates) tx = tx.create(tpl)
+        // THE TRANSFER, in the SAME all-or-nothing transaction that claims it.
+        // `domains[]` is globally unique, so releasing and claiming cannot be
+        // two writes: one of them failing would leave the short address on
+        // both editions (a routing collision) or on neither (an address that
+        // resolves nowhere). Atomicity is what rules both out.
+        if (hostPlan.releaseFrom !== null && hostPlan.transferring !== null) {
+          const releasing = hostPlan.transferring
+          tx = tx.patch(hostPlan.releaseFrom, (p) =>
+            p.unset([`domains[@ == "${releasing}"]`]),
+          )
+        }
         await tx.commit()
       } catch (error) {
         throw new TRPCError({
@@ -1070,6 +1116,17 @@ export const conferenceRouter = router({
       // pending, never inherited from the source edition. Best-effort (#683):
       // the edition is already committed and a missing record fails closed.
       await syncDomainVerifications(newConferenceId, input.domains)
+      // The minted hosts are ALLOCATED (#778) — and only these, because they
+      // were derived server-side from the tenant's OWN org slug rather than
+      // typed. Anything the organizer types is still refused above by
+      // `findUnallocatedPlatformDomains`, so a tenant can never self-serve a
+      // grant on a label outside its own namespace. A transferred host is
+      // re-pointed to the new holder by the same call.
+      if (hostPlan.claim.length > 0) {
+        await syncDomainVerifications(newConferenceId, hostPlan.claim, [], {
+          allocatePlatformHosts: true,
+        })
+      }
 
       // New edition adds a conference document; bust the shared conferences tag
       // so domain resolution can see it once its domain actually resolves.
