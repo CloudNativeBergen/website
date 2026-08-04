@@ -723,8 +723,23 @@ describe('server safety', () => {
 
 const SRC = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const PLACEHOLDERS = join(SRC, 'lib', 'homepage', 'placeholders.ts')
-/** The one route group allowed to import placeholders (organizer-gated). */
-const ADMIN_DIR = join(SRC, 'app', '(admin)')
+/**
+ * The route groups allowed to import placeholders. Both are organizer-gated —
+ * that gate, not the folder name, is what this exemption is really about:
+ *
+ *  - `(admin)` — the composer and the rest of the admin app.
+ *  - `(preview)` — the composer's live-preview document (`/admin/homepage-preview`).
+ *    It is a SEPARATE group only because a page cannot opt out of an ancestor
+ *    layout, and the preview must render without the admin shell; its own
+ *    `layout.tsx` repeats the same `isOrganizerForCurrentOrg` gate.
+ *
+ * Anything else reaching this module would be a public page able to ship
+ * "Sample Speaker A" to real visitors.
+ */
+const PREVIEW_ALLOWED_DIRS = [
+  join(SRC, 'app', '(admin)'),
+  join(SRC, 'app', '(preview)'),
+]
 
 const RESOLUTION_SUFFIXES = [
   '',
@@ -825,7 +840,7 @@ describe('placeholder bytes never reach the public page graph', () => {
    */
   it('is unreachable from every non-admin route in src/app', async () => {
     const entries = (await collectFiles(join(SRC, 'app'))).filter(
-      (file) => !file.startsWith(ADMIN_DIR),
+      (file) => !PREVIEW_ALLOWED_DIRS.some((dir) => file.startsWith(dir)),
     )
     expect(entries.length).toBeGreaterThan(50)
 
