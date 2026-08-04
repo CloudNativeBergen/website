@@ -348,7 +348,7 @@ export function CloudNativePattern({
           <div
             key={`${layer.name}-${i}-${selectedIcon.name}-${currentIconIndex}`}
             className={`absolute ${color} transition-all duration-500${
-              animated ? ' animate-float-seeded' : ''
+              animated ? 'animate-float-seeded' : ''
             }`}
             // The seeded timing rides on custom properties and the animation
             // itself lives in `.animate-float-seeded`, so a reduced-motion
