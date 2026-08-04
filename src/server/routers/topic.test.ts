@@ -125,7 +125,7 @@ describe('topic router — authorization', () => {
 })
 
 describe('topic router — list (org scoping, E3)', () => {
-  it('scopes to the current org, tolerating org-less legacy topics', async () => {
+  it('scopes to the current org and does NOT tolerate org-less topics', async () => {
     getOrgRefMock.mockResolvedValue('org-A')
     let listQuery = ''
     let listParams: Record<string, unknown> | undefined
@@ -142,12 +142,15 @@ describe('topic router — list (org scoping, E3)', () => {
 
     await makeCaller().list()
 
-    expect(listQuery).toContain('!defined(organization)')
+    // The `!defined(organization)` tolerance is gone: it showed every
+    // un-backfilled topic to every tenant. Migration 044 is confirmed applied,
+    // so requiring the key strands nothing.
+    expect(listQuery).not.toContain('!defined(organization)')
     expect(listQuery).toContain('organization._ref == $orgId')
     expect(listParams).toEqual({ orgId: 'org-A' })
   })
 
-  it('is unscoped when the org is unresolvable (legacy-domain bridge)', async () => {
+  it('reads NOTHING when the org is unresolvable, and issues no query', async () => {
     getOrgRefMock.mockResolvedValue(null)
     let listQuery = ''
     let listParams: Record<string, unknown> | undefined
@@ -162,10 +165,15 @@ describe('topic router — list (org scoping, E3)', () => {
       },
     )
 
-    await makeCaller().list()
+    // This test used to assert the OPPOSITE — that an unresolvable org ran an
+    // unscoped query — and called it a legacy-domain bridge. That is the same
+    // fail-open shape as the organizer-set and travel-support fallbacks, both
+    // of which turned out to be live cross-tenant leaks. A test that pins a
+    // leak as intended behaviour is worse than no test.
+    await expect(makeCaller().list()).resolves.toEqual([])
 
-    expect(listQuery).not.toContain('organization._ref == $orgId')
-    expect(listParams).toEqual({})
+    expect(listQuery).toBe('')
+    expect(listParams).toBeUndefined()
   })
 })
 

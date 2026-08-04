@@ -119,7 +119,11 @@ export async function requireCurrentOrgId(): Promise<string> {
 function notFound(expectedType: string): TRPCError {
   return new TRPCError({
     code: 'NOT_FOUND',
-    message: `No ${expectedType} with that id in this organization`,
+    // Deliberately says "for this request" rather than naming a dimension:
+    // this helper serves org-scoped AND conference-scoped guards, and a
+    // conference-scoped refusal that blames the organization sends whoever
+    // reads the log looking at the wrong boundary.
+    message: `No ${expectedType} with that id for this request`,
   })
 }
 

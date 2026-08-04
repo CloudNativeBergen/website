@@ -48,12 +48,22 @@ export const topicRouter = router({
    * the backfill. When the org is unresolvable (legacy domain), all topics show
    * — the same migration bridge used elsewhere. */
   list: adminProcedure.query(async () => {
+    // FAIL CLOSED (#730). This previously fell back to a bare
+    // `_type == "topic"` when the org did not resolve — every tenant's topics,
+    // to any admin on an unrecognised host. It was written as a migration
+    // bridge for legacy domains, which is the same shape as the organizer-set
+    // and travel-support fallbacks that turned out to be live leaks.
+    //
+    // The `!defined(organization)` tolerance is gone for the same reason: it
+    // showed every un-backfilled topic to every tenant. Migration 044 has been
+    // confirmed applied, so nothing is stranded by requiring the key.
     const orgRef = await getOrganizationRefForCurrentConference()
-    const filter = orgRef
-      ? `_type == "topic" && (!defined(organization) || organization._ref == $orgId)`
-      : `_type == "topic"`
+    if (!orgRef) return []
+
     const topics = await clientReadUncached.fetch<Topic[]>(
-      `*[${filter}] | order(title asc){
+      // groq-global-scoped: the tenant predicate is `organization._ref ==
+      // $orgId`, bound below; the early return above guarantees it is present.
+      `*[_type == "topic" && organization._ref == $orgId] | order(title asc){
         _id,
         _type,
         title,
@@ -61,7 +71,7 @@ export const topicRouter = router({
         color,
         slug
       }`,
-      orgRef ? { orgId: orgRef } : {},
+      { orgId: orgRef },
     )
     return topics ?? []
   }),
