@@ -555,7 +555,7 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
     ],
   },
   vanityMetrics: {
-    title: 'Vanity Metrics',
+    title: 'Key Numbers',
     subtitle: 'Landing-page highlight numbers',
     fields: [
       {

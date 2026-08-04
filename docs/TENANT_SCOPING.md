@@ -117,8 +117,16 @@ A query is **not** flagged when:
    hoisted to a `const` and passed by variable is not recognized). This exemption
    does **not** cover `optionalTenantFilter` — a fail-open predicate inside the
    body is not undone by a prefix.
-2. **It is annotated `// groq-global: <reason>`** on the same line as, or the line
-   directly above, the query opener.
+2. **It carries a bound tenant `references()`.** A root filter containing
+   `references($conferenceId)`, `references($orgId)` or
+   `references($organizationId)` constrains the read to that tenant exactly as
+   `conference._ref == $conferenceId` does. Only those tenant parameter names
+   count — `references($speakerId)` or `references(someVar)` still flags — and
+   only for the `unscoped` shape: inside an interpolated filter the injected text
+   can escape the bracket, so a visible `references()` proves nothing about the
+   query that actually runs.
+3. **It carries an annotation** — `// groq-global:` or `// groq-global-scoped:`,
+   see below.
 
 **Allowlisted paths** (never flagged): the builder module itself
 (`src/lib/sanity/scoped.ts`), `migrations/**`, `scripts/**`, `__tests__/**`, and
@@ -126,20 +134,52 @@ A query is **not** flagged when:
 run with the WRITE token — but the cross-tenant reporting scripts are global by
 design, so tightening it needs per-script `groq-global` annotations first.
 
-### Suppression convention — reviewed-global queries
+### Annotation vocabulary — two markers, deliberately distinct
 
-Some reads are intentionally global and must stay that way. Annotate them:
+| Marker                         | Claim                                                                   | Use for                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `// groq-global: <reason>`     | "this read IS cross-tenant, and that is correct"                        | host → conference routing, the tenant registry, the global identity join (#615), platform aggregates, cron sweeps     |
+| `// groq-global-scoped: <how>` | "this read is tenant-scoped, but through something the rule cannot see" | a predicate carried in a variable, a scope applied by a helper, a caller-side authz gate, a point read by a server id |
 
 ```ts
 // groq-global: cross-tenant identity join — a returning global person must
 // resolve regardless of which org they first belonged to (#615).
 groq`*[_type == "speaker" && (lower(email) in $emails || …)] …`
+
+// groq-global-scoped: point read by an id resolved server-side; the caller
+// (`loadManageableConversation`) asserts isOrganizerForOrg + canAccessConversation.
+groq`*[_type == "conversation" && _id == $id][0]`
 ```
 
-Use `// groq-global:` only for genuinely cross-tenant reads: the login identity
-join (a speaker is a **global** person), platform-wide aggregates, and admin
-tooling that operates across tenants by design. Every suppression must carry a
-reason. If you find yourself suppressing a per-tenant list, scope it instead.
+**Why two markers.** Annotating a scoped-but-invisible query `groq-global:` is a
+lie, and it drowns the small set of genuinely cross-tenant reads — the set a
+human must periodically re-audit — in a much larger set of ordinary scoped ones.
+They are independently greppable, because in `groq-global-scoped` the colon is
+not adjacent to `groq-global`:
+
+```
+rg 'groq-global:'         # the reviewed-cross-tenant set — audit this one
+rg 'groq-global-scoped:'  # the scoped-but-invisible set
+```
+
+**Both require a non-empty reason.** A bare `// groq-global:` suppresses nothing.
+If you find yourself annotating a per-tenant list `groq-global:`, scope it
+instead.
+
+**What each marker clears.** `groq-global-scoped:` clears `unscoped` and
+`interpolatedFilter` — the two "the rule cannot see the scope" shapes. It does
+**not** clear `optionalTenantFilter` or `nullScope`: there the rule _can_ see the
+scoping and can see it fail open, so "it is scoped" would be a false claim. Only
+an explicit reviewed-global `groq-global:` silences those.
+
+**Placement.** The marker may sit anywhere in the comment block directly above
+the query, or trailing on the query's own line. It does **not** have to be the
+last comment line — that used to be the requirement, and multi-line annotations
+carrying the marker on their first line silently did nothing (four such
+annotations sat quietly ineffective in this repo). Blank lines between the block
+and the query are skipped; a line carrying **code** is a hard stop, so a marker
+separated from the query by a statement does not suppress, and neither does one
+placed below it.
 
 ## Migration playbook
 
@@ -165,7 +205,9 @@ time). For each unscoped query:
 4. **Prefer inline bodies** so the lint rule recognizes the migration and the
    warning clears.
 5. **If the query is genuinely global,** annotate `// groq-global: <reason>`
-   instead of scoping.
+   instead of scoping. **If it is already scoped but the rule cannot see how,**
+   annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
+   for `groq-global:` there.
 6. **Track progress** by watching the warn count fall:
    `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`.
 

@@ -151,7 +151,7 @@ export const CONTENT_SOURCES: Record<SectionContentSourceId, ContentSource> = {
   },
   'vanity-metrics': {
     id: 'vanity-metrics',
-    label: 'Vanity metrics',
+    label: 'Key numbers',
     href: '/admin/settings/appearance/homepage',
     manageLabel: 'Edit metrics',
   },
@@ -181,8 +181,33 @@ export const CONTENT_SOURCES: Record<SectionContentSourceId, ContentSource> = {
  */
 export type SectionContentKind = 'ready' | 'degraded' | 'empty-hides'
 
+/**
+ * How ALARMED the organizer should be — a separate axis from {@link
+ * SectionContentKind}, which says only how much of the page renders.
+ *
+ *  - `ready` — nothing to say.
+ *  - `waiting` — the band is thin or absent because the content simply has not
+ *    been added yet. This is the NORMAL state of a conference that was created
+ *    an hour ago, and it must not be dressed as a failure: a brand-new
+ *    composition legitimately has six of these, and six warnings in a column is
+ *    a wall the organizer learns to ignore.
+ *  - `attention` — something is genuinely wrong or LOSSY: content the organizer
+ *    has already entered will not reach the page (untiered sponsors, metrics
+ *    past the sixth cell), a block they authored is unusable (a banner with no
+ *    button), or a band that used to render has silently stopped (a countdown
+ *    whose target has passed). These earn amber; nothing else does.
+ *
+ * The distinction cannot be derived from `kind`/`count` after the fact — "no
+ * sponsors yet" and "six sponsors, none of them in a tier" are both `degraded`
+ * with a count of zero, and only one of them is a problem — so it is recorded
+ * per case, right where the guard it mirrors is transcribed.
+ */
+export type SectionContentTone = 'ready' | 'waiting' | 'attention'
+
 interface SectionContentStatusFacts {
   kind: SectionContentKind
+  /** {@link SectionContentTone} — how loudly the UI should say this. */
+  tone: SectionContentTone
   /**
    * TRUE iff the renderer emits nothing for this section — the property the
    * parity test pins. `kind === 'empty-hides'` is the same fact, named for the
@@ -240,6 +265,7 @@ export interface UnknownSectionContentStatus extends SectionContentStatusFacts {
   /** The stored `_type`, verbatim. NOT a registered section type. */
   type: string
   kind: 'empty-hides'
+  tone: 'attention'
   willHide: true
 }
 
@@ -512,12 +538,19 @@ function status(
     countLabel?: string | null
     summary: string
     reason?: string
+    /**
+     * Opt IN to amber. The default is deliberately the quiet one: every case
+     * below is "content not added yet" unless it says otherwise, and a case
+     * that forgets to think about tone should read as calm, not as an alarm.
+     */
+    tone?: SectionContentTone
   },
 ): KnownSectionContentStatus {
   return {
     known: true,
     type,
     kind,
+    tone: fields.tone ?? (kind === 'ready' ? 'ready' : 'waiting'),
     willHide: kind === 'empty-hides',
     count: fields.count ?? null,
     countLabel: fields.countLabel ?? null,
@@ -700,6 +733,9 @@ export function sectionContentStatus(
           summary: `${pluralize(untiered, 'sponsors')}, none in a tier`,
           reason:
             'No logos render — a sponsor is only shown once it is assigned to a tier.',
+          // LOSSY, not merely empty: these sponsors are on file and the page
+          // will not draw one of them.
+          tone: 'attention',
         })
       }
       const summary = `${pluralize(shown, 'sponsors')} in ${pluralize(tiers, 'tiers')}`
@@ -711,6 +747,7 @@ export function sectionContentStatus(
           countLabel: 'sponsors',
           summary,
           reason: `${pluralize(untiered, 'sponsors')} in no tier ${untiered === 1 ? 'is' : 'are'} left out — a sponsor is only shown once it is assigned to a tier.`,
+          tone: 'attention',
         })
       }
       return status('homepageSponsors', 'ready', src, {
@@ -755,6 +792,7 @@ export function sectionContentStatus(
           summary: `${pluralize(stored, 'metrics')}, all blank`,
           reason:
             'Renders as an empty band — every metric on file is missing both its label and its value.',
+          tone: 'attention',
         })
       }
       const leftOut = [
@@ -771,6 +809,7 @@ export function sectionContentStatus(
           countLabel: 'metrics',
           summary: pluralize(shown, 'metrics'),
           reason: leftOut.join(' '),
+          tone: 'attention',
         })
       }
       return status('homepageMetrics', 'ready', src, {
@@ -791,6 +830,9 @@ export function sectionContentStatus(
           summary: section.heading?.trim() || 'Untitled banner',
           reason:
             'Renders without a button — a call-to-action banner needs both a button label and a link.',
+          // Authored HERE and incomplete: a call to action with nothing to click
+          // is broken, not waiting.
+          tone: 'attention',
         })
       }
       return status('homepageCtaBanner', 'ready', src, {
@@ -858,6 +900,9 @@ export function sectionContentStatus(
             summary: 'Target date has passed',
             reason:
               'Hidden on the live site — the countdown target has passed and no message is set to replace it.',
+            // A band that USED to render and silently stopped. Nothing was
+            // added or removed, so nobody is expecting this one.
+            tone: 'attention',
           })
         }
         return status('homepageCountdown', 'degraded', src, {
@@ -906,6 +951,9 @@ export function sectionContentStatus(
         known: false,
         type: String(unknown?._type),
         kind: 'empty-hides',
+        // Not "waiting on content" in any sense the organizer can act on:
+        // stored data this deploy cannot render.
+        tone: 'attention',
         willHide: true,
         count: null,
         countLabel: null,

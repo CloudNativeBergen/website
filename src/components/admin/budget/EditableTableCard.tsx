@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { PencilSquareIcon } from '@heroicons/react/24/outline'
 
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -41,11 +41,20 @@ export function EditableTableCard({
 }) {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
-  // Leaving edit mode (via Save, or any parent-driven toggle) must clear a
-  // pending discard prompt so it can never re-appear in a later edit session.
-  useEffect(() => {
-    if (!editing) setConfirmingCancel(false)
-  }, [editing])
+  // A pending discard prompt must never survive into a later edit session. That
+  // is enforced at the three transitions this card owns — entering edit mode,
+  // saving, and discarding — rather than by an effect that watches `editing`:
+  // resetting state in an effect costs an extra render pass for something every
+  // exit path already knows about. The prompt is additionally gated on
+  // `editing` when rendered, so it is never visible outside an edit session.
+  const startEdit = () => {
+    setConfirmingCancel(false)
+    onStartEdit()
+  }
+  const save = () => {
+    setConfirmingCancel(false)
+    onSave()
+  }
 
   const requestCancel = () => {
     if (isDirty && !isSaving) {
@@ -75,14 +84,14 @@ export function EditableTableCard({
             <AdminButton
               color="blue"
               size="sm"
-              onClick={onSave}
+              onClick={save}
               disabled={isSaving || !isDirty}
             >
               {isSaving ? 'Saving…' : saveLabel}
             </AdminButton>
           </>
         ) : (
-          <AdminButton variant="secondary" size="sm" onClick={onStartEdit}>
+          <AdminButton variant="secondary" size="sm" onClick={startEdit}>
             <PencilSquareIcon className="h-4 w-4" />
             {editLabel}
           </AdminButton>

@@ -93,15 +93,48 @@ export async function updateSponsorTier(
   }
 }
 
+/**
+ * TENANCY. `sponsorTier` carries a `conference` ref, so `conferenceId` is the
+ * tenant boundary and is REQUIRED: the tier is resolved through a scoped point
+ * read FIRST and the delete is refused when it does not belong to the caller's
+ * conference. Previously this deleted whatever id it was handed — a
+ * client-supplied id straight to `transaction.delete` — and cascaded an `unset`
+ * across every `sponsorForConference` referencing it, in any tenant.
+ */
 export async function deleteSponsorTier(
   id: string,
+  conferenceId: string,
 ): Promise<{ error?: Error }> {
+  // FAIL CLOSED: no tenant, no query, no delete.
+  if (!conferenceId) {
+    return {
+      error: new Error(
+        'deleteSponsorTier: refusing to delete without a resolved conference',
+      ),
+    }
+  }
+
   try {
+    // OWNERSHIP FIRST. A NOT-FOUND-shaped refusal either way, so a foreign id's
+    // existence is not distinguishable from a missing one.
+    const owned = await scopedFetch<string | null>(
+      clientWrite,
+      { conferenceId },
+      `*[_type == "sponsorTier" && _id == $id][0]._id`,
+      { id },
+    )
+    if (!owned) {
+      return { error: new Error('Sponsor tier not found in this conference') }
+    }
+
     // Clear the tier from any sponsor that references it before deleting, so we
     // never leave a dangling reference (which projects to null and would let a
     // tierless sponsor slip onto public surfaces). Referencing sponsors become
     // cleanly tierless: hidden from public, surfaced under "No Tier" in admin.
-    const referencingSponsorIds = await clientWrite.fetch<string[]>(
+    // Scoped to the same conference the tier belongs to.
+    const referencingSponsorIds = await scopedFetch<string[]>(
+      clientWrite,
+      { conferenceId },
       `*[_type == "sponsorForConference" && tier._ref == $id]._id`,
       { id },
     )
@@ -222,9 +255,54 @@ export async function updateSponsor(
   }
 }
 
-export async function deleteSponsor(id: string): Promise<{ error?: Error }> {
+/**
+ * TENANCY. `sponsor` is an ORG-level document (a shared company catalog entry)
+ * whose cascade deletes every `sponsorForConference` linking it — across all of
+ * the org's editions, which is why the cascade reads below are deliberately NOT
+ * conference-scoped. `orgId` is REQUIRED and ownership is proved first.
+ *
+ * The ownership probe is backfill-independent: it accepts the sponsor's own
+ * `organization` key (set on create, backfilled by migration 044) AND the orgs
+ * reached through the conferences it is linked to. It refuses unless the
+ * caller's org is the ONLY claimant, and refuses a sponsor with NO claimant at
+ * all — an orphan legacy row with neither an org key nor a conference link
+ * cannot be attributed to a tenant, so it fails closed rather than open.
+ */
+export async function deleteSponsor(
+  id: string,
+  orgId: string | null,
+): Promise<{ error?: Error }> {
+  // FAIL CLOSED: no tenant, no query, no delete.
+  if (!orgId) {
+    return {
+      error: new Error(
+        'deleteSponsor: refusing to delete without a resolved organization',
+      ),
+    }
+  }
+
   try {
-    // Find all sponsorForConference records referencing this sponsor
+    const claim = await clientWrite.fetch<{
+      sponsorOrg: string | null
+      linkedOrgs: (string | null)[] | null
+    }>(
+      // Nothing here is returned to the caller — only the comparison result.
+      // groq-global: an OWNERSHIP PROBE must see the document whichever tenant owns it; resolving its tenant is the whole point of REFUSING it.
+      `{"sponsorOrg": *[_type == "sponsor" && _id == $id][0].organization._ref,
+        "linkedOrgs": *[_type == "sponsorForConference" && sponsor._ref == $id].conference->organization._ref
+      }`,
+      { id },
+    )
+    const claimants = [claim.sponsorOrg, ...(claim.linkedOrgs ?? [])].filter(
+      (o): o is string => Boolean(o),
+    )
+    if (claimants.length === 0 || claimants.some((o) => o !== orgId)) {
+      return { error: new Error('Sponsor not found in this organization') }
+    }
+
+    // Find all sponsorForConference records referencing this sponsor. Org-wide
+    // by design (see the doc comment): ownership is already proven above, so
+    // `sponsor._ref == $id` cannot reach another tenant's rows.
     const sfcDocs = await clientWrite.fetch<
       Array<{
         _id: string
@@ -258,6 +336,10 @@ export async function deleteSponsor(id: string): Promise<{ error?: Error }> {
     let safeAssetIds: string[] = []
     if (candidateAssetIds.length > 0) {
       safeAssetIds = await clientWrite.fetch<string[]>(
+        // The inner "is anyone else still using it?" count MUST stay
+        // cross-tenant — scoping it would delete an asset another edition or
+        // another tenant still references.
+        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
         `*[
           _type == "sanity.fileAsset" &&
           _id in $assetIds &&
@@ -315,22 +397,25 @@ export async function getSponsor(id: string): Promise<{
 }
 
 /**
- * Optional tenant filter for the sponsor company pickers (E10). Sponsor entities
- * are currently global (a shared company catalog), so this is the CONSERVATIVE
- * scoping: when an org is provided, restrict to that org's sponsors, tolerating
- * org-less legacy sponsors (pre-044 backfill) via the coalesce fallback. When no
- * org is provided, behavior is unchanged (every sponsor).
+ * Tenant filter for the sponsor company pickers (E10).
  *
- * NOTE (flagged design question): whether sponsor companies should be shared
- * across tenants or partitioned per-org is an owner decision still pending. This
- * filter is written so the shared model can be restored by simply passing no
- * org, and the partitioned model tightened by dropping the coalesce clause.
+ * CALLERS MUST FAIL CLOSED FIRST. This helper is only ever reached with a
+ * resolved `orgId`; the `null` case is handled by the callers below, which
+ * return empty WITHOUT querying. Previously a null org produced an EMPTY clause
+ * — an unresolvable tenant read every tenant's sponsor list.
+ *
+ * NOTE (flagged design question, unchanged here): `!defined(organization)`
+ * tolerates org-less legacy sponsors (pre-044 backfill). That tolerance is a
+ * documented bridge with an owner decision still pending — whether sponsor
+ * companies are a shared catalog or partitioned per-org — and it is NOT touched
+ * by this change: dropping it would hide every un-backfilled sponsor from the
+ * live deployment. It must be closed (by confirming the 044 backfill ran, then
+ * deleting the clause) before a second tenant's sponsors enter the dataset.
  */
-function sponsorOrgFilter(orgId?: string | null): {
+function sponsorOrgFilter(orgId: string): {
   clause: string
   params: Record<string, string>
 } {
-  if (!orgId) return { clause: '', params: {} }
   return {
     clause: ' && (!defined(organization) || organization._ref == $orgId)',
     params: { orgId },
@@ -339,11 +424,21 @@ function sponsorOrgFilter(orgId?: string | null): {
 
 export async function searchSponsors(
   query: string,
-  orgId?: string | null,
+  orgId: string | null | undefined,
 ): Promise<{
   sponsors?: SponsorExisting[]
   error?: Error
 }> {
+  // FAIL CLOSED: an unresolvable org must return nothing, never every tenant's
+  // sponsors. No query is issued.
+  if (!orgId) {
+    return {
+      error: new Error(
+        'searchSponsors: refusing to search sponsors without a resolved organization',
+      ),
+    }
+  }
+
   try {
     const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(
@@ -365,10 +460,21 @@ export async function searchSponsors(
   }
 }
 
-export async function getAllSponsors(orgId?: string | null): Promise<{
+export async function getAllSponsors(
+  orgId: string | null | undefined,
+): Promise<{
   sponsors?: SponsorExisting[]
   error?: Error
 }> {
+  // FAIL CLOSED: see `searchSponsors`.
+  if (!orgId) {
+    return {
+      error: new Error(
+        'getAllSponsors: refusing to list sponsors without a resolved organization',
+      ),
+    }
+  }
+
   try {
     const { clause, params } = sponsorOrgFilter(orgId)
     const sponsors = await clientWrite.fetch(

@@ -523,14 +523,19 @@ export async function getGalleryImages(
 /**
  * Get featured gallery images for ONE conference. `conferenceId` is REQUIRED
  * (tenant scoping, #616) — see {@link getGalleryImages}.
+ *
+ * `options.useCache` defaults to TRUE (the public pages' behaviour, unchanged).
+ * The homepage composer preview passes `false` so an organizer who just
+ * featured a photo sees it immediately rather than up to an hour later.
  */
 export async function getFeaturedGalleryImages(
   limit: number | undefined,
   conferenceId: string,
+  options?: { useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages(
     { featured: true, limit: limit || 1000, conferenceId },
-    { useCache: true },
+    { useCache: options?.useCache ?? true },
   )
 }
 

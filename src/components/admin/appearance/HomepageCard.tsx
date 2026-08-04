@@ -9,9 +9,9 @@ import type { HomepageSection } from '@/lib/homepage'
 
 /**
  * Appearance → Homepage composition: which sections the public front page
- * renders, in what order. The composition editor itself stays the existing
- * modal island (it is the one appearance surface that is genuinely a
- * workspace); this card is its at-rest display.
+ * renders, in what order. This card is the at-rest display; its action
+ * navigates to `/admin/settings/appearance/composer`, the full-page workspace
+ * where the composition is edited beside a live render of the page.
  */
 export function HomepageCard({
   sections,
