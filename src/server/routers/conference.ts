@@ -56,6 +56,7 @@ import {
   sanitizeSvgFieldOrThrow,
   SvgSanitizeError,
 } from '@/lib/svg/upload'
+import { defaultVariant } from '@/lib/homepage/variants'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -528,6 +529,22 @@ export const conferenceRouter = router({
           const base: Record<string, unknown> = { _type: section._type }
           if (section.hidden) base.hidden = true
           if ('_key' in section && section._key) base._key = section._key
+          // The presentation VARIANT, for all 13 types at once — deliberately
+          // ONE line ABOVE the per-type switch rather than thirteen inside it,
+          // because a per-type mapping is exactly where a new field gets
+          // forgotten for one block and silently never arrives.
+          //
+          // A DEFAULT variant is NEVER persisted (same non-default-only
+          // discipline as `hidden` and `showCta`), and that is the whole
+          // back-compat story: editions that store nothing keep storing
+          // nothing, a composition saved without touching the picker
+          // serializes to the bytes it serializes today, and `resolveVariant`
+          // reads an absent variant back as the default anyway.
+          if (
+            section.variant &&
+            section.variant !== defaultVariant(section._type)
+          )
+            base.variant = section.variant
 
           switch (section._type) {
             case 'homepageHero': {

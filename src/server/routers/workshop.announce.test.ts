@@ -11,10 +11,24 @@ vi.mock('@/lib/conference/sanity', () => ({
     getConferenceMock(...args),
 }))
 
-// --- Organizer set ----------------------------------------------------------
-const getOrganizerSpeakerIdsMock = vi.fn()
+// Organizer authorization runs through the REAL `isOrganizerForCurrentOrg`
+// (session `organizerOrgIds` × the domain-resolved org). Its org resolution goes
+// through `getConferenceForCurrentDomain`, mocked above.
+//
+// TRIPWIRE (#723): the organizer-ID readers select message RECIPIENTS and must
+// never be consulted for an access decision in this router — one of them used to
+// be this gate, and returned every tenant's organizers. Any call from a workshop
+// code path fails the suite loudly rather than silently widening a gate.
+function organizerIdTripwire(): never {
+  throw new Error(
+    'workshop authz must not consult the organizer-id set (#723): use isOrganizerForCurrentOrg',
+  )
+}
 vi.mock('@/lib/notification/sanity', () => ({
-  getOrganizerSpeakerIds: () => getOrganizerSpeakerIdsMock(),
+  getOrganizerSpeakerIds: organizerIdTripwire,
+  getOrganizerSpeakerIdsForOrg: organizerIdTripwire,
+  getAllOrganizerSpeakerIdsAcrossOrgs: organizerIdTripwire,
+  createNotifications: vi.fn(async () => {}),
 }))
 
 // --- Announcements data layer (keep isWorkshopFormat real) ------------------
@@ -58,13 +72,26 @@ vi.mock('@/lib/workshop/announcementRateLimit', () => ({
 import { workshopRouter } from './workshop'
 
 const CONFERENCE_ID = 'conf-1'
+const ORG_ID = 'org-A'
+const OTHER_ORG_ID = 'org-B'
 const OWNER_ID = 'sp-owner'
 const ORGANIZER_ID = 'sp-org'
+const CROSS_TENANT_ORGANIZER_ID = 'sp-org-other-tenant'
 const STRANGER_ID = 'sp-stranger'
+
+/** Which orgs each fixture speaker organizes (the session token's claim). */
+const ORGANIZER_ORG_IDS: Record<string, string[]> = {
+  [ORGANIZER_ID]: [ORG_ID],
+  [CROSS_TENANT_ORGANIZER_ID]: [OTHER_ORG_ID],
+}
 
 function makeCaller(speakerId: string | null) {
   const speaker = speakerId
-    ? { _id: speakerId, name: 'Test Speaker', isOrganizer: false }
+    ? {
+        _id: speakerId,
+        name: 'Test Speaker',
+        organizerOrgIds: ORGANIZER_ORG_IDS[speakerId] ?? [],
+      }
     : undefined
   const ctx = {
     session: speaker ? { speaker, user: { name: 'Test Speaker' } } : null,
@@ -76,7 +103,11 @@ function makeCaller(speakerId: string | null) {
 beforeEach(() => {
   vi.clearAllMocks()
   getConferenceMock.mockResolvedValue({
-    conference: { _id: CONFERENCE_ID, organizer: 'CNB' },
+    conference: {
+      _id: CONFERENCE_ID,
+      organizer: 'CNB',
+      organization: { _ref: ORG_ID },
+    },
     error: null,
   })
   getWorkshopForAnnouncementMock.mockResolvedValue({
@@ -86,7 +117,6 @@ beforeEach(() => {
     conferenceId: CONFERENCE_ID,
     speakerIds: [OWNER_ID],
   })
-  getOrganizerSpeakerIdsMock.mockResolvedValue([ORGANIZER_ID])
   getConfirmedRecipientsMock.mockResolvedValue([
     { userEmail: 'a@example.com', userName: 'A' },
   ])
@@ -118,8 +148,6 @@ describe('workshop.announce — authorization', () => {
     expect(result.recipientCount).toBe(1)
     expect(createAnnouncementMock).toHaveBeenCalledOnce()
     expect(fanOutMock).toHaveBeenCalledOnce()
-    // An owner is authorized without needing the organizer lookup.
-    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalled()
   })
 
   it('allows an ORGANIZER who is not a workshop speaker', async () => {
@@ -128,7 +156,6 @@ describe('workshop.announce — authorization', () => {
       body: 'Room change',
     })
     expect(result.success).toBe(true)
-    expect(getOrganizerSpeakerIdsMock).toHaveBeenCalledOnce()
     expect(createAnnouncementMock).toHaveBeenCalledOnce()
   })
 
@@ -145,6 +172,78 @@ describe('workshop.announce — authorization', () => {
       makeCaller(null).announce({ workshopId: 'ws-1', body: 'hi' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     expect(createAnnouncementMock).not.toHaveBeenCalled()
+  })
+})
+
+// REGRESSION (#723): the organizer arm of these gates used to be
+// `getOrganizerSpeakerIds()` — called with NO argument, so on an unresolvable
+// org it returned the organizers of EVERY conference in the dataset. An
+// organizer of tenant B therefore passed tenant A's gate and could broadcast to
+// A's workshop attendees. Authorization is now org-scoped and fails closed.
+describe('workshop announcements — CROSS-TENANT organizer is denied (#723)', () => {
+  it('announce: FORBIDDEN for an organizer of ANOTHER org', async () => {
+    await expect(
+      makeCaller(CROSS_TENANT_ORGANIZER_ID).announce({
+        workshopId: 'ws-1',
+        body: 'Hello other tenant’s attendees',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(createAnnouncementMock).not.toHaveBeenCalled()
+    expect(fanOutMock).not.toHaveBeenCalled()
+  })
+
+  it('updateAnnouncement: FORBIDDEN for an organizer of ANOTHER org', async () => {
+    await expect(
+      makeCaller(CROSS_TENANT_ORGANIZER_ID).updateAnnouncement({
+        announcementId: 'ann-1',
+        body: 'edited',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(updateAnnouncementBodyMock).not.toHaveBeenCalled()
+  })
+
+  it('deleteAnnouncement: FORBIDDEN for an organizer of ANOTHER org', async () => {
+    await expect(
+      makeCaller(CROSS_TENANT_ORGANIZER_ID).deleteAnnouncement({
+        announcementId: 'ann-1',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(deleteAnnouncementMock).not.toHaveBeenCalled()
+  })
+
+  it('FAILS CLOSED: even a same-org organizer is denied when the conference has no resolvable org', async () => {
+    getConferenceMock.mockResolvedValue({
+      conference: { _id: CONFERENCE_ID, organizer: 'CNB' }, // no `organization`
+      error: null,
+    })
+    await expect(
+      makeCaller(ORGANIZER_ID).announce({ workshopId: 'ws-1', body: 'hi' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(createAnnouncementMock).not.toHaveBeenCalled()
+  })
+
+  it('a LEGACY session token with no organizerOrgIds is denied', async () => {
+    const ctx = {
+      session: { speaker: { _id: 'sp-legacy', name: 'Legacy' } },
+      speaker: { _id: 'sp-legacy', name: 'Legacy' },
+    } as unknown as Context
+    await expect(
+      workshopRouter
+        .createCaller(ctx)
+        .announce({ workshopId: 'ws-1', body: 'hi' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(createAnnouncementMock).not.toHaveBeenCalled()
+  })
+
+  // Belt-and-braces for the tripwire above: an ALLOWED organizer must also reach
+  // success without any organizer-id read (the tripwire would have thrown
+  // INTERNAL_SERVER_ERROR instead of returning success).
+  it('an allowed organizer is authorized without reading the organizer-id set', async () => {
+    const result = await makeCaller(ORGANIZER_ID).announce({
+      workshopId: 'ws-1',
+      body: 'Room change',
+    })
+    expect(result.success).toBe(true)
   })
 })
 
@@ -224,8 +323,6 @@ describe('workshop.updateAnnouncement — authorization + immutability', () => {
       'ann-1',
       'Corrected copy',
     )
-    // Owner is authorized without the organizer lookup.
-    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalled()
   })
 
   it('allows an ORGANIZER who is not a workshop speaker', async () => {
@@ -234,7 +331,6 @@ describe('workshop.updateAnnouncement — authorization + immutability', () => {
       body: 'Room change',
     })
     expect(result.success).toBe(true)
-    expect(getOrganizerSpeakerIdsMock).toHaveBeenCalledOnce()
   })
 
   it('rejects an unrelated speaker (FORBIDDEN)', async () => {

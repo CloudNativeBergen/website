@@ -243,19 +243,21 @@ describe('buildActivationChecklist', () => {
 
   it('every row deep-links to an in-page anchor or a settings sub-page', () => {
     for (const row of buildActivationChecklist(FULLY_LIVE, CHECKS_OK).rows) {
+      // A same-page anchor, or another settings page — optionally anchored,
+      // since the Appearance sections are anchors on one page.
       expect(row.anchor).toMatch(
-        /^(#[a-z0-9-]+|\/admin\/settings(\/[a-z0-9-]+)+)$/,
+        /^(#[a-z0-9-]+|\/admin\/settings(\/[a-z0-9-]+)+(#[a-z0-9-]+)?)$/,
       )
       expect(row.anchor.length).toBeGreaterThan(1)
     }
   })
 
-  it('sends the brand-logo row to the Appearance logos sub-page', () => {
+  it('sends the brand-logo row to the Appearance page logos anchor', () => {
     const row = rowById(
       buildActivationChecklist({}, CHECKS_OK),
       'branding-logo',
     )
-    expect(row.anchor).toBe('/admin/settings/appearance/logos')
+    expect(row.anchor).toBe('/admin/settings/appearance#logos')
   })
 })
 

@@ -169,13 +169,18 @@
    *
    * A per-conference `<style>` (see ThemeStyle / `conferenceThemeCss`) sets
    * `--brand-primary` / `--brand-primary-hover` / `--brand-accent` on `:root`
-   * when a tenant theme exists. Those variables are ALSO read by the dark-mode
-   * rules below (each with its own darker fallback), so ONE `:root` injection
-   * re-skins both light and dark without a `.dark` redefinition to clobber it.
+   * when a tenant theme exists, PLUS a set of derived dark tints
+   * (`--brand-primary-dark`, `--brand-primary-dark-deep`,
+   * `--brand-primary-dark-edge`, `--brand-primary-dark-text`,
+   * `--brand-accent-dark`). The `.dark` rules below read the dark set — NOT the
+   * light one — because the house palette does not paint dark surfaces in the
+   * light primary either. Each `.dark` rule keeps its house shade as the
+   * `var()` fallback, so an unthemed site is byte-identical, and ONE `:root`
+   * injection still re-skins both schemes with no `.dark` redefinition.
    *
-   * L1 does NOT auto-derive contrast: a light primary on white is the admin's
-   * responsibility (the settings preview shows the result). Secondary brand
-   * hues (green/purple/yellow/sky) and per-usage dark tints are NOT L1 knobs.
+   * L1 does NOT auto-derive contrast for the LIGHT palette: a light primary on
+   * white is the admin's responsibility (the settings preview shows the
+   * result). Secondary brand hues (green/purple/yellow/sky) are NOT L1 knobs.
    */
   /* Cloud Native Days Norway Brand Colors */
   --color-brand-cloud-blue: var(--brand-primary, #1d4ed8);
@@ -339,9 +344,12 @@
 }
 
 .dark .bg-brand-cloud-blue {
-  /* Reads the tenant override (set once on :root); dark house shade is the
-     fallback, so the default renders identically. */
-  background-color: var(--brand-primary, #1e40af); /* blue-800 equivalent */
+  /* Reads the tenant's DERIVED dark tint (set once on :root); dark house shade
+     is the fallback, so the default renders identically. */
+  background-color: var(
+    --brand-primary-dark,
+    #1e40af
+  ); /* blue-800 equivalent */
 }
 
 .bg-brand-sky-mist {
@@ -398,8 +406,14 @@
 }
 
 .dark .hover\:bg-brand-cloud-blue-hover:hover {
+  /* Deliberately the SAME tint as the non-hover rule: the house palette gives
+     dark-mode hover no colour change (#1e40af either way), and a themed tenant
+     must match it or storing a theme would not be a no-op. Reading the LIGHT
+     `--brand-primary-hover` here — as this rule used to — leaked the light
+     hover shade into dark mode. Giving dark mode a real hover step is a palette
+     decision for the house colours first, not a per-tenant one. */
   background-color: var(
-    --brand-primary-hover,
+    --brand-primary-dark,
     #1e40af
   ); /* blue-800 (same dark house shade as the non-hover rule) */
 }
@@ -442,7 +456,12 @@
 }
 
 .dark .text-brand-cloud-blue {
-  color: #93c5fd; /* blue-200 equivalent */
+  /* The one dark tint that LIGHTENS the primary: brand text has to read ON the
+     dark background, so it targets a high perceptual lightness rather than a
+     dark surface shade. `text-brand-cloud-blue` is the most-used brand utility
+     in the app, so a fixed hex here meant the most common branded element
+     ignored the tenant's colour entirely. */
+  color: var(--brand-primary-dark-text, #93c5fd); /* blue-300 equivalent */
 }
 
 .text-brand-sky-mist {
@@ -515,10 +534,13 @@
 }
 
 .dark .bg-aqua-gradient {
+  /* The START (`--color-brand-aqua-start`) is a fixed house hue in light mode
+     too, so its dark counterpart stays fixed. Only the END is the themeable
+     accent. */
   background-image: linear-gradient(
     135deg,
     #1e40af,
-    #155e75
+    var(--brand-accent-dark, #155e75)
   ); /* blue-800 to cyan-800 */
 }
 
@@ -527,11 +549,13 @@
 }
 
 .dark .bg-brand-gradient {
-  /* Same override vars as light; dark house endpoints are the fallbacks. */
+  /* Derived dark tints, not the light ones; dark house endpoints are the
+     fallbacks. The start sits a shade below the dark brand surface so the
+     gradient still reads as a backdrop rather than a button. */
   background-image: linear-gradient(
     135deg,
-    var(--brand-primary, #1e3a8a),
-    var(--brand-accent, #155e75)
+    var(--brand-primary-dark-deep, #1e3a8a),
+    var(--brand-accent-dark, #155e75)
   ); /* blue-900 to cyan-800 */
 }
 
@@ -565,7 +589,12 @@
 }
 
 .dark .border-brand-cloud-blue {
-  border-color: var(--brand-primary, #2563eb); /* blue-600 equivalent */
+  /* A shade ABOVE the dark brand surface — a border has to separate from the
+     panel it sits on, so this tint lightens where the surface tint darkens. */
+  border-color: var(
+    --brand-primary-dark-edge,
+    #2563eb
+  ); /* blue-600 equivalent */
 }
 
 .border-brand-sky-mist {
