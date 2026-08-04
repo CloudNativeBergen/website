@@ -26,6 +26,7 @@ import {
 import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { formatDatesSafe } from '@/lib/time'
 import { PortableText } from '@portabletext/react'
+import { toSafeRichTextHref } from '@/lib/portabletext/safeHref'
 import { TypedObject } from 'sanity'
 
 interface PortableTextChild {
@@ -315,22 +316,27 @@ function HeroAnnouncement({ conference }: { conference: Conference }) {
                     {children}
                   </strong>
                 ),
-                link: ({ children, value }) => (
-                  <a
-                    href={value?.href}
-                    className="font-semibold text-brand-cloud-blue underline decoration-brand-cloud-blue/30 underline-offset-2 transition-colors hover:decoration-brand-cloud-blue"
-                    target={
-                      value?.href?.startsWith('http') ? '_blank' : undefined
-                    }
-                    rel={
-                      value?.href?.startsWith('http')
-                        ? 'noopener noreferrer'
-                        : undefined
-                    }
-                  >
-                    {children}
-                  </a>
-                ),
+                link: ({ children, value }) => {
+                  // Gated like every other link mark: the announcement is
+                  // author-supplied, so a stored `javascript:`/`data:` href
+                  // must degrade to an inert anchor rather than render live.
+                  // Derive `target`/`rel` from the SAFE href, not the raw one,
+                  // so a refused scheme cannot still open a new context.
+                  const href = toSafeRichTextHref(
+                    (value as { href?: string })?.href,
+                  )
+                  const external = href.startsWith('http')
+                  return (
+                    <a
+                      href={href}
+                      className="font-semibold text-brand-cloud-blue underline decoration-brand-cloud-blue/30 underline-offset-2 transition-colors hover:decoration-brand-cloud-blue"
+                      target={external ? '_blank' : undefined}
+                      rel={external ? 'noopener noreferrer' : undefined}
+                    >
+                      {children}
+                    </a>
+                  )
+                },
               },
             }}
           />

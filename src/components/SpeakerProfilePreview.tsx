@@ -220,7 +220,10 @@ export default function SpeakerProfilePreview({
                                 {talk.description}
                               </p>
                             ) : (
-                              <PortableText value={talk.description} />
+                              <PortableText
+                                value={talk.description}
+                                components={portableTextComponents}
+                              />
                             )}
                           </div>
                         )}

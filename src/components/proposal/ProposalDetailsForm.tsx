@@ -16,6 +16,7 @@ import {
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableText } from '@portabletext/react'
+import { portableTextComponents } from '@/lib/portabletext/components'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
@@ -131,7 +132,10 @@ export function ProposalDetailsForm({
             </label>
             <div className="prose prose-sm dark:prose-invert mt-2 max-w-none text-gray-900 dark:text-white">
               {description && description.length > 0 ? (
-                <PortableText value={description} />
+                <PortableText
+                  value={description}
+                  components={portableTextComponents}
+                />
               ) : (
                 <p className="text-gray-600 dark:text-gray-400">
                   No abstract provided
