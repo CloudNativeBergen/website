@@ -4,6 +4,8 @@ import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { nudgeStaleConversations } from '@/lib/messaging/nudge'
 import { deleteExpiredEmailSignInTokens } from '@/lib/auth/email-link/store'
 import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
+import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
+import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -86,6 +88,21 @@ export async function GET(request: NextRequest) {
         ` rateLimits=${signInRateLimits.deleted}`,
     )
 
+    // Machine provisioning artifacts (#753), on the same daily trigger and for
+    // the same reason. The receipts are what make a retried tenant-creation
+    // request idempotent, so their retention IS the replay window: purging one
+    // means the same `Idempotency-Key` would provision again — 30 days out,
+    // which is far past any real retry.
+    const [provisioningReceipts, provisioningRateLimits] = await Promise.all([
+      deleteExpiredProvisioningReceipts(),
+      deleteExpiredProvisioningRateLimits(),
+    ])
+
+    console.log(
+      `Provisioning cleanup: receipts=${provisioningReceipts.deleted}` +
+        ` rateLimits=${provisioningRateLimits.deleted}`,
+    )
+
     return NextResponse.json({
       success: true,
       deleted,
@@ -94,6 +111,10 @@ export async function GET(request: NextRequest) {
       emailSignIn: {
         tokens: signInTokens.deleted,
         rateLimits: signInRateLimits.deleted,
+      },
+      provisioning: {
+        receipts: provisioningReceipts.deleted,
+        rateLimits: provisioningRateLimits.deleted,
       },
     })
   } catch (error) {

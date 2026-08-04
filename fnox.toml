@@ -16,6 +16,7 @@ AUTH_LINKEDIN_SECRET= { provider = "keychain", value = "AUTH_LINKEDIN_SECRET" }
 RESEND_API_KEY= { provider = "keychain", value = "RESEND_API_KEY" }
 SLACK_BOT_TOKEN= { provider = "keychain", value = "SLACK_BOT_TOKEN" }
 CRON_SECRET= { provider = "keychain", value = "CRON_SECRET" }
+PROVISIONING_API_TOKEN= { provider = "keychain", value = "PROVISIONING_API_TOKEN" }
 CHECKIN_API_KEY= { provider = "keychain", value = "CHECKIN_API_KEY" }
 CHECKIN_API_SECRET= { provider = "keychain", value = "CHECKIN_API_SECRET" }
 INVITATION_TOKEN_SECRET= { provider = "keychain", value = "INVITATION_TOKEN_SECRET" }
