@@ -351,13 +351,6 @@ export async function getConferenceForDomain(
             ),
             getGalleryImages(
               {
-                limit: galleryOptions.limit ?? 50,
-                conferenceId: conference._id,
-              },
-              { useCache: !uncached },
-            ),
-            getGalleryImages(
-              {
                 limit:
                   galleryOptions.limit ??
                   GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
