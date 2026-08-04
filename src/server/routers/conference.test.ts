@@ -842,6 +842,22 @@ describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  it('EFFECTIVE binding: an unrelated field cannot be saved past a live collision', async () => {
+    // A pre-existing collision (created before this guard, or in Studio) is the
+    // exact state that lets one tenant act on the other's sale. Editing any
+    // other ticketing field while it stands is refused, because the EFFECTIVE
+    // binding is read from storage rather than from the payload. Clearing
+    // `checkinEventId` remains the escape hatch — see the case below.
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinCustomerId: 7,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('SELF-EXCLUSION: re-saving its OWN unchanged binding succeeds', async () => {
     ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
     const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
