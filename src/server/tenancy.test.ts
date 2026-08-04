@@ -416,9 +416,9 @@ describe('requireSpeakersInCurrentOrg', () => {
 
   it('accepts when every id is a speaker this org has standing over', async () => {
     count(2)
-    await expect(
-      requireSpeakersInCurrentOrg(['sp-1', 'sp-2']),
-    ).resolves.toBe(ORG_A)
+    await expect(requireSpeakersInCurrentOrg(['sp-1', 'sp-2'])).resolves.toBe(
+      ORG_A,
+    )
   })
 
   it('refuses the WHOLE array when one id is foreign', async () => {
@@ -455,21 +455,41 @@ describe('requireSpeakersInCurrentOrg', () => {
   })
 
   /**
-   * The admitted set must match the admin speaker pickers, which merge
-   * `SPEAKER_ORG_FILTER` with THIS org's sitting organizers. Without the
-   * organizer arm, an organizer with no talk and no stamped `organizations[]`
-   * would be unremovable — `conference.updateOrganizers` would refuse the whole
-   * save on a live edition.
+   * `conference.updateOrganizers` must be able to re-save a sitting organizer
+   * who has no talk and no stamped `organizations[]`, or the whole save refuses
+   * on a live edition. That is what `includeOrganizerStanding` is for, and it is
+   * the ONLY caller entitled to it.
    */
-  it('the probe admits this org’s sitting organizers as referenceable', async () => {
+  it('admits this org’s sitting organizers when the caller opts in', async () => {
+    let seen = ''
+    h.fetch.mockImplementation(async (query: string) => {
+      seen = query
+      return 1
+    })
+    await expect(
+      requireSpeakersInCurrentOrg(['sp-1'], { includeOrganizerStanding: true }),
+    ).resolves.toBe(ORG_A)
+    expect(seen).toContain('organizers[]._ref')
+    expect(seen).toContain('organization._ref == $orgId')
+  })
+
+  /**
+   * THE F1 RESIDUE (#731). Participation is DERIVED from `talk.speakers[]`, so
+   * admitting the organizer arm on that write promotes the referenced person
+   * into the ownership set one call later — their profile, slug, email and GDPR
+   * consent record. The default must therefore be the ownership terms alone.
+   */
+  it('does NOT admit organizer standing by default', async () => {
     let seen = ''
     h.fetch.mockImplementation(async (query: string) => {
       seen = query
       return 1
     })
     await expect(requireSpeakersInCurrentOrg(['sp-1'])).resolves.toBe(ORG_A)
-    expect(seen).toContain('organizers[]._ref')
-    expect(seen).toContain('organization._ref == $orgId')
+    expect(seen).not.toContain('organizers[]._ref')
+    // …but the ownership terms are both still there.
+    expect(seen).toContain('coalesce(organizations, [])[]._ref')
+    expect(seen).toContain('conference->organization._ref == $orgId')
   })
 
   it('an empty array is a no-op', async () => {

@@ -41,6 +41,20 @@ let domainsByConference: Record<string, string[]> = {}
 let referenceableIds: Set<string> | null = null
 /** The topic refs the conference already carries — grandfathered on save. */
 let currentTopicRefs: string[] = []
+/**
+ * The ticketing binding every conference document claims, keyed by `_id`
+ * (#731 F5). Like `domainsByConference`, the mock APPLIES the query's own
+ * `$excludeIds`, so a router that forgets to self-exclude really does collide
+ * with itself.
+ */
+let ticketingByConference: Record<
+  string,
+  {
+    checkinEventId?: number | null
+    titoAccountSlug?: string | null
+    titoEventSlug?: string | null
+  }
+> = {}
 let lastClaimedParams: Record<string, unknown> | undefined
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
@@ -135,6 +149,7 @@ beforeEach(() => {
   lastClaimedParams = undefined
   referenceableIds = null
   currentTopicRefs = []
+  ticketingByConference = {}
   // Default organizer set for the teams subset check: the caller (sp-1) + sp-2.
   // The domains claimed-set query is answered from `domainsByConference`, with
   // the query's own `$excludeIds` applied.
@@ -155,6 +170,28 @@ beforeEach(() => {
       // `updateTopics` reads the conference's CURRENT topic refs so an id that
       // is already referenced is grandfathered (see the router comment).
       if (query.includes('.topics[]._ref')) return currentTopicRefs
+      // `updateTicketingIds` reads its OWN stored binding, so a one-field patch
+      // is checked against the EFFECTIVE binding, not just the fields sent.
+      if (
+        query.includes('{ checkinEventId, titoAccountSlug, titoEventSlug }')
+      ) {
+        return ticketingByConference[CONFERENCE_ID] ?? null
+      }
+      // The ticketing-binding collision probe (#731 F5).
+      if (query.includes('titoEventSlug == $titoEventSlug')) {
+        const excluded = new Set((params?.excludeIds as string[]) ?? [])
+        return Object.entries(ticketingByConference).filter(([id, binding]) => {
+          if (excluded.has(id)) return false
+          const checkin =
+            params?.checkinEventId != null &&
+            binding.checkinEventId === params.checkinEventId
+          const tito =
+            params?.titoEventSlug != null &&
+            binding.titoAccountSlug === params.titoAccountSlug &&
+            binding.titoEventSlug === params.titoEventSlug
+          return checkin || tito
+        }).length
+      }
       // REFERENCE-INJECTION guards (#731 F4): `updateOrganizers` and
       // `updateTopics` count how many of the supplied ids this org may
       // reference. By default every id is ours; the refusal tests below flip it.
@@ -747,6 +784,105 @@ describe('conference router — domains global uniqueness (#680)', () => {
     })
     // Own entry is NOT reported; the other tenant's wildcard match is.
     expect(res.taken).toEqual(['2026.cndn.no'])
+  })
+})
+
+/**
+ * #731 F5. `checkinEventId` is the tenancy anchor `tickets.*` derives its
+ * provider event from, and the provider credential is one process-wide pair
+ * shared by every tenant. Until this guard, `updateTicketingIds` was a plain
+ * patch of an arbitrary positive integer, so the ticket guards added by this PR
+ * could be walked around in two calls: claim tenant B's event id, mint a
+ * 100%-off code on their paid sale / delete their codes / read their customers'
+ * payment details, restore your own id. It also hijacked the ticket-sold
+ * webhook, which resolves a conference FROM that id.
+ */
+describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
+  const OTHER_CONFERENCE = 'other-conf'
+
+  it('refuses a Checkin event id another conference already claims', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinEventId: 4242,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+  })
+
+  it('refuses a Tito account/event pair another conference already claims', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = {
+      titoAccountSlug: 'other',
+      titoEventSlug: '2026',
+    }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        ticketingProvider: 'tito',
+        titoAccountSlug: 'other',
+        titoEventSlug: '2026',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('EFFECTIVE binding: a one-field patch cannot complete a foreign pair', async () => {
+    // The account slug is already stored; sending only the event slug would
+    // slip past a check that looked at the payload alone.
+    ticketingByConference[CONFERENCE_ID] = { titoAccountSlug: 'other' }
+    ticketingByConference[OTHER_CONFERENCE] = {
+      titoAccountSlug: 'other',
+      titoEventSlug: '2026',
+    }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        titoEventSlug: '2026',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('SELF-EXCLUSION: re-saving its OWN unchanged binding succeeds', async () => {
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: 4242,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toMatchObject({ checkinEventId: 4242 })
+  })
+
+  it('an unclaimed id is accepted', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: 99,
+      checkinCustomerId: 7,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toMatchObject({ checkinEventId: 99, checkinCustomerId: 7 })
+  })
+
+  it('clearing the binding is never a collision', async () => {
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: null,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('FAILS CLOSED when the collision probe is unreadable', async () => {
+    uncachedFetchMock.mockImplementation(async (query: string) => {
+      if (query.includes('titoEventSlug == $titoEventSlug')) {
+        throw new Error('sanity down')
+      }
+      return null
+    })
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinEventId: 4242,
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
   })
 })
 

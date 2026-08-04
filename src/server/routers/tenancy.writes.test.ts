@@ -101,7 +101,7 @@ vi.mock('@/lib/sanity/client', () => {
       return Array.from(orgIds)
     }
     // The reference-graph half of the exclusivity check.
-    if (query.includes('references($id) && _id != $id && defined(')) {
+    if (query.includes('references($id) && _id != $id')) {
       h.probes++
       return h.foreignReferencingDocs
     }
@@ -126,6 +126,28 @@ vi.mock('@/lib/sanity/client', () => {
         }
         return false
       }).length
+    }
+    // The plural ORG-DOCUMENT reference-injection guard (`topics[]`, #731 N2).
+    if (query.includes('_id in $ids && _type == $expectedType')) {
+      h.probes++
+      const ids = (params.ids as string[]) ?? []
+      return ids.filter((id) => {
+        const doc = h.docs.get(id)
+        if (!doc || doc._type !== params.expectedType) return false
+        return (
+          (doc.organization as { _ref?: string } | undefined)?._ref ===
+          params.orgId
+        )
+      }).length
+    }
+    // The grandfathering read behind the `topics[]` guard: the ids ALREADY on
+    // the talk, which may be re-sent unchecked.
+    if (query.includes('.topics[]._ref')) {
+      const doc = h.docs.get(String(params.id))
+      if (!doc || doc._type !== 'talk') return null
+      return ((doc.topics as { _ref: string }[] | undefined) ?? []).map(
+        (t) => t._ref,
+      )
     }
     // `deleteAttachmentHelper`'s own by-id read. Answered from the fake dataset
     // so that REMOVING the guard would let the mutation proceed to a write —
@@ -316,11 +338,14 @@ function seed() {
     speakers: [{ _ref: 'speaker-B-participant' }],
     attachments: [{ _key: 'k', _type: 'urlAttachment' }],
   })
-  // ORG_A's own talk, for the proposal reference-injection tests.
+  // ORG_A's own talk, for the proposal reference-injection tests. It carries a
+  // LEGACY org-less topic so the grandfathering path is exercised: re-saving
+  // that id must keep working, adding a foreign one must not.
   h.docs.set('talk-A', {
     _type: 'talk',
     organization: { _ref: ORG_A },
     speakers: [{ _ref: 'speaker-A' }],
+    topics: [{ _ref: 'topic-A' }, { _ref: 'topic-orphan' }],
     attachments: [{ _key: 'k', _type: 'urlAttachment' }],
   })
 }
@@ -636,6 +661,87 @@ describe('speaker ownership cannot be self-granted (#731 F1)', () => {
 })
 
 /**
+ * #731 N2. `talk.topics[]` is `z.array(ReferenceSchema)` written verbatim by a
+ * bare `.patch().set()`, so it was the same reference-injection shape the PR
+ * fixed one level up at `conference.updateTopics` — and reachable by any
+ * authenticated speaker, not just an organizer. Impact is display pollution
+ * (another tenant's taxonomy title and brand colour on this programme), not
+ * privilege, but it is the same class.
+ */
+describe('talk.topics[] refuses a foreign or wrong-typed reference (#731 N2)', () => {
+  const ref = (id: string) => ({ _type: 'reference' as const, _ref: id })
+
+  it('admin.update refuses another tenant’s topic', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { topics: [ref('topic-A'), ref('topic-B')] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('admin.update refuses a NON-topic document of our own org', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { topics: [ref('conf-A')] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('admin.update accepts our own topics', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { topics: [ref('topic-A')] },
+      }),
+    ).resolves.toBeTruthy()
+    expect(h.updateProposal).toHaveBeenCalled()
+  })
+
+  it('GRANDFATHERING: an org-less topic already on the talk may be re-sent', async () => {
+    // A legacy (pre-044) topic reference must not brick every save of an old
+    // talk — it is already referenced, so re-sending it injects nothing.
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { topics: [ref('topic-A'), ref('topic-orphan')] },
+      }),
+    ).resolves.toBeTruthy()
+    expect(h.updateProposal).toHaveBeenCalled()
+  })
+
+  it('…but a grandfathered id cannot be used to smuggle a NEW foreign one', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { topics: [ref('topic-orphan'), ref('topic-B')] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('admin.create refuses a foreign topic (nothing is grandfathered)', async () => {
+    await expect(
+      proposal().admin.create({
+        title: 'T',
+        description: [{ _type: 'block', children: [] }],
+        format: 'lightning_10',
+        level: 'beginner',
+        language: 'english',
+        audiences: ['developer'],
+        topics: [ref('topic-B')],
+        tos: true,
+        speakers: ['speaker-A'],
+      } as never),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.createProposal).not.toHaveBeenCalled()
+  })
+})
+
+/**
  * #731 F10. Every one of `proposal.admin.*`'s five guards survived the review's
  * mutation test — they could all be deleted with the suite green. One
  * NOT_FOUND-on-foreign-id test per guard, each asserting no write reached the
@@ -693,7 +799,9 @@ describe('proposal admin mutations refuse a foreign or wrong-typed id (#730)', (
     await expect(
       proposal().admin.update({ id: 'talk-A', data: { title: 'Renamed' } }),
     ).resolves.toBeTruthy()
-    await expect(proposal().admin.delete({ id: 'talk-A' })).resolves.toBeTruthy()
+    await expect(
+      proposal().admin.delete({ id: 'talk-A' }),
+    ).resolves.toBeTruthy()
     expect(h.updateProposal).toHaveBeenCalled()
     expect(h.deleteProposal).toHaveBeenCalledWith('talk-A')
   })

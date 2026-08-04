@@ -60,16 +60,64 @@ async function requireCheckinEventId(clientEventId?: number): Promise<number> {
 }
 
 /**
+ * SHORT-TTL MEMO OF ONE EVENT'S ORDER-ID SET (#731 N1).
+ *
+ * `fetchEventTickets` is `fetchEventTicketsRaw` PLUS a `while (hasMore)`
+ * pagination loop at 1000 orders per batch, so an uncached ownership check costs
+ * 1 + ⌈orders/1000⌉ upstream GraphQL calls returning the entire attendee list.
+ * `platformCheckinCredentials()` is ONE account shared by every tenant, so any
+ * authenticated organizer of ANY tenant could loop the payment-details endpoint
+ * and throttle ticketing for everyone. That amplification is new in this PR,
+ * because the guard is.
+ *
+ * The memo keys on the event and holds the in-flight PROMISE, so concurrent
+ * callers share one enumeration and a burst of misses costs one round-trip
+ * rather than one each. Rejections are evicted immediately: a failed read must
+ * not be cached into a refusal, and the caller fails closed on it anyway.
+ *
+ * The TTL is deliberately short. It is a rate limiter, not a data cache — an
+ * order created within the window is refused until it expires, which is a modal
+ * that needs one reopen, against an availability risk for every tenant.
+ */
+const ORDER_IDS_TTL_MS = 30_000
+const orderIdsCache = new Map<
+  string,
+  { expiresAt: number; orderIds: Promise<Set<number>> }
+>()
+
+function orderIdsForEvent(
+  customerId: number,
+  eventId: number,
+): Promise<Set<number>> {
+  const key = `${customerId}:${eventId}`
+  const now = Date.now()
+  const cached = orderIdsCache.get(key)
+  if (cached && cached.expiresAt > now) return cached.orderIds
+
+  const orderIds = checkin()
+    .fetchEventTickets({ customerId, eventId })
+    .then((tickets) => new Set(tickets.map((ticket) => ticket.order_id)))
+  orderIds.catch(() => orderIdsCache.delete(key))
+  orderIdsCache.set(key, { expiresAt: now + ORDER_IDS_TTL_MS, orderIds })
+  // Keep a long-lived warm instance from growing a map entry per event forever.
+  for (const [k, entry] of orderIdsCache) {
+    if (entry.expiresAt <= now) orderIdsCache.delete(k)
+  }
+  return orderIds
+}
+
+/** Test seam: drop the memo so a case cannot inherit another's enumeration. */
+export function __resetOrderIdCache() {
+  orderIdsCache.clear()
+}
+
+/**
  * The same posture for an `orderId`: prove the order is one of THIS
  * conference's event's orders before reading its payment/customer details.
  */
 async function requireOrderInCurrentEvent(orderId: number): Promise<void> {
   const { conference, error } = await getConferenceForCurrentDomain()
-  if (
-    error ||
-    !conference?.checkinEventId ||
-    !conference?.checkinCustomerId
-  ) {
+  if (error || !conference?.checkinEventId || !conference?.checkinCustomerId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Conference checkin configuration not found',
@@ -77,11 +125,10 @@ async function requireOrderInCurrentEvent(orderId: number): Promise<void> {
   }
   let orderIds: Set<number>
   try {
-    const tickets = await checkin().fetchEventTickets({
-      customerId: conference.checkinCustomerId,
-      eventId: conference.checkinEventId,
-    })
-    orderIds = new Set(tickets.map((ticket) => ticket.order_id))
+    orderIds = await orderIdsForEvent(
+      conference.checkinCustomerId,
+      conference.checkinEventId,
+    )
   } catch (cause) {
     // FAIL CLOSED: an unreadable ticket list authorizes nothing.
     throw new TRPCError({

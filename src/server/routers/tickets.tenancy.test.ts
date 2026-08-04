@@ -57,7 +57,7 @@ vi.mock('@/lib/tickets/provider', () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
-import { ticketsRouter } from './tickets'
+import { ticketsRouter, __resetOrderIdCache } from './tickets'
 
 const t = initTRPC.context<Context>().create()
 const ORG_A = 'org-A'
@@ -96,6 +96,9 @@ const tickets = () => t.createCallerFactory(ticketsRouter)(ctx())
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The order-id memo (#731 N1) is module state; a case must never inherit the
+  // previous one's enumeration.
+  __resetOrderIdCache()
   h.getConference.mockResolvedValue({
     conference: {
       _id: CONF_A,
@@ -205,5 +208,32 @@ describe('tickets payment details are bound to this conference’s orders (#731 
       tickets().admin.getPaymentDetails({ orderId: 500 }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.fetchOrderPaymentDetails).not.toHaveBeenCalled()
+  })
+
+  /**
+   * #731 N1. The guard's enumeration is `fetchEventTicketsRaw` + a paginated
+   * order sweep against ONE platform-wide Checkin credential, so an
+   * unrate-limited call per lookup lets any tenant's organizer throttle
+   * ticketing for every tenant.
+   */
+  it('memoizes the order enumeration instead of re-running it per call', async () => {
+    await tickets().admin.getPaymentDetails({ orderId: 500 })
+    await tickets().admin.getPaymentDetails({ orderId: 500 })
+    // A MISS must not re-enumerate either — that is the attacker's loop.
+    await expect(
+      tickets().admin.getPaymentDetails({ orderId: 999 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.fetchEventTickets).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT cache a failed enumeration', async () => {
+    h.fetchEventTickets.mockRejectedValueOnce(new Error('checkin down'))
+    await expect(
+      tickets().admin.getPaymentDetails({ orderId: 500 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    // The next call must retry rather than serve the rejection for the TTL.
+    await tickets().admin.getPaymentDetails({ orderId: 500 })
+    expect(h.fetchOrderPaymentDetails).toHaveBeenCalledWith(500)
+    expect(h.fetchEventTickets).toHaveBeenCalledTimes(2)
   })
 })

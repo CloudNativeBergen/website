@@ -50,6 +50,36 @@ ruleTester.run(
         filename: 'src/lib/speaker/sanity.ts',
         code: 'const q = `*[_type == "speaker"]` // groq-global: organizer count',
       },
+      // REGRESSION (#731): a MULTI-LINE rationale is N separate comment nodes, so
+      // the annotation on its first line is ≥2 lines above the query. Suppression
+      // used to accept only `matchLine` and `matchLine - 1`, which silently
+      // un-suppressed 7 of the repo's annotated sites.
+      {
+        filename: 'src/lib/speaker/sanity.ts',
+        code: [
+          '// groq-global: cross-tenant identity join — a returning global person',
+          '// must be found by provider id before we know which tenant they are',
+          '// about to sign in to.',
+          'const q = `*[_type == "speaker" && $id in providers][0]`',
+        ].join('\n'),
+      },
+      // REGRESSION (#731): the `groq-global-scoped:` variant does not contain the
+      // substring `groq-global:` and was never recognized at all.
+      {
+        filename: 'src/server/tenancy.ts',
+        code: [
+          '// groq-global-scoped: the tenant predicate IS `organization._ref == $orgId`.',
+          'const q = `*[_type == "topic" && organization._ref == $orgId]`',
+        ].join('\n'),
+      },
+      {
+        filename: 'src/server/tenancy.ts',
+        code: [
+          '// groq-global-scoped: multi-line rationale, scoped variant, both fixes',
+          '// exercised at once.',
+          'const q = `*[_type == "topic" && organization._ref == $orgId]`',
+        ].join('\n'),
+      },
       // Allowlisted paths are never flagged.
       {
         filename: 'src/lib/sanity/scoped.ts',
@@ -173,6 +203,27 @@ ruleTester.run(
           '  groq-global: this is inside the string, not a suppression',
           '  *[_type == "talk"]',
           '`',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // The comment block must be CONTIGUOUS with the query: an annotation
+      // separated from it by a line of code annotates something else, and
+      // widening suppression must not swallow the next query down the file.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global: this rationale belongs to the query below it',
+          'const scoped = await scopedFetch(client, { orgId }, `*[_type == "talk"]`)',
+          'const q = `*[_type == "speaker"]`',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // An annotation BELOW the query does not suppress it.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          'const q = `*[_type == "speaker"]`',
+          '// groq-global: too late — this is under the query, not above it',
         ].join('\n'),
         errors: [{ messageId: 'unscoped' }],
       },

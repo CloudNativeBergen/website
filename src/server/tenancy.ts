@@ -207,9 +207,13 @@ export async function requireDocumentsInCurrentConference(
  * write a foreign speaker's id into your own talk's `speakers[]` and you "own"
  * them. Every write that puts a speaker id into a reference field now goes
  * through {@link requireSpeakersInCurrentOrg} first, so participation can only
- * be created for a speaker the caller ALREADY had standing over. Do not add a
- * new speaker-reference write without that guard — see
- * `src/server/routers/tenancy.speakerRefs.test.ts`, which pins the set.
+ * be created for a speaker the caller ALREADY had standing over — and a
+ * PARTICIPATION-CREATING write (`talk.speakers[]`) may only reference the
+ * ownership set itself, never the wider organizer set (see
+ * `includeOrganizerStanding`). Do not add a new speaker-reference write without
+ * that guard — see `src/server/tenancy.speakerRefs.test.ts`, which pins the set
+ * of files allowed to write a speaker reference and fails when a new one
+ * appears.
  *
  * `requireExclusive` additionally refuses a speaker ANOTHER org also has
  * standing over. Deleting or merging a shared person is destructive to that
@@ -267,9 +271,11 @@ export async function requireSpeakerInCurrentOrg(
     // enumerates `*[references($loserId)]` with NO tenant predicate and rewrites
     // every hit in one transaction, so exclusivity has to bound the set the
     // transaction will actually touch — a `conference` that lists the person as
-    // an organizer, a `review`, a `conversation`. Documents that carry no
-    // resolvable owner cannot be attributed and are not counted; membership ∪
-    // participation above remains the primary control.
+    // an organizer, a `review`, a `conversation`. A document we cannot ATTRIBUTE
+    // counts as foreign: in a pre-044 dataset the same missing
+    // `organization._ref` blinds membership, participation AND this probe at
+    // once, so treating unattributable documents as "not another tenant's" would
+    // fail open in exactly the dataset that has no other control left.
     if ((await foreignReferencingDocCount(id, orgId)) !== 0) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -284,8 +290,15 @@ export async function requireSpeakerInCurrentOrg(
 }
 
 /**
- * How many documents OUTSIDE `orgId` reference this speaker. Returns `-1` on a
- * read error so the caller FAILS CLOSED.
+ * How many documents reference this speaker WITHOUT provably belonging to
+ * `orgId` — another tenant's, or one whose tenant cannot be established at all.
+ * Returns `-1` on a read error so the caller FAILS CLOSED.
+ *
+ * The `!defined(...) ||` arm is load-bearing, not defensive padding: GROQ drops
+ * `null != $orgId` as unknown, so a bare inequality silently ignores every
+ * document with no resolvable owner. Those are precisely the pre-044 documents
+ * that also defeat the membership and participation controls, so ignoring them
+ * turns the one remaining control into an allow.
  */
 async function foreignReferencingDocCount(
   id: string,
@@ -294,7 +307,7 @@ async function foreignReferencingDocCount(
   try {
     // groq-global: deliberately unscoped at the root — its whole job is to see
     // OTHER tenants' documents in order to refuse a destructive operation.
-    const query = groq`count(*[references($id) && _id != $id && defined(coalesce(organization._ref, conference->organization._ref)) && coalesce(organization._ref, conference->organization._ref) != $orgId])`
+    const query = groq`count(*[references($id) && _id != $id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])`
     const count = await clientReadUncached.fetch<number>(
       query,
       { id, orgId },
@@ -348,24 +361,32 @@ async function speakerParticipationOrgIds(
  * dataset. Sanity only enforces that a strong reference resolves — not its type
  * and not its tenant.
  *
- * The admitted set is exactly the corpus the admin speaker pickers already
- * show — `SPEAKER_ORG_FILTER` (membership ∨ participation) UNION this org's
- * current organizers, which `speaker.admin.search` merges in. Anything the
- * organizer can pick, they can reference; nothing else. The organizer arm
- * matters for `conference.updateOrganizers`: a sitting organizer who has never
- * spoken and whose `organizations[]` was never stamped would otherwise become
- * unremovable-and-unsavable, breaking a live edition.
+ * BY DEFAULT the admitted set is exactly the OWNERSHIP set — `SPEAKER_ORG_FILTER`
+ * / {@link requireSpeakerInCurrentOrg}'s own terms, membership ∨ participation.
  *
- * It is NOT a self-grant vector: `organizers[]` can only be written through
- * this same guard, and referencing standing is deliberately WIDER than the
- * ownership standing {@link requireSpeakerInCurrentOrg} grants — pointing at a
- * person is not the same as being allowed to rewrite them.
+ * `includeOrganizerStanding` widens it by one disjunct: people this org already
+ * lists in a `conference.organizers[]`. That is needed for
+ * `conference.updateOrganizers` — a sitting organizer who has never spoken and
+ * whose `organizations[]` was never stamped would otherwise become
+ * unremovable-and-unsavable, breaking a live edition — and `speaker.admin.search`
+ * merges the same people into the picker.
+ *
+ * THE WIDER SET MUST NEVER BE USED FOR A PARTICIPATION-CREATING WRITE. An
+ * earlier version of this docstring claimed referencing standing was "wider
+ * than ownership standing" and therefore harmless. That was FALSE for
+ * `talk.speakers[]`: participation is DERIVED from that very reference, so
+ * writing an organizer-arm-only person into your own talk promotes them into
+ * the ownership set one call later, handing you their profile, slug, email and
+ * GDPR consent record. `organizers[]`, `featuredSpeakers[]` and gallery tags do
+ * not feed `speakerParticipationOrgIds`, so widening is inert there; `talk.
+ * speakers[]` does, so it keeps the default.
  *
  * ALL-OR-NOTHING and FAIL CLOSED: one foreign or non-existent id refuses the
  * whole write, and an unreadable probe refuses too.
  */
 export async function requireSpeakersInCurrentOrg(
   ids: string[],
+  opts: { includeOrganizerStanding?: boolean } = {},
 ): Promise<string> {
   const orgId = await requireCurrentOrgId()
   // A blank id in a reference array is never legitimate input, and dropping it
@@ -375,12 +396,20 @@ export async function requireSpeakersInCurrentOrg(
   if (unique.length === 0) return orgId
   let owned = 0
   try {
-    // groq-global-scoped: the tenant predicate is the membership-or-participation
-    // disjunction, exactly the terms of `requireSpeakerInCurrentOrg`. Counts how
-    // many of the SUPPLIED ids this org may reference.
+    // The two literals are written out in full rather than composed, so that
+    // what each call site authorizes is readable here.
+    const query = opts.includeOrganizerStanding
+      ? // groq-global-scoped: the tenant predicate is membership ∨ participation
+        // ∨ this org's own organizers — the picker's corpus. Counts how many of
+        // the SUPPLIED ids this org may reference.
+        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0 || count(*[_type == "conference" && organization._ref == $orgId && ^._id in organizers[]._ref]) > 0)])`
+      : // groq-global-scoped: the tenant predicate is membership ∨ participation,
+        // exactly the terms of `requireSpeakerInCurrentOrg` — the OWNERSHIP set,
+        // which is the only set a participation-creating write may reference.
+        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)])`
     owned =
       (await clientReadUncached.fetch<number>(
-        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0 || count(*[_type == "conference" && organization._ref == $orgId && ^._id in organizers[]._ref]) > 0)])`,
+        query,
         { ids: unique, orgId },
         { cache: 'no-store' },
       )) ?? 0
@@ -396,13 +425,20 @@ export async function requireSpeakersInCurrentOrg(
  * The same guard for ids written into a reference field of a NON-speaker type
  * that is owned directly by an organization (`topic`, …). Same posture as
  * {@link requireDocumentsInCurrentConference}, one dimension up.
+ *
+ * Blank ids are REFUSED rather than dropped, matching
+ * {@link requireSpeakersInCurrentOrg}. Silently filtering them made the count
+ * below pass on fewer distinct documents than the caller is about to write —
+ * harmless for today's callers, whose schemas reject empty strings, but a
+ * fail-open footgun for the next one.
  */
 export async function requireDocumentsInCurrentOrg(
   ids: string[],
   expectedType: string,
 ): Promise<string> {
   const orgId = await requireCurrentOrgId()
-  const unique = Array.from(new Set(ids.filter((id) => Boolean(id))))
+  if (ids.some((id) => !id)) throw notFound(expectedType)
+  const unique = Array.from(new Set(ids))
   if (unique.length === 0) return orgId
   let owned = 0
   try {

@@ -10,6 +10,7 @@ import {
 } from '@/server/trpc'
 import {
   requireDocumentInCurrentOrg,
+  requireDocumentsInCurrentOrg,
   requireSpeakersInCurrentOrg,
 } from '@/server/tenancy'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
@@ -98,6 +99,71 @@ const COMMENT_RELAY_ACTIONS: readonly Action[] = [
   Action.waitlist,
   Action.remind,
 ]
+
+/**
+ * REFERENCE INJECTION, `talk.topics[]` (#730/#731).
+ *
+ * `topics` is `z.array(ReferenceSchema)` — the CLIENT supplies `_ref` verbatim
+ * and `updateProposal`/`createProposal` write it straight through a bare
+ * `.patch().set()`. Sanity only checks that a strong reference RESOLVES, not its
+ * type or its tenant, so without this any authenticated speaker (not merely an
+ * organizer) could attach another tenant's `topic` to a talk and render that
+ * tenant's taxonomy — title and brand colour — on this conference's public
+ * programme. This is the same class the PR fixed one level up at
+ * `conference.updateTopics`; the caller population here is strictly wider.
+ *
+ * GRANDFATHERING, exactly as `conference.updateTopics` does it: only ids that
+ * are NEW to this talk are checked. An id already on the document was already
+ * referenced, so re-sending it injects nothing — and a legacy org-less topic
+ * (pre-migration-044) stays editable instead of making every save of an old
+ * talk refuse. Removing such an id is always allowed; re-adding it is not.
+ */
+function topicIdsOf(topics: unknown): string[] {
+  if (!Array.isArray(topics)) return []
+  return topics
+    .map((topic) => {
+      if (!topic || typeof topic !== 'object') return undefined
+      const t = topic as { _ref?: unknown; _id?: unknown }
+      if (typeof t._ref === 'string') return t._ref
+      if (typeof t._id === 'string') return t._id
+      return undefined
+    })
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+}
+
+async function requireTopicsReferenceable(
+  incoming: unknown,
+  alreadyOnTalk: string[],
+): Promise<void> {
+  if (!Array.isArray(incoming)) return
+  const existing = new Set(alreadyOnTalk)
+  // Blank/malformed entries are NOT dropped: `topicIdsOf` returning fewer ids
+  // than `incoming` has entries means something unparseable is about to be
+  // written into a reference array, which is never legitimate input.
+  const ids = topicIdsOf(incoming)
+  if (ids.length !== incoming.length) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Invalid topic reference',
+    })
+  }
+  const added = ids.filter((id) => !existing.has(id))
+  if (added.length === 0) return
+  await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/** The topic ids currently on a talk, for the grandfathering set above. */
+async function talkTopicIds(talkId: string): Promise<string[]> {
+  const refs = await clientWrite.fetch<(string | null)[] | null>(
+    // groq-global: keyed by an id the caller has ALREADY been proved to own by
+    // `requireDocumentInCurrentOrg`; it reads back that same document.
+    `*[_type == "talk" && _id == $id][0].topics[]._ref`,
+    { id: talkId },
+  )
+  return (refs ?? []).filter(
+    (ref): ref is string => typeof ref === 'string' && ref.length > 0,
+  )
+}
 
 /**
  * Helper function to delete an attachment and its associated file asset
@@ -323,6 +389,11 @@ export const proposalRouter = router({
         const initialStatus =
           input.status === Status.draft ? Status.draft : Status.submitted
 
+        // REFERENCE INJECTION (#731): see `requireTopicsReferenceable`. Nothing
+        // exists yet, so there is no grandfathered set — every topic must be
+        // this org's.
+        await requireTopicsReferenceable(input.data.topics, [])
+
         const { proposal, err } = await createProposal(
           {
             ...input.data,
@@ -471,6 +542,15 @@ export const proposalRouter = router({
             })
           }
         }
+
+        // REFERENCE INJECTION (#731): `getProposal` above proved the TALK is the
+        // caller's; it says nothing about the topic ids being written INTO it.
+        // `existing.topics` is the dereferenced current set — the grandfathered
+        // ids that may be re-sent unchecked.
+        await requireTopicsReferenceable(
+          input.data.topics,
+          topicIdsOf(existing.topics),
+        )
 
         const { proposal, err } = await updateProposal(input.id, input.data)
 
@@ -960,6 +1040,10 @@ export const proposalRouter = router({
           // treats as ownership, so this guard is what keeps that arm honest.
           await requireSpeakersInCurrentOrg(speakers)
 
+          // REFERENCE INJECTION (#731): same for `topics[]`, which is also raw
+          // client-supplied references. Nothing exists yet — no grandfathering.
+          await requireTopicsReferenceable(proposalData.topics, [])
+
           // Convert speaker IDs to references
           const speakerRefs = speakers.map((id) => createReference(id))
 
@@ -1027,6 +1111,17 @@ export const proposalRouter = router({
               ...proposalData,
               speakers: speakerRefs,
             } as typeof proposalData
+          }
+
+          // REFERENCE INJECTION (#731): `topics[]` is client-supplied references
+          // too. Read the talk's CURRENT topics as the grandfathered set so an
+          // ordinary save of a legacy talk carrying an org-less topic still
+          // works, while a newly added foreign id is refused.
+          if (proposalData.topics !== undefined) {
+            await requireTopicsReferenceable(
+              proposalData.topics,
+              await talkTopicIds(input.id),
+            )
           }
 
           const { proposal, err } = await updateProposal(input.id, updateData)

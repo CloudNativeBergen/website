@@ -102,6 +102,13 @@ const ws = vi.hoisted(() => ({
   checkWorkshopCapacity: vi.fn(),
   getWorkshopSignupsByWorkshop: vi.fn(),
 }))
+// The workshop admin surface is additionally gated on the `workshops` feature
+// (#689). That gate is a FEATURE decision and has its own tests; these cases are
+// about TENANCY, so grant it — otherwise every case below would stop at
+// FORBIDDEN and assert nothing about scoping.
+vi.mock('@/lib/features/workshops', () => ({
+  isWorkshopsEnabledForOrg: vi.fn().mockResolvedValue(true),
+}))
 vi.mock('@/lib/workshop/sanity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getAllWorkshopSignups: ws.getAllWorkshopSignups,

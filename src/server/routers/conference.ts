@@ -78,6 +78,67 @@ function conferenceIdVariants(conferenceId: string): string[] {
   return [published, `drafts.${published}`]
 }
 
+/** The message a ticketing-binding collision is rejected with. */
+export const TICKETING_BINDING_ALREADY_CLAIMED =
+  'Another conference is already bound to that ticketing event'
+
+/**
+ * TICKETING IDS ARE A TENANCY ANCHOR, NOT A SETTING (#730/#731).
+ *
+ * `tickets.*` derives the Checkin event it acts on from THIS conference's
+ * `checkinEventId` (`requireCheckinEventId`), and the ticket-sold webhook
+ * resolves a conference FROM that id. Both providers authenticate with ONE
+ * process-wide credential pair shared by every tenant
+ * (`platformCheckinCredentials` / `platformTitoCredentials`), so a conference
+ * that claims another tenant's event id inherits their sale: 100%-off discount
+ * codes minted on it, their live codes deleted, their customers' payment
+ * details readable, and their signature-verified ticket webhooks delivered to
+ * the wrong conference.
+ *
+ * That makes the binding a GLOBAL-uniqueness claim in exactly the sense
+ * `domains[]` already is, and it gets the same rule: an id another conference
+ * document already claims is refused BAD_REQUEST before anything is written.
+ *
+ * SELF-EXCLUSION, like {@link fetchClaimedDomains}: this conference and its
+ * `drafts.` twin are dropped, so re-saving an unchanged binding still succeeds.
+ *
+ * This is a claim check, not proof of ownership at the provider — it stops one
+ * tenant from taking another's *already-bound* event, which is the reachable
+ * attack. Verifying an unclaimed event id against the account that owns it needs
+ * a provider round-trip and is tracked separately.
+ */
+async function ticketingBindingIsClaimed(
+  excludeConferenceId: string,
+  binding: {
+    checkinEventId?: number | null
+    titoAccountSlug?: string | null
+    titoEventSlug?: string | null
+  },
+): Promise<boolean> {
+  const excludeIds = conferenceIdVariants(excludeConferenceId)
+  const checkinEventId = binding.checkinEventId ?? null
+  const titoAccountSlug = binding.titoAccountSlug?.trim() || null
+  const titoEventSlug = binding.titoEventSlug?.trim() || null
+  if (checkinEventId === null && (!titoAccountSlug || !titoEventSlug)) {
+    return false
+  }
+  // groq-global: a ticketing binding is a GLOBAL claim on one shared provider
+  // account, so the collision set is every tenant's conferences (same rule as
+  // `fetchClaimedDomains`).
+  const query = `count(*[_type == "conference" && !(_id in $excludeIds) && (
+      (defined($checkinEventId) && checkinEventId == $checkinEventId)
+      || (defined($titoEventSlug) && titoAccountSlug == $titoAccountSlug && titoEventSlug == $titoEventSlug)
+    )])`
+  // FAIL CLOSED: an unreadable collision probe must not authorize the claim.
+  const claimed = await clientReadUncached.fetch<number | null>(query, {
+    excludeIds,
+    checkinEventId,
+    titoAccountSlug,
+    titoEventSlug,
+  })
+  return (claimed ?? 1) > 0
+}
+
 /**
  * Every domain claimed by ANY conference document, normalized and deduped (two
  * conferences may spell the same host differently, or one may repeat it). Drives the
@@ -276,10 +337,49 @@ export const conferenceRouter = router({
       return applyConferencePatch(conferenceId, input)
     }),
 
+  /**
+   * SAFEGUARDED. See {@link ticketingBindingIsClaimed}: these ids are the tenancy
+   * anchor every `tickets.*` procedure derives its provider event from, and the
+   * provider credential is shared platform-wide, so an unguarded write here
+   * hands the caller another tenant's ticket sale. The check runs on the
+   * EFFECTIVE binding (stored fields with this partial patch applied), because
+   * a one-field patch can complete a foreign binding out of fields already
+   * stored.
+   */
   updateTicketingIds: adminProcedure
     .input(UpdateTicketingIdsSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
+      const current = await clientReadUncached.fetch<{
+        checkinEventId?: number | null
+        titoAccountSlug?: string | null
+        titoEventSlug?: string | null
+      } | null>(
+        // groq-global: keyed by the SERVER-resolved conference id, never client input.
+        `*[_type == "conference" && _id == $id][0]{ checkinEventId, titoAccountSlug, titoEventSlug }`,
+        { id: conferenceId },
+        { cache: 'no-store' },
+      )
+      const effective = {
+        checkinEventId:
+          'checkinEventId' in input
+            ? (input.checkinEventId ?? null)
+            : (current?.checkinEventId ?? null),
+        titoAccountSlug:
+          'titoAccountSlug' in input
+            ? (input.titoAccountSlug ?? null)
+            : (current?.titoAccountSlug ?? null),
+        titoEventSlug:
+          'titoEventSlug' in input
+            ? (input.titoEventSlug ?? null)
+            : (current?.titoEventSlug ?? null),
+      }
+      if (await ticketingBindingIsClaimed(conferenceId, effective)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: TICKETING_BINDING_ALREADY_CLAIMED,
+        })
+      }
       return applyConferencePatch(conferenceId, input)
     }),
 
@@ -426,7 +526,16 @@ export const conferenceRouter = router({
       // unvalidated id here rendered a foreign person as an organizer of this
       // conference AND granted them admin standing in this org on their next
       // sign-in. Every id must be a `speaker` this org already has standing over.
-      await requireSpeakersInCurrentOrg(input.organizers)
+      //
+      // `includeOrganizerStanding` is the ONE place the wider set is admitted:
+      // re-saving `organizers[]` must not drop a sitting organizer who has never
+      // spoken and whose `organizations[]` was never stamped. It is safe here
+      // and nowhere near `talk.speakers[]`, because `organizers[]` does not feed
+      // `speakerParticipationOrgIds` — referencing someone here grants the
+      // caller no ownership over them.
+      await requireSpeakersInCurrentOrg(input.organizers, {
+        includeOrganizerStanding: true,
+      })
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, {
         organizers: input.organizers.map((id) =>

@@ -32,9 +32,11 @@
  *  - A query literal passed as an argument to `scopedFetch(...)` — the tenant
  *    predicate is prepended at runtime by the builder, so the body is scoped
  *    (unless the scope argument is explicitly null; see `nullScope`).
- *  - A query annotated `// groq-global: <reason>` on the same line as, or the
- *    line directly above, the query opener (SUPPRESSION for reviewed-global
- *    reads: a cross-tenant identity join, or an inherently global aggregate).
+ *  - A query annotated `// groq-global: <reason>` (or `// groq-global-scoped:`,
+ *    for a query whose tenant predicate is present but not in a shape this rule
+ *    recognizes) on the match line, or anywhere in the contiguous comment block
+ *    directly above it. SUPPRESSION is for reviewed-global reads: a cross-tenant
+ *    identity join, or an inherently global aggregate.
  *
  * ALLOWLIST: the scoped builder module itself, migrations, scripts, and test
  * files are exempt (tooling / data-plane / fixtures, not tenant reads). NOTE:
@@ -114,13 +116,48 @@ module.exports = {
     const sourceCode =
       context.sourceCode || (context.getSourceCode && context.getSourceCode())
 
+    /**
+     * A match is suppressed by a `groq-global:` (or `groq-global-scoped:`)
+     * annotation on the match line, or anywhere in the CONTIGUOUS comment block
+     * immediately above it.
+     *
+     * Both halves of that were bugs until #731. Accepting only `matchLine` and
+     * `matchLine - 1` meant that in a multi-line `//` rationale — which is N
+     * separate comment nodes — the annotation on the FIRST line was two or more
+     * lines above the query and never matched, so 7 of the repo's 19 annotated
+     * sites were silently unsuppressed. And the `groq-global-scoped:` variant
+     * does not contain the substring `groq-global:` at all, so it never
+     * suppressed anything anywhere.
+     *
+     * Neither failure was visible, because `pnpm lint` has no `--max-warnings`
+     * and this rule already emits hundreds of warnings nobody reads.
+     */
     function isSuppressed(matchLine) {
       const comments = sourceCode ? sourceCode.getAllComments() : []
-      return comments.some(
-        (c) =>
-          /groq-global:/.test(c.value) &&
-          (c.loc.end.line === matchLine || c.loc.end.line === matchLine - 1),
-      )
+      const annotated = new Set()
+      for (const c of comments) {
+        if (/groq-global(-scoped)?:/.test(c.value)) {
+          for (let l = c.loc.start.line; l <= c.loc.end.line; l++) {
+            annotated.add(l)
+          }
+        }
+      }
+      if (annotated.size === 0) return false
+      // Lines occupied by any comment, so a rationale block can be walked
+      // upwards without being broken by the blank-free lines between nodes.
+      const commentLines = new Set()
+      for (const c of comments) {
+        for (let l = c.loc.start.line; l <= c.loc.end.line; l++) {
+          commentLines.add(l)
+        }
+      }
+      if (annotated.has(matchLine)) return true
+      // Walk up through the uninterrupted run of comment lines directly above
+      // the match. A non-comment line ends the block.
+      for (let line = matchLine - 1; commentLines.has(line); line--) {
+        if (annotated.has(line)) return true
+      }
+      return false
     }
 
     /**
