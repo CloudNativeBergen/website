@@ -7,6 +7,7 @@ import { createImageUrlBuilder } from '@sanity/image-url'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { SimpleImageCarousel } from '@/components/SimpleImageCarousel'
 import { GalleryModal } from '@/components/GalleryModal'
+import { ImageMosaic } from '@/components/ImageMosaic'
 import { galleryImageSrc } from '@/lib/sanity/client'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
@@ -225,6 +226,24 @@ describe('gallery image src resolution', () => {
 
     it('does not reach the builder at all for inline data: URIs', () => {
       render(<ImageCarousel images={[generatedImage]} />)
+
+      expect(builderCalls('auto')).toEqual([])
+    })
+
+    // ImageMosaic (#736) landed after this rule and builds its own 1x/2x
+    // srcSet next to a `galleryImageSrc` src, so it needs the same assertion:
+    // the helper covers the src, but the srcSet entries are raw builder calls.
+    it('ImageMosaic asks for auto=format on the src and both srcSet entries', () => {
+      render(<ImageMosaic images={[realImage]} />)
+
+      expect(builderCalls('auto')).toEqual(
+        builderCalls('width').map(() => 'format'),
+      )
+      expect(builderCalls('width')).toEqual([800, 600, 1200])
+    })
+
+    it('ImageMosaic does not reach the builder for inline data: URIs', () => {
+      render(<ImageMosaic images={[generatedImage]} />)
 
       expect(builderCalls('auto')).toEqual([])
     })
