@@ -25,7 +25,12 @@ export {
   getDomainVerification,
   listDomainVerificationsForConference,
 } from './sanity'
-export { listDomainVerificationViews, syncDomainVerifications } from './sync'
+export { PLATFORM_DOMAIN_NOT_ALLOCATED } from './platform'
+export {
+  findUnallocatedPlatformDomains,
+  listDomainVerificationViews,
+  syncDomainVerifications,
+} from './sync'
 export { recheckDomainRecord, runDomainVerificationSweep } from './sweep'
 export { toDomainVerificationView } from './view'
 export type { DomainVerificationView } from './view'

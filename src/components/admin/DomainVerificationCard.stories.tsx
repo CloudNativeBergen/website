@@ -20,6 +20,7 @@ function view(
     hostname,
     status: 'verified',
     grandfathered: false,
+    platformOwned: false,
     graceUntil: null,
     // Derived exactly as `challengeRecordName` does, so the fixture cannot
     // drift from what the router actually hands the card.
@@ -116,6 +117,25 @@ export const Grandfathered: Story = {
   },
 }
 
+/**
+ * A subdomain the platform ALLOCATED to this conference: verified by
+ * construction, no TXT record, no deadline and no "check now" — there is nothing
+ * to check. (An in-zone host with no allocation never reaches this state; the
+ * mutation refuses the claim outright.)
+ */
+export const PlatformOwned: Story = {
+  args: {
+    initialDomains: [
+      view({
+        hostname: 'kubeday.konf.run',
+        platformOwned: true,
+        recordName: null,
+        recordValue: null,
+      }),
+    ],
+  },
+}
+
 /** Every state at once, plus the wildcard and local-dev special cases. */
 export const AllStates: Story = {
   args: {
@@ -138,6 +158,12 @@ export const AllStates: Story = {
         hostname: 'cloudnativedays.no',
         grandfathered: true,
         graceUntil: '2026-08-27T00:00:00.000Z',
+      }),
+      view({
+        hostname: 'kubeday.konf.run',
+        platformOwned: true,
+        recordName: null,
+        recordValue: null,
       }),
       view({
         hostname: '*.cloudnativedays.no',

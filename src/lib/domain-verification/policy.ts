@@ -28,9 +28,23 @@
  * Withdrawal is never destructive: nothing here mutates `domains[]`. We stop
  * *honouring* a claim; republishing the TXT record restores it on the next
  * sweep.
+ *
+ * PLATFORM-ALLOCATED HOSTS are the one standing that is not earned from a check
+ * result at all — see `platform.ts`. Both consumers honour {@link
+ * isPlatformAllocated}, which requires the platform to have RECORDED the
+ * allocation (`method: 'platform-owned'`, written only by tenant provisioning)
+ * AND the hostname to still be under the configured suffix. Being in our zone is
+ * never sufficient on its own: an organizer can type any hostname, so inferring
+ * the grant from the suffix alone would let them claim another tenant's — or an
+ * unissued — subdomain. `revoked` is refused BEFORE the allocation check in both
+ * functions, so releasing a claim withdraws the grant instantly.
+ *
+ * The module stays otherwise pure; the suffix is the only thing it reads from
+ * the environment.
  */
 
 import { isDevOnlyHost, isWildcardEntry } from './challenge'
+import { isPlatformAllocated } from './platform'
 import type {
   DomainCheckOutcome,
   DomainVerificationPatch,
@@ -89,6 +103,28 @@ export function applyCheckOutcome(
 ): DomainVerificationPatch {
   const nowIso = now.toISOString()
   if (record.status === 'revoked') return {}
+
+  if (outcome.kind === 'platform-owned') {
+    // No lookup happened and none ever will. The write-back exists so the
+    // stored record TELLS THE TRUTH — verified, by the platform, with no
+    // failure history — which is what the admin card and the allowlist's GROQ
+    // prefilter read.
+    return {
+      status: 'verified',
+      method: 'platform-owned',
+      // CLEARED, not left alone: a record that was grandfathered before it was
+      // allocated still carries that 30-day deadline, and a platform allocation
+      // has no deadline. Leaving it would expire a permanent grant.
+      graceUntil: null,
+      verifiedAt: record.verifiedAt ?? nowIso,
+      lastSuccessAt: nowIso,
+      lastCheckedAt: nowIso,
+      firstFailureAt: null,
+      consecutiveFailures: 0,
+      consecutiveSoftFailures: 0,
+      lastError: null,
+    }
+  }
 
   if (outcome.kind === 'verified') {
     return {
@@ -152,6 +188,24 @@ export function applyCheckOutcome(
  *
  * Dev-only hosts are excluded too — an allowlist entry is a security grant, and
  * `localhost:3000` must never be one in a deployed environment.
+ *
+ * PLATFORM-ALLOCATED HOSTS ARE ELIGIBLE, and deliberately so. The threat this
+ * function exists to stop is a DANGLING destination: a third party's zone lapses
+ * and the host silently starts resolving to somebody else, which the victim
+ * experiences as a normal login. That cannot happen inside a zone we operate —
+ * its delegation cannot change without our own registrar/DNS account changing
+ * hands, and it could not do so quietly, because every tenant site would go down
+ * at the same moment. The staleness rule below exists to catch a checker that
+ * has silently broken; for our own zone there is no checker to break. Refusing
+ * these instead would mean nobody hosted on the platform's default subdomain
+ * could complete a sign-in round-trip at all.
+ *
+ * The grant follows the ALLOCATION, not the suffix. A host merely sitting in our
+ * zone gets nothing: it has to be a subdomain the platform issued to THIS
+ * conference, which is what stops an organizer from typing another tenant's (or
+ * an unissued) label into their own `domains[]` and being handed a redirect
+ * destination for it. Wildcards and revoked claims remain excluded, so releasing
+ * the claim removes the grant immediately.
  */
 export function isAllowlistEligible(
   record: DomainVerificationRecord,
@@ -159,6 +213,10 @@ export function isAllowlistEligible(
 ): boolean {
   if (isWildcardEntry(record.hostname)) return false
   if (isDevOnlyHost(record.hostname)) return false
+  // Explicit, because the allocation check below bypasses the `verified` status
+  // test that otherwise excludes a released claim.
+  if (record.status === 'revoked') return false
+  if (isPlatformAllocated(record)) return true
   if (inGrandfatherGrace(record, now)) return true
   if (record.status !== 'verified') return false
   if (!record.lastSuccessAt) return false
@@ -179,6 +237,12 @@ export function isRoutingEligible(
   // `pnpm dev` for no security gain (they cannot receive public traffic).
   if (isDevOnlyHost(record.hostname)) return true
   if (record.status === 'revoked') return false
+  // A subdomain the platform ALLOCATED to this conference. PERMANENT — unlike
+  // the grandfather window below, this never expires, because there is no proof
+  // the tenant could publish in a zone only we can write to. An unallocated host
+  // that merely sits in our zone falls through to the ordinary rules and stays
+  // unrouted.
+  if (isPlatformAllocated(record)) return true
   if (inGrandfatherGrace(record, now)) return true
   if (record.status === 'verified') return true
   if (record.status !== 'failing') return false

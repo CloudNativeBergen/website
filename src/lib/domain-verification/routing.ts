@@ -51,6 +51,12 @@ export async function isHostRoutable(
       : null
   if (!matched) return false
 
+  // NO exemption for the platform's own zone here. A platform subdomain routes
+  // because a RECORD says the platform allocated it (`isRoutingEligible` →
+  // `isPlatformAllocated`), never because the hostname happens to end in our
+  // suffix — otherwise an organizer could add any unissued `<label>.<suffix>` to
+  // their `domains[]` and have it served with no allocation at all. A missing
+  // record therefore still fails closed, for platform and custom hosts alike.
   const record = await getDomainVerification(matched)
   if (!record) return false
   return isRoutingEligible(record, now)

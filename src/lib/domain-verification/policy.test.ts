@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import {
   ALLOWLIST_MAX_STALENESS_DAYS,
   ROUTING_GRACE_DAYS,
@@ -38,6 +38,13 @@ function record(
     ...overrides,
   }
 }
+
+/** The platform zone under test. Always stubbed — never inherited from `.env`. */
+const PLATFORM_SUFFIX = 'konf.run'
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 describe('isAllowlistEligible', () => {
   it('accepts a freshly verified exact host', () => {
@@ -293,5 +300,267 @@ describe('applyCheckOutcome', () => {
         NOW,
       ),
     ).toEqual({})
+  })
+
+  it('reconciles a platform-owned host to verified with NO failure history', () => {
+    const patch = applyCheckOutcome(
+      record({
+        hostname: 'kubeday.konf.run',
+        status: 'failing',
+        method: 'dns-txt',
+        firstFailureAt: daysAgo(9),
+        consecutiveFailures: 7,
+        consecutiveSoftFailures: 2,
+        lastError: 'No TXT record',
+      }),
+      { kind: 'platform-owned' },
+      NOW,
+    )
+    expect(patch).toMatchObject({
+      status: 'verified',
+      method: 'platform-owned',
+      firstFailureAt: null,
+      consecutiveFailures: 0,
+      consecutiveSoftFailures: 0,
+      lastError: null,
+    })
+  })
+
+  it('CLEARS a grandfathered deadline when the host becomes platform-owned', () => {
+    // A record grandfathered by the backfill and allocated afterwards still
+    // carries a 30-day `graceUntil`. A platform allocation has no deadline, so
+    // leaving it would expire a grant that is supposed to be permanent — and
+    // `null` is what `patchDomainVerification` turns into an `unset`.
+    const grandfatheredThenAllocated = record({
+      hostname: 'kubeday.konf.run',
+      method: 'grandfathered',
+      graceUntil: new Date(NOW.getTime() + 5 * DAY).toISOString(),
+    })
+    const patch = applyCheckOutcome(
+      grandfatheredThenAllocated,
+      { kind: 'platform-owned' },
+      NOW,
+    )
+    // The STORED record ends up with no deadline at all. (`sweep.test.ts` and
+    // `sanity.test.ts` assert the same thing end-to-end: the patch reaches
+    // Sanity as an `unset`.)
+    expect({ ...grandfatheredThenAllocated, ...patch }.graceUntil).toBeNull()
+  })
+})
+
+/**
+ * PLATFORM-ALLOCATED HOSTS. Every assertion here is about the OBSERVABLE grant —
+ * does this record route, is it on the redirect allowlist — with no reference to
+ * any message or reason string.
+ *
+ * The distinction the whole feature turns on: `allocated()` is a host the
+ * PLATFORM granted, `inZoneOnly()` is a host an organizer typed that merely
+ * happens to sit under the suffix. The first is verified; the second must be
+ * treated exactly like any other unproven claim.
+ */
+describe('platform-allocated hosts', () => {
+  /** An unproven record: `pending`, never checked, no proof of any kind. */
+  function inZoneOnly(hostname: string): DomainVerificationRecord {
+    return record({
+      hostname,
+      _id: `domainVerification.${hostname}`,
+      status: 'pending',
+      method: 'dns-txt',
+      verifiedAt: null,
+      lastSuccessAt: null,
+      lastCheckedAt: null,
+    })
+  }
+
+  /**
+   * The same claim with the platform's allocation recorded on it. Deliberately
+   * left `pending` with no proof of any kind, so the ONLY thing that could grant
+   * it standing is the allocation itself — a `verified` fixture would pass these
+   * assertions even with the platform rule deleted.
+   */
+  function allocated(hostname: string): DomainVerificationRecord {
+    return { ...inZoneOnly(hostname), method: 'platform-owned' }
+  }
+
+  describe('with the platform suffix configured', () => {
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', PLATFORM_SUFFIX)
+    })
+
+    it('ROUTES a subdomain the platform ALLOCATED, with no DNS proof', () => {
+      // The whole point: we minted `kubeday.konf.run` and control its DNS, so
+      // demanding a TXT record in that zone would only take the tenant offline.
+      expect(isRoutingEligible(allocated('kubeday.konf.run'), NOW)).toBe(true)
+    })
+
+    it('ALLOWLISTS an allocated host as a redirect destination', () => {
+      expect(isAllowlistEligible(allocated('kubeday.konf.run'), NOW)).toBe(true)
+    })
+
+    it('REFUSES an UNALLOCATED host that merely sits in the platform zone', () => {
+      // THE HIJACK: an organizer types `some-other-tenant.konf.run` into their
+      // own settings. Being in our zone says nothing about who is entitled to
+      // it, so this must be as unrouted and unallowlisted as any other unproven
+      // claim.
+      const grabbed = inZoneOnly('some-other-tenant.konf.run')
+      expect(isRoutingEligible(grabbed, NOW)).toBe(false)
+      expect(isAllowlistEligible(grabbed, NOW)).toBe(false)
+    })
+
+    it('REFUSES an in-zone host that a tenant merely got VERIFIED by DNS', () => {
+      // Even a genuinely `verified` dns-txt record is not an allocation, so it
+      // cannot carry the permanent standing…
+      const verified = {
+        ...inZoneOnly('kubeday.konf.run'),
+        status: 'verified' as const,
+        lastSuccessAt: daysAgo(1),
+      }
+      expect(isAllowlistEligible(verified, NOW)).toBe(true) // ordinary route in
+      // …and it expires on staleness like any other dns-txt proof, which an
+      // allocation never does.
+      const stale = {
+        ...verified,
+        lastSuccessAt: daysAgo(ALLOWLIST_MAX_STALENESS_DAYS + 1),
+      }
+      expect(isAllowlistEligible(stale, NOW)).toBe(false)
+      expect(
+        isAllowlistEligible(
+          { ...allocated('kubeday.konf.run'), lastSuccessAt: daysAgo(400) },
+          NOW,
+        ),
+      ).toBe(true)
+    })
+
+    it('is PERMANENT — no grace window, no staleness expiry', () => {
+      const ancient = allocated('kubeday.konf.run')
+      const muchLater = new Date(NOW.getTime() + 3650 * DAY)
+      expect(isRoutingEligible(ancient, muchLater)).toBe(true)
+      expect(isAllowlistEligible(ancient, muchLater)).toBe(true)
+      // …whereas a grandfathered claim of the same age is long gone.
+      expect(
+        isRoutingEligible(
+          record({
+            method: 'grandfathered',
+            status: 'pending',
+            graceUntil: daysAgo(-5),
+          }),
+          muchLater,
+        ),
+      ).toBe(false)
+    })
+
+    it('survives a long hard-failure streak that would delist any other host', () => {
+      const failing = {
+        status: 'failing' as const,
+        consecutiveFailures: ROUTING_GRACE_FAILURES + 10,
+        firstFailureAt: daysAgo(ROUTING_GRACE_DAYS + 30),
+      }
+      expect(
+        isRoutingEligible(
+          { ...allocated('kubeday.konf.run'), ...failing },
+          NOW,
+        ),
+      ).toBe(true)
+      expect(
+        isRoutingEligible(
+          { ...allocated('kubeday.example.com'), ...failing },
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('REFUSES a released (revoked) allocated subdomain', () => {
+      // Revoked WINS over the allocation, in both consumers. Releasing the claim
+      // is the remedy if a host ever ends up with the wrong tenant, so it has to
+      // actually undo the grant.
+      const released = {
+        ...allocated('kubeday.konf.run'),
+        status: 'revoked' as const,
+      }
+      expect(isRoutingEligible(released, NOW)).toBe(false)
+      expect(isAllowlistEligible(released, NOW)).toBe(false)
+    })
+
+    it('REFUSES a label-boundary near-miss: evil-konf.run is NOT konf.run', () => {
+      // Allocated on paper, but the hostname is outside our zone: the live
+      // suffix re-check is what stops a mis-issued record from granting.
+      expect(isRoutingEligible(allocated('evil-konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(allocated('evil-konf.run'), NOW)).toBe(false)
+      expect(isRoutingEligible(allocated('sub.evil-konf.run'), NOW)).toBe(false)
+    })
+
+    it('REFUSES the platform zone used as a PREFIX: konf.run.attacker.com', () => {
+      expect(isRoutingEligible(allocated('konf.run.attacker.com'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(allocated('konf.run.attacker.com'), NOW)).toBe(
+        false,
+      )
+    })
+
+    it('leaves CUSTOM domains exactly as they were — real proof still required', () => {
+      // The regression that matters most: turning platform hosts on must not
+      // hand a free pass to a tenant's own domain — even one whose record was
+      // somehow stamped `platform-owned`.
+      expect(isRoutingEligible(inZoneOnly('cloudnativedays.no'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(inZoneOnly('cloudnativedays.no'), NOW)).toBe(
+        false,
+      )
+      expect(isRoutingEligible(allocated('cloudnativedays.no'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(allocated('cloudnativedays.no'), NOW)).toBe(
+        false,
+      )
+      // …and a proven one still passes, for the ordinary reason.
+      expect(
+        isRoutingEligible(record({ hostname: 'cloudnativedays.no' }), NOW),
+      ).toBe(true)
+    })
+
+    it('REFUSES a WILDCARD claim over the platform zone', () => {
+      // `*.konf.run` would route every tenant subdomain for whoever holds it.
+      expect(isRoutingEligible(allocated('*.konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(allocated('*.konf.run'), NOW)).toBe(false)
+    })
+
+    it('REFUSES the platform APEX itself', () => {
+      expect(isRoutingEligible(allocated('konf.run'), NOW)).toBe(false)
+    })
+  })
+
+  describe('with the platform suffix UNSET', () => {
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+    })
+
+    it('FAILS CLOSED — an unset suffix grants nothing, it does not match all', () => {
+      // The inversion that would be catastrophic: "" matching every host would
+      // permanently allowlist and route every unproven claim on the platform.
+      expect(isRoutingEligible(inZoneOnly('kubeday.konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(inZoneOnly('kubeday.konf.run'), NOW)).toBe(
+        false,
+      )
+      expect(isRoutingEligible(inZoneOnly('anything.example.com'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(inZoneOnly('anything.example.com'), NOW)).toBe(
+        false,
+      )
+    })
+
+    it('withdraws the grant from a record that still SAYS platform-owned', () => {
+      // The allocation is re-checked against the LIVE suffix, so re-pointing or
+      // unsetting it cannot leave stale grants behind. `pending` with no proof,
+      // so the only thing that could grant standing is the allocation.
+      const stale = {
+        ...inZoneOnly('kubeday.konf.run'),
+        method: 'platform-owned' as const,
+      }
+      expect(isAllowlistEligible(stale, NOW)).toBe(false)
+      expect(isRoutingEligible(stale, NOW)).toBe(false)
+    })
   })
 })

@@ -17,6 +17,14 @@
  * Publishing the real TXT record (shown on /admin/settings) converts the record
  * to `dns-txt` on the next check and the exemption disappears for good.
  *
+ * It does NOT allocate platform subdomains. A pre-existing claim under
+ * `PLATFORM_DOMAIN_SUFFIX` gets no record at all (`ensureDomainVerification`
+ * refuses to write one without an explicit allocation), because a backfill
+ * cannot know whether the platform ever issued that label to that conference —
+ * and grandfathering it would hand it a 30-day deadline it could never satisfy
+ * anyway, the challenge living in a zone only the platform can write to. Such
+ * hosts must be allocated deliberately, or removed from `domains[]`.
+ *
  * Re-running is safe: hostnames that already have a record are left untouched.
  *
  * Usage:

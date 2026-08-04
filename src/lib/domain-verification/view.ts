@@ -10,6 +10,7 @@ import {
   isDevOnlyHost,
   isWildcardEntry,
 } from './challenge'
+import { isPlatformAllocated } from './platform'
 import { isAllowlistEligible, isRoutingEligible } from './policy'
 import type {
   DomainVerificationRecord,
@@ -21,11 +22,18 @@ export interface DomainVerificationView {
   status: DomainVerificationStatus
   /** True for a claim the backfill admitted without proof, still inside its window. */
   grandfathered: boolean
+  /**
+   * True for a subdomain the platform ALLOCATED to this conference: verified by
+   * construction, permanently, with NOTHING for the tenant to publish. False for
+   * a host that merely sits under the platform suffix without an allocation, and
+   * false once the claim is revoked.
+   */
+  platformOwned: boolean
   /** The deadline for a grandfathered claim to publish a real proof. */
   graceUntil: string | null
-  /** DNS name the TXT record goes at. `null` for a dev-only entry. */
+  /** DNS name the TXT record goes at. `null` for a dev-only or platform entry. */
   recordName: string | null
-  /** The exact TXT value to publish. `null` for a dev-only entry. */
+  /** The exact TXT value to publish. `null` for a dev-only or platform entry. */
   recordValue: string | null
   /** Wildcard claims are proven on their base zone. */
   wildcard: boolean
@@ -50,13 +58,24 @@ export function toDomainVerificationView(
   record: DomainVerificationRecord | null,
   now: Date = new Date(),
 ): DomainVerificationView {
-  const recordName = challengeRecordName(hostname)
   const devOnly = isDevOnlyHost(hostname)
+  // RECORD-DRIVEN, and revoked never counts. Deriving this from the hostname's
+  // suffix would make the card announce "provided by the platform" for a host
+  // the platform never issued — and, for a revoked claim, keep showing it as
+  // verified and routable after the claim was released.
+  const platformOwned =
+    record !== null &&
+    record.status !== 'revoked' &&
+    isPlatformAllocated(record)
+  // No challenge is shown for an allocated host: it would ask the tenant to
+  // publish a record in a zone only the platform can write to.
+  const recordName = platformOwned ? null : challengeRecordName(hostname)
   return {
     hostname,
     status: record?.status ?? 'pending',
-    grandfathered: record?.method === 'grandfathered',
-    graceUntil: record?.graceUntil ?? null,
+    grandfathered: !platformOwned && record?.method === 'grandfathered',
+    platformOwned,
+    graceUntil: platformOwned ? null : (record?.graceUntil ?? null),
     recordName,
     recordValue: record && recordName ? expectedTxtValue(record.token) : null,
     wildcard: isWildcardEntry(hostname),

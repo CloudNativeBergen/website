@@ -41,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.DOMAIN_VERIFICATION_ENFORCE_ROUTING
+  vi.unstubAllEnvs()
 })
 
 describe('isHostRoutable', () => {
@@ -103,5 +104,121 @@ describe('isHostRoutable', () => {
     expect(await isHostRoutable('other.example', ['example.com'], NOW)).toBe(
       false,
     )
+  })
+
+  describe('platform-allocated subdomains', () => {
+    /**
+     * An allocation with NO proof of any kind (`pending`), so these assertions
+     * can only pass through the allocation rule — a `verified` fixture would
+     * route for the ordinary reason and prove nothing.
+     */
+    const allocation = (hostname: string) =>
+      record({
+        _id: `domainVerification.${hostname}`,
+        hostname,
+        status: 'pending' as const,
+        method: 'platform-owned' as const,
+        lastSuccessAt: null,
+      })
+
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    })
+
+    it('serves a platform subdomain the platform ALLOCATED', async () => {
+      getDomainVerification.mockResolvedValue(allocation('kubeday.konf.run'))
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(true)
+    })
+
+    it('FAILS CLOSED for an in-zone host with NO record — no suffix exemption', async () => {
+      // The hijack, at the routing gate: a hostname ending in our suffix must
+      // not be served just because it ends in our suffix. Without an allocation
+      // there is nothing to honour.
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable(
+          'some-other-tenant.konf.run',
+          ['some-other-tenant.konf.run'],
+          NOW,
+        ),
+      ).toBe(false)
+      // It genuinely consulted the record rather than short-circuiting.
+      expect(getDomainVerification).toHaveBeenCalledWith(
+        'some-other-tenant.konf.run',
+      )
+    })
+
+    it('FAILS CLOSED for an in-zone host whose record is merely pending', async () => {
+      getDomainVerification.mockResolvedValue(
+        record({ hostname: 'kubeday.konf.run', status: 'pending' }),
+      )
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(false)
+    })
+
+    it('still requires the host to be CLAIMED by this conference', async () => {
+      getDomainVerification.mockResolvedValue(
+        allocation('someone-else.konf.run'),
+      )
+      expect(
+        await isHostRoutable(
+          'someone-else.konf.run',
+          ['kubeday.konf.run'],
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('does NOT extend the allocation to a `*.konf.run` wildcard claim', async () => {
+      getDomainVerification.mockResolvedValue(allocation('*.konf.run'))
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['*.konf.run'], NOW),
+      ).toBe(false)
+      expect(getDomainVerification).toHaveBeenCalledWith('*.konf.run')
+    })
+
+    it('REFUSES a label-boundary near-miss even with an allocation record', async () => {
+      getDomainVerification.mockImplementation(async (hostname) =>
+        allocation(hostname),
+      )
+      expect(
+        await isHostRoutable('evil-konf.run', ['evil-konf.run'], NOW),
+      ).toBe(false)
+      expect(
+        await isHostRoutable(
+          'konf.run.attacker.com',
+          ['konf.run.attacker.com'],
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('leaves CUSTOM domains fail-closed on a missing record', async () => {
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('cloudnativedays.no', ['cloudnativedays.no'], NOW),
+      ).toBe(false)
+    })
+
+    it('REFUSES a revoked allocation', async () => {
+      getDomainVerification.mockResolvedValue({
+        ...allocation('kubeday.konf.run'),
+        status: 'revoked' as const,
+      })
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(false)
+    })
+
+    it('FAILS CLOSED for the same allocated host when the suffix is unset', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+      getDomainVerification.mockResolvedValue(allocation('kubeday.konf.run'))
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(false)
+    })
   })
 })

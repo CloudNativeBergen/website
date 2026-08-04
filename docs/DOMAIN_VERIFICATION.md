@@ -47,6 +47,102 @@ A `*.example.com` wildcard claim is proven on its **base zone** (`example.com`).
   defending against, is the attacker. A record in the tenant's own zone proves
   control of the **zone**, which is the thing that actually lapses.
 
+## Platform-allocated hosts
+
+Tenants are hosted by default on a subdomain the platform **mints** for them
+(`<slug>.konf.run`). That zone's nameservers are delegated to our own edge and a
+wildcard certificate covers every label under it — the tenant has no access to it
+at all. Asking them for a `_konf-challenge` TXT record there is asking them to
+write into a zone only we can write to, so under routing enforcement every
+platform-hosted tenant would simply go dark.
+
+Such a host is therefore verified **by construction**, recorded as
+`method: "platform-owned"`. Unlike `grandfathered` this is **permanent**: no
+`graceUntil`, no staleness expiry, nothing for the tenant to complete.
+
+### Being in our zone is a precondition, not an entitlement
+
+The tempting shortcut — "it is under our suffix, therefore it is verified" — is a
+**cross-tenant hijack**. "This host is in our zone" says nothing about _which_
+tenant is entitled to it. An organizer can type any hostname into
+/admin/settings, so a read-time suffix inference lets them claim
+`some-other-tenant.konf.run`, or a label earmarked for a customer being onboarded
+next week, and be handed routing plus (once #688 ships) an OAuth redirect
+destination for it. Global uniqueness does not save that — it makes the claim
+_exclusive_, so the rightful tenant could then never be given the hostname at
+all.
+
+Entitlement is therefore an **allocation recorded at write time**:
+
+- The platform grants one host to one conference, and only through
+  `provisionOrganization` — the platform-operator wizard and the
+  bearer-authenticated provisioning API. That is the sole caller that passes
+  `allocatePlatformHosts`.
+- The `domainVerification` document records the grant (`method:
+"platform-owned"`, `conference` = the grantee).
+- Every read-time decision requires **both** the recorded allocation and a live
+  suffix re-check (`isPlatformAllocated`). Neither half is sufficient: a
+  mis-issued record for a host outside the zone grants nothing, and a host in the
+  zone with no allocation grants nothing.
+- Tenant-facing writes never allocate. `updateDomains` and `createEdition`
+  **reject** an unallocated in-zone hostname (`findUnallocatedPlatformDomains`)
+  before any write, and `ensureDomainVerification` creates no document for one,
+  so even a bypass of the mutation guard fails closed.
+- `revoked` is refused **before** the allocation check everywhere — routing, the
+  allowlist and the admin view — so releasing the claim really does undo the
+  grant.
+
+### The suffix is configuration
+
+`PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_SLUG` contract — the platform
+is white-labelable, so `konf.run` is a deployment fact, never a constant in the
+source.
+
+**Unset means _no_ host is in the platform zone**, never "every host is". Every
+rejection path (blank, a bare label such as `run`, a URL, a `:port`) resolves to
+`null` and the predicate fails closed on it.
+
+### Matching rules
+
+Comparison is **label-wise**, never `endsWith` on a raw string. "✅" here means
+only _allocatable_ — the allocation still has to exist:
+
+| Host                    | `konf.run` suffix | Why                                                                                      |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| `kubeday.konf.run`      | ✅ in zone        | exact trailing labels, one label deeper                                                  |
+| `a.b.konf.run`          | ✅ in zone        | still inside the zone                                                                    |
+| `evil-konf.run`         | ❌                | `endsWith` says yes; there is no label boundary                                          |
+| `konf.run.attacker.com` | ❌                | our zone as somebody else's _prefix_                                                     |
+| `a.konf.runner`         | ❌                | different TLD                                                                            |
+| `konf.run` (apex)       | ❌                | the platform's own origin, not a minted subdomain — it can prove itself the ordinary way |
+| `*.konf.run`            | ❌                | a wildcard over the whole zone would let its holder route every tenant subdomain         |
+| `tenant.konf.run:3000`  | ❌                | a port is a dev entry, not a zone                                                        |
+
+The suffix half of the verdict is re-derived **live** on every decision rather
+than trusted from the record alone, so re-pointing or unsetting the suffix
+withdraws the standing immediately instead of leaving stale grants behind.
+
+### What it affects
+
+- **Routing** — served because the record carries the allocation. There is no
+  suffix short-circuit: a missing record still fails closed, exactly as for a
+  custom domain, and the host must be claimed in this conference's `domains[]`.
+- **Redirect allowlist** — eligible. The threat the allowlist guards is a
+  _dangling_ destination: a third party's zone lapses and the host silently
+  resolves to somebody else. That cannot happen inside a zone we operate, and
+  refusing would mean nobody on the platform's default hosting could complete a
+  sign-in. What it grants is a redirect destination to the conference the
+  platform **issued** that subdomain to — not to whoever typed it first.
+  Wildcards and revoked claims stay excluded.
+- **The sweep** — never resolves an allocated record. Doing so would hard-fail
+  the entire platform-hosted estate and alert every organizer about a record they
+  cannot publish. Allocated records are reconciled to `verified`/`platform-owned`
+  (clearing any stale `graceUntil`) and counted separately (`platformOwned` in
+  the summary). An **unallocated** in-zone claim is resolved like any other, hard
+  fails, and stays unrouted.
+- **Custom domains** — completely unaffected. They still require real DNS-TXT
+  proof, whether or not a platform suffix is configured.
+
 ## Data model
 
 A **sidecar document** (`sanity/schemaTypes/domainVerification.ts`), one per
@@ -78,6 +174,8 @@ Two consumers, deliberately different tolerances (`src/lib/domain-verification/p
 | Stale success        | expires after 30 days            | keeps serving indefinitely                          |
 | Wildcard claims      | never eligible (exact host only) | eligible                                            |
 | Dev/loopback entries | never eligible                   | always eligible                                     |
+| Platform-ALLOCATED   | always eligible (permanent)      | always eligible (permanent)                         |
+| In-zone, unallocated | never eligible                   | never eligible (and refused at the claim)           |
 
 DNS failures are classified:
 
@@ -109,9 +207,11 @@ pnpm tsx scripts/backfill-domain-verification.ts --apply
 ```
 
 The backfill mints `method: "grandfathered"` records, honoured for 30 days and no
-longer — a time-boxed exemption, not an amnesty. The admin card shows the
-deadline and the record to publish; the daily sweep starts reporting the missing
-TXT immediately.
+longer — a time-boxed exemption, not an amnesty. It does **not** allocate: a
+pre-existing claim under `PLATFORM_DOMAIN_SUFFIX` gets no record from it, and
+must be allocated deliberately (or removed). The admin card shows the deadline
+and the record to publish; the daily sweep starts reporting the missing TXT
+immediately.
 
 The redirect allowlist is **not** flag-gated. It is a new surface with no
 existing consumers, so it fails closed from day one.
@@ -121,6 +221,7 @@ existing consumers, so it fails closed from day one.
 | Path                                              | Role                                                        |
 | ------------------------------------------------- | ----------------------------------------------------------- |
 | `src/lib/domain-verification/challenge.ts`        | record names, tokens, host classification                   |
+| `src/lib/domain-verification/platform.ts`         | the `PLATFORM_DOMAIN_SUFFIX` contract + label-wise matcher  |
 | `src/lib/domain-verification/dns.ts`              | bounded, uncached TXT resolution + hard/soft classification |
 | `src/lib/domain-verification/policy.ts`           | the delisting policy (pure)                                 |
 | `src/lib/domain-verification/allowlist.ts`        | exact-host OAuth redirect allowlist (#688 consumes this)    |

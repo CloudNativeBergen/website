@@ -17,6 +17,7 @@
 
 import { createNotifications } from '@/lib/notification/sanity'
 import { checkDomainChallenge } from './dns'
+import { isPlatformAllocated } from './platform'
 import { applyCheckOutcome, isAllowlistEligible } from './policy'
 import {
   getConferenceAlertTargets,
@@ -31,6 +32,8 @@ const CONCURRENCY = 5
 export interface DomainVerificationSweepSummary {
   checked: number
   verified: number
+  /** Hosts the platform ALLOCATED — reconciled, never resolved. */
+  platformOwned: number
   hardFailures: number
   softFailures: number
   unverifiable: number
@@ -100,7 +103,17 @@ export async function recheckDomainRecord(
   delisted: boolean
 }> {
   const wasAllowlisted = isAllowlistEligible(record, now)
-  const outcome = await checkDomainChallenge(record.hostname, record.token)
+  // NO LOOKUP for a host the platform ALLOCATED. There is no tenant TXT record
+  // to find, so resolving would hard-fail the whole platform-hosted estate and
+  // alert its organisers about a record they cannot publish. The verdict is
+  // reconciled instead.
+  //
+  // Keyed on the ALLOCATION, not on the suffix: an unallocated claim that merely
+  // sits in our zone is checked like any other, hard-fails, and stays unrouted —
+  // exactly the fail-closed outcome a hijack attempt should get.
+  const outcome: DomainCheckOutcome = isPlatformAllocated(record)
+    ? { kind: 'platform-owned' }
+    : await checkDomainChallenge(record.hostname, record.token)
   const patch = applyCheckOutcome(record, outcome, now)
   await patchDomainVerification(record._id, patch)
 
@@ -131,6 +144,7 @@ export async function runDomainVerificationSweep(
   const summary: DomainVerificationSweepSummary = {
     checked: 0,
     verified: 0,
+    platformOwned: 0,
     hardFailures: 0,
     softFailures: 0,
     unverifiable: 0,
@@ -143,6 +157,7 @@ export async function runDomainVerificationSweep(
       const { outcome, delisted } = await recheckDomainRecord(record, now)
       summary.checked += 1
       if (outcome.kind === 'verified') summary.verified += 1
+      else if (outcome.kind === 'platform-owned') summary.platformOwned += 1
       else if (outcome.kind === 'hard-failure') summary.hardFailures += 1
       else if (outcome.kind === 'soft-failure') summary.softFailures += 1
       else summary.unverifiable += 1

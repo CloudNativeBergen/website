@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DomainVerificationRecord } from './types'
 
 const listAllowlistCandidates =
@@ -36,6 +36,10 @@ function record(
 
 beforeEach(() => {
   listAllowlistCandidates.mockReset()
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('isVerifiedRedirectOrigin', () => {
@@ -129,5 +133,95 @@ describe('isVerifiedRedirectOrigin', () => {
     expect(await isVerifiedRedirectOrigin('https://example.com', NOW)).toBe(
       false,
     )
+  })
+
+  describe('platform-allocated subdomains', () => {
+    /** Claimed, never proven — standing can only come from the allocation. */
+    const inZoneOnly = (hostname: string) =>
+      record({
+        hostname,
+        status: 'pending' as const,
+        method: 'dns-txt' as const,
+        verifiedAt: null,
+        lastSuccessAt: null,
+        lastCheckedAt: null,
+      })
+
+    /** The same claim with the platform's allocation recorded on it. */
+    const allocated = (hostname: string) => ({
+      ...inZoneOnly(hostname),
+      status: 'verified' as const,
+      method: 'platform-owned' as const,
+    })
+
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    })
+
+    it('accepts a subdomain the platform ALLOCATED, with no DNS proof', async () => {
+      // A tenant on the platform's own subdomain has to be able to finish a
+      // sign-in round-trip; the zone is ours, so there is no dangling
+      // destination to defend against.
+      listAllowlistCandidates.mockResolvedValue([allocated('kubeday.konf.run')])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(true)
+    })
+
+    it('REFUSES an UNALLOCATED host that merely sits in the platform zone', async () => {
+      // The hijack, at the redirect allowlist — the more dangerous half: an
+      // organizer's grab for another tenant's label must not become a place we
+      // will deliver an authorization code.
+      listAllowlistCandidates.mockResolvedValue([
+        inZoneOnly('some-other-tenant.konf.run'),
+      ])
+      expect(
+        await isVerifiedRedirectOrigin(
+          'https://some-other-tenant.konf.run',
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('REFUSES a label-boundary near-miss of the platform zone', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        allocated('evil-konf.run'),
+        allocated('konf.run.attacker.com'),
+      ])
+      expect(await isVerifiedRedirectOrigin('https://evil-konf.run', NOW)).toBe(
+        false,
+      )
+      expect(
+        await isVerifiedRedirectOrigin('https://konf.run.attacker.com', NOW),
+      ).toBe(false)
+    })
+
+    it('REFUSES an unproven CUSTOM domain while the platform rule is on', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        inZoneOnly('cloudnativedays.no'),
+      ])
+      expect(
+        await isVerifiedRedirectOrigin('https://cloudnativedays.no', NOW),
+      ).toBe(false)
+    })
+
+    it('REFUSES a released (revoked) allocated subdomain', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        { ...allocated('kubeday.konf.run'), status: 'revoked' as const },
+      ])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(false)
+    })
+
+    it('FAILS CLOSED for the same host when the suffix is unset', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+      listAllowlistCandidates.mockResolvedValue([
+        { ...allocated('kubeday.konf.run'), status: 'pending' as const },
+      ])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(false)
+    })
   })
 })

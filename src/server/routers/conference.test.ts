@@ -94,9 +94,20 @@ vi.mock('@/lib/sanity/client', () => ({
 // the domain mutation itself; the sidecar's own behaviour is covered in
 // src/lib/domain-verification/*.test.ts.
 const syncDomainVerificationsMock = vi.fn(async () => {})
+/**
+ * The PLATFORM-ZONE entitlement guard. Returns the claimed hostnames the
+ * platform never allocated to this conference; `[]` — nothing withheld — is the
+ * default so the pre-existing domain tests are unaffected.
+ */
+const findUnallocatedPlatformDomainsMock = vi.fn(
+  async (): Promise<string[]> => [],
+)
 vi.mock('@/lib/domain-verification', () => ({
   syncDomainVerifications: (...args: unknown[]) =>
     syncDomainVerificationsMock(...(args as [])),
+  findUnallocatedPlatformDomains: () => findUnallocatedPlatformDomainsMock(),
+  PLATFORM_DOMAIN_NOT_ALLOCATED:
+    'That hostname belongs to the platform and has not been allocated to this conference',
 }))
 
 // The teams cache clear is a side effect updateTeams performs on success.
@@ -618,6 +629,34 @@ describe('conference router — domains (safeguarded)', () => {
       makeCaller({ isOrganizer: true }).updateDomains({ domains: [] }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('REFUSES a platform-zone host the platform never allocated (#683)', async () => {
+    // The cross-tenant hijack: an organizer types another tenant's — or an
+    // unissued — `<label>.<platform suffix>` into their own settings. `domains[]`
+    // is a globally unique routing claim, so letting it through would not merely
+    // fail to verify: it would lock the rightful tenant out of that hostname
+    // permanently. Refused at the CLAIM, before anything is written.
+    findUnallocatedPlatformDomainsMock.mockResolvedValue([
+      'some-other-tenant.konf.run',
+    ])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateDomains({
+        domains: [CURRENT, 'some-other-tenant.konf.run'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // NOTHING was written and no verification record was minted.
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(syncDomainVerificationsMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts a platform-zone host that IS allocated to this conference', async () => {
+    findUnallocatedPlatformDomainsMock.mockResolvedValue([])
+    const result = await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [CURRENT, 'kubeday.konf.run'],
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toEqual({ domains: [CURRENT, 'kubeday.konf.run'] })
   })
 
   it('rejects a duplicate entry', async () => {

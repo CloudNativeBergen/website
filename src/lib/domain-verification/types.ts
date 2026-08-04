@@ -15,11 +15,19 @@ export type DomainVerificationStatus =
   'pending' | 'verified' | 'failing' | 'revoked'
 
 /**
- * How the record earned its current status. `grandfathered` records were
- * admitted by the backfill without proof and are trusted ONLY until
- * `graceUntil`; they become `dns-txt` the moment a real proof resolves.
+ * How the record earned its current status.
+ *
+ * - `dns-txt` — the tenant published the challenge record in their own zone.
+ * - `grandfathered` — admitted by the backfill without proof, trusted ONLY
+ *   until `graceUntil`; becomes `dns-txt` the moment a real proof resolves.
+ * - `platform-owned` — the hostname sits under the platform's OWN zone
+ *   (`PLATFORM_DOMAIN_SUFFIX`, see `platform.ts`), so control is ours by
+ *   construction. PERMANENT, not a grace period: it carries no `graceUntil`
+ *   and there is no proof for the tenant to complete. Re-derived from the
+ *   hostname on every decision, so a stale record cannot outlive the config.
  */
-export type DomainVerificationMethod = 'dns-txt' | 'grandfathered'
+export type DomainVerificationMethod =
+  'dns-txt' | 'grandfathered' | 'platform-owned'
 
 /** A `domainVerification` document as the app reads it. */
 export interface DomainVerificationRecord {
@@ -47,19 +55,32 @@ export interface DomainVerificationRecord {
  * only thing that may cost a domain its standing. A `soft-failure` means our
  * resolver could not get an answer at all (timeout, SERVFAIL, network); that is
  * our outage, not the tenant's, and must never delist on its own.
+ *
+ * `platform-owned` is the one verdict reached WITHOUT a lookup: the hostname is
+ * inside our own zone, so there is nothing to resolve and nothing that could
+ * fail. The sweep never issues a query for those records.
  */
 export type DomainCheckOutcome =
   | { kind: 'verified' }
+  | { kind: 'platform-owned' }
   | { kind: 'hard-failure'; reason: string }
   | { kind: 'soft-failure'; reason: string }
   | { kind: 'unverifiable'; reason: string }
 
-/** Fields the policy writes back after a check. */
+/**
+ * Fields the policy writes back after a check.
+ *
+ * `graceUntil` is included so a deadline can be CLEARED (`null` → `unset`, see
+ * `patchDomainVerification`). Without it a record that was grandfathered before
+ * the platform allocated it would keep its 30-day deadline and expire, even
+ * though a platform allocation has none.
+ */
 export type DomainVerificationPatch = Partial<
   Pick<
     DomainVerificationRecord,
     | 'status'
     | 'method'
+    | 'graceUntil'
     | 'verifiedAt'
     | 'lastSuccessAt'
     | 'lastCheckedAt'

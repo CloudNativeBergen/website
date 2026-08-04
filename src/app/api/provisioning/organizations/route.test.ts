@@ -212,6 +212,9 @@ vi.mock('@/lib/domain-verification', () => ({
     hostname,
     status: 'pending',
   }),
+  findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
+  PLATFORM_DOMAIN_NOT_ALLOCATED:
+    'That hostname belongs to the platform and has not been allocated to this conference',
 }))
 
 import { POST } from './route'
@@ -481,9 +484,15 @@ describe('provisioning API — a correct token creates exactly one tenant', () =
       domains: ['oslo.cloudnativedays.no'],
     })
     expect(speakers[0]).toMatchObject({ email: 'kari@cno.no' })
-    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(confs[0]._id, [
-      'oslo.cloudnativedays.no',
-    ])
+    // The bearer-authenticated provisioning path IS the platform's allocation
+    // authority, so it is the one caller allowed to grant a subdomain of the
+    // platform's own zone (#683).
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
+      confs[0]._id,
+      ['oslo.cloudnativedays.no'],
+      [],
+      { allocatePlatformHosts: true },
+    )
   })
 
   it('still reports the committed ids when the POST-COMMIT domain reads fail', async () => {
