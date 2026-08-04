@@ -1,0 +1,105 @@
+# Machine Provisioning API
+
+`POST /api/provisioning/organizations` creates a tenant — one `organization`, its first `conference`, and the first organizer's membership — for a caller that is **not a signed-in platform operator**. It exists for `RunKonf/kontroll` (the control panel at my.konf.app), which is a separate application with no Konf session.
+
+## One transaction, two front doors
+
+There is exactly **one** tenant-creation implementation: `provisionOrganization()` in `src/lib/onboarding/provision.ts`.
+
+| Surface                                | Caller                     | Authentication              | Idempotency  |
+| -------------------------------------- | -------------------------- | --------------------------- | ------------ |
+| `onboarding.createOrganization` (tRPC) | Platform operator, in-app  | Session + platform-org role | none         |
+| `POST /api/provisioning/organizations` | RunKonf/kontroll (machine) | Shared bearer secret        | required key |
+
+Both land on the same reads, the same validation authority, and the same all-or-nothing Sanity transaction. **Do not add provisioning logic to the route handler.** A second copy would fork the per-field document enumeration in `buildOnboardingDocuments` and start silently dropping new conference fields on whichever path was forgotten (#752).
+
+## Environment
+
+| Variable                 | Required | Purpose                                                                                                                                                                    |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROVISIONING_API_TOKEN` | yes      | The shared bearer secret. **Minimum 32 characters.** Unset, empty or shorter ⇒ endpoint refuses everybody.                                                                 |
+| `AUTH_SECRET`            | yes      | Already required app-wide. Salts the idempotency-receipt id and the rate-limit bucket ids so neither the caller's key nor a client IP is ever written to the content lake. |
+
+Both are read lazily at request time, never at module load.
+
+## Request
+
+```http
+POST /api/provisioning/organizations
+Authorization: Bearer <PROVISIONING_API_TOKEN>
+Idempotency-Key: <opaque, 16-200 printable ASCII characters>
+Content-Type: application/json
+```
+
+```json
+{
+  "organization": {
+    "name": "Cloud Native Oslo",
+    "slug": "cloud-native-oslo",
+    "contactEmail": "hello@cno.no",
+    "billingEmail": "faktura@cno.no"
+  },
+  "conference": {
+    "title": "Cloud Native Days Oslo 2027",
+    "city": "Oslo",
+    "country": "Norway",
+    "startDate": "2027-06-01",
+    "endDate": "2027-06-02"
+  },
+  "organizer": { "name": "Kari Nordmann", "email": "kari@cno.no" },
+  "domains": ["oslo.cloudnativedays.no"]
+}
+```
+
+The body is validated with `CreateOrganizationSchema` from `src/server/schemas/onboarding.ts` — **the same schema the operator wizard posts through**, not a looser copy. `billingEmail` is optional; `startDate`/`endDate` are optional but travel as a pair; `domains` may be empty (a tenant can start on no domain and attach one later).
+
+## Responses
+
+| Status | Body                                                                                              | Meaning                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `201`  | `{ organizationId, conferenceId, speakerId, speakerCreated, replayed: false, challenges: [...] }` | Tenant created.                                                                                      |
+| `200`  | same shape, `replayed: true`                                                                      | This key already provisioned; the **original** ids are returned and nothing was written.             |
+| `400`  | `{ error: "invalid_request", code, issues? }`                                                     | `idempotency_key_required`, `invalid_json`, or `schema_validation_failed` (with per-field `issues`). |
+| `401`  | `{ error: "unauthorized" }`                                                                       | Any authentication failure. Uniform and detail-free.                                                 |
+| `409`  | `{ error: "conflict", code, slug? \| domains? }`                                                  | `slug_taken`, `domain_claimed`, `ambiguous_organizer`.                                               |
+| `429`  | `{ error: "rate_limited" }` + `Retry-After`                                                       | Over a cap, or the limiter could not persist a hit.                                                  |
+| `500`  | `{ error: "internal_error" }`                                                                     | The transaction failed; nothing was written.                                                         |
+
+`challenges` is a `DomainVerificationView[]` — one per claimed domain, carrying the TXT record the caller must publish (#683). Domains are **claims, not proofs**: a new conference routes nothing until its records verify.
+
+`speakerCreated: false` means the organizer email matched a pre-existing speaker account, which was patched with the new org membership instead of duplicated.
+
+## Security model
+
+**Fail closed on misconfiguration.** An unset, empty, whitespace-only or under-32-character `PROVISIONING_API_TOKEN` refuses every caller. "No secret configured" never collapses into "no authentication required" — that is how endpoints like this ship open on the day someone forgets an env var in a new environment.
+
+**Constant-time comparison.** Both the presented and the configured secret are hashed to a fixed 32-byte digest before `crypto.timingSafeEqual`, so the comparison has no length-dependent branch at all — neither the secret's length nor its bytes leak. (Stricter than the length-equalising `safeEqual` in `src/lib/auth/email-link/token.ts`, which must preserve its callers' raw strings.)
+
+**The token is never echoed** into a response, an error or a log line.
+
+**Opacity is scoped to the unauthenticated.** Every authentication failure produces a byte-identical `401 {"error":"unauthorized"}`, so a prober cannot learn whether the endpoint is configured, whether their token shape was accepted, or whether a slug or domain exists. Once a caller has proven it holds the secret it is trusted platform infrastructure, and conflicts are named — the control panel legitimately has to render "that slug is taken".
+
+**Two rate limits**, both durable (Sanity-backed, revision-conditioned CAS — an in-process counter is not a limit in a serverless deployment):
+
+- `attempt`, bucketed by client IP, charged **before** the token is compared — 10/min, 60/hour, 300/day. This is the bound on brute-forcing the secret. A missing IP charges a shared `unknown` bucket rather than skipping the limit.
+- `create`, a **single global** bucket, charged after authentication and after validation — 5/min, 30/hour, 100/day. This is the bound on bulk tenant minting if the secret leaks, and it is deliberately not keyed on anything the caller can rotate.
+
+Both **fail closed** in either direction, unlike the email sign-in limiter (which fails open on a read outage because locking everybody out of sign-in is worse than an absent cap). Here the guarded operation is a rare privileged write, so refusing it during an outage costs a retry and nothing else.
+
+## Idempotency
+
+`Idempotency-Key` is **required**. A machine caller that retries a timed-out request without one would create a second tenant — and the duplicate would already hold the domain claim.
+
+The mechanism is a `provisioningRequest` receipt at a deterministic id, `sha256(key + AUTH_SECRET)`, **created inside the same transaction as the organization**. Sanity's `create` on an explicit id fails if the document exists, and the transaction is atomic, so a second request carrying the same key cannot commit an organization no matter how the two interleave.
+
+This is a genuine compare-and-swap, not a read-then-write check. The pre-flight receipt read is only a fast path; the atomic create is the guarantee. Losing the race is indistinguishable from a commit failure, so the handler re-reads the receipt on failure and, if it now exists, returns the winner's ids.
+
+The receipt also makes the retry **safe** rather than merely refused: a caller whose first response was lost gets the original ids back, so a timeout can never strand a tenant the control panel does not know about. The key, not the payload, is authoritative — replaying a used key with a different body returns the original tenant and writes nothing.
+
+Receipts are purged 30 days after creation by the daily cleanup cron (`/api/cron/cleanup-notifications`), so **retention is the replay window**: past it, the same key would provision again.
+
+Nothing about the caller's key is stored — only its salted hash, which is already the document id, so a reader of the content lake cannot confirm a guessed key and replay with it.
+
+## Residual risk
+
+Global slug and domain uniqueness are still enforced by a read-then-write check inside the transaction's preamble, not by a database constraint (Sanity has none). Two requests with **different** idempotency keys racing on the **same** slug can therefore both pass the check. The idempotency receipt does not close this — it is keyed on the request, not the slug. In practice the wizard and the control panel both preflight, and the window is milliseconds; closing it properly means deriving the organization's `_id` from its slug so Sanity's create-CAS enforces uniqueness, which is a follow-up.

@@ -24,6 +24,8 @@ import emailSignInRateLimit from './schemaTypes/emailSignInRateLimit'
 import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
 import organization from './schemaTypes/organization'
+import provisioningRateLimit from './schemaTypes/provisioningRateLimit'
+import provisioningRequest from './schemaTypes/provisioningRequest'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import scheduledReminderLog from './schemaTypes/scheduledReminderLog'
@@ -106,6 +108,12 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // shape is typed and documented; nobody edits them by hand.
     emailSignInToken,
     emailSignInRateLimit,
+
+    // Platform-internal provisioning artifacts (#753) — the machine API's
+    // idempotency receipts and abuse counters. Same rule: registered for shape
+    // and documentation only, hidden from the Studio structure.
+    provisioningRequest,
+    provisioningRateLimit,
   ],
 }
 
@@ -116,4 +124,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'emailSignInToken',
   'emailSignInRateLimit',
+  'provisioningRequest',
+  'provisioningRateLimit',
 ]
