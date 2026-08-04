@@ -3,8 +3,8 @@ import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { BrandingEditor } from '@/components/admin/BrandingEditor'
 import { ThemeEditor } from '@/components/admin/ThemeEditor'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
+import Link from 'next/link'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
-import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
 import {
   HomepageCard,
   LogosCard,
@@ -19,6 +19,7 @@ import { AppearanceNav } from './appearanceLayout'
 import {
   ChartPieIcon,
   PaintBrushIcon,
+  PencilSquareIcon,
   PhotoIcon,
   SwatchIcon,
   Squares2X2Icon,
@@ -140,11 +141,18 @@ export default async function AppearancePage() {
           <HomepageCard
             sections={homepageSections}
             usingDefault={usingDefaultHomepage}
+            // The composition editor is the one appearance surface that is a
+            // WORKSPACE rather than a field: it navigates to a full page with
+            // the live preview beside it, instead of opening a modal that
+            // cannot hold one.
             action={
-              <HomepageSectionsEditor
-                initialSections={homepageSections}
-                usingDefault={usingDefaultHomepage}
-              />
+              <Link
+                href="/admin/settings/appearance/composer"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-brand-cloud-blue hover:bg-brand-cloud-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue"
+              >
+                <PencilSquareIcon className="h-5 w-5" aria-hidden="true" />
+                Edit composition
+              </Link>
             }
           />
 

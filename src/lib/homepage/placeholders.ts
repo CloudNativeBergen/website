@@ -87,7 +87,12 @@ import type {
 } from '@/lib/proposal/types'
 import type { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import type { ConferenceSponsor, SponsorTier } from '@/lib/sponsor/types'
-import type { HomepageFaqItem, HomepageSectionType } from './sections'
+import type {
+  FaqSection,
+  HomepageFaqItem,
+  HomepageSection,
+  HomepageSectionType,
+} from './sections'
 
 /* -------------------------------------------------------------------------- */
 /* Marking                                                                    */
@@ -673,6 +678,27 @@ export const PLACEHOLDER_FAQ_ITEMS: readonly PlaceholderOf<HomepageFaqItem>[] =
         'Placeholder answer. Add your own questions and answers to replace this sample.',
     }),
   ]
+
+/**
+ * Does this FAQ band need {@link PLACEHOLDER_FAQ_ITEMS} behind it?
+ *
+ * The ONE section-level placeholder rule, and therefore the one that could not
+ * live in {@link withPlaceholders}: a FAQ block set to `own` carries its items
+ * on the SECTION, not on the conference, so filling the conference leaves it
+ * just as empty. It lives here rather than at either point of use because there
+ * are now two — the preview substitutes the items, and the composer rail tags
+ * the same card "Sample data" — and two copies of the predicate would
+ * eventually disagree about which cards are honest.
+ */
+export function needsPlaceholderFaqItems(
+  section: HomepageSection,
+): section is FaqSection {
+  return (
+    section._type === 'homepageFaq' &&
+    section.source !== 'ticketFaqs' &&
+    (section.items?.length ?? 0) === 0
+  )
+}
 
 const SAMPLE_VENUE_NAME = 'Sample Hall'
 const SAMPLE_VENUE_ADDRESS = '1 Example Street'

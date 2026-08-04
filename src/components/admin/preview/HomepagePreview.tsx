@@ -10,6 +10,7 @@ import { sectionContentStatus } from '@/lib/homepage/contentStatus'
 import {
   PLACEHOLDER_FAQ_ITEMS,
   isPlaceholder,
+  needsPlaceholderFaqItems,
   withPlaceholders,
 } from '@/lib/homepage/placeholders'
 import type {
@@ -232,11 +233,7 @@ function applyDesignPlaceholders(section: HomepageSection): {
   section: HomepageSection
   sample: boolean
 } {
-  if (
-    section._type === 'homepageFaq' &&
-    section.source !== 'ticketFaqs' &&
-    (section.items?.length ?? 0) === 0
-  ) {
+  if (needsPlaceholderFaqItems(section)) {
     return {
       section: { ...section, items: [...PLACEHOLDER_FAQ_ITEMS] },
       sample: true,

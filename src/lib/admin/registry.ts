@@ -209,6 +209,27 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     icon: CpuChipIcon,
   },
   {
+    // The homepage composition workspace. A ⌘K destination of its own because
+    // it is where an organizer goes to WORK, not a settings anchor: the
+    // appearance page's Composition card is its at-rest display, this is the
+    // editor with the live preview.
+    id: 'settings-appearance-composer',
+    title: 'Homepage composer',
+    href: '/admin/settings/appearance/composer',
+    group: 'Settings',
+    keywords: [
+      'homepage',
+      'composer',
+      'compose',
+      'front page',
+      'sections',
+      'layout',
+      'preview',
+      'blocks',
+    ],
+    icon: Squares2X2Icon,
+  },
+  {
     id: 'budget-config',
     title: 'Budget Configuration',
     href: '/admin/budget/config',

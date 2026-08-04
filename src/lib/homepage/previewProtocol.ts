@@ -114,17 +114,15 @@ export interface PreviewSizeMessage {
   height: number
 }
 
-/** Anything the parent may send to the preview. */
-export type PreviewInboundMessage = PreviewStateMessage
-
-/** Anything the preview may send to the parent. */
+/**
+ * Anything the preview may send to the parent. (The other direction is the one
+ * message {@link PreviewStateMessage}; it needs no union of its own.)
+ */
 export type PreviewOutboundMessage =
   | PreviewReadyMessage
   | PreviewHoverMessage
   | PreviewSelectMessage
   | PreviewSizeMessage
-
-export type PreviewMessage = PreviewInboundMessage | PreviewOutboundMessage
 
 /* -------------------------------------------------------------------------- */
 /* Constructors — so neither end hand-writes an envelope                       */

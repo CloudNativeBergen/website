@@ -7,10 +7,12 @@ import {
   localInputToIso,
   moveByIndex,
   reorderByKey,
+  resolveRowsForSave,
   serializeRows,
   toEditorRows,
   toPayload,
   toPreviewBands,
+  toSections,
 } from './editor'
 import type { HomepageSection } from './sections'
 
@@ -512,6 +514,81 @@ describe('toPayload — trimming, omission and item filtering', () => {
       _key: 'v',
       hidden: true,
     })
+  })
+})
+
+/**
+ * THE COMPOSER'S LOAD-BEARING INVARIANT.
+ *
+ * The workspace pushes its live preview through the very same functions the
+ * Save path uses, so "what the organizer is looking at" and "what would be
+ * stored" cannot drift. These tests pin that: a preview built any other way —
+ * from the raw rows, from a second mapper — would break here.
+ */
+describe('resolveRowsForSave / toSections — preview and save agree', () => {
+  const richRow: EditorRow = {
+    _key: 'rich',
+    _type: 'homepageRichText',
+    heading: 'Getting here',
+    content: [
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          { _type: 'span', _key: 's1', text: 'A ten minute walk.', marks: [] },
+        ],
+      },
+      // An empty code card: the sanitizer drops it, and both the validator and
+      // the preview must see the SAME resolved array.
+      { _type: 'code', _key: 'c1', code: '' },
+    ] as never,
+  }
+
+  it('sanitizes rich text and leaves every other row untouched', () => {
+    const resolved = resolveRowsForSave([...rows, richRow])
+    expect(resolved.slice(0, 3)).toEqual(rows)
+    expect(resolved[3].content).toHaveLength(1)
+    // The AUTHORED row is not mutated — the editor still shows what was typed
+    // until the organizer decides what to do about the dropped card.
+    expect(richRow.content).toHaveLength(2)
+  })
+
+  it('serializes the preview through the same payload the mutation sends', () => {
+    const resolved = resolveRowsForSave([...rows, richRow])
+    expect(toSections(resolved)).toEqual(toPayload(resolved))
+  })
+
+  it('drops the same unfinished content the save would drop', () => {
+    // A CTA override with no href never reaches the dataset, so it must not
+    // reach the preview either.
+    const hero: EditorRow = {
+      _key: 'hero',
+      _type: 'homepageHero',
+      ctaOverrides: [
+        { _key: 'k1', label: 'Tickets', href: '/tickets' },
+        { _key: 'k2', label: 'Nowhere', href: '   ' },
+      ],
+    }
+    const [section] = toSections(resolveRowsForSave([hero]))
+    expect((section as { ctaOverrides?: unknown[] }).ctaOverrides).toHaveLength(
+      1,
+    )
+  })
+
+  it('makes "chose the default variant" identical to "never touched it"', () => {
+    // The dirty guard, the preview push and the payload all read the same
+    // serialization, so this equality is what keeps a no-op click from
+    // arming Save — and from persisting a default the router would strip.
+    const untouched: EditorRow = { _key: 'hero', _type: 'homepageHero' }
+    const chose: EditorRow = {
+      _key: 'hero',
+      _type: 'homepageHero',
+      variant: 'classic',
+    }
+    expect(serializeRows([chose])).toEqual(serializeRows([untouched]))
+    expect(toSections([chose])).toEqual(toSections([untouched]))
   })
 })
 

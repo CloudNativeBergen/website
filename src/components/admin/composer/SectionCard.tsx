@@ -1,0 +1,255 @@
+'use client'
+
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
+  ArrowTopRightOnSquareIcon,
+  Bars3Icon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Cog6ToothIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  SparklesIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline'
+import Link from 'next/link'
+import type { SectionContentStatus } from '@/lib/homepage/contentStatus'
+import {
+  SECTION_LABELS,
+  isConfigurable,
+  type EditorRow,
+} from '@/lib/homepage/editor'
+import { cn } from '@/lib/utils'
+import { SectionConfig } from './SectionConfig'
+import { rowBtnClass } from './styles'
+
+export interface ComposerSectionCardProps {
+  row: EditorRow
+  index: number
+  total: number
+  expanded: boolean
+  /** This card's section is the selected one — ringed on BOTH sides of the workspace. */
+  focused: boolean
+  /** The pointer is over this card, or over its band in the preview. */
+  hovered: boolean
+  /**
+   * What the LIVE site does with this section, computed against the REAL
+   * conference. Absent while the composer's data query is still in flight.
+   */
+  status?: SectionContentStatus
+  /** Design mode is standing this band on sample content. */
+  sample?: boolean
+  onToggleExpanded: () => void
+  onPatch: (patch: Partial<EditorRow>) => void
+  onToggleHidden: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onRemove: () => void
+  onFocus: () => void
+  onHover: (hovering: boolean) => void
+}
+
+/**
+ * One draggable section card in the composer rail: the structure row (order,
+ * label, visibility, remove), the honesty row underneath it, and the per-type
+ * config panel.
+ *
+ * The card is the rail half of the locate loop. Hovering it outlines the
+ * matching band in the preview; clicking it selects that band; and a click on a
+ * band in the preview rings and scrolls to this card. `data-composer-card` is
+ * the handle the workspace scrolls by — an id the two documents already share
+ * (`_key`) beats any parallel numbering.
+ */
+export function ComposerSectionCard({
+  row,
+  index,
+  total,
+  expanded,
+  focused,
+  hovered,
+  status,
+  sample = false,
+  onToggleExpanded,
+  onPatch,
+  onToggleHidden,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+  onFocus,
+  onHover,
+}: ComposerSectionCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row._key })
+
+  const label = SECTION_LABELS[row._type]
+  const configurable = isConfigurable(row._type)
+
+  return (
+    <li
+      ref={setNodeRef}
+      data-composer-card={row._key}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        'scroll-mt-4 rounded-lg border bg-white dark:bg-gray-800/40',
+        isDragging
+          ? 'z-10 border-brand-cloud-blue opacity-50'
+          : 'border-gray-200 dark:border-gray-700',
+        focused &&
+          'border-blue-500 ring-2 ring-blue-500/40 dark:border-blue-400',
+        !focused && hovered && 'border-blue-300 dark:border-blue-700',
+        row.hidden && 'opacity-60',
+      )}
+      onClick={onFocus}
+      // Keyboard parity for the click above: tabbing into any control on this
+      // card selects its band in the preview, so the locate loop works without
+      // a pointer. `onFocusCapture` rather than a tabIndex on the row itself —
+      // the row is not an interactive element, and adding a stop on the tab
+      // order before five real controls would be worse than no shortcut.
+      onFocusCapture={onFocus}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+    >
+      <div className="flex items-center gap-1 p-2 sm:gap-2 sm:p-3">
+        {/* Grab handle: dnd-kit attributes + listeners on the focusable button so
+            Enter/Space starts a keyboard drag; up/down buttons remain the mobile
+            + a11y fallback. */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Drag ${label} to reorder`}
+          className="hidden h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue active:cursor-grabbing sm:inline-flex dark:hover:bg-gray-800 dark:hover:text-gray-300"
+        >
+          <Bars3Icon className="h-5 w-5" />
+        </button>
+
+        {/* The label WRAPS rather than truncates: the rail is 26rem wide and
+            five 44px controls sit beside it, so "Featured Speakers" would clip
+            to "Featured S…" on every card that matters. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="min-w-0 text-sm font-semibold text-gray-900 dark:text-white">
+            <span className="text-gray-400 tabular-nums">{index + 1}.</span>{' '}
+            {label}
+          </span>
+          {row.hidden ? (
+            <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+              Hidden
+            </span>
+          ) : null}
+          {sample ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <SparklesIcon className="h-3 w-3" aria-hidden="true" />
+              Sample data
+            </span>
+          ) : null}
+        </div>
+
+        <div className="flex items-center">
+          {configurable ? (
+            <button
+              type="button"
+              className={rowBtnClass}
+              onClick={onToggleExpanded}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Collapse' : 'Configure'} ${label}`}
+              title="Configure"
+            >
+              <Cog6ToothIcon className="h-5 w-5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onToggleHidden}
+            aria-label={row.hidden ? `Show ${label}` : `Hide ${label}`}
+            title={row.hidden ? 'Hidden — click to show' : 'Visible'}
+          >
+            {row.hidden ? (
+              <EyeSlashIcon className="h-5 w-5" />
+            ) : (
+              <EyeIcon className="h-5 w-5" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onMoveUp}
+            disabled={index === 0}
+            aria-label={`Move ${label} up`}
+          >
+            <ChevronUpIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className={rowBtnClass}
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            aria-label={`Move ${label} down`}
+          >
+            <ChevronDownIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className={`${rowBtnClass} hover:text-red-600`}
+            onClick={onRemove}
+            aria-label={`Remove ${label}`}
+          >
+            <TrashIcon className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {status ? <ContentStatusRow status={status} /> : null}
+
+      {configurable && expanded ? (
+        <div className="border-t border-gray-200 px-3 pt-2 pb-3 dark:border-gray-700">
+          <SectionConfig row={row} onChange={onPatch} />
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+/**
+ * What is actually behind this band, in one line — "12 speakers", "No sponsors
+ * yet", "Dates and Grieghallen" — plus the link that fixes it.
+ *
+ * This is the rail's half of the honesty mechanism: the preview shows the
+ * consequence, the card names the cause and where to go. A band that renders
+ * nothing on the live site says so HERE even in Design mode, where the canvas
+ * is showing it full of sample content.
+ */
+function ContentStatusRow({ status }: { status: SectionContentStatus }) {
+  const warn = status.kind !== 'ready'
+  return (
+    <p
+      className={cn(
+        'flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-3 pb-2 text-xs',
+        warn
+          ? 'text-amber-700 dark:text-amber-300'
+          : 'text-gray-500 dark:text-gray-400',
+      )}
+    >
+      <span>
+        {status.willHide ? 'Not shown on the live site — ' : null}
+        {status.summary}
+      </span>
+      {status.manage ? (
+        <Link
+          href={status.manage.href}
+          className="inline-flex items-center gap-0.5 font-medium underline decoration-dotted underline-offset-2 hover:text-brand-cloud-blue"
+        >
+          {status.manage.label}
+          <ArrowTopRightOnSquareIcon className="h-3 w-3" aria-hidden="true" />
+        </Link>
+      ) : null}
+    </p>
+  )
+}
