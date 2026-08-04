@@ -89,6 +89,7 @@ function renderSection(
         <ProgramHighlightsSectionView
           conference={conference}
           lifecycle={lifecycle}
+          variant={section.variant}
         />
       )
     case 'homepageFeaturedSpeakers':
@@ -146,6 +147,7 @@ function renderSection(
           targetMs={targetMs}
           heading={section.heading}
           liveMessage={section.liveMessage}
+          variant={section.variant}
         />
       )
     }
