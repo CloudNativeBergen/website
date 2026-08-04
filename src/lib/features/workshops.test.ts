@@ -2,10 +2,20 @@
  * @vitest-environment node
  *
  * The workshop feature gate (#689) — the ONE resolver the portal, the admin
- * surfaces and (critically) the ticket-sold email all consult. The org document
- * read is mocked at the Sanity boundary so the REAL entitlement resolution runs:
- * plan/override semantics, override expiry, and the platform-org default that
- * keeps today's tenant working without a data migration.
+ * surfaces and (critically) the ticket-sold email all consult.
+ *
+ * TWO boundaries are mocked, and the distinction is the point (see
+ * RunKonf/platform#36):
+ *
+ *  - `@/lib/organization/sanity` — the CACHED org document, carrying `plan` and
+ *    `featureOverrides`. The real entitlement resolution runs on top of it.
+ *  - `@/lib/sanity/client` — the UNCACHED read `getPlatformOrgId()` uses to turn
+ *    `PLATFORM_ORG_SLUG` into an org id. The real `isPlatformOrganization` runs
+ *    on top of THAT.
+ *
+ * Because the two are mocked independently, a test can make the cached document
+ * disagree with the live slug→id resolution — which is exactly the production
+ * situation this gate got wrong, and what pins it now.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Organization } from '@/lib/organization/types'
@@ -19,6 +29,14 @@ vi.mock('@/lib/organization/sanity', () => ({
     getOrganizationRefForCurrentConference(),
 }))
 
+const h = vi.hoisted(() => ({
+  fetch: vi.fn<(query: string, params?: unknown) => Promise<unknown>>(),
+}))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: { fetch: h.fetch },
+}))
+
 import {
   isWorkshopsEnabledForOrg,
   isWorkshopsEnabledForConference,
@@ -26,6 +44,9 @@ import {
 } from './workshops'
 
 const PLATFORM_SLUG = 'platform-org'
+
+/** The id `PLATFORM_ORG_SLUG` resolves to in the live (uncached) read. */
+const PLATFORM_ORG_ID = 'org-A'
 
 function org(overrides: Partial<Organization> = {}): Organization {
   return {
@@ -36,12 +57,20 @@ function org(overrides: Partial<Organization> = {}): Organization {
   }
 }
 
+/** Point the LIVE slug→id resolution at an org id (or nothing). */
+function platformOrgResolvesTo(orgId: string | null): void {
+  h.fetch.mockResolvedValue(orgId)
+}
+
 const PAST = '2020-01-01T00:00:00.000Z'
 const FUTURE = '2999-01-01T00:00:00.000Z'
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
+  // Default: the slug resolves to nobody, so only tests that opt in are
+  // platform-org tests.
+  platformOrgResolvesTo(null)
 })
 
 afterEach(() => {
@@ -120,28 +149,31 @@ describe('isWorkshopsEnabledForOrg — overrides', () => {
 })
 
 describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
-  it('is ENABLED for the org named by PLATFORM_ORG_SLUG, with no override', async () => {
+  it('is ENABLED for the org PLATFORM_ORG_SLUG resolves to, with no override', async () => {
+    platformOrgResolvesTo(PLATFORM_ORG_ID)
     getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
   })
 
   it('is DISABLED for that same org when the contract is unset', async () => {
     vi.stubEnv('PLATFORM_ORG_SLUG', '')
     getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
   })
 
   it('lets an explicit DENY override revoke it from the platform org', async () => {
+    platformOrgResolvesTo(PLATFORM_ORG_ID)
     getOrganizationById.mockResolvedValue(
       org({
         slug: PLATFORM_SLUG,
         featureOverrides: [{ feature: 'workshops', enabled: false }],
       }),
     )
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
   })
 
   it('ignores an EXPIRED deny override on the platform org', async () => {
+    platformOrgResolvesTo(PLATFORM_ORG_ID)
     getOrganizationById.mockResolvedValue(
       org({
         slug: PLATFORM_SLUG,
@@ -150,12 +182,38 @@ describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
         ],
       }),
     )
-    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(true)
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+  })
+})
+
+/**
+ * THE SLUG-SPLIT REGRESSION NET (RunKonf/platform#36).
+ *
+ * The grant used to be decided by `org.slug` off the CACHED document — up to 24
+ * hours stale, and writable from another application that could not invalidate
+ * it. These two tests make the cached document and the live resolution
+ * disagree, in both directions, and pin the gate to the live one. Restoring the
+ * cached-slug comparison flips both.
+ */
+describe('isWorkshopsEnabledForOrg — the grant follows the LIVE resolution', () => {
+  it('REVOKES immediately when the slug moved, even while the cached document still says platform', async () => {
+    // Another application renamed the platform org's slug seconds ago: the live
+    // read no longer resolves it, but this app's cached copy is unchanged.
+    platformOrgResolvesTo(null)
+    getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
+  })
+
+  it('GRANTS immediately when the slug moved TO this org, while the cached document still says otherwise', async () => {
+    platformOrgResolvesTo(PLATFORM_ORG_ID)
+    getOrganizationById.mockResolvedValue(org({ slug: 'stale-old-slug' }))
+    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
   })
 })
 
 describe('isWorkshopsEnabledForConference', () => {
   it('keys on the conference OWNER, not the request host', async () => {
+    platformOrgResolvesTo('org-owner')
     getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
     await expect(
       isWorkshopsEnabledForConference({

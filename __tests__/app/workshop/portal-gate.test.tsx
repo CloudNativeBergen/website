@@ -37,6 +37,22 @@ vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationRefForCurrentConference: () => null,
 }))
 
+/**
+ * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
+ * The platform-org grant is an ID comparison against this LIVE read, never the
+ * cached org document's `slug` — mocked at the Sanity boundary so the real
+ * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
+ * being the platform org.
+ */
+const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (_query: string, params?: Record<string, unknown>) =>
+      typeof params?.slug === 'string' ? live.platformOrgId : null,
+  },
+}))
+
 vi.mock('@workos-inc/authkit-nextjs', () => ({
   withAuth: (...args: unknown[]) => mockWithAuth(...args),
 }))
@@ -75,6 +91,7 @@ async function is404(render: () => Promise<unknown>): Promise<boolean> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  live.platformOrgId = null
   vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
   mockWithAuth.mockResolvedValue({ user: null })
 })
@@ -132,6 +149,7 @@ describe('workshop portal — unresolvable org fails CLOSED', () => {
 
 describe('workshop portal — feature ON (platform org)', () => {
   beforeEach(() => {
+    live.platformOrgId = 'org-platform'
     mockGetConference.mockResolvedValue({
       conference: conference('org-platform'),
       error: null,

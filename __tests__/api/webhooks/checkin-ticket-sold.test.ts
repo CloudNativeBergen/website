@@ -34,6 +34,22 @@ vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationRefForCurrentConference: () => null,
 }))
 
+/**
+ * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
+ * The platform-org grant is an ID comparison against this LIVE read, never the
+ * cached org document's `slug` — mocked at the Sanity boundary so the real
+ * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
+ * being the platform org.
+ */
+const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (_query: string, params?: Record<string, unknown>) =>
+      typeof params?.slug === 'string' ? live.platformOrgId : null,
+  },
+}))
+
 const SECRET = 'checkin-webhook-test-secret'
 const PLATFORM_SLUG = 'platform-org'
 
@@ -122,6 +138,7 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     // Default: the conference belongs to the platform org, which keeps the
     // workshop feature (the behaviour these signature tests predate).
     vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
+    live.platformOrgId = 'org-platform'
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
@@ -269,6 +286,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
     vi.clearAllMocks()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
+    live.platformOrgId = null
     mockSendWorkshop.mockResolvedValue({
       data: { emailId: 'em-1' },
       error: null,
@@ -338,6 +356,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
   })
 
   it('DOES email for the platform org — today’s behaviour is unchanged', async () => {
+    live.platformOrgId = 'org-platform'
     mockGetConference.mockResolvedValue({
       conference: conferenceOwnedBy('org-platform'),
       error: null,

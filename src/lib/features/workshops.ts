@@ -2,7 +2,7 @@ import 'server-only'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { resolveCurrentOrgId } from '@/lib/authz/organizer'
 import { computeEntitlements, hasActiveOverride } from './entitlements'
-import { isPlatformOrgSlug } from './platform'
+import { isPlatformOrganization } from './platform'
 
 /**
  * THE single gate for the workshop feature (#689) — the portal, the organizer
@@ -39,9 +39,20 @@ import { isPlatformOrgSlug } from './platform'
  *     data migration.
  *  4. Anything else → DISABLED.
  *
- * The org document read is `getOrganizationById`, cached and tagged
- * `organizationTag(orgId)`, so flipping an override in the platform manager
- * takes effect immediately. Expiry is evaluated per call against a fresh `now`.
+ * TWO READS, DIFFERENT STALENESS ON PURPOSE (RunKonf/platform#36):
+ *
+ *  - `plan` and `featureOverrides` come from `getOrganizationById`, cached and
+ *    tagged `organizationTag(orgId)`. The platform manager revalidates that tag
+ *    when it flips an override, and an external writer can now do the same
+ *    through `POST /api/provisioning/cache/invalidate`, so a change takes
+ *    effect immediately by INVALIDATION.
+ *  - Rule 3's platform-org identity comes from `isPlatformOrganization`, which
+ *    resolves `PLATFORM_ORG_SLUG` UNCACHED on every call. It is not tag-busted
+ *    because it must not DEPEND on being tag-busted: a slug edit in another
+ *    application revokes this grant, and a revocation that waits on a caller
+ *    remembering to invalidate is not a revocation.
+ *
+ * Override expiry is evaluated per call against a fresh `now`.
  *
  * LONGER TERM (out of scope, see #689): if workshops become sellable, WorkOS
  * has no `redirectProxyUrl` equivalent and should be replaced by a signed
@@ -92,7 +103,12 @@ export async function isWorkshopsEnabledForOrg(
     return false
   }
 
-  return isPlatformOrgSlug(org.slug)
+  // ID comparison against the ONE uncached resolver, never `org.slug` off the
+  // cached read above — see `./platform`. This is a grant, and this deployment
+  // has an org that is both the platform org and a tenant, so a slug edit that
+  // revokes it must revoke it NOW rather than whenever the cached document
+  // happens to expire.
+  return isPlatformOrganization(orgId)
 }
 
 /** The minimum conference shape this gate reads — its owning tenant. */

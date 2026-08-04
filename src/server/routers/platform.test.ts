@@ -5,8 +5,10 @@
  * property is the SERVER-SIDE platform gate: an ordinary tenant organizer
  * (admin of a non-platform org) gets FORBIDDEN on every procedure, because the
  * client hiding the card is presentation, not security. The gate runs FOR REAL
- * here — `PLATFORM_ORG_SLUG` env + the request org's document slug drive
- * `isPlatformOrganization`; only the external boundaries (the Sanity client,
+ * here — `PLATFORM_ORG_SLUG` env, resolved LIVE to an org id and compared
+ * against the request's org, drives `isPlatformOrganization` (see
+ * RunKonf/platform#36: it must not read through a cache another application can
+ * change but not invalidate); only the external boundaries (the Sanity client,
  * Next's cache API, the domain-conference resolution) are mocked. Also covers
  * the updateEntitlements write path: keyed overrides, empty-optional
  * stripping, and the `organizationTag` revalidation that busts the cached
@@ -41,6 +43,15 @@ const fetchMock = vi.fn(
   async (_query: string, params?: Record<string, unknown>) => {
     if (params && typeof params.orgId === 'string') {
       return ORG_DOCS[params.orgId] ?? null
+    }
+    // The UNCACHED slug→id resolution behind `PLATFORM_ORG_SLUG`
+    // (`getPlatformOrgId`). This — not the org document's cached `slug` — is
+    // what the gate compares against; see RunKonf/platform#36.
+    if (params && typeof params.slug === 'string') {
+      const slug = params.slug
+      return (
+        Object.values(ORG_DOCS).find((org) => org.slug === slug)?._id ?? null
+      )
     }
     return Object.values(ORG_DOCS)
   },
@@ -124,11 +135,27 @@ describe('platform gate', () => {
     const caller = callerFor(['org-A'])
     const orgs = await caller.listOrganizations()
     expect(orgs).toHaveLength(2)
-    // The gate resolved the REQUEST org's document (slug check), not client input.
+    // The gate resolved `PLATFORM_ORG_SLUG` LIVE and compared ids — never a
+    // cached document's slug, and never client input.
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('_id == $orgId'),
-      { orgId: 'org-A' },
+      expect.stringContaining('slug.current == $slug'),
+      { slug: 'platform' },
     )
+  })
+
+  it('REVOKES the moment the slug moves, without waiting for a cached read', async () => {
+    // Another application renamed the platform org's slug: the live resolution
+    // no longer finds it, so operator standing is gone on the next request —
+    // no cache entry stands between the edit and the denial.
+    ORG_DOCS['org-A'].slug = 'renamed'
+    try {
+      const caller = callerFor(['org-A'])
+      await expect(caller.listOrganizations()).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      })
+    } finally {
+      ORG_DOCS['org-A'].slug = 'platform'
+    }
   })
 })
 

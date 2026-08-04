@@ -56,6 +56,22 @@ vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationRefForCurrentConference: vi.fn(async () => 'org-test'),
 }))
 
+/**
+ * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
+ * The platform-org grant is an ID comparison against this LIVE read, never the
+ * cached org document's `slug` — mocked at the Sanity boundary so the real
+ * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
+ * being the platform org.
+ */
+const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (_query: string, params?: Record<string, unknown>) =>
+      typeof params?.slug === 'string' ? live.platformOrgId : null,
+  },
+}))
+
 vi.mock('@/lib/email/workshop', () => ({
   sendBasicWorkshopConfirmation: vi.fn(async () => {}),
 }))
@@ -125,8 +141,10 @@ const baseSignupInput = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Names the org above as the platform org, which is what grants `workshops`.
+  // Names the org above as the platform org, which is what grants `workshops`:
+  // the env contract, AND the live slug→id resolution it is compared through.
   vi.stubEnv('PLATFORM_ORG_SLUG', 'platform-org')
+  live.platformOrgId = 'org-test'
 })
 
 afterEach(() => {

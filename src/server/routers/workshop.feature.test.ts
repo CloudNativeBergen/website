@@ -25,6 +25,22 @@ vi.mock('@/lib/conference/sanity', () => ({
     mockGetConference(...args),
 }))
 
+/**
+ * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
+ * The platform-org grant is an ID comparison against this LIVE read, never the
+ * cached org document's `slug` — mocked at the Sanity boundary so the real
+ * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
+ * being the platform org.
+ */
+const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (_query: string, params?: Record<string, unknown>) =>
+      typeof params?.slug === 'string' ? live.platformOrgId : null,
+  },
+}))
+
 vi.mock('@/lib/workshop/sanity', () => ({
   getAllWorkshopSignups: (...args: unknown[]) =>
     mockGetAllWorkshopSignups(...args),
@@ -58,6 +74,7 @@ function caller() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  live.platformOrgId = null
   vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
   mockGetConference.mockResolvedValue({
     conference: {
@@ -100,6 +117,7 @@ describe('workshop.admin — feature gate', () => {
   })
 
   it('allows the platform org through — unchanged for CND', async () => {
+    live.platformOrgId = ORG_ID
     mockGetOrganizationById.mockResolvedValue({
       _id: ORG_ID,
       name: 'Platform',
