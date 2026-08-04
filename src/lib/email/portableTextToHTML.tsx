@@ -2,6 +2,7 @@ import { toHTML } from '@portabletext/to-html'
 import { PortableTextBlock } from '@portabletext/types'
 
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
+import { toSafeRichTextHref } from '@/lib/portabletext/safeHref'
 
 /**
  * Render a Sanity rich-text body as inline-styled email HTML.
@@ -15,6 +16,20 @@ import { resolveEmailBrandPalette } from '@/lib/branding/email'
  * Non-brand colours — body slate, code chip grey, blockquote rule — are NOT
  * themed. They are reading chrome, not identity.
  */
+/**
+ * Escape a value for interpolation into a double-quoted HTML attribute.
+ *
+ * `&` first, or the ampersands introduced by the later replacements get escaped
+ * a second time.
+ */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 export function portableTextToHTML(
   blocks: PortableTextBlock[],
   brandColor?: string,
@@ -29,7 +44,17 @@ export function portableTextToHTML(
     components: {
       marks: {
         link: ({ children, value }) => {
-          const href = value?.href || '#'
+          // The href is dataset content interpolated into an ATTRIBUTE of a
+          // hand-built HTML string, so it needs both halves:
+          //
+          //  - the scheme gate, so a stored `javascript:` link cannot ride out
+          //    in mail that a client may open in a browser context. This is the
+          //    same predicate the site's rich text and the Studio use, so an
+          //    href the page refuses cannot be smuggled through email instead;
+          //  - attribute escaping, because a value containing a quote closes
+          //    the attribute and everything after it becomes markup we did not
+          //    write.
+          const href = escapeHtmlAttribute(toSafeRichTextHref(value?.href))
           return `<a href="${href}" style="color: ${brand.accent}; text-decoration: underline; font-weight: 500;">${children}</a>`
         },
         strong: ({ children }) =>
