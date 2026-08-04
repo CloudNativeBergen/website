@@ -498,7 +498,7 @@ export const sponsorRouter = router({
     .mutation(async ({ input, ctx }) => {
       // TENANCY: the sponsor id is CLIENT INPUT. `deleteSponsor` proves the
       // REQUEST's org owns it before cascading. `ctx.orgId` is the org the
-      // admin waist already gated on — never anything derived from `input`.
+      // admin procedure already gated on — never anything from `input`.
       const { error } = await deleteSponsor(input.id, ctx.orgId)
 
       if (error) {

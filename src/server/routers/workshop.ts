@@ -848,11 +848,26 @@ export const workshopRouter = router({
       .mutation(async ({ input }) => {
         try {
           // TENANCY: see `confirmSignup`. Ids outside the request's conference
-          // simply do not resolve, so they are never confirmed.
+          // do not resolve — and the batch is then REFUSED WHOLE rather than
+          // acting on the subset that did.
+          //
+          // Two reasons. Acting on the subset lets a crafted batch enumerate
+          // another tenant's id space by observing which ids take effect, which
+          // is the same argument the sponsor bulk operations in this change
+          // already make. And reporting `total: input.signupIds.length` beside
+          // a `succeeded` counted only over RESOLVED rows told the caller five
+          // succeeded when two did — silently dropping the rest.
           const signups = await getAllWorkshopSignups({
             conferenceId: await resolveConferenceId(),
             signupIds: input.signupIds,
           })
+
+          if (signups.length !== input.signupIds.length) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more signups were not found for this conference',
+            })
+          }
 
           const { conference } = await getConferenceForCurrentDomain({})
 
@@ -892,10 +907,11 @@ export const workshopRouter = router({
             results: {
               succeeded,
               failed,
-              total: input.signupIds.length,
+              total: signups.length,
             },
           }
         } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to batch confirm signups',
