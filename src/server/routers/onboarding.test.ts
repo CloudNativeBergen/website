@@ -80,6 +80,16 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// Tenant creation claims domains, so it mints their ownership-verification
+// records and hands the operator the challenge to publish (#683).
+const syncDomainVerificationsMock = vi.fn(async () => {})
+vi.mock('@/lib/domain-verification', () => ({
+  syncDomainVerifications: (...args: unknown[]) =>
+    syncDomainVerificationsMock(...(args as [])),
+  getDomainVerification: async () => null,
+  toDomainVerificationView: (hostname: string) => ({ hostname }),
+}))
+
 import {
   onboardingRouter,
   ORG_SLUG_ALREADY_TAKEN,
@@ -260,6 +270,18 @@ describe('createOrganization — server-side uniqueness authority', () => {
 })
 
 describe('createOrganization — atomic transaction', () => {
+  it('mints verification records for the claimed domains and returns the challenge (#683)', async () => {
+    // A brand-new tenant's domains are CLAIMED, not proven. The hand-off screen
+    // has to hand the operator something to publish, and the records start
+    // `pending` so nothing is routed or allowlisted on trust alone.
+    const result = await makeCaller(operator).createOrganization(input())
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
+      result.conferenceId,
+      ['oslo.cloudnativedays.no'],
+    )
+    expect(result.challenges).toEqual([{ hostname: 'oslo.cloudnativedays.no' }])
+  })
+
   it('creates org + conference + NEW speaker in one committed transaction', async () => {
     const result = await makeCaller(operator).createOrganization(input())
 

@@ -11,6 +11,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
+import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
+import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { FormatsEditor } from '@/components/admin/FormatsEditor'
@@ -57,6 +59,7 @@ import {
   SparklesIcon,
   EyeIcon,
   EyeSlashIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
 
 /** Group id → group metadata, so tier-1 subsections stay single-sourced. */
@@ -115,6 +118,14 @@ export default async function AdminSettings() {
 
   const editUrl = studioEditUrl(conference._id)
   const visibility = resolveConferenceVisibility(conference)
+  // Ownership-verification state per claimed domain (#683). Read here so the
+  // card server-renders its real state; the client island refetches on mount.
+  const domainVerifications = conference._id
+    ? await listDomainVerificationViews(
+        conference._id,
+        conference.domains ?? [],
+      )
+    : []
   const systemChecks = await buildSystemChecks(conference)
   // "Get started" activation checklist — derived purely from the conference and
   // the checks we already built above (no extra probing). Rendered at the top of
@@ -697,6 +708,18 @@ export default async function AdminSettings() {
                 value={conference.socialLinks}
                 type="links"
               />
+            </InfoCard>
+
+            <InfoCard title="Domain Verification" icon={ShieldCheckIcon}>
+              <div id="domain-verification" className="scroll-mt-24">
+                <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+                  Claiming a domain is not the same as owning it. Publish the
+                  DNS TXT record below to prove control. We re-check it every
+                  day and drop a domain from the sign-in redirect allowlist the
+                  moment the record stops resolving.
+                </p>
+                <DomainVerificationCard initialDomains={domainVerifications} />
+              </div>
             </InfoCard>
 
             <InfoCard

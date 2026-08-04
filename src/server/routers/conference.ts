@@ -18,6 +18,7 @@ import {
   domainsWouldStrandHost,
   normalizeDomain,
 } from '@/lib/conference/domains'
+import { syncDomainVerifications } from '@/lib/domain-verification'
 import {
   buildEditionDocuments,
   type SourceConference,
@@ -374,7 +375,24 @@ export const conferenceRouter = router({
           message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
         })
       }
-      return applyConferencePatch(conferenceId, { domains: input.domains })
+      // Read the OUTGOING list before the patch so released entries can be
+      // revoked — a domain that leaves `domains[]` must lose its verification
+      // standing immediately, or it stays on the OAuth redirect allowlist as a
+      // destination nobody is even routing any more (#683).
+      const previous = await clientReadUncached.fetch<string[] | null>(
+        // groq-global: keyed by the SERVER-resolved conference id, never client input.
+        `*[_type == "conference" && _id == $id][0].domains`,
+        { id: conferenceId },
+      )
+      const result = await applyConferencePatch(conferenceId, {
+        domains: input.domains,
+      })
+      await syncDomainVerifications(
+        conferenceId,
+        input.domains,
+        (previous ?? []).map(normalizeDomain),
+      )
+      return result
     }),
 
   // === SE-2: organizers, topics, teams & announcement ======================
@@ -836,6 +854,11 @@ export const conferenceRouter = router({
           cause: error,
         })
       }
+
+      // A new edition CLAIMS new domains, so it needs verification records —
+      // pending, never inherited from the source edition. Best-effort (#683):
+      // the edition is already committed and a missing record fails closed.
+      await syncDomainVerifications(newConferenceId, input.domains)
 
       // New edition adds a conference document; bust the shared conferences tag
       // so domain resolution can see it once its domain actually resolves.

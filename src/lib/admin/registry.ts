@@ -502,6 +502,20 @@ const SETTINGS_CARD_ANCHORS: {
     keywords: ['unlisted', 'listed', 'live', 'public', 'indexing', 'robots'],
     icon: EyeIcon,
   },
+  {
+    id: 'domain-verification',
+    title: 'Domain Verification',
+    keywords: [
+      'dns',
+      'txt',
+      'ownership',
+      'verify',
+      'custom domain',
+      'allowlist',
+      'redirect',
+    ],
+    icon: ShieldCheckIcon,
+  },
 ]
 
 function pageIdFromHref(href: string): string {
