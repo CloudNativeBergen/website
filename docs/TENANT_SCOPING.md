@@ -64,8 +64,10 @@ const count = await scopedFetch<number>(
 
 - `scope`: `{ orgId?, conferenceId? }`. Present dimensions are prepended (conference
   first, then org) and bound; absent/`null` dimensions contribute nothing. An
-  **empty** scope returns the body unchanged — a best-effort degrade so a request
-  path with an unresolvable tenant reads globally rather than throwing.
+  **empty** scope (both absent/null) **throws** — an unresolvable tenant must fail
+  closed, never widen to a global read. Resolve the tenant first and handle the
+  null case explicitly. (The pure `scopedQuery` string helper still returns the
+  body unchanged; only the IO entry point enforces this.)
 - Scope bindings **win** over caller params of the same name — the scope is the
   invariant.
 - `options` is forwarded verbatim (e.g. `{ cache: 'no-store' }`).
@@ -92,8 +94,14 @@ for the pure string transform (both are unit-tested).
 ## The lint rule — `tenancy/no-unscoped-groq`
 
 A local flat-config rule (`eslint-rules/no-unscoped-groq.js`, registered in
-`eslint.config.js`) flags GROQ root filters written as `*[_type == …` string or
-template literals in `src/**`.
+`eslint.config.js`) flags four fail-open GROQ shapes in `src/**`:
+
+| messageId              | Shape                                                                                      | Why                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `unscoped`             | `` `*[_type == "x" && …]` `` with no tenant predicate                                      | reads every tenant                                                                                                         |
+| `interpolatedFilter`   | `` `*[${filter}]` `` — the root predicate STARTS with an interpolation                     | the scoping is invisible to review and to the rule; several leaks shipped in this shape                                    |
+| `optionalTenantFilter` | `!defined($conferenceId) \|\| conference._ref == $conferenceId`, or `!defined(conference)` | a CONDITIONAL tenant predicate: no key ⇒ every tenant, and tenant-less documents leak to everyone (the gallery leak, #616) |
+| `nullScope`            | `scopedFetch(client, { orgId: null }, …)`                                                  | the callee looks scoped, but a null tenant key makes the builder drop the predicate                                        |
 
 **Severity is `warn`, deliberately.** The repo carries ~230 pre-existing unscoped
 queries; an error would block CI. Warn makes NEW unscoped queries visible in
@@ -103,16 +111,20 @@ rule does **not** fail `mise run check` (`eslint` exits 0 with only warnings).
 A query is **not** flagged when:
 
 1. **It is passed to `scopedFetch(...)`.** The literal sits inside a `scopedFetch`
-   call (direct or member form); the tenant predicate is prepended at runtime, so
-   the body legitimately omits it. Prefer passing the body **inline** to
-   `scopedFetch` so the rule recognizes it (a body hoisted to a `const` and passed
-   by variable is not recognized).
+   call (direct or member form) whose scope is not explicitly `null`; the tenant
+   predicate is prepended at runtime, so the body legitimately omits it. Prefer
+   passing the body **inline** to `scopedFetch` so the rule recognizes it (a body
+   hoisted to a `const` and passed by variable is not recognized). This exemption
+   does **not** cover `optionalTenantFilter` — a fail-open predicate inside the
+   body is not undone by a prefix.
 2. **It is annotated `// groq-global: <reason>`** on the same line as, or the line
    directly above, the query opener.
 
 **Allowlisted paths** (never flagged): the builder module itself
 (`src/lib/sanity/scoped.ts`), `migrations/**`, `scripts/**`, `__tests__/**`, and
-`*.test.*` / `*.spec.*` files.
+`*.test.*` / `*.spec.*` files. The `scripts/**` exemption is a known gap — those
+run with the WRITE token — but the cross-tenant reporting scripts are global by
+design, so tightening it needs per-script `groq-global` annotations first.
 
 ### Suppression convention — reviewed-global queries
 
@@ -139,9 +151,13 @@ time). For each unscoped query:
    (most content) or only an `organization` ref (global tenant-scoped types)? Both?
 2. **Resolve the scope** in the caller: `conferenceId` from
    `getConferenceForCurrentDomain()` / `resolveConferenceId()`; `orgId` from
-   `getOrganizationRefForCurrentConference()`. Both resolvers are best-effort and
-   may be null pre-backfill — pass what you have; an empty scope degrades to the
-   prior global read.
+   `getOrganizationRefForCurrentConference()` / `resolveOrganizationId()`. Both
+   resolvers can return null (unknown host, transient read). **A null scope must
+   FAIL CLOSED** — return empty, or throw — never fall back to a global read.
+   `getConferenceForDomain` returns a truthy `{} as Conference` on an unknown
+   host, so guard with `isUnknownHost()` (or `resolveConferenceId()`, which
+   throws); a bare `if (!conference)` never fires and leaves the scope
+   `undefined`.
 3. **Rewrite the read** with `scopedFetch` (drop the `conference._ref` /
    `organization._ref` predicate and its binding from the body — the builder adds
    them), OR, for dynamic queries, compose `CONFERENCE_FILTER` / `ORG_FILTER` by

@@ -596,6 +596,81 @@ describe('getSpeakers — org scoping', () => {
   })
 })
 
+/**
+ * REGRESSION (#616): `includeProposalsFromOtherConferences` with NO org id left
+ * the NESTED proposals projection completely unscoped (`''`), so a speaker who
+ * has spoken for two organizations had BOTH organizations' proposals rendered —
+ * on the admin badge page and the admin speakers page, which both called exactly
+ * that way. It is also a `'use cache'` function, so the cross-org result cached
+ * under a tenant-looking key.
+ */
+describe('getSpeakers — the nested proposals projection is never unscoped (#616)', () => {
+  /**
+   * The filter of the nested `"proposals": *[ … ]` projection — bracket-matched,
+   * because the status list (`status in ["confirmed", …]`) nests brackets.
+   */
+  function proposalsFilter(query: string): string {
+    const open = query.indexOf('"proposals": *[')
+    expect(open).toBeGreaterThan(-1)
+    const from = open + '"proposals": *['.length
+    let depth = 1
+    for (let i = from; i < query.length; i++) {
+      if (query[i] === '[') depth++
+      else if (query[i] === ']') {
+        depth--
+        if (depth === 0) return query.slice(from, i)
+      }
+    }
+    throw new Error('unterminated proposals projection')
+  }
+
+  it('scopes cross-conference proposals to the ORG when an org id is passed', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getSpeakers('conf-1', undefined, true, 'org-1')
+
+    const filter = proposalsFilter(fetchMock.mock.calls[0][0])
+    expect(filter).toContain('conference->organization._ref == $orgId')
+  })
+
+  it('FAILS CLOSED to this conference when cross-conference is asked for WITHOUT an org', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getSpeakers('conf-1', undefined, true, null)
+
+    const filter = proposalsFilter(fetchMock.mock.calls[0][0])
+    // The decisive assertion: some conference/org predicate is present, so the
+    // projection can never span the dataset.
+    expect(filter).toContain('conference._ref == $conferenceId')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ conferenceId: 'conf-1' })
+  })
+
+  it('scopes to this conference when cross-conference is NOT requested', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getSpeakers('conf-1', undefined, false, 'org-1')
+
+    expect(proposalsFilter(fetchMock.mock.calls[0][0])).toContain(
+      'conference._ref == $conferenceId',
+    )
+  })
+
+  it('refuses to run at all with neither a conference nor an org', async () => {
+    fetchMock.mockResolvedValue([])
+
+    const { speakers, err } = await getSpeakers(
+      undefined,
+      undefined,
+      true,
+      null,
+    )
+
+    expect(speakers).toEqual([])
+    expect(err).toBeInstanceOf(Error)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('getOrganizers — org scoping', () => {
   it('scopes organizers to the current org conferences and binds $orgId', async () => {
     fetchMock.mockResolvedValue([])
