@@ -57,6 +57,7 @@ export function CompactPhotoStrip({
                     .width(160)
                     .height(160)
                     .fit('crop')
+                    .auto('format')
                     .url()}
                   alt={image.imageAlt || `Photo from ${conferenceName}`}
                   className="h-full w-full object-cover"

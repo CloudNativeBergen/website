@@ -283,6 +283,10 @@ export default async function Image({
           width: 500,
           height: 500,
           fit: 'crop',
+          // satori fetches this, not a browser: it sends `Accept: */*`, so
+          // `auto=format` would change nothing but the set of codecs its
+          // decoder could be handed. Keep the plain rendition.
+          auto: false,
         })
       : null
 

@@ -7,6 +7,7 @@ import { createImageUrlBuilder } from '@sanity/image-url'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { SimpleImageCarousel } from '@/components/SimpleImageCarousel'
 import { GalleryModal } from '@/components/GalleryModal'
+import { ImageMosaic } from '@/components/ImageMosaic'
 import { galleryImageSrc } from '@/lib/sanity/client'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
@@ -40,7 +41,7 @@ vi.mock('@/lib/trpc/client', () => ({
 // the app funnels through this single instance and its calls are inspectable.
 const MOCK_CDN_URL = 'https://cdn.sanity.io/images/mock/image.png'
 
-function builderCalls(method: 'width' | 'height' | 'quality' | 'fit') {
+function builderCalls(method: 'width' | 'height' | 'quality' | 'fit' | 'auto') {
   const builder = vi.mocked(createImageUrlBuilder).mock.results[0]
     .value as Record<string, ReturnType<typeof vi.fn>>
   return builder[method].mock.calls.map((call) => call[0])
@@ -110,7 +111,15 @@ function rejectedImage(imageUrl: string): GalleryImageWithSpeakers {
 beforeEach(() => {
   const builder = vi.mocked(createImageUrlBuilder).mock.results[0]
     .value as Record<string, ReturnType<typeof vi.fn>>
-  for (const method of ['image', 'width', 'height', 'quality', 'fit', 'url']) {
+  for (const method of [
+    'image',
+    'width',
+    'height',
+    'quality',
+    'fit',
+    'auto',
+    'url',
+  ]) {
     builder[method].mockClear()
   }
 })
@@ -190,6 +199,53 @@ describe('gallery image src resolution', () => {
       expect(builderCalls('height')).toEqual([128])
       expect(builderCalls('quality')).toEqual([90, 85])
       expect(builderCalls('fit')).toEqual(['max', 'crop'])
+    })
+  })
+
+  describe('browser-bound URLs opt into CDN format negotiation', () => {
+    it('ImageCarousel asks for auto=format on the src and both srcSet entries', () => {
+      render(<ImageCarousel images={[realImage]} />)
+
+      // One per builder URL: src (2400) + srcSet 1x/2x.
+      expect(builderCalls('auto')).toEqual(['format', 'format', 'format'])
+    })
+
+    it('ImageCarousel asks for auto=format on thumbnails too', () => {
+      render(<ImageCarousel images={[realImage, secondRealImage]} />)
+
+      expect(builderCalls('auto')).toEqual(
+        builderCalls('width').map(() => 'format'),
+      )
+    })
+
+    it('GalleryModal asks for auto=format on main image and thumbnail', () => {
+      render(<GalleryModal isOpen images={[realImage]} onClose={() => {}} />)
+
+      expect(builderCalls('auto')).toEqual(['format', 'format'])
+    })
+
+    it('does not reach the builder at all for inline data: URIs', () => {
+      render(<ImageCarousel images={[generatedImage]} />)
+
+      expect(builderCalls('auto')).toEqual([])
+    })
+
+    // ImageMosaic (#736) landed after this rule and builds its own 1x/2x
+    // srcSet next to a `galleryImageSrc` src, so it needs the same assertion:
+    // the helper covers the src, but the srcSet entries are raw builder calls.
+    it('ImageMosaic asks for auto=format on the src and both srcSet entries', () => {
+      render(<ImageMosaic images={[realImage]} />)
+
+      expect(builderCalls('auto')).toEqual(
+        builderCalls('width').map(() => 'format'),
+      )
+      expect(builderCalls('width')).toEqual([800, 600, 1200])
+    })
+
+    it('ImageMosaic does not reach the builder for inline data: URIs', () => {
+      render(<ImageMosaic images={[generatedImage]} />)
+
+      expect(builderCalls('auto')).toEqual([])
     })
   })
 

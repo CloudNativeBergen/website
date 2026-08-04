@@ -5,6 +5,7 @@ import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
+import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
 // Imported from the module, NOT the package barrel: `conference/sanity.ts` is on
 // every page render's path, and the barrel would drag the sweep (and with it the
 // notification/push stack) into that graph for a gate that is usually a no-op.
@@ -322,10 +323,18 @@ export async function getConferenceForDomain(
         const galleryOptions =
           typeof gallery === 'object'
             ? gallery
-            : { featuredLimit: 8, limit: 50 }
+            : {
+                featuredLimit: GALLERY_CONSTANTS.LIMITS.FEATURED_IMAGES,
+                limit: GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
+              }
 
         const featuredOnly = galleryOptions.featuredOnly ?? false
 
+        // Both branches leave `featuredLimit` undefined to
+        // `getFeaturedGalleryImages`'s own default rather than defaulting only
+        // one of them — the asymmetry here is what let the homepage
+        // (`{ featuredOnly: true }`, no limit) fall through to an effectively
+        // unbounded fetch.
         if (featuredOnly) {
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
@@ -336,13 +345,15 @@ export async function getConferenceForDomain(
         } else {
           const [featuredGalleryImages, galleryImages] = await Promise.all([
             getFeaturedGalleryImages(
-              galleryOptions.featuredLimit ?? 8,
+              galleryOptions.featuredLimit,
               conference._id,
               { useCache: !uncached },
             ),
             getGalleryImages(
               {
-                limit: galleryOptions.limit ?? 50,
+                limit:
+                  galleryOptions.limit ??
+                  GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
                 conferenceId: conference._id,
               },
               { useCache: !uncached },

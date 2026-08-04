@@ -8,6 +8,8 @@ import {
   ArrowsPointingOutIcon,
 } from '@heroicons/react/24/outline'
 import { useImageCarousel } from '@/hooks/useImageCarousel'
+import { useIsOnScreen } from '@/hooks/useIsOnScreen'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/Button'
@@ -35,6 +37,20 @@ export function ImageCarousel({
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(new Set())
   const [errorImageIds, setErrorImageIds] = useState<Set<string>>(new Set())
   const imageRefs = useRef<Map<string, HTMLImageElement>>(new Map())
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Autoplay is motion the visitor did not ask for, so it runs only when it is
+   * both wanted and worth running: never under `prefers-reduced-motion` (WCAG
+   * 2.3.3 — the slideshow previously advanced every 5s regardless), and not
+   * while the carousel is scrolled out of view or its tab is in the background.
+   *
+   * `useMediaQuery` reports `false` until its effect runs, which is what the
+   * server rendered, so nothing here changes the first paint.
+   */
+  const isOnScreen = useIsOnScreen(containerRef)
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const autoPlayActive = autoPlay && isOnScreen && !prefersReducedMotion
 
   const {
     currentIndex,
@@ -49,7 +65,7 @@ export function ImageCarousel({
     handleTouchEnd,
   } = useImageCarousel({
     totalImages: images.length,
-    enableAutoPlay: autoPlay,
+    enableAutoPlay: autoPlayActive,
     enableKeyboard: true,
     enableTouch: true,
     globalKeyboard: false,
@@ -95,9 +111,10 @@ export function ImageCarousel({
 
   return (
     <div
+      ref={containerRef}
       className={cn('relative w-full', className)}
       onMouseEnter={stopAutoPlay}
-      onMouseLeave={autoPlay ? startAutoPlay : undefined}
+      onMouseLeave={autoPlayActive ? startAutoPlay : undefined}
       onKeyDown={(e) => handleKeyDown(e.nativeEvent)}
       tabIndex={0}
     >
@@ -134,7 +151,7 @@ export function ImageCarousel({
               srcSet={
                 isInlineImageDataUri(currentImage.imageUrl)
                   ? undefined
-                  : `${sanityImage(currentImage.image).width(1200).quality(85).fit('max').url()} 1x, ${sanityImage(currentImage.image).width(2400).quality(85).fit('max').url()} 2x`
+                  : `${sanityImage(currentImage.image).width(1200).quality(85).fit('max').auto('format').url()} 1x, ${sanityImage(currentImage.image).width(2400).quality(85).fit('max').auto('format').url()} 2x`
               }
               alt={
                 currentImage.imageAlt ??
@@ -245,7 +262,7 @@ export function ImageCarousel({
                     srcSet={
                       isInlineImageDataUri(image.imageUrl)
                         ? undefined
-                        : `${sanityImage(image.image).width(256).height(160).quality(85).fit('crop').url()} 1x, ${sanityImage(image.image).width(512).height(320).quality(85).fit('crop').url()} 2x`
+                        : `${sanityImage(image.image).width(256).height(160).quality(85).fit('crop').auto('format').url()} 1x, ${sanityImage(image.image).width(512).height(320).quality(85).fit('crop').auto('format').url()} 2x`
                     }
                     alt={
                       image.imageAlt ||

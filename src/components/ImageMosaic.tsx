@@ -80,7 +80,7 @@ export function ImageMosaic({
                 srcSet={
                   isInlineImageDataUri(image.imageUrl)
                     ? undefined
-                    : `${sanityImage(image.image).width(600).quality(85).fit('max').url()} 1x, ${sanityImage(image.image).width(1200).quality(85).fit('max').url()} 2x`
+                    : `${sanityImage(image.image).width(600).quality(85).fit('max').auto('format').url()} 1x, ${sanityImage(image.image).width(1200).quality(85).fit('max').auto('format').url()} 2x`
                 }
                 alt={alt}
                 style={{ aspectRatio: tileAspectRatio(image) }}

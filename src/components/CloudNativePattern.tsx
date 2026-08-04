@@ -347,21 +347,32 @@ export function CloudNativePattern({
         elements.push(
           <div
             key={`${layer.name}-${i}-${selectedIcon.name}-${currentIconIndex}`}
-            className={`absolute ${color} transition-all duration-500`}
-            style={{
-              width: `${finalSize}px`,
-              height: `${finalSize}px`,
-              left: `${x}%`,
-              top: `${y}%`,
-              opacity: Math.min(finalOpacity, 1),
-              zIndex: layer.zIndex,
-              animation: animated
-                ? `float ${animationDuration}s ease-in-out infinite ${animationDelay}s`
-                : 'none',
-              filter: layer.blur > 0 ? `blur(${layer.blur}px)` : 'none',
-              transform:
-                layer.name === 'background' ? 'scale(0.98)' : 'scale(1)',
-            }}
+            className={`absolute ${color} transition-all duration-500${
+              animated ? 'animate-float-seeded' : ''
+            }`}
+            // The seeded timing rides on custom properties and the animation
+            // itself lives in `.animate-float-seeded`, so a reduced-motion
+            // user's stylesheet can switch it off. An inline `animation`
+            // shorthand here would win over any media query — see the class.
+            style={
+              {
+                width: `${finalSize}px`,
+                height: `${finalSize}px`,
+                left: `${x}%`,
+                top: `${y}%`,
+                opacity: Math.min(finalOpacity, 1),
+                zIndex: layer.zIndex,
+                ...(animated
+                  ? {
+                      '--float-duration': `${animationDuration}s`,
+                      '--float-delay': `${animationDelay}s`,
+                    }
+                  : null),
+                filter: layer.blur > 0 ? `blur(${layer.blur}px)` : 'none',
+                transform:
+                  layer.name === 'background' ? 'scale(0.98)' : 'scale(1)',
+              } as React.CSSProperties
+            }
           >
             <Image
               src={selectedIcon.icon}
