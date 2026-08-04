@@ -182,6 +182,115 @@ describe('a stored CR/LF cannot become a second header on the wire', () => {
     expect(sent[0]).not.toHaveProperty('bcc')
   })
 
+  /**
+   * THE DEDICATED PATH — a tenant on the `dedicated-email` Pro entitlement,
+   * sending on its OWN Resend account. `applySenderPolicy` is skipped there BY
+   * DESIGN, so a fix that lived inside the policy left the injection wide open
+   * for exactly the tenants who pay for their own account. The tenant-editable
+   * fields and the raw-interpolating send sites are identical on both paths.
+   */
+  it('strips it on a DEDICATED client, where the policy is skipped by design', async () => {
+    const { client, sent } = fakeClient(OK)
+    instrumentResendClient(client, {
+      orgId: 'org-kcd',
+      enforceSenderPolicy: false,
+    })
+
+    await client.emails.send({
+      from: `KCD Bergen <${PAYLOAD}>`,
+      to: 'speaker@example.com',
+      subject: 's',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(sent[0].from)
+    expect(sent[0]).not.toHaveProperty('bcc')
+    expect(sent[0].to).toBe('speaker@example.com')
+    // The sender is otherwise UNCHANGED — the policy really is skipped here,
+    // so this proves sanitisation, not a rewrite, is doing the work.
+    expect(sent[0].from).toBe('KCD Bergen <hello@kcd.dev>')
+  })
+
+  it('strips a caller-supplied Reply-To on a DEDICATED client', async () => {
+    const { client, sent } = fakeClient(OK)
+    instrumentResendClient(client, { enforceSenderPolicy: false })
+
+    await client.emails.send({
+      from: 'KCD Bergen <hello@kcd.dev>',
+      replyTo: PAYLOAD,
+      to: 'speaker@example.com',
+      subject: 's',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(sent[0].replyTo)
+    expect(sent[0]).not.toHaveProperty('bcc')
+  })
+
+  it('strips it on a DEDICATED broadcast', async () => {
+    const created: Array<{ from: string; replyTo?: string | string[] }> = []
+    const create = vi.fn(async (payload: { from: string }) => {
+      created.push(payload)
+      return { data: { id: 'bc_1' } }
+    })
+    const client = {
+      emails: { send: vi.fn(), create: vi.fn() },
+      broadcasts: { create },
+    } as unknown as Resend
+    instrumentResendClient(client, {
+      orgId: 'org-kcd',
+      enforceSenderPolicy: false,
+    })
+
+    await client.broadcasts.create({
+      name: 'Announcement',
+      audienceId: 'aud_1',
+      from: `KCD Bergen <${PAYLOAD}>`,
+      replyTo: PAYLOAD,
+      subject: 'Hello',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(created[0].from)
+    expectSingleHeaderLine(created[0].replyTo)
+    expect(created[0]).not.toHaveProperty('bcc')
+    expect(created[0].from).toBe('KCD Bergen <hello@kcd.dev>')
+  })
+
+  it('strips it on BATCH and on broadcast UPDATE, on both paths', async () => {
+    const batched: Array<Array<{ from?: string }>> = []
+    const updated: Array<{ from?: string }> = []
+    const client = {
+      emails: { send: vi.fn(), create: vi.fn() },
+      batch: {
+        send: vi.fn(async (payload: Array<{ from?: string }>) => {
+          batched.push(payload)
+          return { data: { data: [] } }
+        }),
+      },
+      broadcasts: {
+        update: vi.fn(async (_id: string, payload: { from?: string }) => {
+          updated.push(payload)
+          return { data: { id: 'bc_1' } }
+        }),
+      },
+    } as unknown as Resend
+    instrumentResendClient(client, { enforceSenderPolicy: false })
+
+    await client.batch.send([
+      {
+        from: `KCD Bergen <${PAYLOAD}>`,
+        to: 'a@example.com',
+        subject: 's',
+        html: '<p>hi</p>',
+      },
+    ])
+    await client.broadcasts.update('bc_1', { from: `KCD <${PAYLOAD}>` })
+
+    expectSingleHeaderLine(batched[0][0].from)
+    expectSingleHeaderLine(updated[0].from)
+  })
+
   it('strips it on a BROADCAST too', async () => {
     const created: Array<{ from: string; replyTo?: string | string[] }> = []
     const create = vi.fn(async (payload: { from: string }) => {

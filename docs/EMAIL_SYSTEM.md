@@ -357,6 +357,16 @@ reads as verified).
 branch — including the two where the sender is otherwise unchanged — so a raw
 header from a call site is never echoed onto the wire.
 
+But the policy is not the boundary. A **dedicated** client (a tenant's own
+Resend account) skips the policy by design, so sanitisation that lived only
+inside it did not run for exactly the tenants who pay for their own account —
+same fields, same raw-interpolating send sites. The guarantee therefore sits at
+the **client**: `instrumentResendClient` sanitises `from`/`replyTo` on every
+send, on every client, whichever policy branch ran. Every `from`-bearing Resend
+method is wrapped — `emails.send`/`create`, `batch.send`/`create`,
+`broadcasts.create`/`update` — including the ones this codebase does not call
+yet, so adopting one later cannot reopen the hole.
+
 ### The send choke point (`/lib/email/instrument.ts`)
 
 Every client from `getResendClient` is instrumented, so the policy and the
