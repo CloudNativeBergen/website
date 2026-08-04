@@ -2,7 +2,11 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { screen, userEvent } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
-import { HomepageSectionsEditor } from './HomepageSectionsEditor'
+import {
+  HomepageSectionsEditor,
+  VariantPicker,
+  variantOptions,
+} from './HomepageSectionsEditor'
 import { NotificationProvider } from './NotificationProvider'
 import type { HomepageSection } from '@/lib/homepage'
 
@@ -129,6 +133,20 @@ const saveTheDateSections: HomepageSection[] = [
   { _key: 'hero', _type: 'homepageHero' },
   { _key: 'std', _type: 'homepageSaveTheDate' },
   { _key: 'sponsors', _type: 'homepageSponsors' },
+]
+
+// Sections carrying presentation VARIANTS: the Hero has three of them, the
+// Sponsors band two, and Program Highlights has no copy at all — so its
+// accordion is the variant picker and nothing else.
+const variantSections: HomepageSection[] = [
+  {
+    _key: 'hero',
+    _type: 'homepageHero',
+    heroHeadline: 'Real Cloud Native',
+    variant: 'minimal',
+  },
+  { _key: 'program', _type: 'homepageProgramHighlights' },
+  { _key: 'sponsors', _type: 'homepageSponsors', variant: 'logo-wall' },
 ]
 
 const meta = {
@@ -299,6 +317,116 @@ export const ContentBandCopyConfigDark: Story = {
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   play: ContentBandCopyConfig.play,
+}
+
+/**
+ * A THREE-variant type: the Hero picker with `minimal` stored, so the chips show
+ * a non-default selection, the default chip is marked as such, and the helper
+ * line under the chips describes the SELECTED look. The structure panel tags the
+ * bands that were switched away from the house default.
+ */
+export const VariantPickerThreeOptions: Story = {
+  args: {
+    initialSections: variantSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Configure Hero' }),
+    )
+  },
+}
+
+/** The three-option Hero picker in dark mode. */
+export const VariantPickerThreeOptionsDark: Story = {
+  args: VariantPickerThreeOptions.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  play: VariantPickerThreeOptions.play,
+}
+
+/** The three-option Hero picker at mobile width — the chips wrap, none clip. */
+export const VariantPickerThreeOptionsMobile: Story = {
+  args: VariantPickerThreeOptions.args,
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  play: VariantPickerThreeOptions.play,
+}
+
+/**
+ * A TWO-variant type: the Sponsors picker above that band's own copy fields —
+ * the picker is the first row of every config accordion, never a section of
+ * its own.
+ */
+export const VariantPickerTwoOptions: Story = {
+  args: {
+    initialSections: variantSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Configure Sponsors' }),
+    )
+  },
+}
+
+/**
+ * Program Highlights has no copy to configure, so its accordion is the variant
+ * picker alone — the reason every registered type is now configurable.
+ */
+export const VariantPickerOnlyConfig: Story = {
+  args: {
+    initialSections: variantSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Configure Program Highlights',
+      }),
+    )
+  },
+}
+
+/**
+ * A type with a SINGLE variant gets no picker at all — one radio button is a lie
+ * about the choice available. No section type is single-variant today, so the
+ * rule is shown on the picker itself: the same component, given two options and
+ * given one.
+ */
+export const SingleVariantShowsNoPicker: Story = {
+  args: {
+    initialSections: [],
+    usingDefault: false,
+  },
+  render: () => (
+    <div className="max-w-md space-y-4">
+      <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+        <p className="mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+          Two variants — picker shown
+        </p>
+        <VariantPicker
+          sectionLabel="Venue"
+          options={variantOptions('homepageVenue')}
+          onChange={() => {}}
+        />
+      </div>
+      <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+        <p className="mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+          One variant — no picker at all
+        </p>
+        <VariantPicker
+          sectionLabel="Venue"
+          options={variantOptions('homepageVenue').slice(0, 1)}
+          onChange={() => {}}
+        />
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          (nothing renders above this line)
+        </p>
+      </div>
+    </div>
+  ),
 }
 
 /**
