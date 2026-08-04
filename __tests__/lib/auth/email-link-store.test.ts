@@ -31,7 +31,6 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-
 import {
   consumeStoredToken,
   createStoredToken,
@@ -224,7 +223,6 @@ describe('one live link per address, under concurrency', () => {
   })
 
   it('writes a per-address document id, so a later request overwrites', async () => {
-
     await createStoredToken({
       identifier: 'organizer@example.com',
       rawToken: 'sd1.aaa',
@@ -247,7 +245,6 @@ describe('one live link per address, under concurrency', () => {
   })
 
   it('gives different addresses different documents', async () => {
-
     await createStoredToken({
       identifier: 'a@example.com',
       rawToken: 'sd1.aaa',
