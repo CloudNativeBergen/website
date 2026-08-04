@@ -32,6 +32,23 @@ export interface SendContractResult {
  *
  * Used both by the admin manual send flow and the automated
  * registration completion flow.
+ *
+ * ⚠️ TENANCY — THIS FUNCTION HAS NO TENANT GATE. It resolves
+ * `sponsorForConferenceId` with `getSponsorForConference`, which is a plain
+ * unscoped by-id read (`*[_type == "sponsorForConference" && _id == $id][0]`)
+ * that compares no conference. Any id reaching here resolves a record in ANY
+ * tenant, and everything downstream — the PDF, the signing send, the CRM patch,
+ * the `promoteToClosedWonOnContract` promotion — then acts on it.
+ *
+ * That is harmless only because the whole contract-signing feature is PARKED
+ * and no live route calls this. BEFORE WIRING IT UP, gate the id: compare the
+ * resolved `sfc.conference?._id` against `resolveConferenceId()` and refuse a
+ * mismatch — i.e. do what `getSponsorForCurrentConference` in
+ * `src/server/routers/sponsor.ts` does for the live `sendContract` path (do not
+ * confuse the two names; they differ by one word and only the router-side
+ * wrapper gates anything). The `groq-global-scoped:` annotation on the patch in
+ * `promoteToClosedWonOnContract` vouches for the two live callers only, and
+ * explicitly not for this one.
  */
 export async function generateAndSendContract(
   sponsorForConferenceId: string,

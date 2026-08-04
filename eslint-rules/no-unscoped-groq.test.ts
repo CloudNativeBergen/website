@@ -443,11 +443,16 @@ ruleTester.run(
         code: "const p = client.patch({ query: '*[_id == $id && status in $stages]' })",
         errors: [{ messageId: 'unscoped' }],
       },
-      // A by-id root filter nested in a projection is a root filter too: it
-      // reads the whole dataset, not the enclosing document.
+      // The rule scans a literal for the FIRST root filter its pattern can
+      // match, wherever that sits — NOT for the outermost one. Here the outer
+      // `*[slug.current ==` is a shape the pattern cannot see (see the known
+      // gaps in docs/TENANT_SCOPING.md), so the single report comes from the
+      // NESTED by-id filter in the projection. That is the one situation in
+      // which a nested root is examined at all; see the characterization test
+      // in the block below for the situation in which it is not.
       {
         filename: 'src/lib/messaging/sanity.ts',
-        code: 'const q = `*[_type == "conversation"]{ "pref": *[_id == ^._id + $suffix] }`',
+        code: 'const q = `*[slug.current == $slug]{ "pref": *[_id == ^._id + $suffix] }`',
         errors: [{ messageId: 'unscoped' }],
       },
     ],
@@ -491,6 +496,28 @@ ruleTester.run(
       {
         filename: 'src/lib/badge/issuance.ts',
         code: 'const q = `*[_id == $id && references($conferenceId)][0]`',
+      },
+      // ---------------------------------------------------------------------
+      // CHARACTERIZATION — a KNOWN GAP, not desired behaviour.
+      //
+      // `scopedFetch` prepends its tenant predicate into the FIRST `*[` only,
+      // so the NESTED root filter below runs unscoped at runtime. The rule
+      // still reports nothing: it decides "inside scopedFetch ⇒ scoped" once
+      // for the whole literal, and its root-filter scan stops at the first
+      // match (the outer one) rather than walking every root in the string.
+      // The same one-shot decision means a `groq-global-scoped:` annotation
+      // aimed at an outer filter silently covers nested ones too.
+      //
+      // Measured: 26 literals in src/ (non-test) carry 37 such nested root
+      // filters the rule never examines. Closing this needs per-root-filter
+      // suppression and reporting — a rule redesign plus an audit of all 37,
+      // deliberately out of scope for #676. This case exists so that fix flips
+      // a documented expectation instead of changing behaviour silently.
+      // Tracked in docs/TENANT_SCOPING.md → "Known gaps".
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/messaging/sanity.ts',
+        code: 'const r = await scopedFetch(client, { conferenceId }, `*[_type == "conversation"]{ "pref": *[_id == ^._id + $suffix] }`)',
       },
     ],
     invalid: [

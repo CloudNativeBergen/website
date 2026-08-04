@@ -54,8 +54,41 @@
  *     dataset-wide key, so a client-supplied id resolves documents belonging to
  *     any tenant. That is precisely the shape ownership checks are made of, and
  *     precisely the shape a missing ownership check has. The pattern now matches
- *     `_type` and `_id` alike; the by-id reads that survive are the ones that
- *     carry an annotation saying which mechanism constrains them.
+ *     `_type ==` and `_id ==` alike; the by-id reads that survive are the ones
+ *     that carry an annotation saying which mechanism constrains them. Note the
+ *     narrowness: `_id ==` is closed, the `_id` CLASS is not — `_id in $ids` is
+ *     still invisible. See KNOWN GAPS.
+ *
+ * ---------------------------------------------------------------------------
+ * KNOWN GAPS — shapes that read every tenant and are still reported CLEAN
+ * ---------------------------------------------------------------------------
+ *
+ * These patterns are a syntactic first-token match, not a GROQ parser. Verified
+ * by probe, not assumed. Do NOT read a clean run as proof a file is scoped.
+ *
+ *  - `_type` / `_id` NOT the first token:  `*[defined(foo) && _type == "x"]`
+ *  - REVERSED comparison:                  `*["x" == _type]`
+ *  - operators other than `==`:            `*[_type match "x*"]`,
+ *                                          `*[_type in ["a","b"]]`,
+ *                                          `*[_id in $ids]`
+ *  - a root filter opening on another field: `*[references($x)]`,
+ *                                            `*[slug.current == $slug]`
+ *  - NESTED roots in a projection:
+ *        `*[_type == "a"]{ "x": *[_type == "b"] }`
+ *    `checkQuery` reports the FIRST match in the literal and stops, so a nested
+ *    root is examined only when no EARLIER root filter matched. Worse, the
+ *    "inside scopedFetch" and "is suppressed" decisions are made once for the
+ *    whole literal: `scopedFetch` prepends into the first `*[` only, so a nested
+ *    root inside a scoped body runs UNSCOPED with the rule silent, and an outer
+ *    `groq-global-scoped:` covers nested roots it never vouched for. Measured:
+ *    26 literals in src/ carry 37 such nested roots. Closing this needs
+ *    per-root-filter suppression and reporting plus an audit of all 37 — out of
+ *    scope for #676, pinned by a characterization test in the test file.
+ *  - a root filter SPLIT across string concatenation: `"*" + "[_type == \"x\"]"`
+ *
+ * A live census of the sites these gaps hide (9 in src/, none dangerous today)
+ * is kept in docs/TENANT_SCOPING.md → "Known gaps"; re-derive it when these
+ * patterns change.
  *
  * NOT back-ported: kontroll's notion of "scoped". It has no ambient tenant and
  * no query builder — a read there is scoped when the filter binds a proven
