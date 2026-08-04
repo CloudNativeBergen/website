@@ -1,6 +1,6 @@
 import { resend } from '@/lib/email/config'
 import { resolveConferenceFrom } from '@/lib/email/from'
-import { escapeHtml } from '@/lib/email/escape'
+import { escapeHtml } from '@/lib/html/escape'
 import type { Conference } from '@/lib/conference/types'
 
 interface SendInvitationLetterEmailParams {

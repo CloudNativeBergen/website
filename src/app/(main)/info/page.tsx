@@ -1,10 +1,9 @@
-import { formatDate } from '@/lib/time'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { InfoContent } from '@/components/info/InfoContent'
-import type { ConferenceSchedule } from '@/lib/conference/types'
+import { buildInfoFaqs, getScheduleDayInfo } from '@/lib/conference/info-faq'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
@@ -18,59 +17,6 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { absolute: `Practical Information - ${brand}` },
     description: `Essential details for attending ${brand} conference`,
     alternates: await canonicalAlternates('/info'),
-  }
-}
-
-function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {
-  if (!schedules || schedules.length === 0) {
-    return {
-      hasMultipleDays: false,
-      workshopDay: null,
-      conferenceDay: null,
-      days: [],
-    }
-  }
-
-  const sortedSchedules = [...schedules].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  )
-
-  const hasMultipleDays = sortedSchedules.length > 1
-
-  const days = sortedSchedules.map((schedule) => {
-    const allTalks = schedule.tracks.flatMap((track) => track.talks)
-
-    // First item is registration
-    const registrationTalk = allTalks.length > 0 ? allTalks[0] : null
-    const registrationTime = registrationTalk?.startTime || '08:00'
-
-    // The first talk/workshop starts when registration ends (one hour after it starts)
-    // This is the END time of the registration item
-    const firstProgramTime = registrationTalk?.endTime || '09:00'
-
-    const endTimes = allTalks.map((talk) => talk.endTime).filter(Boolean)
-    const latestEnd =
-      endTimes.length > 0 ? endTimes.sort().reverse()[0] : '17:00'
-
-    const isWorkshopDay = schedule.tracks.some((track) =>
-      track.trackTitle?.toLowerCase().includes('workshop'),
-    )
-
-    return {
-      date: schedule.date,
-      registrationTime,
-      startTime: firstProgramTime,
-      endTime: latestEnd,
-      isWorkshopDay,
-      schedule,
-    }
-  })
-
-  return {
-    hasMultipleDays,
-    workshopDay: days[0], // First day is always workshop day
-    conferenceDay: days[1] || days[0], // Second day is conference day, or first if only one day
-    days,
   }
 }
 
@@ -91,182 +37,10 @@ async function CachedInfoContent({ domain }: { domain: string }) {
     return null
   }
 
-  const scheduleInfo = getScheduleDayInfo(conference.schedules)
-
-  const dateAnswer = (() => {
-    if (
-      scheduleInfo.hasMultipleDays &&
-      scheduleInfo.workshopDay &&
-      scheduleInfo.conferenceDay
-    ) {
-      return `This is a multi-day event running from ${formatDate(conference.startDate)} to ${formatDate(conference.endDate)}.
-
-Day 1 (${formatDate(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${scheduleInfo.workshopDay.registrationTime}. Workshops run from ${scheduleInfo.workshopDay.startTime} to ${scheduleInfo.workshopDay.endTime}.
-
-Day 2 (${formatDate(scheduleInfo.conferenceDay.date)}) - Main Conference: Registration opens at ${scheduleInfo.conferenceDay.registrationTime}. Talks are scheduled from ${scheduleInfo.conferenceDay.startTime} to ${scheduleInfo.conferenceDay.endTime}.
-
-Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Conference&quot;) grant access to both days, while conference-only tickets grant access to the main conference day only.`
-    }
-
-    return `The conference will be held on ${formatDate(conference.startDate)}. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The talks are scheduled to start at ${scheduleInfo.conferenceDay?.startTime || '09:00'} and to end at ${scheduleInfo.conferenceDay?.endTime || '17:00'}.`
-  })()
-
-  const venueLocation = [conference.city, conference.country]
-    .filter(Boolean)
-    .join(', ')
-
-  // The sponsor ticket-redemption answer describes ONE vendor's flow (the
-  // sender address is literally Checkin's). Absent means Checkin — that is what
-  // `resolveTicketProvider` treats it as — so this keeps rendering for every
-  // Checkin tenant and degrades to a vendor-neutral answer for anyone else.
-  const usesCheckin =
-    !conference.ticketingProvider || conference.ticketingProvider === 'checkin'
-
-  const faqs = [
-    {
-      anchor: 'general',
-      heading: 'For Attendees',
-      description: 'Practical information for attending the conference.',
-      questions: [
-        {
-          question: 'What is the date of the conference?',
-          answer: dateAnswer,
-        },
-        {
-          question: 'Where is the conference located?',
-          // `city, country` joined defensively — an unset country used to render
-          // the literal string "undefined" on the public page.
-          answer: `The conference will take place at ${conference.venueName || 'the venue'}${venueLocation ? ` in ${venueLocation}` : ''}.${conference.venueAddress ? ` The address is ${conference.venueAddress}.` : ''}`,
-        },
-        // Travel directions are PLACE-SPECIFIC, so they come from the tenant's
-        // own `venueTravelInfo`. This used to be hardcoded Bergen transit prose
-        // (Byparken, Bybanen, "airport Flesland") rendered with whatever city a
-        // tenant had configured — false for everyone but Bergen. No stored
-        // answer now means no question, not a wrong one.
-        ...(conference.venueTravelInfo
-          ? [
-              {
-                question: 'How do I get to the venue?',
-                answer: conference.venueTravelInfo,
-              },
-            ]
-          : []),
-        {
-          question: 'Is this venue accessible?',
-          answer:
-            'Yes, the venue is accessible. If you have any special needs, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
-        },
-        {
-          question: 'What about allergies and dietary restrictions?',
-          answer:
-            'We will serve food and drinks during the conference. If you have any allergies or dietary restrictions, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
-        },
-        {
-          question: 'What ticket types are available?',
-          answer: scheduleInfo.hasMultipleDays
-            ? 'There are two main ticket types: Workshop + Conference (2 days) tickets provide access to both the workshop day and the main conference day, while Conference Only tickets grant access to the main conference day only. Please verify your ticket type before attending to ensure you have access to the correct days.'
-            : 'Please check your ticket confirmation for details about what your ticket includes, such as access to talks, workshops, food, and the afterparty.',
-        },
-        {
-          question: 'When and where can I pick up my badge?',
-          answer:
-            scheduleInfo.hasMultipleDays &&
-            scheduleInfo.workshopDay &&
-            scheduleInfo.conferenceDay
-              ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.workshopDay.registrationTime} on ${formatDate(scheduleInfo.workshopDay.date)} (workshop day) and at ${scheduleInfo.conferenceDay.registrationTime} on ${formatDate(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
-              : `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. We recommend arriving early to get your badge and find a good seat.`,
-        },
-        {
-          question: 'When will the doors open?',
-          answer: scheduleInfo.hasMultipleDays
-            ? `Doors open for registration at ${scheduleInfo.workshopDay?.registrationTime || '08:00'} on the workshop day and at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'} on the conference day. The first workshop starts at ${scheduleInfo.workshopDay?.startTime || '09:00'} and the first talk starts at ${scheduleInfo.conferenceDay?.startTime || '09:00'}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
-            : `Doors open for registration at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The first talk starts at ${scheduleInfo.conferenceDay?.startTime || '09:00'}. We suggest arriving early to pick up your badge and find a good seat.`,
-        },
-        {
-          question: 'What is the code of conduct?',
-          answer: `We have a code of conduct that all attendees, speakers, and sponsors must follow. You can read the code of conduct on our website at <u><a href="/conduct">Code of Conduct</a></u>. If you have any questions or concerns, please contact us.`,
-        },
-        {
-          question: 'What happens after the conference?',
-          answer:
-            'After the conference, we will host an afterparty at the same venue. The afterparty will start at 6 PM and last until late 🌃 There will be food, drinks, and more opertunities to network with other attendees, speakers and sponsors. The afterparty is included in the conference ticket.',
-        },
-      ],
-    },
-    {
-      anchor: 'speakers',
-      heading: 'For Speakers',
-      description:
-        'Information for our awesome speakers to make their experience as smooth as possible. If you have any other questions do not hesitate to contact us.',
-      questions: [
-        {
-          question: 'What do I need to do before the conference?',
-          answer:
-            'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/cfp/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
-        },
-        // Also place-specific (the old copy named a Bergen mountain and linked a
-        // Bergen cable car), and not every conference holds one at all — so the
-        // question exists only when the tenant has written the answer.
-        ...(conference.speakerDinnerInfo
-          ? [
-              {
-                question: 'Will there be a speaker dinner?',
-                answer: conference.speakerDinnerInfo,
-              },
-            ]
-          : []),
-        {
-          question: 'Can I make changes to my talk?',
-          answer:
-            'Yes, you can make changes to your talk up until the day before the conference. You can edit your talk directly from our website by going to the <u><a href="/cfp/list">speaker dashboard</a></u>.',
-        },
-        {
-          question: 'Do I need to bring my own laptop?',
-          answer:
-            'Yes, we recommend you to bring your own laptop. We will provide a projector and a screen for your presentation. If you have any special needs, please let us know in advance.',
-        },
-        // Local sightseeing advice cannot be generated — the old copy asserted
-        // fjords, mountains and Bryggen for whatever city was configured, and
-        // linked Bergen's tourist board. Tenant-authored or absent.
-        ...(conference.localRecommendations
-          ? [
-              {
-                question: conference.city
-                  ? `What do you recommend me to do during my stay in ${conference.city}?`
-                  : 'What do you recommend me to do during my stay?',
-                answer: conference.localRecommendations,
-              },
-            ]
-          : []),
-      ],
-    },
-    {
-      anchor: 'sponsors',
-      heading: 'For Sponsors',
-      description:
-        'Information for our amazing sponsors that makes this event happening. If you have any questions, please contact us.',
-      questions: [
-        {
-          question: 'How do I obtain the sponsor tickets?',
-          answer: usesCheckin
-            ? `Sponsors will receive a unique link to <u>checkin.no</u> to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nThe email will be sent from <u>no-reply@messenger.checkin.no</u>. If you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`
-            : `Sponsors will receive a unique link to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nIf you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
-        },
-        {
-          question: 'What should I do with the sponsor rollups?',
-          answer: `You can bring your rollups to the venue on the day of the conference, or the day before. We will have a designated area for sponsor rollups. If you have any questions, please <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
-        },
-        {
-          question: 'Where can I place my sponsor materials?',
-          answer: `We will have a designated area for sponsor rollups and a table for sponsor materials. We do not have space for sponsor booths. If you have any questions, please <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
-        },
-        {
-          question: 'Do you provide a list of attendees?',
-          answer: `No, we do not provide a list of attendees. However, we encourage you to network with the attendees during the conference and afterparty.`,
-        },
-      ],
-    },
-  ]
+  const faqs = buildInfoFaqs(
+    conference,
+    getScheduleDayInfo(conference.schedules),
+  )
 
   return (
     <>
