@@ -5,6 +5,7 @@ import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
+import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
 import {
   getFeaturedGalleryImages,
   getGalleryImages,
@@ -290,10 +291,18 @@ export async function getConferenceForDomain(
         const galleryOptions =
           typeof gallery === 'object'
             ? gallery
-            : { featuredLimit: 8, limit: 50 }
+            : {
+                featuredLimit: GALLERY_CONSTANTS.LIMITS.FEATURED_IMAGES,
+                limit: GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
+              }
 
         const featuredOnly = galleryOptions.featuredOnly ?? false
 
+        // Both branches leave `featuredLimit` undefined to
+        // `getFeaturedGalleryImages`'s own default rather than defaulting only
+        // one of them — the asymmetry here is what let the homepage
+        // (`{ featuredOnly: true }`, no limit) fall through to an effectively
+        // unbounded fetch.
         if (featuredOnly) {
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
@@ -303,11 +312,13 @@ export async function getConferenceForDomain(
         } else {
           const [featuredGalleryImages, galleryImages] = await Promise.all([
             getFeaturedGalleryImages(
-              galleryOptions.featuredLimit ?? 8,
+              galleryOptions.featuredLimit,
               conference._id,
             ),
             getGalleryImages({
-              limit: galleryOptions.limit ?? 50,
+              limit:
+                galleryOptions.limit ??
+                GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
               conferenceId: conference._id,
             }),
           ])

@@ -6,6 +6,7 @@ import {
 } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { logger } from '@/lib/logger'
+import { GALLERY_CONSTANTS } from './constants'
 import { publishSpeakerTaggedEvent } from './events'
 import type {
   CreateGalleryImageInput,
@@ -523,13 +524,26 @@ export async function getGalleryImages(
 /**
  * Get featured gallery images for ONE conference. `conferenceId` is REQUIRED
  * (tenant scoping, #616) — see {@link getGalleryImages}.
+ *
+ * An omitted `limit` means "the house default", NOT "everything". The previous
+ * fallback of 1000 was effectively unbounded: the homepage never passes a limit
+ * (`getConferenceForDomain({ gallery: { featuredOnly: true } })`), so a tenant
+ * that features 60 photos would ship all 60 into the flight payload and render
+ * 60 carousel dots. `GALLERY_CONSTANTS.LIMITS.FEATURED_IMAGES` is what the band
+ * is designed around — `ImageGallery` already slices its own fallback to the
+ * same 8 — so it is the default here too. Callers that genuinely want more
+ * (admin marketing) pass an explicit limit.
  */
 export async function getFeaturedGalleryImages(
   limit: number | undefined,
   conferenceId: string,
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages(
-    { featured: true, limit: limit || 1000, conferenceId },
+    {
+      featured: true,
+      limit: limit ?? GALLERY_CONSTANTS.LIMITS.FEATURED_IMAGES,
+      conferenceId,
+    },
     { useCache: true },
   )
 }
