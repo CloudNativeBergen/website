@@ -816,6 +816,28 @@
   animation: float-gentle 30s ease-in-out infinite;
 }
 
+/*
+ * CloudNativePattern's per-icon drift. Every icon gets its own seeded duration
+ * and delay, so the timing has to come from the element — but it must come as
+ * CUSTOM PROPERTIES rather than an inline `animation` shorthand, because an
+ * inline declaration cannot be overridden by a stylesheet rule and would leave
+ * the pattern animating for reduced-motion users (measured: 127 of 127 nodes
+ * still ran their infinite `float` with the preference emulated).
+ *
+ * Same shape as the `.animate-marquee-dynamic` / `.vertical-scroll-dynamic`
+ * pairs in the stream components.
+ */
+.animate-float-seeded {
+  animation: float var(--float-duration, 20s) ease-in-out infinite
+    var(--float-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-seeded {
+    animation: none;
+  }
+}
+
 /* Custom Slider Styles */
 .slider::-webkit-slider-thumb {
   appearance: none;
