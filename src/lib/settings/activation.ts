@@ -21,7 +21,7 @@
  */
 
 import type { SystemCheck } from '@/lib/system-status/types'
-import { APPEARANCE_ROOT } from '@/lib/settings/appearance'
+import { APPEARANCE_SECTION } from '@/lib/settings/appearance'
 
 /** A single checklist line. */
 export interface ActivationRow {
@@ -34,8 +34,8 @@ export interface ActivationRow {
   /**
    * Deep-link target: either a same-page anchor already rendered on the Settings
    * page — a group anchor (`#schedule`) or a per-card anchor (`#visibility`) —
-   * or an absolute admin path to a settings sub-page
-   * (`/admin/settings/appearance/logos`). Rows whose editor has moved out of the
+   * or an absolute admin path, optionally anchored, to another settings page
+   * (`/admin/settings/appearance#logos`). Rows whose editor has moved off the
    * settings page use the path form; the checklist routes them client-side.
    */
   anchor: string
@@ -189,7 +189,7 @@ export function buildActivationChecklist(
       id: 'branding-logo',
       label: 'Brand logo',
       done: hasLogo,
-      anchor: `${APPEARANCE_ROOT}/logos`,
+      anchor: APPEARANCE_SECTION.logos.href,
       hint: 'Upload a logo so the site and emails carry your brand.',
     },
     {

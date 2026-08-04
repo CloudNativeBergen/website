@@ -28,6 +28,7 @@ import {
   SANITY_IMAGE_REF_PATTERN,
   sanitizeRichTextContent,
 } from '@/lib/homepage/richText'
+import { SECTION_VARIANTS } from '@/lib/homepage/variants'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -811,11 +812,39 @@ export const HomepageRichTextContentSchema = z
     message: 'Rich text needs at least one block with content',
   })
 
+/**
+ * The presentation VARIANT, validated per section type against the closed
+ * registry in `src/lib/homepage/variants.ts` — a `z.enum` built from that
+ * table, never an open `z.string()`, so a variant this deploy has no markup for
+ * is refused at the boundary exactly like an unknown `_type`.
+ *
+ * The write path and the RENDER path deliberately disagree about an unknown
+ * variant, and the asymmetry is the point:
+ *
+ *  - WRITE (here): REJECT. The only writer is our own editor, driven by the
+ *    same registry, so an out-of-list value is either a stale/forged client or
+ *    a bug; storing it would put a name into a tenant document that nothing can
+ *    render and that no later deploy is obliged to honour.
+ *  - RENDER (`resolveVariant`): TOLERATE — fall back to the default with a
+ *    warn-once. There the value is already in the document (written by a NEWER
+ *    deploy mid-rollout), and refusing it would blank a section whose content
+ *    is perfectly valid.
+ *
+ * Absent is the only way to say "the default look": the router never persists a
+ * variant equal to the type's default, so untouched compositions serialize to
+ * the bytes they serialize today.
+ *
+ * Written out per union member rather than through a generic helper so each
+ * member's inferred type carries ONLY its own variant names — the registry
+ * stays closed at the type level too, and a mis-copied list is a typecheck
+ * error at every call site that builds a section.
+ */
 const HomepageSectionSchema = z.discriminatedUnion('_type', [
   z.object({
     _type: z.literal('homepageHero'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageHero).optional(),
     heroHeadline: z.string().trim().min(1).nullable().optional(),
     heroSubheadline: z.string().trim().min(1).nullable().optional(),
     ctaOverrides: z.array(HeroCtaOverrideSchema).optional(),
@@ -824,6 +853,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageSaveTheDate'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageSaveTheDate).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     description: z.string().trim().min(1).nullable().optional(),
   }),
@@ -831,6 +861,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageFeaturedSpeakers'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageFeaturedSpeakers).optional(),
     heading: sectionCopy,
     description: sectionCopy,
   }),
@@ -838,11 +869,13 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageProgramHighlights'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageProgramHighlights).optional(),
   }),
   z.object({
     _type: z.literal('homepageOrganizers'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageOrganizers).optional(),
     heading: sectionCopy,
     description: sectionCopy,
   }),
@@ -850,6 +883,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageSponsors'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageSponsors).optional(),
     heading: sectionCopy,
     description: sectionCopy,
     // Absent = the CTA card shows (today's behaviour); only `false` hides it.
@@ -861,6 +895,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageGallery'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageGallery).optional(),
     heading: sectionCopy,
     description: sectionCopy,
   }),
@@ -868,12 +903,14 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageMetrics'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageMetrics).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
   }),
   z.object({
     _type: z.literal('homepageCtaBanner'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageCtaBanner).optional(),
     heading: z.string().trim().min(1, 'Heading is required'),
     body: z.string().trim().min(1).nullable().optional(),
     buttonLabel: z.string().trim().min(1, 'Button label is required'),
@@ -883,6 +920,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageRichText'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageRichText).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     content: HomepageRichTextContentSchema,
   }),
@@ -890,6 +928,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageFaq'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageFaq).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     // 'own' (default) renders `items`; 'ticketFaqs' renders conference.ticketFaqs.
     source: z.enum(['own', 'ticketFaqs']).optional(),
@@ -899,6 +938,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageCountdown'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageCountdown).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     targetOverride: countdownTargetString,
     liveMessage: z.string().trim().min(1).nullable().optional(),
@@ -907,6 +947,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageVenue'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageVenue).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     description: z.string().trim().min(1).nullable().optional(),
   }),

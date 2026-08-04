@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readRuntimeModuleImports } from '../../../__tests__/helpers/moduleImports'
 import { HOMEPAGE_SECTION_TYPES, type HomepageSectionType } from './sections'
 import {
   SECTION_VARIANTS,
   type SectionVariant,
   VARIANT_DESCRIPTIONS,
   VARIANT_LABELS,
+  VARIANT_WARN_LIMITS,
   defaultVariant,
   isSectionVariant,
   resolveVariant,
@@ -150,6 +152,69 @@ describe('resolveVariant', () => {
     resolveVariant('homepageVenue', 'unknown-faq-a')
     expect(warn).toHaveBeenCalledTimes(3)
   })
+
+  /**
+   * `stored` is read off a Sanity document, so at runtime it can be anything.
+   * The precedent is `isBlank()` in migration 046: a wrong-typed value must not
+   * be quietly folded into the benign case. Here that means the same safe
+   * default rendering, but REPORTED — and reported by type, so a `variant`
+   * stored as a number is not disguised as a misspelt variant name.
+   */
+  it('renders the default for a wrong-typed value, and says what the type was', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    for (const bad of [null, 0, 42, true, {}, [], Symbol.iterator]) {
+      expect(resolveVariant('homepageHero', bad)).toBe('classic')
+    }
+
+    const messages = warn.mock.calls.map((call) => String(call[0]))
+    expect(messages).toEqual([
+      expect.stringContaining('null'),
+      expect.stringContaining('[number]'),
+      expect.stringContaining('[boolean]'),
+      expect.stringContaining('[object]'),
+      expect.stringContaining('[symbol]'),
+    ])
+    // `0` and `42` collapse to one `[number]` warning; `{}` and `[]` to one
+    // `[object]`. Deduping by TYPE is what stops junk data flooding the log.
+    expect(warn).toHaveBeenCalledTimes(5)
+  })
+
+  it('clips a very long stored value instead of logging it whole', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const long = 'x'.repeat(VARIANT_WARN_LIMITS.storedValue * 4)
+
+    expect(resolveVariant('homepageMetrics', long)).toBe('row')
+
+    const message = String(warn.mock.calls[0][0])
+    expect(message).toContain('…')
+    expect(message).not.toContain(long)
+    expect(message.length).toBeLessThan(
+      VARIANT_WARN_LIMITS.storedValue + long.length,
+    )
+  })
+
+  /**
+   * The ledger is fed by stored data in a long-lived server process, so it is
+   * capped in both directions: bounded memory, and bounded log volume once the
+   * cap is hit. A fresh module instance keeps this out of the other tests'
+   * ledger (and theirs out of this one's).
+   */
+  it('caps the ledger so junk data cannot grow it, or the log, without bound', async () => {
+    vi.resetModules()
+    const fresh = await import('./variants')
+    const cap = fresh.VARIANT_WARN_LIMITS.distinctPairs
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    for (let i = 0; i < cap * 3; i++) {
+      expect(fresh.resolveVariant('homepageHero', `junk-${i}`)).toBe('classic')
+    }
+
+    // `cap` distinct warnings, then exactly ONE notice, then silence — however
+    // many more distinct unknown values arrive.
+    expect(warn).toHaveBeenCalledTimes(cap + 1)
+    expect(String(warn.mock.calls[cap][0])).toContain('suppressing')
+  })
 })
 
 /**
@@ -159,25 +224,22 @@ describe('resolveVariant', () => {
  * even a pure helper — can put a client-only React context in the RSC module
  * graph, and the production build then dies collecting page data with
  * `createContext is not a function`. Invisible to typecheck and to every other
- * test, so it is asserted on the source text. `import type` is fine: it is erased.
+ * test, so it is asserted on the parsed module graph. `import type` is fine: it
+ * is erased.
+ *
+ * The check lives in ONE place ({@link readRuntimeModuleImports}) precisely
+ * because it used to be a regex duplicated here and in `editor.test.ts`, where
+ * both copies missed side-effect imports, re-exports, dynamic imports and
+ * double quotes. See `__tests__/helpers/moduleImports.test.ts`.
  */
 describe('server safety', () => {
   it('has no runtime import at all — not even a relative one', async () => {
-    const { readFile } = await import('node:fs/promises')
-    const source = await readFile(
-      new URL('./variants.ts', import.meta.url),
-      'utf8',
-    )
-
-    // Everything that is not `import type`. The back-edge to ./sections is
-    // type-only by design, so this list must be empty: no package can sneak in,
-    // and the sections.ts ↔ variants.ts cycle stays erased.
-    const runtimeImports = Array.from(
-      source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
-      (match) => match[1],
-    )
-
-    expect(runtimeImports).toEqual([])
+    // The back-edge to ./sections is type-only by design, so this list must be
+    // empty: no package can sneak in, and the sections.ts ↔ variants.ts cycle
+    // stays erased.
+    expect(
+      await readRuntimeModuleImports(new URL('./variants.ts', import.meta.url)),
+    ).toEqual([])
   })
 })
 

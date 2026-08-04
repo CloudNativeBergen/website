@@ -1,64 +1,44 @@
-import Link from 'next/link'
 import { StatusBadge } from '@/components/StatusBadge'
 import { SECTION_LABELS } from '@/lib/homepage/editor'
 import type { HomepageSection } from '@/lib/homepage'
-import type { BackgroundPattern } from '@/lib/conference/backgroundPattern'
-import {
-  APPEARANCE_SECTIONS,
-  type AppearanceSectionId,
-} from '@/lib/settings/appearance'
+import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
 
 /**
- * Presentational primitives for the Appearance section. Data-agnostic (no
- * conference reads, no tRPC) so the whole section is renderable in Storybook for
+ * Presentational primitives for the Appearance page. Data-agnostic (no
+ * conference reads, no tRPC) so the whole page is renderable in Storybook for
  * the mandatory visual QA — the same split `settingsLayout.tsx` uses for the
  * settings page itself.
  */
-
-/** Read-only labels for the background-pattern row. */
-export const BACKGROUND_PATTERN_LABELS: Record<BackgroundPattern, string> = {
-  'cloud-native': 'Cloud Native (animated CNCF logos)',
-  subtle: 'Subtle (sparse, faint logos)',
-  none: 'None (plain gradient)',
-}
 
 const chipBase =
   'inline-flex min-h-[36px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors'
 
 /**
- * The section's sub-navigation: one pill per sub-page, in nav order, with the
- * current page marked. Horizontally scrollable rather than wrapping, so a narrow
- * (393px) viewport keeps the row one line tall and never reflows the page
- * heading — the same behaviour as the settings page's group chips.
+ * The page's jump nav: one chip per anchored section, in page order. Sticky, so
+ * it stays reachable while scrolling the one page — the `SectionNav` pattern
+ * from the settings page.
  *
- * A server component: the active pill comes from the rendering page rather than
- * `usePathname`, so the whole section stays free of client JS.
+ * Plain `<a href="#…">` anchors, not `Link`: same-document jumps, so the whole
+ * page stays free of client JS (no scroll-spy — a chip's "active" state would
+ * need one, and the value here is jumping, not orientation).
  */
-export function AppearanceNav({ current }: { current: AppearanceSectionId }) {
+export function AppearanceNav() {
   return (
     <nav
       aria-label="Appearance sections"
-      className="-mx-4 border-b border-gray-200 sm:mx-0 sm:border-0 dark:border-gray-800"
+      className="sticky top-0 z-10 -mx-4 border-b border-gray-200 bg-gray-50/90 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4 dark:border-gray-700 dark:bg-gray-900/90"
     >
-      <ul className="flex gap-2 overflow-x-auto px-4 pb-2 sm:px-0">
-        {APPEARANCE_SECTIONS.map((section) => {
-          const active = section.id === current
-          return (
-            <li key={section.id} className="shrink-0">
-              <Link
-                href={section.href}
-                aria-current={active ? 'page' : undefined}
-                className={
-                  active
-                    ? `${chipBase} border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-500`
-                    : `${chipBase} border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:text-indigo-400`
-                }
-              >
-                {section.navLabel}
-              </Link>
-            </li>
-          )
-        })}
+      <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+        {APPEARANCE_SECTIONS.map((section) => (
+          <li key={section.id} className="shrink-0">
+            <a
+              href={`#${section.id}`}
+              className={`${chipBase} border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:text-indigo-400`}
+            >
+              {section.navLabel}
+            </a>
+          </li>
+        ))}
       </ul>
     </nav>
   )

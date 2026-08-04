@@ -2,6 +2,7 @@ import React from 'react'
 import { ImageResponse } from 'next/og'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
+import { ogBrandColors } from '@/lib/og/brand'
 import { ogImageMetadata } from '@/lib/og/metadata'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
@@ -26,6 +27,7 @@ const createSponsorLogo = (
   logoBrightSvg: string | null,
   sponsorName: string,
   isLarge: boolean,
+  textColor: string,
 ) => {
   const commonStyle = {
     padding: isLarge ? '12px 20px' : '8px 16px',
@@ -35,7 +37,7 @@ const createSponsorLogo = (
       : STYLES.borderRadius.tiny,
     fontSize: isLarge ? '16px' : '14px',
     fontWeight: '600',
-    color: STYLES.colors.blue,
+    color: textColor,
     fontFamily: STYLES.fontFamily,
   }
 
@@ -72,8 +74,16 @@ const renderSponsorLogo = (
   logoSvg: string | null,
   logoBrightSvg: string | null,
   sponsorName: string,
-  size: 'small' | 'large' = 'small',
-) => createSponsorLogo(logoSvg, logoBrightSvg, sponsorName, size === 'large')
+  size: 'small' | 'large',
+  textColor: string,
+) =>
+  createSponsorLogo(
+    logoSvg,
+    logoBrightSvg,
+    sponsorName,
+    size === 'large',
+    textColor,
+  )
 
 export function generateImageMetadata() {
   return ogImageMetadata((brand) => `${brand} Speaker Profile`)
@@ -222,6 +232,8 @@ export default async function Image({
   }
 
   const fonts = await loadBrandFonts(domain)
+  // Per-tenant brand gradient; unthemed conferences resolve to the house pair.
+  const brand = ogBrandColors(conference.theme)
   const { speaker, talks, err } = await getPublicSpeaker(
     conference._id,
     decodedSlug,
@@ -236,7 +248,7 @@ export default async function Image({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: STYLES.gradient,
+          background: brand.gradient,
           color: 'white',
           fontSize: 48,
           fontWeight: 'bold',
@@ -291,7 +303,7 @@ export default async function Image({
         height: '100%',
         display: 'flex',
         flexDirection: 'row',
-        background: STYLES.gradient,
+        background: brand.gradient,
         color: 'white',
         padding: '40px 40px 80px 40px',
         fontFamily: STYLES.fontFamily,
@@ -407,6 +419,7 @@ export default async function Image({
                     sponsor?.sponsor?.logoBright || null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
+                    brand.textOnLight,
                   )}
                 </div>
               ))}
@@ -610,6 +623,7 @@ export default async function Image({
                     sponsor?.sponsor?.logoBright || null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
+                    brand.textOnLight,
                   )}
                 </div>
               ))}
