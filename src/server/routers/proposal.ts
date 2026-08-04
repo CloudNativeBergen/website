@@ -2190,6 +2190,21 @@ export const proposalRouter = router({
       .input(InvitationCancelSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // CONSTRAIN THE TYPE BEFORE THE PATCH (#746). `getDocument` fetches
+          // ANY document by id and the authorisation below runs on whatever
+          // `proposal` ref it happens to carry — but `review` and
+          // `conversation` carry one too, so without this an organizer could
+          // flip `status` on a review or a conversation of a proposal they can
+          // already see. Intra-tenant, one enum field, but it is exactly the
+          // shape this guard's `_type` equality exists to prevent: a client id
+          // reaching a patch unproven. The org half is redundant with
+          // `getProposal`'s scoping below and deliberately kept — the guard is
+          // the invariant, not the shortest path to it.
+          await requireDocumentInCurrentOrg(
+            input.invitationId,
+            'coSpeakerInvitation',
+          )
+
           // Fetch invitation to verify ownership
           const invitation = await clientWrite.getDocument(input.invitationId)
 
