@@ -8,6 +8,11 @@ import {
   adminProcedure,
   resolveConferenceId,
 } from '@/server/trpc'
+import {
+  requireDocumentInCurrentOrg,
+  requireDocumentsInCurrentOrg,
+  requireSpeakersInCurrentOrg,
+} from '@/server/tenancy'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
 import {
   ProposalInputSchema,
@@ -94,6 +99,71 @@ const COMMENT_RELAY_ACTIONS: readonly Action[] = [
   Action.waitlist,
   Action.remind,
 ]
+
+/**
+ * REFERENCE INJECTION, `talk.topics[]` (#730/#731).
+ *
+ * `topics` is `z.array(ReferenceSchema)` — the CLIENT supplies `_ref` verbatim
+ * and `updateProposal`/`createProposal` write it straight through a bare
+ * `.patch().set()`. Sanity only checks that a strong reference RESOLVES, not its
+ * type or its tenant, so without this any authenticated speaker (not merely an
+ * organizer) could attach another tenant's `topic` to a talk and render that
+ * tenant's taxonomy — title and brand colour — on this conference's public
+ * programme. This is the same class the PR fixed one level up at
+ * `conference.updateTopics`; the caller population here is strictly wider.
+ *
+ * GRANDFATHERING, exactly as `conference.updateTopics` does it: only ids that
+ * are NEW to this talk are checked. An id already on the document was already
+ * referenced, so re-sending it injects nothing — and a legacy org-less topic
+ * (pre-migration-044) stays editable instead of making every save of an old
+ * talk refuse. Removing such an id is always allowed; re-adding it is not.
+ */
+function topicIdsOf(topics: unknown): string[] {
+  if (!Array.isArray(topics)) return []
+  return topics
+    .map((topic) => {
+      if (!topic || typeof topic !== 'object') return undefined
+      const t = topic as { _ref?: unknown; _id?: unknown }
+      if (typeof t._ref === 'string') return t._ref
+      if (typeof t._id === 'string') return t._id
+      return undefined
+    })
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+}
+
+async function requireTopicsReferenceable(
+  incoming: unknown,
+  alreadyOnTalk: string[],
+): Promise<void> {
+  if (!Array.isArray(incoming)) return
+  const existing = new Set(alreadyOnTalk)
+  // Blank/malformed entries are NOT dropped: `topicIdsOf` returning fewer ids
+  // than `incoming` has entries means something unparseable is about to be
+  // written into a reference array, which is never legitimate input.
+  const ids = topicIdsOf(incoming)
+  if (ids.length !== incoming.length) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Invalid topic reference',
+    })
+  }
+  const added = ids.filter((id) => !existing.has(id))
+  if (added.length === 0) return
+  await requireDocumentsInCurrentOrg(added, 'topic')
+}
+
+/** The topic ids currently on a talk, for the grandfathering set above. */
+async function talkTopicIds(talkId: string): Promise<string[]> {
+  const refs = await clientWrite.fetch<(string | null)[] | null>(
+    // groq-global: keyed by an id the caller has ALREADY been proved to own by
+    // `requireDocumentInCurrentOrg`; it reads back that same document.
+    `*[_type == "talk" && _id == $id][0].topics[]._ref`,
+    { id: talkId },
+  )
+  return (refs ?? []).filter(
+    (ref): ref is string => typeof ref === 'string' && ref.length > 0,
+  )
+}
 
 /**
  * Helper function to delete an attachment and its associated file asset
@@ -319,6 +389,11 @@ export const proposalRouter = router({
         const initialStatus =
           input.status === Status.draft ? Status.draft : Status.submitted
 
+        // REFERENCE INJECTION (#731): see `requireTopicsReferenceable`. Nothing
+        // exists yet, so there is no grandfathered set — every topic must be
+        // this org's.
+        await requireTopicsReferenceable(input.data.topics, [])
+
         const { proposal, err } = await createProposal(
           {
             ...input.data,
@@ -467,6 +542,15 @@ export const proposalRouter = router({
             })
           }
         }
+
+        // REFERENCE INJECTION (#731): `getProposal` above proved the TALK is the
+        // caller's; it says nothing about the topic ids being written INTO it.
+        // `existing.topics` is the dereferenced current set — the grandfathered
+        // ids that may be re-sent unchecked.
+        await requireTopicsReferenceable(
+          input.data.topics,
+          topicIdsOf(existing.topics),
+        )
 
         const { proposal, err } = await updateProposal(input.id, input.data)
 
@@ -949,6 +1033,17 @@ export const proposalRouter = router({
           const { speakers, ...proposalData } = input
           const conferenceId = await resolveConferenceId()
 
+          // REFERENCE INJECTION (#730): `speakers[]` is raw client input and a
+          // reference is just `{_ref: id}` — Sanity checks that it RESOLVES, not
+          // that it is a speaker or ours. Writing a foreign id here also
+          // manufactures the participation that `requireSpeakerInCurrentOrg`
+          // treats as ownership, so this guard is what keeps that arm honest.
+          await requireSpeakersInCurrentOrg(speakers)
+
+          // REFERENCE INJECTION (#731): same for `topics[]`, which is also raw
+          // client-supplied references. Nothing exists yet — no grandfathering.
+          await requireTopicsReferenceable(proposalData.topics, [])
+
           // Convert speaker IDs to references
           const speakerRefs = speakers.map((id) => createReference(id))
 
@@ -993,16 +1088,40 @@ export const proposalRouter = router({
       .input(IdParamSchema.extend({ data: ProposalAdminUpdateSchema }))
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input and `updateProposal` is
+          // a bare patch. The speaker-facing `proposal.update` above is gated by
+          // the org-scoped `getProposal`; this admin sibling was not gated at
+          // all, so it could rewrite any document in the shared dataset.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { speakers, ...proposalData } = input.data
 
           // If speakers are being updated, convert to references
           let updateData = proposalData
           if (speakers && speakers.length > 0) {
+            // REFERENCE INJECTION (#730): the guard above proves the TALK is
+            // ours; it says nothing about the ids being written INTO it. Left
+            // unchecked this attached any person in the shared dataset to an own
+            // talk — which then satisfied the participation arm of
+            // `requireSpeakerInCurrentOrg` and handed the caller write access to
+            // that person's profile, email and GDPR consent, and the ability to
+            // merge them away.
+            await requireSpeakersInCurrentOrg(speakers)
             const speakerRefs = speakers.map((id) => createReference(id))
             updateData = {
               ...proposalData,
               speakers: speakerRefs,
             } as typeof proposalData
+          }
+
+          // REFERENCE INJECTION (#731): `topics[]` is client-supplied references
+          // too. Read the talk's CURRENT topics as the grandfathered set so an
+          // ordinary save of a legacy talk carrying an org-less topic still
+          // works, while a newly added foreign id is refused.
+          if (proposalData.topics !== undefined) {
+            await requireTopicsReferenceable(
+              proposalData.topics,
+              await talkTopicIds(input.id),
+            )
           }
 
           const { proposal, err } = await updateProposal(input.id, updateData)
@@ -1047,6 +1166,8 @@ export const proposalRouter = router({
     // Delete proposal (admin)
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): unguarded, this deleted any proposal in the dataset.
+        await requireDocumentInCurrentOrg(input.id, 'talk')
         const { err } = await deleteProposal(input.id)
 
         if (err) {
@@ -1083,6 +1204,10 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): the `_type` check below was already here, but the
+          // TENANT was not checked — any tenant's talk could be given audience
+          // feedback.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const existing = await clientWrite.getDocument(input.id)
 
           if (!existing || existing._type !== 'talk') {
@@ -1130,6 +1255,9 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input, `updateProposal` a
+          // bare patch.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal, err } = await updateProposal(input.id, {
             attachments: input.attachments,
           })
@@ -1170,6 +1298,9 @@ export const proposalRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): the helper checks `_type` but not the tenant, and
+          // it also deletes the referenced file asset.
+          await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal } = await deleteAttachmentHelper(
             input.id,
             input.attachmentKey,
@@ -2059,6 +2190,21 @@ export const proposalRouter = router({
       .input(InvitationCancelSchema)
       .mutation(async ({ input, ctx }) => {
         try {
+          // CONSTRAIN THE TYPE BEFORE THE PATCH (#746). `getDocument` fetches
+          // ANY document by id and the authorisation below runs on whatever
+          // `proposal` ref it happens to carry — but `review` and
+          // `conversation` carry one too, so without this an organizer could
+          // flip `status` on a review or a conversation of a proposal they can
+          // already see. Intra-tenant, one enum field, but it is exactly the
+          // shape this guard's `_type` equality exists to prevent: a client id
+          // reaching a patch unproven. The org half is redundant with
+          // `getProposal`'s scoping below and deliberately kept — the guard is
+          // the invariant, not the shortest path to it.
+          await requireDocumentInCurrentOrg(
+            input.invitationId,
+            'coSpeakerInvitation',
+          )
+
           // Fetch invitation to verify ownership
           const invitation = await clientWrite.getDocument(input.invitationId)
 

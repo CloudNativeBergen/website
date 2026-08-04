@@ -33,6 +33,28 @@ const uncachedFetchMock = vi.fn()
  * domains come back — which is what makes the self-exclusion tests bite.
  */
 let domainsByConference: Record<string, string[]> = {}
+/**
+ * Which ids the reference-injection guards (#731 F4) will accept, or `null` for
+ * "everything the caller sends is ours" — the default, so the existing
+ * behavioural tests are unaffected.
+ */
+let referenceableIds: Set<string> | null = null
+/** The topic refs the conference already carries — grandfathered on save. */
+let currentTopicRefs: string[] = []
+/**
+ * The ticketing binding every conference document claims, keyed by `_id`
+ * (#731 F5). Like `domainsByConference`, the mock APPLIES the query's own
+ * `$excludeIds`, so a router that forgets to self-exclude really does collide
+ * with itself.
+ */
+let ticketingByConference: Record<
+  string,
+  {
+    checkinEventId?: number | null
+    titoAccountSlug?: string | null
+    titoEventSlug?: string | null
+  }
+> = {}
 let lastClaimedParams: Record<string, unknown> | undefined
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
@@ -125,6 +147,9 @@ beforeEach(() => {
   // This conference already owns the host every test is served on.
   domainsByConference = { [CONFERENCE_ID]: ['cloudnativebergen.no'] }
   lastClaimedParams = undefined
+  referenceableIds = null
+  currentTopicRefs = []
+  ticketingByConference = {}
   // Default organizer set for the teams subset check: the caller (sp-1) + sp-2.
   // The domains claimed-set query is answered from `domainsByConference`, with
   // the query's own `$excludeIds` applied.
@@ -141,6 +166,41 @@ beforeEach(() => {
         return Object.entries(domainsByConference)
           .filter(([id]) => !excluded.has(id))
           .flatMap(([, domains]) => domains)
+      }
+      // `updateTopics` reads the conference's CURRENT topic refs so an id that
+      // is already referenced is grandfathered (see the router comment).
+      if (query.includes('.topics[]._ref')) return currentTopicRefs
+      // `updateTicketingIds` reads its OWN stored binding, so a one-field patch
+      // is checked against the EFFECTIVE binding, not just the fields sent.
+      if (
+        query.includes('{ checkinEventId, titoAccountSlug, titoEventSlug }')
+      ) {
+        return ticketingByConference[CONFERENCE_ID] ?? null
+      }
+      // The ticketing-binding collision probe (#731 F5).
+      if (query.includes('titoEventSlug == $titoEventSlug')) {
+        const excluded = new Set((params?.excludeIds as string[]) ?? [])
+        return Object.entries(ticketingByConference).filter(([id, binding]) => {
+          if (excluded.has(id)) return false
+          const checkin =
+            params?.checkinEventId != null &&
+            binding.checkinEventId === params.checkinEventId
+          const tito =
+            params?.titoEventSlug != null &&
+            binding.titoAccountSlug === params.titoAccountSlug &&
+            binding.titoEventSlug === params.titoEventSlug
+          return checkin || tito
+        }).length
+      }
+      // REFERENCE-INJECTION guards (#731 F4): `updateOrganizers` and
+      // `updateTopics` count how many of the supplied ids this org may
+      // reference. By default every id is ours; the refusal tests below flip it.
+      if (query.startsWith('count(')) {
+        return referenceableIds === null
+          ? new Set((params?.ids as string[]) ?? []).size
+          : ((params?.ids as string[]) ?? []).filter((id) =>
+              referenceableIds!.has(id),
+            ).length
       }
       return ['sp-1', 'sp-2']
     },
@@ -727,6 +787,121 @@ describe('conference router — domains global uniqueness (#680)', () => {
   })
 })
 
+/**
+ * #731 F5. `checkinEventId` is the tenancy anchor `tickets.*` derives its
+ * provider event from, and the provider credential is one process-wide pair
+ * shared by every tenant. Until this guard, `updateTicketingIds` was a plain
+ * patch of an arbitrary positive integer, so the ticket guards added by this PR
+ * could be walked around in two calls: claim tenant B's event id, mint a
+ * 100%-off code on their paid sale / delete their codes / read their customers'
+ * payment details, restore your own id. It also hijacked the ticket-sold
+ * webhook, which resolves a conference FROM that id.
+ */
+describe('conference router — ticketing binding uniqueness (#731 F5)', () => {
+  const OTHER_CONFERENCE = 'other-conf'
+
+  it('refuses a Checkin event id another conference already claims', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinEventId: 4242,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(lastSet).toBeUndefined()
+  })
+
+  it('refuses a Tito account/event pair another conference already claims', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = {
+      titoAccountSlug: 'other',
+      titoEventSlug: '2026',
+    }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        ticketingProvider: 'tito',
+        titoAccountSlug: 'other',
+        titoEventSlug: '2026',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('EFFECTIVE binding: a one-field patch cannot complete a foreign pair', async () => {
+    // The account slug is already stored; sending only the event slug would
+    // slip past a check that looked at the payload alone.
+    ticketingByConference[CONFERENCE_ID] = { titoAccountSlug: 'other' }
+    ticketingByConference[OTHER_CONFERENCE] = {
+      titoAccountSlug: 'other',
+      titoEventSlug: '2026',
+    }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        titoEventSlug: '2026',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('EFFECTIVE binding: an unrelated field cannot be saved past a live collision', async () => {
+    // A pre-existing collision (created before this guard, or in Studio) is the
+    // exact state that lets one tenant act on the other's sale. Editing any
+    // other ticketing field while it stands is refused, because the EFFECTIVE
+    // binding is read from storage rather than from the payload. Clearing
+    // `checkinEventId` remains the escape hatch — see the case below.
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinCustomerId: 7,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('SELF-EXCLUSION: re-saving its OWN unchanged binding succeeds', async () => {
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: 4242,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toMatchObject({ checkinEventId: 4242 })
+  })
+
+  it('an unclaimed id is accepted', async () => {
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: 99,
+      checkinCustomerId: 7,
+    })
+    expect(result.success).toBe(true)
+    expect(lastSet).toMatchObject({ checkinEventId: 99, checkinCustomerId: 7 })
+  })
+
+  it('clearing the binding is never a collision', async () => {
+    ticketingByConference[CONFERENCE_ID] = { checkinEventId: 4242 }
+    ticketingByConference[OTHER_CONFERENCE] = { checkinEventId: 4242 }
+    const result = await makeCaller({ isOrganizer: true }).updateTicketingIds({
+      checkinEventId: null,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('FAILS CLOSED when the collision probe is unreadable', async () => {
+    uncachedFetchMock.mockImplementation(async (query: string) => {
+      if (query.includes('titoEventSlug == $titoEventSlug')) {
+        throw new Error('sanity down')
+      }
+      return null
+    })
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTicketingIds({
+        checkinEventId: 4242,
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+})
+
 // === SE-2: organizers, topics, teams & announcement ========================
 
 describe('conference router — organizers (self-lockout guard)', () => {
@@ -769,6 +944,34 @@ describe('conference router — organizers (self-lockout guard)', () => {
     ).rejects.toBeTruthy()
     expect(commitMock).not.toHaveBeenCalled()
   })
+
+  /**
+   * #731 F4. `organizers[]` is what `organizerOrgIds` is derived from, so an
+   * unvalidated id here does not merely RENDER a stranger as an organizer — it
+   * grants that foreign person admin standing in this org on their next
+   * sign-in. The self-lockout check was the only check.
+   */
+  it('refuses an organizer id this org has no standing over', async () => {
+    referenceableIds = new Set(['sp-1'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateOrganizers({
+        organizers: ['sp-1', 'sp-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a non-speaker id (wrong `_type`) in organizers[]', async () => {
+    // The guard's count constrains `_type == "speaker"`, so a topic or
+    // conference id comes back as not-ours and refuses the whole write.
+    referenceableIds = new Set(['sp-1'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateOrganizers({
+        organizers: ['sp-1', 'conf-other'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('conference router — topics', () => {
@@ -795,6 +998,44 @@ describe('conference router — topics', () => {
         topics: ['topic-a', 'topic-a'],
       }),
     ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  /** #731 F4: topics are org-owned; another tenant's taxonomy is not ours. */
+  it('refuses a topic id belonging to another organization', async () => {
+    referenceableIds = new Set(['topic-a'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTopics({
+        topics: ['topic-a', 'topic-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The guard checks only NEWLY ADDED ids. A topic already on this conference —
+   * including a legacy one with no `organization` key (migration 044) — must
+   * stay saveable, or the whole editor refuses every save on a live edition.
+   */
+  it('grandfathers a topic the conference already references', async () => {
+    currentTopicRefs = ['topic-legacy']
+    referenceableIds = new Set(['topic-a'])
+    const result = await makeCaller({ isOrganizer: true }).updateTopics({
+      topics: ['topic-legacy', 'topic-a'],
+    })
+    expect(result.success).toBe(true)
+    const rows = lastSet!.topics as Array<Record<string, unknown>>
+    expect(rows.map((r) => r._ref)).toEqual(['topic-legacy', 'topic-a'])
+  })
+
+  it('…but a NEW foreign id alongside a grandfathered one is still refused', async () => {
+    currentTopicRefs = ['topic-legacy']
+    referenceableIds = new Set(['topic-a'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTopics({
+        topics: ['topic-legacy', 'topic-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(commitMock).not.toHaveBeenCalled()
   })
 })

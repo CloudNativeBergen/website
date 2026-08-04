@@ -31,6 +31,25 @@ vi.mock('@/lib/volunteer/sanity', () => ({
   createVolunteer: vi.fn(),
 }))
 
+// OWNERSHIP PROBE (#730): the volunteer mutations now resolve the target's
+// conference before writing. Report it as belonging to this conference; the
+// cross-tenant REFUSALS live in `tenancy.writes.test.ts`.
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (query: string) =>
+      query.includes('"memberOrgIds"')
+        ? {
+            _type: 'volunteer',
+            orgId: null,
+            conferenceId: 'conf-1',
+            conferenceOrgId: 'org-test',
+            memberOrgIds: [],
+          }
+        : null,
+  },
+  clientWrite: { patch: vi.fn(), delete: vi.fn(), create: vi.fn() },
+}))
+
 import { volunteerRouter } from './volunteer'
 
 function makeCaller(isOrganizer = true) {

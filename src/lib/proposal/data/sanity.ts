@@ -68,7 +68,9 @@ export async function getProposal({
     ? organizerOrgId
       ? `&& conference._ref in *[_type == "conference" && organization._ref == $organizerOrgId]._id`
       : `&& false`
-    : `&& "${speakerId}" in speakers[]._ref`
+    : // PARAMETERISED (#731 F3): this arm IS the owner-scope predicate, so an
+      // interpolated value here would be a scope bypass rather than a nuisance.
+      `&& $speakerId in speakers[]._ref`
 
   try {
     const query = groq`*[_type == "talk" && _id==$id ${speakerFilter}]{
@@ -186,10 +188,15 @@ export async function getProposals({
     `_type == "talk"`,
     returnAll
       ? `status != "${Status.draft}"`
-      : speakerId
-        ? `"${speakerId}" in speakers[]._ref`
+      : // PARAMETERISED (#731 F3). Every caller passes a server-derived
+        // `ctx.speaker._id` today, but an interpolated id is one refactor away
+        // from a scope bypass: `&&` binds tighter than `||`, so a `"` in the
+        // value turns this whole filter into the left arm of a disjunction.
+        speakerId
+        ? `$speakerId in speakers[]._ref`
         : null,
     conferenceId ? `conference._ref == $conferenceId` : null,
+    // `formats` / `statuses` are Zod-validated enum members, not free strings.
     formats && formats.length > 0
       ? `format in [${formats.map((f) => `"${f}"`).join(', ')}]`
       : null,

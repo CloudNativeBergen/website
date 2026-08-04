@@ -23,6 +23,7 @@ import {
 } from '@/lib/sponsor-crm/activity'
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { requireDocumentInCurrentConference } from '../tenancy'
 import { notifySponsorRegistrationComplete } from '@/lib/slack/notify'
 import { sanitizeSvgFieldOrThrow, SvgSanitizeError } from '@/lib/svg/upload'
 import { resolveConferenceFrom } from '@/lib/email/from'
@@ -124,6 +125,15 @@ export const registrationRouter = router({
   generateToken: adminProcedure
     .input(GenerateRegistrationTokenSchema)
     .mutation(async ({ input }) => {
+      // OWNERSHIP (#730): the id is client input and the returned token is a
+      // BEARER credential for the sponsor portal — unguarded, an organizer of
+      // tenant A could mint a working portal token for tenant B's sponsor and
+      // then read and rewrite that sponsor's data through the public
+      // `validate`/`complete` endpoints.
+      await requireDocumentInCurrentConference(
+        input.sponsorForConferenceId,
+        'sponsorForConference',
+      )
       const { token, error } = await generateRegistrationToken(
         input.sponsorForConferenceId,
       )
@@ -157,6 +167,13 @@ export const registrationRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // OWNERSHIP (#730): `getSfcForPortalInvite` looks the id up with no
+      // conference predicate, so without this an organizer of tenant A could
+      // patch tenant B's sponsor record and email B's contacts.
+      await requireDocumentInCurrentConference(
+        input.sponsorForConferenceId,
+        'sponsorForConference',
+      )
       // Fetch full sponsor + conference data for the email
       const sfc = await getSfcForPortalInvite(input.sponsorForConferenceId)
 

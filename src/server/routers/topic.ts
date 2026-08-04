@@ -13,6 +13,7 @@ import {
   getOrganizationRefForCurrentConference,
   organizationField,
 } from '@/lib/organization/sanity'
+import { requireCurrentOrgId, requireDocumentInCurrentOrg } from '../tenancy'
 
 /**
  * Topic CRUD (SE-2). Topics are standalone documents referenced by
@@ -47,12 +48,22 @@ export const topicRouter = router({
    * the backfill. When the org is unresolvable (legacy domain), all topics show
    * — the same migration bridge used elsewhere. */
   list: adminProcedure.query(async () => {
+    // FAIL CLOSED (#730). This previously fell back to a bare
+    // `_type == "topic"` when the org did not resolve — every tenant's topics,
+    // to any admin on an unrecognised host. It was written as a migration
+    // bridge for legacy domains, which is the same shape as the organizer-set
+    // and travel-support fallbacks that turned out to be live leaks.
+    //
+    // The `!defined(organization)` tolerance is gone for the same reason: it
+    // showed every un-backfilled topic to every tenant. Migration 044 has been
+    // confirmed applied, so nothing is stranded by requiring the key.
     const orgRef = await getOrganizationRefForCurrentConference()
-    const filter = orgRef
-      ? `_type == "topic" && (!defined(organization) || organization._ref == $orgId)`
-      : `_type == "topic"`
+    if (!orgRef) return []
+
     const topics = await clientReadUncached.fetch<Topic[]>(
-      `*[${filter}] | order(title asc){
+      // groq-global-scoped: the tenant predicate is `organization._ref ==
+      // $orgId`, bound below; the early return above guarantees it is present.
+      `*[_type == "topic" && organization._ref == $orgId] | order(title asc){
         _id,
         _type,
         title,
@@ -60,7 +71,7 @@ export const topicRouter = router({
         color,
         slug
       }`,
-      orgRef ? { orgId: orgRef } : {},
+      { orgId: orgRef },
     )
     return topics ?? []
   }),
@@ -70,9 +81,11 @@ export const topicRouter = router({
     .mutation(async ({ input }) => {
       try {
         const slug = await uniqueTopicSlug(input.title)
-        // Stamp the current conference's organization (CaaS T1-1) so the topic is
-        // born tenant-owned. Best-effort: absent before the 044 backfill.
-        const orgRef = await getOrganizationRefForCurrentConference()
+        // Stamp the current conference's organization (CaaS T1-1) so the topic
+        // is born tenant-owned. FAIL CLOSED (#730): an org-less topic is owned
+        // by no tenant and the ownership guard on update/delete would refuse it
+        // forever — refuse the create rather than strand it.
+        const orgRef = await requireCurrentOrgId()
         const created = await clientWrite.create({
           _type: 'topic',
           title: input.title,
@@ -121,6 +134,10 @@ export const topicRouter = router({
         })
       }
       try {
+        // OWNERSHIP (#730): `id` is client input. Without this the patch would
+        // rewrite ANY document in the shared dataset — another tenant's topic,
+        // or (no `_type` check either) their `conference` document.
+        await requireDocumentInCurrentOrg(id, 'topic')
         let patch = clientWrite.patch(id)
         if (Object.keys(set).length > 0) patch = patch.set(set)
         if (unset.length > 0) patch = patch.unset(unset)
@@ -140,6 +157,10 @@ export const topicRouter = router({
   delete: adminProcedure
     .input(TopicDeleteSchema)
     .mutation(async ({ input }) => {
+      // OWNERSHIP (#730) FIRST, before the reference probe: `input.id` is client
+      // input, and the reference guard alone let a caller delete any document
+      // nothing happens to reference — including another tenant's.
+      await requireDocumentInCurrentOrg(input.id, 'topic')
       const [talkCount, conferenceCount] = await Promise.all([
         clientReadUncached.fetch<number>(
           `count(*[_type == "talk" && references($id)])`,

@@ -1,9 +1,9 @@
 import { TRPCError } from '@trpc/server'
+import { requireCurrentOrgId } from '@/server/tenancy'
 import {
   adminProcedure,
   protectedProcedure,
   resolveConferenceId,
-  resolveOrganizationId,
   router,
 } from '../trpc'
 import {
@@ -21,22 +21,7 @@ import {
   deleteGalleryImage,
   untagSpeakerFromImage,
 } from '@/lib/gallery/sanity'
-
-/**
- * The current request's org id, or NOT_FOUND. `resolveOrganizationId` returns
- * `null` on an unresolvable host; a gallery read must never continue with that
- * (an unscoped gallery query returns every tenant's photos), so this throws.
- */
-async function requireCurrentOrgId(): Promise<string> {
-  const orgId = await resolveOrganizationId()
-  if (!orgId) {
-    throw new TRPCError({
-      code: 'NOT_FOUND',
-      message: 'Could not resolve organization from domain',
-    })
-  }
-  return orgId
-}
+import { requireSpeakersInCurrentOrg } from '../tenancy'
 
 /**
  * Every gallery mutation takes an image id from CLIENT INPUT, so each one must
@@ -118,6 +103,13 @@ export const galleryRouter = router({
               code: 'BAD_REQUEST',
               message: 'Cannot reassign a gallery image to another conference',
             })
+          }
+          // REFERENCE INJECTION (#730): `speakers[]` is client input written
+          // straight into a reference array, and a tag also pushes a "you were
+          // tagged" notification into that person's hub. Only people this org
+          // already has standing over may be tagged.
+          if (updateData.speakers && updateData.speakers.length > 0) {
+            await requireSpeakersInCurrentOrg(updateData.speakers)
           }
           const res = await updateGalleryImage(id, updateData)
           if (!res.image) {

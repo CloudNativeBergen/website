@@ -30,8 +30,35 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
   }),
 }))
 
+// OWNERSHIP PROBE (#730): `speaker.admin.merge` now resolves each id's tenant
+// before merging. Report both as speakers of this org so the wiring tests below
+// still reach the merge library.
+vi.mock('@/lib/sanity/client', () => ({
+  clientReadUncached: {
+    fetch: async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return {
+          _type: 'speaker',
+          orgId: null,
+          conferenceId: null,
+          conferenceOrgId: null,
+          memberOrgIds: ['org-test'],
+        }
+      }
+      // The participation probe: this org's conferences only, so both ids are
+      // exclusive to it and the destructive guard permits the merge.
+      if (query.includes('.conference->organization._ref')) return ['org-test']
+      // The foreign-reference count.
+      return 0
+    },
+  },
+  clientWrite: { patch: vi.fn(), delete: vi.fn(), create: vi.fn() },
+}))
+
 import { speakerRouter } from './speaker'
 import { MergeValidationError } from '@/lib/speaker/merge'
+// NOTE: the ownership probe (#730) is mocked above as "both ids are speakers of
+// this org"; the cross-tenant REFUSALS live in `tenancy.writes.test.ts`.
 
 const ORG_ID = 'org-test'
 
