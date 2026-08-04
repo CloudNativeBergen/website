@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // E10: the sponsor company pickers must be tenant-scoped. getAllSponsors /
-// searchSponsors take an optional orgId that adds a coalesce org clause,
-// tolerating org-less legacy sponsors; omitting it preserves the global catalog.
+// searchSponsors take a REQUIRED (nullable) orgId that adds a coalesce org
+// clause, tolerating org-less legacy sponsors. A null org now FAILS CLOSED —
+// it used to drop the clause entirely and read every tenant's sponsors.
 const fetchMock = vi.fn().mockResolvedValue([])
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: (...a: unknown[]) => fetchMock(...a) },
@@ -28,11 +29,13 @@ describe('getAllSponsors — org scoping (E10)', () => {
     expect(params).toEqual({ orgId: 'org-A' })
   })
 
-  it('is unscoped (global catalog) when no org is provided', async () => {
-    await getAllSponsors()
-    const [query, params] = fetchMock.mock.calls[0]
-    expect(query).not.toContain('organization._ref')
-    expect(params).toEqual({})
+  // MUTATION CHECK: delete the `if (!orgId)` guard in `getAllSponsors` and this
+  // test fails — the query goes out unscoped again.
+  it('FAILS CLOSED on a null org: no query, no results', async () => {
+    const { sponsors, error } = await getAllSponsors(null)
+    expect(sponsors).toBeUndefined()
+    expect(error).toBeInstanceOf(Error)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -45,10 +48,12 @@ describe('searchSponsors — org scoping (E10)', () => {
     expect(params).toEqual({ searchQuery: 'acme*', orgId: 'org-A' })
   })
 
-  it('omits the org clause when unscoped', async () => {
-    await searchSponsors('acme')
-    const [query, params] = fetchMock.mock.calls[0]
-    expect(query).not.toContain('organization._ref')
-    expect(params).toEqual({ searchQuery: 'acme*' })
+  // MUTATION CHECK: delete the `if (!orgId)` guard in `searchSponsors` and this
+  // test fails.
+  it('FAILS CLOSED on a null org: no query, no results', async () => {
+    const { sponsors, error } = await searchSponsors('acme', null)
+    expect(sponsors).toBeUndefined()
+    expect(error).toBeInstanceOf(Error)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

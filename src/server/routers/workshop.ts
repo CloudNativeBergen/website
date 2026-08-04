@@ -591,7 +591,10 @@ export const workshopRouter = router({
       try {
         const actor = requireWorkshopUser(ctx)
 
+        // TENANCY: resolve the signup INSIDE the request's conference. Without
+        // the predicate this was a by-id lookup across every tenant.
         const signups = await getAllWorkshopSignups({
+          conferenceId: await resolveConferenceId(),
           signupIds: [input.signupId],
         })
 
@@ -884,6 +887,13 @@ export const workshopRouter = router({
             })
           }
 
+          if (signups.length !== input.signupIds.length) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more signups were not found for this conference',
+            })
+          }
+
           const { conference } = await getConferenceForCurrentDomain({})
 
           const results = await Promise.allSettled(
@@ -922,7 +932,7 @@ export const workshopRouter = router({
             results: {
               succeeded,
               failed,
-              total: input.signupIds.length,
+              total: signups.length,
             },
           }
         } catch (error) {

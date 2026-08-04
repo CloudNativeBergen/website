@@ -265,7 +265,11 @@ describe('sponsor (org-owned) mutations refuse a foreign id (#730)', () => {
       sponsor().update({ id: 'sp-A', data: {} }),
     ).resolves.toBeTruthy()
     await expect(sponsor().delete({ id: 'sp-A' })).resolves.toBeTruthy()
-    expect(lib.deleteSponsor).toHaveBeenCalledWith('sp-A')
+    // Both layers: the router guard proved ownership and constrained _type,
+    // and the org id is still passed down so deleteSponsor re-proves it before
+    // cascading. Asserting the single-argument form would pin the pre-merge
+    // shape and quietly drop the data-layer half.
+    expect(lib.deleteSponsor).toHaveBeenCalledWith('sp-A', 'org-A')
   })
 })
 
@@ -325,7 +329,11 @@ describe('sponsorTier (conference-owned) mutations refuse a foreign id (#730)', 
       sponsor().tiers.update({ id: 'tier-A', data: {} }),
     ).resolves.toBeTruthy()
     await expect(sponsor().tiers.delete({ id: 'tier-A' })).resolves.toBeTruthy()
-    expect(lib.deleteSponsorTier).toHaveBeenCalledWith('tier-A')
+    // Both layers — see the sponsor case above.
+    expect(lib.deleteSponsorTier).toHaveBeenCalledWith(
+      'tier-A',
+      expect.any(String),
+    )
   })
 })
 

@@ -107,7 +107,12 @@ import {
   listActivitiesForSponsor,
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
-import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
+import {
+  bulkUpdateSponsors,
+  bulkDeleteSponsors,
+  BulkTenancyError,
+} from '@/lib/sponsor-crm/bulk'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import {
   listContractTemplates,
   getContractTemplate,
@@ -174,19 +179,29 @@ async function getSponsorForCurrentConference(id: string) {
   return result
 }
 
-async function getAllSponsorTiers(conferenceId?: string): Promise<{
+/**
+ * TENANCY — FAILS CLOSED. `conferenceId` used to be optional and the query
+ * degraded to `*[_type == "sponsorTier"]` when it was falsy, returning every
+ * tenant's tiers (and their PRICING) to whichever admin surface asked. The
+ * predicate is now unconditional and an unresolvable tenant issues no query.
+ */
+async function getAllSponsorTiers(conferenceId: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
   error?: Error
 }> {
+  if (!conferenceId) {
+    return {
+      error: new Error(
+        'getAllSponsorTiers: refusing to run without a resolved conference',
+      ),
+    }
+  }
+
   try {
-    const query = conferenceId
-      ? `*[_type == "sponsorTier" && conference._ref == $conferenceId]`
-      : `*[_type == "sponsorTier"]`
-
-    const params = conferenceId ? { conferenceId } : {}
-
-    const sponsorTiers = await clientWrite.fetch(
-      `${query}{
+    const sponsorTiers = await scopedFetch<SponsorTierExisting[]>(
+      clientWrite,
+      { conferenceId },
+      `*[_type == "sponsorTier"]{
         _id,
         _createdAt,
         _updatedAt,
@@ -207,7 +222,6 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
         mostPopular,
         maxQuantity
       }`,
-      params,
     )
 
     return { sponsorTiers }
@@ -494,22 +508,29 @@ export const sponsorRouter = router({
       }
     }),
 
-  delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
-    // OWNERSHIP (#730): unguarded, this deleted any sponsor in the dataset and
-    // cascaded into every `sponsorForConference` referencing it.
-    await requireDocumentInCurrentOrg(input.id, 'sponsor')
-    const { error } = await deleteSponsor(input.id)
+  delete: adminProcedure
+    .input(IdParamSchema)
+    .mutation(async ({ input, ctx }) => {
+      // OWNERSHIP (#730): unguarded, this deleted any sponsor in the dataset
+      // and cascaded into every `sponsorForConference` referencing it.
+      //
+      // Guarded at BOTH layers deliberately. The router guard also constrains
+      // `_type`, so a non-sponsor id cannot be routed here at all; the data
+      // layer re-proves ownership from `ctx.orgId` — the org the admin
+      // procedure already gated on, never anything derived from `input`.
+      await requireDocumentInCurrentOrg(input.id, 'sponsor')
+      const { error } = await deleteSponsor(input.id, ctx.orgId)
 
-    if (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to delete sponsor',
-        cause: error,
-      })
-    }
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete sponsor',
+          cause: error,
+        })
+      }
 
-    return { success: true }
-  }),
+      return { success: true }
+    }),
 
   tiers: router({
     list: adminProcedure.query(async () => {
@@ -678,9 +699,12 @@ export const sponsorRouter = router({
 
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
       // OWNERSHIP (#730): unguarded, this deleted any tier in the dataset and
-      // unset `tier` on every sponsorForConference referencing it.
+      // unset `tier` on every sponsorForConference referencing it. Guarded at
+      // both layers — the router constrains `_type`, the data layer resolves
+      // the id inside the request's conference and refuses otherwise.
       await requireDocumentInCurrentConference(input.id, 'sponsorTier')
-      const { error } = await deleteSponsorTier(input.id)
+      const conferenceId = await resolveConferenceId()
+      const { error } = await deleteSponsorTier(input.id, conferenceId)
 
       if (error) {
         throw new TRPCError({
@@ -691,7 +715,7 @@ export const sponsorRouter = router({
       }
 
       // Sponsor tiers belong to one conference — bust only this tenant.
-      revalidateTag(conferenceTag(await resolveConferenceId()), 'default')
+      revalidateTag(conferenceTag(conferenceId), 'default')
 
       return { success: true }
     }),
@@ -1484,9 +1508,22 @@ export const sponsorRouter = router({
             }
           }
 
-          return await bulkUpdateSponsors(input, userId)
+          // TENANCY: the bulk write is scoped to the REQUEST's conference, never
+          // to anything derived from `input`. `resolveConferenceId` throws
+          // NOT_FOUND (a TRPCError, rethrown below) on an unresolvable host.
+          return await bulkUpdateSponsors(
+            input,
+            userId,
+            await resolveConferenceId(),
+          )
         } catch (error) {
           if (error instanceof TRPCError) throw error
+          if (error instanceof BulkTenancyError) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more sponsors were not found in this conference',
+            })
+          }
 
           console.error('Bulk update error:', error)
           throw new TRPCError({
@@ -1543,10 +1580,22 @@ export const sponsorRouter = router({
         }
 
         try {
-          return await bulkDeleteSponsors(input.ids, {
-            deleteContractAssets: input.deleteContractAssets,
-          })
+          // TENANCY: scoped to the REQUEST's conference (see bulkUpdate).
+          return await bulkDeleteSponsors(
+            input.ids,
+            await resolveConferenceId(),
+            { deleteContractAssets: input.deleteContractAssets },
+          )
         } catch (error) {
+          // Preserve refusals: a fail-closed tenancy denial must not surface as
+          // a 500, or the guard becomes indistinguishable from a server fault.
+          if (error instanceof TRPCError) throw error
+          if (error instanceof BulkTenancyError) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more sponsors were not found in this conference',
+            })
+          }
           console.error('Bulk delete error:', error)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

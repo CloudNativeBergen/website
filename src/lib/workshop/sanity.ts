@@ -9,6 +9,7 @@ import type {
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
+import { scopedFetch } from '@/lib/sanity/scoped'
 
 const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
 
@@ -418,27 +419,48 @@ export async function getWorkshopSignupStatisticsBySpeaker(
   })
 }
 
+/**
+ * Workshop signups for ONE conference.
+ *
+ * TENANCY — FAILS CLOSED. `conferenceId` is REQUIRED. It was optional, and the
+ * `signupIds`-only call path (`confirmSignup`, `batchConfirmSignups`,
+ * `cancelSignup`) built `*[_type == "workshopSignup" && _id in [...]]` with NO
+ * conference predicate at all, so an admin of one tenant could confirm another
+ * tenant's signups by id — the ids are client input. The predicate is now
+ * unconditional and issued through `scopedFetch`.
+ *
+ * INJECTION. Every filter used to be INTERPOLATED into the GROQ source with
+ * hand-rolled quoting (`_id in ["${id}", …]`, `status == "${status}"`), so a
+ * value containing `"` escaped the string literal and rewrote the predicate —
+ * including the tenant predicate. All values are now BOUND as parameters.
+ */
 export async function getAllWorkshopSignups(filters: {
-  conferenceId?: string
+  conferenceId: string
   workshopId?: string
   status?: string
   signupIds?: string[]
   page?: number
   pageSize?: number
 }): Promise<WorkshopSignupExisting[]> {
-  // PARAMETERISED, NEVER INTERPOLATED (#730). These values are client input, and
-  // `&&` binds tighter than `||` in GROQ: an id containing `"` closed the string
-  // and turned the tenant predicate into the left arm of a disjunction —
+  // PARAMETERISED, NEVER INTERPOLATED (#730). These values are client input,
+  // and `&&` binds tighter than `||` in GROQ: an id containing `"` closed the
+  // string and turned the tenant predicate into the left arm of a disjunction —
   // `(type && conference && id) || (anything)` — returning every tenant's
   // signups, which `batchConfirmSignups` / `batchCancelSignups` then WROTE to.
   // `src/lib/sanity/scoped.ts` documents this exact parse.
+  //
+  // FAIL CLOSED: an unresolvable tenant reads nothing, and issues no query.
+  if (!filters.conferenceId) return []
+
   const conditions = ['_type == "workshopSignup"']
   const params: Record<string, unknown> = {}
 
-  if (filters.conferenceId) {
-    conditions.push('conference._ref == $conferenceId')
-    params.conferenceId = filters.conferenceId
-  }
+  // The tenant predicate itself. It is UNCONDITIONAL — the early return above
+  // guarantees an id is present — and it must never be dropped: without it this
+  // function returns every tenant's signups to any caller that supplies a valid
+  // id of its own.
+  conditions.push('conference._ref == $conferenceId')
+  params.conferenceId = filters.conferenceId
 
   if (filters.workshopId) {
     conditions.push('workshop._ref == $workshopId')
@@ -463,6 +485,8 @@ export async function getAllWorkshopSignups(filters: {
   const start = (page - 1) * pageSize
   const end = start + pageSize
 
+  // `start`/`end` are derived from numbers, never from raw strings, so the slice
+  // cannot carry injected GROQ.
   const query = groq`*[${whereClause}] | order(signedUpAt desc) [${start}...${end}] {
     _id,
     _type,

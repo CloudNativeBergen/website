@@ -347,8 +347,8 @@ function ImageFields({
   return (
     <div className="space-y-2">
       {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- admin preview of
-        // a just-uploaded Sanity asset; no layout budget to justify next/image.
+        // Plain <img>: an admin preview of a just-uploaded Sanity asset, with
+        // no layout budget to justify next/image.
         <img
           src={previewUrl}
           alt=""
